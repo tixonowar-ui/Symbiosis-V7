@@ -1,0 +1,14 @@
+node_modules/
+dist/
+reports/
+coverage/
+playwright-report/
+test-results/
+
+# Read-only sources of truth — never reformatted.
+artifacts/
+
+# Pipeline output — formatting is the generator's responsibility.
+generated/
+
+package-lock.json

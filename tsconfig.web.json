@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "jsx": "react-jsx"
+  },
+  // src/shared is included here on purpose: it is consumed by both the host and
+  // the renderer, so it must type-check under DOM libs as well as under node.
+  "include": ["src/web/**/*.ts", "src/web/**/*.tsx", "src/shared/**/*.ts"],
+  "exclude": ["node_modules", "dist", "reports"]
+}

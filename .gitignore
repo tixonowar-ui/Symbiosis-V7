@@ -1,0 +1,51 @@
+# --- dependencies ---
+node_modules/
+
+# --- build output ---
+dist/
+*.tsbuildinfo
+
+# --- pipeline output that must NOT be committed ---
+# generated/spec, generated/types, generated/seed ARE committed (see CLAUDE.md);
+# media is large binary output and is rebuilt by tools/import.
+generated/media/
+
+# --- reports (coverage, traceability, playwright) ---
+reports/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# --- local databases ---
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --- environment / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- editors / OS ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# --- misc caches ---
+.vite/
+.eslintcache
+npm-debug.log*

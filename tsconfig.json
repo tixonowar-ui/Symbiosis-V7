@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/shared/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/persistence/**/*.ts",
+    "src/host/**/*.ts",
+    "tools/**/*.ts",
+    "tests/integration/**/*.ts",
+    "tests/fixtures/**/*.ts",
+    "generated/types/**/*.ts",
+    "*.config.ts"
+  ],
+  "exclude": ["node_modules", "dist", "reports", "generated/media"]
+}
