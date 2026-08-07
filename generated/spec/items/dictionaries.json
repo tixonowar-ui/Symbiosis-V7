@@ -1,0 +1,602 @@
+[
+  {
+    "Code": "A_CANONICAL",
+    "Dictionary": "CATALOG_CLASS",
+    "Meaning": "Именованный предмет из таблиц 1–5 PDF"
+  },
+  {
+    "Code": "B_EXPLICIT",
+    "Dictionary": "CATALOG_CLASS",
+    "Meaning": "Явная предметная сущность вне таблиц"
+  },
+  {
+    "Code": "C_GENERIC",
+    "Dictionary": "CATALOG_CLASS",
+    "Meaning": "Открытый класс/пример для решения мастера"
+  },
+  {
+    "Code": "D_NARRATIVE",
+    "Dictionary": "CATALOG_CLASS",
+    "Meaning": "Упоминание мира без собственной механики"
+  },
+  {
+    "Code": "FULL",
+    "Dictionary": "MECHANICS",
+    "Meaning": "Достаточно данных для основной runtime-механики"
+  },
+  {
+    "Code": "PARTIAL",
+    "Dictionary": "MECHANICS",
+    "Meaning": "Сущность участвует в правилах, но часть полей не определена"
+  },
+  {
+    "Code": "TEMPLATE_FIXED",
+    "Dictionary": "PARAMETER_SOURCE",
+    "Meaning": "Готовые параметры неизменны в каноническом шаблоне; боевые Runtime-броски описываются отдельно."
+  },
+  {
+    "Code": "INSTANCE_RESOLVED",
+    "Dictionary": "PARAMETER_SOURCE",
+    "Meaning": "Готовые параметры сохраняются у экземпляра; результаты боевых Runtime-бросков сюда не входят."
+  },
+  {
+    "Code": "INSTANCE_ZONE",
+    "Dictionary": "PARAMETER_SOURCE",
+    "Meaning": "Экземпляр требует выбора зоны"
+  },
+  {
+    "Code": "PLAYER_FORMULA_VALIDATED",
+    "Dictionary": "STAT_SOURCE",
+    "Meaning": "Игрок указал только формульные выходы; найден joint witness и сохранена версия формулы."
+  },
+  {
+    "Code": "MASTER_OVERRIDE",
+    "Dictionary": "STAT_SOURCE",
+    "Meaning": "Мастер указал профиль вне формул с аудитом"
+  },
+  {
+    "Code": "VALID",
+    "Dictionary": "VALIDATION_STATUS",
+    "Meaning": "Все заявленные поля совместно воспроизводимы"
+  },
+  {
+    "Code": "INVALID",
+    "Dictionary": "VALIDATION_STATUS",
+    "Meaning": "Не существует общего witness"
+  },
+  {
+    "Code": "OVERRIDDEN",
+    "Dictionary": "VALIDATION_STATUS",
+    "Meaning": "Формульная проверка обойдена мастером"
+  },
+  {
+    "Code": "HEAD",
+    "Dictionary": "BODY_ZONE",
+    "Meaning": "Голова"
+  },
+  {
+    "Code": "TORSO",
+    "Dictionary": "BODY_ZONE",
+    "Meaning": "Корпус"
+  },
+  {
+    "Code": "ARM_L",
+    "Dictionary": "BODY_ZONE",
+    "Meaning": "Левая рука"
+  },
+  {
+    "Code": "ARM_R",
+    "Dictionary": "BODY_ZONE",
+    "Meaning": "Правая рука"
+  },
+  {
+    "Code": "LEG_L",
+    "Dictionary": "BODY_ZONE",
+    "Meaning": "Левая нога"
+  },
+  {
+    "Code": "LEG_R",
+    "Dictionary": "BODY_ZONE",
+    "Meaning": "Правая нога"
+  },
+  {
+    "Code": "CHARACTER",
+    "Dictionary": "OWNER_TYPE",
+    "Meaning": "Живой персонаж/НПС"
+  },
+  {
+    "Code": "CORPSE",
+    "Dictionary": "OWNER_TYPE",
+    "Meaning": "Труп в фазе мародерства"
+  },
+  {
+    "Code": "BATTLE_SCENE",
+    "Dictionary": "OWNER_TYPE",
+    "Meaning": "Точка боевой сцены"
+  },
+  {
+    "Code": "1–4",
+    "Dictionary": "QUALITY",
+    "Meaning": "Отсутствует/непригоден"
+  },
+  {
+    "Code": "5–9",
+    "Dictionary": "QUALITY",
+    "Meaning": "Плохое"
+  },
+  {
+    "Code": "10–14",
+    "Dictionary": "QUALITY",
+    "Meaning": "Обычное"
+  },
+  {
+    "Code": "15–18",
+    "Dictionary": "QUALITY",
+    "Meaning": "Хорошее"
+  },
+  {
+    "Code": "19",
+    "Dictionary": "QUALITY",
+    "Meaning": "Исключительное"
+  },
+  {
+    "Code": "20",
+    "Dictionary": "QUALITY",
+    "Meaning": "Редкое"
+  },
+  {
+    "Code": "L",
+    "Dictionary": "FORMULA_DOMAIN",
+    "Meaning": "Целое ≥0 по CORE-185."
+  },
+  {
+    "Code": "Lw",
+    "Dictionary": "FORMULA_DOMAIN",
+    "Meaning": "Целое ≥0; строго >0 там, где является делителем."
+  },
+  {
+    "Code": "Ls",
+    "Dictionary": "FORMULA_DOMAIN",
+    "Meaning": "Целое ≥0."
+  },
+  {
+    "Code": "R4/R6/R12/R20",
+    "Dictionary": "FORMULA_DOMAIN",
+    "Meaning": "Каждое вхождение — отдельное целое 1..N"
+  },
+  {
+    "Code": "INSTANCE_VALUE",
+    "Dictionary": "VALUE_MODE",
+    "Meaning": "Готовое число хранится у конкретного экземпляра; в текущей модели это Dm/instanceDamage. Боевого броска нет."
+  },
+  {
+    "Code": "CONSTANT",
+    "Dictionary": "VALUE_MODE",
+    "Meaning": "Фиксированное значение шаблона; боевого броска нет."
+  },
+  {
+    "Code": "PER_ATTACK_ROLL",
+    "Dictionary": "VALUE_MODE",
+    "Meaning": "Новый бросок при каждой отдельно разрешаемой атаке."
+  },
+  {
+    "Code": "WEAPON_PROFILE_VERSION",
+    "Dictionary": "SOURCE_SCOPE",
+    "Meaning": "Источник значения находится в активной версии профиля конкретного экземпляра."
+  },
+  {
+    "Code": "ITEM_TEMPLATE",
+    "Dictionary": "SOURCE_SCOPE",
+    "Meaning": "Источник канонического значения находится в неизменяемом шаблоне."
+  },
+  {
+    "Code": "EACH_RESOLVED_ATTACK",
+    "Dictionary": "EVALUATION_SCOPE",
+    "Meaning": "Expression вычисляется заново для каждой отдельно разрешаемой атаки/удара."
+  },
+  {
+    "Code": "DAMAGE",
+    "Dictionary": "COMBAT_VALUE_KIND",
+    "Meaning": "Урон атаки"
+  },
+  {
+    "Code": "PENETRATION",
+    "Dictionary": "COMBAT_VALUE_KIND",
+    "Meaning": "Пробитие атаки"
+  },
+  {
+    "Code": "ARMOR",
+    "Dictionary": "COMBAT_VALUE_KIND",
+    "Meaning": "Броня против этой атаки"
+  },
+  {
+    "Code": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+    "Dictionary": "RESULT_PERSISTENCE",
+    "Meaning": "Значение хранится только в разрешении атаки и долговременной записи боевого журнала."
+  },
+  {
+    "Code": "NOT_APPLICABLE",
+    "Dictionary": "RESULT_PERSISTENCE",
+    "Meaning": "Сырого броска нет; применимо к INSTANCE_VALUE и CONSTANT."
+  },
+  {
+    "Code": "SAME_ID",
+    "Dictionary": "ROLL_GROUP_RULE",
+    "Meaning": "Одинаковый rollGroupId в одном AttackResolution означает один общий исходный бросок."
+  },
+  {
+    "Code": "DIFFERENT_ID",
+    "Dictionary": "ROLL_GROUP_RULE",
+    "Meaning": "Разные rollGroupId означают независимые броски."
+  },
+  {
+    "Code": "EMPTY",
+    "Dictionary": "ROLL_GROUP_RULE",
+    "Meaning": "Для определения без броска rollGroupId обязан быть пустым."
+  },
+  {
+    "Code": "DEFAULT",
+    "Dictionary": "ATTACK_VARIANT",
+    "Meaning": "Единственный/обычный вариант атаки"
+  },
+  {
+    "Code": "SWORD",
+    "Dictionary": "ATTACK_VARIANT",
+    "Meaning": "Меч Корнадоры"
+  },
+  {
+    "Code": "SHIELD",
+    "Dictionary": "ATTACK_VARIANT",
+    "Meaning": "Щит Бларадэ"
+  },
+  {
+    "Code": "RAPIER",
+    "Dictionary": "ATTACK_VARIANT",
+    "Meaning": "Шпага Бларадэ"
+  },
+  {
+    "Code": "TEMPLATE_FIXED",
+    "Dictionary": "STAT_SOURCE",
+    "Meaning": "Готовый числовой профиль читается из шаблона; значение не описывает и не отключает боевые Runtime-броски."
+  },
+  {
+    "Code": "NOT_APPLICABLE",
+    "Dictionary": "VALIDATION_STATUS",
+    "Meaning": "Формульная проверка не применяется к неизменному шаблону."
+  },
+  {
+    "Code": "PROFILE_SNAPSHOT",
+    "Dictionary": "EVALUATION_SCOPE",
+    "Meaning": "Значение читается из снимка активного профиля без нового броска."
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "DAMAGE_MODIFIER_STAT",
+    "Meaning": "Характеристика атакующего не добавляется к baseExpression."
+  },
+  {
+    "Code": "S",
+    "Dictionary": "DAMAGE_MODIFIER_STAT",
+    "Meaning": "После baseExpression один раз добавить S атакующего."
+  },
+  {
+    "Code": "D",
+    "Dictionary": "DAMAGE_MODIFIER_STAT",
+    "Meaning": "После baseExpression один раз добавить D атакующего."
+  },
+  {
+    "Code": "NEXT_RESOLVED_ATTACK",
+    "Dictionary": "PROFILE_ACTIVATION",
+    "Meaning": "Новая версия действует со следующей отдельно разрешаемой атаки."
+  },
+  {
+    "Code": "MISSING",
+    "Dictionary": "PATCH_SEMANTICS",
+    "Meaning": "Поле отсутствует в patch: наследовать текущее effective значение."
+  },
+  {
+    "Code": "EXPLICIT_NULL",
+    "Dictionary": "PATCH_SEMANTICS",
+    "Meaning": "Явно удалить только optional значение, если это разрешено контрактом поля."
+  },
+  {
+    "Code": "ITEM_FORMULAS_V1.2",
+    "Dictionary": "FORMULA_VERSION",
+    "Meaning": "Формулы и домены листа 05, синхронизированные с CORE-185."
+  },
+  {
+    "Code": "ONE_HAND",
+    "Dictionary": "ATTACK_VARIANT",
+    "Meaning": "Полуторный меч, фиксированный хват одной рукой."
+  },
+  {
+    "Code": "TWO_HAND",
+    "Dictionary": "ATTACK_VARIANT",
+    "Meaning": "Полуторный меч, фиксированный хват двумя руками."
+  },
+  {
+    "Code": "INVALID_DICE_EXPRESSION",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Выражение не входит в закрытую грамматику мастера."
+  },
+  {
+    "Code": "DICE_BONUS_NOT_POSITIVE",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "X отсутствует либо не является конечным положительным числом."
+  },
+  {
+    "Code": "INVALID_STAT_REQUIREMENT",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Ключ характеристики или порог требования некорректен."
+  },
+  {
+    "Code": "RANGE_NOT_POSITIVE",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Дальность не является конечным положительным числом."
+  },
+  {
+    "Code": "RANGE_NOT_APPLICABLE",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Дальность задана для недальнобойного варианта."
+  },
+  {
+    "Code": "ACCURACY_BONUS_NOT_POSITIVE",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Бонус точности задан и не является конечным положительным числом."
+  },
+  {
+    "Code": "ATTACK_VARIANT_REQUIRED",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Не указан обязательный вариант оружия."
+  },
+  {
+    "Code": "MASTER_ROLE_REQUIRED",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Операция требует подтверждённой роли мастера."
+  },
+  {
+    "Code": "MASTER_REASON_REQUIRED",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Для мастерской версии отсутствует причина."
+  },
+  {
+    "Code": "PURE_WEAPON_PROFILE_LOCKED",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Игрок попытался изменить шаблон оружия Чистых."
+  },
+  {
+    "Code": "PLAYER_WEAPON_EDIT_OUTSIDE_CREATION",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Игрок редактирует оружие вне незавершённого создания персонажа."
+  },
+  {
+    "Code": "PLAYER_FIELD_NOT_FORMULA_DERIVED",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Игрок изменяет поле, которое не является выходом формулы."
+  },
+  {
+    "Code": "FORMULA_PROFILE_REQUIRED",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Для выбранного типа/варианта игрока отсутствует нормативная формула."
+  },
+  {
+    "Code": "FORMULA_FIELDS_INCOMPLETE",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Игрок не указал полный набор формульных выходов."
+  },
+  {
+    "Code": "FORMULA_WITNESS_NOT_FOUND",
+    "Dictionary": "VALIDATION_ERROR",
+    "Meaning": "Не найден единый witness для всего заявленного профиля."
+  },
+  {
+    "Code": "ITEM",
+    "Dictionary": "ATTACK_SOURCE_KIND",
+    "Meaning": "WeaponProfileVersion/ItemInstance source."
+  },
+  {
+    "Code": "MONSTER_BASE_ATTACK",
+    "Dictionary": "ATTACK_SOURCE_KIND",
+    "Meaning": "MonsterAttackProfile; ItemInstance не требуется."
+  },
+  {
+    "Code": "CANONICAL_SPECIAL_ATTACK",
+    "Dictionary": "ATTACK_SOURCE_KIND",
+    "Meaning": "Канонический attack profile; ItemInstance не требуется."
+  },
+  {
+    "Code": "SYMBIONT_ABILITY",
+    "Dictionary": "ATTACK_SOURCE_KIND",
+    "Meaning": "Rule-bound ability; ItemInstance требуется только если сама способность явно требует предмет."
+  },
+  {
+    "Code": "NATURAL_ARMOR",
+    "Dictionary": "ATTACK_SOURCE_KIND",
+    "Meaning": "Входящий armor resolution; не ItemType."
+  },
+  {
+    "Code": "MONSTER_ATTACK_PROFILE",
+    "Dictionary": "SOURCE_SCOPE",
+    "Meaning": "Снимок базовой атаки монстра."
+  },
+  {
+    "Code": "CANONICAL_OVERLAY",
+    "Dictionary": "SOURCE_SCOPE",
+    "Meaning": "Канонический R20/R20 overlay."
+  },
+  {
+    "Code": "NATURAL_ARMOR",
+    "Dictionary": "SOURCE_SCOPE",
+    "Meaning": "NaturalArmorDefinition цели."
+  },
+  {
+    "Code": "EACH_MONSTER_BASE_ATTACK",
+    "Dictionary": "EVALUATION_SCOPE",
+    "Meaning": "Новый Runtime на каждую базовую атаку."
+  },
+  {
+    "Code": "EACH_INCOMING_ARMOR_RESOLUTION",
+    "Dictionary": "EVALUATION_SCOPE",
+    "Meaning": "Новый Runtime природной брони на каждую входящую проверку."
+  },
+  {
+    "Code": "NO_LAYERS",
+    "Dictionary": "ARMOR_LAYER_STATE",
+    "Meaning": "Пустой набор слоёв; любой Pr проходит без сравнения."
+  },
+  {
+    "Code": "PRESENT",
+    "Dictionary": "ARMOR_LAYER_STATE",
+    "Meaning": "Есть хотя бы один слой; проходит только Pr>armor."
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "DEFENSE_CHOICE",
+    "Meaning": "Нет броска/реакции; defenseTotal=0."
+  },
+  {
+    "Code": "LOOTABLE",
+    "Dictionary": "LOOT_POLICY",
+    "Meaning": "Обыск может читать контейнер."
+  },
+  {
+    "Code": "NOT_LOOTABLE",
+    "Dictionary": "LOOT_POLICY",
+    "Meaning": "Вернуть CORPSE_NOT_LOOTABLE до container dereference."
+  },
+  {
+    "Code": "POISON",
+    "Dictionary": "EFFECT_FAMILY",
+    "Meaning": "Общий discriminator любого яда."
+  },
+  {
+    "Code": "ORDINARY",
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Meaning": "Обычный яд."
+  },
+  {
+    "Code": "NATURAL",
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Meaning": "Природный яд."
+  },
+  {
+    "Code": "ARTIFICIAL",
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Meaning": "Искусственный яд."
+  },
+  {
+    "Code": "SYMBIOTIC",
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Meaning": "Яд способности симбионта."
+  },
+  {
+    "Code": "CANONICAL",
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Meaning": "Яд канонической атаки."
+  },
+  {
+    "Code": "CORPSE_NOT_LOOTABLE",
+    "Dictionary": "COMBAT_ERROR",
+    "Meaning": "Труп существует, но обыск запрещён."
+  },
+  {
+    "Code": "NO_CORPSE",
+    "Dictionary": "COMBAT_ERROR",
+    "Meaning": "Труп отсутствует."
+  },
+  {
+    "Code": "SYSTEM_DEFAULT_SENTIENT",
+    "Dictionary": "TEMPLATE_ORIGIN",
+    "Meaning": "Системный read-only шаблон врага-мыслящего."
+  },
+  {
+    "Code": "DEEP_CLONE_MUTABLE_GRAPH",
+    "Dictionary": "CLONE_POLICY",
+    "Meaning": "Новые UUID всех изменяемых item/profile/component/effect сущностей."
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "WRITE_BACK",
+    "Meaning": "Runtime и изменения экземпляра не записываются в шаблон."
+  },
+  {
+    "Code": "DAMAGE",
+    "Dictionary": "RollKind",
+    "Meaning": "Количественный бросок урона; NO_DIRECT_BUT_POOL при исходном D20 игрока."
+  },
+  {
+    "Code": "PENETRATION",
+    "Dictionary": "RollKind",
+    "Meaning": "Количественный бросок пробития; NO_DIRECT_BUT_POOL при исходном D20 игрока."
+  },
+  {
+    "Code": "ARMOR",
+    "Dictionary": "RollKind",
+    "Meaning": "Количественный бросок брони; NO_DIRECT_BUT_POOL при исходном D20 игрока."
+  },
+  {
+    "Code": "D20",
+    "Dictionary": "DieType",
+    "Meaning": "Единственный тип кости, способный создать progression event по natural rawFace 1/20."
+  },
+  {
+    "Code": "OTHER_DIE",
+    "Dictionary": "DieType",
+    "Meaning": "Не создаёт progression event."
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "DieType",
+    "Meaning": "В выражении нет runtime dice occurrence."
+  },
+  {
+    "Code": "NO_DIRECT_BUT_POOL",
+    "Dictionary": "ProgressionEligibility",
+    "Meaning": "Прямой XP запрещён; допустимый player natural 1/20 направляется в общий счётчик."
+  },
+  {
+    "Code": "NEVER_PROGRESSION",
+    "Dictionary": "ProgressionEligibility",
+    "Meaning": "Ни XP, ни баллы общего счётчика."
+  },
+  {
+    "Code": "CHARACTER_PROGRESS_COUNTER",
+    "Dictionary": "ProgressionRoute",
+    "Meaning": "eventPoints добавляются в symbiontXpProgressPoints по CORE-231."
+  },
+  {
+    "Code": "NEVER_PROGRESSION",
+    "Dictionary": "ProgressionRoute",
+    "Meaning": "Состояние прогрессии не меняется."
+  },
+  {
+    "Code": "PLAYER_CHARACTER",
+    "Dictionary": "ActorType",
+    "Meaning": "Единственный actorType, допускающий прогрессию."
+  },
+  {
+    "Code": "SYSTEM_SENTIENT_ENEMY",
+    "Dictionary": "ActorType",
+    "Meaning": "Всегда NO_XP_PROGRESSION."
+  },
+  {
+    "Code": "APPLIED_COUNTER",
+    "Dictionary": "ProcessingStatus",
+    "Meaning": "Допустимый Item quantitative natural 1/20 атомарно применён к общему счётчику."
+  },
+  {
+    "Code": "IGNORED_NEVER",
+    "Dictionary": "ProcessingStatus",
+    "Meaning": "Событие классифицировано NEVER_PROGRESSION; состояние не меняется."
+  },
+  {
+    "Code": "IGNORED_DUPLICATE",
+    "Dictionary": "ProcessingStatus",
+    "Meaning": "originRollId уже обработан; повтор не меняет состояние."
+  },
+  {
+    "Code": "REJECTED_INVALID",
+    "Dictionary": "ProcessingStatus",
+    "Meaning": "Невалидная структура RollOccurrence отклонена до изменения состояния."
+  }
+]

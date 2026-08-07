@@ -1,0 +1,299 @@
+[
+  {
+    "Data type": "UUID",
+    "Default": "—",
+    "Field": "attackResolutionId",
+    "Purpose": "Идентичность разрешения конкретной атаки",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Уникален; неизменяем"
+  },
+  {
+    "Data type": "ARRAY<ID>",
+    "Default": "[]",
+    "Field": "combatValueDefinitionIds",
+    "Purpose": "Какие выражения разрешались",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Статический CVD, dynamic WeaponProfileVersion, MonsterAttackProfile, canonical special или symbiont rule; ровно реально использованные определения."
+  },
+  {
+    "Data type": "MAP<ID,UUID>",
+    "Default": "{}",
+    "Field": "itemInstanceIdByDefinition",
+    "Purpose": "Связь выражения с оружием/щитом/бронёй",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Обязательно только при sourceKind=ITEM; отсутствует для monster/symbiont/natural-armor source."
+  },
+  {
+    "Data type": "MAP<ID,UUID>",
+    "Default": "{}",
+    "Field": "weaponProfileVersionIdsByDefinition",
+    "Purpose": "Связь результата с версией профиля",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Обязательно только для ITEM DAMAGE/PENETRATION; не подставлять фиктивную версию для монстра."
+  },
+  {
+    "Data type": "MAP<ID,ENUM>",
+    "Default": "{}",
+    "Field": "attackVariantIdByDefinition",
+    "Purpose": "Использованный вариант",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Обязательно только для ITEM; для иных sourceKind используется профиль/ability ID."
+  },
+  {
+    "Data type": "MAP<UUID,JSON>",
+    "Default": "{}",
+    "Field": "effectiveWeaponProfileSnapshotsByVersion",
+    "Purpose": "Повторяемость и отсутствие ретроспективного пересчёта",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Только sourceKind=ITEM; общий sourceSnapshotByDefinition обязателен для всех sourceKind."
+  },
+  {
+    "Data type": "MAP<STRING,INTEGER>",
+    "Default": "{}",
+    "Field": "rollResultsByGroupId",
+    "Purpose": "Исходы бросков до множителей и бонусов",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Ровно один сырой результат на каждый использованный rollGroupId; для dice-free определений записи нет"
+  },
+  {
+    "Data type": "NUMBER",
+    "Default": "null",
+    "Field": "resolvedDamage",
+    "Purpose": "Итог урона до последующих правил снижения",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Вычислен по активному DAMAGE-определению"
+  },
+  {
+    "Data type": "NUMBER",
+    "Default": "null",
+    "Field": "resolvedPenetration",
+    "Purpose": "Итог пробития этой атаки",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Вычислен по активному PENETRATION-определению\nПри armorPolicy=IGNORE_ARMOR_BY_MON-115 значение остаётся null: penetration не разрешается."
+  },
+  {
+    "Data type": "MAP<ID,INTEGER>",
+    "Default": "{}",
+    "Field": "resolvedArmorByDefinition",
+    "Purpose": "Результаты брони этой атаки",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Значения только присутствующих слоёв. При armorLayerState=NO_LAYERS карта пуста, сравнение Pr>armor не выполняется.\nПри armorPolicy=IGNORE_ARMOR_BY_MON-115 карта остаётся пустой: armor dice и сравнение не выполняются."
+  },
+  {
+    "Data type": "JSON",
+    "Default": "—",
+    "Field": "evaluationInputsSnapshot",
+    "Purpose": "Повторяемость и аудит вычисления",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Снимок sourceKind-specific профиля/правила, характеристик, модификаторов, DefenseChoice и armor layer set.\nПри IGNORE_ARMOR исходный armor layer set сохраняется в снимке только для аудита и не влияет на урон."
+  },
+  {
+    "Data type": "DATETIME",
+    "Default": "—",
+    "Field": "evaluatedAt",
+    "Purpose": "Хронология",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Время завершения разрешения"
+  },
+  {
+    "Data type": "ID",
+    "Default": "—",
+    "Field": "combatLogEntryId",
+    "Purpose": "Долговременное хранение результата",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Ссылка на неизменяемую запись боевого журнала"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NONE",
+    "Field": "itemInstanceWriteBack",
+    "Purpose": "Явный запрет сохранять runtime-результаты в экземпляр предмета",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "NONE; применимо при ITEM, для иных sourceKind поле остаётся NONE без фиктивного item."
+  },
+  {
+    "Data type": "MAP<ID,ENUM>",
+    "Default": "{}",
+    "Field": "sourceKindByDefinition",
+    "Purpose": "Выбор доменного resolver",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "ITEM | MONSTER_BASE_ATTACK | CANONICAL_SPECIAL_ATTACK | SYMBIONT_ABILITY | NATURAL_ARMOR."
+  },
+  {
+    "Data type": "MAP<ID,JSON>",
+    "Default": "{}",
+    "Field": "sourceSnapshotByDefinition",
+    "Purpose": "Общая повторяемость",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Полный неизменяемый снимок каждого реально использованного source; поздняя правка не влияет."
+  },
+  {
+    "Data type": "MAP<ID,ID>",
+    "Default": "{}",
+    "Field": "monsterAttackProfileIdByDefinition",
+    "Purpose": "Базовая атака монстра",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Для MONSTER_BASE_ATTACK; ItemInstance отсутствует."
+  },
+  {
+    "Data type": "MAP<ID,UUID>",
+    "Default": "{}",
+    "Field": "monsterEntityIdByDefinition",
+    "Purpose": "Связь с актором",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Для monster-domain source; экземпляр атаки/брони."
+  },
+  {
+    "Data type": "MAP<ID,ID>",
+    "Default": "{}",
+    "Field": "canonicalAttackProfileIdByDefinition",
+    "Purpose": "Каноническая особая атака",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Для CANONICAL_SPECIAL_ATTACK."
+  },
+  {
+    "Data type": "MAP<ID,RULE_ID>",
+    "Default": "{}",
+    "Field": "symbiontAbilityRuleIdByDefinition",
+    "Purpose": "Источник способности",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Для SYMBIONT_ABILITY."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NO_LAYERS",
+    "Field": "armorLayerState",
+    "Purpose": "Безошибочное разрешение брони",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "NO_LAYERS | PRESENT. NO_LAYERS пропускает любой Pr, включая 0."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NONE",
+    "Field": "defenseChoice",
+    "Purpose": "Выбор effectiveController цели",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Одна доступная защита либо NONE."
+  },
+  {
+    "Data type": "NUMBER",
+    "Default": 0,
+    "Field": "defenseTotal",
+    "Purpose": "Этап точности",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "При NONE всегда 0 и бросок защиты отсутствует."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NONE",
+    "Field": "monsterTemplateWriteBack",
+    "Purpose": "Запрет записи runtime-результатов в шаблон",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Единственное допустимое значение NONE."
+  },
+  {
+    "Data type": "MAP<ENUM,JSON>",
+    "Default": "{}",
+    "Field": "criticalResolutionByStage",
+    "Purpose": "Воспроизводимый боевой приоритет критичности по каждому этапу",
+    "Required": "CONDITIONAL",
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Только для этапов проверки с allowCritical=true. Хранит rawFace, criticalPolarity, confirmedGrade и resolutionMode; CORE-229 применяется до числового сравнения. DAMAGE/PENETRATION/ARMOR не включаются без отдельного прямого правила."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "STANDARD",
+    "Field": "armorPolicy",
+    "Purpose": "Выбор обычного либо локально переопределённого конвейера брони",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "STANDARD | IGNORE_ARMOR_BY_MON-115. Локальная политика берётся из неизменяемого sourceSnapshot."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NOT_RESOLVED",
+    "Field": "penetrationResolution",
+    "Purpose": "Явное состояние этапа пробития",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "NOT_RESOLVED | RESOLVED | SKIP. При IGNORE_ARMOR_BY_MON-115 обязательно SKIP и resolvedPenetration=null."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NOT_RESOLVED",
+    "Field": "armorResolution",
+    "Purpose": "Явное состояние этапа брони",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "NOT_RESOLVED | RESOLVED | SKIP. При IGNORE_ARMOR_BY_MON-115 обязательно SKIP и resolvedArmorByDefinition={}."
+  },
+  {
+    "Data type": "ARRAY<RollOccurrence>",
+    "Default": "[]",
+    "Field": "rollOccurrences",
+    "Purpose": "Нормализованный аудит исходных, подтверждающих и служебных бросков",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Одна запись на каждый фактически брошенный die occurrence; исходный D20 имеет уникальный originRollId. Множитель результата не создаёт вторую запись."
+  },
+  {
+    "Data type": "MAP<UUID,RollOccurrence>",
+    "Default": "{}",
+    "Field": "rollMetadataByOriginRollId",
+    "Purpose": "Дедупликация CORE-233",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Ключи уникальны; повторное разрешение originRollId не изменяет состояние."
+  },
+  {
+    "Data type": "ARRAY<SymbiontXpEvent>",
+    "Default": "[]",
+    "Field": "progressionEvents",
+    "Purpose": "Маршрут DIRECT_SYMBIONT | CHARACTER_PROGRESS_COUNTER | NEVER_PROGRESSION",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Только для PLAYER_CHARACTER, original D20, rawFace=1|20; максимум одно событие на originRollId."
+  },
+  {
+    "Data type": "SET<UUID>",
+    "Default": "{}",
+    "Field": "processedProgressionOriginRollIds",
+    "Purpose": "Серверная защита от повторного XP/баллов",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "После атомарной обработки содержит originRollId; повтор — IGNORED_DUPLICATE."
+  },
+  {
+    "Data type": "STRING",
+    "Default": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Field": "progressionDependencyTuple",
+    "Purpose": "Импорт и воспроизведение по совместимой линии",
+    "Required": true,
+    "Scope": "ATTACK_RESOLUTION",
+    "Validation / constraint": "Должно дословно равняться: Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2"
+  }
+]

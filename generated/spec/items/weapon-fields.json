@@ -1,0 +1,410 @@
+[
+  {
+    "Data type": "UUID",
+    "Default": "—",
+    "Field": "weaponProfileVersionId",
+    "Purpose": "Идентичность версии",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "Уникален; неизменяем"
+  },
+  {
+    "Data type": "UUID",
+    "Field": "previousVersionId",
+    "Purpose": "Цепочка версий",
+    "Required": false,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "FK на предыдущую версию того же itemInstanceId+attackVariantId"
+  },
+  {
+    "Data type": "UUID",
+    "Default": "—",
+    "Field": "itemInstanceId",
+    "Purpose": "Конкретный экземпляр",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "FK → 07_Модель_экземпляра.itemInstanceId"
+  },
+  {
+    "Data type": "ID",
+    "Default": "—",
+    "Field": "ownerId",
+    "Purpose": "Аудит области действия",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "Снимок владельца на момент создания версии; CHARACTER включает игрока и НПС"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "CHARACTER",
+    "Field": "ownerType",
+    "Purpose": "Тип владельца",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "CHARACTER | CORPSE | BATTLE_SCENE; для master patch существующего оружия обычно CHARACTER"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "DEFAULT",
+    "Field": "attackVariantId",
+    "Purpose": "Вариант профиля/атаки",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "DEFAULT|ONE_HAND|TWO_HAND|SWORD|SHIELD|RAPIER; для многовариантного оружия обязателен"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "TEMPLATE_FIXED",
+    "Field": "statSource",
+    "Purpose": "Происхождение профиля",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "TEMPLATE_FIXED | PLAYER_FORMULA_VALIDATED | MASTER_OVERRIDE"
+  },
+  {
+    "Data type": "STRING",
+    "Default": "ITEM_REGISTRY_V1.2",
+    "Field": "templateProfileVersion",
+    "Purpose": "Трассировка шаблона",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "Версия канонического шаблона, от которого строится effective profile"
+  },
+  {
+    "Data type": "ID",
+    "Field": "formulaId",
+    "Purpose": "Использованная формула",
+    "Required": "CONDITIONAL",
+    "Scope": "PLAYER_VALIDATION",
+    "Validation / constraint": "Обязателен для PLAYER_FORMULA_VALIDATED; FK → 05_Формулы_валидации"
+  },
+  {
+    "Data type": "STRING",
+    "Field": "formulaVersion",
+    "Purpose": "Воспроизводимость валидатора",
+    "Required": "CONDITIONAL",
+    "Scope": "PLAYER_VALIDATION",
+    "Validation / constraint": "Для PLAYER_FORMULA_VALIDATED = ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NOT_APPLICABLE",
+    "Field": "validationStatus",
+    "Purpose": "Итог проверки",
+    "Required": true,
+    "Scope": "PLAYER_VALIDATION",
+    "Validation / constraint": "PLAYER_FORMULA_VALIDATED→VALID; MASTER_OVERRIDE→OVERRIDDEN; TEMPLATE_FIXED→NOT_APPLICABLE"
+  },
+  {
+    "Data type": "JSON",
+    "Field": "validationWitness",
+    "Purpose": "Доказательство joint feasibility",
+    "Required": "CONDITIONAL",
+    "Scope": "PLAYER_VALIDATION",
+    "Validation / constraint": "Обязателен для PLAYER_FORMULA_VALIDATED; L/Lw/Ls и каждый независимый производственный дайс"
+  },
+  {
+    "Data type": "JSON",
+    "Default": "{}",
+    "Field": "instanceProfilePatch",
+    "Purpose": "Дельта к шаблону/предыдущей версии",
+    "Required": "CONDITIONAL",
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "Для PLAYER_FORMULA_VALIDATED содержит только формульные выходы; для MASTER_OVERRIDE — только поля MasterPatchFieldsTable"
+  },
+  {
+    "Data type": "JSON",
+    "Default": "—",
+    "Field": "effectiveProfile",
+    "Purpose": "Единый runtime-снимок профиля",
+    "Required": true,
+    "Scope": "WEAPON_PROFILE_VERSION",
+    "Validation / constraint": "Полный результат templateProfile + instanceProfilePatch; совпадает с afterProfile и структурированными полями версии"
+  },
+  {
+    "Data type": "OBJECT",
+    "Default": "—",
+    "Field": "damageDefinition",
+    "Purpose": "Базовое определение урона",
+    "Required": true,
+    "Scope": "EFFECTIVE_PROFILE",
+    "Validation / constraint": "definitionId,valueMode,sourceNotation,baseExpression,sourceScope,evaluationScope,rollGroupId; master dice — только по закрытой грамматике"
+  },
+  {
+    "Data type": "OBJECT",
+    "Default": "—",
+    "Field": "penetrationDefinition",
+    "Purpose": "Базовое определение пробития",
+    "Required": true,
+    "Scope": "EFFECTIVE_PROFILE",
+    "Validation / constraint": "Та же структура; rollGroupId независим от DAMAGE, если обе величины бросаются"
+  },
+  {
+    "Data type": "NUMBER",
+    "Field": "instanceDamage",
+    "Purpose": "Готовое Dm",
+    "Required": "CONDITIONAL",
+    "Scope": "EFFECTIVE_PROFILE",
+    "Validation / constraint": "Обязателен и >0 только когда effective damageDefinition.valueMode=INSTANCE_VALUE; никогда не хранит исход боя"
+  },
+  {
+    "Data type": "MAP<STAT,NUMBER>",
+    "Default": "{}",
+    "Field": "statRequirements",
+    "Purpose": "Требования для использования без штрафа",
+    "Required": true,
+    "Scope": "EFFECTIVE_PROFILE",
+    "Validation / constraint": "Ключи S/D/I/W/M/Z/C; значения конечные >0; пустая карта = нет требований"
+  },
+  {
+    "Data type": "DECIMAL",
+    "Field": "rangeMeters",
+    "Purpose": "Предельная дальность",
+    "Required": "CONDITIONAL",
+    "Scope": "EFFECTIVE_PROFILE",
+    "Validation / constraint": "Для дальнобойного attackVariantId конечное >0; для ближнего отсутствует"
+  },
+  {
+    "Data type": "DECIMAL",
+    "Field": "accuracyBonus",
+    "Purpose": "Мастерский бонус точности",
+    "Required": false,
+    "Scope": "EFFECTIVE_PROFILE",
+    "Validation / constraint": "Отсутствует либо конечное >0; аддитивно к обычной проверке точности"
+  },
+  {
+    "Data type": "ID",
+    "Default": "—",
+    "Field": "actorId",
+    "Purpose": "Кто инициировал версию",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Игрок, мастер или системный актор"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "—",
+    "Field": "actorRole",
+    "Purpose": "Роль инициатора",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "PLAYER | MASTER | SYSTEM"
+  },
+  {
+    "Data type": "STRING",
+    "Field": "reason",
+    "Purpose": "Основание изменения",
+    "Required": "CONDITIONAL",
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Обязателен для MASTER_OVERRIDE"
+  },
+  {
+    "Data type": "DATETIME",
+    "Default": "—",
+    "Field": "createdAt",
+    "Purpose": "Время версии",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Неизменяемо"
+  },
+  {
+    "Data type": "JSON",
+    "Field": "beforeProfile",
+    "Purpose": "Снимок до операции",
+    "Required": "CONDITIONAL",
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Обязателен для изменения существующего MASTER_OVERRIDE; null при первичном создании"
+  },
+  {
+    "Data type": "JSON",
+    "Default": "—",
+    "Field": "afterProfile",
+    "Purpose": "Снимок после операции",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Полный effective profile после patch"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NEXT_RESOLVED_ATTACK",
+    "Field": "effectiveFrom",
+    "Purpose": "Граница активации",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Новая версия не меняет уже начатую атаку"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "active",
+    "Purpose": "Текущая версия",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "В каждый момент одна активная версия на itemInstanceId+attackVariantId"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": true,
+    "Field": "immutableAudit",
+    "Purpose": "Запрет ретроспективной мутации",
+    "Required": true,
+    "Scope": "VERSION_AUDIT",
+    "Validation / constraint": "Всегда true; версия, before/after и ссылки боевого лога не переписываются"
+  },
+  {
+    "Field": "Закрытая грамматика мастерских дайсов"
+  },
+  {
+    "Field": "X — конечное положительное число. Bare R20 не выбирается как новый шаблон, но уже существующий канонический R20 сохраняется, пока поле не заменено. definitionId и rollGroupId генерируются из weaponProfileVersionId+attackVariantId+valueKind."
+  },
+  {
+    "Data type": "X domain",
+    "Default": "baseExpression",
+    "Field": "sourceNotation",
+    "Purpose": "Rule ID",
+    "Required": "valueMode",
+    "Scope": "X required",
+    "Validation / constraint": "evaluationScope"
+  },
+  {
+    "Data type": "—",
+    "Default": "ROLL(R4)",
+    "Field": "R4",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": false,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "finite NUMBER >0",
+    "Default": "ROLL(R4)+X",
+    "Field": "R4+X",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": true,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "—",
+    "Default": "ROLL(R6)",
+    "Field": "R6",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": false,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "finite NUMBER >0",
+    "Default": "ROLL(R6)+X",
+    "Field": "R6+X",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": true,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "—",
+    "Default": "ROLL(R12)",
+    "Field": "R12",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": false,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "finite NUMBER >0",
+    "Default": "ROLL(R12)+X",
+    "Field": "R12+X",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": true,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "finite NUMBER >0",
+    "Default": "ROLL(R20)+X",
+    "Field": "R20+X",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": true,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Data type": "finite NUMBER >0",
+    "Default": "2*ROLL(R20)+X",
+    "Field": "R20*2+X",
+    "Purpose": "CORE-188/189",
+    "Required": "PER_ATTACK_ROLL",
+    "Scope": true,
+    "Validation / constraint": "EACH_RESOLVED_ATTACK"
+  },
+  {
+    "Field": "Разрешённые поля instanceProfilePatch мастера"
+  },
+  {
+    "Field": "Неуказанное поле наследуется. Явный null разрешён только для удаления optional accuracyBonus либо instanceDamage, если итоговый damageDefinition больше не INSTANCE_VALUE. Шаблон, itemTypeId, навыки, ёмкость, перезарядка, HP и особые эффекты не меняются."
+  },
+  {
+    "Data type": "Applicable to",
+    "Default": "If omitted",
+    "Field": "Patch field",
+    "Purpose": "Rule ID",
+    "Required": "Validation",
+    "Scope": "Actor",
+    "Validation / constraint": "Explicit null"
+  },
+  {
+    "Data type": "Любой известный тип/вариант оружия",
+    "Default": "Наследовать",
+    "Field": "damageDefinition",
+    "Purpose": "CORE-187/188/189",
+    "Required": "Только MasterDiceGrammarTable; полный объект definition",
+    "Scope": "MASTER",
+    "Validation / constraint": "Запрещён"
+  },
+  {
+    "Data type": "Любой известный тип/вариант оружия",
+    "Default": "Наследовать",
+    "Field": "penetrationDefinition",
+    "Purpose": "CORE-187/188/189",
+    "Required": "Только MasterDiceGrammarTable; отдельный rollGroupId",
+    "Scope": "MASTER",
+    "Validation / constraint": "Запрещён"
+  },
+  {
+    "Data type": "Только effective DAMAGE=INSTANCE_VALUE",
+    "Default": "Наследовать",
+    "Field": "instanceDamage",
+    "Purpose": "CORE-187/188",
+    "Required": "Конечное NUMBER >0; formula bounds не применяются",
+    "Scope": "MASTER",
+    "Validation / constraint": "Только если итоговый DAMAGE≠INSTANCE_VALUE"
+  },
+  {
+    "Data type": "Любое оружие игрока/НПС, включая Чистых",
+    "Default": "Наследовать",
+    "Field": "statRequirements",
+    "Purpose": "CORE-187/188",
+    "Required": "Полный MAP S/D/I/W/M/Z/C; каждое значение >0; {} снимает требования",
+    "Scope": "MASTER",
+    "Validation / constraint": "Использовать {}, не null"
+  },
+  {
+    "Data type": "Только дальнобойный attackVariantId",
+    "Default": "Наследовать",
+    "Field": "rangeMeters",
+    "Purpose": "CORE-187/188",
+    "Required": "Конечное DECIMAL >0",
+    "Scope": "MASTER",
+    "Validation / constraint": "Запрещён для дальнобойного"
+  },
+  {
+    "Data type": "Любое оружие игрока/НПС, включая Чистых",
+    "Default": "Наследовать",
+    "Field": "accuracyBonus",
+    "Purpose": "CORE-187/188",
+    "Required": "Отсутствует либо конечное DECIMAL >0",
+    "Scope": "MASTER",
+    "Validation / constraint": "Удалить бонус"
+  }
+]

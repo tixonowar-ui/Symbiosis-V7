@@ -1,0 +1,292 @@
+[
+  {
+    "Actor": "Игрок",
+    "Command": "PLAYER_REQUEST_ITEM",
+    "Context": "Только незавершённое создание собственного персонажа",
+    "Input / action": "Выбрать тип/вариант и формульно выводимые поля не-Чистого оружия; оружие Чистых — только неизменный шаблон",
+    "OperationID": "OP-REQ-PLAYER",
+    "Preconditions / validation": "Не-Чистое: CORE-185 exact joint witness. Чистое: PURE_WEAPON_PROFILE_LOCKED при любом расхождении. После создания редактирование запрещено",
+    "Rule IDs / source": "CORE-184; CORE-185; CORE-186; CORE-190",
+    "State transition / result": "Локальная заявка; после успеха WeaponProfileVersion со statSource PLAYER_FORMULA_VALIDATED либо TEMPLATE_FIXED"
+  },
+  {
+    "Actor": "Система",
+    "Command": "VALIDATE_PLAYER_WEAPON_PROFILE",
+    "Context": "Отправка заявки при создании",
+    "Input / action": "Проверить один общий witness L/Lw/Ls и независимые производственные дайсы",
+    "OperationID": "OP-REQ-VALIDATE",
+    "Preconditions / validation": "FORMULA_MODE=VALIDATION_ONLY; все заявленные выходы совпадают одновременно; min/max только быстрый отказ",
+    "Rule IDs / source": "CORE-183; CORE-184; CORE-185; CORE-190",
+    "State transition / result": "VALID или INVALID; сохранить formulaId/formulaVersion/witness; без бросков и без создания предмета"
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "GM_FINALIZE_REQUEST",
+    "Context": "До завершения создания персонажа",
+    "Input / action": "Утвердить валидированный профиль либо применить разрешённый instanceProfilePatch",
+    "OperationID": "OP-REQ-GM",
+    "Preconditions / validation": "Роль и причина; структурная валидация; itemTypeId существующего экземпляра неизменяем",
+    "Rule IDs / source": "CORE-183; CORE-187; CORE-188; CORE-190",
+    "State transition / result": "Создать полную WeaponProfileVersion; итоговый предмет не экипирован; MASTER_OVERRIDE при изменении профиля"
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "GM_GIVE_READY_ITEM",
+    "Context": "Любое допустимое состояние",
+    "Input / action": "Выдать готовый экземпляр известного типа владельцу PLAYER/NPC",
+    "OperationID": "OP-GM-GIVE",
+    "Preconditions / validation": "Полный effective profile; неизменный шаблон может остаться TEMPLATE_FIXED, иной профиль — MASTER_OVERRIDE; reason обязателен",
+    "Rule IDs / source": "CORE-183; CORE-187; CORE-188; CORE-190; AQA-032",
+    "State transition / result": "Создать ItemInstance и начальную WeaponProfileVersion; provenance/audit"
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "GM_REMOVE_ITEM",
+    "Context": "Любое допустимое состояние",
+    "Input / action": "Изъять экземпляр/часть стека",
+    "OperationID": "OP-GM-REMOVE",
+    "Preconditions / validation": "Причина обязательна",
+    "Rule IDs / source": "AQA-032",
+    "State transition / result": "Удалить у владельца; сохранить аудит"
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "GM_DESTROY_ITEM",
+    "Context": "Любое допустимое состояние",
+    "Input / action": "Уничтожить экземпляр",
+    "OperationID": "OP-GM-DESTROY",
+    "Preconditions / validation": "Причина обязательна",
+    "Rule IDs / source": "AQA-032",
+    "State transition / result": "Экземпляр более недоступен; сохранить аудит"
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "GM_TRANSFORM_TO_STORY_ITEM",
+    "Context": "Вне/в бою по мастерскому решению",
+    "Input / action": "Преобразовать в сюжетный предмет",
+    "OperationID": "OP-GM-STORY",
+    "Preconditions / validation": "Свободный текст не даёт механику без структуры",
+    "Rule IDs / source": "AQA-032; AQ2-005",
+    "State transition / result": "Обновить тип/эффект и аудит"
+  },
+  {
+    "Actor": "Игрок/мастер НПС",
+    "Command": "EQUIP",
+    "Context": "Вне боя или бой",
+    "Input / action": "Экипировать из инвентаря",
+    "OperationID": "OP-EQUIP",
+    "Preconditions / validation": "В бою 1 действие; требования S/D/навыка не блокируют",
+    "Rule IDs / source": "AQA-014; AQA-032; CORE-016; CORE-177",
+    "State transition / result": "Занять руки/зоны; посчитать штрафы"
+  },
+  {
+    "Actor": "Игрок/мастер НПС",
+    "Command": "UNEQUIP",
+    "Context": "Вне боя или бой",
+    "Input / action": "Снять предмет",
+    "OperationID": "OP-UNEQUIP",
+    "Preconditions / validation": "В бою 1 действие",
+    "Rule IDs / source": "AQA-032",
+    "State transition / result": "Освободить слот; вернуть в инвентарь"
+  },
+  {
+    "Actor": "Игрок",
+    "Command": "TRANSFER",
+    "Context": "Вне боя",
+    "Input / action": "Передать согласному персонажу той же локации",
+    "OperationID": "OP-TRANSFER",
+    "Preconditions / validation": "Атомарно; не допускает двойного владельца",
+    "Rule IDs / source": "AQA-032; CORE-180",
+    "State transition / result": "Сменить ownerId; покрытия/бонусы следуют за экземпляром"
+  },
+  {
+    "Actor": "Игрок/мастер",
+    "Command": "SPLIT_STACK",
+    "Context": "Передача/лут/применение",
+    "Input / action": "Выделить q единиц",
+    "OperationID": "OP-SPLIT",
+    "Preconditions / validation": "1≤q≤quantity; сохранить stack signature",
+    "Rule IDs / source": "CQA-061; SYM-183",
+    "State transition / result": "Два стека; суммарное количество неизменно"
+  },
+  {
+    "Actor": "Система",
+    "Command": "MERGE_STACKS",
+    "Context": "Инвентарь",
+    "Input / action": "Объединить полностью идентичные стеки",
+    "OperationID": "OP-MERGE",
+    "Preconditions / validation": "stackKey совпадает",
+    "Rule IDs / source": "AQA-011",
+    "State transition / result": "Одна строка с суммарным количеством"
+  },
+  {
+    "Actor": "Игрок/НПС",
+    "Command": "RELOAD",
+    "Context": "Бой",
+    "Input / action": "Перезарядить/сменить магазин",
+    "OperationID": "OP-RELOAD",
+    "Preconditions / validation": "Стоимость по профилю; Айнцберн 2 действия атомарно в одном ходу",
+    "Rule IDs / source": "CORE-125; CORE-126",
+    "State transition / result": "Обновить currentAmmo и боезапас; отдельный жизненный цикл магазина не автоматизировать без утверждённого правила"
+  },
+  {
+    "Actor": "Игрок/НПС",
+    "Command": "CONSUME_OR_ADMINISTER",
+    "Context": "Бой/вне боя",
+    "Input / action": "Принять/передать/принудительно ввести препарат",
+    "OperationID": "OP-CONSUME",
+    "Preconditions / validation": "1 препарат за ход; раса/лимит 24ч; стоимость по роли",
+    "Rule IDs / source": "CORE-101; CORE-156",
+    "State transition / result": "Списать дозу; создать/обновить эффект"
+  },
+  {
+    "Actor": "Игрок/мастер",
+    "Command": "APPLY_COATING",
+    "Context": "Мирно для яда; бой для слюны",
+    "Input / action": "Нанести одно покрытие на конкретный экземпляр/снаряд/еду",
+    "OperationID": "OP-COAT",
+    "Preconditions / validation": "Стек сначала расщепить. Яд: до первого успешного попадания, промах не расходует; пища — до употребления. Слюна: 1 боевое действие, огниво/Зубы-огниво или подтверждение мастера.\nИсточник и effectFamily типизированы. CustomMonster без inventory не выполняет item-required ветвь; фиктивный предмет/контейнер не создаётся.",
+    "Rule IDs / source": "SYM-183; SYM-068; CQA-009\nCORE-204; CORE-228",
+    "State transition / result": "Создать activeCoating. Яд расходуется при первом попадании (на оружии/снаряде половина профиля; в пище полный). Горящая слюна действует 3/6 ходов, не расходуется попаданием/промахом, повтор обновляет срок.\nДля яда сохранить effectFamily=POISON и poisonSourceKind; ALL_POISON проверяется до payload."
+  },
+  {
+    "Actor": "Игрок/НПС",
+    "Command": "THROW_ITEM",
+    "Context": "Бой",
+    "Input / action": "Метнуть конкретный экземпляр",
+    "OperationID": "OP-THROW",
+    "Preconditions / validation": "Экземпляр предмета удаляется из инвентаря при объявлении; масса нужна",
+    "Rule IDs / source": "CORE-128; CORE-130; CORE-131",
+    "State transition / result": "Экземпляр становится объектом боевой сцены в рассчитанной точке; попадание не передаёт владение цели, подбор — отдельное разрешённое действие"
+  },
+  {
+    "Actor": "Игрок/НПС",
+    "Command": "PICK_UP_THROWN_ITEM",
+    "Context": "Бой",
+    "Input / action": "Подобрать доступный предмет из соседней точки",
+    "OperationID": "OP-PICKUP",
+    "Preconditions / validation": "1 действие; предмет существует в сцене, доступен и ещё не подобран",
+    "Rule IDs / source": "CORE-128",
+    "State transition / result": "Удалить scenePoint; ownerType=CHARACTER; ownerId=подобравший"
+  },
+  {
+    "Actor": "Система/мастер",
+    "Command": "RETURN_THROWN_AFTER_VICTORY",
+    "Context": "Завершение боя победой",
+    "Input / action": "Вернуть исходному метателю его брошенный предмет",
+    "OperationID": "OP-RETURN",
+    "Preconditions / validation": "Только если экземпляр остаётся доступным на сцене и никем не подобран",
+    "Rule IDs / source": "CORE-128; Q-CORE-061",
+    "State transition / result": "ownerType=CHARACTER; ownerId=originalThrowerId; иначе владелец не меняется"
+  },
+  {
+    "Actor": "Игрок",
+    "Command": "LOOT_PARTIAL_STACK",
+    "Context": "Фаза мародерства",
+    "Input / action": "Запросить q единиц из трупа только после проверки corpsePolicy/lootPolicy.",
+    "OperationID": "OP-LOOT",
+    "Preconditions / validation": "Сначала: corpsePolicy=PERSIST и lootPolicy=LOOTABLE. Если NOT_LOOTABLE — CORPSE_NOT_LOOTABLE; если NONE — NO_CORPSE. Только затем разрешено читать containerId/ItemInstance; 1≤q≤остатка.",
+    "Rule IDs / source": "CQA-061; CORE-223",
+    "State transition / result": "При guard error состояние не меняется и контейнер не читается. Для обычного трупа мыслящего q меняет владельца, остаток остаётся у трупа."
+  },
+  {
+    "Actor": "Система",
+    "Command": "DAMAGE_SHIELD",
+    "Context": "Успешный блок",
+    "Input / action": "Вычесть обычный урон атаки",
+    "OperationID": "OP-SHIELD",
+    "Preconditions / validation": "Нет броска брони щита; overflow не переносится",
+    "Rule IDs / source": "CORE-018",
+    "State transition / result": "shieldHP=max(0,HP−damage); при 0 нет бонусов"
+  },
+  {
+    "Actor": "Система/мастер",
+    "Command": "BREAK_NAIT_SEAL",
+    "Context": "Носитель теряет HP или костюм отдельно повреждён",
+    "Input / action": "Снять герметичность и свойства",
+    "OperationID": "OP-SEAL",
+    "Preconditions / validation": "Условие повреждения подтверждено",
+    "Rule IDs / source": "CORE-053",
+    "State transition / result": "sealed=false; эффекты отключены"
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "REPAIR_ITEM",
+    "Context": "Ручное решение",
+    "Input / action": "Отремонтировать щит/Нэйт",
+    "OperationID": "OP-REPAIR",
+    "Preconditions / validation": "Стоимость, время и результат нормативно не заданы",
+    "Rule IDs / source": "CORE-018; CORE-053",
+    "State transition / result": "MANUAL_ONLY; приложение лишь фиксирует итог мастера"
+  },
+  {
+    "Actor": "Система",
+    "Command": "RESOLVE_COMBAT_VALUES",
+    "Context": "Каждая отдельно разрешаемая атака/удар",
+    "Input / action": "Зафиксировать sourceKind/sourceSnapshot; для каждого фактического dice occurrence создать RollOccurrence с уникальным originRollId, rawFace, actorType, rollSource, dieType и rollKind.",
+    "OperationID": "OP-RESOLVE-COMBAT-VALUES",
+    "Preconditions / validation": "Item-поля обязательны только для ITEM. Каждый rollGroupId бросается заново. DAMAGE/PENETRATION/ARMOR не критические. Только PLAYER_CHARACTER + original D20 + rawFace 1/20 допускает CHARACTER_PROGRESS_COUNTER.",
+    "Rule IDs / source": "CORE-125; CORE-208; CORE-229; SYM-021; CORE-230; CORE-233",
+    "State transition / result": "Создать AttackResolution, rollOccurrences и журнал; передать допустимые события в ROUTE_SYMBIONT_XP_EVENT; writeBack шаблонов NONE."
+  },
+  {
+    "Actor": "Мастер",
+    "Command": "MASTER_PATCH_WEAPON_PROFILE",
+    "Context": "Инвентарь любого игрока или НПС",
+    "Input / action": "Передать частичный patch damageDefinition, penetrationDefinition, instanceDamage, statRequirements, rangeMeters, accuracyBonus",
+    "OperationID": "OP-GM-PATCH-WEAPON",
+    "Preconditions / validation": "Подтверждён MASTER; выбран точный itemInstanceId (UI-стек при необходимости расщеплён); reason/time; закрытая грамматика; положительность; attackVariantId; после наследования effective profile полон",
+    "Rule IDs / source": "CORE-187; CORE-188; CORE-190",
+    "State transition / result": "Атомарно создать следующую WeaponProfileVersion; глобальный шаблон и другие экземпляры не менять"
+  },
+  {
+    "Actor": "Система",
+    "Command": "ACTIVATE_WEAPON_PROFILE_VERSION",
+    "Context": "Безопасная граница перед следующей отдельно разрешаемой атакой",
+    "Input / action": "Активировать подготовленную версию itemInstanceId+attackVariantId",
+    "OperationID": "OP-PROFILE-ACTIVATE",
+    "Preconditions / validation": "Предыдущая атака уже имеет собственный snapshot; одна активная версия на ключ",
+    "Rule IDs / source": "CORE-190",
+    "State transition / result": "Обновить activeWeaponProfileVersionIdByVariant; предыдущую версию и журналы сохранить неизменными"
+  },
+  {
+    "Actor": "Система",
+    "Command": "CHECK_CORPSE_LOOT_POLICY",
+    "Context": "До любого LOOT",
+    "Input / action": "Прочитать только corpsePolicy/lootPolicy",
+    "OperationID": "OP-CHECK-CORPSE-LOOT",
+    "Preconditions / validation": "Не обращаться к containerId/ItemInstance до PASS",
+    "Rule IDs / source": "CORE-223",
+    "State transition / result": "LOOTABLE=>continue; NOT_LOOTABLE=>CORPSE_NOT_LOOTABLE; NONE=>NO_CORPSE"
+  },
+  {
+    "Actor": "Система",
+    "Command": "DEEP_CLONE_SENTIENT_INVENTORY",
+    "Context": "INSTANTIATE SentientEnemy",
+    "Input / action": "Клонировать item/container/component/profile/coating graph из CAMPAIGN_CUSTOM или SYSTEM_DEFAULT_SENTIENT snapshot",
+    "OperationID": "OP-CLONE-SENTIENT-INVENTORY",
+    "Preconditions / validation": "Каждая mutable entity получает новый UUID; все внутренние ссылки rewired; immutable ItemType/IconAssetKey могут разделяться",
+    "Rule IDs / source": "CORE-225; CORE-227",
+    "State transition / result": "Новый cloneGraphId; disjoint UUID set; cloneWriteBack=NONE"
+  },
+  {
+    "Actor": "Система",
+    "Command": "REJECT_MONSTER_ITEM_CONTAINER",
+    "Context": "Инстанцирование/выдача/лут",
+    "Input / action": "Проверить EntityKind",
+    "OperationID": "OP-REJECT-MONSTER-INVENTORY",
+    "Preconditions / validation": "CANONICAL_MONSTER и CUSTOM_MONSTER не имеют inventory/equipment",
+    "Rule IDs / source": "CORE-204; CORE-223",
+    "State transition / result": "Контейнер и ItemInstance не создаются; управляемая ошибка операции"
+  },
+  {
+    "Actor": "Система",
+    "Command": "ROUTE_SYMBIONT_XP_EVENT",
+    "Context": "После фиксации каждого исходного D20",
+    "Input / action": "Передать нормализованный RollOccurrence",
+    "OperationID": "OP-ROUTE-SYMBIONT-XP",
+    "Preconditions / validation": "originRollId не обработан; actorType=PLAYER_CHARACTER; rawFace=1|20; original; не confirmation/substitution",
+    "Rule IDs / source": "SYM-021; CORE-230; CORE-233",
+    "State transition / result": "Для DAMAGE/PENETRATION/ARMOR: +1 CHARACTER_PROGRESS_COUNTER; иначе маршрутизацию определяет CORE-230; повтор — NO_OP"
+  }
+]

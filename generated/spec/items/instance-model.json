@@ -1,0 +1,395 @@
+[
+  {
+    "Data type": "UUID",
+    "Default": "—",
+    "Field": "itemInstanceId",
+    "Purpose": "Идентичность физического экземпляра",
+    "Required": true,
+    "Scope": "ITEM_INSTANCE",
+    "Validation / constraint": "Уникален; неизменяем"
+  },
+  {
+    "Data type": "ID",
+    "Default": "—",
+    "Field": "itemTypeId",
+    "Purpose": "Канонический механический тип",
+    "Required": true,
+    "Scope": "ITEM_INSTANCE",
+    "Validation / constraint": "FK → 01_Каталог.ItemTypeID; после создания экземпляра не изменяется"
+  },
+  {
+    "Data type": "MAP<ATTACK_VARIANT,UUID>",
+    "Default": "{}",
+    "Field": "activeWeaponProfileVersionIdByVariant",
+    "Purpose": "Активные версии эффективного профиля",
+    "Required": "CONDITIONAL",
+    "Scope": "ITEM_INSTANCE",
+    "Validation / constraint": "Обязательно для оружия; DEFAULT для обычного, ONE_HAND/TWO_HAND для полуторного, SWORD/SHIELD/RAPIER для составного; FK → 07B"
+  },
+  {
+    "Data type": "DECIMAL",
+    "Field": "massKg",
+    "Purpose": "Метание, переносимый груз и будущая нагрузка",
+    "Required": false,
+    "Scope": "TEMPLATE_OR_INSTANCE",
+    "Validation / constraint": "Конечное число ≥0; если не задано в PDF — ввод мастера"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "UNKNOWN",
+    "Field": "heldSizeClass",
+    "Purpose": "Взаимодействия удержания",
+    "Required": false,
+    "Scope": "TEMPLATE_OR_INSTANCE",
+    "Validation / constraint": "FITS_IN_FIST | LARGE | UNKNOWN"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "UNKNOWN",
+    "Field": "armorWeightClass",
+    "Purpose": "Эффекты лёгкой брони",
+    "Required": false,
+    "Scope": "TEMPLATE",
+    "Validation / constraint": "LIGHT | OTHER | UNKNOWN"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "UNKNOWN",
+    "Field": "flammability",
+    "Purpose": "Явные эффекты; предметное горение не автоматизируется",
+    "Required": false,
+    "Scope": "TEMPLATE_OR_INSTANCE",
+    "Validation / constraint": "COMBUSTIBLE | NONCOMBUSTIBLE | UNKNOWN"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "isIgnitionSource",
+    "Purpose": "Воспламенение покрытия",
+    "Required": false,
+    "Scope": "TEMPLATE",
+    "Validation / constraint": "Огниво=true; custom item — по решению мастера"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "isFood",
+    "Purpose": "Допустимая цель пищевого яда",
+    "Required": false,
+    "Scope": "TEMPLATE",
+    "Validation / constraint": "true для конкретного пищевого custom item"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "canReceivePoison",
+    "Purpose": "Допустимость типизированного ядовитого покрытия; ALL_POISON проверяется до payload.",
+    "Required": false,
+    "Scope": "TEMPLATE",
+    "Validation / constraint": "true для подходящего оружия, снаряда или пищи; каждый профиль покрытия обязан иметь effectFamily=POISON и poisonSourceKind."
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "canReceiveFlammableCoating",
+    "Purpose": "Допустимость горючего покрытия",
+    "Required": false,
+    "Scope": "TEMPLATE",
+    "Validation / constraint": "true для подходящего оружия или снаряда"
+  },
+  {
+    "Data type": "ENUM",
+    "Field": "gripMode",
+    "Purpose": "Фиксированный хват и формульный вариант",
+    "Required": "CONDITIONAL",
+    "Scope": "ITEM_INSTANCE",
+    "Validation / constraint": "ONE_HAND | TWO_HAND; обязателен для полуторного меча; после выдачи не меняется CORE-188"
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "CHARACTER",
+    "Field": "ownerType",
+    "Purpose": "Ровно один владелец или сцена",
+    "Required": true,
+    "Scope": "OWNERSHIP",
+    "Validation / constraint": "CHARACTER | CORPSE | BATTLE_SCENE; доступ к CORPSE разрешается только при внешнем lootPolicy=LOOTABLE."
+  },
+  {
+    "Data type": "ID",
+    "Default": "—",
+    "Field": "ownerId",
+    "Purpose": "Текущий владелец",
+    "Required": true,
+    "Scope": "OWNERSHIP",
+    "Validation / constraint": "Согласован с ownerType; CHARACTER включает игрока и НПС"
+  },
+  {
+    "Data type": "ID",
+    "Field": "battleSceneId",
+    "Purpose": "Боевая сцена",
+    "Required": "CONDITIONAL",
+    "Scope": "OWNERSHIP",
+    "Validation / constraint": "Обязателен при ownerType=BATTLE_SCENE"
+  },
+  {
+    "Data type": "ID",
+    "Field": "scenePointId",
+    "Purpose": "Положение брошенного предмета",
+    "Required": "CONDITIONAL",
+    "Scope": "OWNERSHIP",
+    "Validation / constraint": "Обязателен при ownerType=BATTLE_SCENE"
+  },
+  {
+    "Data type": "ID",
+    "Field": "originalThrowerId",
+    "Purpose": "Исходный метатель",
+    "Required": false,
+    "Scope": "OWNERSHIP",
+    "Validation / constraint": "Сохраняется для условного возврата после боя"
+  },
+  {
+    "Data type": "ID",
+    "Field": "containerId",
+    "Purpose": "Контейнер",
+    "Required": false,
+    "Scope": "OWNERSHIP",
+    "Validation / constraint": "FK на контейнер. Для CANONICAL_MONSTER/CUSTOM_MONSTER контейнер не создаётся; LOOT guard выполняется раньше."
+  },
+  {
+    "Data type": "INTEGER",
+    "Default": 1,
+    "Field": "quantity",
+    "Purpose": "Количество",
+    "Required": true,
+    "Scope": "STACK",
+    "Validation / constraint": "≥1; изменение атомарно"
+  },
+  {
+    "Data type": "STRING",
+    "Default": "—",
+    "Field": "stackKey",
+    "Purpose": "Группировка идентичных экземпляров",
+    "Required": true,
+    "Scope": "STACK",
+    "Validation / constraint": "Учитывает itemType, активный effective profile, качество, покрытия, HP и sealed state"
+  },
+  {
+    "Data type": "INTEGER",
+    "Field": "qualityRoll",
+    "Purpose": "Стартовая оценка",
+    "Required": false,
+    "Scope": "ITEM_INSTANCE",
+    "Validation / constraint": "1..20; рекомендация, не меняет механику автоматически"
+  },
+  {
+    "Data type": "ENUM",
+    "Field": "qualityTier",
+    "Purpose": "Качество",
+    "Required": false,
+    "Scope": "ITEM_INSTANCE",
+    "Validation / constraint": "По шкале PDF; финализирует мастер"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "equipped",
+    "Purpose": "Состояние экипировки",
+    "Required": true,
+    "Scope": "EQUIPMENT",
+    "Validation / constraint": "Выданный предмет не экипируется автоматически"
+  },
+  {
+    "Data type": "ARRAY<ENUM>",
+    "Default": "[]",
+    "Field": "equippedSlots",
+    "Purpose": "Занятые слоты",
+    "Required": false,
+    "Scope": "EQUIPMENT",
+    "Validation / constraint": "Руки или зоны тела"
+  },
+  {
+    "Data type": "ENUM",
+    "Field": "bodyZone",
+    "Purpose": "Зона брони",
+    "Required": false,
+    "Scope": "EQUIPMENT",
+    "Validation / constraint": "HEAD|TORSO|ARM_L|ARM_R|LEG_L|LEG_R"
+  },
+  {
+    "Data type": "INTEGER",
+    "Field": "currentAmmo",
+    "Purpose": "Заряженный боезапас",
+    "Required": false,
+    "Scope": "WEAPON_STATE",
+    "Validation / constraint": "0..magazineCapacity; ёмкость не меняется CORE-188"
+  },
+  {
+    "Data type": "INTEGER",
+    "Field": "shieldCurrentHP",
+    "Purpose": "Текущее HP щита",
+    "Required": false,
+    "Scope": "WEAPON_STATE",
+    "Validation / constraint": "0..shieldMaxHP; max HP не меняется CORE-188"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": false,
+    "Field": "broken",
+    "Purpose": "Неисправность",
+    "Required": true,
+    "Scope": "ITEM_STATE",
+    "Validation / constraint": "При 0 HP щит не даёт бонусов; ремонт MANUAL_ONLY"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Field": "sealed",
+    "Purpose": "Герметичность",
+    "Required": false,
+    "Scope": "ITEM_STATE",
+    "Validation / constraint": "Только Нэйт; true при выдаче"
+  },
+  {
+    "Data type": "ID",
+    "Field": "linkedSetInstanceId",
+    "Purpose": "Связанный комплект",
+    "Required": false,
+    "Scope": "COMPOSITE",
+    "Validation / constraint": "Обязателен для компонентов Корнадоры/Бларадэ"
+  },
+  {
+    "Data type": "ENUM",
+    "Field": "componentRole",
+    "Purpose": "Роль компонента",
+    "Required": false,
+    "Scope": "COMPOSITE",
+    "Validation / constraint": "SWORD | RAPIER | SHIELD"
+  },
+  {
+    "Data type": "ARRAY<OBJECT>",
+    "Default": "[]",
+    "Field": "activeCoatings",
+    "Purpose": "Яд/горючая слюна; любой ALL_POISON иммунитет блокирует обычный и симбиотический poison payload.",
+    "Required": false,
+    "Scope": "ITEM_STATE",
+    "Validation / constraint": "Каждый объект: effectFamily, poisonSourceKind, sourceAbilityId/sourceItemId, payload, appliedAt, expiry/consumeCondition. Для яда effectFamily=POISON обязателен."
+  },
+  {
+    "Data type": "ENUM",
+    "Field": "customBonusStat",
+    "Purpose": "Одна характеристика custom item",
+    "Required": false,
+    "Scope": "CUSTOM_ITEM",
+    "Validation / constraint": "S|D|I|W|M|Z|C"
+  },
+  {
+    "Data type": "INTEGER",
+    "Field": "customBonusValue",
+    "Purpose": "Бонус",
+    "Required": false,
+    "Scope": "CUSTOM_ITEM",
+    "Validation / constraint": ">0; только структурированный custom item"
+  },
+  {
+    "Data type": "BOOLEAN",
+    "Default": true,
+    "Field": "activeOnlyInBackpack",
+    "Purpose": "Условие бонуса",
+    "Required": false,
+    "Scope": "CUSTOM_ITEM",
+    "Validation / constraint": "Для бонусного custom item всегда true"
+  },
+  {
+    "Data type": "JSON",
+    "Default": "—",
+    "Field": "provenance",
+    "Purpose": "Происхождение, deep-clone и доказательство отсутствия write-back.",
+    "Required": true,
+    "Scope": "AUDIT",
+    "Validation / constraint": "source, previousOwner, operationId; при клонировании: templateOrigin, templateId, templateVersionId|catalogVersion, sourceItemKey, cloneGraphId."
+  },
+  {
+    "Data type": "ID",
+    "Default": "—",
+    "Field": "issuedBy",
+    "Purpose": "Кто выдал",
+    "Required": true,
+    "Scope": "AUDIT",
+    "Validation / constraint": "Мастер либо процесс согласования"
+  },
+  {
+    "Data type": "STRING",
+    "Default": "—",
+    "Field": "issueReason",
+    "Purpose": "Причина выдачи",
+    "Required": true,
+    "Scope": "AUDIT",
+    "Validation / constraint": "Не пусто для мастерской операции"
+  },
+  {
+    "Data type": "DATETIME",
+    "Default": "—",
+    "Field": "createdAt",
+    "Purpose": "Время создания экземпляра",
+    "Required": true,
+    "Scope": "AUDIT",
+    "Validation / constraint": "Неизменяемо после создания"
+  },
+  {
+    "Data type": "DATETIME",
+    "Default": "—",
+    "Field": "updatedAt",
+    "Purpose": "Последнее изменение состояния",
+    "Required": true,
+    "Scope": "AUDIT",
+    "Validation / constraint": "Меняется при операции с состоянием; не подменяет аудит профиля"
+  },
+  {
+    "Data type": "UUID",
+    "Field": "cloneGraphId",
+    "Purpose": "Граница независимого item graph",
+    "Required": "CONDITIONAL",
+    "Scope": "AUDIT",
+    "Validation / constraint": "Обязателен для имущества инстанцированного SentientEnemy; новый на каждое добавление."
+  },
+  {
+    "Data type": "STRING",
+    "Field": "sourceItemKey",
+    "Purpose": "Сопоставление clone provenance",
+    "Required": "CONDITIONAL",
+    "Scope": "AUDIT",
+    "Validation / constraint": "Стабильный ключ предмета внутри template version; не является runtime UUID."
+  },
+  {
+    "Data type": "UUID",
+    "Field": "cloneSourceItemInstanceId",
+    "Purpose": "Трассировка источника без shared mutable state",
+    "Required": false,
+    "Scope": "AUDIT",
+    "Validation / constraint": "Только аудит миграции/клона; новый itemInstanceId всегда отличен."
+  },
+  {
+    "Data type": "ENUM",
+    "Field": "templateOrigin",
+    "Purpose": "Источник врага-мыслящего",
+    "Required": "CONDITIONAL",
+    "Scope": "AUDIT",
+    "Validation / constraint": "CAMPAIGN_CUSTOM | SYSTEM_DEFAULT_SENTIENT; для обычной выдачи может отсутствовать."
+  },
+  {
+    "Data type": "ID",
+    "Field": "templateVersionRef",
+    "Purpose": "Воспроизводимость клона",
+    "Required": "CONDITIONAL",
+    "Scope": "AUDIT",
+    "Validation / constraint": "campaign versionId либо system catalogVersion; неизменяемая ссылка."
+  },
+  {
+    "Data type": "ENUM",
+    "Default": "NONE",
+    "Field": "cloneWriteBack",
+    "Purpose": "Запрет изменения шаблона из экземпляра",
+    "Required": true,
+    "Scope": "AUDIT",
+    "Validation / constraint": "Единственное допустимое значение NONE."
+  }
+]

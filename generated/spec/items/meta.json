@@ -1,0 +1,9 @@
+{
+  "gateAllPass": true,
+  "icons": 64,
+  "items": 64,
+  "mediaDir": "generated/media/items",
+  "registryVersion": "v1.6_with_icons",
+  "ruleTraceRows": 157,
+  "source": "artifacts/registries/Symbiosis_V7_Item_Registry_v1.6_with_icons.xlsx"
+}

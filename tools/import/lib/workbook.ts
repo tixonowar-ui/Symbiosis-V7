@@ -55,6 +55,25 @@ export class Workbook {
   }
 
   /**
+   * Rows of a named sheet with blank rows kept, so array index equals the
+   * sheet's own zero-based row number. Needed when something outside the cell
+   * grid refers to rows — drawing anchors do exactly that, and dropping blanks
+   * would shift every reference.
+   */
+  absoluteRows(name: string): readonly Row[] {
+    const raw = this.#book.Sheets[name];
+    if (raw === undefined) {
+      fail(this.#label, `sheet ${JSON.stringify(name)} not found`);
+    }
+    return XLSX.utils.sheet_to_json<CellValue[]>(raw, {
+      header: 1,
+      blankrows: true,
+      defval: null,
+      raw: true,
+    });
+  }
+
+  /**
    * A named sheet read as records keyed by its header row.
    *
    * `headerRow` is explicit because registries are not uniform: some put the

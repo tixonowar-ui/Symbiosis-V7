@@ -1,0 +1,245 @@
+[
+  {
+    "Expected": "64 selectable items; no new monster/web item",
+    "Given": "64 ItemTypeID and 64 IconAssetKey",
+    "Result": "PASS",
+    "Rule / operation IDs": "01; 15",
+    "Scenario ID": "QA-ITM-001",
+    "When": "Import v1.3",
+    "Путь": "Каталог/иконки неизменны"
+  },
+  {
+    "Expected": "No itemInstanceId/WeaponProfile required",
+    "Given": "sourceKind=MONSTER_BASE_ATTACK",
+    "Result": "PASS",
+    "Rule / operation IDs": "OP-RESOLVE-COMBAT-VALUES; 07A/07C",
+    "Scenario ID": "QA-ITM-002",
+    "When": "Resolve attack",
+    "Путь": "MONSTER_ATTACK без предмета"
+  },
+  {
+    "Expected": "Existing item armor/defense works with monster source",
+    "Given": "Target has item layers",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-125/150/226",
+    "Scenario ID": "QA-ITM-003",
+    "When": "Resolve armor",
+    "Путь": "Атака монстра по щиту/броне"
+  },
+  {
+    "Expected": "PASS without comparison",
+    "Given": "armorLayerState=NO_LAYERS",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-226",
+    "Scenario ID": "QA-ITM-004",
+    "When": "Resolve penetration",
+    "Путь": "Pr=0 без брони"
+  },
+  {
+    "Expected": "Blocked",
+    "Given": "armorLayerState=PRESENT",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-226",
+    "Scenario ID": "QA-ITM-005",
+    "When": "Resolve penetration",
+    "Путь": "Pr=0 с бронёй"
+  },
+  {
+    "Expected": "Equal blocked; greater passes",
+    "Given": "PRESENT layer",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-150/226",
+    "Scenario ID": "QA-ITM-006",
+    "When": "Pr=armor / Pr>armor",
+    "Путь": "Граница пробития"
+  },
+  {
+    "Expected": "Both blocked before payload",
+    "Given": "effectFamily=POISON",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-228",
+    "Scenario ID": "QA-ITM-007",
+    "When": "Target has ALL_POISON",
+    "Путь": "Обычный и симбиотический яд"
+  },
+  {
+    "Expected": "CORPSE_NOT_LOOTABLE before container lookup",
+    "Given": "lootPolicy=NOT_LOOTABLE",
+    "Result": "PASS",
+    "Rule / operation IDs": "OP-CHECK-CORPSE-LOOT; CORE-223",
+    "Scenario ID": "QA-ITM-008",
+    "When": "LOOT",
+    "Путь": "Обыск монстра"
+  },
+  {
+    "Expected": "NO_CORPSE controlled error",
+    "Given": "corpsePolicy=NONE",
+    "Result": "PASS",
+    "Rule / operation IDs": "OP-CHECK-CORPSE-LOOT; CORE-223",
+    "Scenario ID": "QA-ITM-009",
+    "When": "LOOT",
+    "Путь": "Обыск уничтоженного трупа"
+  },
+  {
+    "Expected": "Disjoint item/profile/component/coating UUID sets",
+    "Given": "Same template version",
+    "Result": "PASS",
+    "Rule / operation IDs": "OP-CLONE-SENTIENT-INVENTORY; CORE-225",
+    "Scenario ID": "QA-ITM-010",
+    "When": "Instantiate twice",
+    "Путь": "Два custom SentientEnemy"
+  },
+  {
+    "Expected": "Same deep-clone; template unchanged; instance mutable",
+    "Given": "SYSTEM_DEFAULT_SENTIENT",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-225/227",
+    "Scenario ID": "QA-ITM-011",
+    "When": "Instantiate",
+    "Путь": "System default SentientEnemy"
+  },
+  {
+    "Expected": "CREATION_FORBIDDEN; no item/scene/map object",
+    "Given": "Spider/SYM-117",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-224",
+    "Scenario ID": "QA-ITM-012",
+    "When": "Request production",
+    "Путь": "Паутина CustomMonster"
+  },
+  {
+    "Expected": "Exactly 8 v1.2 formats; monster grammar not merged",
+    "Given": "Master weapon patch",
+    "Result": "PASS",
+    "Rule / operation IDs": "07B; CORE-188/189",
+    "Scenario ID": "QA-ITM-013",
+    "When": "Validate expression",
+    "Путь": "Оружейная грамматика"
+  },
+  {
+    "Expected": "Exactly four CVD: DAMAGE/PENETRATION for each grip; no DEFAULT variant",
+    "Given": "ITM-WPN-012 + gripMode ONE_HAND/TWO_HAND",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-033; 02A",
+    "Scenario ID": "QA-ITM-014",
+    "When": "Resolve runtime definitions",
+    "Путь": "Полуторный меч: фиксированный хват"
+  },
+  {
+    "Expected": "Accuracy обрабатывается CORE-229; DAMAGE/PENETRATION/ARMOR не становятся критическими, но каждый исходный D20 игрока с natural 1/20 создаёт ровно 1 балл CHARACTER_PROGRESS_COUNTER.",
+    "Given": "accuracy natural 20/1",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-229; SYM-021; CORE-230; CORE-233; 07A; 19_XP_RollOccurrences",
+    "Scenario ID": "QA-ITM-015",
+    "When": "Resolve combat check",
+    "Путь": "Боевая критичность атаки"
+  },
+  {
+    "Expected": "Full R20×2+40 DAMAGE; resolvedPenetration=null; armor map empty; no Pr comparison",
+    "Given": "Canonical special attack; armorLayerState=PRESENT",
+    "Result": "PASS",
+    "Rule / operation IDs": "MON-115; CORE-150/226; 07A/07C",
+    "Scenario ID": "QA-ITM-016",
+    "When": "Resolve attack contract",
+    "Путь": "Взрыв Блохи по бронированной цели"
+  },
+  {
+    "Expected": "0 direct XP; +1 CHARACTER_PROGRESS_COUNTER; confirmedGrade=0",
+    "Given": "PLAYER_CHARACTER; original D20; rawFace=20; связанная характеристика",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-229/230/233",
+    "Scenario ID": "QA-ITM-XP-001",
+    "When": "Разрешить DAMAGE",
+    "Путь": "DAMAGE natural 20"
+  },
+  {
+    "Expected": "0 direct XP; +1 CHARACTER_PROGRESS_COUNTER",
+    "Given": "PLAYER_CHARACTER; original D20; rawFace=1",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-229/230",
+    "Scenario ID": "QA-ITM-XP-002",
+    "When": "Разрешить PENETRATION",
+    "Путь": "PENETRATION natural 1"
+  },
+  {
+    "Expected": "0 direct XP; +1 CHARACTER_PROGRESS_COUNTER",
+    "Given": "PLAYER_CHARACTER-защитник; original D20; rawFace=20",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-229/230",
+    "Scenario ID": "QA-ITM-XP-003",
+    "When": "Разрешить ARMOR",
+    "Путь": "ARMOR natural 20"
+  },
+  {
+    "Expected": "Нет progression event",
+    "Given": "rawFace≠20; итог выражения=20",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-230/233",
+    "Scenario ID": "QA-ITM-XP-004",
+    "When": "Разрешить quantitative stage",
+    "Путь": "Формула дала 20 без natural"
+  },
+  {
+    "Expected": "Один RollOccurrence, один originRollId, +1 балл",
+    "Given": "2*ROLL(R20); rawFace=20",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-233; 02A/07A",
+    "Scenario ID": "QA-ITM-XP-005",
+    "When": "Разрешить один rollGroupId",
+    "Путь": "R20×2"
+  },
+  {
+    "Expected": "Каждый фактический D20 получает собственный originRollId",
+    "Given": "Точность, пробитие и урон имеют разные rollGroupId",
+    "Result": "PASS",
+    "Rule / operation IDs": "07A; 19_XP",
+    "Scenario ID": "QA-ITM-XP-006",
+    "When": "Разрешить атаку",
+    "Путь": "Независимые D20"
+  },
+  {
+    "Expected": "IGNORED_DUPLICATE; состояние не меняется",
+    "Given": "Уже APPLIED_COUNTER",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-233",
+    "Scenario ID": "QA-ITM-XP-007",
+    "When": "Повторно отправить событие",
+    "Путь": "Повтор originRollId"
+  },
+  {
+    "Expected": "Одинаковый результат; источник сохраняется только для аудита",
+    "Given": "Одинаковые actor/rawFace/rollKind",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-230",
+    "Scenario ID": "QA-ITM-XP-008",
+    "When": "Маршрутизировать",
+    "Путь": "AUTO и MANUAL"
+  },
+  {
+    "Expected": "NEVER_PROGRESSION; нет счётчика и XP",
+    "Given": "SYSTEM_SENTIENT_ENEMY или CANONICAL_MONSTER; rawFace=20",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-230; NO_XP_PROGRESSION",
+    "Scenario ID": "QA-ITM-XP-009",
+    "When": "Разрешить stage",
+    "Путь": "Системный противник"
+  },
+  {
+    "Expected": "CORE-083/084 не запускаются; eventPoints=1 только в pool",
+    "Given": "DAMAGE/PENETRATION/ARMOR",
+    "Result": "PASS",
+    "Rule / operation IDs": "CORE-229",
+    "Scenario ID": "QA-ITM-XP-010",
+    "When": "rawFace=1|20",
+    "Путь": "Некритические stages"
+  },
+  {
+    "Expected": "Tuple совпадает дословно",
+    "Given": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Result": "PASS",
+    "Rule / operation IDs": "Baseline v1.1",
+    "Scenario ID": "QA-ITM-XP-011",
+    "When": "Импортировать registry",
+    "Путь": "Version tuple"
+  }
+]

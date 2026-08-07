@@ -1,0 +1,186 @@
+[
+  {
+    "Allowed / default": "Новый UUID для каждого исходного D20",
+    "Data type": "UUID",
+    "Field": "originRollId",
+    "Required": true,
+    "Runtime use": "Deduplication key CORE-233",
+    "Validation / invariant": "Уникален в журнале кампании; служебные записи ссылаются на originRollId, но не переиспользуют его как собственный источник прогрессии."
+  },
+  {
+    "Allowed / default": "Existing AttackResolution",
+    "Data type": "UUID",
+    "Field": "attackResolutionId",
+    "Required": true,
+    "Runtime use": "Combat audit",
+    "Validation / invariant": "FK на 07A."
+  },
+  {
+    "Allowed / default": "Один CVD / dynamic definition",
+    "Data type": "ID",
+    "Field": "combatValueDefinitionId",
+    "Required": false,
+    "Runtime use": "Связь с 02A",
+    "Validation / invariant": "Обязательно для предметного DAMAGE/PENETRATION/ARMOR."
+  },
+  {
+    "Allowed / default": "Одна runtime-группа",
+    "Data type": "STRING",
+    "Field": "rollGroupId",
+    "Required": false,
+    "Runtime use": "Raw result correlation",
+    "Validation / invariant": "Множитель 2×ROLL(R20) остаётся одной группой и одним originRollId."
+  },
+  {
+    "Allowed / default": "null для не-персонажей",
+    "Data type": "UUID",
+    "Field": "actorCharacterId",
+    "Required": false,
+    "Runtime use": "Owner of progression",
+    "Validation / invariant": "Обязательно при actorType=PLAYER_CHARACTER."
+  },
+  {
+    "Allowed / default": "PLAYER_CHARACTER | NPC | CANONICAL_MONSTER | ARBITRARY_MONSTER | SYSTEM_SENTIENT_ENEMY",
+    "Data type": "ENUM",
+    "Field": "actorType",
+    "Required": true,
+    "Runtime use": "Boundary",
+    "Validation / invariant": "Только PLAYER_CHARACTER допускает progression event; остальные всегда NEVER_PROGRESSION."
+  },
+  {
+    "Allowed / default": "AUTO | MANUAL",
+    "Data type": "ENUM",
+    "Field": "rollSource",
+    "Required": true,
+    "Runtime use": "Audit",
+    "Validation / invariant": "Не влияет на маршрутизацию; MANUAL проходит ту же серверную проверку rawFace."
+  },
+  {
+    "Allowed / default": "D20 | OTHER_DIE | NONE",
+    "Data type": "ENUM",
+    "Field": "dieType",
+    "Required": true,
+    "Runtime use": "Eligibility",
+    "Validation / invariant": "Событие прогрессии возможно только для D20."
+  },
+  {
+    "Allowed / default": "1..число граней",
+    "Data type": "INTEGER",
+    "Field": "rawFace",
+    "Required": false,
+    "Runtime use": "Natural face",
+    "Validation / invariant": "Хранится до модификаторов и множителей."
+  },
+  {
+    "Allowed / default": "DAMAGE | PENETRATION | ARMOR | ATTACK_ACCURACY | OTHER_CHECK",
+    "Data type": "ENUM",
+    "Field": "rollKind",
+    "Required": true,
+    "Runtime use": "Classification",
+    "Validation / invariant": "DAMAGE/PENETRATION/ARMOR имеют NO_DIRECT_BUT_POOL."
+  },
+  {
+    "Allowed / default": "QUANTITATIVE_COMBAT_VALUE для 02A",
+    "Data type": "STRING",
+    "Field": "checkKind",
+    "Required": true,
+    "Runtime use": "Context",
+    "Validation / invariant": "Не объявляет DAMAGE/PENETRATION/ARMOR критическими проверками."
+  },
+  {
+    "Allowed / default": "[]",
+    "Data type": "ARRAY<STAT>",
+    "Field": "modifierStatCodes",
+    "Required": true,
+    "Runtime use": "Direct-XP eligibility outside Item stages",
+    "Validation / invariant": "Фактически прибавленные характеристики; не выводятся из описания."
+  },
+  {
+    "Allowed / default": "NONE | NATURAL_FACE | CONFIRMATION | ABILITY_ASSIGNED | EQUAL_GRADE_SUBSTITUTION",
+    "Data type": "ENUM",
+    "Field": "criticalSource",
+    "Required": true,
+    "Runtime use": "Exclusion",
+    "Validation / invariant": "02A stages use NONE; ability/substitution are NEVER_PROGRESSION."
+  },
+  {
+    "Allowed / default": "POSITIVE | NEGATIVE | null",
+    "Data type": "ENUM",
+    "Field": "criticalPolarity",
+    "Required": false,
+    "Runtime use": "Audit",
+    "Validation / invariant": "Отсутствует для некритических stages."
+  },
+  {
+    "Allowed / default": "0..5",
+    "Data type": "INTEGER",
+    "Field": "confirmedGrade",
+    "Required": true,
+    "Runtime use": "eventPoints source for eligible checks",
+    "Validation / invariant": "Для DAMAGE/PENETRATION/ARMOR всегда 0."
+  },
+  {
+    "Allowed / default": "true для исходного occurrence",
+    "Data type": "BOOLEAN",
+    "Field": "isOriginalRoll",
+    "Required": true,
+    "Runtime use": "Eligibility",
+    "Validation / invariant": "Только true может создать progression event."
+  },
+  {
+    "Allowed / default": false,
+    "Data type": "BOOLEAN",
+    "Field": "isConfirmationRoll",
+    "Required": true,
+    "Runtime use": "Exclusion",
+    "Validation / invariant": "true => NEVER_PROGRESSION."
+  },
+  {
+    "Allowed / default": false,
+    "Data type": "BOOLEAN",
+    "Field": "isEqualGradeSubstitution",
+    "Required": true,
+    "Runtime use": "Exclusion",
+    "Validation / invariant": "true => NEVER_PROGRESSION."
+  },
+  {
+    "Allowed / default": "NO_DIRECT_BUT_POOL | NEVER_PROGRESSION",
+    "Data type": "ENUM",
+    "Field": "progressionEligibility",
+    "Required": true,
+    "Runtime use": "Route guard",
+    "Validation / invariant": "Для D20 Item stages — NO_DIRECT_BUT_POOL; без D20 — NEVER_PROGRESSION."
+  },
+  {
+    "Allowed / default": "CHARACTER_PROGRESS_COUNTER | NEVER_PROGRESSION",
+    "Data type": "ENUM",
+    "Field": "progressionRoute",
+    "Required": true,
+    "Runtime use": "State transition",
+    "Validation / invariant": "Item quantitative stages никогда не используют DIRECT_SYMBIONT."
+  },
+  {
+    "Allowed / default": "0 | 1",
+    "Data type": "INTEGER",
+    "Field": "eventPoints",
+    "Required": true,
+    "Runtime use": "Counter increment",
+    "Validation / invariant": "Некритический Item D20 rawFace=1/20 даёт 1; иначе 0."
+  },
+  {
+    "Allowed / default": "null",
+    "Data type": "UUID",
+    "Field": "selectedSymbiontInstanceId",
+    "Required": false,
+    "Runtime use": "No direct XP",
+    "Validation / invariant": "Для Item quantitative stages всегда null."
+  },
+  {
+    "Allowed / default": "PENDING | APPLIED_DIRECT | APPLIED_COUNTER | IGNORED_NEVER | IGNORED_DUPLICATE | REJECTED_INVALID",
+    "Data type": "ENUM",
+    "Field": "processingStatus",
+    "Required": true,
+    "Runtime use": "Audit",
+    "Validation / invariant": "Для Item quantitative natural 1/20 после атомарной фиксации используется APPLIED_COUNTER; повтор — IGNORED_DUPLICATE."
+  }
+]

@@ -1,0 +1,52 @@
+[
+  {
+    "Armor semantics": "Target item/natural layers via CORE-226",
+    "Evaluation scope": "EACH_RESOLVED_ATTACK",
+    "ItemInstance required": true,
+    "Profile / rule field": "effectiveWeaponProfileSnapshot",
+    "Rule IDs": "CORE-189/190",
+    "Snapshot identity": "itemInstanceId+weaponProfileVersionId+attackVariantId",
+    "Source kind": "ITEM",
+    "Write-back": "itemInstanceWriteBack=NONE"
+  },
+  {
+    "Armor semantics": "Target layers via CORE-226",
+    "Evaluation scope": "EACH_MONSTER_BASE_ATTACK",
+    "ItemInstance required": false,
+    "Profile / rule field": "MonsterAttackProfileVersion",
+    "Rule IDs": "CORE-205…208; CORE-226",
+    "Snapshot identity": "monsterEntityId+monsterAttackProfileId",
+    "Source kind": "MONSTER_BASE_ATTACK",
+    "Write-back": "monsterTemplateWriteBack=NONE"
+  },
+  {
+    "Armor semantics": "Typed profile; armorPolicy from contract. IGNORE_ARMOR_BY_MON-115 => penetrationResolution=SKIP; no armor roll/comparison.",
+    "Evaluation scope": "BY_PROFILE",
+    "ItemInstance required": false,
+    "Profile / rule field": "CanonicalAttackContract",
+    "Rule IDs": "CORE-212; CORE-226; MON-115; Bestiary 06A",
+    "Snapshot identity": "monsterEntityId+canonicalAttackProfileId+rulesVersion",
+    "Source kind": "CANONICAL_SPECIAL_ATTACK",
+    "Write-back": "monsterTemplateWriteBack=NONE"
+  },
+  {
+    "Armor semantics": "Ability rule then CORE-226",
+    "Evaluation scope": "BY_ABILITY",
+    "ItemInstance required": false,
+    "Profile / rule field": "Rule/ability snapshot",
+    "Rule IDs": "CORE-209; CORE-224",
+    "Snapshot identity": "actorEntityId+symbiontAbilityRuleId+ability state",
+    "Source kind": "SYMBIONT_ABILITY",
+    "Write-back": "sourceTemplateWriteBack=NONE"
+  },
+  {
+    "Armor semantics": "0 without other layers => NO_LAYERS",
+    "Evaluation scope": "EACH_INCOMING_ARMOR_RESOLUTION",
+    "ItemInstance required": false,
+    "Profile / rule field": "NaturalArmorDefinition",
+    "Rule IDs": "CORE-210; CORE-226",
+    "Snapshot identity": "targetEntityId+naturalArmorDefinition snapshot",
+    "Source kind": "NATURAL_ARMOR",
+    "Write-back": "targetTemplateWriteBack=NONE"
+  }
+]

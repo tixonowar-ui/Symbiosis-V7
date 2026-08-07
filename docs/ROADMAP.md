@@ -54,9 +54,18 @@
   с их источником: множитель `FREE` = 2 и отсутствие обратной команды у
   начисления. Расхождение останавливает импорт
 
+- Item Registry v1.6 → `generated/spec/items` (20 файлов) и
+  `generated/types/items.ts`: 64 типа предметов, 157 строк трассировки правил,
+  65 боевых значений, гейт по листу «Контроль» (84 строки)
+- **`generated/media` заработал**: 64 иконки извлечены в
+  `generated/media/items`. Связь «изображение → предмет» берётся из якорей
+  OOXML (`xl/drawings/`), а не из порядка файлов в `xl/media/` — там
+  `image10.png` сортируется раньше `image2.png`, и совпадение было бы
+  случайным. Результат сверяется с колонкой `FileName` самого реестра
+
 Осталось:
 
-- Items / Effects / Bestiary / Sentient → `generated/spec`
+- Effects / Bestiary / Sentient → `generated/spec`
 - `generated/media` из `xl/media/` и Runtime Pack (64 иконки, 16 артов)
 - `generated/seed` — SQLite seed
 
