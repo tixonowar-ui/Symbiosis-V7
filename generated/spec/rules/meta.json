@@ -1,0 +1,12 @@
+{
+  "active": 699,
+  "cards": 739,
+  "controlAllPass": true,
+  "controlRows": 99,
+  "dictionaries": 250,
+  "links": 876,
+  "parameters": 4621,
+  "registryVersion": "v1.7",
+  "source": "artifacts/registries/Symbiosis_V7_Executable_Rules_Registry_v1.7.xlsx",
+  "tombstone": 40
+}

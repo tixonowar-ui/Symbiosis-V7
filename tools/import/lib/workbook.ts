@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import * as XLSX from '@e965/xlsx';
 import { fail } from './fail.js';
+import type { JsonObject } from './json.js';
 
 export type CellValue = string | number | boolean | null;
 export type Row = readonly CellValue[];
@@ -118,6 +119,13 @@ export class Table {
     return value;
   }
 
+  /** Cell with its original type preserved — numbers stay numbers. */
+  value(row: number, column: string): CellValue {
+    const raw = this.rows[row]?.[this.#indexOf(column)];
+    if (raw === undefined || raw === null) return null;
+    return typeof raw === 'string' ? raw.trim() : raw;
+  }
+
   /** Rows whose given column is non-empty, as indices. */
   populated(column: string): number[] {
     const indices: number[] = [];
@@ -125,5 +133,34 @@ export class Table {
       if (this.text(i, column) !== '') indices.push(i);
     }
     return indices;
+  }
+
+  /**
+   * Rows as records keyed by column name, skipping rows whose `keyColumn` is
+   * empty — registries carry trailing blank rows that are layout, not data.
+   *
+   * Empty cells are omitted rather than emitted as `null`: across 739 rule cards
+   * of 35 mostly-prose columns that is the difference between a lean spec and
+   * megabytes of padding, and a consumer treats absent and empty alike.
+   */
+  records(keyColumn: string): JsonObject[] {
+    const named = this.columns.map((name, index) => ({ name, index })).filter((c) => c.name !== '');
+
+    const duplicates = named.map((c) => c.name).filter((name, i, all) => all.indexOf(name) !== i);
+    if (duplicates.length > 0) {
+      fail(this.label, `duplicate column name(s): ${[...new Set(duplicates)].join(', ')}`);
+    }
+
+    const out: JsonObject[] = [];
+    for (const row of this.populated(keyColumn)) {
+      const record: JsonObject = {};
+      for (const column of named) {
+        const value = this.value(row, column.name);
+        if (value === null || value === '') continue;
+        record[column.name] = value;
+      }
+      out.push(record);
+    }
+    return out;
   }
 }

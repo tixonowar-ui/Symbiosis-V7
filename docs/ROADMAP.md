@@ -34,11 +34,14 @@
 - Сверка атласа с самим собой: объявленные `counts`, распределение по
   16 доменам, замкнутость 1672 переходов на каталог форм, совпадение
   префикса ID с доменом
+- Executable Rules v1.7 → `generated/spec/rules` (6 файлов) и
+  `generated/types/rules.ts`: 739 карточек, 699 активных, 40 tombstone,
+  4621 параметр, 876 связей, 250 статей справочника
+- Гейт по листу «Контроль» реестра правил: все 99 строк обязаны быть PASS
+- Замкнутость параметров и связей на каталог правил
 
 Осталось:
 
-- Executable Rules v1.7 → `generated/spec` (739 карточек, 4621 параметр,
-  876 связей)
 - Character / Items / Effects / Bestiary / Sentient → `generated/spec`
 - `generated/media` из `xl/media/` и Runtime Pack (64 иконки, 16 артов)
 - `generated/seed` — SQLite seed

@@ -10,6 +10,7 @@
 import { describeFailure, verify } from '../checksums/manifest.js';
 import { importAtlas } from './atlas.js';
 import { ImportError } from './lib/fail.js';
+import { importRules } from './rules.js';
 
 async function gate(): Promise<void> {
   const result = await verify();
@@ -24,14 +25,24 @@ async function gate(): Promise<void> {
 async function main(): Promise<number> {
   await gate();
 
+  // Rules first: it is the senior source of mechanics and every other registry
+  // references its Rule IDs.
+  const rules = await importRules();
+  console.log(
+    `rules:     ${String(rules.activeIds.length)} active, ` +
+      `${String(rules.tombstoneIds.length)} tombstone`,
+  );
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
-  for (const file of atlas.files) {
+
+  const files = [...rules.files, ...atlas.files];
+  for (const file of files) {
     console.log(`           ${file}`);
   }
 
-  const kib = (atlas.bytesWritten / 1024).toFixed(1);
-  console.log(`written:   ${kib} KiB across ${String(atlas.files.length)} file(s)`);
+  const mib = ((rules.bytesWritten + atlas.bytesWritten) / 1024 / 1024).toFixed(2);
+  console.log(`written:   ${mib} MiB across ${String(files.length)} file(s)`);
   return 0;
 }
 
