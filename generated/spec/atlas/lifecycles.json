@@ -1,0 +1,313 @@
+[
+  {
+    "coverageStatus": "COVERED",
+    "entity": "localCharacter",
+    "journeyIds": [
+      "J-CHAR-CREATE",
+      "J-CHAR-IMPORT-EXPORT"
+    ],
+    "states": [
+      "DRAFT",
+      "VALID",
+      "FINAL",
+      "EXPORTED",
+      "VARIANT",
+      "DELETED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "campaignCharacterCopy",
+    "journeyIds": [
+      "J-JOIN-REVIEW",
+      "J-GM-IMPORT-ADMISSION"
+    ],
+    "states": [
+      "CANDIDATE",
+      "GM_REVIEW",
+      "PROPOSED",
+      "ACTIVE",
+      "DECLINED",
+      "ARCHIVED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "campaign",
+    "journeyIds": [
+      "J-CAMPAIGN-CREATE",
+      "J-CAMPAIGN-LIFECYCLE"
+    ],
+    "states": [
+      "DRAFT",
+      "PREFLIGHT",
+      "HOSTING",
+      "PAUSED",
+      "COMPLETED",
+      "IMMUTABLE_ARCHIVE"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "deviceAndLocalSeat",
+    "journeyIds": [
+      "J-LOCAL-SEATS",
+      "J-RECONNECT"
+    ],
+    "states": [
+      "UNBOUND",
+      "PROVISIONAL",
+      "ADMITTED",
+      "ACTIVE",
+      "HANDOFF",
+      "DISCONNECTED",
+      "RESTORED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "group",
+    "journeyIds": [
+      "J-GROUP-MAP",
+      "J-BATTLE"
+    ],
+    "states": [
+      "ACTIVE",
+      "SPLIT",
+      "MERGED",
+      "LOCATION_SUBGROUP",
+      "IN_COMBAT",
+      "DELETED_EMPTY"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "npc",
+    "journeyIds": [
+      "J-NPC-CREATE"
+    ],
+    "states": [
+      "DRAFT",
+      "VERSIONED",
+      "ACTIVE",
+      "PINNED_IN_COMBAT",
+      "ARCHIVED",
+      "DELETE_BLOCKED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "enemyTemplate",
+    "journeyIds": [
+      "J-ENEMY-SENTIENT",
+      "J-ENEMY-MONSTER",
+      "J-ENEMY-GENERATOR"
+    ],
+    "states": [
+      "DRAFT",
+      "VERSIONED",
+      "ARCHIVED",
+      "RUNTIME_CLONE"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "item",
+    "journeyIds": [
+      "J-INVENTORY",
+      "J-BATTLE"
+    ],
+    "states": [
+      "INVENTORY",
+      "EQUIPPED",
+      "WORLD_RUNTIME",
+      "LOCKED_LOOT",
+      "TRANSFERRED",
+      "CONSUMED",
+      "DESTROYED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "symbiont",
+    "journeyIds": [
+      "J-GM-CHAR-OPS",
+      "J-PROGRESSION"
+    ],
+    "states": [
+      "ASSIGNED",
+      "REMOVED",
+      "SLOT_REPLACED",
+      "XP_AWARDED",
+      "NODE_PURCHASED",
+      "OE_CHANGED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "effect",
+    "journeyIds": [
+      "J-GM-CHAR-OPS",
+      "J-BATTLE",
+      "J-TIME-LIGHT"
+    ],
+    "states": [
+      "ABSENT",
+      "APPLIED",
+      "STACKED",
+      "TICKING",
+      "REMOVED",
+      "TERMINAL_DEATH_SEPARATE"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "longRest",
+    "journeyIds": [
+      "J-LONG-REST"
+    ],
+    "states": [
+      "REQUESTED",
+      "PLANNED",
+      "RUNNING",
+      "INTERRUPTED",
+      "CANCELLED",
+      "COMPLETED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "combat",
+    "journeyIds": [
+      "J-BATTLE"
+    ],
+    "states": [
+      "DRAFT",
+      "PREFLIGHT",
+      "ACTIVE",
+      "FINISHING",
+      "LOOT",
+      "DISPOSITION",
+      "CLOSED"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "combatActor",
+    "journeyIds": [
+      "J-BATTLE",
+      "J-HIDDEN-ENTRY",
+      "J-GUARDIAN"
+    ],
+    "states": [
+      "RESERVE",
+      "ACTIVE",
+      "HIDDEN_OFF_MAP",
+      "ENTERED",
+      "INCAPABLE",
+      "DEAD",
+      "REMOVED_FROM_INITIATIVE"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "rollRequest",
+    "journeyIds": [
+      "J-BATTLE",
+      "J-PROGRESSION"
+    ],
+    "states": [
+      "CREATED",
+      "MODE_SNAPSHOT",
+      "ROLLED",
+      "CONFIRMING_CRIT",
+      "RESOLVED",
+      "REPLAY_RECEIPT"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "command",
+    "journeyIds": [
+      "J-AVAILABLE-ACTIONS",
+      "J-BATTLE"
+    ],
+    "states": [
+      "DECLARED",
+      "PENDING_CONSENT",
+      "REVALIDATING",
+      "COMMITTED",
+      "REJECTED_STALE",
+      "IDEMPOTENT_REPLAY"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "soundtrackContext",
+    "journeyIds": [
+      "J-SOUNDTRACK",
+      "J-TIME-LIGHT"
+    ],
+    "states": [
+      "SILENT",
+      "SELECTED",
+      "PLAYING",
+      "CROSSFADING",
+      "AUTOPLAY_BLOCKED",
+      "MISSING_FILE_FALLBACK"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "guardianHostCapture",
+    "journeyIds": [
+      "J-GUARDIAN",
+      "J-GUARDIAN-CAPTURE"
+    ],
+    "states": [
+      "OUTSIDE_BODY",
+      "CAPTURE_READY",
+      "CAPTURE_WON",
+      "CAPTURE_LOST",
+      "CAPTURE_TIED_EXPELLED",
+      "PRE_REWRITE_SLEEP",
+      "REWRITING_24H",
+      "COMPANION_SEQUENCE",
+      "PAUSED",
+      "FINALIZED",
+      "STABLE_HOST"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "chimeraDevouring",
+    "journeyIds": [
+      "J-CHIMERA-DEVOURING"
+    ],
+    "states": [
+      "THRESHOLDS_UNSET",
+      "THRESHOLDS_LOCKED_GM_ONLY",
+      "IN_PROGRESS",
+      "INTERRUPTED_NO_REWARD",
+      "AUTO_COMPLETED",
+      "EXTERNAL_RECONCILED",
+      "SLOT_1",
+      "SLOT_2",
+      "SLOT_3"
+    ]
+  },
+  {
+    "coverageStatus": "COVERED",
+    "entity": "plagueDoctorInfectionRegistry",
+    "journeyIds": [
+      "J-PLAGUE-DOCTOR-MONITOR"
+    ],
+    "states": [
+      "ACTIVE",
+      "OFF_MAP",
+      "UNAVAILABLE",
+      "SOURCE_INACTIVE_PERSISTS",
+      "ASSISTANTS_DESTROYED"
+    ]
+  }
+]

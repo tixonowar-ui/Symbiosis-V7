@@ -112,6 +112,7 @@ npm run verify
 
 | Команда                           | Что делает                               |
 | --------------------------------- | ---------------------------------------- |
+| `npm run import`                  | `artifacts/` → `generated/`              |
 | `npm run checksums`               | пересчитать `artifacts/CHECKSUMS.sha256` |
 | `npm run checksums:verify`        | проверить артефакты на дрейф             |
 | `npm run typecheck`               | `tsc` по node- и web-проектам            |

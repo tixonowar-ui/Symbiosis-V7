@@ -1,0 +1,88 @@
+{
+  "atlasVersion": "1.2",
+  "contentDigest": "ceace6ea95167e81b8cbbd86670930270b0b177e81db07e8e0fa437d21747a5c",
+  "counts": {
+    "activeRules": 699,
+    "automatedAbilities": 167,
+    "byDomain": {
+      "Анимации": 11,
+      "Боевая ситуация": 73,
+      "Группы": 8,
+      "Длительный отдых": 15,
+      "Игровое время": 9,
+      "Кампания": 16,
+      "Карта": 9,
+      "Мастерские операции": 39,
+      "Настройки": 6,
+      "Повседневная проекция игрока": 35,
+      "Подключение и полномочия": 28,
+      "Постоянные НПС": 17,
+      "Приложение и локальные данные": 11,
+      "Системные состояния": 29,
+      "Создание локального персонажа": 44,
+      "Шаблоны врагов и монстров": 26
+    },
+    "byOrigin": {
+      "v1.1-addendum": 8,
+      "v1.1-base-catalog": 347,
+      "v1.2-web": 21
+    },
+    "byType": {
+      "banner": 25,
+      "component": 20,
+      "dialog": 45,
+      "overlay": 30,
+      "screen": 244,
+      "specification": 12
+    },
+    "diagrams": 11,
+    "excludedEffectTypes": 1,
+    "forms": 376,
+    "journeys": 66,
+    "legacyFormsPreserved": 355,
+    "manualOnlyNodes": 15,
+    "modeledEffectTypes": 66,
+    "newForms": 21,
+    "operations": 70,
+    "qaScenarios": 2440,
+    "qnaRows": 444,
+    "qnaUniqueIds": 410,
+    "requirements": 91,
+    "tombstoneRules": 40,
+    "transitions": 1672,
+    "workflowCommands": 106
+  },
+  "graphDigest": "693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df",
+  "guardStates": [
+    "role",
+    "authority",
+    "controllerSeat",
+    "scene/phase",
+    "stateRevision",
+    "projectionRevision",
+    "actorVisibilityRevision",
+    "resource/effect/equipment",
+    "consent/masterPredicate",
+    "connection"
+  ],
+  "normativeStatus": "APPROVED_BASELINE_DERIVATIVE_NO_OPEN_UX_QUESTIONS",
+  "roles": [
+    {
+      "authority": "Only admitted local seats and observer-safe player projections.",
+      "id": "player",
+      "title": "Игрок"
+    },
+    {
+      "authority": "Single host authority; separate GM projection and administrative commands.",
+      "id": "gm",
+      "title": "Мастер"
+    },
+    {
+      "authority": "Server handlers, forced triggers and non-interactive specifications.",
+      "id": "system",
+      "title": "Система"
+    }
+  ],
+  "schemaVersion": "1.2.0",
+  "source": "artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json"
+}

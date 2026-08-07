@@ -25,6 +25,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:e2e": "playwright test --pass-with-no-tests",
+    "import": "tsx tools/import/index.ts",
     "checksums": "tsx tools/checksums/index.ts write",
     "checksums:verify": "tsx tools/checksums/index.ts verify",
     "verify": "npm run checksums:verify && npm run typecheck && npm run lint && npm run format:check && npm run test"

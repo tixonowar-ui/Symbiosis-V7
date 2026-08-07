@@ -1,0 +1,68 @@
+[
+  {
+    "diagramId": "DGM-ROLE",
+    "source": "stateDiagram-v2\n    [*] --> BOOTING\n    BOOTING --> ERROR: integrity fail\n    ERROR --> BOOTING: retry\n    BOOTING --> READY: compatible baseline\n    READY --> PLAYER_HOME: Игрок\n    READY --> GM_HOME: Мастер\n    PLAYER_HOME --> READY: сменить режим\n    GM_HOME --> READY: сменить режим",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Выбор роли и разные главные меню"
+  },
+  {
+    "diagramId": "DGM-CHARACTER",
+    "source": "stateDiagram-v2\n    [*] --> DRAFT\n    DRAFT --> METHOD: новый персонаж\n    METHOD --> IDENTITY: способ и симбионты\n    IDENTITY --> STATS: имя, описание, арт\n    STATS --> SKILLS: семь характеристик\n    SKILLS --> INVENTORY: навыки\n    INVENTORY --> REVIEW: имущество и масса\n    REVIEW --> FINAL: проверки пройдены\n    FINAL --> EXPORTED: экспорт\n    FINAL --> VARIANT: создать вариант\n    VARIANT --> DRAFT",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Создание и локальный lifecycle персонажа"
+  },
+  {
+    "diagramId": "DGM-ADMISSION",
+    "source": "stateDiagram-v2\n    [*] --> LOCAL_SHEET\n    LOCAL_SHEET --> CANDIDATE: игрок предлагает snapshot\n    CANDIDATE --> GM_REVIEW: batch 1..3\n    GM_REVIEW --> DECLINED: причина\n    GM_REVIEW --> PROPOSED: atomic campaign copies\n    PROPOSED --> DECLINED: игрок отклонил diff\n    PROPOSED --> ACTIVE: игрок принял и capacity valid\n    ACTIVE --> ARCHIVED: кампания завершена",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Заявка, рассмотрение и допуск кампанийной копии"
+  },
+  {
+    "diagramId": "DGM-SEATS",
+    "source": "stateDiagram-v2\n    [*] --> DEVICE\n    DEVICE --> ORDINARY: player launch\n    DEVICE --> HOST: master launch\n    ORDINARY --> P0: 0 admitted\n    P0 --> P1: add player\n    P1 --> P2: add player\n    P2 --> P3: add player\n    HOST --> GM_ONLY: 0 local players\n    GM_ONLY --> GM_P1: provisional claim admitted\n    GM_P1 --> GM_P2: add player\n    GM_P2 --> GM_P3: add player\n    P3 --> LIMIT: fourth rejected\n    GM_P3 --> LIMIT: fourth rejected",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Локальные seats обычного ПК и host-компьютера"
+  },
+  {
+    "diagramId": "DGM-NPC",
+    "source": "stateDiagram-v2\n    [*] --> IDENTITY\n    IDENTITY --> SCHEMA: раса, класс, анатомия\n    SCHEMA --> STATS: семь ручных stats\n    STATS --> SYMBIONTS: без лимита суммы\n    SYMBIONTS --> SKILLS\n    SKILLS --> INVENTORY\n    INVENTORY --> STATE: HP, OE, effects\n    STATE --> REVIEW\n    REVIEW --> V1: atomic save\n    V1 --> V_NEXT: новая версия\n    V_NEXT --> ARCHIVED: archive\n    V1 --> BLOCKED_DELETE: active reference",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Создание и версионирование НПС"
+  },
+  {
+    "diagramId": "DGM-ENEMIES",
+    "source": "stateDiagram-v2\n    [*] --> CATALOG\n    CATALOG --> SENTIENT_DRAFT: враг-мыслящий\n    CATALOG --> MONSTER_DRAFT: произвольный монстр\n    SENTIENT_DRAFT --> SENTIENT_REVIEW: полная персонажная схема\n    MONSTER_DRAFT --> MONSTER_REVIEW: строгая схема монстра\n    SENTIENT_REVIEW --> TEMPLATE_V1: save\n    MONSTER_REVIEW --> TEMPLATE_V1: save\n    TEMPLATE_V1 --> TEMPLATE_NEXT: новая версия\n    TEMPLATE_V1 --> RUNTIME_COPY: добавить в бой\n    RUNTIME_COPY --> TEMPLATE_V1: template unchanged",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Создание и версионирование врага и монстра"
+  },
+  {
+    "diagramId": "DGM-REST",
+    "source": "stateDiagram-v2\n    [*] --> REQUESTED\n    REQUESTED --> PLANNED: GM participants and watches\n    REQUESTED --> DECLINED: GM reason\n    PLANNED --> RUNNING: start\n    RUNNING --> INTERRUPTED: event or combat\n    INTERRUPTED --> RUNNING: GM resume and restart segments\n    INTERRUPTED --> CANCELLED: GM cancel\n    RUNNING --> COMPLETE: accumulated 240 minutes\n    COMPLETE --> COOLDOWN: apply ordered full-rest effects",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Длительный отдых"
+  },
+  {
+    "diagramId": "DGM-BATTLE",
+    "source": "stateDiagram-v2\n    [*] --> DRAFT\n    DRAFT --> PREFLIGHT: sides, actors, positions, visibility\n    PREFLIGHT --> ACTIVE: Start and freeze world time\n    ACTIVE --> AMBUSH: optional preinitiative scene\n    ACTIVE --> INITIATIVE: no ambush\n    AMBUSH --> INITIATIVE: scene resolved\n    INITIATIVE --> TURN: fixed strip built\n    TURN --> COMMAND: available action declared\n    COMMAND --> ROLL: request or accelerated same-command packet\n    ROLL --> RESOLVE: roll chain complete\n    RESOLVE --> TURN: next actor\n    TURN --> FINISH: GM result\n    FINISH --> LOOT: eligible player victory\n    FINISH --> DISPOSITION: no loot\n    LOOT --> DISPOSITION\n    DISPOSITION --> CLOSED",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Полный lifecycle боя и актора"
+  },
+  {
+    "diagramId": "DGM-RECONNECT",
+    "source": "stateDiagram-v2\n    [*] --> CONNECTED\n    CONNECTED --> LOST: heartbeat timeout\n    LOST --> RECONNECTING: network available\n    RECONNECTING --> RECONCILING: identity accepted\n    RECONCILING --> CONFLICT: local command differs\n    RECONCILING --> RESTORED: server snapshot and receipt\n    CONFLICT --> RESTORED: server state accepted\n    RESTORED --> CONNECTED",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Потеря связи и reconnect"
+  },
+  {
+    "diagramId": "DGM-ACTIONS",
+    "source": "stateDiagram-v2\n    [*] --> CALCULATE\n    CALCULATE --> EMPTY: no executable command\n    CALCULATE --> PROJECTED: allowed actions only\n    PROJECTED --> REQUEST: consent or master predicate\n    PROJECTED --> REVALIDATE: direct executable intent\n    REQUEST --> CALCULATE: denied or state changed\n    REQUEST --> REVALIDATE: positive linked response\n    REVALIDATE --> STALE: revision or guard changed\n    REVALIDATE --> COMMITTED: atomic write\n    STALE --> CALCULATE\n    COMMITTED --> CALCULATE",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Authoritative availableActions"
+  },
+  {
+    "diagramId": "DGM-GUARDIAN",
+    "source": "stateDiagram-v2\n    [*] --> OWNER_DEAD\n    OWNER_DEAD --> OUTSIDE_BODY: confirmed exit\n    OUTSIDE_BODY --> CAPTURE: eligible body and chosen symbiont\n    CAPTURE --> OUTSIDE_BODY: equal OE, expelled\n    CAPTURE --> TERMINAL: lower OE\n    CAPTURE --> PRE_REWRITE: greater OE\n    PRE_REWRITE --> REWRITING: first 4h sleep\n    REWRITING --> COMPANIONS: United host\n    COMPANIONS --> PAUSED: stop or equal OE\n    PAUSED --> COMPANIONS: resume after OE recovery\n    COMPANIONS --> FINAL: explicit final configuration\n    REWRITING --> FINAL: Free host or no sequence\n    FINAL --> STABLE_HOST: 24h rewrite complete",
+    "syntax": "mermaid/stateDiagram-v2",
+    "title": "Хранитель: выход, захват, перезапись и Попутчики"
+  }
+]
