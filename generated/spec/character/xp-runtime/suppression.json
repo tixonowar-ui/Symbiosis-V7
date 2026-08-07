@@ -1,0 +1,38 @@
+[
+  {
+    "AppliesToDirectAndOtherAwards": true,
+    "EffectsEnabled": false,
+    "ID unique": 1,
+    "PolicyID": "TOAD-SUPPRESSES-TAIPAN",
+    "Priority": 100,
+    "RuleIDs": "SYM-038; Q-SYM-016",
+    "SpeciesKey": "TAIPAN",
+    "Status": "ACTIVE",
+    "SuppressorSpeciesKey": "TOAD",
+    "XpEligible": false
+  },
+  {
+    "AppliesToDirectAndOtherAwards": true,
+    "EffectsEnabled": false,
+    "ID unique": 1,
+    "PolicyID": "TROGR-SUPPRESSES-ADVISER",
+    "Priority": 100,
+    "RuleIDs": "SYM-075; Q-CHAR-006",
+    "SpeciesKey": "ADVISER",
+    "Status": "ACTIVE",
+    "SuppressorSpeciesKey": "TROGR",
+    "XpEligible": false
+  },
+  {
+    "AppliesToDirectAndOtherAwards": true,
+    "EffectsEnabled": false,
+    "ID unique": 1,
+    "PolicyID": "TROGR-SUPPRESSES-PENGUIN",
+    "Priority": 100,
+    "RuleIDs": "SYM-075; SYM-130",
+    "SpeciesKey": "PENGUIN",
+    "Status": "ACTIVE",
+    "SuppressorSpeciesKey": "TROGR",
+    "XpEligible": true
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "rollKind=RANDOM_TABLE",
+    "NeverSourceCode": "RANDOM_TABLE",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "isConfirmationRoll=true",
+    "NeverSourceCode": "CRITICAL_CONFIRMATION",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "CORE-083; CORE-084; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "criticalSource=ABILITY_OVERRIDE и rawFace∉{1,20}",
+    "NeverSourceCode": "ABILITY_ASSIGNED_CRITICAL_WITHOUT_NATURAL_FACE",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "CORE-229; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "criticalSource=ABILITY_OVERRIDE; sourceRuleId=SYM-082; нет natural 1/20",
+    "NeverSourceCode": "SYM_082_ABILITY_OVERRIDE_WITHOUT_NATURAL_FACE",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "SYM-082; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "isEqualGradeSubstitution=true",
+    "NeverSourceCode": "EQUAL_GRADE_SUBSTITUTION",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "unique(actorCharacterId,originRollId) уже обработан",
+    "NeverSourceCode": "DUPLICATE_ORIGIN_ROLL",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "итог формулы равен 1/20, но rawFace∉{1,20}",
+    "NeverSourceCode": "FORMULA_RESULT_WITHOUT_NATURAL_FACE",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "AuditOnly": true,
+    "CreatesProgressionEvent": false,
+    "CreatesXPOrPoints": false,
+    "ID unique": 1,
+    "MatchCondition": "dieType<>D20 либо формула не содержит оригинального D20",
+    "NeverSourceCode": "NON_D20_ROLL",
+    "ProgressionRoute": "NEVER_PROGRESSION",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  }
+]

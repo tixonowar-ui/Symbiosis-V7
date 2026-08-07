@@ -7,6 +7,7 @@
  * catalogue the seed will be built from.
  */
 import { join } from 'node:path';
+import { importXpRuntime } from './character-xp.js';
 import { banner, tsUnion, writeJson, writeText } from './lib/emit.js';
 import { expectCount, fail } from './lib/fail.js';
 import type { JsonObject } from './lib/json.js';
@@ -123,18 +124,9 @@ const TABLES = [
   },
 ] as const;
 
-/**
- * `24_XP_Runtime` is deliberately not imported here. It is not one table but
- * several stacked sections ("A. Progression routes", "B. Event points", …),
- * each with its own header row and columns. Parsing it with the single-header
- * reader would silently produce nonsense, so it needs an explicit section map
- * of its own. The GM-facing XP decisions it covers are already recorded in
- * docs/adr/0004-gm-xp-award-is-irreversible.md.
- */
-const DEFERRED_SHEETS = ['24_XP_Runtime'] as const;
-
 export interface CharacterImport {
   readonly payloads: number;
+  readonly xpSections: number;
   readonly bytesWritten: number;
   readonly files: readonly string[];
 }
@@ -151,12 +143,6 @@ export async function importCharacter(
   ruleCatalogue: ReadonlySet<string>,
 ): Promise<CharacterImport> {
   const book = Workbook.open(ARTIFACT.character, WHERE);
-
-  for (const sheet of DEFERRED_SHEETS) {
-    if (!book.sheetNames.includes(sheet)) {
-      fail(WHERE, `sheet ${JSON.stringify(sheet)} is listed as deferred but no longer exists`);
-    }
-  }
 
   // --- the registry must agree with both of its own self-checks -----------
   for (const gate of GATE) {
@@ -212,6 +198,11 @@ export async function importCharacter(
 
   const payloads = collected.get('20_Payload_JSON') ?? [];
 
+  // --- 24_XP_Runtime, which needs its own section-aware reader ------------
+  const xp = await importXpRuntime(book);
+  bytes += xp.bytesWritten;
+  files.push(...xp.files);
+
   bytes += await writeJson(join(dir, 'meta.json'), {
     source: SOURCE,
     registryVersion: 'v1.2',
@@ -220,7 +211,8 @@ export async function importCharacter(
     symbiontSpecies: (collected.get('07_Симбионты') ?? []).length,
     ruleTraceRows: trace.length,
     gatesAllPass: true,
-    deferredSheets: [...DEFERRED_SHEETS],
+    xpRuntimeSections: xp.sections,
+    xpRuntimeRows: xp.dataRows,
   });
   files.push('generated/spec/character/meta.json');
 
@@ -228,7 +220,7 @@ export async function importCharacter(
   bytes += await writeText(join(TYPES_DIR, 'character.ts'), renderTypes(collected));
   files.push('generated/types/character.ts');
 
-  return { payloads: payloads.length, bytesWritten: bytes, files };
+  return { payloads: payloads.length, xpSections: xp.sections, bytesWritten: bytes, files };
 }
 
 function renderTypes(collected: ReadonlyMap<string, JsonObject[]>): string {

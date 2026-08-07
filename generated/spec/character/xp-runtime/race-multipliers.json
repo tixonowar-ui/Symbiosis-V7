@@ -1,0 +1,38 @@
+[
+  {
+    "AllocationXpMultiplier": 1,
+    "AppliesToPlayerOnly": true,
+    "ConversionThreshold": 3,
+    "DirectXpMultiplier": 1,
+    "ID unique": 1,
+    "ProgressPointMultiplier": 1,
+    "RaceCode": "PURE",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE",
+    "UnallocatedXpPerThreshold": 1
+  },
+  {
+    "AllocationXpMultiplier": 2,
+    "AppliesToPlayerOnly": true,
+    "ConversionThreshold": 3,
+    "DirectXpMultiplier": 2,
+    "ID unique": 1,
+    "ProgressPointMultiplier": 1,
+    "RaceCode": "FREE",
+    "RuleIDs": "CORE-007; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE",
+    "UnallocatedXpPerThreshold": 1
+  },
+  {
+    "AllocationXpMultiplier": 1,
+    "AppliesToPlayerOnly": true,
+    "ConversionThreshold": 3,
+    "DirectXpMultiplier": 1,
+    "ID unique": 1,
+    "ProgressPointMultiplier": 1,
+    "RaceCode": "UNITED",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE",
+    "UnallocatedXpPerThreshold": 1
+  }
+]

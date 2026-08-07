@@ -1,0 +1,35 @@
+[
+  {
+    "AppliesWhen": "PLAYER_CHARACTER; original D20 rawFace=1|20; значимая проверка; modifierStatCodes пересекаются с LinkedStatCodes хотя бы одного xpEligible симбионта; rollKind не NO_DIRECT_BUT_POOL/NEVER.",
+    "CounterPoints": false,
+    "DirectXP": true,
+    "ID unique": 1,
+    "RouteCode": "DIRECT_SYMBIONT",
+    "RuleIDs": "SYM-021; CORE-007; USR-2026-07-30-XP-001",
+    "StateTransition": "Равновероятно выбрать ровно один подходящий symbiontInstanceId; xp += eventPoints×race.directXpMultiplier.",
+    "Status": "ACTIVE",
+    "Terminal": true
+  },
+  {
+    "AppliesWhen": "PLAYER_CHARACTER; original D20 rawFace=1|20; событие не NEVER; нет подходящего LinkedStatCode либо rollKind=NO_DIRECT_BUT_POOL.",
+    "CounterPoints": true,
+    "DirectXP": false,
+    "ID unique": 1,
+    "RouteCode": "CHARACTER_PROGRESS_COUNTER",
+    "RuleIDs": "SYM-021; CORE-085; USR-2026-07-30-XP-001",
+    "StateTransition": "symbiontXpProgressPoints += eventPoints; каждые 3 атомарно конвертируются в 1 unallocatedSymbiontXp, остаток 0..2.",
+    "Status": "ACTIVE",
+    "Terminal": true
+  },
+  {
+    "AppliesWhen": "Любой запрет из SymbiontXpNeverSourcePolicy либо actorType не PLAYER_CHARACTER.",
+    "CounterPoints": false,
+    "DirectXP": false,
+    "ID unique": 1,
+    "RouteCode": "NEVER_PROGRESSION",
+    "RuleIDs": "CORE-229; SYM-021; USR-2026-07-30-XP-001",
+    "StateTransition": "XP и баллы не изменяются; причина и processingStatus журналируются. Повтор originRollId имеет статус IGNORED_DUPLICATE.",
+    "Status": "ACTIVE",
+    "Terminal": true
+  }
+]

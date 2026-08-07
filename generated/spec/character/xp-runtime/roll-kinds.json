@@ -1,0 +1,123 @@
+[
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": true,
+    "DirectXPAllowed": true,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "DIRECT_ELIGIBLE",
+    "RollKind": "SIGNIFICANT_CHECK",
+    "RuleIDs": "CORE-073; CORE-082; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "DAMAGE",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "PENETRATION",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "ARMOR",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "INITIATIVE",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "HEALING_AMOUNT",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "DURATION",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "RADIUS",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "ZONE_SIZE",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "QUANTITY",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "CounterAllowed": true,
+    "CriticalChainAllowed": false,
+    "DirectXPAllowed": false,
+    "ID unique": 1,
+    "OriginalD20Required": true,
+    "ProgressionClass": "NO_DIRECT_BUT_POOL",
+    "RollKind": "TARGET_COUNT",
+    "RuleIDs": "SYM-021; CORE-229; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  }
+]

@@ -1,0 +1,79 @@
+[
+  {
+    "ConfirmedGrade": 0,
+    "CriticalPolarity": "NONE",
+    "EventPoints": 1,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": 20,
+    "PointPolicyID": "NATURAL_20_GRADE_0",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "ConfirmedGrade": 0,
+    "CriticalPolarity": "NONE",
+    "EventPoints": 1,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": 1,
+    "PointPolicyID": "NATURAL_1_GRADE_0",
+    "RuleIDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "ConfirmedGrade": 1,
+    "CriticalPolarity": "SUCCESS|FAILURE",
+    "EventPoints": 1,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": "1|20",
+    "PointPolicyID": "CONFIRMED_CRIT",
+    "RuleIDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "ConfirmedGrade": 2,
+    "CriticalPolarity": "SUCCESS|FAILURE",
+    "EventPoints": 2,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": "1|20",
+    "PointPolicyID": "CONFIRMED_DOUBLE_CRIT",
+    "RuleIDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "ConfirmedGrade": 3,
+    "CriticalPolarity": "SUCCESS|FAILURE",
+    "EventPoints": 3,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": "1|20",
+    "PointPolicyID": "CONFIRMED_TRIPLE_CRIT",
+    "RuleIDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "ConfirmedGrade": 4,
+    "CriticalPolarity": "SUCCESS|FAILURE",
+    "EventPoints": 4,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": "1|20",
+    "PointPolicyID": "CONFIRMED_ULTRA_CRIT",
+    "RuleIDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  },
+  {
+    "ConfirmedGrade": 5,
+    "CriticalPolarity": "SUCCESS|FAILURE",
+    "EventPoints": 5,
+    "GradeReplacesBase": true,
+    "ID unique": 1,
+    "NaturalFace": "1|20",
+    "PointPolicyID": "CONFIRMED_RAMPAGE",
+    "RuleIDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Status": "ACTIVE"
+  }
+]

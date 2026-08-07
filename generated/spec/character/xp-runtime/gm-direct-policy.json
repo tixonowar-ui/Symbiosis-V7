@@ -1,0 +1,14 @@
+[
+  {
+    "AppliesWhen": "GM command at safe boundary",
+    "Audit": "Append-only full before/after receipt",
+    "BaseXP": "integer >=1; reason required",
+    "CommitPolicy": "COMMITTED_ALWAYS_VALID; no rollback/delete/compensation",
+    "CounterEffect": "NONE: no progressPoints, unallocatedXP or 3:1",
+    "Idempotency": "awardId exact retry returns same receipt",
+    "Multiplier": "FREE=2; otherwise 1; exactly once",
+    "PolicyID": "GM_DIRECT_SYMBIONT_XP",
+    "Status": "ACTIVE",
+    "Target": "Owned xpEligible symbiont of PLAYER_CHARACTER"
+  }
+]

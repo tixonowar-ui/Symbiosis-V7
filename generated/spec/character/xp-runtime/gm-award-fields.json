@@ -1,0 +1,114 @@
+[
+  {
+    "Data type": "UUID",
+    "Field": "awardId",
+    "ID unique": 1,
+    "Purpose": "Idempotency",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "Unique; exact retry only"
+  },
+  {
+    "Data type": "UUID",
+    "Field": "masterUserId",
+    "ID unique": 1,
+    "Purpose": "Audit actor",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "Current authorized GM"
+  },
+  {
+    "Data type": "UUID",
+    "Field": "actorCharacterId",
+    "ID unique": 1,
+    "Purpose": "XP owner",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "FK PLAYER_CHARACTER"
+  },
+  {
+    "Data type": "UUID",
+    "Field": "symbiontInstanceId",
+    "ID unique": 1,
+    "Purpose": "Exact target",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "Owned; xpEligible=true"
+  },
+  {
+    "Data type": "integer",
+    "Field": "baseXP",
+    "ID unique": 1,
+    "Purpose": "Pre-multiplier amount",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": ">=1"
+  },
+  {
+    "Data type": "string",
+    "Field": "reason",
+    "ID unique": 1,
+    "Purpose": "Mandatory reason",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "trim length 1..2000"
+  },
+  {
+    "Data type": "integer",
+    "Default": 1,
+    "Field": "multiplier",
+    "ID unique": 1,
+    "Purpose": "One-time race policy",
+    "Required": true,
+    "Rule IDs": "CORE-007",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "FREE=2; else 1"
+  },
+  {
+    "Data type": "integer",
+    "Field": "finalXP",
+    "ID unique": 1,
+    "Purpose": "Applied delta",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "baseXP*multiplier"
+  },
+  {
+    "Data type": "timestamp",
+    "Field": "committedAt",
+    "ID unique": 1,
+    "Purpose": "Immutable ordering",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "Server campaign time"
+  },
+  {
+    "Data type": "object",
+    "Field": "beforeAfter",
+    "ID unique": 1,
+    "Purpose": "Audit receipt",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "beforeXP and afterXP"
+  },
+  {
+    "Data type": "boolean",
+    "Default": true,
+    "Field": "immutable",
+    "ID unique": 1,
+    "Purpose": "Commit policy",
+    "Required": true,
+    "Rule IDs": "CORE-234",
+    "Scope": "MasterSymbiontXpAward",
+    "Validation / constraint": "Always true; no inverse command"
+  }
+]

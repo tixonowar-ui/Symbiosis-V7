@@ -1,0 +1,203 @@
+[
+  {
+    "Data type": "UUID",
+    "Field": "originRollId",
+    "ID unique": 1,
+    "Purpose": "Дедупликация исходного D20.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "Обязателен; уникален в паре с actorCharacterId."
+  },
+  {
+    "Data type": "UUID",
+    "Field": "actorCharacterId",
+    "ID unique": 1,
+    "Purpose": "Владелец прогрессии.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "FK CharacterProfile."
+  },
+  {
+    "Data type": "enum",
+    "Field": "actorType",
+    "ID unique": 1,
+    "Purpose": "Только PLAYER_CHARACTER допускает прогрессию.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "PLAYER_CHARACTER|NPC|CANONICAL_MONSTER|CUSTOM_MONSTER|SYSTEM_SENTIENT_ENEMY."
+  },
+  {
+    "Data type": "enum",
+    "Field": "rollSource",
+    "ID unique": 1,
+    "Purpose": "Источник броска не меняет результат.",
+    "Required": true,
+    "Rule IDs": "CORE-229; SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "AUTO|MANUAL."
+  },
+  {
+    "Data type": "enum",
+    "Default": "D20",
+    "Field": "dieType",
+    "ID unique": 1,
+    "Purpose": "Фиксация типа дайса.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "Для прогрессии только D20."
+  },
+  {
+    "Data type": "integer",
+    "Field": "rawFace",
+    "ID unique": 1,
+    "Purpose": "Натуральная грань до формул.",
+    "Required": true,
+    "Rule IDs": "CORE-082; SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "1..20; прогрессия только rawFace=1|20."
+  },
+  {
+    "Data type": "enum",
+    "Field": "rollKind",
+    "ID unique": 1,
+    "Purpose": "Классификация DIRECT/COUNTER/NEVER.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "FK SymbiontXpRollKindPolicy."
+  },
+  {
+    "Data type": "enum",
+    "Default": "NONE",
+    "Field": "checkKind",
+    "ID unique": 1,
+    "Purpose": "Смысл исходной проверки.",
+    "Required": true,
+    "Rule IDs": "CORE-073; CORE-229; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "ACTION|ATTACK|DEFENSE|RESISTANCE|MEDICAL_CHECK|OTHER|NONE."
+  },
+  {
+    "Data type": "StatCode[]",
+    "Default": "[]",
+    "Field": "modifierStatCodes",
+    "ID unique": 1,
+    "Purpose": "Пересечение с LinkedStatCodes.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "Только реально прибавленные характеристики; все FK StatCode."
+  },
+  {
+    "Data type": "enum",
+    "Default": "NONE",
+    "Field": "criticalSource",
+    "ID unique": 1,
+    "Purpose": "Отделить натуральную грань от искусственной.",
+    "Required": true,
+    "Rule IDs": "CORE-229; SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "NATURAL_FACE|CONFIRMATION_CHAIN|ABILITY_OVERRIDE|EQUAL_GRADE_SUBSTITUTION|NONE."
+  },
+  {
+    "Data type": "enum",
+    "Default": "NONE",
+    "Field": "criticalPolarity",
+    "ID unique": 1,
+    "Purpose": "Одинаковая шкала XP для успеха и провала.",
+    "Required": true,
+    "Rule IDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "SUCCESS|FAILURE|NONE."
+  },
+  {
+    "Data type": "integer",
+    "Default": 0,
+    "Field": "confirmedGrade",
+    "ID unique": 1,
+    "Purpose": "Crit..Rampage.",
+    "Required": true,
+    "Rule IDs": "CORE-083; CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "0..5; grade заменяет базовую единицу."
+  },
+  {
+    "Data type": "boolean",
+    "Default": true,
+    "Field": "isOriginalRoll",
+    "ID unique": 1,
+    "Purpose": "Исключение производных бросков.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "Только true может создавать прогрессию."
+  },
+  {
+    "Data type": "boolean",
+    "Default": false,
+    "Field": "isConfirmationRoll",
+    "ID unique": 1,
+    "Purpose": "Не создавать второе событие.",
+    "Required": true,
+    "Rule IDs": "CORE-083; CORE-084; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "true всегда маршрутизируется NEVER."
+  },
+  {
+    "Data type": "boolean",
+    "Default": false,
+    "Field": "isEqualGradeSubstitution",
+    "ID unique": 1,
+    "Purpose": "Не создавать второе событие при replay rawFace=20.",
+    "Required": true,
+    "Rule IDs": "CORE-229; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "true всегда маршрутизируется NEVER."
+  },
+  {
+    "Data type": "enum",
+    "Field": "progressionRoute",
+    "ID unique": 1,
+    "Purpose": "Итог маршрутизатора.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "DIRECT_SYMBIONT|CHARACTER_PROGRESS_COUNTER|NEVER_PROGRESSION."
+  },
+  {
+    "Data type": "integer",
+    "Default": 0,
+    "Field": "eventPoints",
+    "ID unique": 1,
+    "Purpose": "XP либо баллы события.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "0..5; 0 только для NEVER."
+  },
+  {
+    "Data type": "UUID|null",
+    "Field": "selectedSymbiontInstanceId",
+    "ID unique": 1,
+    "Purpose": "Адресат прямого XP.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "Обязателен только для DIRECT_SYMBIONT; ровно один."
+  },
+  {
+    "Data type": "enum",
+    "Default": "PENDING",
+    "Field": "processingStatus",
+    "ID unique": 1,
+    "Purpose": "Идемпотентность, маршрут и аудит.",
+    "Required": true,
+    "Rule IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scope": "SymbiontXpEvent",
+    "Validation / constraint": "PENDING|APPLIED_DIRECT|APPLIED_COUNTER|IGNORED_NEVER|IGNORED_DUPLICATE|REJECTED_INVALID."
+  }
+]

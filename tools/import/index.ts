@@ -37,7 +37,10 @@ async function main(): Promise<number> {
   // Character references rule ids, so it validates against the catalogue Rules
   // just produced rather than trusting them.
   const character = await importCharacter(rules.catalogue);
-  console.log(`character: ${String(character.payloads)} payload entities`);
+  console.log(
+    `character: ${String(character.payloads)} payload entities, ` +
+      `${String(character.xpSections)} XP contract sections`,
+  );
 
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);

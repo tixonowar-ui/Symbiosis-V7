@@ -50,12 +50,15 @@ describe('generated character spec', () => {
     expect(trace.filter((t) => !catalogue.has(t['Rule ID']))).toEqual([]);
   });
 
-  it('records that both self-checks passed and names what was deferred', () => {
-    const meta = spec<{ gatesAllPass: boolean; deferredSheets: string[] }>('meta.json');
+  it('records that both self-checks passed and the XP contract was read', () => {
+    const meta = spec<{
+      gatesAllPass: boolean;
+      xpRuntimeSections: number;
+      xpRuntimeRows: number;
+    }>('meta.json');
     expect(meta.gatesAllPass).toBe(true);
-    // The XP runtime sheet is stacked sections, not one table; it needs its own
-    // reader. Leaving it out must stay visible rather than quietly forgotten.
-    expect(meta.deferredSheets).toEqual(['24_XP_Runtime']);
+    expect(meta.xpRuntimeSections).toBe(9);
+    expect(meta.xpRuntimeRows).toBe(66);
   });
 });
 
