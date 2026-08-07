@@ -45,6 +45,7 @@
 | [0011](0011-not-modeled-stays-tombstone.md)               | NOT_MODELED остаётся tombstone       | принято |
 | [0012](0012-release-hash-model.md)                        | Модель хеширования выпуска           | принято |
 | [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято |
+| [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято |
 
 ## Перенос решений аудита
 
