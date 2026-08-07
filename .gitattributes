@@ -1,0 +1,32 @@
+# Единый конец строки в рабочем дереве независимо от core.autocrlf на машине.
+# Без этого на Windows (autocrlf=true по умолчанию) свежий клон получил бы CRLF,
+# и `npm run format:check` падал бы на каждом файле.
+* text=auto eol=lf
+
+# artifacts/ — read-only источники правды, покрытые artifacts/CHECKSUMS.sha256.
+# Любая нормализация конца строки изменила бы SHA-256 и уронила
+# `npm run checksums:verify` после клона. Git не должен трогать их вообще —
+# включая текстовые atlas/*.md и atlas/*.json.
+artifacts/** -text
+
+# Бинарные форматы: помечены явно, чтобы git не пытался их различать сам
+# и не показывал бесполезные диффы.
+*.xlsx  binary
+*.zip   binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.webp  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.sqlite binary
+*.db    binary
+
+# Скрипты для Windows должны сохранять CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# package-lock.json пишет npm — не показывать его в диффах как исходник.
+package-lock.json linguist-generated=true
