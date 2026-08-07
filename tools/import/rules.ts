@@ -73,6 +73,8 @@ const STATUS_ACTIVE = 'Активно';
 const CONTROL_PASS = 'PASS';
 
 export interface RulesImport {
+  /** Every Rule ID, for downstream registries to validate their references. */
+  readonly catalogue: ReadonlySet<string>;
   readonly activeIds: readonly string[];
   readonly tombstoneIds: readonly string[];
   readonly bytesWritten: number;
@@ -227,7 +229,7 @@ export async function importRules(): Promise<RulesImport> {
   );
   files.push('generated/types/rules.ts');
 
-  return { activeIds, tombstoneIds, bytesWritten: bytes, files };
+  return { catalogue, activeIds, tombstoneIds, bytesWritten: bytes, files };
 }
 
 function assertReferences(

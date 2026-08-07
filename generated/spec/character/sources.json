@@ -1,0 +1,92 @@
+[
+  {
+    "SHA-256": "20564071c6948331585b118c018c279c3005f107468ecd74e921beac1b3f9096",
+    "Source ID": "SRC-RULES-1.5",
+    "Status": "VERIFIED",
+    "Версия / статус": "v1.5 / approved",
+    "Использование": "Характеристики, создание, навыки, симбионты, боевое и runtime-поведение",
+    "Приоритет": 100,
+    "Роль": "PRIMARY_NORMATIVE",
+    "Файл": "Symbiosis_V7_Executable_Rules_Registry_v1.5.xlsx"
+  },
+  {
+    "SHA-256": "678bdb4393cb434f296139dfcaf2c2c8ebb8b5bb2a6dc09263f7549a14481806",
+    "Source ID": "SRC-ITEMS-1.4",
+    "Status": "VERIFIED",
+    "Версия / статус": "v1.4_with_icons / approved",
+    "Использование": "Граница ItemTypeID; предметные ссылки; отсутствие WEB_ITEM в каталоге",
+    "Приоритет": 100,
+    "Роль": "PRIMARY_NORMATIVE",
+    "Файл": "Symbiosis_V7_Item_Registry_v1.4_with_icons.xlsx"
+  },
+  {
+    "SHA-256": "0957d70c0405da3d8c08d4bb9c684802097564613a22fdb634046949db30e7d0",
+    "Source ID": "SRC-BESTIARY-1.2",
+    "Status": "VERIFIED",
+    "Версия / статус": "v1.2 / approved",
+    "Использование": "Граница канонических монстров и симбиотических вариантов",
+    "Приоритет": 100,
+    "Роль": "PRIMARY_NORMATIVE",
+    "Файл": "Symbiosis_V7_Canonical_Bestiary_Registry_v1.2.xlsx"
+  },
+  {
+    "SHA-256": "18117d0d6baefd023c80b3e25b6c0011d873428c6f651f46596f2744127057a0",
+    "Source ID": "SRC-SENTIENT-1.1",
+    "Status": "VERIFIED",
+    "Версия / статус": "v1.1 / approved",
+    "Использование": "Существующие SkillKey, SpeciesKey, 44 payload и 175 learnedNodeRefs",
+    "Приоритет": 100,
+    "Роль": "PRIMARY_NORMATIVE",
+    "Файл": "Symbiosis_V7_Default_Sentient_Enemy_Registry_v1.1.xlsx"
+  },
+  {
+    "SHA-256": "dd1afe86a73895f96576e278e4f747d2fee79f5a09904c46962e43005bab332a",
+    "Source ID": "SRC-QA-1.0",
+    "Status": "VERIFIED",
+    "Версия / статус": "v1.0 / lower priority",
+    "Использование": "Решения об автоматизации и мирных командах",
+    "Приоритет": 50,
+    "Роль": "SECONDARY_CONTEXT",
+    "Файл": "Symbiosis_V7_All_Questions_and_Answers_Registry_v1.0.xlsx"
+  },
+  {
+    "SHA-256": "19fd32d2e6e5ffdaddac0ded70c6585067bce1b70b30c6d1d42e824044122989",
+    "Source ID": "SRC-RULEBOOK-FALLBACK",
+    "Status": "VERIFIED",
+    "Версия / статус": "approved fallback",
+    "Использование": "Только если пяти вышестоящих источников недостаточно; не переопределяет их",
+    "Приоритет": 10,
+    "Роль": "FALLBACK_ONLY",
+    "Файл": "Symbiosis_V7_print_final (2).pdf"
+  },
+  {
+    "SHA-256": "92a0d19c72ecbcdf1aab8b7a2a068a194b32179190913660cad6d7cab122a506",
+    "Source ID": "SRC-BASELINE-MANIFEST-1.0",
+    "Status": "VERIFIED",
+    "Версия / статус": "v1.0 / immutable approved baseline",
+    "Использование": "v1.0 не изменяется; новый реестр предназначен для будущего Manifest v1.1",
+    "Приоритет": 0,
+    "Роль": "INTEGRATION_TARGET",
+    "Файл": "Symbiosis_V7_Development_Baseline_Manifest_v1.0.xlsx"
+  },
+  {
+    "SHA-256": "NOT_APPLICABLE",
+    "Source ID": "USR-2026-07-30-WEB-001",
+    "Status": "VERIFIED",
+    "Версия / статус": "2026-07-30 / applied",
+    "Использование": "SYM-117/WEB_ITEM: мгновенно, один предмет, без времени/объёма/массы/нагрузки",
+    "Приоритет": 110,
+    "Роль": "AUTHORITATIVE_LOCAL_OVERRIDE",
+    "Файл": "Прямые ответы пользователя в текущем диалоге"
+  },
+  {
+    "SHA-256": "NOT_APPLICABLE",
+    "Source ID": "USR-2026-07-30-XP-001",
+    "Status": "VERIFIED",
+    "Версия / статус": "2026-07-30 / applied",
+    "Использование": "Натуральные 1/20, обе полярности, общий счётчик, распределение, roll/source policies, player-only boundary",
+    "Приоритет": 120,
+    "Роль": "AUTHORITATIVE_LOCAL_OVERRIDE",
+    "Файл": "Прямое авторское решение в задании на baseline v1.1"
+  }
+]

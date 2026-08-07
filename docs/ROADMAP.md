@@ -39,10 +39,18 @@
   4621 параметр, 876 связей, 250 статей справочника
 - Гейт по листу «Контроль» реестра правил: все 99 строк обязаны быть PASS
 - Замкнутость параметров и связей на каталог правил
+- Character / Skills / Symbionts v1.2 → `generated/spec/character` (22 файла) и
+  `generated/types/character.ts`: 1144 payload-сущности, 167 способностей,
+  74 вида симбионтов, 7 характеристик
+- Два гейта Character: паспорт (21 строка) и контроль (48 строк), все PASS
+- Перекрёстная проверка: 291 строка трассировки правил разрешается в каталог
+  Executable Rules
 
 Осталось:
 
-- Character / Items / Effects / Bestiary / Sentient → `generated/spec`
+- `24_XP_Runtime` — лист из нескольких секций со своими заголовками; нужен
+  отдельный разбор по секциям, единым читателем не берётся
+- Items / Effects / Bestiary / Sentient → `generated/spec`
 - `generated/media` из `xl/media/` и Runtime Pack (64 иконки, 16 артов)
 - `generated/seed` — SQLite seed
 

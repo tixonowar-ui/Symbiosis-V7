@@ -1,0 +1,485 @@
+[
+  {
+    "Consumer": "All consumers",
+    "ContractKey": "registryVersion",
+    "NormativeValue": "1.2",
+    "RuleRef": "Registry passport",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Campaign / services",
+    "ContractKey": "catalogVersion",
+    "NormativeValue": "SYMBIOSIS_CHARACTER_SKILLS_SYMBIONTS_V1.2",
+    "RuleRef": "Runtime contract",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Legacy payload deserializer",
+    "ContractKey": "builtAgainstTuple",
+    "NormativeValue": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "RuleRef": "Frozen v1.1 payload baseline",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Resolver",
+    "ContractKey": "sourcePriority",
+    "NormativeValue": "User decisions 2026-08-01 > v1.2 extension > v1.1 builtAgainst > earlier Q&A",
+    "RuleRef": "Q-GM-XP-001; Q-ENEMY-B14",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Character service",
+    "ContractKey": "skillRequirementStage",
+    "NormativeValue": "SKILL_STAGE_PRE_SYMBIONT",
+    "RuleRef": "CORE-081/167",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Character service",
+    "ContractKey": "startSkillSlots",
+    "NormativeValue": "ceil(skillStageStats.W/2); mandatory fill",
+    "RuleRef": "CORE-081/159/AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Skill service",
+    "ContractKey": "trainingSlotLedger",
+    "NormativeValue": "monotonic maxEverIssued=floor(permanentW/2)",
+    "RuleRef": "CORE-081/Q-CORE-051",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Skill service",
+    "ContractKey": "skillLevelFormula",
+    "NormativeValue": "+1..+5 costs 1..5; after +5 each +1 costs +2 slots",
+    "RuleRef": "CORE-165",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Skill service",
+    "ContractKey": "genericSkillXP",
+    "NormativeValue": "NOT_DEFINED_DO_NOT_INVENT",
+    "RuleRef": "Approved source gap",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Symbiont service",
+    "ContractKey": "symbiontNodeCost",
+    "NormativeValue": "XP cost equals node level; L=max learned available node level",
+    "RuleRef": "SYM-022/024",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Ability service",
+    "ContractKey": "abilityContexts",
+    "NormativeValue": "Exactly COMBAT and PEACE for every automated ability",
+    "RuleRef": "Q-APP-001/002",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Symbiont service",
+    "ContractKey": "manualNodes",
+    "NormativeValue": "Tree topology only; no executable behavior",
+    "RuleRef": "Q&A automation decisions",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Inventory service",
+    "ContractKey": "webItemNamespace",
+    "NormativeValue": "GeneratedObjectType; not ItemTypeID",
+    "RuleRef": "SYM-117/USR-2026-07-30-WEB-001",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Inventory service",
+    "ContractKey": "inventoryLoad",
+    "NormativeValue": "NOT_MODELED; massKg optional per instance",
+    "RuleRef": "ISS-006/CORE-130/131",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Character service",
+    "ContractKey": "symbioticMonsterSlots",
+    "NormativeValue": "4 base slots",
+    "RuleRef": "MON-001",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Character service",
+    "ContractKey": "chimeraExtraSlots",
+    "NormativeValue": "Confirmed Devouring history only; initial 0",
+    "RuleRef": "MON-006/007/010",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Character service",
+    "ContractKey": "puppeteerPlagueExtras",
+    "NormativeValue": "FORBIDDEN",
+    "RuleRef": "MON-001",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Deserializer",
+    "ContractKey": "adviserAlias",
+    "NormativeValue": "Canonical ADVISER; compatibility alias ADVISOR",
+    "RuleRef": "Rules/Sentient compatibility",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Release tooling / CI",
+    "ContractKey": "manifestIntegration",
+    "NormativeValue": "NORMATIVE_ARTIFACT_IN_MANIFEST_V1.2",
+    "RuleRef": "Development Baseline Manifest v1.2",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "Importer / CI",
+    "ContractKey": "forwardCompatibility",
+    "NormativeValue": "Current extension tuple=Rules v1.7 | Character-Skills-Symbionts v1.2 | Items v1.6_with_icons | Bestiary v1.4 | Sentient v1.2; frozen Sentient Registry/Runtime Pack v1.2 accepted only with SHA-256=614f0da1c3128aebbb28d67a68a89ccd189a067c57d407c92536425e46072cdc. New GM/player and generator contracts do not alter SYSTEM_SENTIENT_ENEMY/NO_XP_PROGRESSION payload semantics.",
+    "RuleRef": "Manifest v1.2 compatibility assertion",
+    "Status": "PASS"
+  },
+  {
+    "Consumer": "B. CharacterProfile Fields",
+    "ContractKey": "B. CharacterProfile Fields",
+    "NormativeValue": "B. CharacterProfile Fields",
+    "RuleRef": "B. CharacterProfile Fields",
+    "Status": "B. CharacterProfile Fields"
+  },
+  {
+    "Consumer": "Required",
+    "ContractKey": "Field",
+    "NormativeValue": "Scope",
+    "RuleRef": "Data type",
+    "Status": "Default"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "characterId",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "UUID",
+    "Status": "new UUID"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "raceCode",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "enum"
+  },
+  {
+    "Consumer": false,
+    "ContractKey": "pureClassCode",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "enum|null"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "baseStats",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "StatMap"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "skillStageStats",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "StatMap"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "effectiveStats",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "StatMap"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "equippedStats",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "StatMap"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "skills",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "SkillInstance[]",
+    "Status": "[]"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "startSkillSlots",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "integer",
+    "Status": "ceil(skillStageStats.W/2)"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "trainingSlotsEverIssued",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "integer",
+    "Status": 0
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "symbionts",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "SymbiontInstance[]",
+    "Status": "[]"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "maxHP",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "integer",
+    "Status": 100
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "currentHP",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "integer",
+    "Status": "maxHP"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "symbiontXpProgressPoints",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "integer",
+    "Status": 0
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "unallocatedSymbiontXp",
+    "NormativeValue": "CharacterProfile",
+    "RuleRef": "integer",
+    "Status": 0
+  },
+  {
+    "Consumer": "C. SymbiontInstance Fields",
+    "ContractKey": "C. SymbiontInstance Fields",
+    "NormativeValue": "C. SymbiontInstance Fields",
+    "RuleRef": "C. SymbiontInstance Fields",
+    "Status": "C. SymbiontInstance Fields"
+  },
+  {
+    "Consumer": "Required",
+    "ContractKey": "Field",
+    "NormativeValue": "Scope",
+    "RuleRef": "Data type",
+    "Status": "Default"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "symbiontInstanceId",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "UUID",
+    "Status": "new UUID"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "speciesKey",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "enum"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "targetL",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": 1
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "effectiveL",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": 1
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "branchChoices",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "string[]",
+    "Status": "[]"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "learnedNodeRefs",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "NodeRef[]",
+    "Status": "L1 roots"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "maxOE",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": "profile formula"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "currentOE",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": "maxOE"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "initialRuntimeState",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "object",
+    "Status": "{}"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "deepClone",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "boolean",
+    "Status": true
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "slotCost",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": "catalog value"
+  },
+  {
+    "Consumer": false,
+    "ContractKey": "monsterProfileID",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "string|null"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "extraSlotCount",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": 0
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "devouringHistory",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "object[]",
+    "Status": "[]"
+  },
+  {
+    "Consumer": false,
+    "ContractKey": "adviserCard",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "object|null"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "xp",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "integer",
+    "Status": 0
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "effectsEnabled",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "boolean",
+    "Status": true
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "xpEligible",
+    "NormativeValue": "SymbiontInstance",
+    "RuleRef": "boolean",
+    "Status": true
+  },
+  {
+    "Consumer": "D. AbilityExecution Fields",
+    "ContractKey": "D. AbilityExecution Fields",
+    "NormativeValue": "D. AbilityExecution Fields",
+    "RuleRef": "D. AbilityExecution Fields",
+    "Status": "D. AbilityExecution Fields"
+  },
+  {
+    "Consumer": "Required",
+    "ContractKey": "Field",
+    "NormativeValue": "Scope",
+    "RuleRef": "Data type",
+    "Status": "Default"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "executionId",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "UUID",
+    "Status": "new UUID"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "abilityId",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "AbilityID"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "context",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "enum"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "actorId",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "UUID"
+  },
+  {
+    "Consumer": false,
+    "ContractKey": "targetRef",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "EntityRef|null"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "parameters",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "object",
+    "Status": "{}"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "actionCost",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "integer|typed",
+    "Status": 0
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "resourceCost",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "object",
+    "Status": "{}"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "rolls",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "RollSpec[]",
+    "Status": "[]"
+  },
+  {
+    "Consumer": false,
+    "ContractKey": "attackResolution",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "object|null"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "stateWrites",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "object[]",
+    "Status": "[]"
+  },
+  {
+    "Consumer": true,
+    "ContractKey": "audit",
+    "NormativeValue": "AbilityExecution",
+    "RuleRef": "object",
+    "Status": "{}"
+  }
+]

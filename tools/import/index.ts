@@ -9,6 +9,7 @@
  */
 import { describeFailure, verify } from '../checksums/manifest.js';
 import { importAtlas } from './atlas.js';
+import { importCharacter } from './character.js';
 import { ImportError } from './lib/fail.js';
 import { importRules } from './rules.js';
 
@@ -33,15 +34,17 @@ async function main(): Promise<number> {
       `${String(rules.tombstoneIds.length)} tombstone`,
   );
 
+  // Character references rule ids, so it validates against the catalogue Rules
+  // just produced rather than trusting them.
+  const character = await importCharacter(rules.catalogue);
+  console.log(`character: ${String(character.payloads)} payload entities`);
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
-  const files = [...rules.files, ...atlas.files];
-  for (const file of files) {
-    console.log(`           ${file}`);
-  }
-
-  const mib = ((rules.bytesWritten + atlas.bytesWritten) / 1024 / 1024).toFixed(2);
+  const files = [...rules.files, ...character.files, ...atlas.files];
+  const bytes = rules.bytesWritten + character.bytesWritten + atlas.bytesWritten;
+  const mib = (bytes / 1024 / 1024).toFixed(2);
   console.log(`written:   ${mib} MiB across ${String(files.length)} file(s)`);
   return 0;
 }

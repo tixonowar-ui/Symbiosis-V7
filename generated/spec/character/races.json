@@ -1,0 +1,51 @@
+[
+  {
+    "AllocationXPMultiplier": 1,
+    "BaseSymbiontSlots": 0,
+    "ClassPolicy": "REQUIRED_PURE_CLASS",
+    "CounterPointMultiplier": 1,
+    "Creation Rule IDs": "CORE-008; CORE-009; CORE-010; CORE-013",
+    "DirectXPMultiplier": 1,
+    "ID unique": 1,
+    "RaceCode": "PURE",
+    "StatModifierProfileID": "RACE-MOD-PURE",
+    "Status": "ACTIVE",
+    "SymbiontXPPolicy": "STANDARD_XP_AWARD",
+    "SymbioticMonsterAllowed": false,
+    "Источник": "Rules Registry v1.5",
+    "Название": "Чистый"
+  },
+  {
+    "AllocationXPMultiplier": 2,
+    "BaseSymbiontSlots": 1,
+    "ClassPolicy": "NO_CLASS",
+    "CounterPointMultiplier": 1,
+    "Creation Rule IDs": "CORE-006; CORE-007",
+    "DirectXPMultiplier": 2,
+    "ID unique": 1,
+    "RaceCode": "FREE",
+    "StatModifierProfileID": "RACE-MOD-FREE",
+    "Status": "ACTIVE",
+    "SymbiontXPPolicy": "XP_AWARD_X2",
+    "SymbioticMonsterAllowed": false,
+    "Источник": "Rules Registry v1.5",
+    "Название": "Вольный"
+  },
+  {
+    "AllocationXPMultiplier": 1,
+    "BaseSymbiontSlots": 4,
+    "ClassPolicy": "NO_CLASS",
+    "CounterPointMultiplier": 1,
+    "Creation Rule IDs": "CORE-001; CORE-004; CORE-005",
+    "DirectXPMultiplier": 1,
+    "GrantedSkillRefs": "FOLLOWING_PAIN",
+    "ID unique": 1,
+    "RaceCode": "UNITED",
+    "StatModifierProfileID": "RACE-MOD-UNITED",
+    "Status": "ACTIVE",
+    "SymbiontXPPolicy": "STANDARD_XP_AWARD",
+    "SymbioticMonsterAllowed": true,
+    "Источник": "Rules Registry v1.5",
+    "Название": "Единый"
+  }
+]

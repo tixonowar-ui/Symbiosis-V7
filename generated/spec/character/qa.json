@@ -1,0 +1,461 @@
+[
+  {
+    "Expected": "Все ceil(W/2) слотов заполнены; обязательный класс резервирует 1",
+    "Given": "Создаётся персонаж",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-081/159/AQA-004",
+    "Scenario ID": "QA-001",
+    "When": "Рассчитать и заполнить стартовые слоты",
+    "Путь": "Character → Skills"
+  },
+  {
+    "Expected": "Используются skillStageStats до симбионтов",
+    "Given": "Есть бонусы симбионтов",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-167/Q-CORE-024",
+    "Scenario ID": "QA-002",
+    "When": "Проверить стартовые требования",
+    "Путь": "Character → Skills"
+  },
+  {
+    "Expected": "Все SkillKey, SpeciesKey и 175 NodeRef существуют",
+    "Given": "44 payload Sentient v1.2",
+    "Result": "PASS",
+    "Rule / contract IDs": "Sentient v1.2",
+    "Scenario ID": "QA-003",
+    "When": "Разрешить ссылки",
+    "Путь": "Sentient → Skills/Symbionts"
+  },
+  {
+    "Expected": "Все родители существуют; циклов нет",
+    "Given": "182 узла",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-023/024",
+    "Scenario ID": "QA-004",
+    "When": "Проверить родителей и циклы",
+    "Путь": "Nodes graph"
+  },
+  {
+    "Expected": "Отклонить",
+    "Given": "Кукловод или Чумной доктор",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-001",
+    "Scenario ID": "QA-005",
+    "When": "Добавить обычного симбионта",
+    "Путь": "Monster slots"
+  },
+  {
+    "Expected": "Отклонить; extraSlots=0",
+    "Given": "Химера без подтверждённых Пожираний",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-006/007/010",
+    "Scenario ID": "QA-006",
+    "When": "Добавить обычного симбионта",
+    "Путь": "Chimera slots"
+  },
+  {
+    "Expected": "Ровно 334: COMBAT+PEACE на каждую",
+    "Given": "167 способностей",
+    "Result": "PASS",
+    "Rule / contract IDs": "Q-APP-001/002",
+    "Scenario ID": "QA-007",
+    "When": "Проверить строки контекстов",
+    "Путь": "Ability contexts"
+  },
+  {
+    "Expected": "Два независимых полных описания и два player-command флага",
+    "Given": "Способность разрешена в обоих контекстах",
+    "Result": "PASS",
+    "Rule / contract IDs": "Q-APP-002",
+    "Scenario ID": "QA-008",
+    "When": "Прочитать поведение",
+    "Путь": "Ability contexts"
+  },
+  {
+    "Expected": "CORE-229 разрешает outcome; отдельный SYM-021 event создаётся по исходной natural 1/20.",
+    "Given": "Натуральная 20/1 в бою",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-229; SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "QA-009",
+    "When": "Разрешить проверку",
+    "Путь": "Combat critical"
+  },
+  {
+    "Expected": "Боевой auto-outcome не применяется; XP-маршрутизация natural 1/20 применяется.",
+    "Given": "Натуральная 20/1 вне боя",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-229; SYM-021; Q-APP-004; USR-2026-07-30-XP-001",
+    "Scenario ID": "QA-010",
+    "When": "Разрешить проверку",
+    "Путь": "Peace critical"
+  },
+  {
+    "Expected": "Нет автоматического пробития или максимального урона без частного правила",
+    "Given": "Критическое попадание",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-229",
+    "Scenario ID": "QA-011",
+    "When": "Проверить броню",
+    "Путь": "AttackResolution"
+  },
+  {
+    "Expected": "sourceKind=SYMBIONT_ABILITY; ItemInstance не создаётся",
+    "Given": "Атакующая способность",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-013/014",
+    "Scenario ID": "QA-012",
+    "When": "Маршрутизировать урон",
+    "Путь": "Symbiont attack"
+  },
+  {
+    "Expected": "Иммунитет блокирует payload до применения",
+    "Given": "Абсолютный иммунитет",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-228",
+    "Scenario ID": "QA-013",
+    "When": "Применить симбиотический яд",
+    "Путь": "Poison"
+  },
+  {
+    "Expected": "Сразу создан ровно один объект; time/volume/mass/load не моделируются",
+    "Given": "Игрок активирует SYM-117 вне боя",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-117/USR-2026-07-30-WEB-001",
+    "Scenario ID": "QA-014",
+    "When": "Выполнить команду",
+    "Путь": "WEB_ITEM"
+  },
+  {
+    "Expected": "Операции разрешены; предмет после удаления Паука сохраняется",
+    "Given": "Готовая паутина в инвентаре",
+    "Result": "PASS",
+    "Rule / contract IDs": "USR-2026-07-30-WEB-001",
+    "Scenario ID": "QA-015",
+    "When": "Передать/выбросить/мародёрить/удалить Паука",
+    "Путь": "WEB_ITEM"
+  },
+  {
+    "Expected": "WEB_ITEM не ItemTypeID и не требует иконки",
+    "Given": "Каталог Items v1.5_with_icons",
+    "Result": "PASS",
+    "Rule / contract IDs": "Items v1.5_with_icons",
+    "Scenario ID": "QA-016",
+    "When": "Проверить FK и иконку",
+    "Путь": "WEB_ITEM boundary"
+  },
+  {
+    "Expected": "JSON и SHA-256 совпадают",
+    "Given": "Нормализованная строка",
+    "Result": "PASS",
+    "Rule / contract IDs": "Runtime contract",
+    "Scenario ID": "QA-017",
+    "When": "Канонически сериализовать",
+    "Путь": "Payload"
+  },
+  {
+    "Expected": "Exact tuple: Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Given": "Импорт Character Registry v1.1",
+    "Result": "PASS",
+    "Rule / contract IDs": "BASE-001..007; Character runtime contract",
+    "Scenario ID": "QA-018",
+    "When": "Проверить tuple и SHA источников",
+    "Путь": "Baseline"
+  },
+  {
+    "Expected": "1 прямой baseXP одному симбионту",
+    "Given": "Связанная характеристика; rawFace=20; grade=0",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-001",
+    "When": "Маршрутизировать событие",
+    "Путь": "XP → DIRECT"
+  },
+  {
+    "Expected": "1 прямой baseXP одному симбионту",
+    "Given": "Связанная характеристика; rawFace=1; grade=0",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-002",
+    "When": "Маршрутизировать событие",
+    "Путь": "XP → DIRECT"
+  },
+  {
+    "Expected": "3 прямых baseXP",
+    "Given": "Связанная характеристика; Triple Crit SUCCESS",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-083; SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-003",
+    "When": "Маршрутизировать событие",
+    "Путь": "XP → DIRECT"
+  },
+  {
+    "Expected": "3 прямых baseXP",
+    "Given": "Связанная характеристика; Triple Crit FAILURE",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-084; SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-004",
+    "When": "Маршрутизировать событие",
+    "Путь": "XP → DIRECT"
+  },
+  {
+    "Expected": "Ровно один равновероятный selectedSymbiontInstanceId",
+    "Given": "Два подходящих xpEligible симбионта",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-005",
+    "When": "Выбрать адресата",
+    "Путь": "XP → DIRECT"
+  },
+  {
+    "Expected": "+1 symbiontXpProgressPoints",
+    "Given": "Несвязанная характеристика; rawFace=20",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-006",
+    "When": "Маршрутизировать событие",
+    "Путь": "XP → COUNTER"
+  },
+  {
+    "Expected": "+2 symbiontXpProgressPoints",
+    "Given": "Несвязанная характеристика; Double Crit FAILURE",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-007",
+    "When": "Маршрутизировать событие",
+    "Путь": "XP → COUNTER"
+  },
+  {
+    "Expected": "+2 unallocatedSymbiontXp; остаток=1",
+    "Given": "Счётчик=2; eventPoints=5",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-008",
+    "When": "Атомарно конвертировать",
+    "Путь": "XP → CONVERT"
+  },
+  {
+    "Expected": "0 direct XP; +1 балл",
+    "Given": "Связанная характеристика; DAMAGE rawFace=20",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-009",
+    "When": "Маршрутизировать событие",
+    "Путь": "DAMAGE → COUNTER"
+  },
+  {
+    "Expected": "+1 балл",
+    "Given": "INITIATIVE rawFace=1",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-010",
+    "When": "Маршрутизировать событие",
+    "Путь": "INITIATIVE → COUNTER"
+  },
+  {
+    "Expected": "XP и баллы не изменяются",
+    "Given": "RANDOM_TABLE rawFace=20",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-011",
+    "When": "Маршрутизировать событие",
+    "Путь": "RANDOM_TABLE → NEVER"
+  },
+  {
+    "Expected": "XP и баллы не изменяются",
+    "Given": "Искусственный Crit без rawFace 1/20",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-229; SYM-082; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-012",
+    "When": "Маршрутизировать событие",
+    "Путь": "ABILITY_OVERRIDE → NEVER"
+  },
+  {
+    "Expected": "Второе событие не создаётся",
+    "Given": "Подстановка rawFace=20",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-229; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-013",
+    "When": "Проверить источник",
+    "Путь": "Equal grade → NEVER"
+  },
+  {
+    "Expected": "Самостоятельный XP не создаётся",
+    "Given": "isConfirmationRoll=true",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-083; CORE-084; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-014",
+    "When": "Проверить источник",
+    "Путь": "Confirmation → NEVER"
+  },
+  {
+    "Expected": "Одинаковый route/eventPoints/state delta",
+    "Given": "Одинаковые исходные данные",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-015",
+    "When": "Сравнить маршрутизацию",
+    "Путь": "AUTO/MANUAL"
+  },
+  {
+    "Expected": "Собственное XP-событие сохраняется",
+    "Given": "Собственная natural 20; итоговый проигрыш",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-229; SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-016",
+    "When": "Разрешить проверку",
+    "Путь": "Opposed check"
+  },
+  {
+    "Expected": "Симбионт получает 2 XP",
+    "Given": "Вольный; direct baseXP=1",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-007; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-017",
+    "When": "Начислить XP",
+    "Путь": "FREE → DIRECT"
+  },
+  {
+    "Expected": "Создан 1 unallocated; симбионт получает 2 XP",
+    "Given": "Вольный; накоплено 3 балла",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-007; SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-018",
+    "When": "Конвертировать и распределить 1 XP",
+    "Путь": "FREE → COUNTER/ALLOCATE"
+  },
+  {
+    "Expected": "XP сохраняется без автоназначения",
+    "Given": "Есть нераспределённый XP",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-019",
+    "When": "Не выбирать симбионта",
+    "Путь": "Unallocated persistence"
+  },
+  {
+    "Expected": "Счётчики сохраняются; распределение недоступно",
+    "Given": "У персонажа нет симбионтов",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-020",
+    "When": "Накопить и попытаться распределить",
+    "Путь": "No symbiont"
+  },
+  {
+    "Expected": "Первый создаёт одно событие; второй — ни одного",
+    "Given": "rawFace=20; формула удваивает; отдельно rawFace=10 даёт итог 20",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-021",
+    "When": "Маршрутизировать",
+    "Путь": "R20×2"
+  },
+  {
+    "Expected": "Вторая доставка не меняет состояние",
+    "Given": "Один originRollId доставлен дважды",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-022",
+    "When": "Повторно обработать",
+    "Путь": "Idempotency"
+  },
+  {
+    "Expected": "Счётчики и XP не создаются",
+    "Given": "SentientEnemy/монстр rawFace=1|20",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-023",
+    "When": "Маршрутизировать",
+    "Путь": "NPC boundary"
+  },
+  {
+    "Expected": "Количество → counter; медицинская проверка со связанной характеристикой → direct",
+    "Given": "HEALING_AMOUNT и значимая MEDICAL_CHECK",
+    "Result": "PASS",
+    "Rule / contract IDs": "SYM-021; USR-2026-07-30-XP-001",
+    "Scenario ID": "XP-QA-024",
+    "When": "Маршрутизировать обе",
+    "Путь": "Healing distinction"
+  },
+  {
+    "Expected": "Target gains 3 XP; counters unchanged; immutable receipt",
+    "Given": "PURE player; owned xpEligible target; baseXP=3; reason present",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-001",
+    "When": "Commit award",
+    "Путь": "GM direct → PURE"
+  },
+  {
+    "Expected": "Target gains 6 XP; multiplier applied once",
+    "Given": "FREE player; baseXP=3",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-007; CORE-234",
+    "Scenario ID": "GMXP-QA-002",
+    "When": "Commit award",
+    "Путь": "GM direct → FREE"
+  },
+  {
+    "Expected": "Both counters remain 2 and 5; no 3→1 conversion",
+    "Given": "progressPoints=2; unallocated=5",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-003",
+    "When": "Commit baseXP=4",
+    "Путь": "Counter bypass"
+  },
+  {
+    "Expected": "Reject without state/audit commit",
+    "Given": "baseXP=0 or negative/fractional",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-004",
+    "When": "Submit",
+    "Путь": "Validation amount"
+  },
+  {
+    "Expected": "ERR_REASON_REQUIRED; no state change",
+    "Given": "Reason empty after trim",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-005",
+    "When": "Submit",
+    "Путь": "Validation reason"
+  },
+  {
+    "Expected": "Reject; no award",
+    "Given": "Foreign, NPC-owned or xpEligible=false symbiont",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-006",
+    "When": "Submit",
+    "Путь": "Target eligibility"
+  },
+  {
+    "Expected": "Second call returns same receipt; no double XP",
+    "Given": "Same awardId and identical payload delivered twice",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-007",
+    "When": "Retry",
+    "Путь": "Idempotency"
+  },
+  {
+    "Expected": "Operation unavailable/rejected; committed XP remains",
+    "Given": "Committed valid award",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-234",
+    "Scenario ID": "GMXP-QA-008",
+    "When": "Request rollback/delete/negative compensation",
+    "Путь": "Immutability"
+  },
+  {
+    "Expected": "Percent in 80..150; target/factual totals equal; average oriented to 80; every one of seven random stats <=35; accepted instances enter combat setup; no AI/template mutation",
+    "Given": "Stable party snapshot; auditable seed; sentient+monster origins enabled",
+    "Result": "PASS",
+    "Rule / contract IDs": "AQA-044; CORE-214; CORE-215; Q-ENEMY-B14",
+    "Scenario ID": "GEN-QA-001",
+    "When": "Generate preview then accept",
+    "Путь": "Enemy group generator"
+  }
+]

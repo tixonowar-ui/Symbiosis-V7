@@ -1,0 +1,24 @@
+[
+  {
+    "CountsTowardInventoryLoad": false,
+    "CreationCount": 1,
+    "DerivedProperties": "loadCapacityKg=20×sourceLevelSnapshot; adhesionKgPerCm2=5×sourceLevelSnapshot",
+    "Droppable": true,
+    "GeneratedObjectTypeID": "WEB_ITEM",
+    "ID unique": 1,
+    "IconRequired": false,
+    "Lifecycle": "Обычный инвентарь; передача, выбрасывание и мародёрство разрешены. Общая масса/вместимость инвентаря приложением не моделируется.",
+    "Lootable": true,
+    "PersistsAfterSymbiontRemoval": true,
+    "ProducerAbilityID": "SYM-117",
+    "QuantityMode": "ONE_INSTANCE_PER_ACTIVATION",
+    "Rule IDs": "SYM-117; CORE-224; ISS-006",
+    "RuntimeKind": "SERVICE_GENERATED_ITEM",
+    "Source Question IDs": "Q-SYM-048; USR-2026-07-30-WEB-001",
+    "StackPolicy": "NEVER_AUTO_MERGE",
+    "Status": "ACTIVE",
+    "Transferable": true,
+    "VolumeMode": "NOT_MODELED",
+    "Название": "Готовая паутина Паука"
+  }
+]

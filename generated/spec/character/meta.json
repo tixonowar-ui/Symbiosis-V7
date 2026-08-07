@@ -1,0 +1,12 @@
+{
+  "abilities": 167,
+  "deferredSheets": [
+    "24_XP_Runtime"
+  ],
+  "gatesAllPass": true,
+  "payloads": 1144,
+  "registryVersion": "v1.2",
+  "ruleTraceRows": 291,
+  "source": "artifacts/registries/Symbiosis_V7_Character_Skills_Symbionts_Registry_v1.2.xlsx",
+  "symbiontSpecies": 74
+}

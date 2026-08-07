@@ -1,0 +1,1737 @@
+[
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-027",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-027",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-027"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-028",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-028",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-028",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-007; Q-SYM-008"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-029",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-029",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-029"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-030",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-030",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-030",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-009"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-032",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-032",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-032",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-011"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-034",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-034",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-034",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-013; Q-SYM-014"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-031",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-031",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-031",
+    "SourceQuestionID": "Q-SYM-010"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-033",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-033",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-033",
+    "SourceQuestionID": "Q-SYM-010; Q-SYM-012"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-035",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-035",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-035",
+    "SourceQuestionID": "Q-SYM-015"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-036",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-036",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-036"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-039",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-039",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-039",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-017; Q-SYM-076; Q-APP-002"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-040",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-040",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-040",
+    "SourceQuestionID": "Q-SYM-018"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-041",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-041",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-041",
+    "SourceQuestionID": "Q-SYM-010; Q-SYM-075"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-042",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-042",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-042",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-017; Q-SYM-019; Q-SYM-076; Q-APP-002"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-043",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-043",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-043",
+    "SourceQuestionID": "Q-SYM-010"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-044",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-044",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-044",
+    "SourceQuestionID": "Q-SYM-010"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-045",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-045",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-045",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-017; Q-SYM-020; Q-SYM-076; Q-APP-002"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-047",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-047",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-047",
+    "SourceQuestionID": "Q-SYM-021"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-048",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-048",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-048"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-049",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-049",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-049"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-050",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-050",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-050"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-051",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-051",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-051",
+    "SourceQuestionID": "Q-SYM-022"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-052",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-052",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-052"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-054",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-054",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-054"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-055",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-055",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-055",
+    "SourceQuestionID": "Q-SYM-085"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-056",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-056",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-056"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-057",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-057",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-057",
+    "SourceQuestionID": "Q-SYM-023; Q-SYM-024"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-058",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-058",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-058"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-059",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-059",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-059",
+    "SourceQuestionID": "Q-SYM-024; Q-SYM-025"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-061",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-061",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-061"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-062",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-062",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-062"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-063",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-063",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-063"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-064",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-064",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-064"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-065",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-065",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-065"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-066",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-066",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-066",
+    "SourceQuestionID": "Q-SYM-026"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-068",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-068",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-068",
+    "SourceQuestionID": "Q-SYM-027"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-069",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-069",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-069",
+    "SourceQuestionID": "Q-SYM-028"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-070",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-070",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-070"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-071",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-071",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-071",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-029"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-072",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-072",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-072",
+    "SourceQuestionID": "Q-SYM-077"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-073",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-073",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-073",
+    "SourceQuestionID": "Q-SYM-030"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-076",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-076",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-076",
+    "SourceQuestionID": "Q-SYM-032"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-077",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-077",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-077",
+    "SourceQuestionID": "Q-SYM-033"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-078",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-078",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-078",
+    "SourceQuestionID": "Q-SYM-034"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-079",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-079",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-079"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-080",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-080",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-080",
+    "SourceQuestionID": "Q-SYM-035"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-081",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-081",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-081"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-082",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-082",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-082",
+    "SourceQuestionID": "Q-COMBAT-CRIT-001"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-084",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-084",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-084; SYM-085",
+    "SourceQuestionID": "Q-SYM-036; Q-SYM-074"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-086",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-086",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-086"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-087",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-087",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-087",
+    "SourceQuestionID": "Q-SYM-009"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-088",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-088",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-088"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-089",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-089",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-089",
+    "SourceQuestionID": "Q-SYM-009"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-090",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-090",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-090"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-091",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-091",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-091",
+    "SourceQuestionID": "Q-QA-003; Q-SYM-037"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "SYM-092",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-092",
+    "SourceQuestionID": "Q-SYM-038"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-093",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-093",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-093",
+    "SourceQuestionID": "Q-SYM-039"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-094",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-094",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-094",
+    "SourceQuestionID": "Q-SYM-009"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-096",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-096",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-096",
+    "SourceQuestionID": "Q-SYM-040"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-097",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-097",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-097"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-098",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-098",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-098"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-099",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-099",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-099",
+    "SourceQuestionID": "Q-SYM-041"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-100",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-100",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-100"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-101",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-101",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-101",
+    "SourceQuestionID": "Q-SYM-042"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-103",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-103",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-103",
+    "SourceQuestionID": "Q-SYM-043"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-104",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-104",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-104",
+    "SourceQuestionID": "Q-SYM-022"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-105",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-105",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-105"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-106",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-106",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-106",
+    "SourceQuestionID": "Q-SYM-044"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-107",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-107",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-107",
+    "SourceQuestionID": "Q-SYM-045"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-108",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-108",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-108"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-110",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-110",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-110"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-111",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-111",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-111"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-112",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-112",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-112",
+    "SourceQuestionID": "Q-SYM-046"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-113",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-113",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-113"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-114",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-114",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-114",
+    "SourceQuestionID": "Q-SYM-047"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-115",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-115",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-115"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-117",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-117",
+    "LaterOverrideIDs": "USR-2026-07-30-WEB-001",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-117",
+    "SourceQuestionID": "Q-SYM-048; Q-PREDEV-010; USR-2026-07-30-WEB-001"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-118",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-118",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-118"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "SYM-119",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-119",
+    "SourceQuestionID": "Q-SYM-049"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-120",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-120",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-120",
+    "SourceQuestionID": "Q-SYM-050"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-121",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-121",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-121",
+    "SourceQuestionID": "Q-SYM-050"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-122",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-122",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-122"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-124",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-124",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-124",
+    "SourceQuestionID": "Q-SYM-051"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-125",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-125",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-125",
+    "SourceQuestionID": "Q-SYM-051"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-126",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-126",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-126",
+    "SourceQuestionID": "Q-SYM-021"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-127",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-127",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-127"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-128",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-128",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-128"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-129",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-129",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-129",
+    "SourceQuestionID": "Q-SYM-052"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-131#MI_MI_MI",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-131#MI_MI_MI",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-131",
+    "SourceQuestionID": "Q-SYM-053"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-131#OH_NICE",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-131#OH_NICE",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-131",
+    "SourceQuestionID": "Q-SYM-053"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-131#BLACK_WHITE_FEAR",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-131#BLACK_WHITE_FEAR",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-131",
+    "SourceQuestionID": "Q-SYM-053"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-132",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-132",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-132",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-011; Q-SYM-054"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-133",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-133",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-133",
+    "SourceQuestionID": "Q-SYM-053"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-134",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-134",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-134",
+    "SourceQuestionID": "Q-SYM-005"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-135",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-135",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-135",
+    "SourceQuestionID": "Q-SYM-005; Q-SYM-055"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-137",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-137",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-137",
+    "SourceQuestionID": "Q-SYM-056"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-138",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-138",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-138"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-139",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-139",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-139",
+    "SourceQuestionID": "Q-SYM-057"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-140",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-140",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-140"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-141",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-141",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-141"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-142",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-142",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-142",
+    "SourceQuestionID": "Q-SYM-058"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-144",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-144",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-144"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-145",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-145",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-145"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "SYM-146",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-146",
+    "SourceQuestionID": "Q-SYM-059"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-147",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-147",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-147",
+    "SourceQuestionID": "Q-SYM-059"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-148",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-148",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-148"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-149",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-149",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-149"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-150",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-150",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-150"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-152",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-152",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-152; SYM-153",
+    "SourceQuestionID": "Q-SYM-060; Q-PREDEV-003"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-154",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-154",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-154",
+    "SourceQuestionID": "Q-SYM-061"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-155",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-155",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-155",
+    "SourceQuestionID": "Q-PREDEV-003"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-156",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-156",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-156"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-157",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-157",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-157",
+    "SourceQuestionID": "Q-SYM-062; Q-PREDEV-003"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-158",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-158",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-158"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-159",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-159",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-159",
+    "SourceQuestionID": "Q-SYM-062; Q-PREDEV-003"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "SYM-151#RAT_COMMUNICATIONS",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-151"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-160",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-160",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-160",
+    "SourceQuestionID": "Q-PREDEV-003"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "SYM-151#TOTAL_RATHOOD",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-151"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-162",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-162",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-162"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-163",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-163",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-163",
+    "SourceQuestionID": "Q-SYM-063"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-164",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-164",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-164"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-165",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-165",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-165"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "SYM-161#ABSOLUTE_MEMORY",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-161"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-166",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-166",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-166"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-168",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-168",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-168",
+    "SourceQuestionID": "Q-SYM-064"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-169",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-169",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-169",
+    "SourceQuestionID": "Q-SYM-065"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-170",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-170",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-170"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-171",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-171",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-171",
+    "SourceQuestionID": "Q-SYM-066"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-172",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-172",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-172",
+    "SourceQuestionID": "Q-SYM-064"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-173",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-173",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-173",
+    "SourceQuestionID": "Q-SYM-064"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-175",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-175",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-175",
+    "SourceQuestionID": "Q-SYM-067"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-176",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-176",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-176",
+    "SourceQuestionID": "Q-SYM-068"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-177",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-177",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-177",
+    "SourceQuestionID": "Q-SYM-069"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-178",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-178",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-178",
+    "SourceQuestionID": "Q-SYM-070"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-179",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-179",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-179",
+    "SourceQuestionID": "Q-SYM-070; Q-SYM-071"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "SYM-180",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "SYM-180",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "SYM-180",
+    "SourceQuestionID": "Q-SYM-070; Q-SYM-071; Q-SYM-072"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-004",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-004",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-004; MON-005; MON-006; MON-007",
+    "SourceQuestionID": "Q-MON-002; Q-MON-003; Q-MON-004"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-008",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-008",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-008; MON-009"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-010",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-010",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-010",
+    "SourceQuestionID": "Q-MON-005"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-011",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-011",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-011"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-012",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-012",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-012"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-013",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-013",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-013"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-014",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-014",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-014; MON-015",
+    "SourceQuestionID": "Q-MON-006"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-016",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-016",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-016"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-017",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-017",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-017"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-018",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-018",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-018; MON-019",
+    "SourceQuestionID": "Q-MON-006"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-020",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-020",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-020",
+    "SourceQuestionID": "Q-CORE-022"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-021",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-021",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-021"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-022",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-022",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-022",
+    "SourceQuestionID": "Q-MON-007; Q-MON-008"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-023",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-023",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-023; MON-024",
+    "SourceQuestionID": "Q-MON-009"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-027",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-027",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-027",
+    "SourceQuestionID": "Q-MON-078"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-028",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-028",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-028"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-026#READ_THOUGHTS",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-026"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-029",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-029",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-029; MON-030",
+    "SourceQuestionID": "Q-MON-010; Q-MON-011"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-031",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-031",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-031",
+    "SourceQuestionID": "Q-MON-012"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-032",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-032",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-032",
+    "SourceQuestionID": "Q-MON-012"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-033",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-033",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-033; MON-034",
+    "SourceQuestionID": "Q-MON-013"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-026#DIVERT_ATTENTION",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-026"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-035",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-035",
+    "SourceQuestionID": "Q-MON-014; Q-MON-076"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-036",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-036",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-036",
+    "SourceQuestionID": "Q-MON-015"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-026#PERMANENT_ILLUSION",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-026"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-037",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-037",
+    "SourceQuestionID": "Q-MON-016"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-038",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-038",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-038",
+    "SourceQuestionID": "Q-MON-017; Q-PREDEV-006"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-039",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-039",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-039",
+    "SourceQuestionID": "Q-MON-018"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-042",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-042",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-042; MON-043; MON-044; MON-045; MON-046; MON-047",
+    "SourceQuestionID": "Q-MON-019; Q-MON-020; Q-MON-021; Q-MON-022"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-048",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-048",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-048",
+    "SourceQuestionID": "Q-MON-019"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-049",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-049",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-049"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-050",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-050",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-050",
+    "SourceQuestionID": "Q-MON-023"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-051",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-051",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-051",
+    "SourceQuestionID": "Q-MON-024"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-052",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-052",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-052"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-053",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-053",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-053"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-054",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-054",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-054"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-055",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-055",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-055",
+    "SourceQuestionID": "Q-MON-025"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-041#ONE_FAMILY",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-041"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-056",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-056",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-056; MON-057"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-058",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-058; MON-059; MON-060",
+    "SourceQuestionID": "Q-MON-026; Q-MON-027; Q-MON-028; Q-MON-029"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-061",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-061",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-061; MON-062; MON-063"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-064",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-064; MON-065",
+    "SourceQuestionID": "Q-MON-031"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-066",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-066",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-066; MON-067",
+    "SourceQuestionID": "Q-MON-032"
+  },
+  {
+    "AcceptedEvidence": "Topology retained; executable behavior intentionally omitted",
+    "CandidateRuleID": "MON-068",
+    "DecisionCode": "NODE_ONLY_NO_EXECUTABLE_BEHAVIOR",
+    "QuestionStatus": "CLOSED_EXCLUDED_OR_NODE_ONLY",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-068; MON-069; MON-070",
+    "SourceQuestionID": "Q-MON-033; Q-MON-034"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-073",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-073",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-073"
+  },
+  {
+    "AcceptedEvidence": "Rules implementation card + accepted Q&A automation decision",
+    "CandidateRuleID": "MON-071",
+    "DecisionCode": "INCLUDED_AUTOMATED",
+    "IncludedAbilityID": "MON-071",
+    "QuestionStatus": "CLOSED_ACCEPTED",
+    "Result": "PASS",
+    "RulesMirrorID": "MON-071; MON-072",
+    "SourceQuestionID": "Q-MON-035; Q-MON-036"
+  }
+]

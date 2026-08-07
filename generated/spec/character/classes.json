@@ -1,0 +1,41 @@
+[
+  {
+    "ClassCode": "SEEKER",
+    "ContextModifierRefs": "CLASS-MOD-SEEKER-C-VS-PURE; CLASS-MOD-SEEKER-C-VS-UNITED",
+    "ID unique": 1,
+    "MandatorySkillKey": "PURE_SEEKER",
+    "MandatorySkillSlotCost": 1,
+    "RaceCode": "PURE",
+    "Rule IDs": "CORE-009",
+    "StatModifierProfileID": "CLASS-MOD-SEEKER",
+    "Status": "ACTIVE",
+    "Источник": "Rules Registry v1.5",
+    "Название": "Искатель"
+  },
+  {
+    "ClassCode": "STALKER",
+    "ContextModifierRefs": "CLASS-MOD-STALKER-C-VS-PURE; CLASS-MOD-STALKER-C-VS-UNITED",
+    "ID unique": 1,
+    "MandatorySkillKey": "PURE_STALKER",
+    "MandatorySkillSlotCost": 1,
+    "RaceCode": "PURE",
+    "Rule IDs": "CORE-010",
+    "StatModifierProfileID": "CLASS-MOD-STALKER",
+    "Status": "ACTIVE",
+    "Источник": "Rules Registry v1.5",
+    "Название": "Сталкер"
+  },
+  {
+    "ClassCode": "SOLDIER",
+    "ContextModifierRefs": "CLASS-MOD-SOLDIER-C-VS-PURE; CLASS-MOD-SOLDIER-C-VS-UNITED",
+    "ID unique": 1,
+    "MandatorySkillKey": "PURE_SOLDIER",
+    "MandatorySkillSlotCost": 1,
+    "RaceCode": "PURE",
+    "Rule IDs": "CORE-013",
+    "StatModifierProfileID": "CLASS-MOD-SOLDIER",
+    "Status": "ACTIVE",
+    "Источник": "Rules Registry v1.5",
+    "Название": "Солдат"
+  }
+]

@@ -1,0 +1,1059 @@
+[
+  {
+    "Code": "S",
+    "Dictionary": "StatCode",
+    "LabelRU": "Сила",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-073; CORE-078; CORE-079; CORE-160; CORE-197"
+  },
+  {
+    "Code": "D",
+    "Dictionary": "StatCode",
+    "LabelRU": "Ловкость",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-073; CORE-078; CORE-079; CORE-160; CORE-197"
+  },
+  {
+    "Code": "M",
+    "Dictionary": "StatCode",
+    "LabelRU": "Метаболизм",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-073; CORE-078; CORE-079; CORE-160; CORE-197"
+  },
+  {
+    "Code": "Z",
+    "Dictionary": "StatCode",
+    "LabelRU": "Здоровье",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-031; CORE-073; CORE-078; CORE-079; CORE-160; CORE-197"
+  },
+  {
+    "Code": "I",
+    "Dictionary": "StatCode",
+    "LabelRU": "Интеллект",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-073; CORE-078; CORE-079; CORE-160; CORE-197"
+  },
+  {
+    "Code": "W",
+    "Dictionary": "StatCode",
+    "LabelRU": "Мудрость",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-073; CORE-078; CORE-079; CORE-081; CORE-160; CORE-197"
+  },
+  {
+    "Code": "C",
+    "Dictionary": "StatCode",
+    "LabelRU": "Харизма",
+    "Meaning": "Канонический код",
+    "RuleRef / Note": "CORE-073; CORE-078; CORE-079; CORE-160; CORE-197"
+  },
+  {
+    "Code": "PURE",
+    "Dictionary": "RaceCode",
+    "LabelRU": "Чистый",
+    "Meaning": "Игровая раса",
+    "RuleRef / Note": "CORE-008; CORE-009; CORE-010; CORE-013"
+  },
+  {
+    "Code": "FREE",
+    "Dictionary": "RaceCode",
+    "LabelRU": "Вольный",
+    "Meaning": "Игровая раса",
+    "RuleRef / Note": "CORE-006; CORE-007"
+  },
+  {
+    "Code": "UNITED",
+    "Dictionary": "RaceCode",
+    "LabelRU": "Единый",
+    "Meaning": "Игровая раса",
+    "RuleRef / Note": "CORE-001; CORE-004; CORE-005"
+  },
+  {
+    "Code": "SEEKER",
+    "Dictionary": "PureClass",
+    "LabelRU": "Искатель",
+    "Meaning": "Класс Чистого",
+    "RuleRef / Note": "CORE-009"
+  },
+  {
+    "Code": "STALKER",
+    "Dictionary": "PureClass",
+    "LabelRU": "Сталкер",
+    "Meaning": "Класс Чистого",
+    "RuleRef / Note": "CORE-010"
+  },
+  {
+    "Code": "SOLDIER",
+    "Dictionary": "PureClass",
+    "LabelRU": "Солдат",
+    "Meaning": "Класс Чистого",
+    "RuleRef / Note": "CORE-013"
+  },
+  {
+    "Code": "UNARMED",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Рукопашный бой",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "GRAPPLING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Борьба",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "WEAPON_THROWING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Метание",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "OBJECT_THROWING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Бросание",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "SHOOTING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Стрельба",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "ARCHERY",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Стрельба из лука",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "GROSS",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Владение грубым оружием",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "FENCING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Фехтование",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "SPEAR",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Владение копьём",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "SHORT",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Владение коротким оружием",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "AXES",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Владение топорами",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "SHIELD",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Владение щитом",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "RIDING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Наездник",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "STEALTH",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Скрытность",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "THIEVERY",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Вор",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "ACROBATICS",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Акробатика",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "ORIENTATION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Ориентирование",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "LEARNING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Ученик",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "TEACHING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Учитель",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "CRAFT",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Крафт",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "REPAIR",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Ремонт",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "TRACKING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Выслеживание",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "AWARENESS",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Внимательность",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "ANALYTICAL_THINKING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Аналитическое мышление",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "INVENTION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Изобретательство",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "LITERACY",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Письмо и чтение",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "SEDUCTION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Соблазнение",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "DECEPTION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Обман",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "ACTING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Актёрское мастерство",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "BARGAINING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Торг",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "EXECUTIONER",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Палач",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "WILDERNESS_SURVIVAL",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Выживание в дикой природе",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "LIGHTNING_REACTION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Молниеносная реакция",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "VEHICLE_OPERATION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Управление техникой",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "HEALTHY_LIFESTYLE",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Здоровый образ жизни",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "INSIGHT",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Проницательность",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "COOKING",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Кулинария",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "MEDIC",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Медик",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "ERUDITION",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Эрудиция",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "NATURAL_SCIENCE",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Естественнонаучные знания",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "VETERAN_DRINKER",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Алкоголик со стажем",
+    "Meaning": "SELECTABLE_GENERAL",
+    "RuleRef / Note": "CORE-165; CORE-167"
+  },
+  {
+    "Code": "FOLLOWING_PAIN",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Идущий вслед за болью",
+    "Meaning": "FIXED_RACE_PASSIVE",
+    "RuleRef / Note": "CORE-004"
+  },
+  {
+    "Code": "PURE_SEEKER",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Искатель Последнего Рассвета",
+    "Meaning": "FIXED_CLASS_PASSIVE",
+    "RuleRef / Note": "CORE-009"
+  },
+  {
+    "Code": "PURE_STALKER",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Сталкер Последнего Рассвета",
+    "Meaning": "FIXED_CLASS_PASSIVE",
+    "RuleRef / Note": "CORE-010"
+  },
+  {
+    "Code": "PURE_SOLDIER",
+    "Dictionary": "SkillKey",
+    "LabelRU": "Солдат Последнего Рассвета",
+    "Meaning": "FIXED_CLASS_PASSIVE",
+    "RuleRef / Note": "CORE-013"
+  },
+  {
+    "Code": "WEAVER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Ткач",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-026"
+  },
+  {
+    "Code": "TAIPAN",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Тайпан",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-037"
+  },
+  {
+    "Code": "OWL",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Сова",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-046"
+  },
+  {
+    "Code": "TEACHER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Учитель",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-053"
+  },
+  {
+    "Code": "ARMADILLO",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Броненосец",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-060"
+  },
+  {
+    "Code": "DRAGON",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Дракон",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-067"
+  },
+  {
+    "Code": "TROGR",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Трогр",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-074"
+  },
+  {
+    "Code": "KEEPER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Хранитель",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-083"
+  },
+  {
+    "Code": "ADVISER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Советник",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-095"
+  },
+  {
+    "Code": "TICK",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Клещ",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-102"
+  },
+  {
+    "Code": "CRICKET",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Сверчок",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-109"
+  },
+  {
+    "Code": "SPIDER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Паук",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-116"
+  },
+  {
+    "Code": "CHAMELEON",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Хамелеон",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-123"
+  },
+  {
+    "Code": "PENGUIN",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Пингвин",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-130"
+  },
+  {
+    "Code": "EEL",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Угорь",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-136"
+  },
+  {
+    "Code": "TOAD",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Жаба",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-143"
+  },
+  {
+    "Code": "RAT",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Крыса",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-151"
+  },
+  {
+    "Code": "DOLPHIN",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Дельфин",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-161"
+  },
+  {
+    "Code": "MANTIS",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Богомол",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-167"
+  },
+  {
+    "Code": "SKUNK",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Скунс",
+    "Meaning": "ORDINARY",
+    "RuleRef / Note": "SYM-174"
+  },
+  {
+    "Code": "CHIMERA",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Химера",
+    "Meaning": "SYMBIOTIC_MONSTER",
+    "RuleRef / Note": "MON-002"
+  },
+  {
+    "Code": "PUPPETEER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Кукловод",
+    "Meaning": "SYMBIOTIC_MONSTER",
+    "RuleRef / Note": "MON-025"
+  },
+  {
+    "Code": "PLAGUE_DOCTOR",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Чумной доктор",
+    "Meaning": "SYMBIOTIC_MONSTER",
+    "RuleRef / Note": "MON-040"
+  },
+  {
+    "Code": "ADVISOR",
+    "Dictionary": "SymbiontSpeciesAlias",
+    "LabelRU": "Советник",
+    "Meaning": "Deprecated compatibility alias → ADVISER",
+    "RuleRef / Note": "Rules/Sentient compatibility"
+  },
+  {
+    "Code": "COMBAT",
+    "Dictionary": "AbilityContext",
+    "LabelRU": "Боевая ситуация",
+    "Meaning": "Боевой контекст; CORE-229 applies",
+    "RuleRef / Note": "CORE-229"
+  },
+  {
+    "Code": "PEACE",
+    "Dictionary": "AbilityContext",
+    "LabelRU": "Мирная ситуация",
+    "Meaning": "Мирный контекст; combat-only critical semantics do not apply",
+    "RuleRef / Note": "Q-APP-001/002"
+  },
+  {
+    "Code": "AUTOMATED_ACCEPTED",
+    "Dictionary": "AutomationStatus",
+    "LabelRU": "Автоматизируется",
+    "Meaning": "Executable behavior present",
+    "RuleRef / Note": "Q&A automation decisions"
+  },
+  {
+    "Code": "NODE_ONLY_MANUAL",
+    "Dictionary": "AutomationStatus",
+    "LabelRU": "Только узел дерева",
+    "Meaning": "No executable behavior in this registry",
+    "RuleRef / Note": "Q&A automation decisions"
+  },
+  {
+    "Code": "WEB_ITEM",
+    "Dictionary": "GeneratedObjectType",
+    "LabelRU": "Готовая паутина",
+    "Meaning": "Service-generated object; not ItemTypeID",
+    "RuleRef / Note": "SYM-117/USR-2026-07-30-WEB-001"
+  },
+  {
+    "Code": "NEVER_AUTO_MERGE",
+    "Dictionary": "StackPolicy",
+    "LabelRU": "Не объединять автоматически",
+    "Meaning": "Каждая активация создаёт отдельный экземпляр",
+    "RuleRef / Note": "USR-2026-07-30-WEB-001"
+  },
+  {
+    "Code": "baseStats",
+    "Dictionary": "StatLayer",
+    "LabelRU": "Базовые",
+    "Meaning": "Результат создания",
+    "RuleRef / Note": "CORE-160..163"
+  },
+  {
+    "Code": "skillStageStats",
+    "Dictionary": "StatLayer",
+    "LabelRU": "До симбионтов",
+    "Meaning": "base + race + class",
+    "RuleRef / Note": "CORE-081/167"
+  },
+  {
+    "Code": "effectiveStats",
+    "Dictionary": "StatLayer",
+    "LabelRU": "Эффективные",
+    "Meaning": "После активных постоянных эффектов",
+    "RuleRef / Note": "CORE-078/079"
+  },
+  {
+    "Code": "equippedStats",
+    "Dictionary": "StatLayer",
+    "LabelRU": "С экипировкой",
+    "Meaning": "После модификаторов экипировки",
+    "RuleRef / Note": "CORE-079"
+  },
+  {
+    "Code": "DIRECT_SYMBIONT",
+    "Dictionary": "ProgressionRoute",
+    "LabelRU": "DIRECT_SYMBIONT",
+    "Meaning": "Равновероятно выбрать ровно один подходящий symbiontInstanceId; xp += eventPoints×race.directXpMultiplier.",
+    "RuleRef / Note": "SYM-021; CORE-007; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "CHARACTER_PROGRESS_COUNTER",
+    "Dictionary": "ProgressionRoute",
+    "LabelRU": "CHARACTER_PROGRESS_COUNTER",
+    "Meaning": "symbiontXpProgressPoints += eventPoints; каждые 3 атомарно конвертируются в 1 unallocatedSymbiontXp, остаток 0..2.",
+    "RuleRef / Note": "SYM-021; CORE-085; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NEVER_PROGRESSION",
+    "Dictionary": "ProgressionRoute",
+    "LabelRU": "NEVER_PROGRESSION",
+    "Meaning": "XP и баллы не изменяются; причина и processingStatus журналируются. Повтор originRollId имеет статус IGNORED_DUPLICATE.",
+    "RuleRef / Note": "CORE-229; SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "DIRECT_ELIGIBLE",
+    "Dictionary": "XpRollClass",
+    "LabelRU": "Прямой XP возможен",
+    "Meaning": "Значимая проверка с LinkedStatCode; при отсутствии кандидата — counter.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NO_DIRECT_BUT_POOL",
+    "Dictionary": "XpRollClass",
+    "LabelRU": "Только общий счётчик",
+    "Meaning": "Прямой XP запрещён; natural 1/20 даёт баллы.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NEVER_PROGRESSION",
+    "Dictionary": "XpRollClass",
+    "LabelRU": "Нет прогрессии",
+    "Meaning": "Ни XP, ни баллов.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "AUTO",
+    "Dictionary": "RollSource",
+    "LabelRU": "Автоматический бросок",
+    "Meaning": "Сервер генерирует rawFace.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "MANUAL",
+    "Dictionary": "RollSource",
+    "LabelRU": "Ручной ввод",
+    "Meaning": "Пользователь вводит rawFace; сервер валидирует идентично AUTO.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "PLAYER_CHARACTER",
+    "Dictionary": "XpActorType",
+    "LabelRU": "PLAYER_CHARACTER",
+    "Meaning": "Допускает прогрессию.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NPC",
+    "Dictionary": "XpActorType",
+    "LabelRU": "NPC",
+    "Meaning": "NO_XP_PROGRESSION.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "CANONICAL_MONSTER",
+    "Dictionary": "XpActorType",
+    "LabelRU": "CANONICAL_MONSTER",
+    "Meaning": "NO_XP_PROGRESSION.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "CUSTOM_MONSTER",
+    "Dictionary": "XpActorType",
+    "LabelRU": "CUSTOM_MONSTER",
+    "Meaning": "NO_XP_PROGRESSION.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "SYSTEM_SENTIENT_ENEMY",
+    "Dictionary": "XpActorType",
+    "LabelRU": "SYSTEM_SENTIENT_ENEMY",
+    "Meaning": "NO_XP_PROGRESSION.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NATURAL_FACE",
+    "Dictionary": "CriticalSource",
+    "LabelRU": "NATURAL_FACE",
+    "Meaning": "Источник critical state.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "CONFIRMATION_CHAIN",
+    "Dictionary": "CriticalSource",
+    "LabelRU": "CONFIRMATION_CHAIN",
+    "Meaning": "Источник critical state.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ABILITY_OVERRIDE",
+    "Dictionary": "CriticalSource",
+    "LabelRU": "ABILITY_OVERRIDE",
+    "Meaning": "Источник critical state.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "EQUAL_GRADE_SUBSTITUTION",
+    "Dictionary": "CriticalSource",
+    "LabelRU": "EQUAL_GRADE_SUBSTITUTION",
+    "Meaning": "Источник critical state.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "CriticalSource",
+    "LabelRU": "NONE",
+    "Meaning": "Источник critical state.",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "SUCCESS",
+    "Dictionary": "CriticalPolarity",
+    "LabelRU": "SUCCESS",
+    "Meaning": "Полярность; SUCCESS и FAILURE используют одинаковую шкалу eventPoints.",
+    "RuleRef / Note": "CORE-083; CORE-084; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "FAILURE",
+    "Dictionary": "CriticalPolarity",
+    "LabelRU": "FAILURE",
+    "Meaning": "Полярность; SUCCESS и FAILURE используют одинаковую шкалу eventPoints.",
+    "RuleRef / Note": "CORE-083; CORE-084; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "CriticalPolarity",
+    "LabelRU": "NONE",
+    "Meaning": "Полярность; SUCCESS и FAILURE используют одинаковую шкалу eventPoints.",
+    "RuleRef / Note": "CORE-083; CORE-084; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "PENDING",
+    "Dictionary": "XpProcessingStatus",
+    "LabelRU": "PENDING",
+    "Meaning": "Статус обработки SymbiontXpEvent.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "APPLIED_DIRECT",
+    "Dictionary": "XpProcessingStatus",
+    "LabelRU": "APPLIED_DIRECT",
+    "Meaning": "Статус обработки SymbiontXpEvent.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "APPLIED_COUNTER",
+    "Dictionary": "XpProcessingStatus",
+    "LabelRU": "APPLIED_COUNTER",
+    "Meaning": "Статус обработки SymbiontXpEvent.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "IGNORED_NEVER",
+    "Dictionary": "XpProcessingStatus",
+    "LabelRU": "IGNORED_NEVER",
+    "Meaning": "Статус обработки SymbiontXpEvent.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "IGNORED_DUPLICATE",
+    "Dictionary": "XpProcessingStatus",
+    "LabelRU": "IGNORED_DUPLICATE",
+    "Meaning": "Статус обработки SymbiontXpEvent.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "REJECTED_INVALID",
+    "Dictionary": "XpProcessingStatus",
+    "LabelRU": "REJECTED_INVALID",
+    "Meaning": "Статус обработки SymbiontXpEvent.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ELIGIBLE",
+    "Dictionary": "XpEligibility",
+    "LabelRU": "XP разрешён",
+    "Meaning": "effectsEnabled может отличаться.",
+    "RuleRef / Note": "SYM-038; SYM-075; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "INELIGIBLE",
+    "Dictionary": "XpEligibility",
+    "LabelRU": "XP запрещён",
+    "Meaning": "Локальная suppression policy сильнее общего правила.",
+    "RuleRef / Note": "SYM-038; SYM-075; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "SIGNIFICANT_CHECK",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "SIGNIFICANT_CHECK",
+    "Meaning": "DIRECT_ELIGIBLE",
+    "RuleRef / Note": "CORE-073; CORE-082; SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "DAMAGE",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "DAMAGE",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "PENETRATION",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "PENETRATION",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ARMOR",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "ARMOR",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "INITIATIVE",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "INITIATIVE",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "HEALING_AMOUNT",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "HEALING_AMOUNT",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "DURATION",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "DURATION",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "RADIUS",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "RADIUS",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ZONE_SIZE",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "ZONE_SIZE",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "QUANTITY",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "QUANTITY",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "TARGET_COUNT",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "TARGET_COUNT",
+    "Meaning": "NO_DIRECT_BUT_POOL",
+    "RuleRef / Note": "SYM-021; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "RANDOM_TABLE",
+    "Dictionary": "XpRollKind",
+    "LabelRU": "RANDOM_TABLE",
+    "Meaning": "NEVER_PROGRESSION",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "RANDOM_TABLE",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "RANDOM_TABLE",
+    "Meaning": "rollKind=RANDOM_TABLE",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "CRITICAL_CONFIRMATION",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "CRITICAL_CONFIRMATION",
+    "Meaning": "isConfirmationRoll=true",
+    "RuleRef / Note": "CORE-083; CORE-084; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ABILITY_ASSIGNED_CRITICAL_WITHOUT_NATURAL_FACE",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "ABILITY_ASSIGNED_CRITICAL_WITHOUT_NATURAL_FACE",
+    "Meaning": "criticalSource=ABILITY_OVERRIDE и rawFace∉{1,20}",
+    "RuleRef / Note": "CORE-229; SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "SYM_082_ABILITY_OVERRIDE_WITHOUT_NATURAL_FACE",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "SYM_082_ABILITY_OVERRIDE_WITHOUT_NATURAL_FACE",
+    "Meaning": "criticalSource=ABILITY_OVERRIDE; sourceRuleId=SYM-082; нет natural 1/20",
+    "RuleRef / Note": "SYM-082; SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "EQUAL_GRADE_SUBSTITUTION",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "EQUAL_GRADE_SUBSTITUTION",
+    "Meaning": "isEqualGradeSubstitution=true",
+    "RuleRef / Note": "CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "DUPLICATE_ORIGIN_ROLL",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "DUPLICATE_ORIGIN_ROLL",
+    "Meaning": "unique(actorCharacterId,originRollId) уже обработан",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "FORMULA_RESULT_WITHOUT_NATURAL_FACE",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "FORMULA_RESULT_WITHOUT_NATURAL_FACE",
+    "Meaning": "итог формулы равен 1/20, но rawFace∉{1,20}",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NON_D20_ROLL",
+    "Dictionary": "XpNeverSource",
+    "LabelRU": "NON_D20_ROLL",
+    "Meaning": "dieType<>D20 либо формула не содержит оригинального D20",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ACTION",
+    "Dictionary": "CheckKind",
+    "LabelRU": "ACTION",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "ATTACK",
+    "Dictionary": "CheckKind",
+    "LabelRU": "ATTACK",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "DEFENSE",
+    "Dictionary": "CheckKind",
+    "LabelRU": "DEFENSE",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "RESISTANCE",
+    "Dictionary": "CheckKind",
+    "LabelRU": "RESISTANCE",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "MEDICAL_CHECK",
+    "Dictionary": "CheckKind",
+    "LabelRU": "MEDICAL_CHECK",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "OTHER",
+    "Dictionary": "CheckKind",
+    "LabelRU": "OTHER",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "NONE",
+    "Dictionary": "CheckKind",
+    "LabelRU": "NONE",
+    "Meaning": "Тип значимой/служебной проверки.",
+    "RuleRef / Note": "CORE-073; CORE-229; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "D20",
+    "Dictionary": "DieType",
+    "LabelRU": "D20",
+    "Meaning": "Единственный тип дайса, создающий XP event.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "STANDARD_XP_AWARD",
+    "Dictionary": "SymbiontXPPolicy",
+    "LabelRU": "Стандартный XP",
+    "Meaning": "direct/allocated multiplier=1.",
+    "RuleRef / Note": "SYM-021; USR-2026-07-30-XP-001"
+  },
+  {
+    "Code": "XP_AWARD_X2",
+    "Dictionary": "SymbiontXPPolicy",
+    "LabelRU": "XP Вольного ×2",
+    "Meaning": "direct/allocated multiplier=2; points multiplier=1.",
+    "RuleRef / Note": "CORE-007; USR-2026-07-30-XP-001"
+  }
+]
