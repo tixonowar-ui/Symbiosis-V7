@@ -39,8 +39,10 @@ jobs:
           MAX_TOTAL_FILES: 60
         run: |
           base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          git fetch --no-tags --depth=1 origin "$base" "$head"
 
-          stat=$(git diff --numstat "$base"...HEAD -- . \
+          stat=$(git diff --numstat "$base" "$head" -- . \
                  ':(exclude)generated/**' ':(exclude)package-lock.json')
 
           if [ -z "$stat" ]; then
