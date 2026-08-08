@@ -10,6 +10,7 @@
 import { describeFailure, verify } from '../checksums/manifest.js';
 import { importAtlas } from './atlas.js';
 import { importCharacter } from './character.js';
+import { importBestiary } from './bestiary.js';
 import { importEffects } from './effects.js';
 import { importItems } from './items.js';
 import { ImportError } from './lib/fail.js';
@@ -56,6 +57,12 @@ async function main(): Promise<number> {
       `(${String(effects.modeled)} modeled, ${String(effects.notModeled)} not)`,
   );
 
+  const bestiary = await importBestiary(rules.catalogue);
+  console.log(
+    `bestiary:  ${String(bestiary.species)} species, ${String(bestiary.templates)} templates, ` +
+      `${String(bestiary.arts)} arts (${(bestiary.mediaBytes / 1024 / 1024).toFixed(1)} MiB)`,
+  );
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
@@ -64,6 +71,7 @@ async function main(): Promise<number> {
     ...character.files,
     ...items.files,
     ...effects.files,
+    ...bestiary.files,
     ...atlas.files,
   ];
   const bytes =
@@ -71,6 +79,7 @@ async function main(): Promise<number> {
     character.bytesWritten +
     items.bytesWritten +
     effects.bytesWritten +
+    bestiary.bytesWritten +
     atlas.bytesWritten;
   const mib = (bytes / 1024 / 1024).toFixed(2);
   console.log(`written:   ${mib} MiB across ${String(files.length)} file(s) + media`);

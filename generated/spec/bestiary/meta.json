@@ -1,0 +1,14 @@
+{
+  "arts": 16,
+  "gateAllPass": true,
+  "mediaDir": "generated/media/bestiary",
+  "registryVersion": "v1.4",
+  "ruleRows": 80,
+  "skippedSheets": [
+    "00_Сводка",
+    "01_Галерея"
+  ],
+  "source": "artifacts/registries/Symbiosis_V7_Canonical_Bestiary_Registry_v1.4.xlsx",
+  "species": 16,
+  "templates": 17
+}

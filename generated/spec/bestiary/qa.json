@@ -1,0 +1,218 @@
+[
+  {
+    "Expected": "17 независимых боевых сущностей, MASTER controller",
+    "Given": "17 system-managed templates",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-213/225; 03A",
+    "Scenario ID": "QA-BES-001",
+    "When": "INSTANTIATE once for each",
+    "Проверяемый путь": "Добавление каждого канонического монстра"
+  },
+  {
+    "Expected": "entity/effect/cooldown UUID sets не пересекаются",
+    "Given": "Каждый из 17 templates",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-225; 03A",
+    "Scenario ID": "QA-BES-002",
+    "When": "INSTANTIATE twice",
+    "Проверяемый путь": "Несколько экземпляров каждого монстра"
+  },
+  {
+    "Expected": "effectiveController=MASTER; AI=NONE",
+    "Given": "CanonicalMonster in combat",
+    "Result": "PASS",
+    "Rule / contract IDs": "AQA-040/043; 03A",
+    "Scenario ID": "QA-BES-003",
+    "When": "Master chooses action/target",
+    "Проверяемый путь": "Управление мастером"
+  },
+  {
+    "Expected": "targetable=true; zone routed; armor/HP resolved",
+    "Given": "Любой weapon attack",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-125/220/226; 03A/05A",
+    "Scenario ID": "QA-BES-004",
+    "When": "Target one of 17 templates",
+    "Проверяемый путь": "Игрок атакует каждого монстра оружием"
+  },
+  {
+    "Expected": "Valid effect applies; incompatible secondary effect skipped/rejected without crash",
+    "Given": "SYMBIONT_ATTACK with typed requirements",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-224; 05A/06A",
+    "Scenario ID": "QA-BES-005",
+    "When": "Target each template",
+    "Проверяемый путь": "Повреждающие способности всех симбионтов"
+  },
+  {
+    "Expected": "Typed defense or NONE; armor then damage/effect",
+    "Given": "22 attack profiles",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-217/226; 06A",
+    "Scenario ID": "QA-BES-006",
+    "When": "Target selects defense",
+    "Проверяемый путь": "Защита игрока от атак монстра"
+  },
+  {
+    "Expected": "Dodge if eligible else NONE; Pr=0 works without armor",
+    "Given": "RatEntity TORSO/NO_LAYERS",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-218/217/226",
+    "Scenario ID": "QA-BES-007",
+    "When": "Any canonical attack",
+    "Проверяемый путь": "Атака по вышедшей Крысе"
+  },
+  {
+    "Expected": "Damage/AoE applies; incompatible anatomy effects do not",
+    "Given": "RatSwarm SWARM",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-219; 06A",
+    "Scenario ID": "QA-BES-008",
+    "When": "Any canonical attack",
+    "Проверяемый путь": "Атака по крысиной стае"
+  },
+  {
+    "Expected": "Temporary ControlLease; returns to MASTER",
+    "Given": "17 templates have I/PUPPET_ALLOWED",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-038; CORE-221; 03A",
+    "Scenario ID": "QA-BES-009",
+    "When": "Independent opposed checks succeed",
+    "Проверяемый путь": "«Марионетка» по каждому монстру"
+  },
+  {
+    "Expected": "CORPSE_NOT_LOOTABLE before container dereference",
+    "Given": "Dead canonical monster",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-223; 03A",
+    "Scenario ID": "QA-BES-010",
+    "When": "LOOT",
+    "Проверяемый путь": "Обыск трупа"
+  },
+  {
+    "Expected": "NO_CORPSE; controlled error",
+    "Given": "Fire Flea explosion resolved",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-115; CORE-223",
+    "Scenario ID": "QA-BES-011",
+    "When": "LOOT",
+    "Проверяемый путь": "Обыск после взрыва Блохи"
+  },
+  {
+    "Expected": "IMMUNE_BEFORE_ROLL; no payload",
+    "Given": "POISON ordinary/canonical/symbiotic",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-104; CORE-228; 06B",
+    "Scenario ID": "QA-BES-012",
+    "When": "Resolve effect",
+    "Проверяемый путь": "Крысюк против любого яда"
+  },
+  {
+    "Expected": "IMMUNE_BEFORE_ROLL; no payload",
+    "Given": "POISON ordinary/canonical/symbiotic",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-155; CORE-228; 06B",
+    "Scenario ID": "QA-BES-013",
+    "When": "Resolve effect",
+    "Проверяемый путь": "Гигантская жаба против любого яда"
+  },
+  {
+    "Expected": "Standard severe wound or explicit Volmer/Flea override",
+    "Given": "Monster reaches HP=0",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-222; 03A",
+    "Scenario ID": "QA-BES-014",
+    "When": "Resolve post-damage",
+    "Проверяемый путь": "Тяжёлое ранение и overrides"
+  },
+  {
+    "Expected": "Known oldest first; only UNKNOWN random",
+    "Given": "KNOWN and UNKNOWN targets",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-094",
+    "Scenario ID": "QA-BES-015",
+    "When": "Validate target",
+    "Проверяемый путь": "Возраст Бубуя"
+  },
+  {
+    "Expected": "Command unavailable; no web ItemInstance/MapObject",
+    "Given": "Spider selected and valid tree",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-224",
+    "Scenario ID": "QA-BES-016",
+    "When": "Request SYM-117",
+    "Проверяемый путь": "CustomMonster с Пауком"
+  },
+  {
+    "Expected": "Pinned, always available, non-removable; not mixed into bestiary",
+    "Given": "SYSTEM_DEFAULT_SENTIENT external registry",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-227",
+    "Scenario ID": "QA-BES-017",
+    "When": "Load campaign catalog",
+    "Проверяемый путь": "Будущий системный SentientEnemy"
+  },
+  {
+    "Expected": "Обе цели получают один и тот же полный R20×2+40 DAMAGE; penetration/armor roll и сравнение отсутствуют",
+    "Given": "Одна цель armorLayerState=PRESENT, другая NO_LAYERS",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-115; CORE-150/226; 06A",
+    "Scenario ID": "QA-BES-018",
+    "When": "Разрешить один ATK-FIRE-FLEA-EXPLOSION",
+    "Проверяемый путь": "Взрыв Огненной блохи и броня"
+  },
+  {
+    "Expected": "NO_XP_PROGRESSION; нет прямого XP и pool fields",
+    "Given": "actorType=CANONICAL_MONSTER; rawFace=20",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-230; 03A/06/06A",
+    "Scenario ID": "QA-BES-XP-001",
+    "When": "Разрешить любую атаку",
+    "Проверяемый путь": "Канонический монстр natural 20"
+  },
+  {
+    "Expected": "NO_XP_PROGRESSION независимо от rollKind",
+    "Given": "actorType=CANONICAL_MONSTER; rawFace=1",
+    "Result": "PASS",
+    "Rule / contract IDs": "CORE-230",
+    "Scenario ID": "QA-BES-XP-002",
+    "When": "Разрешить любую атаку",
+    "Проверяемый путь": "Канонический монстр natural 1"
+  },
+  {
+    "Expected": "Все стадии имеют нормализованный rollKind и dieType",
+    "Given": "22 attack profiles",
+    "Result": "PASS",
+    "Rule / contract IDs": "06_Атаки",
+    "Scenario ID": "QA-BES-XP-003",
+    "When": "Проверить accuracy/penetration/damage stages",
+    "Проверяемый путь": "RollKind completeness"
+  },
+  {
+    "Expected": "Один D20 occurrence; actor monster; NEVER_PROGRESSION; баланс не изменён",
+    "Given": "Damage definition R20*2+40",
+    "Result": "PASS",
+    "Rule / contract IDs": "MON-115; CORE-230",
+    "Scenario ID": "QA-BES-XP-004",
+    "When": "Разрешить взрыв",
+    "Проверяемый путь": "R20×2 Огненной блохи"
+  },
+  {
+    "Expected": "Actor policy остаётся системной; XP/counter не создаются",
+    "Given": "SYSTEM_SENTIENT_ENEMY",
+    "Result": "PASS",
+    "Rule / contract IDs": "Sentient v1.2; CORE-230",
+    "Scenario ID": "QA-BES-XP-005",
+    "When": "Использовать canonical special profile",
+    "Проверяемый путь": "Внешний SentientEnemy"
+  },
+  {
+    "Expected": "Tuple совпадает дословно",
+    "Given": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Result": "PASS",
+    "Rule / contract IDs": "Baseline v1.1",
+    "Scenario ID": "QA-BES-XP-006",
+    "When": "Импортировать registry",
+    "Проверяемый путь": "Dependency tuple"
+  }
+]

@@ -1,0 +1,554 @@
+[
+  {
+    "Entity": "CanonicalBestiaryRegistry",
+    "Field": "schemaVersion",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Технический контракт бестиария",
+    "Семантика / инвариант": "Версия структуры этой книги; v1.2."
+  },
+  {
+    "Entity": "CanonicalBestiaryRegistry",
+    "Field": "rulesVersion",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Rules Registry v1.6",
+    "Семантика / инвариант": "Ровно 1.6; определяет snapshot, overlay и боевые контракты."
+  },
+  {
+    "Entity": "CanonicalBestiaryRegistry",
+    "Field": "species[]",
+    "Required": "Да",
+    "Type": "BestiarySpecies[]",
+    "Источник": "Раздел 9; whitelist v1.3",
+    "Семантика / инвариант": "16 канонических видов."
+  },
+  {
+    "Entity": "CanonicalBestiaryRegistry",
+    "Field": "templates[]",
+    "Required": "Да",
+    "Type": "CanonicalMonsterTemplate[]",
+    "Источник": "MON-092/093 и остальные статблоки",
+    "Семантика / инвариант": "17 активных статблоков: два Бубуя и 15 одиночных."
+  },
+  {
+    "Entity": "CanonicalBestiaryRegistry",
+    "Field": "registryHash",
+    "Required": "На импорте",
+    "Type": "sha256",
+    "Источник": "Технический контракт",
+    "Семантика / инвариант": "Хеш вычисляется приложением по импортированному payload; не является самоссылкой Excel."
+  },
+  {
+    "Entity": "BestiarySpecies",
+    "Field": "speciesId",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Эта книга",
+    "Семантика / инвариант": "Стабильный семантический ключ вида."
+  },
+  {
+    "Entity": "BestiarySpecies",
+    "Field": "canonicalName",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Рулбук V7",
+    "Семантика / инвариант": "Нормализованное имя для API."
+  },
+  {
+    "Entity": "BestiarySpecies",
+    "Field": "displayName",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Рулбук V7",
+    "Семантика / инвариант": "Имя для интерфейса."
+  },
+  {
+    "Entity": "BestiarySpecies",
+    "Field": "aliases[]",
+    "Required": "Нет",
+    "Type": "string[]",
+    "Источник": "Рулбук V7",
+    "Семантика / инвариант": "Поиск и миграция вариантов имени без создания нового вида."
+  },
+  {
+    "Entity": "BestiarySpecies",
+    "Field": "lore",
+    "Required": "Да",
+    "Type": "object",
+    "Источник": "Печатный рулбук V7",
+    "Семантика / инвариант": "summary/habitat/behavior/physiology; не участвует в расчётах."
+  },
+  {
+    "Entity": "BestiarySpecies",
+    "Field": "artAssetKey",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Simbioz_V7.docx",
+    "Семантика / инвариант": "Ссылка на встроенный арт галереи."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "canonicalTemplateId",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Эта книга",
+    "Семантика / инвариант": "Стабильный ключ read-only статблока."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "origin",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-212",
+    "Семантика / инвариант": "CANONICAL_BESTIARY."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "entityKind",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "MON-091",
+    "Семантика / инвариант": "MONSTER."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "rulesVersion",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Rules Registry v1.6",
+    "Семантика / инвариант": "Ровно 1.6; определяет snapshot, overlay и боевые контракты."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "statBlockRuleId",
+    "Required": "Да",
+    "Type": "Rule ID",
+    "Источник": "MON-092…166",
+    "Семантика / инвариант": "Одна из 17 whitelist-карточек статблока."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "statDefinitions",
+    "Required": "Да",
+    "Type": "StatDefinition[7]",
+    "Источник": "MON-088",
+    "Семантика / инвариант": "Ровно S,D,M,Z,I,W,C."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "healthDefinition",
+    "Required": "Да",
+    "Type": "HealthDefinition",
+    "Источник": "Видовые MON-карточки",
+    "Семантика / инвариант": "SINGLE_POOL, ZONAL_SINGLE_POOL или HEAD_ONLY."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "anatomyDefinition",
+    "Required": "Да",
+    "Type": "AnatomyDefinition",
+    "Источник": "CORE-211",
+    "Семантика / инвариант": "CANONICAL_DEFINED; не NONSTANDARD_TORSO_ONLY."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "naturalArmorDefinition",
+    "Required": "Да",
+    "Type": "Runtime/Zoned",
+    "Источник": "MON-090; видовые карточки",
+    "Семантика / инвариант": "0, равномерная или зональная броня."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "baseAttackOverlayPolicy",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-212",
+    "Семантика / инвариант": "REQUIRED_R20_R20."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "specialAttackIds[]",
+    "Required": "Нет",
+    "Type": "string[]",
+    "Источник": "MON-091; CORE-212",
+    "Семантика / инвариант": "Особые атаки добавляются к базовой и не заменяются ею."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "ruleBindings[]",
+    "Required": "Да",
+    "Type": "RuleBinding[]",
+    "Источник": "Rules Registry v1.6",
+    "Семантика / инвариант": "Ровно 80 MON-карточек, дословно синхронизированных с Rules Registry v1.6; ID вопросов не являются зависимостями."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "readOnly",
+    "Required": "Да",
+    "Type": "boolean",
+    "Источник": "CORE-227; CORE-212",
+    "Семантика / инвариант": "Всегда true; также systemManaged=true, ALWAYS_AVAILABLE и masterCanEdit/Hide/Archive/Delete=false."
+  },
+  {
+    "Entity": "StatDefinition",
+    "Field": "statCode",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-200; MON-088",
+    "Семантика / инвариант": "S,D,M,Z,I,W,C."
+  },
+  {
+    "Entity": "StatDefinition",
+    "Field": "min/max",
+    "Required": "Да",
+    "Type": "integer",
+    "Источник": "MON-088",
+    "Семантика / инвариант": "Границы канонического диапазона; предел 35 не применяется."
+  },
+  {
+    "Entity": "StatDefinition",
+    "Field": "defaultValue",
+    "Required": "Да",
+    "Type": "formula",
+    "Источник": "MON-088",
+    "Семантика / инвариант": "ROUND((min+max)/2,0), математическое округление."
+  },
+  {
+    "Entity": "StatDefinition",
+    "Field": "resolution",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "MON-088",
+    "Семантика / инвариант": "MASTER_SELECT_OR_MIDPOINT; значение фиксируется в экземпляре."
+  },
+  {
+    "Entity": "HealthDefinition",
+    "Field": "model",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "Видовые статблоки",
+    "Семантика / инвариант": "SINGLE_POOL | ZONAL_SINGLE_POOL | HEAD_ONLY."
+  },
+  {
+    "Entity": "HealthDefinition",
+    "Field": "pools[]",
+    "Required": "Да",
+    "Type": "HealthPool[]",
+    "Источник": "Видовые статблоки",
+    "Семантика / инвариант": "MAIN либо HEAD; currentHP создаётся равным maxHP."
+  },
+  {
+    "Entity": "AnatomyDefinition",
+    "Field": "mode",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-211",
+    "Семантика / инвариант": "CANONICAL_DEFINED."
+  },
+  {
+    "Entity": "AnatomyDefinition",
+    "Field": "zones[]",
+    "Required": "Да",
+    "Type": "AnatomyZone[]",
+    "Источник": "MON-125/128; MON-138/140/141",
+    "Семантика / инвариант": "Источник-специфичные зоны и маршрутизация урона."
+  },
+  {
+    "Entity": "NaturalArmorDefinition",
+    "Field": "evaluationScope",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-210",
+    "Семантика / инвариант": "EACH_INCOMING_ARMOR_RESOLUTION."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "category",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "MON-091; CORE-207/212",
+    "Семантика / инвариант": "MONSTER_ATTACK для базовой; специальные категории отдельно."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "distance",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-207/212",
+    "Семантика / инвариант": "MELEE для базовой атаки."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "accuracy",
+    "Required": "Да",
+    "Type": "expression",
+    "Источник": "CORE-208/212",
+    "Семантика / инвариант": "R20+D+situational для базовой атаки."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "additionalDamage",
+    "Required": "Да",
+    "Type": "RuntimeDefinition",
+    "Источник": "CORE-212",
+    "Семантика / инвариант": "R20 для канонического overlay."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "penetration",
+    "Required": "Да",
+    "Type": "RuntimeDefinition",
+    "Источник": "CORE-212",
+    "Семантика / инвариант": "R20 для канонического overlay."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "actionCost",
+    "Required": "Да",
+    "Type": "integer",
+    "Источник": "MON-089; CORE-212",
+    "Семантика / инвариант": "1 для базовой атаки."
+  },
+  {
+    "Entity": "RuleBinding",
+    "Field": "ruleId",
+    "Required": "Да",
+    "Type": "Rule ID",
+    "Источник": "Rules Registry v1.6",
+    "Семантика / инвариант": "Ссылка только на реально исполняемую/trace-only карточку."
+  },
+  {
+    "Entity": "RuleBinding",
+    "Field": "sourceQuestionIds[]",
+    "Required": "Нет",
+    "Type": "string[]",
+    "Источник": "Rules Registry v1.6",
+    "Семантика / инвариант": "Происхождение решения; не runtime-зависимость."
+  },
+  {
+    "Entity": "RuleBinding",
+    "Field": "executionStatus",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "Rules Registry v1.6",
+    "Семантика / инвариант": "ACTIVE или TRACE_ONLY."
+  },
+  {
+    "Entity": "CanonicalSymbiontRelation",
+    "Field": "relationStatus",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "Рулбук V7",
+    "Семантика / инвариант": "Подтверждение отделено от гипотезы."
+  },
+  {
+    "Entity": "CanonicalSymbiontRelation",
+    "Field": "runtimeBinding",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "Видовые MON-карточки",
+    "Семантика / инвариант": "LORE_ONLY, CANONICAL_STATBLOCK_ONLY или CANONICAL_SPECIAL_ATTACK_ONLY."
+  },
+  {
+    "Entity": "CanonicalSymbiontRelation",
+    "Field": "countsTowardCustomLimit",
+    "Required": "Да",
+    "Type": "boolean",
+    "Источник": "CORE-203/212",
+    "Семантика / инвариант": "Всегда false: ограничения CORE-203 относятся только к CustomMonster."
+  },
+  {
+    "Entity": "MonsterInstanceSnapshot",
+    "Field": "entityId",
+    "Required": "Да",
+    "Type": "uuid",
+    "Источник": "CORE-213; CORE-225",
+    "Семантика / инвариант": "Новый UUID для каждого добавления; весь изменяемый runtime-граф клонируется по CORE-225."
+  },
+  {
+    "Entity": "MonsterInstanceSnapshot",
+    "Field": "provenance",
+    "Required": "Да",
+    "Type": "object",
+    "Источник": "CORE-212/213",
+    "Семантика / инвариант": "canonicalTemplateId + rulesVersion."
+  },
+  {
+    "Entity": "MonsterInstanceSnapshot",
+    "Field": "resolvedStats",
+    "Required": "Да",
+    "Type": "object",
+    "Источник": "MON-088",
+    "Семантика / инвариант": "Выбранные значения диапазонов фиксируются на срок жизни экземпляра."
+  },
+  {
+    "Entity": "MonsterInstanceSnapshot",
+    "Field": "effectiveActions",
+    "Required": "Да",
+    "Type": "array",
+    "Источник": "CORE-212",
+    "Семантика / инвариант": "Ровно одна базовая MONSTER_ATTACK плюс неизменённые особые действия."
+  },
+  {
+    "Entity": "MonsterInstanceSnapshot",
+    "Field": "sourceSnapshotHash",
+    "Required": "Да",
+    "Type": "sha256",
+    "Источник": "Технический контракт",
+    "Семантика / инвариант": "Фиксирует состояние шаблона и overlay на момент создания."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "systemPolicy",
+    "Required": "Да",
+    "Type": "TemplateSystemPolicy",
+    "Источник": "CORE-227; эта книга",
+    "Семантика / инвариант": "SYSTEM_GLOBAL; ALWAYS_AVAILABLE; masterCanEdit/Hide/Archive/Delete=false."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "controllerPolicy",
+    "Required": "Да",
+    "Type": "ControllerPolicy",
+    "Источник": "AQA-040/043; CORE-221",
+    "Семантика / инвариант": "owningController=MASTER; effectiveController=MASTER по умолчанию; AI=NONE; ControlLease может временно переопределить."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "targetingPolicy",
+    "Required": "Да",
+    "Type": "TargetPolicy",
+    "Источник": "CORE-125; CORE-220",
+    "Семантика / инвариант": "combatTargetable=true; weapon/symbiont attacks accepted; анатомия маршрутизируется 05A."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "corpsePolicy",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-223; MON-115",
+    "Семантика / инвариант": "PERSIST для обычного трупа; Fire Flea после взрыва NONE."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "lootPolicy",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-223",
+    "Семантика / инвариант": "NOT_LOOTABLE; контейнер отсутствует; guard выполняется до dereference."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "defeatPolicy",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-222",
+    "Семантика / инвариант": "Обычный severe wound; Volmer и armed Fire Flea имеют видовые overrides."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "mindControlPolicy",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "MON-038; CORE-221",
+    "Семантика / инвариант": "PUPPET_ALLOWED; все 17 статблоков имеют I."
+  },
+  {
+    "Entity": "AttackResolution",
+    "Field": "defenseChoice",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-217",
+    "Семантика / инвариант": "Активная защита либо NONE с total=0 без броска."
+  },
+  {
+    "Entity": "AttackResolution",
+    "Field": "armorLayerState",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-226",
+    "Семантика / инвариант": "NO_LAYERS автоматически проходит любой Pr; PRESENT требует Pr>armor."
+  },
+  {
+    "Entity": "CanonicalAttackContract",
+    "Field": "typedFields",
+    "Required": "Да",
+    "Type": "object",
+    "Источник": "06A; CORE-125",
+    "Семантика / инвариант": "sourceKind,targetSelector,requiredCapabilities,defenses,armorPolicy,effectTags,stateWrites."
+  },
+  {
+    "Entity": "CanonicalEffectResponse",
+    "Field": "poisonImmunity",
+    "Required": "Да",
+    "Type": "object",
+    "Источник": "06B; CORE-228",
+    "Семантика / инвариант": "Крысюк и Гигантская жаба: POISON/ANY/IMMUNE_BEFORE_ROLL."
+  },
+  {
+    "Entity": "MonsterInstanceSnapshot",
+    "Field": "deepClone",
+    "Required": "Да",
+    "Type": "policy",
+    "Источник": "CORE-225",
+    "Семантика / инвариант": "Новые UUID entity/effect/cooldown/capture/spawned mutable graph; общими остаются immutable refs."
+  },
+  {
+    "Entity": "SystemDefaultSentientCatalog",
+    "Field": "boundary",
+    "Required": "Да",
+    "Type": "external registry",
+    "Источник": "CORE-227",
+    "Семантика / инвариант": "Не входит в канонический бестиарий; использует общий system-managed policy. Сами записи будут поставлены позже."
+  },
+  {
+    "Entity": "SpiderWebProduction",
+    "Field": "customMonster",
+    "Required": "Да",
+    "Type": "forbidden",
+    "Источник": "CORE-224; MON-136/137",
+    "Семантика / инвариант": "SYM-117 недоступна; ItemInstance/MapObject не создаются. Каноническая сеть Прядильщика сохраняется."
+  },
+  {
+    "Entity": "SpawnedActor",
+    "Field": "rat",
+    "Required": "Да",
+    "Type": "contract",
+    "Источник": "CORE-218/219",
+    "Семантика / инвариант": "RatEntity SINGLE_BODY/TORSO; RatSwarm SWARM. Это не виды бестиария."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "actorType",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-230; 03A",
+    "Семантика / инвариант": "CANONICAL_MONSTER; не PLAYER_CHARACTER."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "progressionPolicy",
+    "Required": "Да",
+    "Type": "enum",
+    "Источник": "CORE-230; 03A",
+    "Семантика / инвариант": "NO_XP_PROGRESSION; не создаёт symbiontXpProgressPoints, unallocatedSymbiontXp или XP."
+  },
+  {
+    "Entity": "MonsterAttackProfile",
+    "Field": "rollKinds",
+    "Required": "Да",
+    "Type": "object",
+    "Источник": "CORE-229/230; 06",
+    "Семантика / инвариант": "Нормализованные accuracy/penetration/damage rollKind и dieType на 06_Атаки."
+  },
+  {
+    "Entity": "CanonicalMonsterTemplate",
+    "Field": "dependencyTuple",
+    "Required": "Да",
+    "Type": "string",
+    "Источник": "Baseline v1.1",
+    "Семантика / инвариант": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2"
+  }
+]

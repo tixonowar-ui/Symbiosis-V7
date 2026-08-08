@@ -1,0 +1,56 @@
+[
+  {
+    "SHA-256": "PENDING_FINAL_SHA_AFTER_OFFICE_RECALC",
+    "Source ID": "SRC-RULES-V1.6",
+    "Версия / статус": "Версия 1.6",
+    "Использование": "80 карточек MON, CORE-216…233, SYM-021 и XP-маршрутизация.",
+    "Приоритет": "Высший для механики",
+    "Роль": "Нормативная механика",
+    "Файл": "Symbiosis_V7_Executable_Rules_Registry_v1.6.xlsx"
+  },
+  {
+    "SHA-256": "19fd32d2e6e5ffdaddac0ded70c6585067bce1b70b30c6d1d42e824044122989",
+    "Source ID": "SRC-PRINT-V7",
+    "Версия / статус": "Печатная версия",
+    "Использование": "Раздел 9, печ. стр. 207–226; состав, лор и источниковые страницы.",
+    "Приоритет": "После v1.6 для механики",
+    "Роль": "Канонический текст и печатные страницы",
+    "Файл": "Symbiosis_V7_print_final (2).pdf"
+  },
+  {
+    "SHA-256": "eee5f7d757e93a196248825e32f51faf9d60f8044942a2c36de804ca8094742b",
+    "Source ID": "SRC-DOCX-V7",
+    "Версия / статус": "Рабочий документ",
+    "Использование": "Извлечены ровно 16 артов активных видов; механические коллизии решает Rules v1.6.",
+    "Приоритет": "Медиа-источник",
+    "Роль": "Встроенные арты и редактируемый текст",
+    "Файл": "Simbioz_V7.docx"
+  },
+  {
+    "SHA-256": "PENDING_FINAL_SHA_AFTER_OFFICE_RECALC",
+    "Source ID": "SRC-CHARACTER-V1.1",
+    "Версия / статус": "Версия 1.1",
+    "Использование": "Только dependency/contract; канонические монстры не прогрессируют.",
+    "Приоритет": "Нормативный",
+    "Роль": "Связи SpeciesKey ↔ LinkedStatCode и runtime XP contract",
+    "Файл": "Symbiosis_V7_Character_Skills_Symbionts_Registry_v1.1.xlsx"
+  },
+  {
+    "SHA-256": "PENDING_FINAL_SHA_AFTER_OFFICE_RECALC",
+    "Source ID": "SRC-ITEMS-V1.5",
+    "Версия / статус": "Версия 1.5_with_icons",
+    "Использование": "Баланс и предметные формулы не импортируются заново.",
+    "Приоритет": "Нормативный",
+    "Роль": "rollKind и AttackResolution RollOccurrence",
+    "Файл": "Symbiosis_V7_Item_Registry_v1.5_with_icons.xlsx"
+  },
+  {
+    "SHA-256": "PENDING_FINAL_SHA_AFTER_OFFICE_RECALC",
+    "Source ID": "SRC-SENTIENT-V1.2",
+    "Версия / статус": "Версия 1.2",
+    "Использование": "Не смешивается с canonical bestiary.",
+    "Приоритет": "Нормативный внешний реестр",
+    "Роль": "Системная политика NO_XP_PROGRESSION",
+    "Файл": "Symbiosis_V7_Default_Sentient_Enemy_Registry_v1.2.xlsx"
+  }
+]

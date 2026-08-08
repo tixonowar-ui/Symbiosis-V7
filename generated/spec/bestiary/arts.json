@@ -1,0 +1,98 @@
+[
+  {
+    "artAssetKey": "ART-CB-BUBUY",
+    "bytes": 417746,
+    "file": "art-cb-bubuy.jpeg",
+    "speciesId": "SPC-BUBUY"
+  },
+  {
+    "artAssetKey": "ART-CB-FELIDA",
+    "bytes": 345123,
+    "file": "art-cb-felida.jpeg",
+    "speciesId": "SPC-FELIDA"
+  },
+  {
+    "artAssetKey": "ART-CB-FIRE-FLEA",
+    "bytes": 330051,
+    "file": "art-cb-fire-flea.jpeg",
+    "speciesId": "SPC-FIRE-FLEA"
+  },
+  {
+    "artAssetKey": "ART-CB-GIANT-TOAD",
+    "bytes": 349706,
+    "file": "art-cb-giant-toad.jpeg",
+    "speciesId": "SPC-GIANT-TOAD"
+  },
+  {
+    "artAssetKey": "ART-CB-KENG",
+    "bytes": 329016,
+    "file": "art-cb-keng.jpeg",
+    "speciesId": "SPC-KENG"
+  },
+  {
+    "artAssetKey": "ART-CB-KRYSYUK",
+    "bytes": 349805,
+    "file": "art-cb-krysyuk.jpeg",
+    "speciesId": "SPC-KRYSYUK"
+  },
+  {
+    "artAssetKey": "ART-CB-PLEADER",
+    "bytes": 300305,
+    "file": "art-cb-pleader.jpeg",
+    "speciesId": "SPC-PLEADER"
+  },
+  {
+    "artAssetKey": "ART-CB-PSIONIC-TOAD",
+    "bytes": 356197,
+    "file": "art-cb-psionic-toad.jpeg",
+    "speciesId": "SPC-PSIONIC-TOAD"
+  },
+  {
+    "artAssetKey": "ART-CB-QUAGMIRE",
+    "bytes": 381789,
+    "file": "art-cb-quagmire.jpeg",
+    "speciesId": "SPC-QUAGMIRE"
+  },
+  {
+    "artAssetKey": "ART-CB-SPINNER",
+    "bytes": 379265,
+    "file": "art-cb-spinner.jpeg",
+    "speciesId": "SPC-SPINNER"
+  },
+  {
+    "artAssetKey": "ART-CB-STORYTELLER",
+    "bytes": 444629,
+    "file": "art-cb-storyteller.jpeg",
+    "speciesId": "SPC-STORYTELLER"
+  },
+  {
+    "artAssetKey": "ART-CB-SWADDLER",
+    "bytes": 346433,
+    "file": "art-cb-swaddler.jpeg",
+    "speciesId": "SPC-SWADDLER"
+  },
+  {
+    "artAssetKey": "ART-CB-TROGR-CAT",
+    "bytes": 354081,
+    "file": "art-cb-trogr-cat.jpeg",
+    "speciesId": "SPC-TROGR-CAT"
+  },
+  {
+    "artAssetKey": "ART-CB-VIVISECTOR",
+    "bytes": 373832,
+    "file": "art-cb-vivisector.jpeg",
+    "speciesId": "SPC-VIVISECTOR"
+  },
+  {
+    "artAssetKey": "ART-CB-VOLMER",
+    "bytes": 337091,
+    "file": "art-cb-volmer.jpeg",
+    "speciesId": "SPC-VOLMER"
+  },
+  {
+    "artAssetKey": "ART-CB-WREATH",
+    "bytes": 360022,
+    "file": "art-cb-wreath.jpeg",
+    "speciesId": "SPC-WREATH"
+  }
+]

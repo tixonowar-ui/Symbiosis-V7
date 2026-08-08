@@ -1,0 +1,47 @@
+[
+  {
+    "Blocked payload": "damage,state,counter,secondary effects",
+    "Canonical Template ID": "CBT-KRYSYUK",
+    "Effect family": "POISON",
+    "Response": "IMMUNE_BEFORE_ROLL",
+    "Response profile ID": "ERP-KRYSYUK-POISON",
+    "Source Rule ID": "MON-104; CORE-228",
+    "Source scope": "ANY"
+  },
+  {
+    "Canonical Template ID": "CBT-KRYSYUK",
+    "Effect family": "DISEASE",
+    "Modifier": 5,
+    "Response": "CHECK_MODIFIER",
+    "Response profile ID": "ERP-KRYSYUK-DISEASE",
+    "Source Rule ID": "MON-104",
+    "Source scope": "ANY"
+  },
+  {
+    "Canonical Template ID": "CBT-KRYSYUK",
+    "Effect family": "EXHAUSTION",
+    "Modifier": 5,
+    "Response": "CHECK_MODIFIER",
+    "Response profile ID": "ERP-KRYSYUK-EXHAUSTION",
+    "Source Rule ID": "MON-104",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "damage,state,counter,secondary effects",
+    "Canonical Template ID": "CBT-GIANT-TOAD",
+    "Effect family": "POISON",
+    "Response": "IMMUNE_BEFORE_ROLL",
+    "Response profile ID": "ERP-GIANT-TOAD-POISON",
+    "Source Rule ID": "MON-155; CORE-228",
+    "Source scope": "ANY"
+  },
+  {
+    "Canonical Template ID": "CBT-GIANT-TOAD",
+    "Effect family": "DISEASE",
+    "Modifier": 10,
+    "Response": "CHECK_MODIFIER",
+    "Response profile ID": "ERP-GIANT-TOAD-DISEASE",
+    "Source Rule ID": "MON-155",
+    "Source scope": "ANY"
+  }
+]

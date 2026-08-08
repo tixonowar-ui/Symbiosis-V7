@@ -70,9 +70,17 @@
   источником: ровно один `NOT_MODELED` тип — `EFF-SENSE-BLINDNESS` со статусом
   `EXCLUDED_FROM_RUNTIME`, и 66 моделируемых, как заявляет атлас
 
+- Canonical Bestiary v1.4 → `generated/spec/bestiary` (17 файлов),
+  `generated/media/bestiary` (16 артов, 5,5 МБ) и
+  `generated/types/bestiary.ts`: 16 видов, 17 статблоков, 119 строк
+  характеристик. Гейт по «12_Контроль» (49 проверок + 1 подзаголовок секции)
+- Галерея бестиария — сетка, а не список: два арта в ряд, подпись под каждым в
+  своей колонке. Арт сопоставляется с ближайшей подписью ниже в той же колонке,
+  результат сверяется с `Art asset key` из `02_Виды`
+
 Осталось:
 
-- Bestiary / Sentient → `generated/spec` (плюс 16 артов через `lib/media.ts`)
+- Default Sentient Enemy v1.2 + Runtime Pack → `generated/spec`
 - `generated/media` из `xl/media/` и Runtime Pack (64 иконки, 16 артов)
 - `generated/seed` — SQLite seed
 
