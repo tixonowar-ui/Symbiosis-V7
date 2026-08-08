@@ -38,10 +38,11 @@ jobs:
           MAX_DOC_LINES: 3000
           MAX_TOTAL_FILES: 60
         run: |
-          base="origin/${{ github.base_ref }}"
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          git fetch --no-tags --depth=1 origin "$base" "$head"
 
-          stat=$(git diff --numstat "$base"...HEAD -- . \
+          stat=$(git diff --numstat "$base" "$head" -- . \
                  ':(exclude)generated/**' ':(exclude)package-lock.json')
 
           if [ -z "$stat" ]; then
@@ -51,9 +52,9 @@ jobs:
 
           code_files=$(echo "$stat" | grep -vE '\.(md|txt)$' | grep -c . || true)
           code_lines=$(echo "$stat" | grep -vE '\.(md|txt)$' \
-                       | awk '{a+=$1; d+=$2} END {print a+d+0}')
+                       | awk '{a+=$1; d+=$2} END {print a+d+0}') || true
           doc_lines=$(echo "$stat" | grep -E '\.(md|txt)$' \
-                      | awk '{a+=$1; d+=$2} END {print a+d+0}')
+                      | awk '{a+=$1; d+=$2} END {print a+d+0}') || true
           total_files=$(echo "$stat" | grep -c .)
 
           echo "code:  $code_files files (limit $MAX_CODE_FILES), $code_lines lines (limit $MAX_CODE_LINES)"
