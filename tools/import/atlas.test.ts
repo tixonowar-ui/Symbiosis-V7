@@ -16,6 +16,13 @@ describe('generated atlas spec', () => {
     expect(spec('forms.json')).toHaveLength(376);
   });
 
+  it('indexes every form by id without changing its contents', () => {
+    const forms = spec('forms.json') as { id: string }[];
+    const formsById = spec('forms-by-id.json') as Record<string, unknown>;
+    expect(Object.keys(formsById)).toHaveLength(376);
+    expect(formsById).toEqual(Object.fromEntries(forms.map((form) => [form.id, form])));
+  });
+
   it('matches the counts the audit states about the atlas', () => {
     expect(spec('transitions.json')).toHaveLength(1672);
     expect(spec('journeys.json')).toHaveLength(66);

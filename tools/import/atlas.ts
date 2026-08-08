@@ -138,6 +138,7 @@ export async function importAtlas(): Promise<AtlasImport> {
   const formIds: string[] = [];
   const seen = new Set<string>();
   const byDomain = new Map<string, number>();
+  const formsById: JsonObject = {};
 
   forms.forEach((form, index) => {
     const at = `forms[${String(index)}]`;
@@ -145,6 +146,7 @@ export async function importAtlas(): Promise<AtlasImport> {
     if (seen.has(id)) fail(WHERE, `${at}: duplicate form id ${JSON.stringify(id)}`);
     seen.add(id);
     formIds.push(id);
+    formsById[id] = form;
 
     const domain = asString(form['domain'], WHERE, `${at}.domain`);
     const prefix = DOMAIN_PREFIX.get(domain);
@@ -213,6 +215,7 @@ export async function importAtlas(): Promise<AtlasImport> {
     guardStates,
   });
   await emit('forms.json', forms);
+  await emit('forms-by-id.json', formsById);
   await emit('transitions.json', transitions);
   await emit('journeys.json', journeys);
   await emit('requirements.json', requirements);
