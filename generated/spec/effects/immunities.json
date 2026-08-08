@@ -1,0 +1,222 @@
+[
+  {
+    "Blocked payload": "damage,state,counter,secondary effects",
+    "Effect family": "POISON",
+    "Existing effect policy / note": "No automatic cleanse",
+    "Modifier": "—",
+    "Provider": "CBT-KRYSYUK",
+    "Response": "IMMUNE_BEFORE_ROLL",
+    "ResponseProfileID": "RSP-KRYSYUK-POISON",
+    "Rule refs": "MON-104; CORE-228",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "DISEASE",
+    "Existing effect policy / note": "Only an existing check",
+    "Modifier": "+5",
+    "Provider": "CBT-KRYSYUK",
+    "Response": "CHECK_MODIFIER",
+    "ResponseProfileID": "RSP-KRYSYUK-DISEASE",
+    "Rule refs": "MON-104",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "EXHAUSTION",
+    "Existing effect policy / note": "Mechanic otherwise orphaned",
+    "Modifier": "+5",
+    "Provider": "CBT-KRYSYUK",
+    "Response": "CHECK_MODIFIER",
+    "ResponseProfileID": "RSP-KRYSYUK-EXHAUSTION",
+    "Rule refs": "MON-104",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "damage,state,counter,secondary effects",
+    "Effect family": "POISON",
+    "Existing effect policy / note": "No automatic cleanse",
+    "Modifier": "—",
+    "Provider": "CBT-GIANT-TOAD",
+    "Response": "IMMUNE_BEFORE_ROLL",
+    "ResponseProfileID": "RSP-GIANT-TOAD-POISON",
+    "Rule refs": "MON-155; CORE-228",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "DISEASE",
+    "Existing effect policy / note": "No exhaustion bonus",
+    "Modifier": "+10",
+    "Provider": "CBT-GIANT-TOAD",
+    "Response": "CHECK_MODIFIER",
+    "ResponseProfileID": "RSP-GIANT-TOAD-DISEASE",
+    "Rule refs": "MON-155",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "own poison payload",
+    "Effect family": "POISON",
+    "Existing effect policy / note": "No own effect created",
+    "Modifier": "—",
+    "Provider": "CBT-VIVISECTOR",
+    "Response": "IMMUNE",
+    "ResponseProfileID": "RSP-VIVISECTOR-SELF",
+    "Rule refs": "MON-101",
+    "Source scope": "OWN_SLIME_OR_FUMES"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "POISON",
+    "Existing effect policy / note": "Artificial/symbiotic normal",
+    "Modifier": "+10",
+    "Provider": "CBT-VIVISECTOR",
+    "Response": "CHECK_MODIFIER",
+    "ResponseProfileID": "RSP-VIVISECTOR-NATURAL",
+    "Rule refs": "MON-101",
+    "Source scope": "NATURAL"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "FIRE",
+    "Existing effect policy / note": "Burn may still apply",
+    "Modifier": "×0.5",
+    "Provider": "CBT-VIVISECTOR",
+    "Response": "DAMAGE_MULTIPLIER",
+    "ResponseProfileID": "RSP-VIVISECTOR-FIRE",
+    "Rule refs": "MON-101",
+    "Source scope": "ORDINARY"
+  },
+  {
+    "Blocked payload": "standard fire damage/burn",
+    "Effect family": "FIRE",
+    "Existing effect policy / note": "Specific explosion rules separate",
+    "Modifier": "—",
+    "Provider": "CBT-FIRE-FLEA",
+    "Response": "IMMUNE_STANDARD_FIRE",
+    "ResponseProfileID": "RSP-FIRE-FLEA-FIRE",
+    "Rule refs": "MON-113",
+    "Source scope": "ORDINARY"
+  },
+  {
+    "Blocked payload": "fumes, pheromones, infected vapor",
+    "Effect family": "INHALED_CHEMICAL_OR_INFECTION",
+    "Existing effect policy / note": "Does not cleanse existing",
+    "Modifier": "—",
+    "Provider": "ITEM:ITM-ARM-005 sealed",
+    "Response": "BLOCK_APPLICATION",
+    "ResponseProfileID": "RSP-NAIT-INHALED",
+    "Rule refs": "CORE-053",
+    "Source scope": "EXTERNAL"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "DISEASE|SYMBIONT_INFECTION|EXTERNAL_CHEMICAL",
+    "Existing effect policy / note": "Only while sealed",
+    "Modifier": "+20",
+    "Provider": "ITEM:ITM-ARM-005 sealed",
+    "Response": "CHECK_MODIFIER",
+    "ResponseProfileID": "RSP-NAIT-CHECK",
+    "Rule refs": "CORE-053",
+    "Source scope": "EXTERNAL"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "ELECTRIC|MENTAL|CHEMICAL|POISON_FUMES",
+    "Existing effect policy / note": "Internal/ingested/injected excluded",
+    "Modifier": "−20 per portion",
+    "Provider": "ITEM:ITM-ARM-005 sealed",
+    "Response": "DAMAGE_REDUCTION",
+    "ResponseProfileID": "RSP-NAIT-DAMAGE",
+    "Rule refs": "CORE-053",
+    "Source scope": "EXTERNAL"
+  },
+  {
+    "Blocked payload": "—",
+    "Effect family": "MENTAL_PSI",
+    "Existing effect policy / note": "Chemical pheromones not blocked",
+    "Modifier": "−5 damage; +5 check",
+    "Provider": "ITEM:ITM-ARM-006",
+    "Response": "DAMAGE_REDUCTION_AND_CHECK",
+    "ResponseProfileID": "RSP-KASTELCROSS-PSI",
+    "Rule refs": "CORE-054",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "choke control",
+    "Effect family": "CHOKE_HOLD",
+    "Existing effect policy / note": "Armor condition per item",
+    "Modifier": "—",
+    "Provider": "ITEM:ITM-ARM-006",
+    "Response": "IMMUNE",
+    "ResponseProfileID": "RSP-KASTELCROSS-CHOKE",
+    "Rule refs": "CORE-054",
+    "Source scope": "PHYSICAL"
+  },
+  {
+    "Blocked payload": "choke control",
+    "Effect family": "CHOKE_HOLD",
+    "Existing effect policy / note": "Requires head+torso",
+    "Modifier": "—",
+    "Provider": "ITEM:ITM-ARM-002 full set",
+    "Response": "IMMUNE",
+    "ResponseProfileID": "RSP-BRIGANDINE-CHOKE",
+    "Rule refs": "CORE-050",
+    "Source scope": "PHYSICAL"
+  },
+  {
+    "Blocked payload": "hold consequence",
+    "Effect family": "TRAUMATIC_OR_CHOKE_HOLD",
+    "Existing effect policy / note": "Normal trauma from penetrating attack remains",
+    "Modifier": "—",
+    "Provider": "ITEM:ITM-ARM-008",
+    "Response": "IMMUNE_TO_HOLD",
+    "ResponseProfileID": "RSP-GLENHEIM-HOLDS",
+    "Rule refs": "CORE-056",
+    "Source scope": "PHYSICAL"
+  },
+  {
+    "Blocked payload": "poison damage and poison CONTROL-tagged effects",
+    "Effect family": "POISON_OR_DECOCTION",
+    "Existing effect policy / note": "SYM-042 stat debuff is not blocked",
+    "Modifier": "—",
+    "Provider": "SYM:TOAD",
+    "Response": "IMMUNE_DAMAGE_AND_CONTROL",
+    "ResponseProfileID": "RSP-TOAD-SYMBIONT-POISON",
+    "Rule refs": "SYM-144",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "physical and mental control",
+    "Effect family": "CONTROL",
+    "Existing effect policy / note": "Not wounds/unconscious/death/damage/trauma",
+    "Modifier": "—",
+    "Provider": "MON:CHIMERA Unstoppable",
+    "Response": "REMOVE_AND_IMMUNE_TEMPORARILY",
+    "ResponseProfileID": "RSP-CHIMERA-CONTROL",
+    "Rule refs": "MON-020; CQA-043",
+    "Source scope": "ANY"
+  },
+  {
+    "Blocked payload": "infection",
+    "Effect family": "NATURAL_SYMBIONT_INFECTION",
+    "Existing effect policy / note": "Other infection routes source-specific",
+    "Modifier": "—",
+    "Provider": "RACE:PURE",
+    "Response": "IMMUNE",
+    "ResponseProfileID": "RSP-PURE-INFECTION",
+    "Rule refs": "SYM-003",
+    "Source scope": "NATURAL"
+  },
+  {
+    "Blocked payload": "S/D/I penalties only",
+    "Effect family": "ALCOHOL",
+    "Existing effect policy / note": "Other alcohol effects remain",
+    "Modifier": "—",
+    "Provider": "CBT-BUBUI",
+    "Response": "IGNORE_SELECTED_PENALTIES",
+    "ResponseProfileID": "RSP-BUBUI-ALCOHOL",
+    "Rule refs": "MON-095",
+    "Source scope": "ANY"
+  }
+]

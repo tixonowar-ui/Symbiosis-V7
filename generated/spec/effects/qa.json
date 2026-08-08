@@ -1,0 +1,982 @@
+[
+  {
+    "Actual": "24",
+    "Expected": "24",
+    "Given": "Семейства",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-001",
+    "When": "Проверка уникальности ID",
+    "Путь": "Структура"
+  },
+  {
+    "Actual": "67",
+    "Expected": "67",
+    "Given": "Типы эффектов",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-002",
+    "When": "Проверка уникальности ID",
+    "Путь": "Структура"
+  },
+  {
+    "Actual": "10",
+    "Expected": "10",
+    "Given": "Болезни",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-003",
+    "When": "Проверка уникальности ID",
+    "Путь": "Структура"
+  },
+  {
+    "Actual": "8",
+    "Expected": "8",
+    "Given": "Яды",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-004",
+    "When": "Проверка уникальности ID",
+    "Путь": "Структура"
+  },
+  {
+    "Actual": "300",
+    "Expected": "300",
+    "Given": "24 семейств",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-005",
+    "When": "Полная неупорядоченная матрица с диагональю",
+    "Путь": "Матрица"
+  },
+  {
+    "Actual": "300",
+    "Expected": "300",
+    "Given": "Пары",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-006",
+    "When": "Проверка уникальности",
+    "Путь": "Матрица"
+  },
+  {
+    "Actual": "5",
+    "Expected": "5",
+    "Given": "Одноимённые числовые 3, 5, 2",
+    "Result": "PASS",
+    "Rule / contract": "CORE-080",
+    "ScenarioID": "EFF-QA-007",
+    "When": "Применить CORE-080",
+    "Путь": "Стек"
+  },
+  {
+    "Actual": "{\"M\":-2}",
+    "Expected": "{\"M\":-2}",
+    "Given": "DIS-RHINITIS дважды",
+    "Result": "PASS",
+    "Rule / contract": "MON-085",
+    "ScenarioID": "EFF-QA-008",
+    "When": "Сложить активные болезни",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "{\"M\":-12}",
+    "Expected": "{\"M\":-12}",
+    "Given": "DIS-RHINITIS + DIS-FEVER",
+    "Result": "PASS",
+    "Rule / contract": "MON-085",
+    "ScenarioID": "EFF-QA-009",
+    "When": "Сложить активные болезни",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "{\"C\":-6,\"D\":-2,\"I\":-10}",
+    "Expected": "{\"C\":-6,\"D\":-2,\"I\":-10}",
+    "Given": "DIS-SCABIES + DIS-MIGRAINE",
+    "Result": "PASS",
+    "Rule / contract": "MON-085",
+    "ScenarioID": "EFF-QA-010",
+    "When": "Сложить активные болезни",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "DISEASE",
+    "Expected": "DISEASE",
+    "Given": "DIS-POISONING",
+    "Result": "PASS",
+    "Rule / contract": "CORE-228; MON-076",
+    "ScenarioID": "EFF-QA-011",
+    "When": "Проверить effectFamily",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "false",
+    "Expected": "false",
+    "Given": "DIS-POISONING",
+    "Result": "PASS",
+    "Rule / contract": "CORE-228",
+    "ScenarioID": "EFF-QA-012",
+    "When": "Проверить poison tag",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "{\"immediateExtraTick\":false,\"remainingTurns\":5}",
+    "Expected": "{\"immediateExtraTick\":false,\"remainingTurns\":5}",
+    "Given": "{2 turns} + {5 turns}",
+    "Result": "PASS",
+    "Rule / contract": "CORE-112",
+    "ScenarioID": "EFF-QA-013",
+    "When": "Повторное наложение",
+    "Путь": "Горение"
+  },
+  {
+    "Actual": "3",
+    "Expected": "3",
+    "Given": "Обычный эффект 3 хода",
+    "Result": "PASS",
+    "Rule / contract": "Q-CORE-063",
+    "ScenarioID": "EFF-QA-014",
+    "When": "Конвертация в мир",
+    "Путь": "Таймер"
+  },
+  {
+    "Actual": "15",
+    "Expected": "15",
+    "Given": "Тяжёлое ранение 3 хода",
+    "Result": "PASS",
+    "Rule / contract": "CORE-153; Q-CORE-063",
+    "ScenarioID": "EFF-QA-015",
+    "When": "Конвертация в мир",
+    "Путь": "Таймер"
+  },
+  {
+    "Actual": "a,b,c",
+    "Expected": "a,b,c",
+    "Given": "b@t0, a@t0, c@t1",
+    "Result": "PASS",
+    "Rule / contract": "AQA-024",
+    "ScenarioID": "EFF-QA-016",
+    "When": "createdAt затем UUID",
+    "Путь": "Порядок"
+  },
+  {
+    "Actual": "IMMUNE_BEFORE_ROLL",
+    "Expected": "IMMUNE_BEFORE_ROLL",
+    "Given": "Krysuk POISON",
+    "Result": "PASS",
+    "Rule / contract": "CORE-228",
+    "ScenarioID": "EFF-QA-017",
+    "When": "Response stage",
+    "Путь": "Иммунитет"
+  },
+  {
+    "Actual": "+10",
+    "Expected": "+10",
+    "Given": "Giant Toad disease",
+    "Result": "PASS",
+    "Rule / contract": "MON-155",
+    "ScenarioID": "EFF-QA-018",
+    "When": "Modifier",
+    "Путь": "Иммунитет"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Giant Toad exhaustion",
+    "Result": "PASS",
+    "Rule / contract": "MON-155",
+    "ScenarioID": "EFF-QA-019",
+    "When": "Отсутствие профиля",
+    "Путь": "Иммунитет"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "EffectInstance",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-020",
+    "When": "UUID field",
+    "Путь": "Runtime"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "EffectInstance",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-021",
+    "When": "stackingKey field",
+    "Путь": "Runtime"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "EffectInstance",
+    "Result": "PASS",
+    "Rule / contract": "CQA-002",
+    "ScenarioID": "EFF-QA-022",
+    "When": "sourceSnapshot field",
+    "Путь": "Runtime"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "DiseaseInstance",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-023",
+    "When": "diseaseId field",
+    "Путь": "Runtime"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "TraumaInstance",
+    "Result": "PASS",
+    "Rule / contract": "CORE-119",
+    "ScenarioID": "EFF-QA-024",
+    "When": "regionId field",
+    "Путь": "Runtime"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "WoundInstance",
+    "Result": "PASS",
+    "Rule / contract": "GAP-001–003",
+    "ScenarioID": "EFF-QA-025",
+    "When": "Проверить обязательные regionId/creationPolicy/healingPolicy",
+    "Путь": "Runtime"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Sleep + damage",
+    "Result": "PASS",
+    "Rule / contract": "CORE-061",
+    "ScenarioID": "EFF-QA-026",
+    "When": "Resolver exists",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Paralysis + damage",
+    "Result": "PASS",
+    "Rule / contract": "CORE-062",
+    "ScenarioID": "EFF-QA-027",
+    "When": "Resolver exists",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Severe wound + heal",
+    "Result": "PASS",
+    "Rule / contract": "CORE-156",
+    "ScenarioID": "EFF-QA-028",
+    "When": "Resolver exists",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Severe wound + new damage",
+    "Result": "PASS",
+    "Rule / contract": "CORE-155",
+    "ScenarioID": "EFF-QA-029",
+    "When": "Resolver exists",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "DEAD_REMAINS_TERMINAL",
+    "Expected": "DEAD_REMAINS_TERMINAL",
+    "Given": "Dead + heal",
+    "Result": "PASS",
+    "Rule / contract": "CORE-156",
+    "ScenarioID": "EFF-QA-030",
+    "When": "Terminal resolver",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Same limb trauma",
+    "Result": "PASS",
+    "Rule / contract": "CORE-119",
+    "ScenarioID": "EFF-QA-031",
+    "When": "Additive resolver",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "POISON_CONTINUES_TO_EXPIRY",
+    "Expected": "POISON_CONTINUES_TO_EXPIRY",
+    "Given": "Taipan suppression + injected poison",
+    "Result": "PASS",
+    "Rule / contract": "SYM-038",
+    "ScenarioID": "EFF-QA-032",
+    "When": "Continues",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Mental immunity no-roll effect",
+    "Result": "PASS",
+    "Rule / contract": "CQA-050",
+    "ScenarioID": "EFF-QA-033",
+    "When": "Resolver exists",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Nait + inhaled",
+    "Result": "PASS",
+    "Rule / contract": "CORE-053",
+    "ScenarioID": "EFF-QA-034",
+    "When": "Resolver exists",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Swaddler second fail",
+    "Result": "PASS",
+    "Rule / contract": "MON-150",
+    "ScenarioID": "EFF-QA-035",
+    "When": "Replace penalty",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "DETONATION_CONTINUES",
+    "Expected": "DETONATION_CONTINUES",
+    "Given": "Fire Flea dead + detonation",
+    "Result": "PASS",
+    "Rule / contract": "MON-114–115",
+    "ScenarioID": "EFF-QA-036",
+    "When": "Continues",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "GM effect edit",
+    "Result": "PASS",
+    "Rule / contract": "AQA-045",
+    "ScenarioID": "EFF-QA-037",
+    "When": "Version replace",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "REJECT",
+    "Expected": "REJECT",
+    "Given": "Источник без CREATES_WOUND",
+    "Result": "PASS",
+    "Rule / contract": "GAP-001",
+    "ScenarioID": "EFF-QA-038",
+    "When": "Попытка создать рану",
+    "Путь": "Раны"
+  },
+  {
+    "Actual": "REJECT",
+    "Expected": "REJECT",
+    "Given": "Только медицинское оборудование",
+    "Result": "PASS",
+    "Rule / contract": "GAP-003; GAP-029",
+    "ScenarioID": "EFF-QA-039",
+    "When": "Попытка снять травму",
+    "Путь": "Травмы"
+  },
+  {
+    "Actual": "CANCEL",
+    "Expected": "CANCEL",
+    "Given": "Поверхность уже покрыта",
+    "Result": "PASS",
+    "Rule / contract": "GAP-011",
+    "ScenarioID": "EFF-QA-040",
+    "When": "Новое покрытие без подтверждения",
+    "Путь": "Покрытия"
+  },
+  {
+    "Actual": "ALLOW_STAT_DEBUFF",
+    "Expected": "ALLOW_STAT_DEBUFF",
+    "Given": "SYM-144 + SYM-042 stat debuff",
+    "Result": "PASS",
+    "Rule / contract": "GAP-007",
+    "ScenarioID": "EFF-QA-041",
+    "When": "Применить ответ",
+    "Путь": "Иммунитет"
+  },
+  {
+    "Actual": "RESOLVED_BY_PRIORITY",
+    "Expected": "RESOLVED_BY_PRIORITY",
+    "Given": "Legacy disease automation",
+    "Result": "PASS",
+    "Rule / contract": "CQA-060",
+    "ScenarioID": "EFF-QA-042",
+    "When": "Resolved by priority",
+    "Путь": "Пробелы"
+  },
+  {
+    "Actual": "306",
+    "Expected": "306",
+    "Given": "Rules state selection",
+    "Result": "PASS",
+    "Rule / contract": "Rules v1.6",
+    "ScenarioID": "EFF-QA-043",
+    "When": "All 306 indexed",
+    "Путь": "Источники"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Rules source rows",
+    "Result": "PASS",
+    "Rule / contract": "Rules v1.6",
+    "ScenarioID": "EFF-QA-044",
+    "When": "Every source has locator",
+    "Путь": "Источники"
+  },
+  {
+    "Actual": "9",
+    "Expected": "9",
+    "Given": "Agreed artifacts",
+    "Result": "PASS",
+    "Rule / contract": "Baseline",
+    "ScenarioID": "EFF-QA-045",
+    "When": "Count dependencies",
+    "Путь": "Зависимости"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Canonical payload rows",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-046",
+    "When": "Validate SHA length",
+    "Путь": "Payload"
+  },
+  {
+    "Actual": 185,
+    "Expected": 185,
+    "Given": "Payload IDs",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-047",
+    "When": "Validate uniqueness",
+    "Путь": "Payload"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Effect definitions",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-048",
+    "When": "Validate every family FK",
+    "Путь": "Семейства"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Combination rules",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-049",
+    "When": "Validate both family FK",
+    "Путь": "Сочетания"
+  },
+  {
+    "Actual": "HP_MINUS_10_EACH_FULL_DAY",
+    "Expected": "HP_MINUS_10_EACH_FULL_DAY",
+    "Given": "DIS-PNEUMONIA",
+    "Result": "PASS",
+    "Rule / contract": "MON-080",
+    "ScenarioID": "EFF-QA-050",
+    "When": "Validate explicit tick",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Other named active diseases",
+    "Result": "PASS",
+    "Rule / contract": "MON-087",
+    "ScenarioID": "EFF-QA-051",
+    "When": "Reject implicit ticks",
+    "Путь": "Болезни"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "All poison profiles",
+    "Result": "PASS",
+    "Rule / contract": "CORE-228",
+    "ScenarioID": "EFF-QA-052",
+    "When": "Validate family tag",
+    "Путь": "Яды"
+  },
+  {
+    "Actual": "NO",
+    "Expected": "NO",
+    "Given": "PRF-DEAD",
+    "Result": "PASS",
+    "Rule / contract": "CORE-156",
+    "ScenarioID": "EFF-QA-053",
+    "When": "Validate physical actions",
+    "Путь": "Профили"
+  },
+  {
+    "Actual": "YES",
+    "Expected": "YES",
+    "Given": "PRF-UNCONSCIOUS",
+    "Result": "PASS",
+    "Rule / contract": "CORE-103",
+    "ScenarioID": "EFF-QA-054",
+    "When": "Validate armor",
+    "Путь": "Профили"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "PRF-PARALYZED",
+    "Result": "PASS",
+    "Rule / contract": "CORE-103",
+    "ScenarioID": "EFF-QA-055",
+    "When": "Validate mental conditional",
+    "Путь": "Профили"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "Family pairs",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-056",
+    "When": "Surface blocked interactions",
+    "Путь": "Матрица"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "ASSIGN_DISEASE",
+    "Result": "PASS",
+    "Rule / contract": "CQA-060",
+    "ScenarioID": "EFF-QA-057",
+    "When": "Reject unknown disease",
+    "Путь": "Операции"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "CREATE_WOUND",
+    "Result": "PASS",
+    "Rule / contract": "Registry",
+    "ScenarioID": "EFF-QA-058",
+    "When": "Block generic creation",
+    "Путь": "Операции"
+  },
+  {
+    "Actual": "true",
+    "Expected": "true",
+    "Given": "CLONE_RUNTIME_STATE",
+    "Result": "PASS",
+    "Rule / contract": "Bestiary 09_Контракты",
+    "ScenarioID": "EFF-QA-059",
+    "When": "Generate new UUID",
+    "Путь": "Операции"
+  },
+  {
+    "Actual": "0",
+    "Expected": "0",
+    "Given": "Baseline files",
+    "Result": "PASS",
+    "Rule / contract": "User instruction",
+    "ScenarioID": "EFF-QA-060",
+    "When": "Validate mutation policy",
+    "Путь": "Совместимость"
+  },
+  {
+    "Actual": "1 wound",
+    "Expected": "1 wound",
+    "Given": "Источник CREATES_WOUND + зона",
+    "Result": "PASS",
+    "Rule / contract": "GAP-001",
+    "ScenarioID": "EFF-QA-061",
+    "When": "Одно событие",
+    "Путь": "Раны"
+  },
+  {
+    "Actual": "1 wound",
+    "Expected": "1 wound",
+    "Given": "GM authority + зона",
+    "Result": "PASS",
+    "Rule / contract": "GAP-001",
+    "ScenarioID": "EFF-QA-062",
+    "When": "Создать formal wound",
+    "Путь": "Раны"
+  },
+  {
+    "Actual": "2 wound instances",
+    "Expected": "2 wound instances",
+    "Given": "Два разных события в одной зоне",
+    "Result": "PASS",
+    "Rule / contract": "GAP-001",
+    "ScenarioID": "EFF-QA-063",
+    "When": "Создать раны",
+    "Путь": "Раны"
+  },
+  {
+    "Actual": "−3 HP",
+    "Expected": "−3 HP",
+    "Given": "Явный damagePerTick=3",
+    "Result": "PASS",
+    "Rule / contract": "GAP-002",
+    "ScenarioID": "EFF-QA-064",
+    "When": "Конец хода цели",
+    "Путь": "Кровотечение"
+  },
+  {
+    "Actual": "2 independent ticks",
+    "Expected": "2 independent ticks",
+    "Given": "Две кровоточащие раны",
+    "Result": "PASS",
+    "Rule / contract": "GAP-002",
+    "ScenarioID": "EFF-QA-065",
+    "When": "Тик",
+    "Путь": "Кровотечение"
+  },
+  {
+    "Actual": "remove all",
+    "Expected": "remove all",
+    "Given": "Несколько bleeding instances",
+    "Result": "PASS",
+    "Rule / contract": "CORE-063; GAP-002",
+    "ScenarioID": "EFF-QA-066",
+    "When": "CORE-063",
+    "Путь": "Кровотечение"
+  },
+  {
+    "Actual": "no recovery",
+    "Expected": "no recovery",
+    "Given": "Отдых без явной процедуры",
+    "Result": "PASS",
+    "Rule / contract": "GAP-003",
+    "ScenarioID": "EFF-QA-067",
+    "When": "ADVANCE_TIME",
+    "Путь": "Травмы"
+  },
+  {
+    "Actual": "one mechanical effect",
+    "Expected": "one mechanical effect",
+    "Given": "Один type+variant+region, два источника",
+    "Result": "PASS",
+    "Rule / contract": "GAP-004",
+    "ScenarioID": "EFF-QA-068",
+    "When": "Агрегация",
+    "Путь": "Бинарный эффект"
+  },
+  {
+    "Actual": "two mechanical effects",
+    "Expected": "two mechanical effects",
+    "Given": "Разные affectedRegion",
+    "Result": "PASS",
+    "Rule / contract": "GAP-004",
+    "ScenarioID": "EFF-QA-069",
+    "When": "Агрегация",
+    "Путь": "Бинарный эффект"
+  },
+  {
+    "Actual": "{turns:3,dpt:5,noExtraTick:true}",
+    "Expected": "{turns:3,dpt:5,noExtraTick:true}",
+    "Given": "{3 turns,dpt2}+{2 turns,dpt5}",
+    "Result": "PASS",
+    "Rule / contract": "GAP-005",
+    "ScenarioID": "EFF-QA-070",
+    "When": "Повтор",
+    "Путь": "Горение"
+  },
+  {
+    "Actual": "TERMINATED",
+    "Expected": "TERMINATED",
+    "Given": "Временный CONTROL активен",
+    "Result": "PASS",
+    "Rule / contract": "GAP-006",
+    "ScenarioID": "EFF-QA-071",
+    "When": "Окончательная смерть",
+    "Путь": "Смерть"
+  },
+  {
+    "Actual": "PRESERVED",
+    "Expected": "PRESERVED",
+    "Given": "Травмы, раны, item state, inventory, symbionts",
+    "Result": "PASS",
+    "Rule / contract": "GAP-006",
+    "ScenarioID": "EFF-QA-072",
+    "When": "Окончательная смерть",
+    "Путь": "Смерть"
+  },
+  {
+    "Actual": "not resumed",
+    "Expected": "not resumed",
+    "Given": "Ранее завершённый временный эффект",
+    "Result": "PASS",
+    "Rule / contract": "GAP-006",
+    "ScenarioID": "EFF-QA-073",
+    "When": "Воскрешение",
+    "Путь": "Воскрешение"
+  },
+  {
+    "Actual": "CONTROL",
+    "Expected": "CONTROL",
+    "Given": "Эффект с tag CONTROL",
+    "Result": "PASS",
+    "Rule / contract": "GAP-008",
+    "ScenarioID": "EFF-QA-074",
+    "When": "Классификация",
+    "Путь": "Контроль"
+  },
+  {
+    "Actual": "NOT_CONTROL",
+    "Expected": "NOT_CONTROL",
+    "Given": "Неизвестный эффект без CONTROL",
+    "Result": "PASS",
+    "Rule / contract": "GAP-008",
+    "ScenarioID": "EFF-QA-075",
+    "When": "Классификация",
+    "Путь": "Контроль"
+  },
+  {
+    "Actual": "1 slot quantity=20",
+    "Expected": "1 slot quantity=20",
+    "Given": "20 обычных стрел",
+    "Result": "PASS",
+    "Rule / contract": "GAP-011",
+    "ScenarioID": "EFF-QA-076",
+    "When": "Хранение",
+    "Путь": "Инвентарь"
+  },
+  {
+    "Actual": "3 item instances",
+    "Expected": "3 item instances",
+    "Given": "3 отравленные стрелы",
+    "Result": "PASS",
+    "Rule / contract": "GAP-011",
+    "ScenarioID": "EFF-QA-077",
+    "When": "Хранение",
+    "Путь": "Инвентарь"
+  },
+  {
+    "Actual": "old=REPLACED,new=ACTIVE",
+    "Expected": "old=REPLACED,new=ACTIVE",
+    "Given": "Новое покрытие + подтверждение",
+    "Result": "PASS",
+    "Rule / contract": "GAP-011",
+    "ScenarioID": "EFF-QA-078",
+    "When": "Замена",
+    "Путь": "Покрытия"
+  },
+  {
+    "Actual": "−5; two releases",
+    "Expected": "−5; two releases",
+    "Given": "Штрафы −2 и −5, два источника",
+    "Result": "PASS",
+    "Rule / contract": "GAP-012",
+    "ScenarioID": "EFF-QA-079",
+    "When": "Проекция",
+    "Путь": "Захваты"
+  },
+  {
+    "Actual": "−3 once",
+    "Expected": "−3 once",
+    "Given": "Штрафы −1 и −3 до серии",
+    "Result": "PASS",
+    "Rule / contract": "GAP-013",
+    "ScenarioID": "EFF-QA-080",
+    "When": "Следующая серия",
+    "Путь": "Щит"
+  },
+  {
+    "Actual": "one matching counter",
+    "Expected": "one matching counter",
+    "Given": "Два sourceId на одной цели",
+    "Result": "PASS",
+    "Rule / contract": "GAP-014",
+    "ScenarioID": "EFF-QA-081",
+    "When": "Провал одного",
+    "Путь": "Пеленальщица"
+  },
+  {
+    "Actual": "consume earliest one",
+    "Expected": "consume earliest one",
+    "Given": "Два заряда MON-159",
+    "Result": "PASS",
+    "Rule / contract": "GAP-015",
+    "ScenarioID": "EFF-QA-082",
+    "When": "Одна проверка",
+    "Путь": "Пси-защита"
+  },
+  {
+    "Actual": "two ordered checks",
+    "Expected": "two ordered checks",
+    "Given": "Два источника паров",
+    "Result": "PASS",
+    "Rule / contract": "GAP-016",
+    "ScenarioID": "EFF-QA-083",
+    "When": "Конец хода цели",
+    "Путь": "Вивисектор"
+  },
+  {
+    "Actual": "no paralysis; hit/others kept",
+    "Expected": "no paralysis; hit/others kept",
+    "Given": "Негуманоид, попадание успешно",
+    "Result": "PASS",
+    "Rule / contract": "GAP-017",
+    "ScenarioID": "EFF-QA-084",
+    "When": "Разрешить payload",
+    "Путь": "Парализующий яд"
+  },
+  {
+    "Actual": "3 turns",
+    "Expected": "3 turns",
+    "Given": "R20/3=2.5",
+    "Result": "PASS",
+    "Rule / contract": "GAP-018",
+    "ScenarioID": "EFF-QA-085",
+    "When": "Длительность",
+    "Путь": "Округление"
+  },
+  {
+    "Actual": "REJECT",
+    "Expected": "REJECT",
+    "Given": "В бою либо без GM",
+    "Result": "PASS",
+    "Rule / contract": "GAP-019",
+    "ScenarioID": "EFF-QA-086",
+    "When": "RESTORE_NAIT_SEAL",
+    "Путь": "Нэйт"
+  },
+  {
+    "Actual": "REJECT",
+    "Expected": "REJECT",
+    "Given": "Оборудование без процедуры",
+    "Result": "PASS",
+    "Rule / contract": "GAP-029",
+    "ScenarioID": "EFF-QA-087",
+    "When": "REMOVE_TRAUMA",
+    "Путь": "Медицина"
+  },
+  {
+    "Actual": "effectiveStat=−3; unconscious",
+    "Expected": "effectiveStat=−3; unconscious",
+    "Given": "effectiveStat=2, modifier=−5, Z=2",
+    "Result": "PASS",
+    "Rule / contract": "GAP-032; MON-075",
+    "ScenarioID": "EFF-QA-088",
+    "When": "Пересчёт",
+    "Путь": "Болезнь"
+  },
+  {
+    "Actual": "−3 turns; remaining actions allowed after extinguish",
+    "Expected": "−3 turns; remaining actions allowed after extinguish",
+    "Given": "Провал самообладания, 3 действия",
+    "Result": "PASS",
+    "Rule / contract": "Q-CORE-031",
+    "ScenarioID": "EFF-QA-089",
+    "When": "Тушение",
+    "Путь": "Горение/действия"
+  },
+  {
+    "Actual": "destroy outer item immediately",
+    "Expected": "destroy outer item immediately",
+    "Given": "Одежда/лёгкая броня, save≤R6",
+    "Result": "PASS",
+    "Rule / contract": "GAP-034",
+    "ScenarioID": "EFF-QA-090",
+    "When": "SYM-041/Q-SYM-075",
+    "Путь": "Коррозия"
+  },
+  {
+    "Actual": "−5; restrictions union; two states retained",
+    "Expected": "−5; restrictions union; two states retained",
+    "Given": "Одна конечность: штрафы −3 и −5",
+    "Result": "PASS",
+    "Rule / contract": "COMB-031",
+    "ScenarioID": "EFF-QA-091",
+    "When": "Проекция зоны",
+    "Путь": "Травма+онемение"
+  },
+  {
+    "Actual": "−5 once; not −10",
+    "Expected": "−5 once; not −10",
+    "Given": "Одна конечность: два штрафа −5",
+    "Result": "PASS",
+    "Rule / contract": "COMB-031",
+    "ScenarioID": "EFF-QA-092",
+    "When": "Проекция зоны",
+    "Путь": "Травма+онемение"
+  },
+  {
+    "Actual": "trauma −3 remains; numbness removed",
+    "Expected": "trauma −3 remains; numbness removed",
+    "Given": "Травма −3 + онемение −5; онемение истекло",
+    "Result": "PASS",
+    "Rule / contract": "COMB-031",
+    "ScenarioID": "EFF-QA-093",
+    "When": "Recalculate",
+    "Путь": "Независимое снятие"
+  },
+  {
+    "Actual": "numbness remains; trauma removed",
+    "Expected": "numbness remains; trauma removed",
+    "Given": "Травма вылечена; онемение ещё активно",
+    "Result": "PASS",
+    "Rule / contract": "COMB-031",
+    "ScenarioID": "EFF-QA-094",
+    "When": "Recalculate",
+    "Путь": "Независимое снятие"
+  },
+  {
+    "Actual": "pain hold only; no blindness EffectInstance",
+    "Expected": "pain hold only; no blindness EffectInstance",
+    "Given": "CORE-143: порог выдавливания глаз достигнут",
+    "Result": "PASS",
+    "Rule / contract": "CORE-143; Q-CORE-045",
+    "ScenarioID": "EFF-QA-095",
+    "When": "Resolve application branch",
+    "Путь": "Слепота"
+  },
+  {
+    "Actual": "REJECT_NOT_MODELED",
+    "Expected": "REJECT_NOT_MODELED",
+    "Given": "GM назначает EFF-SENSE-BLINDNESS",
+    "Result": "PASS",
+    "Rule / contract": "GAP-030",
+    "ScenarioID": "EFF-QA-096",
+    "When": "SET_GM_FORMAL_STATE",
+    "Путь": "Слепота"
+  },
+  {
+    "Actual": "no stored effect; no vision modifiers",
+    "Expected": "no stored effect; no vision modifiers",
+    "Given": "Нарративное повреждение глаз",
+    "Result": "PASS",
+    "Rule / contract": "GAP-030",
+    "ScenarioID": "EFF-QA-097",
+    "When": "State/UI projection",
+    "Путь": "Слепота"
+  },
+  {
+    "Actual": "NOT_APPLICABLE; no modeled state",
+    "Expected": "NOT_APPLICABLE; no modeled state",
+    "Given": "Попытка универсального снятия слепоты",
+    "Result": "PASS",
+    "Rule / contract": "GAP-030",
+    "ScenarioID": "EFF-QA-098",
+    "When": "Remove effect",
+    "Путь": "Слепота"
+  }
+]

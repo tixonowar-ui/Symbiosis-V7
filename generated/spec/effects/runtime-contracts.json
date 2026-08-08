@@ -1,0 +1,554 @@
+[
+  {
+    "Entity": "EffectDefinition",
+    "Field": "effectTypeId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "Стабильный ID из 02_Типы_эффектов"
+  },
+  {
+    "Entity": "EffectDefinition",
+    "Field": "familyCode",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "FK на 01_Семейства"
+  },
+  {
+    "Entity": "EffectDefinition",
+    "Field": "displayName",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "Пользовательское имя"
+  },
+  {
+    "Entity": "EffectDefinition",
+    "Field": "stateBucket",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "currentEffects/currentTraumas/currentWounds/actorFlags/item/source/narrative"
+  },
+  {
+    "Entity": "EffectDefinition",
+    "Field": "defaultStackPolicy",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "Не заменяет частную карточку источника"
+  },
+  {
+    "Entity": "EffectDefinition",
+    "Field": "defaultSourceLifecycle",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "SOURCE_MAINTAINED/AUTONOMOUS/SOURCE_SPECIFIC"
+  },
+  {
+    "Entity": "EffectDefinition",
+    "Field": "automationStatus",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "NEW_SUPPLEMENT_SCHEMA",
+    "Семантика / инвариант": "AUTOMATED/PARTIAL/TRACE_ONLY/BLOCKED/NOT_MODELED"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "effectInstanceId",
+    "Required": "YES",
+    "Type": "UUID",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Уникален в mutable graph; новый UUID при клонировании"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "effectTypeId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "FK EffectDefinition"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "familyCode",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Дублируется для быстрого ответа и валидируется по типу"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "targetActorId",
+    "Required": "YES",
+    "Type": "UUID",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Владелец состояния"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "targetRegionId",
+    "Required": "CONDITIONAL",
+    "Type": "string|null",
+    "Источник / статус": "REQUIRED_IF_REGION",
+    "Семантика / инвариант": "Обязателен для конечности/зоны"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "sourceRuleIds",
+    "Required": "YES",
+    "Type": "string[]",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Нормативные Rule ID"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "sourceEntityId",
+    "Required": "CONDITIONAL",
+    "Type": "UUID|null",
+    "Источник / статус": "SOURCE_SPECIFIC",
+    "Семантика / инвариант": "Актор/объект источника"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "sourceInstanceId",
+    "Required": "CONDITIONAL",
+    "Type": "UUID|string|null",
+    "Источник / статус": "SOURCE_SPECIFIC",
+    "Семантика / инвариант": "Способность, предмет, зона, покрытие или связь"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "sourceSnapshot",
+    "Required": "CONDITIONAL",
+    "Type": "object|null",
+    "Источник / статус": "CQA-002",
+    "Семантика / инвариант": "Последний читаемый уровень/параметры для автономного эффекта"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "sourceLifecyclePolicy",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "SOURCE_MAINTAINED/AUTONOMOUS/SOURCE_SPECIFIC"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "stackingKey",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Не выводить молча из displayName; брать из типа/источника"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "payload",
+    "Required": "YES",
+    "Type": "object",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Типизированные значения конкретного эффекта"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "magnitude",
+    "Required": "CONDITIONAL",
+    "Type": "number|object|null",
+    "Источник / статус": "SOURCE_SPECIFIC",
+    "Семантика / инвариант": "Число для CORE-080 либо структурированный пакет"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "tags",
+    "Required": "YES",
+    "Type": "string[]",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "CONTROL/POISON/DISEASE и другие явно подтверждённые теги"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "createdAt",
+    "Required": "YES",
+    "Type": "timestamp",
+    "Источник / статус": "AQA-024",
+    "Семантика / инвариант": "Для стабильного порядка"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "startsAt",
+    "Required": "YES",
+    "Type": "timestamp|turnRef",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Момент начала"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "expiresAt",
+    "Required": "CONDITIONAL",
+    "Type": "timestamp|turnRef|null",
+    "Источник / статус": "REQUIRED_IF_TIMED",
+    "Семантика / инвариант": "NULL только для бессрочного/условного"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "remainingExact",
+    "Required": "CONDITIONAL",
+    "Type": "decimal|null",
+    "Источник / статус": "Q-CORE-063",
+    "Семантика / инвариант": "Точный остаток при конвертации"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "durationUnit",
+    "Required": "CONDITIONAL",
+    "Type": "enum|null",
+    "Источник / статус": "REQUIRED_IF_TIMED",
+    "Семантика / инвариант": "TURN/ROUND/MINUTE/HOUR/DAY/COMBAT/CONDITION"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "tickSchedule",
+    "Required": "CONDITIONAL",
+    "Type": "object|null",
+    "Источник / статус": "REQUIRED_IF_PERIODIC",
+    "Семантика / инвариант": "Фаза, период и nextTickAt"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "lastTickAt",
+    "Required": "NO",
+    "Type": "timestamp|turnRef|null",
+    "Источник / статус": "PERIODIC",
+    "Семантика / инвариант": "Аудит дедупликации тика"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "status",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "PENDING/ACTIVE/SUSPENDED/EXPIRED/REMOVED/REPLACED/BLOCKED"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "revision",
+    "Required": "YES",
+    "Type": "integer>=1",
+    "Источник / статус": "AQA-045",
+    "Семантика / инвариант": "Изменение мастером создаёт новую версию, старую завершает"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "removalReason",
+    "Required": "NO",
+    "Type": "enum|null",
+    "Источник / статус": "AUDIT",
+    "Семантика / инвариант": "EXPIRY/CURE/CLEANSE/DAMAGE/SOURCE_INVALID/REPLACED/GM/DEATH"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "createdBy",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "AUDIT",
+    "Семантика / инвариант": "RULE/PLAYER_COMMAND/GM/SYSTEM"
+  },
+  {
+    "Entity": "DiseaseInstance",
+    "Field": "diseaseId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "FK 03_Болезни; effectTypeId=EFF-DISEASE-INSTANCE"
+  },
+  {
+    "Entity": "DiseaseInstance",
+    "Field": "assignedByGM",
+    "Required": "YES",
+    "Type": "boolean",
+    "Источник / статус": "CQA-060",
+    "Семантика / инвариант": "Для приложения true по CQA-060"
+  },
+  {
+    "Entity": "DiseaseInstance",
+    "Field": "modifierComponents",
+    "Required": "YES",
+    "Type": "object[]",
+    "Источник / статус": "MON-076–084",
+    "Семантика / инвариант": "Статовые и проверочные модификаторы"
+  },
+  {
+    "Entity": "DiseaseInstance",
+    "Field": "dailyTick",
+    "Required": "CONDITIONAL",
+    "Type": "object|null",
+    "Источник / статус": "MON-080; MON-087",
+    "Семантика / инвариант": "Только если прямо задано"
+  },
+  {
+    "Entity": "PoisonInstance",
+    "Field": "poisonProfileId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "FK 04_Яды"
+  },
+  {
+    "Entity": "PoisonInstance",
+    "Field": "poisonSourceKind",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "CORE-228",
+    "Семантика / инвариант": "ORDINARY/NATURAL/ARTIFICIAL/SYMBIOTIC/CANONICAL"
+  },
+  {
+    "Entity": "PoisonInstance",
+    "Field": "deliveryKind",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "CONTACT/INHALED/INGESTED/INJECTED/COATING/SOURCE_SPECIFIC"
+  },
+  {
+    "Entity": "TraumaInstance",
+    "Field": "traumaInstanceId",
+    "Required": "YES",
+    "Type": "UUID",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Элемент currentTraumas"
+  },
+  {
+    "Entity": "TraumaInstance",
+    "Field": "regionId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Зона анатомии"
+  },
+  {
+    "Entity": "TraumaInstance",
+    "Field": "traumaValue",
+    "Required": "YES",
+    "Type": "number",
+    "Источник / статус": "CORE-119",
+    "Семантика / инвариант": "Суммируется по одной конечности по CORE-119"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "woundInstanceId",
+    "Required": "YES",
+    "Type": "UUID",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Элемент currentWounds"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "woundType",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "GENERIC/BLEEDING; создание только SOURCE_CREATES_WOUND_OR_GM"
+  },
+  {
+    "Entity": "EffectResponse",
+    "Field": "responseProfileId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Стабильный ID 10_Иммунитеты"
+  },
+  {
+    "Entity": "EffectResponse",
+    "Field": "effectFamily",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "Семейство входящего payload"
+  },
+  {
+    "Entity": "EffectResponse",
+    "Field": "sourceScope",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "ANY/NATURAL/EXTERNAL/OWN_SOURCE/..."
+  },
+  {
+    "Entity": "EffectResponse",
+    "Field": "response",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "REQUIRED",
+    "Семантика / инвариант": "IMMUNE_BEFORE_ROLL/CHECK_MODIFIER/DAMAGE_REDUCTION/..."
+  },
+  {
+    "Entity": "DerivedStateProjection",
+    "Field": "canPhysicalAct",
+    "Required": "YES",
+    "Type": "boolean",
+    "Источник / статус": "DERIVED",
+    "Семантика / инвариант": "Пересчитывается из активных состояний"
+  },
+  {
+    "Entity": "DerivedStateProjection",
+    "Field": "canMentalAct",
+    "Required": "YES",
+    "Type": "boolean|conditional",
+    "Источник / статус": "DERIVED",
+    "Семантика / инвариант": "С учётом речи/движения/контроля тела"
+  },
+  {
+    "Entity": "DerivedStateProjection",
+    "Field": "canReact",
+    "Required": "YES",
+    "Type": "boolean",
+    "Источник / статус": "DERIVED",
+    "Семантика / инвариант": "Пересчитывается"
+  },
+  {
+    "Entity": "DerivedStateProjection",
+    "Field": "canActiveDefend",
+    "Required": "YES",
+    "Type": "boolean",
+    "Источник / статус": "DERIVED",
+    "Семантика / инвариант": "Броня отдельно"
+  },
+  {
+    "Entity": "DerivedStateProjection",
+    "Field": "effectiveControllerId",
+    "Required": "YES",
+    "Type": "UUID|string|null",
+    "Источник / статус": "DERIVED",
+    "Семантика / инвариант": "Результат CORE-181/221"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "variantKey",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "GAP-004",
+    "Семантика / инвариант": "Явный вариант эффекта; пустая строка допустима для единственного варианта"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "aggregateKey",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "GAP-004",
+    "Семантика / инвариант": "Для бинарных эффектов: effectTypeId|variantKey|targetRegionId; источники и таймеры остаются отдельными"
+  },
+  {
+    "Entity": "EffectInstance",
+    "Field": "deathDisposition",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "GAP-006",
+    "Семантика / инвариант": "TERMINATE_ON_DEATH/PRESERVE_ON_CORPSE/SOURCE_SPECIFIC"
+  },
+  {
+    "Entity": "PoisonInstance",
+    "Field": "secondaryControlApplicable",
+    "Required": "YES",
+    "Type": "boolean",
+    "Источник / статус": "GAP-017",
+    "Семантика / инвариант": "false для парализующего яда на негуманоиде; остальной payload сохраняется"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "regionId",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "GAP-001",
+    "Семантика / инвариант": "Зона одной раны, созданной одним событием"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "creationPolicy",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "GAP-001",
+    "Семантика / инвариант": "SOURCE_CREATES_WOUND_OR_GM"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "damagePerTick",
+    "Required": "CONDITIONAL",
+    "Type": "number|null",
+    "Источник / статус": "GAP-002",
+    "Семантика / инвариант": "Обязателен только для BLEEDING; значения по умолчанию нет"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "tickPhase",
+    "Required": "CONDITIONAL",
+    "Type": "enum|null",
+    "Источник / статус": "GAP-002",
+    "Семантика / инвариант": "END_OF_TARGET_TURN для BLEEDING"
+  },
+  {
+    "Entity": "WoundInstance",
+    "Field": "healingPolicy",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "GAP-001–003",
+    "Семантика / инвариант": "EXPLICIT_TREATMENT_OR_GM_ONLY"
+  },
+  {
+    "Entity": "PreparedCoatingInstance",
+    "Field": "coatingInstanceId",
+    "Required": "YES",
+    "Type": "UUID",
+    "Источник / статус": "GAP-011",
+    "Семантика / инвариант": "Уникальный экземпляр расходуемого покрытия"
+  },
+  {
+    "Entity": "PreparedCoatingInstance",
+    "Field": "hostItemInstanceId",
+    "Required": "YES",
+    "Type": "UUID",
+    "Источник / статус": "GAP-011",
+    "Семантика / инвариант": "Экземпляр предмета либо отдельного отравленного снаряда"
+  },
+  {
+    "Entity": "PreparedCoatingInstance",
+    "Field": "surfaceKey",
+    "Required": "YES",
+    "Type": "string",
+    "Источник / статус": "GAP-011",
+    "Семантика / инвариант": "Одна поражающая поверхность; одновременно одно расходуемое покрытие"
+  },
+  {
+    "Entity": "PreparedCoatingInstance",
+    "Field": "inventoryMode",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "GAP-011",
+    "Семантика / инвариант": "STACKABLE_UNCOATED_PROJECTILES/INDIVIDUAL_POISONED_PROJECTILE/INDIVIDUAL_ITEM_COATING"
+  },
+  {
+    "Entity": "PreparedCoatingInstance",
+    "Field": "consumptionState",
+    "Required": "YES",
+    "Type": "enum",
+    "Источник / статус": "GAP-011",
+    "Семантика / инвариант": "ACTIVE/CONSUMED/REPLACED"
+  },
+  {
+    "Entity": "PreparedCoatingInstance",
+    "Field": "replacesCoatingId",
+    "Required": "NO",
+    "Type": "UUID|null",
+    "Источник / статус": "GAP-011",
+    "Семантика / инвариант": "Заполняется после подтверждённой замены покрытия"
+  },
+  {
+    "Entity": "DerivedStateProjection",
+    "Field": "regionPenaltyById",
+    "Required": "YES",
+    "Type": "map<regionId,number>",
+    "Источник / статус": "CORE-119; MON-169; SYM-045; COMB-031; Author decision 2026-07-31",
+    "Семантика / инвариант": "Для одной зоны действует наиболее строгий числовой штраф из травмы/онемения; источники хранятся раздельно, самостоятельные ограничения объединяются, после снятия выполняется пересчёт"
+  }
+]

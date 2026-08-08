@@ -63,9 +63,16 @@
   `image10.png` сортируется раньше `image2.png`, и совпадение было бы
   случайным. Результат сверяется с колонкой `FileName` самого реестра
 
+- Effects and Diseases v1.2 → `generated/spec/effects` (20 файлов) и
+  `generated/types/effects.ts`: 67 типов эффектов, 24 семейства, 306 строк
+  карты источников, 300 пар матрицы семейств. Гейт по «20_Контроль» (24 строки)
+- Импорт сверяет [ADR 0011](adr/0011-not-modeled-stays-tombstone.md) с
+  источником: ровно один `NOT_MODELED` тип — `EFF-SENSE-BLINDNESS` со статусом
+  `EXCLUDED_FROM_RUNTIME`, и 66 моделируемых, как заявляет атлас
+
 Осталось:
 
-- Effects / Bestiary / Sentient → `generated/spec`
+- Bestiary / Sentient → `generated/spec` (плюс 16 артов через `lib/media.ts`)
 - `generated/media` из `xl/media/` и Runtime Pack (64 иконки, 16 артов)
 - `generated/seed` — SQLite seed
 

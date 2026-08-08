@@ -1,0 +1,92 @@
+[
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "7fe8939403bced0436a009c80fd97830b96a3b2dbf58c9271970e2a8869c3c35",
+    "Status": "PASS",
+    "Версия": "v1.6",
+    "Размер, байт": 920352,
+    "Роль": "NORMATIVE_RULES",
+    "Файл": "Symbiosis_V7_Executable_Rules_Registry_v1.6.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "cdc31421568695e9d88c794179918567c551576756b8a2252b1de74c32245dba",
+    "Status": "PASS",
+    "Версия": "v1.1",
+    "Размер, байт": 697755,
+    "Роль": "NORMATIVE_CHARACTER",
+    "Файл": "Symbiosis_V7_Character_Skills_Symbionts_Registry_v1.1.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "09d5e2a5386e318eeb87d4f7b81b3aebb6f9e1669638042f8c58dc9fd92ac19d",
+    "Status": "PASS",
+    "Версия": "v1.5_with_icons",
+    "Размер, байт": 1102446,
+    "Роль": "NORMATIVE_ITEMS",
+    "Файл": "Symbiosis_V7_Item_Registry_v1.5_with_icons.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "53253a350673932367812a4f221297a1d6bdbd979a82585df1ab37709be77ae3",
+    "Status": "PASS",
+    "Версия": "v1.3",
+    "Размер, байт": 5888594,
+    "Роль": "NORMATIVE_BESTIARY",
+    "Файл": "Symbiosis_V7_Canonical_Bestiary_Registry_v1.3.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "b4c8ff7199e8a9798e5e4928599ee63c9efba3b4244b9c412666a70111ad175f",
+    "Status": "PASS",
+    "Версия": "v1.2",
+    "Размер, байт": 17138567,
+    "Роль": "NORMATIVE_SENTIENT",
+    "Файл": "Symbiosis_V7_Default_Sentient_Enemy_Registry_v1.2.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "614f0da1c3128aebbb28d67a68a89ccd189a067c57d407c92536425e46072cdc",
+    "Status": "PASS",
+    "Версия": "v1.2",
+    "Размер, байт": 17051280,
+    "Роль": "DERIVED_RUNTIME_PACK",
+    "Файл": "Symbiosis_V7_Default_Sentient_Enemy_Runtime_Pack_v1.2.zip"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "cc780d920d3f2c08626b66e2f32e2a0b7f3012513b0c84563c2ed3c72387d1c1",
+    "Status": "PASS",
+    "Версия": "v1.1",
+    "Размер, байт": 185292,
+    "Роль": "AUTHORITATIVE_QA",
+    "Файл": "Symbiosis_V7_All_Questions_and_Answers_Registry_v1.1.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "4704a9d8a1af5d8d9b60e3fd26e21334ab484b5fcedc8f8e25674023882b1ae2",
+    "Status": "PASS",
+    "Версия": "v1.1",
+    "Размер, байт": 33567,
+    "Роль": "AUDIT",
+    "Файл": "Symbiosis_V7_Cross_Registry_Audit_Report_v1.1.xlsx"
+  },
+  {
+    "Dependency tuple": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Mutation policy": "IMMUTABLE_AGREED_INPUT",
+    "SHA-256": "e813b5b3beac184708345489c24e472f73e069765a69a291898de96fef529787",
+    "Status": "PASS",
+    "Версия": "v1.1",
+    "Размер, байт": 26329,
+    "Роль": "BASELINE_MANIFEST",
+    "Файл": "Symbiosis_V7_Development_Baseline_Manifest_v1.1.xlsx"
+  }
+]

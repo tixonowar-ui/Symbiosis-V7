@@ -1,0 +1,536 @@
+[
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-152–156; CORE-182; CORE-222",
+    "Value": "FAM-LIFECYCLE",
+    "Определение": "Жизненный цикл"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-061; CORE-103; MON-075",
+    "Value": "FAM-CONSCIOUSNESS",
+    "Определение": "Сознание"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-103; CORE-138; CORE-141; CORE-143–144",
+    "Value": "FAM-PHYSICAL_CONTROL",
+    "Определение": "Физический контроль"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-178; CORE-181; CORE-221; MON-038",
+    "Value": "FAM-MENTAL_CONTROL",
+    "Определение": "Ментальный контроль"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-138–144; MON-165",
+    "Value": "FAM-MOBILITY_POSITION",
+    "Определение": "Положение и мобильность"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-031; CORE-043–048; CORE-070; MON-150; MON-160",
+    "Value": "FAM-ACTION_ECONOMY",
+    "Определение": "Действия и серия"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-117; CORE-119–121",
+    "Value": "FAM-TRAUMA",
+    "Определение": "Травмы"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-059; CORE-063",
+    "Value": "FAM-WOUND_BLEEDING",
+    "Определение": "Раны и кровотечения"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "MON-075–087; CQA-060",
+    "Value": "FAM-DISEASE",
+    "Определение": "Болезни"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-109; CORE-228; SYM-039; SYM-042; SYM-045",
+    "Value": "FAM-POISON",
+    "Определение": "Яды"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-112; CORE-114",
+    "Value": "FAM-FIRE",
+    "Определение": "Огонь и горение"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-101; AQA-024",
+    "Value": "FAM-PERIODIC_DAMAGE",
+    "Определение": "Периодический урон"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-071; AQA-024",
+    "Value": "FAM-PERIODIC_HEAL",
+    "Определение": "Периодическое лечение"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-079–080",
+    "Value": "FAM-STAT_MODIFIER",
+    "Определение": "Модификаторы характеристик"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-059; CORE-067–069; CORE-072",
+    "Value": "FAM-CHECK_MODIFIER",
+    "Определение": "Модификаторы проверок"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-066; SYM-124; SYM-127; SYM-184",
+    "Value": "FAM-SENSE_VISIBILITY",
+    "Определение": "Чувства и видимость"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "SYM-091; SYM-114; SYM-169",
+    "Value": "FAM-FORM_MODE",
+    "Определение": "Форма и режим"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-104; SYM-038; SYM-075; SYM-181",
+    "Value": "FAM-SYMBIONT_STATE",
+    "Определение": "Состояние симбионта"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-072; CORE-228; CQA-043; CQA-050",
+    "Value": "FAM-IMMUNITY_RESISTANCE",
+    "Определение": "Иммунитеты и сопротивления"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "SYM-003–005; MON-042–063",
+    "Value": "FAM-INFECTION",
+    "Определение": "Заражение"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-048; SYM-183; MON-114",
+    "Value": "FAM-PREPARED_EFFECT",
+    "Определение": "Подготовленные эффекты"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CQA-002; AQ2-020",
+    "Value": "FAM-SOURCE_LINK",
+    "Определение": "Связи с источником"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "CORE-053; MON-100; MON-129",
+    "Value": "FAM-ITEM_STATE",
+    "Определение": "Состояние предмета"
+  },
+  {
+    "Dictionary": "EFFECT_FAMILY",
+    "Rule refs": "AQ2-009; AQA-045",
+    "Value": "FAM-NARRATIVE",
+    "Определение": "Нарративная пометка"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "Sentient payload",
+    "Value": "currentEffects",
+    "Определение": "Временные/поддерживаемые/периодические экземпляры"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "Sentient payload",
+    "Value": "currentTraumas",
+    "Определение": "Травмы и их зональные значения"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "Sentient payload",
+    "Value": "currentWounds",
+    "Определение": "Формализованные раны и кровотечения с явной политикой создания и лечения"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "CORE-152–156",
+    "Value": "actorFlags",
+    "Определение": "Терминальные и базовые флаги актора"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "Items",
+    "Value": "itemInstance",
+    "Определение": "Герметичность и иные состояния экземпляра предмета"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "CQA-002",
+    "Value": "sourceGraph",
+    "Определение": "Связи заражения, контроля, троса и ауры"
+  },
+  {
+    "Dictionary": "STATE_BUCKET",
+    "Rule refs": "AQ2-009",
+    "Value": "narrativeMarkers",
+    "Определение": "Немеханические пометки"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "CORE-080",
+    "Value": "SAME_NAME_STRONGEST_TIMERS_INDEPENDENT",
+    "Определение": "Численно действует сильнейший, таймеры источников сохраняются"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "CORE-058",
+    "Value": "REFRESH_SAME_SOURCE",
+    "Определение": "Повтор обновляет срок без усиления"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "MON-085",
+    "Value": "NO_STACK_BY_DISEASE_ID",
+    "Определение": "Одна болезнь не дублирует штрафы"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "CQA-002",
+    "Value": "PER_SOURCE",
+    "Определение": "Независимый экземпляр на источник"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "Source-specific",
+    "Value": "PER_SOURCE_TARGET",
+    "Определение": "Независимый экземпляр на пару источник–цель"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "SYM-045",
+    "Value": "PER_LIMB",
+    "Определение": "Независимый экземпляр на конечность"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "CORE-119",
+    "Value": "ADDITIVE_SAME_LIMB",
+    "Определение": "Значения травм одной конечности складываются"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "CORE-181; CORE-221",
+    "Value": "PRIORITY_LEASE",
+    "Определение": "Один effectiveController по явному приоритету"
+  },
+  {
+    "Dictionary": "SOURCE_LIFECYCLE",
+    "Rule refs": "CQA-002",
+    "Value": "SOURCE_MAINTAINED",
+    "Определение": "Заканчивается при инвалидировании источника"
+  },
+  {
+    "Dictionary": "SOURCE_LIFECYCLE",
+    "Rule refs": "CQA-002",
+    "Value": "AUTONOMOUS",
+    "Определение": "Продолжается после источника"
+  },
+  {
+    "Dictionary": "SOURCE_LIFECYCLE",
+    "Rule refs": "CQA-002",
+    "Value": "SOURCE_SPECIFIC",
+    "Определение": "Определяется частной карточкой"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "Registry",
+    "Value": "PENDING",
+    "Определение": "Создан, но ещё не начался"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "Registry",
+    "Value": "ACTIVE",
+    "Определение": "Активен"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "SYM-169",
+    "Value": "SUSPENDED",
+    "Определение": "Временно приостановлен без накопления"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "Registry",
+    "Value": "EXPIRED",
+    "Определение": "Завершён сроком"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "Registry",
+    "Value": "REMOVED",
+    "Определение": "Снят валидным источником"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "AQA-045",
+    "Value": "REPLACED",
+    "Определение": "Завершён изменением версии/повтором"
+  },
+  {
+    "Dictionary": "EFFECT_STATUS",
+    "Rule refs": "CORE-228",
+    "Value": "BLOCKED",
+    "Определение": "Не применён ответом/несовместимостью"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "Registry",
+    "Value": "EXPIRY",
+    "Определение": "Истёк срок"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "CQA-060",
+    "Value": "CURE",
+    "Определение": "Излечение болезни"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "CQA-043",
+    "Value": "CLEANSE",
+    "Определение": "Специальное очищение"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "CORE-061",
+    "Value": "DAMAGE",
+    "Определение": "Урон снимает эффект"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "CQA-002",
+    "Value": "SOURCE_INVALID",
+    "Определение": "Источник перестал поддерживать"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "AQA-045",
+    "Value": "REPLACED",
+    "Определение": "Заменён новым пакетом/версией"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "AQA-028",
+    "Value": "GM",
+    "Определение": "Структурированная команда мастера"
+  },
+  {
+    "Dictionary": "REMOVAL_REASON",
+    "Rule refs": "AQA-024",
+    "Value": "DEATH",
+    "Определение": "Завершение временного эффекта или контроля при окончательной смерти"
+  },
+  {
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Rule refs": "CORE-228",
+    "Value": "ORDINARY",
+    "Определение": "Обычный яд"
+  },
+  {
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Rule refs": "CORE-228",
+    "Value": "NATURAL",
+    "Определение": "Природный яд"
+  },
+  {
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Rule refs": "CORE-228",
+    "Value": "ARTIFICIAL",
+    "Определение": "Искусственный яд"
+  },
+  {
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Rule refs": "CORE-228",
+    "Value": "SYMBIOTIC",
+    "Определение": "Симбиотический яд"
+  },
+  {
+    "Dictionary": "POISON_SOURCE_KIND",
+    "Rule refs": "CORE-228",
+    "Value": "CANONICAL",
+    "Определение": "Канонический яд существа"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "CORE-101",
+    "Value": "TURN",
+    "Определение": "Личный ход"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "CORE-101",
+    "Value": "ROUND",
+    "Определение": "Боевой круг"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "Q-CORE-063",
+    "Value": "MINUTE",
+    "Определение": "Минута мира"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "CORE-061–062",
+    "Value": "HOUR",
+    "Определение": "Час"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "MON-080",
+    "Value": "DAY",
+    "Определение": "Полные сутки"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "CORE-086",
+    "Value": "COMBAT",
+    "Определение": "До конца боя"
+  },
+  {
+    "Dictionary": "DURATION_UNIT",
+    "Rule refs": "Source-specific",
+    "Value": "CONDITION",
+    "Определение": "До выполнения условия"
+  },
+  {
+    "Dictionary": "AUTOMATION_STATUS",
+    "Rule refs": "Registry",
+    "Value": "AUTOMATED",
+    "Определение": "Семантика достаточна для исполнения"
+  },
+  {
+    "Dictionary": "AUTOMATION_STATUS",
+    "Rule refs": "Registry",
+    "Value": "PARTIAL",
+    "Определение": "Исполняется только определённая ветвь"
+  },
+  {
+    "Dictionary": "AUTOMATION_STATUS",
+    "Rule refs": "Registry",
+    "Value": "TRACE_ONLY",
+    "Определение": "Хранить/показывать, не исполнять"
+  },
+  {
+    "Dictionary": "AUTOMATION_STATUS",
+    "Rule refs": "Registry",
+    "Value": "BLOCKED",
+    "Определение": "Требуется авторское решение"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "GAP-004",
+    "Value": "BINARY_AGGREGATE_KEY",
+    "Определение": "Один механический эффект на EffectTypeID+variantKey+affectedRegion; источники/таймеры независимы"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "GAP-011",
+    "Value": "ONE_CONSUMABLE_PER_SURFACE",
+    "Определение": "Одно расходуемое покрытие на поражающую поверхность"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "GAP-002",
+    "Value": "PER_WOUND_INSTANCE",
+    "Определение": "Отдельный экземпляр на каждую рану"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "GAP-014",
+    "Value": "SOURCE_TARGET_COUNTER",
+    "Определение": "Счётчик принадлежит паре sourceId+targetId"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "GAP-012–013",
+    "Value": "MAX_PENALTY_SOURCES_INDEPENDENT",
+    "Определение": "Действует наибольший штраф, источники снимаются раздельно"
+  },
+  {
+    "Dictionary": "DEATH_DISPOSITION",
+    "Rule refs": "GAP-006",
+    "Value": "TERMINATE_ON_DEATH",
+    "Определение": "Временные эффекты и контроль завершаются"
+  },
+  {
+    "Dictionary": "DEATH_DISPOSITION",
+    "Rule refs": "GAP-006",
+    "Value": "PRESERVE_ON_CORPSE",
+    "Определение": "Травмы, раны, item state, inventory и symbionts сохраняются"
+  },
+  {
+    "Dictionary": "DEATH_DISPOSITION",
+    "Rule refs": "GAP-006",
+    "Value": "SOURCE_SPECIFIC",
+    "Определение": "Частная карточка явно определяет исключение"
+  },
+  {
+    "Dictionary": "INVENTORY_MODE",
+    "Rule refs": "GAP-011",
+    "Value": "STACKABLE_UNCOATED_PROJECTILES",
+    "Определение": "Обычные снаряды занимают одну ячейку с quantity"
+  },
+  {
+    "Dictionary": "INVENTORY_MODE",
+    "Rule refs": "GAP-011",
+    "Value": "INDIVIDUAL_POISONED_PROJECTILE",
+    "Определение": "Каждый смазанный ядом снаряд хранится отдельным предметом"
+  },
+  {
+    "Dictionary": "INVENTORY_MODE",
+    "Rule refs": "GAP-011",
+    "Value": "INDIVIDUAL_ITEM_COATING",
+    "Определение": "Покрытие отдельного экземпляра оружия/предмета"
+  },
+  {
+    "Dictionary": "EFFECT_TAG",
+    "Rule refs": "GAP-008",
+    "Value": "CONTROL",
+    "Определение": "Единственный машинный признак эффекта контроля; карта закрыта на версию"
+  },
+  {
+    "Dictionary": "WOUND_CREATION",
+    "Rule refs": "GAP-001",
+    "Value": "SOURCE_CREATES_WOUND_OR_GM",
+    "Определение": "Формальная рана создаётся только явным признаком источника или мастером"
+  },
+  {
+    "Dictionary": "ROUNDING_POLICY",
+    "Rule refs": "GAP-018",
+    "Value": "ROUND_NEAREST_HALF_UP_MIN_ONE",
+    "Определение": "Ближайшее целое; 0,5 вверх; положительный минимум 1"
+  },
+  {
+    "Dictionary": "AUTOMATION_STATUS",
+    "Rule refs": "GAP-030; Q-CORE-045",
+    "Value": "NOT_MODELED",
+    "Определение": "Состояние или ветвь правила не создаётся, не хранится и не отображается приложением"
+  },
+  {
+    "Dictionary": "STACK_POLICY",
+    "Rule refs": "COMB-031",
+    "Value": "MAX_PENALTY_SAME_REGION_RESTRICTIONS_UNION",
+    "Определение": "Для одной зоны действует наиболее строгий числовой штраф; самостоятельные ограничения и сроки сохраняются"
+  }
+]

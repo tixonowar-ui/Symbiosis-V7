@@ -10,6 +10,7 @@
 import { describeFailure, verify } from '../checksums/manifest.js';
 import { importAtlas } from './atlas.js';
 import { importCharacter } from './character.js';
+import { importEffects } from './effects.js';
 import { importItems } from './items.js';
 import { ImportError } from './lib/fail.js';
 import { importRules } from './rules.js';
@@ -49,12 +50,28 @@ async function main(): Promise<number> {
       `(${(items.mediaBytes / 1024).toFixed(0)} KiB → generated/media/items)`,
   );
 
+  const effects = await importEffects(rules.catalogue);
+  console.log(
+    `effects:   ${String(effects.effectTypes)} effect types ` +
+      `(${String(effects.modeled)} modeled, ${String(effects.notModeled)} not)`,
+  );
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
-  const files = [...rules.files, ...character.files, ...items.files, ...atlas.files];
+  const files = [
+    ...rules.files,
+    ...character.files,
+    ...items.files,
+    ...effects.files,
+    ...atlas.files,
+  ];
   const bytes =
-    rules.bytesWritten + character.bytesWritten + items.bytesWritten + atlas.bytesWritten;
+    rules.bytesWritten +
+    character.bytesWritten +
+    items.bytesWritten +
+    effects.bytesWritten +
+    atlas.bytesWritten;
   const mib = (bytes / 1024 / 1024).toFixed(2);
   console.log(`written:   ${mib} MiB across ${String(files.length)} file(s) + media`);
   return 0;

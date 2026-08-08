@@ -1,0 +1,242 @@
+[
+  {
+    "FamilyCode": "FAM-LIFECYCLE",
+    "ID count": 1,
+    "Rule refs": "CORE-152–156; CORE-182; CORE-222",
+    "State bucket": "actorFlags / currentEffects",
+    "Композиция по умолчанию": "TERMINAL_OR_SOURCE_SPECIFIC",
+    "Название": "Жизненный цикл",
+    "Область": "Тяжёлое ранение, таймер смерти, окончательная смерть",
+    "Стадия ответа": "AFTER_DAMAGE_RECALC"
+  },
+  {
+    "FamilyCode": "FAM-CONSCIOUSNESS",
+    "ID count": 1,
+    "Rule refs": "CORE-061; CORE-103; MON-075",
+    "State bucket": "actorFlags / currentEffects",
+    "Композиция по умолчанию": "RESTRICTIONS_UNION",
+    "Название": "Сознание",
+    "Область": "Бессознательность и сон",
+    "Стадия ответа": "AFTER_EACH_CONSEQUENCE"
+  },
+  {
+    "FamilyCode": "FAM-PHYSICAL_CONTROL",
+    "ID count": 1,
+    "Rule refs": "CORE-103; CORE-138; CORE-141; CORE-143–144",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "RESTRICTIONS_UNION; MAX_ACTION_PENALTY; SOURCES_INDEPENDENT",
+    "Название": "Физический контроль",
+    "Область": "Паралич, оглушение, захват, удержание, опутывание, кокон",
+    "Стадия ответа": "BEFORE_APPLY_CONTROL"
+  },
+  {
+    "FamilyCode": "FAM-MENTAL_CONTROL",
+    "ID count": 1,
+    "Rule refs": "CORE-178; CORE-181; CORE-221; MON-038",
+    "State bucket": "currentEffects / controlLease",
+    "Композиция по умолчанию": "ONE_EFFECTIVE_CONTROLLER_BY_PRIORITY",
+    "Название": "Ментальный контроль",
+    "Область": "Принуждение, бегство, внешний контроллер",
+    "Стадия ответа": "BEFORE_APPLY_CONTROL"
+  },
+  {
+    "FamilyCode": "FAM-MOBILITY_POSITION",
+    "ID count": 1,
+    "Rule refs": "CORE-138–144; MON-165",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "RESTRICTIONS_UNION",
+    "Название": "Положение и мобильность",
+    "Область": "Сбит с ног, выгодная позиция, вынужденное перемещение",
+    "Стадия ответа": "COMMAND_FILTER"
+  },
+  {
+    "FamilyCode": "FAM-ACTION_ECONOMY",
+    "ID count": 1,
+    "Rule refs": "CORE-031; CORE-043–048; CORE-070; MON-150; MON-160",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "SOURCE_SPECIFIC; MIN_ZERO",
+    "Название": "Действия и серия",
+    "Область": "Бонусы и штрафы действий, пропуск хода, следующий ход/серия",
+    "Стадия ответа": "TURN_START_OR_CONSUME"
+  },
+  {
+    "FamilyCode": "FAM-TRAUMA",
+    "ID count": 1,
+    "Rule refs": "CORE-117; CORE-119–121",
+    "State bucket": "currentTraumas / derivedProjection",
+    "Композиция по умолчанию": "SAME_ZONE_ADDITIVE; DIFFERENT_ZONE_INDEPENDENT",
+    "Название": "Травмы",
+    "Область": "Зональные травмы и отключение конечности",
+    "Стадия ответа": "AFTER_ACTUAL_DAMAGE"
+  },
+  {
+    "FamilyCode": "FAM-WOUND_BLEEDING",
+    "ID count": 1,
+    "Rule refs": "CORE-059; CORE-063",
+    "State bucket": "currentWounds",
+    "Композиция по умолчанию": "PER_EVENT_PER_REGION; BLEEDING_PER_WOUND",
+    "Название": "Раны и кровотечения",
+    "Область": "Формализованная рана, кровотечение и профилактика через рану",
+    "Стадия ответа": "SOURCE_SPECIFIC"
+  },
+  {
+    "FamilyCode": "FAM-DISEASE",
+    "ID count": 1,
+    "Rule refs": "MON-075–087; CQA-060",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "SAME_DISEASE_NO_STACK; DIFFERENT_DISEASE_ADD",
+    "Название": "Болезни",
+    "Область": "Назначенные мастером заболевания и их модификаторы",
+    "Стадия ответа": "ASSIGN_REMOVE_RECALC"
+  },
+  {
+    "FamilyCode": "FAM-POISON",
+    "ID count": 1,
+    "Rule refs": "CORE-109; CORE-228; SYM-039; SYM-042; SYM-045",
+    "State bucket": "currentEffects / activeCoatings",
+    "Композиция по умолчанию": "PROFILE_SPECIFIC",
+    "Название": "Яды",
+    "Область": "POISON payload, урон, дебафф, счётчик и зональный паралич",
+    "Стадия ответа": "IMMUNITY_BEFORE_ROLL"
+  },
+  {
+    "FamilyCode": "FAM-FIRE",
+    "ID count": 1,
+    "Rule refs": "CORE-112; CORE-114",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "ONE_BINARY_STATE; MAX_REMAINING_DURATION",
+    "Название": "Огонь и горение",
+    "Область": "Бинарное горение персонажа и огненные ответы",
+    "Стадия ответа": "BEFORE_APPLY_BURN"
+  },
+  {
+    "FamilyCode": "FAM-PERIODIC_DAMAGE",
+    "ID count": 1,
+    "Rule refs": "CORE-101; AQA-024",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "PER_INSTANCE; ORDER_BY_CREATED_AT_UUID",
+    "Название": "Периодический урон",
+    "Область": "Автономные и поддерживаемые тики урона",
+    "Стадия ответа": "TIME_PHASE_1"
+  },
+  {
+    "FamilyCode": "FAM-PERIODIC_HEAL",
+    "ID count": 1,
+    "Rule refs": "CORE-071; AQA-024",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "PER_INSTANCE; SOURCE_STACK_RULE",
+    "Название": "Периодическое лечение",
+    "Область": "Повторяющееся восстановление HP/ОЭ",
+    "Стадия ответа": "TIME_PHASE_3"
+  },
+  {
+    "FamilyCode": "FAM-STAT_MODIFIER",
+    "ID count": 1,
+    "Rule refs": "CORE-079–080",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "CORE-079_PIPELINE; CORE-080_SAME_NAME",
+    "Название": "Модификаторы характеристик",
+    "Область": "Временные ±, ×/÷, exact/min/max",
+    "Стадия ответа": "RECALC"
+  },
+  {
+    "FamilyCode": "FAM-CHECK_MODIFIER",
+    "ID count": 1,
+    "Rule refs": "CORE-059; CORE-067–069; CORE-072",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "SOURCE_SPECIFIC; CONSUME_ON_MATCH",
+    "Название": "Модификаторы проверок",
+    "Область": "Временный, следующий или условный бонус/штраф проверки",
+    "Стадия ответа": "CHECK_BUILD"
+  },
+  {
+    "FamilyCode": "FAM-SENSE_VISIBILITY",
+    "ID count": 1,
+    "Rule refs": "CORE-066; SYM-124; SYM-127; SYM-184",
+    "State bucket": "currentEffects",
+    "Композиция по умолчанию": "PROFILE_SPECIFIC; CAMOUFLAGE_STRONGEST",
+    "Название": "Чувства и видимость",
+    "Область": "Ночное зрение, маскировка и раскрытие; слепота исключена из модели приложения",
+    "Стадия ответа": "TARGETING_OR_DETECTION"
+  },
+  {
+    "FamilyCode": "FAM-FORM_MODE",
+    "ID count": 1,
+    "Rule refs": "SYM-091; SYM-114; SYM-169",
+    "State bucket": "currentEffects / initialRuntimeState",
+    "Композиция по умолчанию": "SOURCE_SPECIFIC_COMPATIBILITY",
+    "Название": "Форма и режим",
+    "Область": "Полёт, стойка, статуя и иные поддерживаемые формы",
+    "Стадия ответа": "COMMAND_FILTER"
+  },
+  {
+    "FamilyCode": "FAM-SYMBIONT_STATE",
+    "ID count": 1,
+    "Rule refs": "CORE-104; SYM-038; SYM-075; SYM-181",
+    "State bucket": "symbiontInstance / currentEffects",
+    "Композиция по умолчанию": "SPECIES_AND_SOURCE_PRIORITY",
+    "Название": "Состояние симбионта",
+    "Область": "Отключение, подавление, выбранный режим",
+    "Стадия ответа": "BEFORE_ABILITY_OR_PASSIVE"
+  },
+  {
+    "FamilyCode": "FAM-IMMUNITY_RESISTANCE",
+    "ID count": 1,
+    "Rule refs": "CORE-072; CORE-228; CQA-043; CQA-050",
+    "State bucket": "responseProfiles / currentEffects",
+    "Композиция по умолчанию": "MOST_SPECIFIC_RESPONSE_FIRST",
+    "Название": "Иммунитеты и сопротивления",
+    "Область": "До-бросковый иммунитет, числовая защита, очистка контроля",
+    "Стадия ответа": "PRE_APPLICATION"
+  },
+  {
+    "FamilyCode": "FAM-INFECTION",
+    "ID count": 1,
+    "Rule refs": "SYM-003–005; MON-042–063",
+    "State bucket": "currentEffects / source graph",
+    "Композиция по умолчанию": "SOURCE_SPECIFIC",
+    "Название": "Заражение",
+    "Область": "Связи заражения симбионтом и инфекционные источники",
+    "Стадия ответа": "APPLICATION_OR_GM_ASSIGN"
+  },
+  {
+    "FamilyCode": "FAM-PREPARED_EFFECT",
+    "ID count": 1,
+    "Rule refs": "CORE-048; SYM-183; MON-114",
+    "State bucket": "activeCoatings / currentEffects / source object",
+    "Композиция по умолчанию": "ONE_CONSUMABLE_COATING_PER_SURFACE; POISONED_PROJECTILES_INDIVIDUAL",
+    "Название": "Подготовленные эффекты",
+    "Область": "Покрытия, реакции, детонации и заряды",
+    "Стадия ответа": "CONSUME_OR_TRIGGER"
+  },
+  {
+    "FamilyCode": "FAM-SOURCE_LINK",
+    "ID count": 1,
+    "Rule refs": "CQA-002; AQ2-020",
+    "State bucket": "currentEffects / relation graph",
+    "Композиция по умолчанию": "SOURCE_MAINTAINED_OR_AUTONOMOUS",
+    "Название": "Связи с источником",
+    "Область": "Аура, трос, захват, поддерживаемый канал",
+    "Стадия ответа": "SOURCE_LIFECYCLE"
+  },
+  {
+    "FamilyCode": "FAM-ITEM_STATE",
+    "ID count": 1,
+    "Rule refs": "CORE-053; MON-100; MON-129",
+    "State bucket": "itemInstance / currentEffects",
+    "Композиция по умолчанию": "ITEM_AND_SOURCE_SPECIFIC",
+    "Название": "Состояние предмета",
+    "Область": "Герметичность, коррозионный счётчик, застрявшее оружие",
+    "Стадия ответа": "EQUIPMENT_OR_TICK"
+  },
+  {
+    "FamilyCode": "FAM-NARRATIVE",
+    "ID count": 1,
+    "Rule refs": "AQ2-009; AQA-045",
+    "State bucket": "narrativeMarkers",
+    "Композиция по умолчанию": "NO_MECHANICAL_EFFECT",
+    "Название": "Нарративная пометка",
+    "Область": "Текст без механического изменения",
+    "Стадия ответа": "NONE"
+  }
+]

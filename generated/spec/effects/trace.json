@@ -1,0 +1,254 @@
+[
+  {
+    "Rule / contract": "AQA-009",
+    "Status": "PASS",
+    "TraceID": "TRACE-001",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B372:AH372",
+    "Нормализованная семантика": "Нет ран, травм, кровотечения, горения, болезней, ядов и временных эффектов",
+    "Область": "Initial clean state"
+  },
+  {
+    "Rule / contract": "CORE-079",
+    "Status": "PASS",
+    "TraceID": "TRACE-002",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B41:AH41",
+    "Нормализованная семантика": "Постоянное → временное ± → ×/÷ → exact/min/max",
+    "Область": "Modifier pipeline"
+  },
+  {
+    "Rule / contract": "CORE-080",
+    "Status": "PASS",
+    "TraceID": "TRACE-003",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B482:AH482",
+    "Нормализованная семантика": "Одноимённые числовые: сильнейший, таймеры независимы",
+    "Область": "Effect stacking"
+  },
+  {
+    "Rule / contract": "CORE-101",
+    "Status": "PASS",
+    "TraceID": "TRACE-004",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B489:AH489",
+    "Нормализованная семантика": "Общие длительности и периодика",
+    "Область": "Timers"
+  },
+  {
+    "Rule / contract": "AQA-024",
+    "Status": "PASS",
+    "TraceID": "TRACE-005",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B387:AH387",
+    "Нормализованная семантика": "Стабильные фазы и пересчёт после каждого тика",
+    "Область": "Transaction order"
+  },
+  {
+    "Rule / contract": "CQA-002",
+    "Status": "PASS",
+    "TraceID": "TRACE-006",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B305:AH305",
+    "Нормализованная семантика": "Поддерживаемый vs автономный эффект",
+    "Область": "Source lifecycle"
+  },
+  {
+    "Rule / contract": "CORE-103",
+    "Status": "PASS",
+    "TraceID": "TRACE-007",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B57:AH57",
+    "Нормализованная семантика": "Сознание, паралич, оглушение, пропуск",
+    "Область": "Capabilities"
+  },
+  {
+    "Rule / contract": "CORE-104",
+    "Status": "PASS",
+    "TraceID": "TRACE-008",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B58:AH58",
+    "Нормализованная семантика": "Механические эффекты и XP выключены",
+    "Область": "Symbiont disabled"
+  },
+  {
+    "Rule / contract": "CORE-117",
+    "Status": "PASS",
+    "TraceID": "TRACE-009",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B65:AH65",
+    "Нормализованная семантика": "Строгое сравнение R20+Z < actualDamage",
+    "Область": "Trauma trigger"
+  },
+  {
+    "Rule / contract": "CORE-119",
+    "Status": "PASS",
+    "TraceID": "TRACE-010",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B496:AH496",
+    "Нормализованная семантика": "Сумма по конечности; disabled >6",
+    "Область": "Limb trauma"
+  },
+  {
+    "Rule / contract": "CORE-121",
+    "Status": "PASS",
+    "TraceID": "TRACE-011",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B67:AH67",
+    "Нормализованная семантика": "Однократный extra HP, без рекурсии",
+    "Область": "Torso trauma"
+  },
+  {
+    "Rule / contract": "CORE-112",
+    "Status": "PASS",
+    "TraceID": "TRACE-012",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B493:AH493",
+    "Нормализованная семантика": "Бинарный статус и max duration",
+    "Область": "Burning"
+  },
+  {
+    "Rule / contract": "CORE-152–156",
+    "Status": "PASS",
+    "TraceID": "TRACE-013",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B514:AH516; B82:AH83",
+    "Нормализованная семантика": "Вход, таймер, добивание, реанимация",
+    "Область": "Severe wound"
+  },
+  {
+    "Rule / contract": "CORE-182",
+    "Status": "PASS",
+    "TraceID": "TRACE-014",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B687:AH687",
+    "Нормализованная семантика": "Первый применимый источник",
+    "Область": "Protection priority"
+  },
+  {
+    "Rule / contract": "CORE-222",
+    "Status": "PASS",
+    "TraceID": "TRACE-015",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B728:AH728",
+    "Нормализованная семантика": "Стандартный monster: severe + unconscious",
+    "Область": "Monster severe wound"
+  },
+  {
+    "Rule / contract": "CORE-228",
+    "Status": "PASS",
+    "TraceID": "TRACE-016",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B734:AH734",
+    "Нормализованная семантика": "POISON и IMMUNE_BEFORE_ROLL",
+    "Область": "Poison typing"
+  },
+  {
+    "Rule / contract": "MON-076–085",
+    "Status": "PASS",
+    "TraceID": "TRACE-017",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B230:AH239",
+    "Нормализованная семантика": "Каталог и сложение",
+    "Область": "Diseases"
+  },
+  {
+    "Rule / contract": "CQA-060",
+    "Status": "PASS",
+    "TraceID": "TRACE-018",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B363:AH363",
+    "Нормализованная семантика": "Назначение/снятие мастером",
+    "Область": "Manual disease"
+  },
+  {
+    "Rule / contract": "AQA-045",
+    "Status": "PASS",
+    "TraceID": "TRACE-019",
+    "Артефакт": "Rules v1.6",
+    "Локатор": "Реестр правил!B686:AH686",
+    "Нормализованная семантика": "Версионирование без отката",
+    "Область": "Effect editing"
+  },
+  {
+    "Rule / contract": "currentEffects/currentTraumas/currentWounds",
+    "Status": "PASS",
+    "TraceID": "TRACE-020",
+    "Артефакт": "Sentient v1.2",
+    "Локатор": "12_Payload_JSON!C6:C49",
+    "Нормализованная семантика": "44 чистых payload; entry schema отсутствовала",
+    "Область": "Sentient arrays"
+  },
+  {
+    "Rule / contract": "EffectResponse",
+    "Status": "PASS",
+    "TraceID": "TRACE-021",
+    "Артефакт": "Bestiary v1.3",
+    "Локатор": "06B_Ответы_эффектов!A1:H6",
+    "Нормализованная семантика": "5 канонических response rows",
+    "Область": "Bestiary responses"
+  },
+  {
+    "Rule / contract": "CORE-058–072",
+    "Status": "PASS",
+    "TraceID": "TRACE-022",
+    "Артефакт": "Items v1.5",
+    "Локатор": "04_Фармацевтика!A5:J18",
+    "Нормализованная семантика": "14 item profiles",
+    "Область": "Pharmacy"
+  },
+  {
+    "Rule / contract": "activeCoatings",
+    "Status": "PASS",
+    "TraceID": "TRACE-023",
+    "Артефакт": "Items v1.5",
+    "Локатор": "07_Модель_экземпляра!A36:G36",
+    "Нормализованная семантика": "Массив покрытий; взаимодействие открыто",
+    "Область": "Coatings"
+  },
+  {
+    "Rule / contract": "sealed",
+    "Status": "PASS",
+    "TraceID": "TRACE-024",
+    "Артефакт": "Items v1.5",
+    "Локатор": "07_Модель_экземпляра!A33:G33",
+    "Нормализованная семантика": "Герметичность экземпляра предмета",
+    "Область": "Nait seal"
+  },
+  {
+    "Rule / contract": "167 accepted abilities",
+    "Status": "PASS",
+    "TraceID": "TRACE-025",
+    "Артефакт": "Character v1.1",
+    "Локатор": "10_Способности!A6:Q172; 11_Контексты_способностей!A6:Y339",
+    "Нормализованная семантика": "Источник активных, пассивных, поддерживаемых и автономных состояний 23 видов",
+    "Область": "Symbiont abilities"
+  },
+  {
+    "Rule / contract": "initialRuntimeState/stateWrites",
+    "Status": "PASS",
+    "TraceID": "TRACE-026",
+    "Артефакт": "Character v1.1",
+    "Локатор": "14_Контракты_Runtime; 18_Справочники",
+    "Нормализованная семантика": "Обобщённые object/object[] без каталога EffectType/Disease/response",
+    "Область": "Character runtime gap"
+  },
+  {
+    "Rule / contract": "COMB-031",
+    "Status": "PASS",
+    "TraceID": "TRACE-027",
+    "Артефакт": "Effects Registry v1.2",
+    "Локатор": "02_Типы_эффектов; 04_Яды; 05_Травмы_и_раны; 07_Правила_сочетаний; 12_Runtime_контракты",
+    "Нормализованная семантика": "Для травмы и онемения одной конечности действует наиболее строгий числовой штраф; ограничения объединяются, снятие независимо",
+    "Область": "Same-region overlap"
+  },
+  {
+    "Rule / contract": "CORE-143; Q-CORE-045; GAP-030",
+    "Status": "PASS",
+    "TraceID": "TRACE-028",
+    "Артефакт": "Rules v1.6; Q&A v1.1; Effects Registry v1.2",
+    "Локатор": "02_Типы_эффектов; 06_Карта_источников; 13_Операции; 14_Пробелы_и_решения",
+    "Нормализованная семантика": "Слепота, выдавливание глаз и физическая потеря зрения не создают runtime-состояние приложения",
+    "Область": "Application boundary"
+  }
+]

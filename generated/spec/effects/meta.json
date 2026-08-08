@@ -1,0 +1,13 @@
+{
+  "effectTypes": 67,
+  "families": 24,
+  "gateAllPass": true,
+  "modeledEffectTypes": 66,
+  "notModeledEffectTypes": 1,
+  "registryVersion": "v1.2",
+  "skippedSheets": [
+    "00_Паспорт"
+  ],
+  "source": "artifacts/registries/Symbiosis_V7_Effects_and_Diseases_Registry_v1.2.xlsx",
+  "sourceMapRows": 306
+}

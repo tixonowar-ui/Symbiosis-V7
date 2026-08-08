@@ -1,0 +1,227 @@
+[
+  {
+    "Failure policy": "REJECT_BLOCKED_OR_NOT_MODELED",
+    "Idempotency / audit": "IDEMPOTENCY_KEY",
+    "Inputs": "EffectDefinition + source payload + target",
+    "OperationID": "APPLY_EFFECT",
+    "Rule refs": "CORE-080; CORE-228",
+    "State writes": "currentEffects/source bucket; audit",
+    "Алгоритм": "Validate response → anatomy → known EffectTypeID; reject BLOCKED/NOT_MODELED; then aggregateKey/stack policy → create or aggregate"
+  },
+  {
+    "Failure policy": "REJECT_TERMINAL_DEAD_CLEAR",
+    "Idempotency / audit": "effectInstanceId+revision",
+    "Inputs": "effectInstanceId + authorized reason",
+    "OperationID": "REMOVE_EFFECT",
+    "Rule refs": "AQA-028; AQA-045",
+    "State writes": "status=REMOVED; recalc",
+    "Алгоритм": "Validate specific removal permission"
+  },
+  {
+    "Failure policy": "NO_ROLLBACK",
+    "Idempotency / audit": "commandId",
+    "Inputs": "old instance + new payload",
+    "OperationID": "REPLACE_EFFECT",
+    "Rule refs": "AQA-045",
+    "State writes": "old=REPLACED; new revision",
+    "Алгоритм": "End old version and create new atomically"
+  },
+  {
+    "Failure policy": "REJECT_IF_STACK_POLICY_DIFFERS",
+    "Idempotency / audit": "commandId",
+    "Inputs": "effectInstanceId + new duration",
+    "OperationID": "REFRESH_EFFECT",
+    "Rule refs": "CORE-058; AQA-045",
+    "State writes": "Update through replacement/versioning",
+    "Алгоритм": "Only if source profile says refresh"
+  },
+  {
+    "Failure policy": "ROLLBACK_TRANSACTION_ON_ERROR",
+    "Idempotency / audit": "timeAdvanceId",
+    "Inputs": "target timestamp / combat boundary",
+    "OperationID": "ADVANCE_TIME",
+    "Rule refs": "AQA-024",
+    "State writes": "ticks, recalc, recovery, expiry, GM requests",
+    "Алгоритм": "Build stable event snapshot and execute phases"
+  },
+  {
+    "Failure policy": "SKIP_IF_DEAD_OR_INAPPLICABLE",
+    "Idempotency / audit": "effectInstanceId+tickAt",
+    "Inputs": "effectInstanceId + tick occurrence",
+    "OperationID": "RESOLVE_EFFECT_TICK",
+    "Rule refs": "AQA-024",
+    "State writes": "resource/state delta + nextTick",
+    "Алгоритм": "Revalidate active/applicable; execute exactly once"
+  },
+  {
+    "Failure policy": "BLOCK_UNKNOWN_DISEASE",
+    "Idempotency / audit": "actorId+diseaseId+commandId",
+    "Inputs": "actorId + diseaseId + GM authority",
+    "OperationID": "ASSIGN_DISEASE",
+    "Rule refs": "CQA-060; MON-085",
+    "State writes": "EFF-DISEASE-INSTANCE",
+    "Алгоритм": "No automatic disease selection; apply if not same active disease"
+  },
+  {
+    "Failure policy": "NO_AUTOMATIC_TREATMENT",
+    "Idempotency / audit": "commandId",
+    "Inputs": "actorId + disease instance + GM authority",
+    "OperationID": "REMOVE_DISEASE",
+    "Rule refs": "CQA-060",
+    "State writes": "status=REMOVED",
+    "Алгоритм": "Remove named disease and recalc"
+  },
+  {
+    "Failure policy": "DROP_POISON_PAYLOAD_ON_ABSOLUTE_IMMUNITY",
+    "Idempotency / audit": "originEventId+profile",
+    "Inputs": "poison profile + delivery + source + target",
+    "OperationID": "APPLY_POISON",
+    "Rule refs": "CORE-228",
+    "State writes": "PoisonInstance/counter/damage",
+    "Алгоритм": "Run IMMUNE_BEFORE_ROLL; then profile algorithm"
+  },
+  {
+    "Failure policy": "REJECT_MISSING_DAMAGE_PER_TICK",
+    "Idempotency / audit": "originEventId",
+    "Inputs": "target + duration + damagePerTick + source",
+    "OperationID": "APPLY_BURNING",
+    "Rule refs": "CORE-112",
+    "State writes": "EFF-FIRE-BURNING",
+    "Алгоритм": "Create binary status or set max duration and max damagePerTick; no immediate second tick"
+  },
+  {
+    "Failure policy": "SOURCE_SPECIFIC",
+    "Idempotency / audit": "commandId",
+    "Inputs": "target + source/GM command",
+    "OperationID": "EXTINGUISH_BURNING",
+    "Rule refs": "CORE-112; CORE-114",
+    "State writes": "remove burn",
+    "Алгоритм": "Validate explicit extinguisher or GM scene resolution"
+  },
+  {
+    "Failure policy": "NO_RECURSIVE_TRAUMA",
+    "Idempotency / audit": "damageEventId+zone",
+    "Inputs": "damage event + anatomy zone",
+    "OperationID": "APPLY_TRAUMA",
+    "Rule refs": "CORE-117–121",
+    "State writes": "currentTraumas; derived limb state",
+    "Алгоритм": "Check R20+Z < actualDamage; apply source zone algorithm"
+  },
+  {
+    "Failure policy": "BLOCK_EQUIPMENT_ONLY_OR_PASSIVE_RECOVERY",
+    "Idempotency / audit": "commandId",
+    "Inputs": "trauma instance + explicit healing source",
+    "OperationID": "REMOVE_TRAUMA",
+    "Rule refs": "SYM-027; SYM-029",
+    "State writes": "currentTraumas",
+    "Алгоритм": "Только явная способность, описанная процедура или команда мастера"
+  },
+  {
+    "Failure policy": "REJECT_IMPLICIT_HP_LOSS_AS_WOUND",
+    "Idempotency / audit": "originEventId+regionId",
+    "Inputs": "wound payload + source trait or GM authority",
+    "OperationID": "CREATE_WOUND",
+    "Rule refs": "CORE-059; CORE-063",
+    "State writes": "currentWounds",
+    "Алгоритм": "Require CREATES_WOUND or GM; create one wound per event with regionId"
+  },
+  {
+    "Failure policy": "DO_NOT_INVENT_BLEED_CREATION",
+    "Idempotency / audit": "commandId",
+    "Inputs": "target + CORE-063 item use",
+    "OperationID": "STOP_ALL_BLEEDING",
+    "Rule refs": "CORE-063",
+    "State writes": "currentWounds",
+    "Алгоритм": "Remove all existing bleeding instances"
+  },
+  {
+    "Failure policy": "ONE_RESPONSE_DECISION_PER_STAGE",
+    "Idempotency / audit": "originEventId+response",
+    "Inputs": "incoming family/sourceScope + target profiles",
+    "OperationID": "RESOLVE_EFFECT_RESPONSE",
+    "Rule refs": "CORE-228; CQA-050",
+    "State writes": "allow/modify/block payload",
+    "Алгоритм": "Most specific response; absolute immunity before roll"
+  },
+  {
+    "Failure policy": "ATOMIC",
+    "Idempotency / audit": "stateRevision",
+    "Inputs": "actor state graph",
+    "OperationID": "RECALC_DERIVED_STATE",
+    "Rule refs": "CORE-079; MON-075; CORE-181; CORE-119; MON-169; SYM-045; COMB-031",
+    "State writes": "DerivedStateProjection",
+    "Алгоритм": "Recalculate from surviving sources: per region select the greatest penalty magnitude, union independent restrictions, then apply modifier pipeline and MON-075 consciousness projection"
+  },
+  {
+    "Failure policy": "NO_FREE_TEXT_OR_NOT_MODELED_MECHANICS",
+    "Idempotency / audit": "commandId",
+    "Inputs": "actor + known effectTypeId с automationStatus не BLOCKED/NOT_MODELED + structured fields",
+    "OperationID": "SET_GM_FORMAL_STATE",
+    "Rule refs": "AQ2-009; AQA-028",
+    "State writes": "new effect instance",
+    "Алгоритм": "Validate schema, authority and automation boundary"
+  },
+  {
+    "Failure policy": "NO_RETROACTIVE_ROLLBACK",
+    "Idempotency / audit": "commandId",
+    "Inputs": "effect instance + changed structured fields",
+    "OperationID": "EDIT_GM_EFFECT",
+    "Rule refs": "AQA-045",
+    "State writes": "old replaced; new active",
+    "Алгоритм": "Replace version atomically"
+  },
+  {
+    "Failure policy": "NO_SHARED_MUTABLE_IDS",
+    "Idempotency / audit": "cloneCommandId",
+    "Inputs": "template mutable graph",
+    "OperationID": "CLONE_RUNTIME_STATE",
+    "Rule refs": "Bestiary 09_Контракты",
+    "State writes": "independent effects/cooldowns/captures",
+    "Алгоритм": "Deep clone and generate fresh UUIDs"
+  },
+  {
+    "Failure policy": "DO_NOT_CLEANSE_EXISTING_EFFECTS",
+    "Idempotency / audit": "eventId+itemId",
+    "Inputs": "item instance + qualifying event",
+    "OperationID": "BREAK_NAIT_SEAL",
+    "Rule refs": "CORE-053",
+    "State writes": "item.sealed=false",
+    "Алгоритм": "Set sealed=false and stop future response"
+  },
+  {
+    "Failure policy": "REJECT_MISSING_DAMAGE_PER_TICK",
+    "Idempotency / audit": "originEventId+woundInstanceId",
+    "Inputs": "woundInstanceId + explicit damagePerTick + source",
+    "OperationID": "APPLY_BLEEDING",
+    "Rule refs": "CORE-063; GAP-002",
+    "State writes": "currentWounds; tick schedule",
+    "Алгоритм": "Require explicit value; create one bleeding instance for the wound; schedule end of target turn"
+  },
+  {
+    "Failure policy": "CANCEL_WITHOUT_CONFIRMATION",
+    "Idempotency / audit": "commandId+surfaceKey",
+    "Inputs": "item/projectile + surfaceKey + coating + confirmation",
+    "OperationID": "APPLY_COATING",
+    "Rule refs": "SYM-183; GAP-011",
+    "State writes": "PreparedCoatingInstance; old=REPLACED",
+    "Алгоритм": "One consumable coating per surface; replacement only after confirmation"
+  },
+  {
+    "Failure policy": "REJECT_IN_COMBAT_OR_WITHOUT_GM",
+    "Idempotency / audit": "commandId+itemId",
+    "Inputs": "item instance + GM authority + repair confirmation",
+    "OperationID": "RESTORE_NAIT_SEAL",
+    "Rule refs": "CORE-053; GAP-019",
+    "State writes": "item.sealed=true",
+    "Алгоритм": "Outside combat after narratively confirmed repair or replacement"
+  },
+  {
+    "Failure policy": "NO_RESUME_ON_RESURRECTION",
+    "Idempotency / audit": "deathEventId",
+    "Inputs": "actor state graph",
+    "OperationID": "FINALIZE_DEATH_STATE",
+    "Rule refs": "CQA-001; AQA-024; GAP-006",
+    "State writes": "effect statuses; corpse state",
+    "Алгоритм": "Terminate temporary/control effects; preserve traumas, wounds, item state, inventory and symbionts"
+  }
+]

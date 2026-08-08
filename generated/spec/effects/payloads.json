@@ -1,0 +1,1667 @@
+[
+  {
+    "Canonical JSON": "{\"bucket\":\"actorFlags / currentEffects\",\"defaultComposition\":\"TERMINAL_OR_SOURCE_SPECIFIC\",\"id\":\"FAM-LIFECYCLE\",\"name\":\"Жизненный цикл\",\"refs\":\"CORE-152–156; CORE-182; CORE-222\",\"responseStage\":\"AFTER_DAMAGE_RECALC\",\"scope\":\"Тяжёлое ранение, таймер смерти, окончательная смерть\"}",
+    "EntityID": "FAM-LIFECYCLE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-001",
+    "SHA-256": "87e6730a09779d98290311e9546040f08f7c859b8a929f36b53d81e0211ea1b1",
+    "Status": "PASS",
+    "UTF-8 bytes": 339
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"actorFlags / currentEffects\",\"defaultComposition\":\"RESTRICTIONS_UNION\",\"id\":\"FAM-CONSCIOUSNESS\",\"name\":\"Сознание\",\"refs\":\"CORE-061; CORE-103; MON-075\",\"responseStage\":\"AFTER_EACH_CONSEQUENCE\",\"scope\":\"Бессознательность и сон\"}",
+    "EntityID": "FAM-CONSCIOUSNESS",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-002",
+    "SHA-256": "60513cbd9b72e8570574c9089a94564a3a162143b678b813b56833b1e24f850d",
+    "Status": "PASS",
+    "UTF-8 bytes": 266
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"RESTRICTIONS_UNION; MAX_ACTION_PENALTY; SOURCES_INDEPENDENT\",\"id\":\"FAM-PHYSICAL_CONTROL\",\"name\":\"Физический контроль\",\"refs\":\"CORE-103; CORE-138; CORE-141; CORE-143–144\",\"responseStage\":\"BEFORE_APPLY_CONTROL\",\"scope\":\"Паралич, оглушение, захват, удержание, опутывание, кокон\"}",
+    "EntityID": "FAM-PHYSICAL_CONTROL",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-003",
+    "SHA-256": "e9417a26409b0541bcc779b400d6b8f70e4b5d0673fc302ebde04b2f5f47ec12",
+    "Status": "PASS",
+    "UTF-8 bytes": 391
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects / controlLease\",\"defaultComposition\":\"ONE_EFFECTIVE_CONTROLLER_BY_PRIORITY\",\"id\":\"FAM-MENTAL_CONTROL\",\"name\":\"Ментальный контроль\",\"refs\":\"CORE-178; CORE-181; CORE-221; MON-038\",\"responseStage\":\"BEFORE_APPLY_CONTROL\",\"scope\":\"Принуждение, бегство, внешний контроллер\"}",
+    "EntityID": "FAM-MENTAL_CONTROL",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-004",
+    "SHA-256": "3a6eb4beda668d7ab33e68a0d04a573023c62f8bab47e7e67b197fa05615205a",
+    "Status": "PASS",
+    "UTF-8 bytes": 347
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"RESTRICTIONS_UNION\",\"id\":\"FAM-MOBILITY_POSITION\",\"name\":\"Положение и мобильность\",\"refs\":\"CORE-138–144; MON-165\",\"responseStage\":\"COMMAND_FILTER\",\"scope\":\"Сбит с ног, выгодная позиция, вынужденное перемещение\"}",
+    "EntityID": "FAM-MOBILITY_POSITION",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-005",
+    "SHA-256": "89ebb97e76ce0bb2134fafc5deb2263bc5e618c98e1b0d0ac4332cea75ca6a78",
+    "Status": "PASS",
+    "UTF-8 bytes": 327
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"SOURCE_SPECIFIC; MIN_ZERO\",\"id\":\"FAM-ACTION_ECONOMY\",\"name\":\"Действия и серия\",\"refs\":\"CORE-031; CORE-043–048; CORE-070; MON-150; MON-160\",\"responseStage\":\"TURN_START_OR_CONSUME\",\"scope\":\"Бонусы и штрафы действий, пропуск хода, следующий ход/серия\"}",
+    "EntityID": "FAM-ACTION_ECONOMY",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-006",
+    "SHA-256": "c63e28643d89b8a39e54895b9e482f343765ab253e34ad118b46df510ca46807",
+    "Status": "PASS",
+    "UTF-8 bytes": 363
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentTraumas / derivedProjection\",\"defaultComposition\":\"SAME_ZONE_ADDITIVE; DIFFERENT_ZONE_INDEPENDENT\",\"id\":\"FAM-TRAUMA\",\"name\":\"Травмы\",\"refs\":\"CORE-117; CORE-119–121\",\"responseStage\":\"AFTER_ACTUAL_DAMAGE\",\"scope\":\"Зональные травмы и отключение конечности\"}",
+    "EntityID": "FAM-TRAUMA",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-007",
+    "SHA-256": "3aa619f12a18b440af00273921ca88d6a27d301ee1b436556b165ec1a7fe3556",
+    "Status": "PASS",
+    "UTF-8 bytes": 316
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentWounds\",\"defaultComposition\":\"PER_EVENT_PER_REGION; BLEEDING_PER_WOUND\",\"id\":\"FAM-WOUND_BLEEDING\",\"name\":\"Раны и кровотечения\",\"refs\":\"CORE-059; CORE-063\",\"responseStage\":\"SOURCE_SPECIFIC\",\"scope\":\"Формализованная рана, кровотечение и профилактика через рану\"}",
+    "EntityID": "FAM-WOUND_BLEEDING",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-008",
+    "SHA-256": "add69ea3de0cba1c434c3f74b0f4da4eea0314e7ce888157f35dc5ff6878155a",
+    "Status": "PASS",
+    "UTF-8 bytes": 348
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"SAME_DISEASE_NO_STACK; DIFFERENT_DISEASE_ADD\",\"id\":\"FAM-DISEASE\",\"name\":\"Болезни\",\"refs\":\"MON-075–087; CQA-060\",\"responseStage\":\"ASSIGN_REMOVE_RECALC\",\"scope\":\"Назначенные мастером заболевания и их модификаторы\"}",
+    "EntityID": "FAM-DISEASE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-009",
+    "SHA-256": "a8ff8d9f9f7b4319da5e9960479076c8fd2de00ad2ea8170f9152ea71bcf7af3",
+    "Status": "PASS",
+    "UTF-8 bytes": 315
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects / activeCoatings\",\"defaultComposition\":\"PROFILE_SPECIFIC\",\"id\":\"FAM-POISON\",\"name\":\"Яды\",\"refs\":\"CORE-109; CORE-228; SYM-039; SYM-042; SYM-045\",\"responseStage\":\"IMMUNITY_BEFORE_ROLL\",\"scope\":\"POISON payload, урон, дебафф, счётчик и зональный паралич\"}",
+    "EntityID": "FAM-POISON",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-010",
+    "SHA-256": "6adde4468a9ac553519c6d283d0230f0a0c0a7dc3902ebd4e5ac6c411546676b",
+    "Status": "PASS",
+    "UTF-8 bytes": 314
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"ONE_BINARY_STATE; MAX_REMAINING_DURATION\",\"id\":\"FAM-FIRE\",\"name\":\"Огонь и горение\",\"refs\":\"CORE-112; CORE-114\",\"responseStage\":\"BEFORE_APPLY_BURN\",\"scope\":\"Бинарное горение персонажа и огненные ответы\"}",
+    "EntityID": "FAM-FIRE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-011",
+    "SHA-256": "c8a688f50669286e22b21bda17f50bf2117600cef5ff6d33144c410484b9f9e4",
+    "Status": "PASS",
+    "UTF-8 bytes": 303
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"PER_INSTANCE; ORDER_BY_CREATED_AT_UUID\",\"id\":\"FAM-PERIODIC_DAMAGE\",\"name\":\"Периодический урон\",\"refs\":\"CORE-101; AQA-024\",\"responseStage\":\"TIME_PHASE_1\",\"scope\":\"Автономные и поддерживаемые тики урона\"}",
+    "EntityID": "FAM-PERIODIC_DAMAGE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-012",
+    "SHA-256": "343be1070d0f798b908f25641847920eb31fd458f9aa0eebb7d7f09b4abda79b",
+    "Status": "PASS",
+    "UTF-8 bytes": 302
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"PER_INSTANCE; SOURCE_STACK_RULE\",\"id\":\"FAM-PERIODIC_HEAL\",\"name\":\"Периодическое лечение\",\"refs\":\"CORE-071; AQA-024\",\"responseStage\":\"TIME_PHASE_3\",\"scope\":\"Повторяющееся восстановление HP/ОЭ\"}",
+    "EntityID": "FAM-PERIODIC_HEAL",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-013",
+    "SHA-256": "36a043e5e6690d6ff928f61a0492324afbbf8b464d3541b9526ee345d562966e",
+    "Status": "PASS",
+    "UTF-8 bytes": 290
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"CORE-079_PIPELINE; CORE-080_SAME_NAME\",\"id\":\"FAM-STAT_MODIFIER\",\"name\":\"Модификаторы характеристик\",\"refs\":\"CORE-079–080\",\"responseStage\":\"RECALC\",\"scope\":\"Временные ±, ×/÷, exact/min/max\"}",
+    "EntityID": "FAM-STAT_MODIFIER",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-014",
+    "SHA-256": "354ac2e4b8511aa93776919b49e5f53fd34c96338370b287d7977026b5e68f60",
+    "Status": "PASS",
+    "UTF-8 bytes": 277
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"SOURCE_SPECIFIC; CONSUME_ON_MATCH\",\"id\":\"FAM-CHECK_MODIFIER\",\"name\":\"Модификаторы проверок\",\"refs\":\"CORE-059; CORE-067–069; CORE-072\",\"responseStage\":\"CHECK_BUILD\",\"scope\":\"Временный, следующий или условный бонус/штраф проверки\"}",
+    "EntityID": "FAM-CHECK_MODIFIER",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-015",
+    "SHA-256": "4a44351b8f0c6132ce13aa8fb619f626c7011b0cf3dac57949bb9b35dcf27db6",
+    "Status": "PASS",
+    "UTF-8 bytes": 347
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"defaultComposition\":\"PROFILE_SPECIFIC; CAMOUFLAGE_STRONGEST\",\"id\":\"FAM-SENSE_VISIBILITY\",\"name\":\"Чувства и видимость\",\"refs\":\"CORE-066; SYM-124; SYM-127; SYM-184\",\"responseStage\":\"TARGETING_OR_DETECTION\",\"scope\":\"Ночное зрение, маскировка и раскрытие; слепота исключена из модели приложения\"}",
+    "EntityID": "FAM-SENSE_VISIBILITY",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-016",
+    "SHA-256": "84e37204897c768769052c02c8b1419aaf4963604a59e705a0e39319df6be5e0",
+    "Status": "PASS",
+    "UTF-8 bytes": 403
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects / initialRuntimeState\",\"defaultComposition\":\"SOURCE_SPECIFIC_COMPATIBILITY\",\"id\":\"FAM-FORM_MODE\",\"name\":\"Форма и режим\",\"refs\":\"SYM-091; SYM-114; SYM-169\",\"responseStage\":\"COMMAND_FILTER\",\"scope\":\"Полёт, стойка, статуя и иные поддерживаемые формы\"}",
+    "EntityID": "FAM-FORM_MODE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-017",
+    "SHA-256": "ccbcb443271d0f7edef71cec83feebeb099943b3a53ccc4d1a0c4928518b4acc",
+    "Status": "PASS",
+    "UTF-8 bytes": 326
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"symbiontInstance / currentEffects\",\"defaultComposition\":\"SPECIES_AND_SOURCE_PRIORITY\",\"id\":\"FAM-SYMBIONT_STATE\",\"name\":\"Состояние симбионта\",\"refs\":\"CORE-104; SYM-038; SYM-075; SYM-181\",\"responseStage\":\"BEFORE_ABILITY_OR_PASSIVE\",\"scope\":\"Отключение, подавление, выбранный режим\"}",
+    "EntityID": "FAM-SYMBIONT_STATE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-018",
+    "SHA-256": "e2f1ed591f67b39d2037d3e0cf4418365492436be712638eed4b6e67c6844e1c",
+    "Status": "PASS",
+    "UTF-8 bytes": 343
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"responseProfiles / currentEffects\",\"defaultComposition\":\"MOST_SPECIFIC_RESPONSE_FIRST\",\"id\":\"FAM-IMMUNITY_RESISTANCE\",\"name\":\"Иммунитеты и сопротивления\",\"refs\":\"CORE-072; CORE-228; CQA-043; CQA-050\",\"responseStage\":\"PRE_APPLICATION\",\"scope\":\"До-бросковый иммунитет, числовая защита, очистка контроля\"}",
+    "EntityID": "FAM-IMMUNITY_RESISTANCE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-019",
+    "SHA-256": "0d98a465913e24bc01ddffaa47f7c06678e64d72d149131418aa08183d04c208",
+    "Status": "PASS",
+    "UTF-8 bytes": 386
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects / source graph\",\"defaultComposition\":\"SOURCE_SPECIFIC\",\"id\":\"FAM-INFECTION\",\"name\":\"Заражение\",\"refs\":\"SYM-003–005; MON-042–063\",\"responseStage\":\"APPLICATION_OR_GM_ASSIGN\",\"scope\":\"Связи заражения симбионтом и инфекционные источники\"}",
+    "EntityID": "FAM-INFECTION",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-020",
+    "SHA-256": "c0af2e7f2958d09c7d5a81b190caf0fef8173f61e1c3fa238698398f19f1e77f",
+    "Status": "PASS",
+    "UTF-8 bytes": 319
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"activeCoatings / currentEffects / source object\",\"defaultComposition\":\"ONE_CONSUMABLE_COATING_PER_SURFACE; POISONED_PROJECTILES_INDIVIDUAL\",\"id\":\"FAM-PREPARED_EFFECT\",\"name\":\"Подготовленные эффекты\",\"refs\":\"CORE-048; SYM-183; MON-114\",\"responseStage\":\"CONSUME_OR_TRIGGER\",\"scope\":\"Покрытия, реакции, детонации и заряды\"}",
+    "EntityID": "FAM-PREPARED_EFFECT",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-021",
+    "SHA-256": "9470782abc2afa2e7a870faa874fa80e6e3e774775c2612742243f6583b536e8",
+    "Status": "PASS",
+    "UTF-8 bytes": 383
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects / relation graph\",\"defaultComposition\":\"SOURCE_MAINTAINED_OR_AUTONOMOUS\",\"id\":\"FAM-SOURCE_LINK\",\"name\":\"Связи с источником\",\"refs\":\"CQA-002; AQ2-020\",\"responseStage\":\"SOURCE_LIFECYCLE\",\"scope\":\"Аура, трос, захват, поддерживаемый канал\"}",
+    "EntityID": "FAM-SOURCE_LINK",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-022",
+    "SHA-256": "baec4455809d952414c72a1d55a832929efb9f2785d5d5ca95ada9dcd367ea4a",
+    "Status": "PASS",
+    "UTF-8 bytes": 311
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"itemInstance / currentEffects\",\"defaultComposition\":\"ITEM_AND_SOURCE_SPECIFIC\",\"id\":\"FAM-ITEM_STATE\",\"name\":\"Состояние предмета\",\"refs\":\"CORE-053; MON-100; MON-129\",\"responseStage\":\"EQUIPMENT_OR_TICK\",\"scope\":\"Герметичность, коррозионный счётчик, застрявшее оружие\"}",
+    "EntityID": "FAM-ITEM_STATE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-023",
+    "SHA-256": "d472721e620267a67dab2559f02cfd163c3a94c28332c896912f8c688d326eae",
+    "Status": "PASS",
+    "UTF-8 bytes": 342
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"narrativeMarkers\",\"defaultComposition\":\"NO_MECHANICAL_EFFECT\",\"id\":\"FAM-NARRATIVE\",\"name\":\"Нарративная пометка\",\"refs\":\"AQ2-009; AQA-045\",\"responseStage\":\"NONE\",\"scope\":\"Текст без механического изменения\"}",
+    "EntityID": "FAM-NARRATIVE",
+    "EntityType": "EffectFamily",
+    "PayloadID": "PAY-024",
+    "SHA-256": "0bd27512bed5a7ababde54e9b710155c17de9f66ed7d5e76cb8de62dc631b84d",
+    "Status": "PASS",
+    "UTF-8 bytes": 264
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"actorFlags\",\"family\":\"FAM-LIFECYCLE\",\"id\":\"EFF-LIFE-DEAD\",\"name\":\"Окончательная смерть\",\"refs\":\"CORE-155–156; CQA-001\",\"removal\":\"NONE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Терминальное состояние; обычное лечение и снятие эффекта не воскрешают\",\"stacking\":\"TERMINAL_SINGLETON\",\"stateWrites\":\"dead=true\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-LIFE-DEAD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-025",
+    "SHA-256": "ddd1415d5614e448db01352bd4f89177b38704c07cfb796865e56b687615976f",
+    "Status": "PASS",
+    "UTF-8 bytes": 466
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"actorFlags\",\"family\":\"FAM-LIFECYCLE\",\"id\":\"EFF-LIFE-SEVERE_WOUND\",\"name\":\"Тяжёлое ранение\",\"refs\":\"CORE-152; CORE-182; CORE-222\",\"removal\":\"SOURCE_OR_REANIMATION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"HP=0; специальная дееспособность возможна только по прямому источнику\",\"stacking\":\"SINGLETON\",\"stateWrites\":\"severeWound=true\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-LIFE-SEVERE_WOUND",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-026",
+    "SHA-256": "f9485e71c89d9e2e11f9e5decc3256783c2a40e9e0742c113073b67be01c37d3",
+    "Status": "PASS",
+    "UTF-8 bytes": 479
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-LIFECYCLE\",\"id\":\"EFF-LIFE-DEATH_TIMER\",\"name\":\"Таймер смерти\",\"refs\":\"CORE-153–156\",\"removal\":\"EXPLICIT_REANIMATION_OR_EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Точный остаток хранится без округления интерфейсом\",\"stacking\":\"SINGLETON_BY_ACTOR\",\"stateWrites\":\"deathTimer\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-LIFE-DEATH_TIMER",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-027",
+    "SHA-256": "60818ced4612523dd87b4aba828d5491a58ed76bc8277cff3e28f43e9f8a1cb8",
+    "Status": "PASS",
+    "UTF-8 bytes": 445
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"actorFlags\",\"family\":\"FAM-CONSCIOUSNESS\",\"id\":\"EFF-CONSCIOUS-UNCONSCIOUS\",\"name\":\"Без сознания\",\"refs\":\"CORE-103; MON-075; CORE-222\",\"removal\":\"SOURCE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Нет действий, реакций и активной защиты; броня работает\",\"stacking\":\"BINARY_SOURCE_TRACKED\",\"stateWrites\":\"unconscious=true\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONSCIOUS-UNCONSCIOUS",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-028",
+    "SHA-256": "2882f229c76336741bea2e8338c0e395bba078aa999994d3dc93204ed762d63d",
+    "Status": "PASS",
+    "UTF-8 bytes": 461
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-CONSCIOUSNESS\",\"id\":\"EFF-CONSCIOUS-SLEEP\",\"name\":\"Сон\",\"refs\":\"CORE-061; CORE-103\",\"removal\":\"DAMAGE_OR_SPECIFIC_ANTIDOTE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Фармацевтический сон снимается любым уроном либо CORE-060\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONSCIOUS-SLEEP",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-029",
+    "SHA-256": "c6276135e5a2880a5ecdf9e3b346ea4c6763be8ffbc63d3abfc5c8434539b4c7",
+    "Status": "PASS",
+    "UTF-8 bytes": 433
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-PARALYSIS\",\"name\":\"Паралич\",\"refs\":\"CORE-062; CORE-103; MON-150\",\"removal\":\"SOURCE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Нет физических действий и активной защиты; чисто ментальные действия условно возможны\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-PARALYSIS",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-030",
+    "SHA-256": "6cdc7cc9d5fce52a94e0279f7dcfe0f1d0144360a79162624277c89aceaeb862",
+    "Status": "PASS",
+    "UTF-8 bytes": 502
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-STUN\",\"name\":\"Оглушение\",\"refs\":\"CORE-031; CORE-103\",\"removal\":\"EXPIRY_OR_CONTROL_CLEANSE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Пропуск указанных ходов и реакций; частное правило может сохранить защиты\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-STUN",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-031",
+    "SHA-256": "04376b7f5e790f4778e96438dec007f21e20134d3d4ee217df1f53812d8efd05",
+    "Status": "PASS",
+    "UTF-8 bytes": 479
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-ACTION_ECONOMY\",\"id\":\"EFF-CONTROL-TURN_SKIP\",\"name\":\"Пропуск хода\",\"refs\":\"CORE-103; MON-124\",\"removal\":\"CONSUME_NAMED_TURNS\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Нет боевых и небоевых действий; защита вне хода только по прямому разрешению\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-TURN_SKIP",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-032",
+    "SHA-256": "51795b9b489f8acf3420b141daf5e31978744e7881557eb1f1b1c6870baab178",
+    "Status": "PASS",
+    "UTF-8 bytes": 484
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-GRAPPLE\",\"name\":\"Захват\",\"refs\":\"CORE-138; MON-117; MON-127; MON-133\",\"removal\":\"RELEASE_OR_SOURCE_BREAK\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Модификаторы CORE-138; число параллельных захватов ограничено свободными хватательными конечностями\",\"stacking\":\"PER_SOURCE_TARGET\",\"stateWrites\":\"CaptureState\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-GRAPPLE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-033",
+    "SHA-256": "7aa934cc2735b4ffefb3b2d10294bc71042004d5cd102a396dd98269f6eae77d",
+    "Status": "PASS",
+    "UTF-8 bytes": 539
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-LIMB_HOLD\",\"name\":\"Удержание конечности\",\"refs\":\"CORE-141\",\"removal\":\"CONTESTED_RELEASE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Предусловие для травмирующего/болевого приёма\",\"stacking\":\"PER_SOURCE_LIMB\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-LIMB_HOLD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-034",
+    "SHA-256": "8329614ae56ff288f849b41e5788c71ab4ed19450e915856b5c2d0fbef9dd2ea",
+    "Status": "PASS",
+    "UTF-8 bytes": 442
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-PAIN_HOLD\",\"name\":\"Болевой приём\",\"refs\":\"CORE-143\",\"removal\":\"CONTESTED_RELEASE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"При неуспешном самообладании доступны только защитные действия борьбы\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-PAIN_HOLD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-035",
+    "SHA-256": "b81146343f20b91f853c62b2db80a12f298fafa6f09e716971c562862f4dbc09",
+    "Status": "PASS",
+    "UTF-8 bytes": 468
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-CHOKE_HOLD\",\"name\":\"Удушающий приём\",\"refs\":\"CORE-144\",\"removal\":\"BREAK_GRAPPLE_OR_RELEASE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Требует цепочки захват → выгодная позиция → удушение\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-CHOKE_HOLD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-036",
+    "SHA-256": "b6169551e37fbc680098bf5a24cb2eb368847aaa2eae34e8b9c4f43202e3606d",
+    "Status": "PASS",
+    "UTF-8 bytes": 448
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-RESTRAINED\",\"name\":\"Опутан / связан\",\"refs\":\"MON-136; MON-149\",\"removal\":\"SOURCE_SPECIFIC_RELEASE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Сеть и нить имеют собственные штрафы и проверки освобождения\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-RESTRAINED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-037",
+    "SHA-256": "153e1a443f958aee872db51ebd3ef65c2c13a1a643f9179fb6d0ac87c46dd77c",
+    "Status": "PASS",
+    "UTF-8 bytes": 466
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PHYSICAL_CONTROL\",\"id\":\"EFF-CONTROL-COCOONED\",\"name\":\"В коконе / вне боя\",\"refs\":\"MON-151\",\"removal\":\"ALLY_RELEASE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Завершённое пеленание выводит цель из боя до освобождения\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-COCOONED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-038",
+    "SHA-256": "7ef5c597a0be89cea2a83d20993d6229c12db78cd6840a6987a2f87b744b75bf",
+    "Status": "PASS",
+    "UTF-8 bytes": 443
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"MIXED_TRACE\",\"bucket\":\"currentEffects\",\"family\":\"FAM-MENTAL_CONTROL\",\"id\":\"EFF-CONTROL-FORCED_MOVEMENT\",\"name\":\"Принудительное движение\",\"refs\":\"CORE-072; MON-119\",\"removal\":\"SOURCE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Контроль; полная соответствующая неуязвимость блокирует\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-FORCED_MOVEMENT",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-039",
+    "SHA-256": "ca87c424f45bf844544ffb6f7df00786e3899f4d8722725fa30cc3c546615315",
+    "Status": "PASS",
+    "UTF-8 bytes": 475
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-MENTAL_CONTROL\",\"id\":\"EFF-CONTROL-FLEEING\",\"name\":\"Бегство\",\"refs\":\"CORE-178\",\"removal\":\"EXIT_CONDITION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Автомат поведения и выход из боя по источнику\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-FLEEING",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-040",
+    "SHA-256": "967312029d52b2b5b6edfba383d08cf51b5f28d4c07bbf26048ddd9c5ba5e589",
+    "Status": "PASS",
+    "UTF-8 bytes": 402
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"controlLease\",\"family\":\"FAM-MENTAL_CONTROL\",\"id\":\"EFF-CONTROL-MENTAL_LEASE\",\"name\":\"Внешний контроллер\",\"refs\":\"CORE-181; CORE-221; MON-038\",\"removal\":\"EXPIRY_OR_INVALIDATION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"owningController не меняется; effectiveController временно переопределяется\",\"stacking\":\"PRIORITY_LEASE\",\"stateWrites\":\"ControlLease\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CONTROL-MENTAL_LEASE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-041",
+    "SHA-256": "580b95c1ae4611a622f0e519b94a6ca9be007f5349acadb05a12dce4a2def35d",
+    "Status": "PASS",
+    "UTF-8 bytes": 479
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"SOURCE_SPECIFIC\",\"bucket\":\"currentEffects\",\"family\":\"FAM-MOBILITY_POSITION\",\"id\":\"EFF-POSITION-PRONE\",\"name\":\"Сбит с ног\",\"refs\":\"MON-165\",\"removal\":\"SOURCE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Позиционный статус; точные общие штрафы не нормализованы\",\"stacking\":\"PER_SOURCE_OR_DERIVED\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-POSITION-PRONE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-042",
+    "SHA-256": "b30c01b8a545c010d20d8ad14ea637d916c443ebbaecb5996e5e0153c8592ecb",
+    "Status": "PASS",
+    "UTF-8 bytes": 447
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-MOBILITY_POSITION\",\"id\":\"EFF-POSITION-ADVANTAGE\",\"name\":\"Выгодная позиция\",\"refs\":\"CORE-144\",\"removal\":\"BREAK_GRAPPLE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Промежуточное состояние цепочки удушения\",\"stacking\":\"PER_GRAPPLE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-POSITION-ADVANTAGE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-043",
+    "SHA-256": "dc95b07c55172b84e1ed25830d745d249f066244c4e0501cb6a2cadd653cc5cb",
+    "Status": "PASS",
+    "UTF-8 bytes": 419
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-ACTION_ECONOMY\",\"id\":\"EFF-ACTION-SERIES_MOD\",\"name\":\"Модификатор серии/действий\",\"refs\":\"CORE-070; MON-160\",\"removal\":\"EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Минимум действий 0, если частное правило не сообщает иное\",\"stacking\":\"SAME_NAME_SOURCE_SPECIFIC\",\"stateWrites\":\"actionModifier\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-ACTION-SERIES_MOD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-044",
+    "SHA-256": "c2f22fc840761aa63058c90dfa8ee8fbe16035de2ec89a3b613107a5a6fe9b44",
+    "Status": "PASS",
+    "UTF-8 bytes": 475
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-ACTION_ECONOMY\",\"id\":\"EFF-ACTION-NEXT_SERIES_PENALTY\",\"name\":\"Штраф следующей серии\",\"refs\":\"CORE-043–048; MON-150\",\"removal\":\"CONSUME_OR_REPLACE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Потрясение щитом не складывается: действует наибольший штраф; один ожидающий эффект расходуется на следующей серии\",\"stacking\":\"SAME_VARIANT_MAX_PENALTY; CONSUME_NEXT_SERIES\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-ACTION-NEXT_SERIES_PENALTY",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-045",
+    "SHA-256": "8b899742db516d15b00df1cbc98dde21e272576ce42688c8c5538fab40086488",
+    "Status": "PASS",
+    "UTF-8 bytes": 623
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-ACTION_ECONOMY\",\"id\":\"EFF-ACTION-SKIP_NEXT\",\"name\":\"Пропуск следующего хода/кругов\",\"refs\":\"CORE-031; MON-124\",\"removal\":\"CONSUME_TURNS\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Число и единица определяются источником\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-ACTION-SKIP_NEXT",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-046",
+    "SHA-256": "323fc68eae00733e5d6ee4e2ee4bf6fd50dba99b229ca48944bff7e26ed543b9",
+    "Status": "PASS",
+    "UTF-8 bytes": 445
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED_NO_RECOVERY\",\"bucket\":\"currentTraumas\",\"family\":\"FAM-TRAUMA\",\"id\":\"EFF-TRAUMA-LIMB\",\"name\":\"Травма конечности\",\"refs\":\"CORE-117; CORE-119\",\"removal\":\"SOURCE_SPECIFIC_RECOVERY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Травматические значения одной конечности складываются\",\"stacking\":\"ADDITIVE_SAME_LIMB\",\"stateWrites\":\"currentTraumas[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-TRAUMA-LIMB",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-047",
+    "SHA-256": "b0be91bfb83333608366cd694425d79029653ce06843d4e9e3f93febf73a4918",
+    "Status": "PASS",
+    "UTF-8 bytes": 468
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED_NO_RECOVERY\",\"bucket\":\"currentTraumas\",\"family\":\"FAM-TRAUMA\",\"id\":\"EFF-TRAUMA-HEAD\",\"name\":\"Травма головы\",\"refs\":\"CORE-120\",\"removal\":\"SOURCE_SPECIFIC_RECOVERY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Семантика по CORE-120; автоматического восстановления нет, снятие только явной способностью, процедурой или командой мастера\",\"stacking\":\"PER_TRAUMA\",\"stateWrites\":\"currentTraumas[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-TRAUMA-HEAD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-048",
+    "SHA-256": "a5defe632e85e9bece86f2036aa5b3577ca5f796aed79ebd39bd12feeadd37c6",
+    "Status": "PASS",
+    "UTF-8 bytes": 564
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED_NO_RECOVERY\",\"bucket\":\"currentTraumas\",\"family\":\"FAM-TRAUMA\",\"id\":\"EFF-TRAUMA-TORSO\",\"name\":\"Травма корпуса\",\"refs\":\"CORE-121\",\"removal\":\"SOURCE_SPECIFIC_RECOVERY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Однократная дополнительная потеря HP, без рекурсивной травмы\",\"stacking\":\"PER_EVENT\",\"stateWrites\":\"currentTraumas[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-TRAUMA-TORSO",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-049",
+    "SHA-256": "dae9f2e8563b09c507a8963c04bf184e9b9d56515e0f8ee8b2a83985058f8a69",
+    "Status": "PASS",
+    "UTF-8 bytes": 453
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"DERIVED\",\"bucket\":\"derivedProjection\",\"family\":\"FAM-TRAUMA\",\"id\":\"EFF-TRAUMA-LIMB_DISABLED\",\"name\":\"Отключённая конечность\",\"refs\":\"CORE-119; MON-169\",\"removal\":\"RECALC_FROM_TRAUMAS\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Порог суммарной травмы конечности >6; при временном онемении той же зоны действует наиболее строгий числовой штраф, а самостоятельные ограничения объединяются\",\"stacking\":\"DERIVED_PER_LIMB\",\"stateWrites\":\"derived.disabledLimbs; DerivedStateProjection.regionPenaltyById\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-TRAUMA-LIMB_DISABLED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-050",
+    "SHA-256": "7166b8d2afe62f1a2aa1723082790ac8a817cd6218efbd7040ec81057b1e6753",
+    "Status": "PASS",
+    "UTF-8 bytes": 706
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentWounds\",\"family\":\"FAM-WOUND_BLEEDING\",\"id\":\"EFF-WOUND-GENERIC\",\"name\":\"Формализованная рана\",\"refs\":\"CORE-059\",\"removal\":\"EXPLICIT_TREATMENT_OR_GM_ONLY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Создаётся только источником с CREATES_WOUND либо мастером; одно событие создаёт одну рану с зоной\",\"stacking\":\"PER_EVENT_AND_REGION\",\"stateWrites\":\"currentWounds[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-WOUND-GENERIC",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-051",
+    "SHA-256": "2913b4e277f3120d6edeb5fe3922df53e8cea4e8a2204e2231d5176efb12f72f",
+    "Status": "PASS",
+    "UTF-8 bytes": 532
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentWounds\",\"family\":\"FAM-WOUND_BLEEDING\",\"id\":\"EFF-WOUND-BLEEDING\",\"name\":\"Кровотечение\",\"refs\":\"CORE-063\",\"removal\":\"CORE-063_REMOVES_ALL_OR_EXPLICIT_TREATMENT\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Только явный источник с damagePerTick; отдельный экземпляр на рану; тик в конце личного хода цели\",\"stacking\":\"PER_WOUND_INSTANCE\",\"stateWrites\":\"currentWounds[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-WOUND-BLEEDING",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-052",
+    "SHA-256": "79a25dee4fdb679249425ad90d5c0f266828a9d8bec9a959c02a8cfd54874ec8",
+    "Status": "PASS",
+    "UTF-8 bytes": 527
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-FIRE\",\"id\":\"EFF-FIRE-BURNING\",\"name\":\"Горение\",\"refs\":\"CORE-112; CORE-114\",\"removal\":\"EXTINGUISH_OR_EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Один статус; повтор задаёт max(remaining,new) и max(damagePerTick); мгновенного дополнительного тика нет; тушение по Q-CORE-031\",\"stacking\":\"ONE_BINARY_MAX_DURATION_MAX_DAMAGE\",\"stateWrites\":\"remainingTurns; damagePerTick\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-FIRE-BURNING",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-053",
+    "SHA-256": "9556dfb8309c0dd441a3a6fcd9219281d4b0ad0e93fb0ee1b8c86e82e628f798",
+    "Status": "PASS",
+    "UTF-8 bytes": 551
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PERIODIC_DAMAGE\",\"id\":\"EFF-DAMAGE-PERIODIC\",\"name\":\"Периодический урон\",\"refs\":\"CORE-101; AQA-024\",\"removal\":\"EXPIRY_OR_SOURCE_RULE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Тик обрабатывается в фазе 1; после каждого тика пересчёт смертельных последствий\",\"stacking\":\"PER_INSTANCE\",\"stateWrites\":\"tickSchedule\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-DAMAGE-PERIODIC",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-054",
+    "SHA-256": "f7845026b6d2e03c2138f3c3f4d8f51d1459fe8c0d788b211203b34a27aaf263",
+    "Status": "PASS",
+    "UTF-8 bytes": 503
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PERIODIC_HEAL\",\"id\":\"EFF-HEAL-PERIODIC\",\"name\":\"Периодическое лечение\",\"refs\":\"CORE-071; AQA-024\",\"removal\":\"EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Фаза восстановления; обычное лечение не действует в тяжёлом ранении\",\"stacking\":\"PER_INSTANCE_SOURCE_RULE\",\"stateWrites\":\"tickSchedule\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-HEAL-PERIODIC",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-055",
+    "SHA-256": "d46417d8ddc631c014bcba1676db269aa15dcf7b8b97d881adee54ac4542e9c7",
+    "Status": "PASS",
+    "UTF-8 bytes": 479
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-STAT_MODIFIER\",\"id\":\"EFF-STAT-TEMP_MOD\",\"name\":\"Временный модификатор характеристики\",\"refs\":\"CORE-079–080\",\"removal\":\"EXPIRY_OR_REMOVE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Порядок применения по CORE-079\",\"stacking\":\"SAME_NAME_STRONGEST_TIMERS_INDEPENDENT\",\"stateWrites\":\"modifierComponents\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-STAT-TEMP_MOD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-056",
+    "SHA-256": "672ea05f4f1f0a6468bfdb2f782a6d98eb00d509240a93a28f94bc823e583e53",
+    "Status": "PASS",
+    "UTF-8 bytes": 459
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-STAT_MODIFIER\",\"id\":\"EFF-STAT-EXACT_SET\",\"name\":\"Точная установка/min/max\",\"refs\":\"CORE-079\",\"removal\":\"EXPIRY_OR_REMOVE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Применяется после ± и ×/÷\",\"stacking\":\"SPECIFICITY_THEN_RESTRICTIVE\",\"stateWrites\":\"modifierComponents\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-STAT-EXACT_SET",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-057",
+    "SHA-256": "0aad123bc009c694e543415d68b69132d2eb4458da357fdcd66145dbeb0807ea",
+    "Status": "PASS",
+    "UTF-8 bytes": 409
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-CHECK_MODIFIER\",\"id\":\"EFF-CHECK-TEMP_MOD\",\"name\":\"Временный модификатор проверки\",\"refs\":\"CORE-067–072\",\"removal\":\"EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Применяется только к явно подходящим проверкам\",\"stacking\":\"SOURCE_SPECIFIC\",\"stateWrites\":\"checkModifier\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CHECK-TEMP_MOD",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-058",
+    "SHA-256": "03b9b7645d08776e74c56f70bb0632cc22c629af15c7dd91a9fda2a78da7fb2a",
+    "Status": "PASS",
+    "UTF-8 bytes": 449
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-CHECK_MODIFIER\",\"id\":\"EFF-CHECK-NEXT\",\"name\":\"Модификатор следующей проверки\",\"refs\":\"CORE-059; CORE-069; MON-159\",\"removal\":\"MATCHING_CHECK_OR_EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Не расходуется неподходящей проверкой\",\"stacking\":\"CONSUME_ON_MATCH\",\"stateWrites\":\"consumeCondition\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CHECK-NEXT",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-059",
+    "SHA-256": "4d3df6db9e867f6d1dd93cd6de26aadd09c06f51a01408e554d32ba16672ec61",
+    "Status": "PASS",
+    "UTF-8 bytes": 464
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-SENSE_VISIBILITY\",\"id\":\"EFF-SENSE-NIGHT_VISION\",\"name\":\"Ночное зрение\",\"refs\":\"CORE-066\",\"removal\":\"EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Видеть в темноте как днём; повтор обновляет срок\",\"stacking\":\"REFRESH_SAME_DRUG\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SENSE-NIGHT_VISION",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-060",
+    "SHA-256": "b7bce8e4abb031911d1bda369b2c4d1bc513351169217bc334b9ce66fdef5870",
+    "Status": "PASS",
+    "UTF-8 bytes": 422
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-SENSE_VISIBILITY\",\"id\":\"EFF-SENSE-CAMOUFLAGE\",\"name\":\"Маскировка\",\"refs\":\"SYM-124; SYM-127; SYM-184\",\"removal\":\"SOURCE_CONDITION_OR_EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Хамелеон: численно действует наибольший по модулю штраф\",\"stacking\":\"STRONGEST_MAGNITUDE_TIMERS_INDEPENDENT\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SENSE-CAMOUFLAGE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-061",
+    "SHA-256": "a6cc144224e2297c1bc6e35985b105bfffd050b6c3addc01f361851672fe88f3",
+    "Status": "PASS",
+    "UTF-8 bytes": 488
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"SOURCE_SPECIFIC\",\"bucket\":\"currentEffects\",\"family\":\"FAM-SENSE_VISIBILITY\",\"id\":\"EFF-SENSE-REVEALED\",\"name\":\"Раскрыт / обнаружен\",\"refs\":\"SYM-113; SYM-127\",\"removal\":\"SOURCE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Не универсальный антимодификатор; задаётся конкретным источником\",\"stacking\":\"SOURCE_SPECIFIC\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SENSE-REVEALED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-062",
+    "SHA-256": "4d60ad1b06fe776f538917844d93156b067cdff93a76f17a2534f5df3205af9b",
+    "Status": "PASS",
+    "UTF-8 bytes": 483
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"NOT_MODELED\",\"bucket\":\"none\",\"family\":\"FAM-SENSE_VISIBILITY\",\"id\":\"EFF-SENSE-BLINDNESS\",\"name\":\"Слепота (не моделируется приложением)\",\"refs\":\"CORE-143; Q-CORE-045; Author decision 2026-07-31\",\"removal\":\"NOT_APPLICABLE\",\"schemaStatus\":\"EXCLUDED_FROM_RUNTIME\",\"semantics\":\"Приложение не создаёт, не хранит и не отображает слепоту; выдавливание глаз и иные причины потери зрения не моделируются\",\"stacking\":\"NONE\",\"stateWrites\":\"NONE\",\"timerPolicy\":\"NOT_APPLICABLE\"}",
+    "EntityID": "EFF-SENSE-BLINDNESS",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-063",
+    "SHA-256": "b8c2a429886b9c33bda205a1a6da5c9ad6b5c32c0b8a7cd5cc00f80a2b5c98c4",
+    "Status": "PASS",
+    "UTF-8 bytes": 612
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-FORM_MODE\",\"id\":\"EFF-FORM-FLIGHT\",\"name\":\"Полёт\",\"refs\":\"SYM-091; SYM-114; CQA-002\",\"removal\":\"SOURCE_INVALIDATION_OR_COMMAND\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Поддерживаемая форма заканчивается при недееспособности/источнике по частной карточке\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-FORM-FLIGHT",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-064",
+    "SHA-256": "ba464561815ecec86afb33f764e9d4084b2bbd89e2545939676baf09f00d2299",
+    "Status": "PASS",
+    "UTF-8 bytes": 501
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-FORM_MODE\",\"id\":\"EFF-FORM-STONE_STATUE\",\"name\":\"Каменная статуя\",\"refs\":\"SYM-169\",\"removal\":\"COMMAND\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Телесные действия запрещены; броня и горение работают; иные периодические эффекты приостановлены без накопления\",\"stacking\":\"SINGLETON_SOURCE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-FORM-STONE_STATUE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-065",
+    "SHA-256": "98e76ac54393ee17244093aa9e0300d71afdd98859e7ee9b8c5d749b2d997952",
+    "Status": "PASS",
+    "UTF-8 bytes": 537
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"SOURCE_SPECIFIC\",\"bucket\":\"currentEffects\",\"family\":\"FAM-FORM_MODE\",\"id\":\"EFF-FORM-STANCE\",\"name\":\"Стойка/режим\",\"refs\":\"SYM-173; MON-023\",\"removal\":\"COMMAND_OR_SOURCE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Условия совместимости определяет источник\",\"stacking\":\"SOURCE_SPECIFIC_EXCLUSIVE\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-FORM-STANCE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-066",
+    "SHA-256": "3b670c537fcd9b37626fd191ca8b4a1636ea7ee5556042dfd18723f721b59422",
+    "Status": "PASS",
+    "UTF-8 bytes": 430
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"symbiontInstance\",\"family\":\"FAM-SYMBIONT_STATE\",\"id\":\"EFF-SYMBIONT-DISABLED\",\"name\":\"Симбионт отключён\",\"refs\":\"CORE-104\",\"removal\":\"SOURCE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Нет активных/пассивных механик и XP; анатомия физически остаётся\",\"stacking\":\"PER_SYMBIONT\",\"stateWrites\":\"symbiont.disabled\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SYMBIONT-DISABLED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-067",
+    "SHA-256": "7bc5053053d462a99ad24206ac15e08325600496fa4dc6230a7623052604e152",
+    "Status": "PASS",
+    "UTF-8 bytes": 463
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"symbiontInstance\",\"family\":\"FAM-SYMBIONT_STATE\",\"id\":\"EFF-SYMBIONT-SUPPRESSED\",\"name\":\"Симбионт подавлен\",\"refs\":\"SYM-038; SYM-047; SYM-075\",\"removal\":\"RELATION_END\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Локальные исключения Тайпана, Пингвина и Хамелеона имеют приоритет\",\"stacking\":\"PER_RELATION\",\"stateWrites\":\"symbiont.effectsEnabled\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SYMBIONT-SUPPRESSED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-068",
+    "SHA-256": "0b012e0a10f143833095b4a938dcd044c87808918ac0a2b12966d5532b375acc",
+    "Status": "PASS",
+    "UTF-8 bytes": 492
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"initialRuntimeState\",\"family\":\"FAM-SYMBIONT_STATE\",\"id\":\"EFF-SYMBIONT-POISON_MODE\",\"name\":\"Активный тип яда\",\"refs\":\"SYM-181\",\"removal\":\"SWITCH_COMPLETE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Старый тип остаётся до завершения переключения\",\"stacking\":\"ONE_ACTIVE_MODE\",\"stateWrites\":\"activePoisonType\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SYMBIONT-POISON_MODE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-069",
+    "SHA-256": "dfced8a9898113920f1ac99bab11aee754323efa610768082e78e499dbf84589",
+    "Status": "PASS",
+    "UTF-8 bytes": 437
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"responseProfiles\",\"family\":\"FAM-IMMUNITY_RESISTANCE\",\"id\":\"EFF-RESPONSE-IMMUNITY\",\"name\":\"Иммунитет\",\"refs\":\"CORE-228; CQA-050\",\"removal\":\"SOURCE_INVALIDATION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Полная неуязвимость может отклонить цель или payload до броска\",\"stacking\":\"MOST_SPECIFIC\",\"stateWrites\":\"EffectResponse\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-RESPONSE-IMMUNITY",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-070",
+    "SHA-256": "b23eb85d15eebcd202f2c73d284da49b30121c857d1e60f67ed2f87be579b494",
+    "Status": "PASS",
+    "UTF-8 bytes": 456
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"responseProfiles\",\"family\":\"FAM-IMMUNITY_RESISTANCE\",\"id\":\"EFF-RESPONSE-RESISTANCE\",\"name\":\"Числовое сопротивление\",\"refs\":\"CORE-072; CQA-050\",\"removal\":\"SOURCE_INVALIDATION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Модифицирует существующую проверку; не создаёт новую\",\"stacking\":\"SOURCE_SPECIFIC_SUM\",\"stateWrites\":\"EffectResponse\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-RESPONSE-RESISTANCE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-071",
+    "SHA-256": "90a6742b86c7939276eef1779cdd702ac0af8dbd2664abd74e82302a1680df6d",
+    "Status": "PASS",
+    "UTF-8 bytes": 478
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-LIFECYCLE\",\"id\":\"EFF-PROTECTION-SEVERE_WOUND\",\"name\":\"Предотвращение тяжёлого ранения\",\"refs\":\"SYM-030; MON-008; CORE-182\",\"removal\":\"CONSUME_ON_TRIGGER\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Исполняется по порядку CORE-182; только первый применимый источник расходуется\",\"stacking\":\"PRIORITY_CONSUMABLE\",\"stateWrites\":\"preparedProtection\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-PROTECTION-SEVERE_WOUND",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-072",
+    "SHA-256": "f9abaf987ab2458317df82883015b9e33d08f365d5de89c6289f414cc4268161",
+    "Status": "PASS",
+    "UTF-8 bytes": 540
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-LIFECYCLE\",\"id\":\"EFF-CAPABILITY-SEVERE_WOUND\",\"name\":\"Дееспособность в тяжёлом ранении\",\"refs\":\"CORE-154; SYM-028; CORE-069\",\"removal\":\"SOURCE_END\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Не отменяет добивание новым уроном\",\"stacking\":\"BOOLEAN_BY_ANY_ACTIVE_SOURCE\",\"stateWrites\":\"capabilityOverride\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-CAPABILITY-SEVERE_WOUND",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-073",
+    "SHA-256": "59a4cc7f0c2dc7ad7482f9e516dd06e551389c7b6a4499dfbc805e6475692ca5",
+    "Status": "PASS",
+    "UTF-8 bytes": 468
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"MIXED\",\"bucket\":\"sourceGraph\",\"family\":\"FAM-INFECTION\",\"id\":\"EFF-INFECTION-LINK\",\"name\":\"Связь заражения\",\"refs\":\"MON-042–063\",\"removal\":\"CURE_OR_SOURCE_RULE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Отдельна от болезни и яда\",\"stacking\":\"SOURCE_SPECIFIC_LIMIT\",\"stateWrites\":\"infectedTargets\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-INFECTION-LINK",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-074",
+    "SHA-256": "2b272af1d12cb09dfed893687038c985e2ee381b9cd00d04ab8c1a4a2024c3a3",
+    "Status": "PASS",
+    "UTF-8 bytes": 387
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED_WITH_GAP\",\"bucket\":\"activeCoatings\",\"family\":\"FAM-PREPARED_EFFECT\",\"id\":\"EFF-PREPARED-COATING\",\"name\":\"Покрытие предмета\",\"refs\":\"SYM-068; SYM-183\",\"removal\":\"CONSUME_OR_EXPIRY\",\"schemaStatus\":\"PARTIAL\",\"semantics\":\"Промах не расходует яд Тайпана; слюна имеет собственный срок\",\"stacking\":\"MULTIPLE_POLICY_UNRESOLVED\",\"stateWrites\":\"activeCoatings[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-PREPARED-COATING",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-075",
+    "SHA-256": "7fc1aa2b786576132c11e799b7ac52ba247dcfc8d919249f6c065b40f5be299d",
+    "Status": "PASS",
+    "UTF-8 bytes": 487
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PREPARED_EFFECT\",\"id\":\"EFF-PREPARED-REACTION\",\"name\":\"Подготовленная реакция\",\"refs\":\"CORE-048; MON-036\",\"removal\":\"TRIGGER_OR_EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Одноразовое окно и потребление определяет источник\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"preparedReaction\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-PREPARED-REACTION",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-076",
+    "SHA-256": "b98e11b060f83947a653d0174d475cf575fb2235061553af13d36ec01e5bbdb7",
+    "Status": "PASS",
+    "UTF-8 bytes": 458
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-PREPARED_EFFECT\",\"id\":\"EFF-PREPARED-DETONATION\",\"name\":\"Запущенная детонация\",\"refs\":\"MON-114–115\",\"removal\":\"SPECIAL_NEUTRALIZATION_OR_TRIGGER\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Бессознательность, паралич и смерть Огненной блохи не отменяют\",\"stacking\":\"SINGLETON_SOURCE\",\"stateWrites\":\"detonationState\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-PREPARED-DETONATION",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-077",
+    "SHA-256": "e470b9a51e0a1f0ee61060774edb601faa21af383a3e700ac850c3bf8e07fc15",
+    "Status": "PASS",
+    "UTF-8 bytes": 494
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"SOURCE_SPECIFIC\",\"bucket\":\"relationGraph\",\"family\":\"FAM-SOURCE_LINK\",\"id\":\"EFF-SOURCE-AURA\",\"name\":\"Аура/область источника\",\"refs\":\"CQA-002\",\"removal\":\"SOURCE_INVALIDATION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Поддерживаемая область заканчивается при потере источника, если не стала автономной\",\"stacking\":\"PER_SOURCE\",\"stateWrites\":\"sourceLink\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SOURCE-AURA",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-078",
+    "SHA-256": "d6c3479d310fc1ee18721cbe9338a28d6924289dd84b86ce25d5d5d0368e8cde",
+    "Status": "PASS",
+    "UTF-8 bytes": 499
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"relationGraph\",\"family\":\"FAM-SOURCE_LINK\",\"id\":\"EFF-SOURCE-TETHER\",\"name\":\"Трос/связь\",\"refs\":\"CQA-023; SYM-107\",\"removal\":\"BREAK_OR_SOURCE_INVALIDATION\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Позиционные ограничения и жизненный цикл задаёт конкретная связь\",\"stacking\":\"PER_SOURCE_TARGET\",\"stateWrites\":\"sourceLink\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-SOURCE-TETHER",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-079",
+    "SHA-256": "5f2b5b0ee7713051c74e82fb0b4c9a59b19388fe42224ad97397b87ddb04dc9d",
+    "Status": "PASS",
+    "UTF-8 bytes": 462
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"itemInstance\",\"family\":\"FAM-ITEM_STATE\",\"id\":\"EFF-ITEM-SEALED\",\"name\":\"Герметичность Нэйта\",\"refs\":\"CORE-053\",\"removal\":\"BREAK_SEAL\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Блокирует только определённые внешние/вдыхаемые воздействия; уже активные не очищает\",\"stacking\":\"PER_ITEM\",\"stateWrites\":\"item.sealed\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-ITEM-SEALED",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-080",
+    "SHA-256": "e003360041d08cd936c1a9bf8fcad1ec0b2be3a0bbd33e76a0877c008c8ba93d",
+    "Status": "PASS",
+    "UTF-8 bytes": 479
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED_WITH_SCHEMA_GAP\",\"bucket\":\"currentEffects\",\"family\":\"FAM-ITEM_STATE\",\"id\":\"EFF-ITEM-CORROSION_COUNTER\",\"name\":\"Счётчик коррозии\",\"refs\":\"MON-100\",\"removal\":\"EXIT_SOURCE_AREA\",\"schemaStatus\":\"PARTIAL\",\"semantics\":\"В слизи Вивисектора: +1 в конце хода; при первом достижении 2 уничтожается допустимый предмет\",\"stacking\":\"PER_SOURCE_TARGET\",\"stateWrites\":\"corrosionCounter\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-ITEM-CORROSION_COUNTER",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-081",
+    "SHA-256": "08529b1e31d50903c0100ebdc538f29910e97b3e633b75410dd10576811a2c48",
+    "Status": "PASS",
+    "UTF-8 bytes": 531
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-POISON\",\"id\":\"EFF-POISON-FAIL_COUNTER\",\"name\":\"Счётчик провалов яда\",\"refs\":\"MON-150\",\"removal\":\"SUCCESS_RESET\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Счётчик отдельный для пары sourceId+targetId; успех сбрасывает только счётчик этого источника\",\"stacking\":\"PER_SOURCE_TARGET\",\"stateWrites\":\"poisonFailCounter\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-POISON-FAIL_COUNTER",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-082",
+    "SHA-256": "b84650543832ae6ccd782a7dfe01dc754184ef25edcfc01d113f95d5c2c79af9",
+    "Status": "PASS",
+    "UTF-8 bytes": 503
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentWounds\",\"family\":\"FAM-CHECK_MODIFIER\",\"id\":\"EFF-PREVENT-DISEASE-NEXT_WOUND\",\"name\":\"Профилактика болезни через рану\",\"refs\":\"CORE-059\",\"removal\":\"CONSUME_NEXT_ATTEMPT\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"−10 к следующей попытке болезни через выбранную формализованную рану; затем расходуется\",\"stacking\":\"PER_WOUND_SINGLE_USE\",\"stateWrites\":\"wound.prevention\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-PREVENT-DISEASE-NEXT_WOUND",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-083",
+    "SHA-256": "e6c28b5cbbdf7d5843305770e4518d0621df40acd0e627416481f74076936594",
+    "Status": "PASS",
+    "UTF-8 bytes": 552
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"consumptionHistory\",\"family\":\"FAM-PREPARED_EFFECT\",\"id\":\"EFF-DOSE-COOLDOWN\",\"name\":\"Скользящий лимит доз\",\"refs\":\"CORE-058\",\"removal\":\"SLIDING_24H\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Одна фармацевтика за личный боевой ход; лимиты по препарату\",\"stacking\":\"PER_ITEM_TYPE\",\"stateWrites\":\"consumptionHistory\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-DOSE-COOLDOWN",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-084",
+    "SHA-256": "96fac457770060e4c666db7128aae33402efbc185354b8928658723de0ce1c5d",
+    "Status": "PASS",
+    "UTF-8 bytes": 457
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"TRACE_ONLY\",\"bucket\":\"currentEffects\",\"family\":\"FAM-STAT_MODIFIER\",\"id\":\"EFF-FATIGUE\",\"name\":\"Усталость\",\"refs\":\"CORE-002–003\",\"removal\":\"UNDEFINED\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"CORE-002/003 не автоматизируются\",\"stacking\":\"UNDEFINED\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-FATIGUE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-085",
+    "SHA-256": "733163fb7be5181fbe444cd7a21078a58aeb8006190c63c16b73bab00649e9fc",
+    "Status": "PASS",
+    "UTF-8 bytes": 365
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"ORPHANED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-STAT_MODIFIER\",\"id\":\"EFF-EXHAUSTION\",\"name\":\"Истощение\",\"refs\":\"MON-104\",\"removal\":\"UNDEFINED\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Существует ответ MON-104, но активной общей механики нет\",\"stacking\":\"UNDEFINED\",\"stateWrites\":\"currentEffects[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-EXHAUSTION",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-086",
+    "SHA-256": "ca13cad635a2ad08a8b565e3d827eff1d9f3fb9744173baebbbfe2bfdd693446",
+    "Status": "PASS",
+    "UTF-8 bytes": 406
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"NARRATIVE_ONLY\",\"bucket\":\"narrativeMarkers\",\"family\":\"FAM-NARRATIVE\",\"id\":\"EFF-NARRATIVE-MARKER\",\"name\":\"Сюжетная пометка\",\"refs\":\"AQ2-009; AQA-045\",\"removal\":\"GM_EDIT_OR_DELETE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Никогда не меняет механику\",\"stacking\":\"PER_MARKER\",\"stateWrites\":\"narrativeMarkers[]\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-NARRATIVE-MARKER",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-087",
+    "SHA-256": "d7e0c3e64fdccb17c294c395c61d781f6cc3f0c811739627b80a162656aaed97",
+    "Status": "PASS",
+    "UTF-8 bytes": 401
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"REGISTRY_SCHEMA\",\"bucket\":\"currentEffects\",\"family\":\"FAM-DISEASE\",\"id\":\"EFF-DISEASE-INSTANCE\",\"name\":\"Экземпляр болезни\",\"refs\":\"MON-085; CQA-060\",\"removal\":\"GM_REMOVE\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Модификаторы болезни изменяют effectiveStat без нижней границы; при effectiveStat+effectiveZ<1 применяется MON-075\",\"stacking\":\"NO_STACK_BY_DISEASE_ID\",\"stateWrites\":\"EffectInstance.payload.diseaseId\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-DISEASE-INSTANCE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-088",
+    "SHA-256": "52d84b004e8407a73ba5ffe1ee80ce014cdfe73d41a4c780eac7f5ed60623a9e",
+    "Status": "PASS",
+    "UTF-8 bytes": 540
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"REGISTRY_SCHEMA\",\"bucket\":\"currentEffects\",\"family\":\"FAM-POISON\",\"id\":\"EFF-POISON-INSTANCE\",\"name\":\"Экземпляр яда\",\"refs\":\"CORE-228\",\"removal\":\"PROFILE_SPECIFIC\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Нормализованный контейнер poison payload\",\"stacking\":\"POISON_PROFILE_SPECIFIC\",\"stateWrites\":\"EffectInstance.payload.poisonProfileId\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-POISON-INSTANCE",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-089",
+    "SHA-256": "085c5248933fa23da604ca126c1701daf9a49ee8c701e474bfb27aa36536baa2",
+    "Status": "PASS",
+    "UTF-8 bytes": 429
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED_WITH_TARGET_FILTER\",\"bucket\":\"currentEffects\",\"family\":\"FAM-TRAUMA\",\"id\":\"EFF-REGION-NUMBNESS\",\"name\":\"Временное онемение конечности\",\"refs\":\"MON-169; SYM-045\",\"removal\":\"EXPIRY\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Гуманоид: случайная действующая конечность; негуманоид: вторичный паралич не создаётся, попадание и остальные последствия сохраняются. При травме той же зоны действует наиболее строгий числовой штраф; ограничения, сроки и снятие источников независимы\",\"stacking\":\"PER_LIMB\",\"stateWrites\":\"disabledRegion; DerivedStateProjection.regionPenaltyById\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-REGION-NUMBNESS",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-090",
+    "SHA-256": "a0c6edf9f9d1f60a5249750061273f632f0d1bb50a0d8e9040061cd8f25673b3",
+    "Status": "PASS",
+    "UTF-8 bytes": 874
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"bucket\":\"currentEffects\",\"family\":\"FAM-ITEM_STATE\",\"id\":\"EFF-EQUIPMENT-STUCK\",\"name\":\"Застрявшее оружие\",\"refs\":\"MON-129\",\"removal\":\"ACTION_AND_CHECK\",\"schemaStatus\":\"DEFINED\",\"semantics\":\"Освобождение по конкретной карточке\",\"stacking\":\"PER_ITEM_TARGET\",\"stateWrites\":\"itemLink\",\"timerPolicy\":\"SOURCE_SPECIFIC_OR_EXPLICIT\"}",
+    "EntityID": "EFF-EQUIPMENT-STUCK",
+    "EntityType": "EffectDefinition",
+    "PayloadID": "PAY-091",
+    "SHA-256": "8c7dbc05a26425aa769d20143f85a510e94b92a95f62718d3c501c1edd8d6e3d",
+    "Status": "PASS",
+    "UTF-8 bytes": 399
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-POISONING\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Отравление\",\"notes\":\"Название не делает болезнь POISON\",\"periodic\":\"NONE\",\"refs\":\"MON-076\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"S\\\":-2,\\\"M\\\":-2}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-POISONING",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-092",
+    "SHA-256": "076427825304f23dcd44f12b2193b371953426d5863467a2d708e8ac07c9382b",
+    "Status": "PASS",
+    "UTF-8 bytes": 476
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-RHINITIS\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Насморк\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-077\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"M\\\":-2}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-RHINITIS",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-093",
+    "SHA-256": "8ec142246636d903dd39621ac167e735702a478e0e9ccaec03a1438aed8f0989",
+    "Status": "PASS",
+    "UTF-8 bytes": 406
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-FEVER\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Жар\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-078\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"M\\\":-10}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-FEVER",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-094",
+    "SHA-256": "c1ba18f7c2dfc7645e96605e2e9959250a6764a41f898d27585870d29d1920f8",
+    "Status": "PASS",
+    "UTF-8 bytes": 396
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-SCABIES\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Чесотка\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-079\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"I\\\":-4,\\\"C\\\":-4,\\\"D\\\":-2}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-SCABIES",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-095",
+    "SHA-256": "4083fdf8145bf601879c42530df0afc936e334dcdfb8d9c79571bd8107cc7f2a",
+    "Status": "PASS",
+    "UTF-8 bytes": 423
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-PNEUMONIA\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Пневмония\",\"notes\":\"Периодический урон явно разрешён\",\"periodic\":\"HP_MINUS_10_EACH_FULL_DAY\",\"refs\":\"MON-080; MON-087\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"M\\\":-14,\\\"S\\\":-12,\\\"D\\\":-12}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-PNEUMONIA",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-096",
+    "SHA-256": "0e405376d5bec3ba9ca60558720d093ac424b58feb88a03ac3748c9e5ad7e5d1",
+    "Status": "PASS",
+    "UTF-8 bytes": 521
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-MIGRAINE\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Мигрень\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-081\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"I\\\":-6,\\\"C\\\":-2}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-MIGRAINE",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-097",
+    "SHA-256": "62a888da211f1c5f25cdca253629eef0fda09ac17e11d7844aa4fd3c5d8cc5c0",
+    "Status": "PASS",
+    "UTF-8 bytes": 415
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{\\\"STEALTH\\\":-5}\",\"diseaseId\":\"DIS-FLATULENCE\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Метеоризм\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-082\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"C\\\":-5}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-FLATULENCE",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-098",
+    "SHA-256": "947e7849c2c8e08935f0180e4ec943485fefadf51893319f76ecb6f80527829a",
+    "Status": "PASS",
+    "UTF-8 bytes": 426
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-SKIN_GROWTHS\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Образования на коже\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-083\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"C\\\":-6}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-SKIN_GROWTHS",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-099",
+    "SHA-256": "17f7cea7a56fd70ddbfb9abd1908b436470f44180c9c528e757e82976102f340",
+    "Status": "PASS",
+    "UTF-8 bytes": 432
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"GM_ASSIGN_REMOVE\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-ITCHY_SKIN_GROWTHS\",\"duration\":\"UNTIL_GM_REMOVE_OR_SPECIFIC_CURE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Чешущиеся образования на коже\",\"notes\":null,\"periodic\":\"NONE\",\"refs\":\"MON-084\",\"stacking\":\"NO_STACK_SAME_ID\",\"statModifiers\":\"{\\\"D\\\":-3,\\\"C\\\":-6}\",\"status\":\"ACTIVE\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-ITCHY_SKIN_GROWTHS",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-100",
+    "SHA-256": "aba9a5d81b30b59379d17862e9d8c5e00d2b45d8954fa6a2cd0df3d008386ca2",
+    "Status": "PASS",
+    "UTF-8 bytes": 466
+  },
+  {
+    "Canonical JSON": "{\"assignment\":\"SOURCE_SPECIFIC_TREATMENT\",\"checkModifiers\":\"{}\",\"diseaseId\":\"DIS-PESTILENCE\",\"duration\":\"SOURCE_RULE\",\"effectFamily\":\"DISEASE\",\"isPoison\":\"false\",\"name\":\"Поветрие\",\"notes\":\"Не автоматизируется; при любом S/D/M<1 тяжёлая рана\",\"periodic\":\"DAILY_DEGRADATION; FLOWER_ON_DEATH\",\"refs\":\"MON-058–060\",\"stacking\":\"SOURCE_SPECIFIC\",\"statModifiers\":\"{\\\"S\\\":-3,\\\"D\\\":-3,\\\"M\\\":-3}\",\"status\":\"TRACE_ONLY\",\"unconsciousProjection\":\"FOR_EACH_REDUCED_STAT_IF_EFFECTIVE_X_PLUS_EFFECTIVE_Z_LT_1\"}",
+    "EntityID": "DIS-PESTILENCE",
+    "EntityType": "DiseaseDefinition",
+    "PayloadID": "PAY-101",
+    "SHA-256": "a64db20ccf58d7eb390bf15ba325382c44f01351c789693f794185b322f236c1",
+    "Status": "PASS",
+    "UTF-8 bytes": 541
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-TAIPAN-DEADLY\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Смертельный яд Тайпана\",\"notes\":\"Первый тик в конце следующего хода цели; оружие даёт половину урона за тик\",\"payload\":\"R20/5+L per turn; duration R20/2\",\"payloadKind\":\"PERIODIC_DAMAGE\",\"refs\":\"SYM-039\",\"repeatPolicy\":\"REPLACE_STRENGTH_AND_DURATION_RESTART\",\"sourceKind\":\"SYMBIOTIC\",\"stackingKey\":\"TARGET\"}",
+    "EntityID": "POI-TAIPAN-DEADLY",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-102",
+    "SHA-256": "b3b4a8382e2ac3161d250e88d557ab176e39501c5eeaafaac6983c7fae38c0df",
+    "Status": "PASS",
+    "UTF-8 bytes": 540
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"absolute immunity: all; SYM-144: poison damage/control only\",\"effectFamily\":\"POISON\",\"id\":\"POI-TAIPAN-WEAKENING\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Ослабляющий яд Тайпана\",\"notes\":\"Ослабление характеристик SYM-042 не является уроном или контролем и проходит через SYM-144\",\"payload\":\"K=max(0,R20+L−Z); S/D/M decrease, each not below 1; duration R20/2\",\"payloadKind\":\"STAT_DEBUFF\",\"refs\":\"SYM-042\",\"repeatPolicy\":\"REPLACE_STRENGTH_AND_DURATION\",\"sourceKind\":\"SYMBIOTIC\",\"stackingKey\":\"TARGET\"}",
+    "EntityID": "POI-TAIPAN-WEAKENING",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-103",
+    "SHA-256": "5ecc2256c85744b28ad21d633155372964b7ad742e7b4537d0795042c3eae94d",
+    "Status": "PASS",
+    "UTF-8 bytes": 608
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-TAIPAN-PARALYTIC\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Парализующий яд Тайпана\",\"notes\":\"На негуманоида паралич не действует; попадание и остальные последствия сохраняются. При травме той же конечности применяется наиболее строгий числовой штраф; ограничения и снятие источников независимы\",\"payload\":\"if R20+L>Z: humanoid active limb; duration R20/3; nonhumanoid secondary paralysis skipped\",\"payloadKind\":\"LIMB_DISABLE\",\"refs\":\"SYM-045\",\"repeatPolicy\":\"PER_DISTINCT_LIMB\",\"sourceKind\":\"SYMBIOTIC\",\"stackingKey\":\"TARGET_LIMB\"}",
+    "EntityID": "POI-TAIPAN-PARALYTIC",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-104",
+    "SHA-256": "8fff05efa119c93b7f0af592e29ad59fedaa62a9a34e3d6970c161c28a73d9cc",
+    "Status": "PASS",
+    "UTF-8 bytes": 822
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-VIVISECTOR-ENTRY\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Слизь Вивисектора при входе\",\"notes\":\"Дублирующие описания не должны дать двойной урон\",\"payload\":\"R12+8 once on entry\",\"payloadKind\":\"DIRECT_POISON_DAMAGE\",\"refs\":\"MON-098; MON-100\",\"repeatPolicy\":\"ONE_EVENT_DEDUP\",\"sourceKind\":\"CANONICAL\",\"stackingKey\":\"SOURCE_TARGET_ENTRY\"}",
+    "EntityID": "POI-VIVISECTOR-ENTRY",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-105",
+    "SHA-256": "7e3e6bd785a6edf103f95501dd2b0574f29ea47a665db6cf23f49ac390096788",
+    "Status": "PASS",
+    "UTF-8 bytes": 499
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-VIVISECTOR-FUMES\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Ядовитые пары Вивисектора\",\"notes\":\"По одной проверке на каждого Вивисектора в конце хода цели; источники разрешаются отдельно в стабильном порядке\",\"payload\":\"end target turn in 6m; R20+Z vs R20+12; fail R12 damage\",\"payloadKind\":\"POISON_DAMAGE_CHECK\",\"refs\":\"MON-099\",\"repeatPolicy\":\"PER_SOURCE_TARGET_TURN\",\"sourceKind\":\"CANONICAL\",\"stackingKey\":\"SOURCE_TARGET\"}",
+    "EntityID": "POI-VIVISECTOR-FUMES",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-106",
+    "SHA-256": "21a862ec380d34c0d098e11256ba74be4c6d0ed45bac834bcfeb0b569079f811",
+    "Status": "PASS",
+    "UTF-8 bytes": 639
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-SWADDLER-SEQUENCE\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Яд Пеленальщицы\",\"notes\":\"Счётчик отдельный для пары sourceId+targetId; успех сбрасывает только этот счётчик\",\"payload\":\"first fail −2 next series; second consecutive fail paralysis 5 own turns\",\"payloadKind\":\"FAIL_COUNTER_CONTROL\",\"refs\":\"MON-150\",\"repeatPolicy\":\"SUCCESS_RESETS; SECOND_REPLACES_FIRST\",\"sourceKind\":\"CANONICAL\",\"stackingKey\":\"SOURCE_TARGET\"}",
+    "EntityID": "POI-SWADDLER-SEQUENCE",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-107",
+    "SHA-256": "0bf15c04306e7748103b1efa1d2631f0db3b5b330fd1a314128a0f759331ddb5",
+    "Status": "PASS",
+    "UTF-8 bytes": 587
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-FELIDA-NUMBING\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Плевок Фелиды-Тайпана\",\"notes\":\"Округление до ближайшего целого, ровно 0,5 вверх; положительная длительность минимум 1 ход. При травме той же конечности применяется наиболее строгий числовой штраф; ограничения и снятие источников независимы\",\"payload\":\"R20+7>Z; random active limb; duration round_half_up(R20/3), min 1\",\"payloadKind\":\"LIMB_DISABLE\",\"refs\":\"MON-169\",\"repeatPolicy\":\"PER_LIMB\",\"sourceKind\":\"CANONICAL\",\"stackingKey\":\"TARGET_LIMB\"}",
+    "EntityID": "POI-FELIDA-NUMBING",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-108",
+    "SHA-256": "d01174f0bde8dc4eafbc722c3432e1e0fe151a022f3f713de3572c625c513b65",
+    "Status": "PASS",
+    "UTF-8 bytes": 792
+  },
+  {
+    "Canonical JSON": "{\"blockedPayload\":\"damage,state,counter,secondary effects\",\"effectFamily\":\"POISON\",\"id\":\"POI-FOOD_ALCOHOL\",\"immunityStage\":\"IMMUNE_BEFORE_ROLL\",\"name\":\"Пищевое/алкогольное отравление\",\"notes\":\"Не смешивать с болезнью DIS-POISONING\",\"payload\":\"By CORE-110\",\"payloadKind\":\"SOURCE_SPECIFIC\",\"refs\":\"CORE-110\",\"repeatPolicy\":\"SOURCE_SPECIFIC\",\"sourceKind\":\"ORDINARY\",\"stackingKey\":\"TARGET\"}",
+    "EntityID": "POI-FOOD_ALCOHOL",
+    "EntityType": "PoisonProfile",
+    "PayloadID": "PAY-109",
+    "SHA-256": "cb96066b0da7b1eae5923cb3cccf11a6a167be725e5a8a948a148017522d0b2b",
+    "Status": "PASS",
+    "UTF-8 bytes": 434
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentTraumas\",\"consequence\":\"DISABLED_IF_TOTAL_GT_6; SAME_REGION_APPLY_MOST_SEVERE_PENALTY\",\"id\":\"TRM-LIMB\",\"kind\":\"TRAUMA\",\"name\":\"Травма конечности\",\"notes\":\"Автоматического восстановления нет. При временном онемении той же конечности применяется наиболее строгий числовой штраф; ограничения объединяются, снятие одного состояния не снимает другое\",\"payload\":\"injury=max(0,round_math(R12−Z/3))\",\"recovery\":\"EXPLICIT_ABILITY_PROCEDURE_OR_GM\",\"refs\":\"CORE-117; CORE-119\",\"stacking\":\"ADDITIVE_SAME_LIMB\",\"trigger\":\"R20+Z < actualDamage\"}",
+    "EntityID": "TRM-LIMB",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-110",
+    "SHA-256": "ec8c556b11af333e51c18290f2d58115692c70197e2b9b54de729236f493a9d7",
+    "Status": "PASS",
+    "UTF-8 bytes": 732
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentTraumas\",\"consequence\":\"SOURCE_SPECIFIC\",\"id\":\"TRM-HEAD\",\"kind\":\"TRAUMA\",\"name\":\"Травма головы\",\"notes\":\"Травма головы не создаёт слепоту: потеря зрения исключена из модели приложения\",\"payload\":\"CORE-120\",\"recovery\":\"EXPLICIT_ABILITY_PROCEDURE_OR_GM\",\"refs\":\"CORE-117; CORE-120\",\"stacking\":\"PER_EVENT\",\"trigger\":\"R20+Z < actualDamage\"}",
+    "EntityID": "TRM-HEAD",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-111",
+    "SHA-256": "cd9713c9b52df331980e953ee700e3c7ad315797a93e60a68e26da3e65027660",
+    "Status": "PASS",
+    "UTF-8 bytes": 433
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentTraumas\",\"consequence\":\"NO_RECURSIVE_TRAUMA\",\"id\":\"TRM-TORSO\",\"kind\":\"TRAUMA\",\"name\":\"Травма корпуса\",\"notes\":null,\"payload\":\"one-time extra HP loss\",\"recovery\":\"EXPLICIT_ABILITY_PROCEDURE_OR_GM\",\"refs\":\"CORE-117; CORE-121\",\"stacking\":\"PER_EVENT\",\"trigger\":\"R20+Z < actualDamage\"}",
+    "EntityID": "TRM-TORSO",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-112",
+    "SHA-256": "759ad7323ff382e49637e8de908ea122d7d225e94bd5fa447df244391777e2bd",
+    "Status": "PASS",
+    "UTF-8 bytes": 311
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentTraumas\",\"consequence\":\"UNSUPPORTED_ANATOMY_POLICY\",\"id\":\"TRM-MULTILIMB\",\"kind\":\"TRAUMA\",\"name\":\"Травма многоконечного существа\",\"notes\":\"Не автоматизируется\",\"payload\":\"not automated\",\"recovery\":\"EXPLICIT_ABILITY_PROCEDURE_OR_GM\",\"refs\":\"CORE-122–124\",\"stacking\":\"TRACE_ONLY\",\"trigger\":\"SOURCE_SPECIFIC\"}",
+    "EntityID": "TRM-MULTILIMB",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-113",
+    "SHA-256": "3d3891ec1f2855d28e6cf681a94caff503719357abb9d2d4ce907a86b4315ba0",
+    "Status": "PASS",
+    "UTF-8 bytes": 371
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"actorFlags\",\"consequence\":\"NEW_HP_LOSS_GT_0_CAUSES_DEATH\",\"id\":\"WND-SEVERE\",\"kind\":\"WOUND\",\"name\":\"Тяжёлое ранение\",\"notes\":\"Для обычных монстров одновременно unconscious\",\"payload\":\"severeWound=true; death timer\",\"recovery\":\"SOURCE_SPECIFIC\",\"refs\":\"CORE-152–156; CORE-182\",\"stacking\":\"SINGLETON\",\"trigger\":\"HP reaches 0 after protections\"}",
+    "EntityID": "WND-SEVERE",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-114",
+    "SHA-256": "8debbf6448b7fca3c28a5b5e08d9b263fbca1bc5f894962d78006ee08c5be1a8",
+    "Status": "PASS",
+    "UTF-8 bytes": 398
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentEffects\",\"consequence\":\"EXPIRE_TO_DEAD_OR_REANIMATE\",\"id\":\"WND-DEATH_TIMER\",\"kind\":\"WOUND_TIMER\",\"name\":\"Таймер смерти\",\"notes\":\"Дубль ×4 применяется один раз\",\"payload\":\"D6 turns or D6×5m; exact remainder\",\"recovery\":\"SOURCE_SPECIFIC\",\"refs\":\"CORE-153\",\"stacking\":\"SINGLETON\",\"trigger\":\"severe wound created\"}",
+    "EntityID": "WND-DEATH_TIMER",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-115",
+    "SHA-256": "267b64db51b505252e4da4f675ccbde8c1e461f1d41756e1cc7609c3763d07c4",
+    "Status": "PASS",
+    "UTF-8 bytes": 365
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentWounds\",\"consequence\":\"FORMAL_WOUND_FOR_TARGETED_TREATMENT\",\"id\":\"WND-GENERIC\",\"kind\":\"WOUND\",\"name\":\"Рана\",\"notes\":\"Автоматического заживления нет\",\"payload\":\"one wound per event with regionId\",\"recovery\":\"EXPLICIT_TREATMENT_OR_GM_ONLY\",\"refs\":\"CORE-059\",\"stacking\":\"PER_EVENT_AND_REGION\",\"trigger\":\"SOURCE_HAS_CREATES_WOUND_OR_GM\"}",
+    "EntityID": "WND-GENERIC",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-116",
+    "SHA-256": "07d0f4e8d84d7cd1498b1ef10d87fc32339d5213b1bead6d62e961795b0eca27",
+    "Status": "PASS",
+    "UTF-8 bytes": 383
+  },
+  {
+    "Canonical JSON": "{\"bucket\":\"currentWounds\",\"consequence\":\"CORE-063_REMOVES_ALL\",\"id\":\"WND-BLEEDING\",\"kind\":\"WOUND\",\"name\":\"Кровотечение\",\"notes\":\"Значение урона по умолчанию не вводится\",\"payload\":\"damagePerTick; tick=end_of_target_turn\",\"recovery\":\"CORE-063_OR_EXPLICIT_TREATMENT_OR_GM\",\"refs\":\"CORE-063\",\"stacking\":\"PER_WOUND_INSTANCE\",\"trigger\":\"SOURCE_EXPLICIT_DAMAGE_PER_TICK\"}",
+    "EntityID": "WND-BLEEDING",
+    "EntityType": "InjuryDefinition",
+    "PayloadID": "PAY-117",
+    "SHA-256": "48d2b505ffc973e4de1f319a2214c2f82d31d8bdce083ba65d1c8b8835458619",
+    "Status": "PASS",
+    "UTF-8 bytes": 411
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-001\",\"left\":\"same effect name, numeric\",\"leftFamily\":\"FAM-STAT_MODIFIER\",\"outcome\":\"STRONGEST_MAGNITUDE_APPLIES; TIMERS_INDEPENDENT\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-080\",\"removalTransition\":\"После сильнейшего автоматически действует следующий активный\",\"right\":\"same effect name, numeric\",\"rightFamily\":\"FAM-STAT_MODIFIER\",\"status\":\"DEFINED\",\"timerStack\":\"STRONGEST_MAGNITUDE_APPLIES; TIMERS_INDEPENDENT\"}",
+    "EntityID": "COMB-001",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-118",
+    "SHA-256": "d6857a93cda0924a0bef3df29796db27554f39da6710cd247d0561e80e2bb39f",
+    "Status": "PASS",
+    "UTF-8 bytes": 537
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-002\",\"left\":\"same pharmaceutical effect\",\"leftFamily\":\"FAM-PREPARED_EFFECT\",\"outcome\":\"REFRESH_DURATION; DO_NOT_INCREASE_VALUE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-058\",\"removalTransition\":\"Специальное правило сильнее общего стека\",\"right\":\"repeat dose\",\"rightFamily\":\"FAM-STAT_MODIFIER\",\"status\":\"DEFINED\",\"timerStack\":\"REFRESH_DURATION; DO_NOT_INCREASE_VALUE\"}",
+    "EntityID": "COMB-002",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-119",
+    "SHA-256": "980bb1ee43ca47e3c9bc1dc903f8495f46ee023ad31386f904788819a262f369",
+    "Status": "PASS",
+    "UTF-8 bytes": 471
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-003\",\"left\":\"same diseaseId\",\"leftFamily\":\"FAM-DISEASE\",\"outcome\":\"NO_DUPLICATE_PENALTIES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-085\",\"removalTransition\":\"Один экземпляр/один набор штрафов\",\"right\":\"same diseaseId\",\"rightFamily\":\"FAM-DISEASE\",\"status\":\"DEFINED\",\"timerStack\":\"NO_DUPLICATE_PENALTIES\"}",
+    "EntityID": "COMB-003",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-120",
+    "SHA-256": "b1803577a3a3ed3698ecc0068760591fa9f388f37955c24adc70909292031dcb",
+    "Status": "PASS",
+    "UTF-8 bytes": 399
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-004\",\"left\":\"different diseaseId\",\"leftFamily\":\"FAM-DISEASE\",\"outcome\":\"COEXIST; MODIFIERS_ADD\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-085\",\"removalTransition\":\"Периодика каждой болезни остаётся собственной\",\"right\":\"different diseaseId\",\"rightFamily\":\"FAM-DISEASE\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST; MODIFIERS_ADD\"}",
+    "EntityID": "COMB-004",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-121",
+    "SHA-256": "e48460cf041a9eb0cd649a2e8a42922c7aee201ac6a09e5b8bb192cea6e1937f",
+    "Status": "PASS",
+    "UTF-8 bytes": 433
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-005\",\"left\":\"disease modifiers\",\"leftFamily\":\"FAM-DISEASE\",\"outcome\":\"APPLY_CORE_079_PIPELINE; RECALC_DERIVED_STATES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-079; MON-075\",\"removalTransition\":\"Порог бессознательности проверяется после пересчёта\",\"right\":\"other stat modifiers\",\"rightFamily\":\"FAM-STAT_MODIFIER\",\"status\":\"DEFINED\",\"timerStack\":\"APPLY_CORE_079_PIPELINE; RECALC_DERIVED_STATES\"}",
+    "EntityID": "COMB-005",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-122",
+    "SHA-256": "1e85de4cc02fa7da25422294710d403246684d26c950005db7bf838200413ee1",
+    "Status": "PASS",
+    "UTF-8 bytes": 508
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-006\",\"left\":\"DIS-POISONING\",\"leftFamily\":\"FAM-DISEASE\",\"outcome\":\"DISEASE_REMAINS; NOT_A_POISON_WITHOUT_TAG\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-228; MON-076\",\"removalTransition\":\"Совпадение бытового названия не меняет effectFamily\",\"right\":\"POISON immunity\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"DISEASE_REMAINS; NOT_A_POISON_WITHOUT_TAG\"}",
+    "EntityID": "COMB-006",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-123",
+    "SHA-256": "6f95337426c8b2bcff6a7f93b5341e96c783b9522cc6d70657e4f68e8e7a563e",
+    "Status": "PASS",
+    "UTF-8 bytes": 482
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-007\",\"left\":\"physical hit payload\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"KEEP_VALID_PHYSICAL_PAYLOAD; DROP_POISON_DAMAGE_STATE_COUNTER_SECONDARY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-228\",\"removalTransition\":\"Иммунитет обрабатывается до бросков яда\",\"right\":\"poison payload with absolute immunity\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"KEEP_VALID_PHYSICAL_PAYLOAD; DROP_POISON_DAMAGE_STATE_COUNTER_SECONDARY\"}",
+    "EntityID": "COMB-007",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-124",
+    "SHA-256": "ee366b98d8874df70ce56aafdc1989c8ddd4445f553a9b334e0b6f9a787f0474",
+    "Status": "PASS",
+    "UTF-8 bytes": 550
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-008\",\"left\":\"existing poison\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"NO_AUTOMATIC_CLEANSE_UNLESS_SOURCE_SAYS_SO\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-228; CORE-080\",\"removalTransition\":\"Иммунитет по умолчанию предотвращает наложение\",\"right\":\"newly gained poison immunity\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"NO_AUTOMATIC_CLEANSE_UNLESS_SOURCE_SAYS_SO\"}",
+    "EntityID": "COMB-008",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-125",
+    "SHA-256": "bf556baae4b4111f0ded2878bf696ed92c825698d51e2884740600685335c8bd",
+    "Status": "PASS",
+    "UTF-8 bytes": 502
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-009\",\"left\":\"Taipan deadly/weakening poison\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"REPLACE_STRENGTH_AND_DURATION; RESTART_TIMER\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-039; SYM-042\",\"removalTransition\":\"Не складывать два пакета одного профиля\",\"right\":\"same poison again\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"REPLACE_STRENGTH_AND_DURATION; RESTART_TIMER\"}",
+    "EntityID": "COMB-009",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-126",
+    "SHA-256": "1c71ab96a1483ca865766899d7b386c2ef4d63a6ccd15a90c6f1f93d73f7ddbb",
+    "Status": "PASS",
+    "UTF-8 bytes": 480
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-010\",\"left\":\"Taipan paralytic poison on limb A\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"COEXIST_PER_DISTINCT_LIMB\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-045\",\"removalTransition\":\"Уже онемевшая конечность исключается из выбора\",\"right\":\"same profile on limb B\",\"rightFamily\":\"FAM-TRAUMA\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST_PER_DISTINCT_LIMB\"}",
+    "EntityID": "COMB-010",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-127",
+    "SHA-256": "3c76d721c77537322de5760f861c3912ca51aff04b3fcd57b896f4a1836ee6b5",
+    "Status": "PASS",
+    "UTF-8 bytes": 455
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-011\",\"left\":\"Taipan suppressed/disabled\",\"leftFamily\":\"FAM-SYMBIONT_STATE\",\"outcome\":\"POISON_CONTINUES_TO_EXPIRY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-038; CQA-002\",\"removalTransition\":\"Подавление прекращает производство, не автономный payload\",\"right\":\"already injected poison\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"POISON_CONTINUES_TO_EXPIRY\"}",
+    "EntityID": "COMB-011",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-128",
+    "SHA-256": "ea1b67d0b5986ab8d0327bf5eb9f3fefda2efb2988508e79215d72614c830ed3",
+    "Status": "PASS",
+    "UTF-8 bytes": 482
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-012\",\"left\":\"burning\",\"leftFamily\":\"FAM-FIRE\",\"outcome\":\"ONE_BINARY_STATE; remaining=max(current,new); damagePerTick=max(current,new); NO_INSTANT_SECOND_TICK\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-112\",\"removalTransition\":\"Повторное горение не создаёт немедленный тик\",\"right\":\"new burning\",\"rightFamily\":\"FAM-FIRE\",\"status\":\"DEFINED\",\"timerStack\":\"ONE_BINARY_STATE; remaining=max(current,new); damagePerTick=max(current,new); NO_INSTANT_SECOND_TICK\"}",
+    "EntityID": "COMB-012",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-129",
+    "SHA-256": "bf249b8881c21286ac6139706fce2018d2d542ff60c8f348899ac44f3731f2da",
+    "Status": "PASS",
+    "UTF-8 bytes": 561
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-013\",\"left\":\"Fire Flea explosion damage\",\"leftFamily\":\"FAM-FIRE\",\"outcome\":\"KEEP_EXPLOSION_DAMAGE; BLOCK_STANDARD_BURN_ONLY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-115\",\"removalTransition\":\"Если иной источник прямо не даёт иммунитет самому взрыву\",\"right\":\"fire/burn immunity\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"KEEP_EXPLOSION_DAMAGE; BLOCK_STANDARD_BURN_ONLY\"}",
+    "EntityID": "COMB-013",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-130",
+    "SHA-256": "06f0b6e1674c97a4fd4ec41272e7c25bf9c4617545e14e2e971670605d791af1",
+    "Status": "PASS",
+    "UTF-8 bytes": 516
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-014\",\"left\":\"burning\",\"leftFamily\":\"FAM-FIRE\",\"outcome\":\"COEXIST; AUTONOMOUS_BURN_TICKS_CONTINUE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-103; CQA-002\",\"removalTransition\":\"Броня продолжает работать только там, где урон не игнорирует её\",\"right\":\"unconscious\",\"rightFamily\":\"FAM-CONSCIOUSNESS\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST; AUTONOMOUS_BURN_TICKS_CONTINUE\"}",
+    "EntityID": "COMB-014",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-131",
+    "SHA-256": "34f616f7e87ddea8907be8478b0f9000f34a12208da278291f2d12f5a6227de3",
+    "Status": "PASS",
+    "UTF-8 bytes": 490
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-015\",\"left\":\"burning\",\"leftFamily\":\"FAM-FIRE\",\"outcome\":\"BURNING_AND_DIRECT_DAMAGE_APPLY_NORMALLY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-169\",\"removalTransition\":\"Иная периодика в статуе приостанавливается без накопления\",\"right\":\"stone statue\",\"rightFamily\":\"FAM-FORM_MODE\",\"status\":\"DEFINED\",\"timerStack\":\"BURNING_AND_DIRECT_DAMAGE_APPLY_NORMALLY\"}",
+    "EntityID": "COMB-015",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-132",
+    "SHA-256": "08a3a6c1dec9fb02c72ee0f4ce4606de4389666407660367b497071e0c2f649b",
+    "Status": "PASS",
+    "UTF-8 bytes": 471
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-016\",\"left\":\"pharmaceutical sleep\",\"leftFamily\":\"FAM-CONSCIOUSNESS\",\"outcome\":\"REMOVE_SLEEP_ONLY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-061\",\"removalTransition\":\"Паралич и другие состояния не снимаются\",\"right\":\"any actual damage\",\"rightFamily\":\"FAM-PERIODIC_DAMAGE\",\"status\":\"DEFINED\",\"timerStack\":\"REMOVE_SLEEP_ONLY\"}",
+    "EntityID": "COMB-016",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-133",
+    "SHA-256": "7d5e4a67eb6dd816f995f86b175fd46fa02a2ce29d4a389a6f5f8d708f7ca869",
+    "Status": "PASS",
+    "UTF-8 bytes": 424
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-017\",\"left\":\"pharmaceutical paralysis\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"PARALYSIS_REMAINS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-062\",\"removalTransition\":\"Снимается CORE-060 либо истечением\",\"right\":\"damage\",\"rightFamily\":\"FAM-PERIODIC_DAMAGE\",\"status\":\"DEFINED\",\"timerStack\":\"PARALYSIS_REMAINS\"}",
+    "EntityID": "COMB-017",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-134",
+    "SHA-256": "a58d643f6dbfb11cf9823b766c6822f6726765a4c7dc9752155c795f2e7ea236",
+    "Status": "PASS",
+    "UTF-8 bytes": 404
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-018\",\"left\":\"sleep\",\"leftFamily\":\"FAM-CONSCIOUSNESS\",\"outcome\":\"COEXIST; RESTRICTIONS_UNION\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-061–062; CORE-103\",\"removalTransition\":\"Пробуждение не снимает паралич\",\"right\":\"paralysis\",\"rightFamily\":\"FAM-PHYSICAL_CONTROL\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST; RESTRICTIONS_UNION\"}",
+    "EntityID": "COMB-018",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-135",
+    "SHA-256": "6110746a0174e1a7250d732de88bd0fb0139f762379a35522b25b296a18cebc3",
+    "Status": "PASS",
+    "UTF-8 bytes": 422
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-019\",\"left\":\"unconscious\",\"leftFamily\":\"FAM-CONSCIOUSNESS\",\"outcome\":\"COEXIST; RESTRICTIONS_UNION; ARMOR_REMAINS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-103\",\"removalTransition\":\"Снятие одного состояния не снимает другое\",\"right\":\"physical control\",\"rightFamily\":\"FAM-PHYSICAL_CONTROL\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST; RESTRICTIONS_UNION; ARMOR_REMAINS\"}",
+    "EntityID": "COMB-019",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-136",
+    "SHA-256": "b0564f5ba78ee7dbe14b45878ba8d1aa6644addb322ca4aabc66cc2db44e1bec",
+    "Status": "PASS",
+    "UTF-8 bytes": 469
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-020\",\"left\":\"Advisor automatic control\",\"leftFamily\":\"FAM-CONSCIOUSNESS\",\"outcome\":\"ALLOWED_IF_BODY_PHYSICALLY_CAPABLE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-100; CORE-181\",\"removalTransition\":\"Не действует при тяжёлом ранении, параличе, разрушении органов, полной иммобилизации\",\"right\":\"unconscious/stunned/sleeping body\",\"rightFamily\":\"FAM-MENTAL_CONTROL\",\"status\":\"DEFINED\",\"timerStack\":\"ALLOWED_IF_BODY_PHYSICALLY_CAPABLE\"}",
+    "EntityID": "COMB-020",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-137",
+    "SHA-256": "e99424b6c3501e35bbbec1afe8fb54af6ed5b37b055dece0d38dae3da7acddc5",
+    "Status": "PASS",
+    "UTF-8 bytes": 570
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-021\",\"left\":\"severe wound\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"NO_EXIT_FROM_SEVERE_WOUND\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-071; CORE-156\",\"removalTransition\":\"Обычное лечение не реанимирует\",\"right\":\"ordinary healing\",\"rightFamily\":\"FAM-PERIODIC_HEAL\",\"status\":\"DEFINED\",\"timerStack\":\"NO_EXIT_FROM_SEVERE_WOUND\"}",
+    "EntityID": "COMB-021",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-138",
+    "SHA-256": "18a4c53524c9ea5fcf2872f40f7a08d4c2c4182f3fe2fe64b2096ef71860ce6a",
+    "Status": "PASS",
+    "UTF-8 bytes": 419
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-022\",\"left\":\"severe wound\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"CLEAR_SEVERE_WOUND; HP=1; STOP_DEATH_TIMER\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-060; CORE-156\",\"removalTransition\":\"Окончательную смерть не отменяет\",\"right\":\"CORE-060 reanimation\",\"rightFamily\":\"FAM-PREPARED_EFFECT\",\"status\":\"DEFINED\",\"timerStack\":\"CLEAR_SEVERE_WOUND; HP=1; STOP_DEATH_TIMER\"}",
+    "EntityID": "COMB-022",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-139",
+    "SHA-256": "0d9bf18e188cd4d3396028d8aed859b54babff7f3c1f82bf7763829e28c664cd",
+    "Status": "PASS",
+    "UTF-8 bytes": 463
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-023\",\"left\":\"severe wound\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"ALLOW_ACTIONS; MULTIPLY_ORIGINAL_TIMER_X4_ONCE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-154\",\"removalTransition\":\"Окончание дубля не пересчитывает таймер обратно\",\"right\":\"functional duplicate\",\"rightFamily\":\"FAM-LIFECYCLE\",\"status\":\"DEFINED\",\"timerStack\":\"ALLOW_ACTIONS; MULTIPLY_ORIGINAL_TIMER_X4_ONCE\"}",
+    "EntityID": "COMB-023",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-140",
+    "SHA-256": "953aa25eeb292927288f05ad9b548db50f64208f5f7ff56fbe2412505343384f",
+    "Status": "PASS",
+    "UTF-8 bytes": 483
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-024\",\"left\":\"severe wound\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"ALLOW_ACTIONS_UNTIL_COMBAT_END\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-069\",\"removalTransition\":\"Новый урон всё равно убивает\",\"right\":\"explosive power tablet capability\",\"rightFamily\":\"FAM-CHECK_MODIFIER\",\"status\":\"DEFINED\",\"timerStack\":\"ALLOW_ACTIONS_UNTIL_COMBAT_END\"}",
+    "EntityID": "COMB-024",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-141",
+    "SHA-256": "bb2eefbc0076cec2adf2c113a6cf2b2597180b705cb3023acf9bb80a3954fa64",
+    "Status": "PASS",
+    "UTF-8 bytes": 432
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-025\",\"left\":\"severe wound\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"TRANSITION_TO_DEAD\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-155\",\"removalTransition\":\"Защиты применяются до определения фактической потери\",\"right\":\"new actual HP loss >0\",\"rightFamily\":\"FAM-PERIODIC_DAMAGE\",\"status\":\"DEFINED\",\"timerStack\":\"TRANSITION_TO_DEAD\"}",
+    "EntityID": "COMB-025",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-142",
+    "SHA-256": "9cf5077fa15a1bd5bbfb3edcf5970731a1b093db6bfa8a025cce313dbd2ed3df",
+    "Status": "PASS",
+    "UTF-8 bytes": 444
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-026\",\"left\":\"dead\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"DEAD_REMAINS_TERMINAL\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-156; AQA-028\",\"removalTransition\":\"Только явное воскрешение может создать переход\",\"right\":\"ordinary heal/remove effect\",\"rightFamily\":\"FAM-PERIODIC_HEAL\",\"status\":\"DEFINED\",\"timerStack\":\"DEAD_REMAINS_TERMINAL\"}",
+    "EntityID": "COMB-026",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-143",
+    "SHA-256": "ce1bff0960f3c520c0281eaa219f36e71479a37f29a54259d5d84550dcc23c5b",
+    "Status": "PASS",
+    "UTF-8 bytes": 443
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-027\",\"left\":\"Fire Flea detonation primed\",\"leftFamily\":\"FAM-PREPARED_EFFECT\",\"outcome\":\"DETONATION_CONTINUES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-114–115; CORE-222\",\"removalTransition\":\"Частное исключение сильнее обычного прекращения действий\",\"right\":\"unconscious/paralyzed/dead source\",\"rightFamily\":\"FAM-LIFECYCLE\",\"status\":\"DEFINED\",\"timerStack\":\"DETONATION_CONTINUES\"}",
+    "EntityID": "COMB-027",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-144",
+    "SHA-256": "aab853c13726c98bdd97ceefa342ac29412f4e9e577a6638741bee2368506a41",
+    "Status": "PASS",
+    "UTF-8 bytes": 498
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-028\",\"left\":\"dead\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"CANCEL_REMAINING_PERSONAL_EVENTS; KEEP_DEATH_TRIGGERED_EVENTS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"AQA-024\",\"removalTransition\":\"Стабильная транзакционная очередь\",\"right\":\"pending personal ticks/recovery same mark\",\"rightFamily\":\"FAM-PERIODIC_DAMAGE\",\"status\":\"DEFINED\",\"timerStack\":\"CANCEL_REMAINING_PERSONAL_EVENTS; KEEP_DEATH_TRIGGERED_EVENTS\"}",
+    "EntityID": "COMB-028",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-145",
+    "SHA-256": "986d50024f9874966168b2f3a86b112a9930892cc9811380fb0b5d27fbd9502a",
+    "Status": "PASS",
+    "UTF-8 bytes": 506
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-029\",\"left\":\"limb trauma\",\"leftFamily\":\"FAM-TRAUMA\",\"outcome\":\"ADD_TRAUMA_VALUES; DISABLE_IF_TOTAL_GT_6\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-119\",\"removalTransition\":\"Каждая отключённая конечность даёт один глобальный −5\",\"right\":\"same limb trauma\",\"rightFamily\":\"FAM-TRAUMA\",\"status\":\"DEFINED\",\"timerStack\":\"ADD_TRAUMA_VALUES; DISABLE_IF_TOTAL_GT_6\"}",
+    "EntityID": "COMB-029",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-146",
+    "SHA-256": "c6e0ec987c7fab0a710b5657f4e66883df79a08a48639feaaa83309909c4b68a",
+    "Status": "PASS",
+    "UTF-8 bytes": 471
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-030\",\"left\":\"limb trauma A\",\"leftFamily\":\"FAM-TRAUMA\",\"outcome\":\"INDEPENDENT_BY_LIMB\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-119\",\"removalTransition\":\"Функциональные ограничения считаются для каждой зоны\",\"right\":\"limb trauma B\",\"rightFamily\":\"FAM-TRAUMA\",\"status\":\"DEFINED\",\"timerStack\":\"INDEPENDENT_BY_LIMB\"}",
+    "EntityID": "COMB-030",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-147",
+    "SHA-256": "7f4e130054e19ffefeaf5384ce96b08d37d916df4344f6c081bc9c0179fdaaa5",
+    "Status": "PASS",
+    "UTF-8 bytes": 427
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-031\",\"left\":\"limb trauma\",\"leftFamily\":\"FAM-TRAUMA\",\"outcome\":\"COEXIST; APPLY_MOST_SEVERE_NUMERIC_PENALTY; UNION_NON_NUMERIC_RESTRICTIONS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-119; MON-169\",\"removalTransition\":\"Снятие онемения не устраняет травму; лечение/снятие травмы не завершает онемение\",\"right\":\"temporary numbness same limb\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"PENALTIES_DO_NOT_ADD; TIMERS_AND_REMOVAL_INDEPENDENT\"}",
+    "EntityID": "COMB-031",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-148",
+    "SHA-256": "8719f559b6c2bd70f5e49e8df4b6775a640c64852b859a425774b969c5cb1dc1",
+    "Status": "PASS",
+    "UTF-8 bytes": 587
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-032\",\"left\":\"grapple\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"CHAIN_REQUIRED; END_CHOKE_IF_GRAPPLE_ENDS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-144\",\"removalTransition\":\"Выгодная позиция также прекращается\",\"right\":\"choke hold\",\"rightFamily\":\"FAM-PHYSICAL_CONTROL\",\"status\":\"DEFINED\",\"timerStack\":\"CHAIN_REQUIRED; END_CHOKE_IF_GRAPPLE_ENDS\"}",
+    "EntityID": "COMB-032",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-149",
+    "SHA-256": "eaa78d5b2bbef50d10883a4777bc3e1a096a5f30345329c8574545e047c1cc47",
+    "Status": "PASS",
+    "UTF-8 bytes": 450
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-033\",\"left\":\"multiple grapples/nets/threads\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"KEEP_PER_SOURCE; APPLY_MAX_ACTION_PENALTY; UNION_NON_NUMERIC_RESTRICTIONS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-138; MON-136; MON-149\",\"removalTransition\":\"Освобождение требуется от каждого источника отдельно\",\"right\":\"same target\",\"rightFamily\":\"FAM-PHYSICAL_CONTROL\",\"status\":\"DEFINED\",\"timerStack\":\"KEEP_PER_SOURCE; APPLY_MAX_ACTION_PENALTY; UNION_NON_NUMERIC_RESTRICTIONS\"}",
+    "EntityID": "COMB-033",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-150",
+    "SHA-256": "50c643df9387b970be3555b70fb1d7e31c22bb7e50cc17cce6a4b3fb3d1035ac",
+    "Status": "PASS",
+    "UTF-8 bytes": 588
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-034\",\"left\":\"Swaddler restrained\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"COEXIST\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-149–150\",\"removalTransition\":\"Физическая нить и poison counter независимы\",\"right\":\"first poison fail\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST\"}",
+    "EntityID": "COMB-034",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-151",
+    "SHA-256": "7c89da505ba8c310b22c9fcf2d4d546d5bb89afec0716c3930c827355a80adf6",
+    "Status": "PASS",
+    "UTF-8 bytes": 397
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-035\",\"left\":\"first Swaddler poison fail penalty\",\"leftFamily\":\"FAM-ACTION_ECONOMY\",\"outcome\":\"REPLACE_PENDING_MINUS_2_WITH_PARALYSIS_5_TURNS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-150\",\"removalTransition\":\"Успех сбрасывает последовательность\",\"right\":\"second consecutive fail\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"REPLACE_PENDING_MINUS_2_WITH_PARALYSIS_5_TURNS\"}",
+    "EntityID": "COMB-035",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-152",
+    "SHA-256": "13825f77eb7e69eace5c25dd12eda5d29f2001a6910d65cfa5b06e276c370d15",
+    "Status": "PASS",
+    "UTF-8 bytes": 488
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-036\",\"left\":\"restrained target\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"PROGRESS_ALLOWED; RESET_IF_IMMOBILIZATION_OR_CONTACT_ENDS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-151\",\"removalTransition\":\"Два полных последовательных хода источника\",\"right\":\"cocoon progress\",\"rightFamily\":\"FAM-PREPARED_EFFECT\",\"status\":\"DEFINED\",\"timerStack\":\"PROGRESS_ALLOWED; RESET_IF_IMMOBILIZATION_OR_CONTACT_ENDS\"}",
+    "EntityID": "COMB-036",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-153",
+    "SHA-256": "e0afbaf58a1240bee99ab1877901ecee21042c471a1cc3595e8a0cfa0abc79cf",
+    "Status": "PASS",
+    "UTF-8 bytes": 508
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-037\",\"left\":\"full mental immunity\",\"leftFamily\":\"FAM-MENTAL_CONTROL\",\"outcome\":\"TARGET_INVALID_OR_EFFECT_CANCELLED\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CQA-050\",\"removalTransition\":\"Числовой бонус не создаёт отсутствующую проверку\",\"right\":\"mental effect without contest\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"TARGET_INVALID_OR_EFFECT_CANCELLED\"}",
+    "EntityID": "COMB-037",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-154",
+    "SHA-256": "f98ea93d46beb5e4bd09e37f569c588e7e12249a138d9f2f39810f4db362ab3d",
+    "Status": "PASS",
+    "UTF-8 bytes": 492
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-038\",\"left\":\"Chimera Unstoppable success\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"REMOVE_EXISTING_CONTROL; BLOCK_NEW_CONTROL_DURING_TERM\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CQA-043; MON-020\",\"removalTransition\":\"Не снимает раны, бессознательность, смерть, урон, травмы, отключение Химеры\",\"right\":\"existing/new control\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"REMOVE_EXISTING_CONTROL; BLOCK_NEW_CONTROL_DURING_TERM\"}",
+    "EntityID": "COMB-038",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-155",
+    "SHA-256": "9dc2656d0b3c0187269754590ec07fe042debfe98bf93bef83143e15f3f850dd",
+    "Status": "PASS",
+    "UTF-8 bytes": 587
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-039\",\"left\":\"control resistance +5\",\"leftFamily\":\"FAM-CHECK_MODIFIER\",\"outcome\":\"NO_MODIFIER\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-072\",\"removalTransition\":\"Только существующая проверка сопротивления/освобождения от CONTROL\",\"right\":\"damage/trauma/disease/poison/equipment penalty\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"NO_MODIFIER\"}",
+    "EntityID": "COMB-039",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-156",
+    "SHA-256": "57d3b95171e0fc42cce6db7165466c87ca35728eaa4e3b59e5cf510c48e487c9",
+    "Status": "PASS",
+    "UTF-8 bytes": 493
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-040\",\"left\":\"source-maintained aura/form/control\",\"leftFamily\":\"FAM-SOURCE_LINK\",\"outcome\":\"END_EFFECT\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CQA-002; AQ2-020\",\"removalTransition\":\"Частное правило может сохранить эффект\",\"right\":\"source dies/incapacitated/disabled/off-map\",\"rightFamily\":\"FAM-LIFECYCLE\",\"status\":\"DEFINED\",\"timerStack\":\"END_EFFECT\"}",
+    "EntityID": "COMB-040",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-157",
+    "SHA-256": "2a864a7cd44191880c6e2fdae35249d693e962c94b4b7b34863b1d46078522c0",
+    "Status": "PASS",
+    "UTF-8 bytes": 449
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-041\",\"left\":\"autonomous poison/infection/mine/projectile\",\"leftFamily\":\"FAM-SOURCE_LINK\",\"outcome\":\"CONTINUE_WITH_SOURCE_SNAPSHOT\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CQA-002; AQ2-020\",\"removalTransition\":\"Использовать текущий L, пока источник читаем, иначе последний снимок\",\"right\":\"source removed\",\"rightFamily\":\"FAM-PREPARED_EFFECT\",\"status\":\"DEFINED\",\"timerStack\":\"CONTINUE_WITH_SOURCE_SNAPSHOT\"}",
+    "EntityID": "COMB-041",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-158",
+    "SHA-256": "bf46dcea006abe76f6e3e124fd9fe2cd3946f2ffbd974385f380e43ff47dfa59",
+    "Status": "PASS",
+    "UTF-8 bytes": 526
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-042\",\"left\":\"symbiont disabled\",\"leftFamily\":\"FAM-SYMBIONT_STATE\",\"outcome\":\"END_OR_DISABLE; AUTONOMOUS_ALREADY_APPLIED_EFFECTS_CONTINUE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-104; CQA-002\",\"removalTransition\":\"Локальные исключения имеют приоритет\",\"right\":\"source-maintained own mechanics\",\"rightFamily\":\"FAM-SOURCE_LINK\",\"status\":\"DEFINED\",\"timerStack\":\"END_OR_DISABLE; AUTONOMOUS_ALREADY_APPLIED_EFFECTS_CONTINUE\"}",
+    "EntityID": "COMB-042",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-159",
+    "SHA-256": "e25ca4100757c5aba41fe226330e072ea3857c8d23e62de6e7439cffe2504a2a",
+    "Status": "PASS",
+    "UTF-8 bytes": 521
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-043\",\"left\":\"active mechanical effect\",\"leftFamily\":\"FAM-NARRATIVE\",\"outcome\":\"END_OLD_VERSION; CREATE_NEW_ATOMICALLY; NO_ROLLBACK\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"AQA-045\",\"removalTransition\":\"Повторное включение создаёт новую версию\",\"right\":\"GM changes value/duration/source/key\",\"rightFamily\":\"FAM-SOURCE_LINK\",\"status\":\"DEFINED\",\"timerStack\":\"END_OLD_VERSION; CREATE_NEW_ATOMICALLY; NO_ROLLBACK\"}",
+    "EntityID": "COMB-043",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-160",
+    "SHA-256": "45a28c5a42f8dd81e6f5dca4feff4460fdca1e9f97c34b22966dc895e06509aa",
+    "Status": "PASS",
+    "UTF-8 bytes": 509
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-044\",\"left\":\"multiple events at same timestamp\",\"leftFamily\":\"FAM-PERIODIC_DAMAGE\",\"outcome\":\"STABLE_CREATED_AT_THEN_UUID; RECALC_AFTER_EACH_TICK\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"AQA-024\",\"removalTransition\":\"Новые события не возвращают обработку в завершённую фазу\",\"right\":\"periodic consequences\",\"rightFamily\":\"FAM-PERIODIC_HEAL\",\"status\":\"DEFINED\",\"timerStack\":\"STABLE_CREATED_AT_THEN_UUID; RECALC_AFTER_EACH_TICK\"}",
+    "EntityID": "COMB-044",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-161",
+    "SHA-256": "91dec739567257c2610034b902b391c87153897903751986e49188d534c1aee8",
+    "Status": "PASS",
+    "UTF-8 bytes": 540
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-045\",\"left\":\"new timed effect\",\"leftFamily\":\"FAM-PREPARED_EFFECT\",\"outcome\":\"NO_SAME_MOMENT_TICK_OR_TIMER_DECREMENT\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-101; AQA-024\",\"removalTransition\":\"Первое обслуживание — следующая подходящая метка\",\"right\":\"same creation timestamp\",\"rightFamily\":\"FAM-PERIODIC_DAMAGE\",\"status\":\"DEFINED\",\"timerStack\":\"NO_SAME_MOMENT_TICK_OR_TIMER_DECREMENT\"}",
+    "EntityID": "COMB-045",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-162",
+    "SHA-256": "cb7a81111ec98f0dee38f10abdf40d7c142be95a3af4426855b51eb7cdb79b8e",
+    "Status": "PASS",
+    "UTF-8 bytes": 498
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-046\",\"left\":\"combat duration remainder\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"NORMAL_1_TURN=1_MINUTE; SEVERE_WOUND_1_TURN=5_MINUTES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"Q-CORE-063; CORE-153\",\"removalTransition\":\"Хранить точный остаток; округлять вверх только отображение\",\"right\":\"peace-time conversion\",\"rightFamily\":\"FAM-PREPARED_EFFECT\",\"status\":\"DEFINED\",\"timerStack\":\"NORMAL_1_TURN=1_MINUTE; SEVERE_WOUND_1_TURN=5_MINUTES\"}",
+    "EntityID": "COMB-046",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-163",
+    "SHA-256": "893a8b51eeb6ef90929445bc14712796720a91efbe584f879f8d4bfdc8cd15f4",
+    "Status": "PASS",
+    "UTF-8 bytes": 549
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-047\",\"left\":\"two Chameleon camouflage effects\",\"leftFamily\":\"FAM-SENSE_VISIBILITY\",\"outcome\":\"ONLY_STRONGEST_APPLICABLE_MAGNITUDE; TIMERS_INDEPENDENT\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-184\",\"removalTransition\":\"Специальное правило к CORE-080\",\"right\":\"same detection attempt\",\"rightFamily\":\"FAM-SENSE_VISIBILITY\",\"status\":\"DEFINED\",\"timerStack\":\"ONLY_STRONGEST_APPLICABLE_MAGNITUDE; TIMERS_INDEPENDENT\"}",
+    "EntityID": "COMB-047",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-164",
+    "SHA-256": "3959b5ac41e1f394a0713c142e73b7252ba7a88f04c3be8c9514a8cd07fca9db",
+    "Status": "PASS",
+    "UTF-8 bytes": 496
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-048\",\"left\":\"multiple ControlLease\",\"leftFamily\":\"FAM-MENTAL_CONTROL\",\"outcome\":\"ONE_EFFECTIVE_CONTROLLER_BY_EXPLICIT_PRIORITY_AND_TIME\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-181; CORE-221\",\"removalTransition\":\"owningController не уничтожается\",\"right\":\"same body\",\"rightFamily\":\"FAM-MENTAL_CONTROL\",\"status\":\"DEFINED\",\"timerStack\":\"ONE_EFFECTIVE_CONTROLLER_BY_EXPLICIT_PRIORITY_AND_TIME\"}",
+    "EntityID": "COMB-048",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-165",
+    "SHA-256": "f70082c8fdb92c21c5ffa87faa174148862f7f4b736a22116ee123f83a6f2996",
+    "Status": "PASS",
+    "UTF-8 bytes": 474
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-049\",\"left\":\"hemostatic decoction\",\"leftFamily\":\"FAM-WOUND_BLEEDING\",\"outcome\":\"REMOVE_ALL_BLEEDING_INSTANCES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-063\",\"removalTransition\":\"Не создаёт модель отсутствующих источников кровотечения\",\"right\":\"all current bleedings\",\"rightFamily\":\"FAM-PREPARED_EFFECT\",\"status\":\"DEFINED\",\"timerStack\":\"REMOVE_ALL_BLEEDING_INSTANCES\"}",
+    "EntityID": "COMB-049",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-166",
+    "SHA-256": "affe0f04cc9995abe83ecd7d60ab835037d2a794689843afbe252ebdd27c9842",
+    "Status": "PASS",
+    "UTF-8 bytes": 485
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"PARTIAL\",\"id\":\"COMB-050\",\"left\":\"antiseptic on selected wound\",\"leftFamily\":\"FAM-WOUND_BLEEDING\",\"outcome\":\"APPLY_MINUS_10_ONCE; CONSUME\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-059\",\"removalTransition\":\"Требует идентификатора раны\",\"right\":\"next disease attempt through that wound\",\"rightFamily\":\"FAM-DISEASE\",\"status\":\"DEFINED\",\"timerStack\":\"APPLY_MINUS_10_ONCE; CONSUME\"}",
+    "EntityID": "COMB-050",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-167",
+    "SHA-256": "a013d5eab0706deb9ea182a306d51f36db63bd4f67c33b4665c44e17bcbd44bc",
+    "Status": "PASS",
+    "UTF-8 bytes": 446
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-051\",\"left\":\"Nait sealed\",\"leftFamily\":\"FAM-ITEM_STATE\",\"outcome\":\"BLOCK_BEFORE_APPLICATION\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-053\",\"removalTransition\":\"Не блокирует проглоченный, введённый или уже внутренний яд\",\"right\":\"inhaled fumes/pheromones/infected vapor\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"BLOCK_BEFORE_APPLICATION\"}",
+    "EntityID": "COMB-051",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-168",
+    "SHA-256": "f74b527f9d579a029e6d90e6db02cbd7c8cf5c71974b73a5621b07706986f7f9",
+    "Status": "PASS",
+    "UTF-8 bytes": 487
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-052\",\"left\":\"Nait seal breaks\",\"leftFamily\":\"FAM-ITEM_STATE\",\"outcome\":\"DO_NOT_CLEANSE; DISABLE_FUTURE_RESPONSE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-053\",\"removalTransition\":\"Ремонт не формализован\",\"right\":\"already active effect\",\"rightFamily\":\"FAM-SOURCE_LINK\",\"status\":\"DEFINED\",\"timerStack\":\"DO_NOT_CLEANSE; DISABLE_FUTURE_RESPONSE\"}",
+    "EntityID": "COMB-052",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-169",
+    "SHA-256": "4a6f90f702a7278db92c0152ba5e5586c9383435f2a9541bc701713f3cb6b9b6",
+    "Status": "PASS",
+    "UTF-8 bytes": 430
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-053\",\"left\":\"different pharmaceutical effects\",\"leftFamily\":\"FAM-PREPARED_EFFECT\",\"outcome\":\"COEXIST; APPLICATION_LIMITS_REMAIN\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-058\",\"removalTransition\":\"Одно применение препарата за личный боевой ход\",\"right\":\"same target\",\"rightFamily\":\"FAM-CHECK_MODIFIER\",\"status\":\"DEFINED\",\"timerStack\":\"COEXIST; APPLICATION_LIMITS_REMAIN\"}",
+    "EntityID": "COMB-053",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-170",
+    "SHA-256": "bc978240f39621a970677388efbcdf01c737b20e943d4fe5153da3461e93ce8b",
+    "Status": "PASS",
+    "UTF-8 bytes": 478
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-054\",\"left\":\"shield shock pending\",\"leftFamily\":\"FAM-ACTION_ECONOMY\",\"outcome\":\"KEEP_ONE_PENDING_EFFECT_WITH_MAX_PENALTY; CONSUME_ON_NEXT_SERIES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-043–048\",\"removalTransition\":\"Штрафы не складываются; повтор обновляет ожидающий эффект\",\"right\":\"another shield shock before next series\",\"rightFamily\":\"FAM-ACTION_ECONOMY\",\"status\":\"DEFINED\",\"timerStack\":\"KEEP_ONE_PENDING_EFFECT_WITH_MAX_PENALTY; CONSUME_ON_NEXT_SERIES\"}",
+    "EntityID": "COMB-054",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-171",
+    "SHA-256": "e0d53416514178f7d489bcd15d034dbd556d676786dd71f54c5948529186d884",
+    "Status": "PASS",
+    "UTF-8 bytes": 580
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-055\",\"left\":\"multiple activeCoatings\",\"leftFamily\":\"FAM-PREPARED_EFFECT\",\"outcome\":\"ONE_CONSUMABLE_COATING_PER_SURFACE; REPLACE_AFTER_CONFIRMATION\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"Items 07_Модель_экземпляра; SYM-183\",\"removalTransition\":\"Обычные снаряды: один stackable item с quantity; только смазанные ядом снаряды — отдельные item instances\",\"right\":\"same item\",\"rightFamily\":\"FAM-ITEM_STATE\",\"status\":\"DEFINED\",\"timerStack\":\"ONE_CONSUMABLE_COATING_PER_SURFACE; REPLACE_AFTER_CONFIRMATION\"}",
+    "EntityID": "COMB-055",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-172",
+    "SHA-256": "49ba4c9e4e9f509b9e30bf5bbdba8303611a66718ca5dd4190b10701397f4fdd",
+    "Status": "PASS",
+    "UTF-8 bytes": 637
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-056\",\"left\":\"multiple Swaddler poison sources\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"COUNTER_KEY=sourceId+targetId; SUCCESS_RESETS_MATCHING_SOURCE_ONLY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-150\",\"removalTransition\":\"Разные Пеленальщицы не ускоряют общий счётчик\",\"right\":\"same target fail counter\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"COUNTER_KEY=sourceId+targetId; SUCCESS_RESETS_MATCHING_SOURCE_ONLY\"}",
+    "EntityID": "COMB-056",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-173",
+    "SHA-256": "688aaeb7b0f4bb44d20a68bbd7e3b05125d76bd2699136330f0b1bdf9d45a66c",
+    "Status": "PASS",
+    "UTF-8 bytes": 536
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-057\",\"left\":\"periodic healing\",\"leftFamily\":\"FAM-PERIODIC_HEAL\",\"outcome\":\"ORDINARY_HEAL_TICK_SKIPPED\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-071\",\"removalTransition\":\"Эффект может оставаться активным до конца боя\",\"right\":\"severe wound\",\"rightFamily\":\"FAM-LIFECYCLE\",\"status\":\"DEFINED\",\"timerStack\":\"ORDINARY_HEAL_TICK_SKIPPED\"}",
+    "EntityID": "COMB-057",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-174",
+    "SHA-256": "39efabd26e0c9e819057a89d3eb26c563a1080aa84015794a12837c02ff22bb4",
+    "Status": "PASS",
+    "UTF-8 bytes": 438
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-058\",\"left\":\"SYM-144 poison immunity\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"ALLOW_SYM_042_STAT_DEBUFF; BLOCK_POISON_DAMAGE_AND_CONTROL_ONLY\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-144; SYM-042\",\"removalTransition\":\"Ослабление характеристик не является уроном или контролем\",\"right\":\"SYM-042 weakening debuff\",\"rightFamily\":\"FAM-IMMUNITY_RESISTANCE\",\"status\":\"DEFINED\",\"timerStack\":\"ALLOW_SYM_042_STAT_DEBUFF; BLOCK_POISON_DAMAGE_AND_CONTROL_ONLY\"}",
+    "EntityID": "COMB-058",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-175",
+    "SHA-256": "4502a065f6c578ea0cb3efd70fd64856f407eac156acd6a1fcd01dbe0e75bd1c",
+    "Status": "PASS",
+    "UTF-8 bytes": 566
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-059\",\"left\":\"manual disease assignment\",\"leftFamily\":\"FAM-DISEASE\",\"outcome\":\"CQA-060_MANUAL_CONTRACT_WINS_FOR_APP\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CQA-060; MON-074; MON-086\",\"removalTransition\":\"Не выполнять автоматический выбор болезни/лечения\",\"right\":\"legacy infection/treatment rolls\",\"rightFamily\":\"FAM-INFECTION\",\"status\":\"DEFINED\",\"timerStack\":\"CQA-060_MANUAL_CONTRACT_WINS_FOR_APP\"}",
+    "EntityID": "COMB-059",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-176",
+    "SHA-256": "1ea28ec13e0c619c21bd6ffaf109b5254eaa8a8440ab3bbf250ee6b924de313f",
+    "Status": "PASS",
+    "UTF-8 bytes": 507
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-060\",\"left\":\"standard monster HP=0\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"SET_SEVERE_WOUND_AND_UNCONSCIOUS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-222\",\"removalTransition\":\"SWARM и видовые исключения сильнее\",\"right\":\"consciousness\",\"rightFamily\":\"FAM-CONSCIOUSNESS\",\"status\":\"DEFINED\",\"timerStack\":\"SET_SEVERE_WOUND_AND_UNCONSCIOUS\"}",
+    "EntityID": "COMB-060",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-177",
+    "SHA-256": "3e078f7ecfe86f922b2d8905216869cb71662b84e3a146f882089906411525e4",
+    "Status": "PASS",
+    "UTF-8 bytes": 431
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-061\",\"left\":\"player character severe wound\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"DO_NOT_INFER_EQUIVALENCE_BEYOND_SOURCE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-152; CORE-103\",\"removalTransition\":\"Тяжёлое ранение имеет собственный фильтр; источники дееспособности могут его изменить\",\"right\":\"unconsciousness\",\"rightFamily\":\"FAM-CONSCIOUSNESS\",\"status\":\"DEFINED\",\"timerStack\":\"DO_NOT_INFER_EQUIVALENCE_BEYOND_SOURCE\"}",
+    "EntityID": "COMB-061",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-178",
+    "SHA-256": "2b1d80a54969801ef5c337ca3e1d1e6e76bc9e7ccf4c1550a5d86bf2ab69b6b6",
+    "Status": "PASS",
+    "UTF-8 bytes": 564
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-062\",\"left\":\"SWARM HP loss\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"NO_SEVERE_WOUND\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CORE-219; CORE-222\",\"removalTransition\":\"SWARM не использует обычную модель ран\",\"right\":\"severe wound\",\"rightFamily\":\"FAM-TRAUMA\",\"status\":\"DEFINED\",\"timerStack\":\"NO_SEVERE_WOUND\"}",
+    "EntityID": "COMB-062",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-179",
+    "SHA-256": "e996d68f706284ee8499d379d89b2a3607aec98956c60f54810482b2d546099c",
+    "Status": "PASS",
+    "UTF-8 bytes": 398
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-063\",\"left\":\"clone mutable runtime graph\",\"leftFamily\":\"FAM-SOURCE_LINK\",\"outcome\":\"GENERATE_NEW_UUIDS\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"Bestiary 09_Контракты\",\"removalTransition\":\"Не делить mutable экземпляры между шаблоном и сценой\",\"right\":\"effect/cooldown/capture IDs\",\"rightFamily\":\"FAM-PREPARED_EFFECT\",\"status\":\"DEFINED\",\"timerStack\":\"GENERATE_NEW_UUIDS\"}",
+    "EntityID": "COMB-063",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-180",
+    "SHA-256": "c04a91b20aa94e54d72605097f171306c3b00078819ab076dd3e92462fc352b5",
+    "Status": "PASS",
+    "UTF-8 bytes": 480
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-064\",\"left\":\"secondary control incompatible with anatomy\",\"leftFamily\":\"FAM-PHYSICAL_CONTROL\",\"outcome\":\"NONHUMANOID: SKIP_PARALYSIS_SECONDARY; KEEP_HIT_DAMAGE_AND_OTHER_VALID_CONSEQUENCES\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"SYM-045; Bestiary 05A/06A\",\"removalTransition\":\"Парализующий яд не действует на негуманоидов; основное попадание не отменяется\",\"right\":\"valid attack damage\",\"rightFamily\":\"FAM-TRAUMA\",\"status\":\"DEFINED\",\"timerStack\":\"NONHUMANOID: SKIP_PARALYSIS_SECONDARY; KEEP_HIT_DAMAGE_AND_OTHER_VALID_CONSEQUENCES\"}",
+    "EntityID": "COMB-064",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-181",
+    "SHA-256": "dcdba77ccce4816614dff6602f173a80d22b748bf8c578ccca5dc1c1b1cab31d",
+    "Status": "PASS",
+    "UTF-8 bytes": 665
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-065\",\"left\":\"dead actor\",\"leftFamily\":\"FAM-LIFECYCLE\",\"outcome\":\"ON_FINAL_DEATH TERMINATE_TEMPORARY_AND_CONTROL; PRESERVE_TRAUMAS_WOUNDS_ITEM_STATE_INVENTORY_SYMBIONTS; NO_RESUME_ON_RESURRECTION\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"CQA-001; AQA-024\",\"removalTransition\":\"Сохранённые состояния трупа не возобновляют завершённые временные эффекты\",\"right\":\"stored effects on corpse/resurrection\",\"rightFamily\":\"FAM-SOURCE_LINK\",\"status\":\"DEFINED\",\"timerStack\":\"ON_FINAL_DEATH TERMINATE_TEMPORARY_AND_CONTROL; PRESERVE_TRAUMAS_WOUNDS_ITEM_STATE_INVENTORY_SYMBIONTS; NO_RESUME_ON_RESURRECTION\"}",
+    "EntityID": "COMB-065",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-182",
+    "SHA-256": "5d3198e2b492f810b63198065fce92fbfc2bb876cf235e0386e8a33e020c3c66",
+    "Status": "PASS",
+    "UTF-8 bytes": 724
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-066\",\"left\":\"multiple MON-159 psi-protection charges\",\"leftFamily\":\"FAM-CHECK_MODIFIER\",\"outcome\":\"CONSUME_ONE_EARLIEST_CHARGE; OTHER_SOURCE_CHARGES_REMAIN\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-159\",\"removalTransition\":\"Бонусы не складываются на одной проверке\",\"right\":\"same defensive check\",\"rightFamily\":\"FAM-CHECK_MODIFIER\",\"status\":\"DEFINED\",\"timerStack\":\"CONSUME_ONE_EARLIEST_CHARGE; OTHER_SOURCE_CHARGES_REMAIN\"}",
+    "EntityID": "COMB-066",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-183",
+    "SHA-256": "fe8af421d911b031bf4138189e83789beff7e38b3b4c26062b67d17e70e61ce4",
+    "Status": "PASS",
+    "UTF-8 bytes": 525
+  },
+  {
+    "Canonical JSON": "{\"automation\":\"AUTOMATED\",\"id\":\"COMB-067\",\"left\":\"multiple Vivisector fumes\",\"leftFamily\":\"FAM-POISON\",\"outcome\":\"ONE_CHECK_PER_SOURCE; STABLE_CREATED_AT_THEN_UUID; NO_ZONE_MERGE\",\"precedence\":\"SPECIFIC_RULE_OVERRIDES_DEFAULT_COEXISTENCE\",\"refs\":\"MON-099; AQA-024\",\"removalTransition\":\"Урон и зоны каждого источника разрешаются отдельно\",\"right\":\"same target at end of target turn\",\"rightFamily\":\"FAM-POISON\",\"status\":\"DEFINED\",\"timerStack\":\"ONE_CHECK_PER_SOURCE; STABLE_CREATED_AT_THEN_UUID; NO_ZONE_MERGE\"}",
+    "EntityID": "COMB-067",
+    "EntityType": "CombinationRule",
+    "PayloadID": "PAY-184",
+    "SHA-256": "babaccd168e952953d1ce6c7fc9c11ca4a363fdb430c2e25edfb3fdc378485e2",
+    "Status": "PASS",
+    "UTF-8 bytes": 552
+  },
+  {
+    "Canonical JSON": "{\"contracts\":[[\"EffectDefinition\",\"effectTypeId\",\"string\",\"YES\",\"Стабильный ID из 02_Типы_эффектов\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectDefinition\",\"familyCode\",\"enum\",\"YES\",\"FK на 01_Семейства\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectDefinition\",\"displayName\",\"string\",\"YES\",\"Пользовательское имя\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectDefinition\",\"stateBucket\",\"enum\",\"YES\",\"currentEffects/currentTraumas/currentWounds/actorFlags/item/source/narrative\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectDefinition\",\"defaultStackPolicy\",\"enum\",\"YES\",\"Не заменяет частную карточку источника\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectDefinition\",\"defaultSourceLifecycle\",\"enum\",\"YES\",\"SOURCE_MAINTAINED/AUTONOMOUS/SOURCE_SPECIFIC\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectDefinition\",\"automationStatus\",\"enum\",\"YES\",\"AUTOMATED/PARTIAL/TRACE_ONLY/BLOCKED/NOT_MODELED\",\"NEW_SUPPLEMENT_SCHEMA\"],[\"EffectInstance\",\"effectInstanceId\",\"UUID\",\"YES\",\"Уникален в mutable graph; новый UUID при клонировании\",\"REQUIRED\"],[\"EffectInstance\",\"effectTypeId\",\"string\",\"YES\",\"FK EffectDefinition\",\"REQUIRED\"],[\"EffectInstance\",\"familyCode\",\"enum\",\"YES\",\"Дублируется для быстрого ответа и валидируется по типу\",\"REQUIRED\"],[\"EffectInstance\",\"targetActorId\",\"UUID\",\"YES\",\"Владелец состояния\",\"REQUIRED\"],[\"EffectInstance\",\"targetRegionId\",\"string|null\",\"CONDITIONAL\",\"Обязателен для конечности/зоны\",\"REQUIRED_IF_REGION\"],[\"EffectInstance\",\"sourceRuleIds\",\"string[]\",\"YES\",\"Нормативные Rule ID\",\"REQUIRED\"],[\"EffectInstance\",\"sourceEntityId\",\"UUID|null\",\"CONDITIONAL\",\"Актор/объект источника\",\"SOURCE_SPECIFIC\"],[\"EffectInstance\",\"sourceInstanceId\",\"UUID|string|null\",\"CONDITIONAL\",\"Способность, предмет, зона, покрытие или связь\",\"SOURCE_SPECIFIC\"],[\"EffectInstance\",\"sourceSnapshot\",\"object|null\",\"CONDITIONAL\",\"Последний читаемый уровень/параметры для автономного эффекта\",\"CQA-002\"],[\"EffectInstance\",\"sourceLifecyclePolicy\",\"enum\",\"YES\",\"SOURCE_MAINTAINED/AUTONOMOUS/SOURCE_SPECIFIC\",\"REQUIRED\"],[\"EffectInstance\",\"stackingKey\",\"string\",\"YES\",\"Не выводить молча из displayName; брать из типа/источника\",\"REQUIRED\"],[\"EffectInstance\",\"payload\",\"object\",\"YES\",\"Типизированные значения конкретного эффекта\",\"REQUIRED\"],[\"EffectInstance\",\"magnitude\",\"number|object|null\",\"CONDITIONAL\",\"Число для CORE-080 либо структурированный пакет\",\"SOURCE_SPECIFIC\"],[\"EffectInstance\",\"tags\",\"string[]\",\"YES\",\"CONTROL/POISON/DISEASE и другие явно подтверждённые теги\",\"REQUIRED\"],[\"EffectInstance\",\"createdAt\",\"timestamp\",\"YES\",\"Для стабильного порядка\",\"AQA-024\"],[\"EffectInstance\",\"startsAt\",\"timestamp|turnRef\",\"YES\",\"Момент начала\",\"REQUIRED\"],[\"EffectInstance\",\"expiresAt\",\"timestamp|turnRef|null\",\"CONDITIONAL\",\"NULL только для бессрочного/условного\",\"REQUIRED_IF_TIMED\"],[\"EffectInstance\",\"remainingExact\",\"decimal|null\",\"CONDITIONAL\",\"Точный остаток при конвертации\",\"Q-CORE-063\"],[\"EffectInstance\",\"durationUnit\",\"enum|null\",\"CONDITIONAL\",\"TURN/ROUND/MINUTE/HOUR/DAY/COMBAT/CONDITION\",\"REQUIRED_IF_TIMED\"],[\"EffectInstance\",\"tickSchedule\",\"object|null\",\"CONDITIONAL\",\"Фаза, период и nextTickAt\",\"REQUIRED_IF_PERIODIC\"],[\"EffectInstance\",\"lastTickAt\",\"timestamp|turnRef|null\",\"NO\",\"Аудит дедупликации тика\",\"PERIODIC\"],[\"EffectInstance\",\"status\",\"enum\",\"YES\",\"PENDING/ACTIVE/SUSPENDED/EXPIRED/REMOVED/REPLACED/BLOCKED\",\"REQUIRED\"],[\"EffectInstance\",\"revision\",\"integer>=1\",\"YES\",\"Изменение мастером создаёт новую версию, старую завершает\",\"AQA-045\"],[\"EffectInstance\",\"removalReason\",\"enum|null\",\"NO\",\"EXPIRY/CURE/CLEANSE/DAMAGE/SOURCE_INVALID/REPLACED/GM/DEATH\",\"AUDIT\"],[\"EffectInstance\",\"createdBy\",\"enum\",\"YES\",\"RULE/PLAYER_COMMAND/GM/SYSTEM\",\"AUDIT\"],[\"DiseaseInstance\",\"diseaseId\",\"string\",\"YES\",\"FK 03_Болезни; effectTypeId=EFF-DISEASE-INSTANCE\",\"REQUIRED\"],[\"DiseaseInstance\",\"assignedByGM\",\"boolean\",\"YES\",\"Для приложения true по CQA-060\",\"CQA-060\"],[\"DiseaseInstance\",\"modifierComponents\",\"object[]\",\"YES\",\"Статовые и проверочные модификаторы\",\"MON-076–084\"],[\"DiseaseInstance\",\"dailyTick\",\"object|null\",\"CONDITIONAL\",\"Только если прямо задано\",\"MON-080; MON-087\"],[\"PoisonInstance\",\"poisonProfileId\",\"string\",\"YES\",\"FK 04_Яды\",\"REQUIRED\"],[\"PoisonInstance\",\"poisonSourceKind\",\"enum\",\"YES\",\"ORDINARY/NATURAL/ARTIFICIAL/SYMBIOTIC/CANONICAL\",\"CORE-228\"],[\"PoisonInstance\",\"deliveryKind\",\"enum\",\"YES\",\"CONTACT/INHALED/INGESTED/INJECTED/COATING/SOURCE_SPECIFIC\",\"REQUIRED\"],[\"TraumaInstance\",\"traumaInstanceId\",\"UUID\",\"YES\",\"Элемент currentTraumas\",\"REQUIRED\"],[\"TraumaInstance\",\"regionId\",\"string\",\"YES\",\"Зона анатомии\",\"REQUIRED\"],[\"TraumaInstance\",\"traumaValue\",\"number\",\"YES\",\"Суммируется по одной конечности по CORE-119\",\"CORE-119\"],[\"WoundInstance\",\"woundInstanceId\",\"UUID\",\"YES\",\"Элемент currentWounds\",\"REQUIRED\"],[\"WoundInstance\",\"woundType\",\"enum\",\"YES\",\"GENERIC/BLEEDING; создание только SOURCE_CREATES_WOUND_OR_GM\",\"REQUIRED\"],[\"EffectResponse\",\"responseProfileId\",\"string\",\"YES\",\"Стабильный ID 10_Иммунитеты\",\"REQUIRED\"],[\"EffectResponse\",\"effectFamily\",\"enum\",\"YES\",\"Семейство входящего payload\",\"REQUIRED\"],[\"EffectResponse\",\"sourceScope\",\"enum\",\"YES\",\"ANY/NATURAL/EXTERNAL/OWN_SOURCE/...\",\"REQUIRED\"],[\"EffectResponse\",\"response\",\"enum\",\"YES\",\"IMMUNE_BEFORE_ROLL/CHECK_MODIFIER/DAMAGE_REDUCTION/...\",\"REQUIRED\"],[\"DerivedStateProjection\",\"canPhysicalAct\",\"boolean\",\"YES\",\"Пересчитывается из активных состояний\",\"DERIVED\"],[\"DerivedStateProjection\",\"canMentalAct\",\"boolean|conditional\",\"YES\",\"С учётом речи/движения/контроля тела\",\"DERIVED\"],[\"DerivedStateProjection\",\"canReact\",\"boolean\",\"YES\",\"Пересчитывается\",\"DERIVED\"],[\"DerivedStateProjection\",\"canActiveDefend\",\"boolean\",\"YES\",\"Броня отдельно\",\"DERIVED\"],[\"DerivedStateProjection\",\"effectiveControllerId\",\"UUID|string|null\",\"YES\",\"Результат CORE-181/221\",\"DERIVED\"],[\"DerivedStateProjection\",\"regionPenaltyById\",\"map<regionId,number>\",\"YES\",\"Для одной зоны действует наиболее строгий числовой штраф из травмы/онемения; штрафы не складываются, самостоятельные ограничения объединяются\",\"COMB-031\"],[\"EffectInstance\",\"variantKey\",\"string\",\"YES\",\"Явный вариант эффекта; пустая строка допустима для единственного варианта\",\"GAP-004\"],[\"EffectInstance\",\"aggregateKey\",\"string\",\"YES\",\"Для бинарных эффектов: effectTypeId|variantKey|targetRegionId; источники и таймеры остаются отдельными\",\"GAP-004\"],[\"EffectInstance\",\"deathDisposition\",\"enum\",\"YES\",\"TERMINATE_ON_DEATH/PRESERVE_ON_CORPSE/SOURCE_SPECIFIC\",\"GAP-006\"],[\"PoisonInstance\",\"secondaryControlApplicable\",\"boolean\",\"YES\",\"false для парализующего яда на негуманоиде; остальной payload сохраняется\",\"GAP-017\"],[\"WoundInstance\",\"regionId\",\"string\",\"YES\",\"Зона одной раны, созданной одним событием\",\"GAP-001\"],[\"WoundInstance\",\"creationPolicy\",\"enum\",\"YES\",\"SOURCE_CREATES_WOUND_OR_GM\",\"GAP-001\"],[\"WoundInstance\",\"damagePerTick\",\"number|null\",\"CONDITIONAL\",\"Обязателен только для BLEEDING; значения по умолчанию нет\",\"GAP-002\"],[\"WoundInstance\",\"tickPhase\",\"enum|null\",\"CONDITIONAL\",\"END_OF_TARGET_TURN для BLEEDING\",\"GAP-002\"],[\"WoundInstance\",\"healingPolicy\",\"enum\",\"YES\",\"EXPLICIT_TREATMENT_OR_GM_ONLY\",\"GAP-001–003\"],[\"PreparedCoatingInstance\",\"coatingInstanceId\",\"UUID\",\"YES\",\"Уникальный экземпляр расходуемого покрытия\",\"GAP-011\"],[\"PreparedCoatingInstance\",\"hostItemInstanceId\",\"UUID\",\"YES\",\"Экземпляр предмета либо отдельного отравленного снаряда\",\"GAP-011\"],[\"PreparedCoatingInstance\",\"surfaceKey\",\"string\",\"YES\",\"Одна поражающая поверхность; одновременно одно расходуемое покрытие\",\"GAP-011\"],[\"PreparedCoatingInstance\",\"inventoryMode\",\"enum\",\"YES\",\"STACKABLE_UNCOATED_PROJECTILES/INDIVIDUAL_POISONED_PROJECTILE/INDIVIDUAL_ITEM_COATING\",\"GAP-011\"],[\"PreparedCoatingInstance\",\"consumptionState\",\"enum\",\"YES\",\"ACTIVE/CONSUMED/REPLACED\",\"GAP-011\"],[\"PreparedCoatingInstance\",\"replacesCoatingId\",\"UUID|null\",\"NO\",\"Заполняется после подтверждённой замены покрытия\",\"GAP-011\"]]}",
+    "EntityID": "EFFECT_RUNTIME_SCHEMA_V1_2",
+    "EntityType": "RuntimeSchema",
+    "PayloadID": "PAY-185",
+    "SHA-256": "1620fcec05d3e0e82e57f84b68b6790fd8f275d7b7ff2bd03a9a797ceba36eb3",
+    "Status": "PASS",
+    "UTF-8 bytes": 9237
+  }
+]
