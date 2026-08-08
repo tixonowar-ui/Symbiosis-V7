@@ -52,9 +52,9 @@ jobs:
 
           code_files=$(echo "$stat" | grep -vE '\.(md|txt)$' | grep -c . || true)
           code_lines=$(echo "$stat" | grep -vE '\.(md|txt)$' \
-                       | awk '{a+=$1; d+=$2} END {print a+d+0}')
+                       | awk '{a+=$1; d+=$2} END {print a+d+0}') || true
           doc_lines=$(echo "$stat" | grep -E '\.(md|txt)$' \
-                      | awk '{a+=$1; d+=$2} END {print a+d+0}')
+                      | awk '{a+=$1; d+=$2} END {print a+d+0}') || true
           total_files=$(echo "$stat" | grep -c .)
 
           echo "code:  $code_files files (limit $MAX_CODE_FILES), $code_lines lines (limit $MAX_CODE_LINES)"
