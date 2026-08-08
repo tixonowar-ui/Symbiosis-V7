@@ -1,0 +1,50 @@
+name: PR size
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One task = one minimal diff (AGENTS.md section 6). This guards against a
+# "rebuild the whole app" PR slipping past review by being too large to read.
+#
+# generated/ is excluded from the count: a re-imported artifact legitimately
+# rewrites megabytes, and that is the pipeline's output, not hand-written code.
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Measure hand-written change
+        shell: bash
+        env:
+          MAX_LINES: 1500
+          MAX_FILES: 40
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+          stat=$(git diff --numstat "$base"...HEAD -- . \
+                 ':(exclude)generated/**' ':(exclude)package-lock.json')
+          files=$(echo "$stat" | grep -c . || true)
+          lines=$(echo "$stat" | awk '{a+=$1; d+=$2} END {print a+d+0}')
+
+          echo "changed files: $files (limit $MAX_FILES)"
+          echo "changed lines: $lines (limit $MAX_LINES)"
+          echo "$stat" | sort -k3 | head -50
+
+          over=0
+          [ "$files" -gt "$MAX_FILES" ] && over=1
+          [ "$lines" -gt "$MAX_LINES" ] && over=1
+
+          if [ "$over" = "1" ]; then
+            echo "::error::This PR exceeds the size limit. Split it, or explain in the PR why it cannot be split and ask the owner to override."
+            exit 1
+          fi
+          echo "within limits"

@@ -1,0 +1,40 @@
+# Владелец репозитория ревьюит всё и единственный жмёт Merge.
+# @Saltbound — псевдоним владельца; замените на реальный GitHub-логин,
+# см. docs/process/setup-checklist.md.
+
+*                       @Saltbound
+
+# Read-only источники правды. Изменение — только новой поставкой.
+/artifacts/             @Saltbound
+
+# Вывод конвейера. Меняется прогоном npm run import, не руками.
+/generated/             @Saltbound
+
+# Решения проекта. Принятый ADR не редактируется по существу.
+/docs/adr/              @Saltbound
+
+# Процесс, инвентаризация, очередь задач.
+/docs/                  @Saltbound
+
+# Конвейер и проверки — то, на чём держится доверие к данным.
+/tools/import/          @Saltbound
+/tools/checksums/       @Saltbound
+/tools/validate/        @Saltbound
+
+# CI и шаблоны.
+/.github/               @Saltbound
+
+# Конфигурация проверок. Ослабление ради прохождения задачи запрещено.
+/eslint.config.js       @Saltbound
+/tsconfig.json          @Saltbound
+/tsconfig.base.json     @Saltbound
+/tsconfig.web.json      @Saltbound
+/vitest.config.ts       @Saltbound
+/playwright.config.ts   @Saltbound
+/.prettierrc.json       @Saltbound
+/.gitattributes         @Saltbound
+/package.json           @Saltbound
+
+# Контракт для агентов.
+/AGENTS.md              @Saltbound
+/CLAUDE.md              @Saltbound
