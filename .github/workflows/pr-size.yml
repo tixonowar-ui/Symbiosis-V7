@@ -39,7 +39,6 @@ jobs:
           MAX_TOTAL_FILES: 60
         run: |
           base="origin/${{ github.base_ref }}"
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
           stat=$(git diff --numstat "$base"...HEAD -- . \
                  ':(exclude)generated/**' ':(exclude)package-lock.json')
