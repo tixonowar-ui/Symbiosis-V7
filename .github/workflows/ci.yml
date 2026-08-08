@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Windows is the target platform (ADR 0001), so checks run where the code
+    # will actually live. It also catches line-ending regressions that a Linux
+    # runner would silently pass.
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Artifacts are read-only sources of truth. If they drifted, nothing
+      # downstream can be trusted, so this runs before anything else.
+      - name: Checksums
+        run: npm run checksums:verify
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      # generated/media is not committed (ADR 0016), and the media tests read
+      # what the pipeline produced — so the import has to run before tests.
+      - name: Import
+        run: npm run import
+
+      # The pipeline is required to be byte-reproducible (ADR 0015). If the
+      # import changed a committed file, either the artifact changed without
+      # generated/ being rebuilt, or determinism broke. Both must fail here.
+      - name: Pipeline output is reproducible
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain -- generated/)" ]; then
+            echo "::error::generated/ changed after running the import."
+            echo "Either commit the rebuilt output, or the pipeline is not deterministic."
+            git --no-pager diff --stat -- generated/
+            git status --porcelain -- generated/
+            exit 1
+          fi
+          echo "generated/ matches the committed output"
+
+      - name: Tests
+        run: npm test
+
+      - name: Cross-registry validation
+        run: npm run validate
+
+      - name: E2E
+        # Playwright is configured but has no tests yet and no browsers
+        # installed. Kept as an explicit step so the first e2e test is not
+        # silently skipped; install browsers when tests/e2e stops being empty.
+        run: npm run test:e2e
+
+  markers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unfinished-work markers carry a milestone or a reason
+        shell: bash
+        run: |
+          bad=$(grep -rnE '\b(TODO|STUB|BLOCKED|FIXME|XXX|HACK)\b' \
+                  --include='*.ts' --include='*.tsx' --include='*.js' \
+                  src tools tests 2>/dev/null \
+                | grep -vE '\b(TODO|STUB|BLOCKED)\([^)]+\)' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Markers must be TODO(<milestone>), STUB(<milestone>) or BLOCKED(<reason>). See AGENTS.md section 9."
+            echo "$bad"
+            exit 1
+          fi
+          echo "all markers are qualified"

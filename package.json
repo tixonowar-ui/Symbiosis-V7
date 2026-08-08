@@ -26,9 +26,10 @@
     "test:coverage": "vitest run --coverage --passWithNoTests",
     "test:e2e": "playwright test --pass-with-no-tests",
     "import": "tsx tools/import/index.ts",
+    "validate": "tsx tools/validate/index.ts",
     "checksums": "tsx tools/checksums/index.ts write",
     "checksums:verify": "tsx tools/checksums/index.ts verify",
-    "verify": "npm run checksums:verify && npm run typecheck && npm run lint && npm run format:check && npm run test"
+    "verify": "npm run checksums:verify && npm run typecheck && npm run lint && npm run format:check && npm run test && npm run validate"
   },
   "dependencies": {
     "@e965/xlsx": "0.20.3",

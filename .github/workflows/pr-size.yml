@@ -1,0 +1,75 @@
+name: PR size
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One task = one minimal diff (AGENTS.md section 6). This guards against a
+# "rebuild the whole app" PR slipping past review by being too large to read.
+#
+# Code and documentation are counted separately on purpose. A 2000-line
+# documentation PR is ordinary; a 2000-line code PR is a rewrite. One shared
+# limit would either block honest documentation work or let a rewrite through,
+# depending on where it was set. The handoff PR that introduced this workflow
+# was 1798 lines of documentation and 311 of code — exactly the shape a single
+# limit misjudges.
+#
+# generated/ is excluded entirely: a re-imported artifact legitimately rewrites
+# megabytes, and that is pipeline output, not hand-written work.
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Measure hand-written change
+        shell: bash
+        env:
+          # Calibrate after Codex's first few tasks — these are starting points,
+          # not measurements.
+          MAX_CODE_LINES: 900
+          MAX_CODE_FILES: 25
+          MAX_DOC_LINES: 3000
+          MAX_TOTAL_FILES: 60
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+
+          stat=$(git diff --numstat "$base"...HEAD -- . \
+                 ':(exclude)generated/**' ':(exclude)package-lock.json')
+
+          if [ -z "$stat" ]; then
+            echo "no hand-written changes"
+            exit 0
+          fi
+
+          code_files=$(echo "$stat" | grep -vE '\.(md|txt)$' | grep -c . || true)
+          code_lines=$(echo "$stat" | grep -vE '\.(md|txt)$' \
+                       | awk '{a+=$1; d+=$2} END {print a+d+0}')
+          doc_lines=$(echo "$stat" | grep -E '\.(md|txt)$' \
+                      | awk '{a+=$1; d+=$2} END {print a+d+0}')
+          total_files=$(echo "$stat" | grep -c .)
+
+          echo "code:  $code_files files (limit $MAX_CODE_FILES), $code_lines lines (limit $MAX_CODE_LINES)"
+          echo "docs:  $doc_lines lines (limit $MAX_DOC_LINES)"
+          echo "total: $total_files files (limit $MAX_TOTAL_FILES)"
+          echo
+          echo "$stat" | sort -k3
+
+          over=""
+          [ "$code_files" -gt "$MAX_CODE_FILES" ] && over="$over code-files"
+          [ "$code_lines" -gt "$MAX_CODE_LINES" ] && over="$over code-lines"
+          [ "$doc_lines" -gt "$MAX_DOC_LINES" ] && over="$over doc-lines"
+          [ "$total_files" -gt "$MAX_TOTAL_FILES" ] && over="$over total-files"
+
+          if [ -n "$over" ]; then
+            echo "::error::PR exceeds the size limit ($over). Split it, or explain in the PR why it cannot be split and ask the owner to override."
+            exit 1
+          fi
+          echo "within limits"
