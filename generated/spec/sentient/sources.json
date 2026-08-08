@@ -1,0 +1,51 @@
+[
+  {
+    "Версия / файл": "Symbiosis_V7_Executable_Rules_Registry_v1.6.xlsx",
+    "Граница": "Нормативный",
+    "Использование": "Создание, характеристики, навыки, симбионты, системный каталог и XP routing",
+    "Источник": "Executable Rules Registry",
+    "Статус": "USED"
+  },
+  {
+    "Версия / файл": "Symbiosis_V7_Character_Skills_Symbionts_Registry_v1.1.xlsx",
+    "Граница": "Нормативный",
+    "Использование": "SpeciesKey ↔ LinkedStatCode и runtime XP contracts",
+    "Источник": "Character, Skills & Symbionts Registry",
+    "Статус": "USED"
+  },
+  {
+    "Версия / файл": "Symbiosis_V7_Item_Registry_v1.5_with_icons.xlsx",
+    "Граница": "Нормативный",
+    "Использование": "ItemTypeID, формулы, rollKind и AttackResolution RollOccurrence",
+    "Источник": "Item Registry",
+    "Статус": "USED"
+  },
+  {
+    "Версия / файл": "Symbiosis_V7_Canonical_Bestiary_Registry_v1.3.xlsx",
+    "Граница": "Нормативный",
+    "Использование": "MON-профили и NO_XP_PROGRESSION системных монстров",
+    "Источник": "Canonical Bestiary Registry",
+    "Статус": "USED"
+  },
+  {
+    "Версия / файл": "Simbioz_V7.docx",
+    "Граница": "Канонический контекст",
+    "Использование": "Физиология рас и визуальное описание вооружения/симбионтов",
+    "Источник": "Авторский рулбук",
+    "Статус": "USED"
+  },
+  {
+    "Версия / файл": "Symbiosis_V7_Full_QA_Test_Cases_v1.0.docx",
+    "Граница": "Явно исключён",
+    "Использование": "Не открывался и не использовался",
+    "Источник": "Full QA Test Cases",
+    "Статус": "EXCLUDED"
+  },
+  {
+    "Версия / файл": "Default Sentient Enemy Registry v1.2",
+    "Граница": "Пользовательское содержание",
+    "Использование": "44 шаблона, 44 арта, NO_XP_PROGRESSION и полный dependency tuple",
+    "Источник": "Текущая задача",
+    "Статус": "USED"
+  }
+]

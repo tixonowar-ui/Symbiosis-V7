@@ -1,0 +1,240 @@
+[
+  {
+    "ContractKey": "catalogVersion",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "SYMBIOSIS_SENTIENT_DEFAULTS_V1.2",
+    "Потребитель": "Campaign",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "campaign.defaultSentientCatalogVersion",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "Фиксируется при создании кампании",
+    "Потребитель": "Campaign",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "origin",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "SYSTEM_DEFAULT_SENTIENT",
+    "Потребитель": "Template",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "systemTemplateMutation",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "FORBIDDEN",
+    "Потребитель": "GM UI / API",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "systemTemplateHide",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "FORBIDDEN",
+    "Потребитель": "GM UI / API",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "systemTemplateArchive",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "FORBIDDEN",
+    "Потребитель": "GM UI / API",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "systemTemplateDelete",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "FORBIDDEN",
+    "Потребитель": "GM UI / API",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "campaignCustomTemplates",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "ALLOWED",
+    "Потребитель": "GM UI / API",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "instanceProvenance",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "systemTemplateId+catalogVersion",
+    "Потребитель": "Combat instance",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "instanceMutationWritesBack",
+    "RuleRef": "CORE-227",
+    "Нормативное значение": "NEVER",
+    "Потребитель": "Combat instance",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "templateInstantiation",
+    "RuleRef": "CORE-225",
+    "Нормативное значение": "DEEP_CLONE_NEW_UUID",
+    "Потребитель": "Items / symbionts / effects",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "sentientCreationPipeline",
+    "RuleRef": "CORE-159/196/197/AQA-004",
+    "Нормативное значение": "CORE-196 with CORE-197 stats; all start skill slots filled before finalization",
+    "Потребитель": "Character service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "symbiontLevels",
+    "RuleRef": "CORE-216; CORE-230",
+    "Нормативное значение": "NO_XP_PROGRESSION; NO_XP_BUDGET; targetLevel=effectiveLevel; currentXP=0; currentOE=maxOE",
+    "Потребитель": "Symbiont service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "learnedNodeRefs",
+    "RuleRef": "Rules Registry / local node dictionary",
+    "Нормативное значение": "RuleID or RuleID#SUBNODE; composite refs must resolve in nodeRefCatalog",
+    "Потребитель": "Symbiont service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "skillOwner",
+    "RuleRef": "AQA-006",
+    "Нормативное значение": "HOST or ADVISER; adviser skill rows resolve to ownerEntityKey",
+    "Потребитель": "Skill service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "adviserCard",
+    "RuleRef": "SYM-096/SYM-097/AQA-006",
+    "Нормативное значение": "Creation rolls, base/effective I/W and full adviser skills are tabular fields",
+    "Потребитель": "Symbiont service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "initialRuntimeState",
+    "RuleRef": "CORE-216/AQA-009",
+    "Нормативное значение": "Structured object; all histories empty; no free-form parser",
+    "Потребитель": "Runtime state",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "loadoutIssuance",
+    "RuleRef": "CORE-196/AQA-032/CORE-227",
+    "Нормативное значение": "SYSTEM_DEFAULT_LOADOUT after character-valid creation; CORE-173 five-starting-item rolls are not executed",
+    "Потребитель": "Inventory service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "itemTypeSource",
+    "RuleRef": "Item Registry",
+    "Нормативное значение": "Item Registry v1.5_with_icons only",
+    "Потребитель": "Inventory service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "formulaWeaponProfile",
+    "RuleRef": "CORE-183/184/185/190",
+    "Нормативное значение": "PLAYER_FORMULA_VALIDATED + exact joint witness",
+    "Потребитель": "Weapon service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "actorRole",
+    "RuleRef": "Item Registry 07B",
+    "Нормативное значение": "SYSTEM",
+    "Потребитель": "Audit",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "artAssetFormat",
+    "RuleRef": "CORE-193",
+    "Нормативное значение": "PNG 512×512 for app and embedded XLSX; each ≤12 MB",
+    "Потребитель": "Combat UI",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "rulesMutation",
+    "RuleRef": "Scope boundary",
+    "Нормативное значение": "NONE",
+    "Потребитель": "Rules engine",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "rulesRegistryVersion",
+    "RuleRef": "Baseline Manifest v1.1",
+    "Нормативное значение": "v1.6",
+    "Потребитель": "Rules service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "itemRegistryVersion",
+    "RuleRef": "Baseline Manifest v1.1",
+    "Нормативное значение": "v1.5_with_icons",
+    "Потребитель": "Inventory service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "bestiaryRegistryVersion",
+    "RuleRef": "Baseline Manifest v1.1",
+    "Нормативное значение": "v1.3",
+    "Потребитель": "Enemy catalog service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "characterSkillsSymbiontsRegistryVersion",
+    "RuleRef": "Baseline Manifest v1.1",
+    "Нормативное значение": "v1.1",
+    "Потребитель": "Character / Symbiont service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "sentientRegistryVersion",
+    "RuleRef": "Baseline Manifest v1.1",
+    "Нормативное значение": "v1.2",
+    "Потребитель": "Campaign / Runtime pack",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "actorType",
+    "RuleRef": "CORE-230",
+    "Нормативное значение": "SYSTEM_SENTIENT_ENEMY",
+    "Потребитель": "Combat / Progression router",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "progressionPolicy",
+    "RuleRef": "CORE-230",
+    "Нормативное значение": "NO_XP_PROGRESSION",
+    "Потребитель": "Progression service",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "symbiontXpProgressPoints",
+    "RuleRef": "CORE-230/231",
+    "Нормативное значение": "PROHIBITED_FIELD",
+    "Потребитель": "Template / Instance schema",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "unallocatedSymbiontXp",
+    "RuleRef": "CORE-230/231/232",
+    "Нормативное значение": "PROHIBITED_FIELD",
+    "Потребитель": "Template / Instance schema",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "progressionEventHandling",
+    "RuleRef": "SYM-021; CORE-230/233",
+    "Нормативное значение": "NEVER_PROGRESSION; no XP/pool mutation for rawFace 1 or 20",
+    "Потребитель": "Combat / Progression router",
+    "Статус": "PASS"
+  },
+  {
+    "ContractKey": "dependencyTuple",
+    "RuleRef": "Baseline Manifest v1.1",
+    "Нормативное значение": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Потребитель": "All importers",
+    "Статус": "PASS"
+  }
+]

@@ -78,9 +78,23 @@
   своей колонке. Арт сопоставляется с ближайшей подписью ниже в той же колонке,
   результат сверяется с `Art asset key` из `02_Виды`
 
+- Default Sentient Enemy v1.2 + Runtime Pack → `generated/spec/sentient`
+  (13 файлов), `generated/media/sentient` (44 арта, 16,2 МБ) и
+  `generated/types/sentient.ts`: 44 замороженных шаблона (12 PURE / 16 FREE /
+  16 UNITED), 1195 QA-проверок. Гейты — паспорт (8 строк) и QA (1195)
+- Проверка [ADR 0007](adr/0007-frozen-runtime-pack-forward-compatibility.md):
+  пакет принят по forward assertion, его `dependencyTuple` намеренно старше
+  текущей линии. Требование точного равенства версий отвергло бы валидный пакет
+- Проверка RTC-011 дважды: по листу контракта и построчно по всем 44 шаблонам
+  (`ActorType`, `ProgressionPolicy`, `Immutable`)
+- Реестр и замороженный пакет сверены между собой: 44 SHA-256 артов и
+  44 payload-хеша совпали
+
+**Все шесть реестров и атлас импортированы.**
+
 Осталось:
 
-- Default Sentient Enemy v1.2 + Runtime Pack → `generated/spec`
+- `generated/seed` — SQLite seed из `generated/spec`
 - `generated/media` из `xl/media/` и Runtime Pack (64 иконки, 16 артов)
 - `generated/seed` — SQLite seed
 

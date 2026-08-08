@@ -1,0 +1,392 @@
+[
+  {
+    "Code": "PURE",
+    "Dictionary": "Race",
+    "LabelRU": "Чистый",
+    "RuleRef / Note": "CORE-001/006/008"
+  },
+  {
+    "Code": "FREE",
+    "Dictionary": "Race",
+    "LabelRU": "Вольный",
+    "RuleRef / Note": "CORE-001/006/008"
+  },
+  {
+    "Code": "UNITED",
+    "Dictionary": "Race",
+    "LabelRU": "Единый",
+    "RuleRef / Note": "CORE-001/006/008"
+  },
+  {
+    "Code": "STALKER",
+    "Dictionary": "PureClass",
+    "LabelRU": "Сталкер",
+    "RuleRef / Note": "CORE-008"
+  },
+  {
+    "Code": "SOLDIER",
+    "Dictionary": "PureClass",
+    "LabelRU": "Солдат",
+    "RuleRef / Note": "CORE-008"
+  },
+  {
+    "Code": "SEEKER",
+    "Dictionary": "PureClass",
+    "LabelRU": "Искатель",
+    "RuleRef / Note": "CORE-008"
+  },
+  {
+    "Code": "TRAINED",
+    "Dictionary": "ThreatTier",
+    "LabelRU": "Обученный",
+    "RuleRef / Note": "Контентная рекомендация, не новая механика"
+  },
+  {
+    "Code": "VETERAN",
+    "Dictionary": "ThreatTier",
+    "LabelRU": "Ветеран",
+    "RuleRef / Note": "Контентная рекомендация, не новая механика"
+  },
+  {
+    "Code": "ELITE",
+    "Dictionary": "ThreatTier",
+    "LabelRU": "Элита",
+    "RuleRef / Note": "Контентная рекомендация, не новая механика"
+  },
+  {
+    "Code": "BOSS",
+    "Dictionary": "ThreatTier",
+    "LabelRU": "Босс",
+    "RuleRef / Note": "Контентная рекомендация, не новая механика"
+  },
+  {
+    "Code": "WPNPROF-SYS-001",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-001",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-002",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-002",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-003",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-007",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-005",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-009",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-006",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-010",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-007",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-011",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-008B",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-012",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-009",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-013",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-010",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-014",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-011",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-015",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-012",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-016",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-013",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-017",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-014",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-018",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-016",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-020",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-018",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-022",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-019",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-023",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WPNPROF-SYS-021",
+    "Dictionary": "WeaponProfileVersion",
+    "LabelRU": "ITM-WPN-025",
+    "RuleRef / Note": "ITEM_FORMULAS_V1.2"
+  },
+  {
+    "Code": "WEAVER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Ткач",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "TAIPAN",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Тайпан",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "OWL",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Сова",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "ARMADILLO",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Броненосец",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "DRAGON",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Дракон",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "TROGR",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Трогр",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "KEEPER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Хранитель",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "TICK",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Клещ",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "CRICKET",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Сверчок",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "SPIDER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Паук",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "CHAMELEON",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Хамелеон",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "PENGUIN",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Пингвин",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "RAT",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Крыса",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "EEL",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Угорь",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "MANTIS",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Богомол",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "SKUNK",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Скунс",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "TOAD",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Жаба",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "TEACHER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Учитель",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "ADVISER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Советник",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "DOLPHIN",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Дельфин",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "SYMBIOTIC_MONSTER",
+    "Dictionary": "SymbiontSpecies",
+    "LabelRU": "Огненный костяной Чумной доктор",
+    "RuleRef / Note": "Rules Registry v1.6"
+  },
+  {
+    "Code": "SYM-131#MI_MI_MI",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Ми-ми-ми",
+    "RuleRef / Note": "rootRuleId=SYM-131; subnodeCode=MI_MI_MI; level=1"
+  },
+  {
+    "Code": "SYM-131#OH_NICE",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Oh nice!",
+    "RuleRef / Note": "rootRuleId=SYM-131; subnodeCode=OH_NICE; level=2"
+  },
+  {
+    "Code": "SYM-131#BLACK_WHITE_FEAR",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Чёрно-белый страх",
+    "RuleRef / Note": "rootRuleId=SYM-131; subnodeCode=BLACK_WHITE_FEAR; level=3"
+  },
+  {
+    "Code": "SYM-151#RAT_COMMUNICATIONS",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Крысиные коммуникации",
+    "RuleRef / Note": "rootRuleId=SYM-151; subnodeCode=RAT_COMMUNICATIONS; level=6"
+  },
+  {
+    "Code": "SYM-161#ABSOLUTE_MEMORY",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Абсолютная память",
+    "RuleRef / Note": "rootRuleId=SYM-161; subnodeCode=ABSOLUTE_MEMORY; level=5"
+  },
+  {
+    "Code": "MON-026#READ_THOUGHTS",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Чтение мыслей",
+    "RuleRef / Note": "rootRuleId=MON-026; subnodeCode=READ_THOUGHTS; level=2"
+  },
+  {
+    "Code": "MON-026#DIVERT_ATTENTION",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Отведение внимания",
+    "RuleRef / Note": "rootRuleId=MON-026; subnodeCode=DIVERT_ATTENTION; level=4"
+  },
+  {
+    "Code": "MON-026#PERMANENT_ILLUSION",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Постоянная иллюзия",
+    "RuleRef / Note": "rootRuleId=MON-026; subnodeCode=PERMANENT_ILLUSION; level=5"
+  },
+  {
+    "Code": "MON-041#ONE_FAMILY",
+    "Dictionary": "CompositeNodeRef",
+    "LabelRU": "Мы — одна семья",
+    "RuleRef / Note": "rootRuleId=MON-041; subnodeCode=ONE_FAMILY; level=4"
+  },
+  {
+    "Code": "SYSTEM_DEFAULT_SENTIENT",
+    "Dictionary": "Origin",
+    "LabelRU": "Системный враг-мыслящий по умолчанию",
+    "RuleRef / Note": "CORE-227"
+  },
+  {
+    "Code": "SYSTEM_DEFAULT_LOADOUT",
+    "Dictionary": "ItemOrigin",
+    "LabelRU": "Системная выдача шаблону",
+    "RuleRef / Note": "AQA-032"
+  },
+  {
+    "Code": "image/png",
+    "Dictionary": "ArtMime",
+    "LabelRU": "PNG 512×512",
+    "RuleRef / Note": "CORE-193 / Combat UI asset"
+  },
+  {
+    "Code": "SYSTEM_SENTIENT_ENEMY",
+    "Dictionary": "ActorType",
+    "LabelRU": "Системный враг-мыслящий; не PLAYER_CHARACTER.",
+    "RuleRef / Note": "CORE-230"
+  },
+  {
+    "Code": "NO_XP_PROGRESSION",
+    "Dictionary": "ProgressionPolicy",
+    "LabelRU": "Не создаёт прямой XP, баллы pool или нераспределённый XP.",
+    "RuleRef / Note": "CORE-230"
+  },
+  {
+    "Code": "NEVER_PROGRESSION",
+    "Dictionary": "ProgressionRoute",
+    "LabelRU": "Единственный разрешённый маршрут для системного SentientEnemy.",
+    "RuleRef / Note": "CORE-230/233"
+  },
+  {
+    "Code": "symbiontXpProgressPoints",
+    "Dictionary": "ProhibitedStateField",
+    "LabelRU": "Поле отсутствует в template и instance payload.",
+    "RuleRef / Note": "CORE-231"
+  },
+  {
+    "Code": "unallocatedSymbiontXp",
+    "Dictionary": "ProhibitedStateField",
+    "LabelRU": "Поле отсутствует в template и instance payload.",
+    "RuleRef / Note": "CORE-231/232"
+  }
+]

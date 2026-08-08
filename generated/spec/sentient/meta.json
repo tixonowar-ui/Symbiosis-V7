@@ -1,0 +1,12 @@
+{
+  "arts": 44,
+  "forwardCompatibilityAsserted": true,
+  "gatesAllPass": true,
+  "mediaDir": "generated/media/sentient",
+  "packBuiltAgainst": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+  "packFiles": 50,
+  "packSource": "artifacts/packs/Symbiosis_V7_Default_Sentient_Enemy_Runtime_Pack_v1.2.zip",
+  "registryVersion": "v1.2",
+  "source": "artifacts/registries/Symbiosis_V7_Default_Sentient_Enemy_Registry_v1.2.xlsx",
+  "templates": 44
+}

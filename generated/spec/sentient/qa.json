@@ -1,0 +1,5977 @@
+[
+  {
+    "CheckID": "COUNT_TOTAL_44",
+    "Detail": "count=44",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "COUNT_PURE_12",
+    "Detail": "4 Stalker + 5 Soldier + 3 Seeker",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "COUNT_FREE_16",
+    "Detail": "16 Вольных",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "COUNT_UNITED_16",
+    "Detail": "16 Единых",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "UNIQUE_TEMPLATE_IDS",
+    "Detail": "systemTemplateId unique",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "UNIQUE_NAMES",
+    "Detail": "displayName unique",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "UNIQUE_ART_FILES",
+    "Detail": "artFile unique",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_BASE_RANGE",
+    "Detail": "{\"S\":10,\"D\":35,\"M\":10,\"Z\":10,\"I\":8,\"W\":10,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_FINAL_MIN",
+    "Detail": "{\"S\":12,\"D\":40,\"M\":15,\"Z\":15,\"I\":8,\"W\":10,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_SKILL_SLOTS",
+    "Detail": "used=5;required=5;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":40,\"M\":15,\"Z\":15,\"I\":8,\"W\":10,\"C\":6};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":12,\"D\":40,\"M\":15,\"Z\":15,\"I\":8,\"W\":10,\"C\":6};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_PURE_CLASS",
+    "Detail": "class=STALKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_ARMOR_STRENGTH",
+    "Detail": "S=12;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_ITM-WPN-003_STATS",
+    "Detail": "final={\"S\":12,\"D\":40,\"M\":15,\"Z\":15,\"I\":8,\"W\":10,\"C\":6};req={\"S\":8,\"D\":19,\"skillKey\":\"SHOOTING\",\"hands\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_ITM-WPN-003_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=4;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_ITM-WPN-003_STATS",
+    "Detail": "final={\"S\":12,\"D\":40,\"M\":15,\"Z\":15,\"I\":8,\"W\":10,\"C\":6};req={\"S\":8,\"D\":19,\"skillKey\":\"SHOOTING\",\"hands\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-001_ITM-WPN-003_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=4;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_BASE_RANGE",
+    "Detail": "{\"S\":17,\"D\":12,\"M\":10,\"Z\":12,\"I\":6,\"W\":6,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_FINAL_MIN",
+    "Detail": "{\"S\":19,\"D\":17,\"M\":15,\"Z\":17,\"I\":6,\"W\":6,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":19,\"D\":17,\"M\":15,\"Z\":17,\"I\":6,\"W\":6,\"C\":6};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":19,\"D\":17,\"M\":15,\"Z\":17,\"I\":6,\"W\":6,\"C\":6};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_PURE_CLASS",
+    "Detail": "class=STALKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_ARMOR_STRENGTH",
+    "Detail": "S=19;armorReqSum=14",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_ITM-WPN-005_STATS",
+    "Detail": "final={\"S\":19,\"D\":17,\"M\":15,\"Z\":17,\"I\":6,\"W\":6,\"C\":6};req={\"S\":19,\"D\":14,\"skillKey\":\"SHOOTING\",\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-002_ITM-WPN-005_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=2;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_BASE_RANGE",
+    "Detail": "{\"S\":35,\"D\":35,\"M\":15,\"Z\":15,\"I\":8,\"W\":8,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_FINAL_MIN",
+    "Detail": "{\"S\":37,\"D\":40,\"M\":20,\"Z\":20,\"I\":8,\"W\":8,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":37,\"D\":40,\"M\":20,\"Z\":20,\"I\":8,\"W\":8,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":37,\"D\":40,\"M\":20,\"Z\":20,\"I\":8,\"W\":8,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_PURE_CLASS",
+    "Detail": "class=STALKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_ARMOR_STRENGTH",
+    "Detail": "S=37;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_ITM-WPN-004_STATS",
+    "Detail": "final={\"S\":37,\"D\":40,\"M\":20,\"Z\":20,\"I\":8,\"W\":8,\"C\":5};req={\"S\":16,\"D\":12,\"skillKey\":\"SHOOTING\",\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-003_ITM-WPN-004_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=3;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_BASE_RANGE",
+    "Detail": "{\"S\":20,\"D\":17,\"M\":10,\"Z\":10,\"I\":12,\"W\":8,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_FINAL_MIN",
+    "Detail": "{\"S\":22,\"D\":22,\"M\":15,\"Z\":15,\"I\":12,\"W\":8,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":22,\"D\":22,\"M\":15,\"Z\":15,\"I\":12,\"W\":8,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":22,\"D\":22,\"M\":15,\"Z\":15,\"I\":12,\"W\":8,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_PURE_CLASS",
+    "Detail": "class=STALKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_ARMOR_STRENGTH",
+    "Detail": "S=22;armorReqSum=14",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_ITM-WPN-006_STATS",
+    "Detail": "final={\"S\":22,\"D\":22,\"M\":15,\"Z\":15,\"I\":12,\"W\":8,\"C\":5};req={\"S\":22,\"D\":22,\"I\":12,\"skillKey\":\"SHOOTING\",\"minBonus\":2,\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-STK-004_ITM-WPN-006_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=3;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_BASE_RANGE",
+    "Detail": "{\"S\":19,\"D\":14,\"M\":10,\"Z\":15,\"I\":6,\"W\":10,\"C\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_FINAL_MIN",
+    "Detail": "{\"S\":24,\"D\":16,\"M\":15,\"Z\":20,\"I\":6,\"W\":10,\"C\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_SKILL_SLOTS",
+    "Detail": "used=5;required=5;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":24,\"D\":16,\"M\":15,\"Z\":20,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":24,\"D\":16,\"M\":15,\"Z\":20,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":24,\"D\":16,\"M\":15,\"Z\":20,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":24,\"D\":16,\"M\":15,\"Z\":20,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_PURE_CLASS",
+    "Detail": "class=SOLDIER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_ARMOR_STRENGTH",
+    "Detail": "S=24;armorReqSum=24",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_ITM-WPN-026_STATS",
+    "Detail": "final={\"S\":24,\"D\":16,\"M\":15,\"Z\":20,\"I\":6,\"W\":10,\"C\":4};req={\"S\":22,\"D\":16,\"skillKey\":\"FENCING\",\"secondSkillKey\":\"SHIELD\",\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_ITM-WPN-026_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=2;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-001_ITM-WPN-026_SECOND_SKILL",
+    "Detail": "skill=SHIELD",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_BASE_RANGE",
+    "Detail": "{\"S\":15,\"D\":20,\"M\":10,\"Z\":12,\"I\":6,\"W\":10,\"C\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_FINAL_MIN",
+    "Detail": "{\"S\":20,\"D\":22,\"M\":15,\"Z\":17,\"I\":6,\"W\":10,\"C\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_SKILL_SLOTS",
+    "Detail": "used=5;required=5;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":20,\"D\":22,\"M\":15,\"Z\":17,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":20,\"D\":22,\"M\":15,\"Z\":17,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":20,\"D\":22,\"M\":15,\"Z\":17,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":20,\"D\":22,\"M\":15,\"Z\":17,\"I\":6,\"W\":10,\"C\":4};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_PURE_CLASS",
+    "Detail": "class=SOLDIER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_ARMOR_STRENGTH",
+    "Detail": "S=20;armorReqSum=20",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_ITM-WPN-027_STATS",
+    "Detail": "final={\"S\":20,\"D\":22,\"M\":15,\"Z\":17,\"I\":6,\"W\":10,\"C\":4};req={\"S\":15,\"D\":22,\"skillKey\":\"FENCING\",\"secondSkillKey\":\"SHIELD\",\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_ITM-WPN-027_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=2;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-002_ITM-WPN-027_SECOND_SKILL",
+    "Detail": "skill=SHIELD",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_BASE_RANGE",
+    "Detail": "{\"S\":17,\"D\":20,\"M\":10,\"Z\":12,\"I\":12,\"W\":8,\"C\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_FINAL_MIN",
+    "Detail": "{\"S\":22,\"D\":22,\"M\":15,\"Z\":17,\"I\":12,\"W\":8,\"C\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":22,\"D\":22,\"M\":15,\"Z\":17,\"I\":12,\"W\":8,\"C\":4};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":22,\"D\":22,\"M\":15,\"Z\":17,\"I\":12,\"W\":8,\"C\":4};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_PURE_CLASS",
+    "Detail": "class=SOLDIER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_ARMOR_STRENGTH",
+    "Detail": "S=22;armorReqSum=14",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_ITM-WPN-006_STATS",
+    "Detail": "final={\"S\":22,\"D\":22,\"M\":15,\"Z\":17,\"I\":12,\"W\":8,\"C\":4};req={\"S\":22,\"D\":22,\"I\":12,\"skillKey\":\"SHOOTING\",\"minBonus\":2,\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-003_ITM-WPN-006_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=3;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_BASE_RANGE",
+    "Detail": "{\"S\":14,\"D\":17,\"M\":10,\"Z\":12,\"I\":8,\"W\":10,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_FINAL_MIN",
+    "Detail": "{\"S\":19,\"D\":19,\"M\":15,\"Z\":17,\"I\":8,\"W\":10,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_SKILL_SLOTS",
+    "Detail": "used=5;required=5;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":19,\"D\":19,\"M\":15,\"Z\":17,\"I\":8,\"W\":10,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":19,\"D\":19,\"M\":15,\"Z\":17,\"I\":8,\"W\":10,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_PURE_CLASS",
+    "Detail": "class=SOLDIER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ARMOR_STRENGTH",
+    "Detail": "S=19;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ITM-WPN-003_STATS",
+    "Detail": "final={\"S\":19,\"D\":19,\"M\":15,\"Z\":17,\"I\":8,\"W\":10,\"C\":5};req={\"S\":8,\"D\":19,\"skillKey\":\"SHOOTING\",\"hands\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ITM-WPN-003_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=4;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ITM-WPN-003_STATS",
+    "Detail": "final={\"S\":19,\"D\":19,\"M\":15,\"Z\":17,\"I\":8,\"W\":10,\"C\":5};req={\"S\":8,\"D\":19,\"skillKey\":\"SHOOTING\",\"hands\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ITM-WPN-003_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=4;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ITM-WPN-005_STATS",
+    "Detail": "final={\"S\":19,\"D\":19,\"M\":15,\"Z\":17,\"I\":8,\"W\":10,\"C\":5};req={\"S\":19,\"D\":14,\"skillKey\":\"SHOOTING\",\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-004_ITM-WPN-005_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=4;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_BASE_RANGE",
+    "Detail": "{\"S\":11,\"D\":10,\"M\":10,\"Z\":12,\"I\":6,\"W\":8,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_FINAL_MIN",
+    "Detail": "{\"S\":16,\"D\":12,\"M\":15,\"Z\":17,\"I\":6,\"W\":8,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":16,\"D\":12,\"M\":15,\"Z\":17,\"I\":6,\"W\":8,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":12,\"M\":15,\"Z\":17,\"I\":6,\"W\":8,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_PURE_CLASS",
+    "Detail": "class=SOLDIER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_ARMOR_STRENGTH",
+    "Detail": "S=16;armorReqSum=14",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_ITM-WPN-004_STATS",
+    "Detail": "final={\"S\":16,\"D\":12,\"M\":15,\"Z\":17,\"I\":6,\"W\":8,\"C\":5};req={\"S\":16,\"D\":12,\"skillKey\":\"SHOOTING\",\"hands\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SOL-005_ITM-WPN-004_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=3;pureProficiency=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_BASE_RANGE",
+    "Detail": "{\"S\":10,\"D\":10,\"M\":8,\"Z\":10,\"I\":12,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_FINAL_MIN",
+    "Detail": "{\"S\":12,\"D\":12,\"M\":8,\"Z\":15,\"I\":19,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_SKILL_ARCHERY_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":12,\"M\":8,\"Z\":15,\"I\":19,\"W\":8,\"C\":8};req={\"S\":8,\"D\":12,\"I\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_SKILL_ARCHERY_FINAL_REQ",
+    "Detail": "final={\"S\":12,\"D\":12,\"M\":8,\"Z\":15,\"I\":19,\"W\":8,\"C\":8};req={\"S\":8,\"D\":12,\"I\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_PURE_CLASS",
+    "Detail": "class=SEEKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_ARMOR_STRENGTH",
+    "Detail": "S=12;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_ITM-WPN-007_STATS",
+    "Detail": "final={\"S\":12,\"D\":12,\"M\":8,\"Z\":15,\"I\":19,\"W\":8,\"C\":8};req={\"S\":5,\"D\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-001_ITM-WPN-007_NO_PENALTY",
+    "Detail": "skill=ARCHERY;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_BASE_RANGE",
+    "Detail": "{\"S\":9,\"D\":4,\"M\":10,\"Z\":10,\"I\":7,\"W\":6,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":6,\"M\":10,\"Z\":15,\"I\":14,\"W\":6,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":6,\"M\":10,\"Z\":15,\"I\":14,\"W\":6,\"C\":8};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":6,\"M\":10,\"Z\":15,\"I\":14,\"W\":6,\"C\":8};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_PURE_CLASS",
+    "Detail": "class=SEEKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_ITM-WPN-002_STATS",
+    "Detail": "final={\"S\":11,\"D\":6,\"M\":10,\"Z\":15,\"I\":14,\"W\":6,\"C\":8};req={\"S\":11,\"D\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-002_ITM-WPN-002_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_BASE_RANGE",
+    "Detail": "{\"S\":35,\"D\":35,\"M\":12,\"Z\":15,\"I\":15,\"W\":8,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_FINAL_MIN",
+    "Detail": "{\"S\":37,\"D\":37,\"M\":12,\"Z\":20,\"I\":22,\"W\":8,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_MASS",
+    "Detail": "massKg=110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":37,\"D\":37,\"M\":12,\"Z\":20,\"I\":22,\"W\":8,\"C\":7};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":37,\"D\":37,\"M\":12,\"Z\":20,\"I\":22,\"W\":8,\"C\":7};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_PURE_NO_SYMBIONTS",
+    "Detail": "Pure immunity",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_PURE_CLASS",
+    "Detail": "class=SEEKER",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_ARMOR_STRENGTH",
+    "Detail": "S=37;armorReqSum=18",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_ITM-WPN-013_STATS",
+    "Detail": "final={\"S\":37,\"D\":37,\"M\":12,\"Z\":20,\"I\":22,\"W\":8,\"C\":7};req={\"S\":15,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-PURE-SEEK-003_ITM-WPN-013_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_BASE_RANGE",
+    "Detail": "{\"S\":15,\"D\":14,\"M\":14,\"Z\":14,\"I\":10,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_FINAL_MIN",
+    "Detail": "{\"S\":13,\"D\":14,\"M\":12,\"Z\":12,\"I\":10,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":13,\"D\":14,\"M\":12,\"Z\":12,\"I\":10,\"W\":8,\"C\":8};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":13,\"D\":14,\"M\":12,\"Z\":12,\"I\":10,\"W\":8,\"C\":8};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_WEAVER_LEVEL",
+    "Detail": "L=4",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_WEAVER_OE",
+    "Detail": "OE=200",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_WEAVER_ABILITIES",
+    "Detail": "nodes=4;L=4",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_ARMOR_STRENGTH",
+    "Detail": "S=13;armorReqSum=4",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_ITM-WPN-002_STATS",
+    "Detail": "final={\"S\":13,\"D\":14,\"M\":12,\"Z\":12,\"I\":10,\"W\":8,\"C\":8};req={\"S\":11,\"D\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-001_ITM-WPN-002_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_BASE_RANGE",
+    "Detail": "{\"S\":12,\"D\":18,\"M\":12,\"Z\":16,\"I\":8,\"W\":8,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_FINAL_MIN",
+    "Detail": "{\"S\":10,\"D\":18,\"M\":10,\"Z\":9,\"I\":8,\"W\":8,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_SKILL_SHORT_CREATION_REQ",
+    "Detail": "stage={\"S\":10,\"D\":18,\"M\":10,\"Z\":14,\"I\":8,\"W\":8,\"C\":7};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_SKILL_SHORT_FINAL_REQ",
+    "Detail": "final={\"S\":10,\"D\":18,\"M\":10,\"Z\":9,\"I\":8,\"W\":8,\"C\":7};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_TAIPAN_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_TAIPAN_OE",
+    "Detail": "OE=350",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_TAIPAN_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_ARMOR_STRENGTH",
+    "Detail": "S=10;armorReqSum=4",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_ITM-WPN-016_STATS",
+    "Detail": "final={\"S\":10,\"D\":18,\"M\":10,\"Z\":9,\"I\":8,\"W\":8,\"C\":7};req={\"S\":6,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_ITM-WPN-016_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_ITM-WPN-016_STATS",
+    "Detail": "final={\"S\":10,\"D\":18,\"M\":10,\"Z\":9,\"I\":8,\"W\":8,\"C\":7};req={\"S\":6,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-002_ITM-WPN-016_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":17,\"M\":12,\"Z\":12,\"I\":10,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_FINAL_MIN",
+    "Detail": "{\"S\":16,\"D\":17,\"M\":10,\"Z\":10,\"I\":10,\"W\":13,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_SKILL_ARCHERY_CREATION_REQ",
+    "Detail": "stage={\"S\":16,\"D\":17,\"M\":10,\"Z\":10,\"I\":10,\"W\":8,\"C\":8};req={\"S\":8,\"D\":12,\"I\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_SKILL_ARCHERY_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":17,\"M\":10,\"Z\":10,\"I\":10,\"W\":13,\"C\":8};req={\"S\":8,\"D\":12,\"I\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_OWL_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_OWL_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_OWL_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_ARMOR_STRENGTH",
+    "Detail": "S=16;armorReqSum=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_ITM-WPN-009_STATS",
+    "Detail": "final={\"S\":16,\"D\":17,\"M\":10,\"Z\":10,\"I\":10,\"W\":13,\"C\":8};req={\"S\":16,\"D\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-003_ITM-WPN-009_NO_PENALTY",
+    "Detail": "skill=ARCHERY;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":14,\"M\":14,\"Z\":16,\"I\":6,\"W\":6,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_FINAL_MIN",
+    "Detail": "{\"S\":16,\"D\":14,\"M\":12,\"Z\":20,\"I\":6,\"W\":6,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_MASS",
+    "Detail": "massKg=70",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_SKILL_AXES_CREATION_REQ",
+    "Detail": "stage={\"S\":16,\"D\":14,\"M\":12,\"Z\":14,\"I\":6,\"W\":6,\"C\":6};req={\"S\":12,\"D\":10,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_SKILL_AXES_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":14,\"M\":12,\"Z\":20,\"I\":6,\"W\":6,\"C\":6};req={\"S\":12,\"D\":10,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_ARMADILLO_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_ARMADILLO_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_ARMADILLO_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_ARMOR_STRENGTH",
+    "Detail": "S=16;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_ITM-WPN-020_STATS",
+    "Detail": "final={\"S\":16,\"D\":14,\"M\":12,\"Z\":20,\"I\":6,\"W\":6,\"C\":6};req={\"S\":15,\"D\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-004_ITM-WPN-020_NO_PENALTY",
+    "Detail": "skill=AXES;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_BASE_RANGE",
+    "Detail": "{\"S\":15,\"D\":15,\"M\":18,\"Z\":18,\"I\":6,\"W\":8,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_FINAL_MIN",
+    "Detail": "{\"S\":13,\"D\":15,\"M\":11,\"Z\":11,\"I\":6,\"W\":8,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_SKILL_SPEAR_CREATION_REQ",
+    "Detail": "stage={\"S\":13,\"D\":15,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":6};req={\"S\":10,\"D\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_SKILL_SPEAR_FINAL_REQ",
+    "Detail": "final={\"S\":13,\"D\":15,\"M\":11,\"Z\":11,\"I\":6,\"W\":8,\"C\":6};req={\"S\":10,\"D\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_DRAGON_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_DRAGON_OE",
+    "Detail": "OE=180",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_DRAGON_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_ARMOR_STRENGTH",
+    "Detail": "S=13;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_ITM-WPN-015_STATS",
+    "Detail": "final={\"S\":13,\"D\":15,\"M\":11,\"Z\":11,\"I\":6,\"W\":8,\"C\":6};req={\"S\":7,\"D\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-005_ITM-WPN-015_NO_PENALTY",
+    "Detail": "skill=SPEAR;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_BASE_RANGE",
+    "Detail": "{\"S\":16,\"D\":12,\"M\":16,\"Z\":16,\"I\":8,\"W\":6,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_FINAL_MIN",
+    "Detail": "{\"S\":35,\"D\":35,\"M\":35,\"Z\":35,\"I\":1,\"W\":1,\"C\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_MASS",
+    "Detail": "massKg=120",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":14,\"D\":12,\"M\":14,\"Z\":14,\"I\":8,\"W\":6,\"C\":8};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":35,\"D\":35,\"M\":35,\"Z\":35,\"I\":1,\"W\":1,\"C\":1};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_TROGR_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_TROGR_OE",
+    "Detail": "OE=6000",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_TROGR_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_TROGR_GROSS_GRANT",
+    "Detail": "[{\"skillKey\":\"GROSS\",\"skillName\":\"Владение грубым оружием\",\"bonus\":3,\"slotCost\":0,\"sourceType\":\"SYMBIONT_GRANTED\",\"sourceRuleId\":\"SYM-079\",\"note\":\"Высокий навык без слотов от Трогра L4.\"}]",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_ARMOR_STRENGTH",
+    "Detail": "S=35;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_ITM-WPN-010_STATS",
+    "Detail": "final={\"S\":35,\"D\":35,\"M\":35,\"Z\":35,\"I\":1,\"W\":1,\"C\":1};req={\"S\":11,\"D\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-006_ITM-WPN-010_NO_PENALTY",
+    "Detail": "skill=GROSS;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_BASE_RANGE",
+    "Detail": "{\"S\":19,\"D\":14,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_FINAL_MIN",
+    "Detail": "{\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_KEEPER_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_KEEPER_OE",
+    "Detail": "OE=1200",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_KEEPER_ABILITIES",
+    "Detail": "nodes=10;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_ARMOR_STRENGTH",
+    "Detail": "S=17;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_ITM-WPN-011_STATS",
+    "Detail": "final={\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6};req={\"S\":9,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_ITM-WPN-011_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_ITM-WPN-023_STATS",
+    "Detail": "final={\"S\":17,\"D\":14,\"M\":14,\"Z\":14,\"I\":6,\"W\":8,\"C\":6};req={\"S\":15,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-007_ITM-WPN-023_NO_PENALTY",
+    "Detail": "skill=SHIELD;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_BASE_RANGE",
+    "Detail": "{\"S\":12,\"D\":16,\"M\":14,\"Z\":14,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_FINAL_MIN",
+    "Detail": "{\"S\":16,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_SKILL_SHORT_CREATION_REQ",
+    "Detail": "stage={\"S\":10,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_SKILL_SHORT_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_TICK_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_TICK_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_TICK_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_ARMOR_STRENGTH",
+    "Detail": "S=16;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_ITM-WPN-016_STATS",
+    "Detail": "final={\"S\":16,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":6,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-008_ITM-WPN-016_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_BASE_RANGE",
+    "Detail": "{\"S\":14,\"D\":20,\"M\":15,\"Z\":14,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_FINAL_MIN",
+    "Detail": "{\"S\":12,\"D\":20,\"M\":13,\"Z\":12,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":20,\"M\":13,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":12,\"D\":20,\"M\":13,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_CRICKET_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_CRICKET_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_CRICKET_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_ARMOR_STRENGTH",
+    "Detail": "S=12;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_ITM-WPN-014_STATS",
+    "Detail": "final={\"S\":12,\"D\":20,\"M\":13,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":5,\"D\":15}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-009_ITM-WPN-014_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_BASE_RANGE",
+    "Detail": "{\"S\":12,\"D\":18,\"M\":14,\"Z\":14,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_FINAL_MIN",
+    "Detail": "{\"S\":10,\"D\":24,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_SKILL_SHORT_CREATION_REQ",
+    "Detail": "stage={\"S\":10,\"D\":18,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_SKILL_SHORT_FINAL_REQ",
+    "Detail": "final={\"S\":10,\"D\":24,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_SPIDER_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_SPIDER_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_SPIDER_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_ARMOR_STRENGTH",
+    "Detail": "S=10;armorReqSum=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_ITM-WPN-017_STATS",
+    "Detail": "final={\"S\":10,\"D\":24,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":7,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-010_ITM-WPN-017_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_BASE_RANGE",
+    "Detail": "{\"S\":13,\"D\":20,\"M\":12,\"Z\":12,\"I\":8,\"W\":8,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_SKILL_ARCHERY_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":7};req={\"S\":8,\"D\":12,\"I\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_SKILL_ARCHERY_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":7};req={\"S\":8,\"D\":12,\"I\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_CHAMELEON_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_CHAMELEON_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_CHAMELEON_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_ITM-WPN-007_STATS",
+    "Detail": "final={\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":7};req={\"S\":5,\"D\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-011_ITM-WPN-007_NO_PENALTY",
+    "Detail": "skill=ARCHERY;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_BASE_RANGE",
+    "Detail": "{\"S\":24,\"D\":16,\"M\":18,\"Z\":18,\"I\":6,\"W\":8,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_FINAL_MIN",
+    "Detail": "{\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_PENGUIN_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_PENGUIN_OE",
+    "Detail": "OE=140",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_PENGUIN_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_ARMOR_STRENGTH",
+    "Detail": "S=22;armorReqSum=18",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_ITM-WPN-011_STATS",
+    "Detail": "final={\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10};req={\"S\":9,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_ITM-WPN-011_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_ITM-WPN-025_STATS",
+    "Detail": "final={\"S\":22,\"D\":16,\"M\":16,\"Z\":16,\"I\":6,\"W\":8,\"C\":10};req={\"S\":20,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-012_ITM-WPN-025_NO_PENALTY",
+    "Detail": "skill=SHIELD;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_BASE_RANGE",
+    "Detail": "{\"S\":12,\"D\":18,\"M\":14,\"Z\":14,\"I\":8,\"W\":6,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_FINAL_MIN",
+    "Detail": "{\"S\":10,\"D\":18,\"M\":12,\"Z\":12,\"I\":8,\"W\":6,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_SKILL_SHORT_CREATION_REQ",
+    "Detail": "stage={\"S\":10,\"D\":18,\"M\":12,\"Z\":12,\"I\":8,\"W\":6,\"C\":8};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_SKILL_SHORT_FINAL_REQ",
+    "Detail": "final={\"S\":10,\"D\":18,\"M\":12,\"Z\":12,\"I\":8,\"W\":6,\"C\":8};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_RAT_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_RAT_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_RAT_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_ARMOR_STRENGTH",
+    "Detail": "S=10;armorReqSum=8",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_ITM-WPN-017_STATS",
+    "Detail": "final={\"S\":10,\"D\":18,\"M\":12,\"Z\":12,\"I\":8,\"W\":6,\"C\":8};req={\"S\":7,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-013_ITM-WPN-017_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_BASE_RANGE",
+    "Detail": "{\"S\":16,\"D\":16,\"M\":14,\"Z\":14,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_FINAL_MIN",
+    "Detail": "{\"S\":14,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_SKILL_AXES_CREATION_REQ",
+    "Detail": "stage={\"S\":14,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":12,\"D\":10,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_SKILL_AXES_FINAL_REQ",
+    "Detail": "final={\"S\":14,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":12,\"D\":10,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_EEL_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_EEL_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_EEL_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_ARMOR_STRENGTH",
+    "Detail": "S=14;armorReqSum=8",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_ITM-WPN-018_STATS",
+    "Detail": "final={\"S\":14,\"D\":16,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":10,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-014_ITM-WPN-018_NO_PENALTY",
+    "Detail": "skill=AXES;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_BASE_RANGE",
+    "Detail": "{\"S\":14,\"D\":18,\"M\":14,\"Z\":14,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_FINAL_MIN",
+    "Detail": "{\"S\":12,\"D\":23,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":18,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":12,\"D\":23,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_MANTIS_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_MANTIS_OE",
+    "Detail": "OE=240",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_MANTIS_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_ARMOR_STRENGTH",
+    "Detail": "S=12;armorReqSum=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_ITM-WPN-011_STATS",
+    "Detail": "final={\"S\":12,\"D\":23,\"M\":12,\"Z\":12,\"I\":6,\"W\":6,\"C\":7};req={\"S\":9,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-015_ITM-WPN-011_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_BASE_RANGE",
+    "Detail": "{\"S\":10,\"D\":14,\"M\":14,\"Z\":14,\"I\":7,\"W\":6,\"C\":15}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_FINAL_MIN",
+    "Detail": "{\"S\":8,\"D\":14,\"M\":12,\"Z\":12,\"I\":7,\"W\":6,\"C\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_MASS",
+    "Detail": "massKg=64",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_SKILL_SLOTS",
+    "Detail": "used=3;required=3;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_SKILL_SHOOTING_CREATION_REQ",
+    "Detail": "stage={\"S\":8,\"D\":14,\"M\":12,\"Z\":12,\"I\":7,\"W\":6,\"C\":15};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_SKILL_SHOOTING_FINAL_REQ",
+    "Detail": "final={\"S\":8,\"D\":14,\"M\":12,\"Z\":12,\"I\":7,\"W\":6,\"C\":5};req={\"S\":5,\"D\":6,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_FREE_ONE_SYMBIONT",
+    "Detail": "count=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_SKUNK_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_SKUNK_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_SKUNK_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_ARMOR_STRENGTH",
+    "Detail": "S=8;armorReqSum=4",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_ITM-WPN-001_STATS",
+    "Detail": "final={\"S\":8,\"D\":14,\"M\":12,\"Z\":12,\"I\":7,\"W\":6,\"C\":5};req={\"S\":4,\"D\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-FREE-016_ITM-WPN-001_NO_PENALTY",
+    "Detail": "skill=SHOOTING;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_BASE_RANGE",
+    "Detail": "{\"S\":31,\"D\":18,\"M\":25,\"Z\":25,\"I\":10,\"W\":10,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_FINAL_MIN",
+    "Detail": "{\"S\":24,\"D\":18,\"M\":15,\"Z\":26,\"I\":10,\"W\":20,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_SKILL_SLOTS",
+    "Detail": "used=5;required=5;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":24,\"D\":18,\"M\":15,\"Z\":15,\"I\":10,\"W\":10,\"C\":10};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":24,\"D\":18,\"M\":15,\"Z\":26,\"I\":10,\"W\":20,\"C\":10};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":24,\"D\":18,\"M\":15,\"Z\":15,\"I\":10,\"W\":10,\"C\":10};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":24,\"D\":18,\"M\":15,\"Z\":26,\"I\":10,\"W\":20,\"C\":10};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ARMADILLO_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ARMADILLO_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ARMADILLO_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TOAD_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TOAD_OE",
+    "Detail": "OE=280",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TOAD_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TEACHER_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TEACHER_OE",
+    "Detail": "OE=120",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TEACHER_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_PENGUIN_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_PENGUIN_OE",
+    "Detail": "OE=140",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_PENGUIN_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_TEACHER_W_FORMULA",
+    "Detail": "W=20;expected=20;rawW=20;stageW=10;L=6;AQA-005",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ARMOR_STRENGTH",
+    "Detail": "S=24;armorReqSum=24",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ITM-WPN-011_STATS",
+    "Detail": "final={\"S\":24,\"D\":18,\"M\":15,\"Z\":26,\"I\":10,\"W\":20,\"C\":10};req={\"S\":9,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ITM-WPN-011_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ITM-WPN-025_STATS",
+    "Detail": "final={\"S\":24,\"D\":18,\"M\":15,\"Z\":26,\"I\":10,\"W\":20,\"C\":10};req={\"S\":20,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-001_ITM-WPN-025_NO_PENALTY",
+    "Detail": "skill=SHIELD;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_BASE_RANGE",
+    "Detail": "{\"S\":25,\"D\":16,\"M\":24,\"Z\":24,\"I\":8,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_FINAL_MIN",
+    "Detail": "{\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":18,\"D\":16,\"M\":14,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_ARMADILLO_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_ARMADILLO_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_ARMADILLO_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_DRAGON_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_DRAGON_OE",
+    "Detail": "OE=150",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_DRAGON_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_RAT_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_RAT_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_RAT_ABILITIES",
+    "Detail": "nodes=9;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_WEAVER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_WEAVER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_WEAVER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_RAT_BOTH_L6_NODES",
+    "Detail": "SYM-152,SYM-154,SYM-155,SYM-156,SYM-157,SYM-151#RAT_COMMUNICATIONS,SYM-158,SYM-159,SYM-160",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_ARMOR_STRENGTH",
+    "Detail": "S=18;armorReqSum=18",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_ITM-WPN-012_STATS",
+    "Detail": "final={\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":9,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-002_ITM-WPN-012_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_BASE_RANGE",
+    "Detail": "{\"S\":25,\"D\":16,\"M\":24,\"Z\":24,\"I\":8,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_FINAL_MIN",
+    "Detail": "{\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_SKILL_AXES_CREATION_REQ",
+    "Detail": "stage={\"S\":18,\"D\":16,\"M\":14,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":12,\"D\":10,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_SKILL_AXES_FINAL_REQ",
+    "Detail": "final={\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":12,\"D\":10,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":18,\"D\":16,\"M\":14,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_DRAGON_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_DRAGON_OE",
+    "Detail": "OE=180",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_DRAGON_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ARMADILLO_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ARMADILLO_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ARMADILLO_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_WEAVER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_WEAVER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_WEAVER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_KEEPER_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_KEEPER_OE",
+    "Detail": "OE=1200",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_KEEPER_ABILITIES",
+    "Detail": "nodes=10;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ARMOR_STRENGTH",
+    "Detail": "S=18;armorReqSum=18",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ITM-WPN-018_STATS",
+    "Detail": "final={\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":10,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ITM-WPN-018_NO_PENALTY",
+    "Detail": "skill=AXES;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ITM-WPN-023_STATS",
+    "Detail": "final={\"S\":18,\"D\":16,\"M\":9,\"Z\":14,\"I\":8,\"W\":8,\"C\":8};req={\"S\":15,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-003_ITM-WPN-023_NO_PENALTY",
+    "Detail": "skill=SHIELD;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_BASE_RANGE",
+    "Detail": "{\"S\":19,\"D\":22,\"M\":20,\"Z\":20,\"I\":8,\"W\":8,\"C\":12}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_FINAL_MIN",
+    "Detail": "{\"S\":12,\"D\":22,\"M\":10,\"Z\":15,\"I\":8,\"W\":8,\"C\":12}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":22,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":12};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":12,\"D\":22,\"M\":10,\"Z\":15,\"I\":8,\"W\":8,\"C\":12};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_SKILL_SHIELD_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":22,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":12};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_SKILL_SHIELD_FINAL_REQ",
+    "Detail": "final={\"S\":12,\"D\":22,\"M\":10,\"Z\":15,\"I\":8,\"W\":8,\"C\":12};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ARMADILLO_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ARMADILLO_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ARMADILLO_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_CHAMELEON_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_CHAMELEON_OE",
+    "Detail": "OE=360",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_CHAMELEON_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_PENGUIN_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_PENGUIN_OE",
+    "Detail": "OE=140",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_PENGUIN_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_OE",
+    "Detail": "OE=100",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_CREATION_ROLLS",
+    "Detail": "{\"I_R20\":12,\"W_R20\":12}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_EFFECTIVE_STATS",
+    "Detail": "baseI=20;baseW=20;effectiveI=25;effectiveW=20",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_SLOTS_FILLED",
+    "Detail": "used=10;available=10",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_FENCING_REQ",
+    "Detail": "stats={\"S\":12,\"D\":22,\"M\":10,\"Z\":10,\"I\":25,\"W\":20,\"C\":12};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_SHIELD_REQ",
+    "Detail": "stats={\"S\":12,\"D\":22,\"M\":10,\"Z\":10,\"I\":25,\"W\":20,\"C\":12};req={\"S\":10,\"D\":8,\"I\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ADVISER_LIGHTNING_REACTION_REQ",
+    "Detail": "stats={\"S\":12,\"D\":22,\"M\":10,\"Z\":10,\"I\":25,\"W\":20,\"C\":12};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ARMOR_STRENGTH",
+    "Detail": "S=12;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ITM-WPN-014_STATS",
+    "Detail": "final={\"S\":12,\"D\":22,\"M\":10,\"Z\":15,\"I\":8,\"W\":8,\"C\":12};req={\"S\":5,\"D\":15}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ITM-WPN-014_NO_PENALTY",
+    "Detail": "skill=FENCING;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ITM-WPN-022_STATS",
+    "Detail": "final={\"S\":12,\"D\":22,\"M\":10,\"Z\":15,\"I\":8,\"W\":8,\"C\":12};req={\"S\":10,\"D\":9}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-004_ITM-WPN-022_NO_PENALTY",
+    "Detail": "skill=SHIELD;bonus=2;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_BASE_RANGE",
+    "Detail": "{\"S\":23,\"D\":18,\"M\":22,\"Z\":22,\"I\":10,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_FINAL_MIN",
+    "Detail": "{\"S\":16,\"D\":18,\"M\":12,\"Z\":17,\"I\":10,\"W\":13,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_SKILL_SPEAR_CREATION_REQ",
+    "Detail": "stage={\"S\":16,\"D\":18,\"M\":12,\"Z\":12,\"I\":10,\"W\":8,\"C\":8};req={\"S\":10,\"D\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_SKILL_SPEAR_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":18,\"M\":12,\"Z\":17,\"I\":10,\"W\":13,\"C\":8};req={\"S\":10,\"D\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_CRICKET_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_CRICKET_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_CRICKET_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_ARMADILLO_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_ARMADILLO_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_ARMADILLO_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_WEAVER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_WEAVER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_WEAVER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_OWL_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_OWL_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_OWL_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_ARMOR_STRENGTH",
+    "Detail": "S=16;armorReqSum=14",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_HANDS",
+    "Detail": "handUse=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_ITM-WPN-015_STATS",
+    "Detail": "final={\"S\":16,\"D\":18,\"M\":12,\"Z\":17,\"I\":10,\"W\":13,\"C\":8};req={\"S\":7,\"D\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-005_ITM-WPN-015_NO_PENALTY",
+    "Detail": "skill=SPEAR;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_BASE_RANGE",
+    "Detail": "{\"S\":20,\"D\":20,\"M\":20,\"Z\":20,\"I\":10,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_FINAL_MIN",
+    "Detail": "{\"S\":25,\"D\":25,\"M\":25,\"Z\":25,\"I\":1,\"W\":1,\"C\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_MASS",
+    "Detail": "massKg=120",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":13,\"D\":20,\"M\":10,\"Z\":10,\"I\":10,\"W\":8,\"C\":8};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":25,\"D\":25,\"M\":25,\"Z\":25,\"I\":1,\"W\":1,\"C\":1};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_TROGR_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_TROGR_OE",
+    "Detail": "OE=6000",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_TROGR_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_MANTIS_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_MANTIS_OE",
+    "Detail": "OE=240",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_MANTIS_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_SPIDER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_SPIDER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_SPIDER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_CHAMELEON_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_CHAMELEON_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_CHAMELEON_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_TROGR_GROSS_GRANT",
+    "Detail": "[{\"skillKey\":\"GROSS\",\"skillName\":\"Владение грубым оружием\",\"bonus\":3,\"slotCost\":0,\"sourceType\":\"SYMBIONT_GRANTED\",\"sourceRuleId\":\"SYM-079\",\"note\":\"Высокий навык без слотов от Трогра L4.\"}]",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_ARMOR_STRENGTH",
+    "Detail": "S=25;armorReqSum=8",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_ITM-WPN-010_STATS",
+    "Detail": "final={\"S\":25,\"D\":25,\"M\":25,\"Z\":25,\"I\":1,\"W\":1,\"C\":1};req={\"S\":11,\"D\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-006_ITM-WPN-010_NO_PENALTY",
+    "Detail": "skill=GROSS;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_BASE_RANGE",
+    "Detail": "{\"S\":19,\"D\":20,\"M\":22,\"Z\":22,\"I\":8,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_FINAL_MIN",
+    "Detail": "{\"S\":18,\"D\":20,\"M\":12,\"Z\":22,\"I\":8,\"W\":8,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_SKILL_SHORT_CREATION_REQ",
+    "Detail": "stage={\"S\":12,\"D\":20,\"M\":12,\"Z\":12,\"I\":8,\"W\":8,\"C\":8};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_SKILL_SHORT_FINAL_REQ",
+    "Detail": "final={\"S\":18,\"D\":20,\"M\":12,\"Z\":22,\"I\":8,\"W\":8,\"C\":8};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_TOAD_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_TOAD_OE",
+    "Detail": "OE=280",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_TOAD_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_TICK_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_TICK_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_TICK_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_ARMADILLO_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_ARMADILLO_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_ARMADILLO_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_SPIDER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_SPIDER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_SPIDER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_ARMOR_STRENGTH",
+    "Detail": "S=18;armorReqSum=12",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_ITM-WPN-016_STATS",
+    "Detail": "final={\"S\":18,\"D\":20,\"M\":12,\"Z\":22,\"I\":8,\"W\":8,\"C\":8};req={\"S\":6,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-007_ITM-WPN-016_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=4;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":24,\"M\":20,\"Z\":25,\"I\":16,\"W\":16,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":24,\"M\":10,\"Z\":10,\"I\":16,\"W\":20,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SKILL_SLOTS",
+    "Detail": "used=8;required=8;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":24,\"M\":10,\"Z\":15,\"I\":16,\"W\":16,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":24,\"M\":10,\"Z\":10,\"I\":16,\"W\":20,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":24,\"M\":10,\"Z\":15,\"I\":16,\"W\":16,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":24,\"M\":10,\"Z\":10,\"I\":16,\"W\":20,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TAIPAN_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TAIPAN_OE",
+    "Detail": "OE=350",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TAIPAN_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_OWL_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_OWL_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_OWL_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SPIDER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SPIDER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_SPIDER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TEACHER_LEVEL",
+    "Detail": "L=3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TEACHER_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TEACHER_ABILITIES",
+    "Detail": "nodes=3;L=3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_TEACHER_W_FORMULA",
+    "Detail": "W=20;expected=20;rawW=25;stageW=16;L=3;AQA-005",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-008_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":20,\"M\":25,\"Z\":25,\"I\":14,\"W\":18,\"C\":18}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":14,\"W\":20,\"C\":18}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_SKILL_SLOTS",
+    "Detail": "used=9;required=9;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":20,\"M\":15,\"Z\":15,\"I\":14,\"W\":18,\"C\":18};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":14,\"W\":20,\"C\":18};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":20,\"M\":15,\"Z\":15,\"I\":14,\"W\":18,\"C\":18};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":20,\"M\":10,\"Z\":10,\"I\":14,\"W\":20,\"C\":18};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_DRAGON_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_DRAGON_OE",
+    "Detail": "OE=180",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_DRAGON_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_PENGUIN_LEVEL",
+    "Detail": "L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_PENGUIN_OE",
+    "Detail": "OE=140",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_PENGUIN_ABILITIES",
+    "Detail": "nodes=7;L=7",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_TEACHER_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_TEACHER_OE",
+    "Detail": "OE=120",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_TEACHER_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_WEAVER_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_WEAVER_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_WEAVER_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_TEACHER_W_FORMULA",
+    "Detail": "W=20;expected=20;rawW=20;stageW=18;L=6;AQA-005",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-009_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":22,\"M\":22,\"Z\":22,\"I\":18,\"W\":16,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":22,\"M\":12,\"Z\":17,\"I\":30,\"W\":16,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_SKILL_SLOTS",
+    "Detail": "used=8;required=8;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":22,\"M\":12,\"Z\":12,\"I\":18,\"W\":16,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":22,\"M\":12,\"Z\":17,\"I\":30,\"W\":16,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":22,\"M\":12,\"Z\":12,\"I\":18,\"W\":16,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":22,\"M\":12,\"Z\":17,\"I\":30,\"W\":16,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_EEL_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_EEL_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_EEL_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_WEAVER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_WEAVER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_WEAVER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_TOAD_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_TOAD_OE",
+    "Detail": "OE=240",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_TOAD_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_DOLPHIN_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_DOLPHIN_OE",
+    "Detail": "OE=180",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_DOLPHIN_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-010_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":22,\"M\":20,\"Z\":20,\"I\":16,\"W\":16,\"C\":18}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":20,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKILL_SLOTS",
+    "Detail": "used=8;required=8;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":16,\"C\":18};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":20,\"C\":8};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":16,\"C\":18};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":20,\"C\":8};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKUNK_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKUNK_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SKUNK_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_OWL_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_OWL_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_OWL_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SPIDER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SPIDER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_SPIDER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_TEACHER_LEVEL",
+    "Detail": "L=3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_TEACHER_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_TEACHER_ABILITIES",
+    "Detail": "nodes=3;L=3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_TEACHER_W_FORMULA",
+    "Detail": "W=20;expected=20;rawW=25;stageW=16;L=3;AQA-005",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-011_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":24,\"M\":20,\"Z\":20,\"I\":16,\"W\":14,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":29,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SKILL_SLOTS",
+    "Detail": "used=7;required=7;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":24,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":29,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":24,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":29,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_CHAMELEON_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_CHAMELEON_OE",
+    "Detail": "OE=360",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_CHAMELEON_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_MANTIS_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_MANTIS_OE",
+    "Detail": "OE=240",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_MANTIS_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SPIDER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SPIDER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_SPIDER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_RAT_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_RAT_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_RAT_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-012_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":22,\"M\":20,\"Z\":20,\"I\":16,\"W\":14,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_FINAL_MIN",
+    "Detail": "{\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":19,\"C\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SKILL_SLOTS",
+    "Detail": "used=7;required=7;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":19,\"C\":10};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":14,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":11,\"D\":22,\"M\":10,\"Z\":10,\"I\":16,\"W\":19,\"C\":10};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_UNITED_COMPOSITION",
+    "Detail": "ordinary=4;monster=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_OWL_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_OWL_OE",
+    "Detail": "OE=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_OWL_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_RAT_LEVEL",
+    "Detail": "L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_RAT_OE",
+    "Detail": "OE=300",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_RAT_ABILITIES",
+    "Detail": "nodes=6;L=6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SPIDER_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SPIDER_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_SPIDER_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_CRICKET_LEVEL",
+    "Detail": "L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_CRICKET_OE",
+    "Detail": "OE=250",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_CRICKET_ABILITIES",
+    "Detail": "nodes=5;L=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_ARMOR_STRENGTH",
+    "Detail": "S=11;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-013_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_BASE_RANGE",
+    "Detail": "{\"S\":18,\"D\":16,\"M\":20,\"Z\":20,\"I\":8,\"W\":8,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_FINAL_MIN",
+    "Detail": "{\"S\":16,\"D\":16,\"M\":35,\"Z\":10,\"I\":8,\"W\":8,\"C\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_MASS",
+    "Detail": "massKg=65",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_SKILL_SLOTS",
+    "Detail": "used=4;required=4;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":16,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":6};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":16,\"M\":35,\"Z\":10,\"I\":8,\"W\":8,\"C\":6};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_SKILL_GRAPPLING_CREATION_REQ",
+    "Detail": "stage={\"S\":11,\"D\":16,\"M\":10,\"Z\":10,\"I\":8,\"W\":8,\"C\":6};req={\"S\":11,\"D\":9,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_SKILL_GRAPPLING_FINAL_REQ",
+    "Detail": "final={\"S\":16,\"D\":16,\"M\":35,\"Z\":10,\"I\":8,\"W\":8,\"C\":6};req={\"S\":11,\"D\":9,\"I\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_UNITED_COMPOSITION",
+    "Detail": "ordinary=0;monster=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_ARMOR_STRENGTH",
+    "Detail": "S=16;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_BASE_RANGE",
+    "Detail": "{\"S\":13,\"D\":16,\"M\":20,\"Z\":20,\"I\":18,\"W\":16,\"C\":12}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_FINAL_MIN",
+    "Detail": "{\"S\":6,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":16,\"C\":22}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_MASS",
+    "Detail": "massKg=43",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_SKILL_SLOTS",
+    "Detail": "used=8;required=8;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_SKILL_SHORT_CREATION_REQ",
+    "Detail": "stage={\"S\":6,\"D\":16,\"M\":10,\"Z\":10,\"I\":18,\"W\":16,\"C\":12};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_SKILL_SHORT_FINAL_REQ",
+    "Detail": "final={\"S\":6,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":16,\"C\":22};req={\"S\":6,\"D\":12,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_SKILL_LIGHTNING_REACTION_CREATION_REQ",
+    "Detail": "stage={\"S\":6,\"D\":16,\"M\":10,\"Z\":10,\"I\":18,\"W\":16,\"C\":12};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_SKILL_LIGHTNING_REACTION_FINAL_REQ",
+    "Detail": "final={\"S\":6,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":16,\"C\":22};req={\"D\":16,\"I\":14,\"W\":14}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_UNITED_COMPOSITION",
+    "Detail": "ordinary=0;monster=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_ARMOR_STRENGTH",
+    "Detail": "S=6;armorReqSum=2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_HANDS",
+    "Detail": "handUse=1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_ITM-WPN-016_STATS",
+    "Detail": "final={\"S\":6,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":16,\"C\":22};req={\"S\":6,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_ITM-WPN-016_NO_PENALTY",
+    "Detail": "skill=SHORT;bonus=3;pureProficiency=false",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_BASE_RANGE",
+    "Detail": "{\"S\":17,\"D\":16,\"M\":20,\"Z\":20,\"I\":14,\"W\":12,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_FINAL_MIN",
+    "Detail": "{\"S\":10,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":12,\"C\":8}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_MASS",
+    "Detail": "massKg=60",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_SKILL_SLOTS",
+    "Detail": "used=6;required=6;AQA-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_SKILL_FENCING_CREATION_REQ",
+    "Detail": "stage={\"S\":10,\"D\":16,\"M\":10,\"Z\":10,\"I\":14,\"W\":12,\"C\":8};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_SKILL_FENCING_FINAL_REQ",
+    "Detail": "final={\"S\":10,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":12,\"C\":8};req={\"S\":10,\"D\":10,\"I\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_SKILL_UNARMED_CREATION_REQ",
+    "Detail": "stage={\"S\":10,\"D\":16,\"M\":10,\"Z\":10,\"I\":14,\"W\":12,\"C\":8};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_SKILL_UNARMED_FINAL_REQ",
+    "Detail": "final={\"S\":10,\"D\":16,\"M\":10,\"Z\":10,\"I\":24,\"W\":12,\"C\":8};req={\"S\":9,\"D\":11}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_UNITED_COMPOSITION",
+    "Detail": "ordinary=0;monster=true",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_NO_TOAD_TAIPAN",
+    "Detail": "No suppressed poison build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_NO_OWL_CHAMELEON",
+    "Detail": "No suppressed Double Focus build",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_NO_SKUNK_DRAGON",
+    "Detail": "No fire-extinguishing conflict",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_NO_TROGR_CONFLICT",
+    "Detail": "No predation, suppression or ambiguous Trogr/Keeper fight",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_ARMOR_STRENGTH",
+    "Detail": "S=10;armorReqSum=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_HANDS",
+    "Detail": "handUse=0",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "FREE_SPECIES_EXACT_SET",
+    "Detail": "WEAVER,TAIPAN,OWL,ARMADILLO,DRAGON,TROGR,KEEPER,TICK,CRICKET,SPIDER,CHAMELEON,PENGUIN,RAT,EEL,MANTIS,SKUNK",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "FREE_EXCLUSIONS",
+    "Detail": "No Adviser/Teacher/Toad/Dolphin among Free",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "FREE_ALL_HAVE_WEAPON",
+    "Detail": "16/16",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "FREE_ALL_HAVE_ARMOR",
+    "Detail": "16/16",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "PURE_STALKERS_4",
+    "Detail": "count=4",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "PURE_SOLDIERS_5",
+    "Detail": "count=5",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "PURE_SEEKERS_3",
+    "Detail": "count=3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SOLDIER_ALL_PURE_WEAPONS",
+    "Detail": "ITM-WPN-026,ITM-ARM-008,ITM-WPN-027,ITM-ARM-006,ITM-WPN-006,ITM-ARM-007,RES-AMM-001,ITM-WPN-003,ITM-WPN-005,ITM-ARM-005,ITM-WPN-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SOLDIER_ALL_PURE_ARMORS",
+    "Detail": "ITM-WPN-026,ITM-ARM-008,ITM-WPN-027,ITM-ARM-006,ITM-WPN-006,ITM-ARM-007,RES-AMM-001,ITM-WPN-003,ITM-WPN-005,ITM-ARM-005,ITM-WPN-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "GLENHEIM_KORNADORA_PRESENT",
+    "Detail": "required pair",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "UNITED_PROTECTED_MELEE_AT_LEAST_5",
+    "Detail": "count=8",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "UNITED_THREE_MONSTERS",
+    "Detail": "count=3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_STRUCTURED_RUNTIME_STATE",
+    "Detail": "{\"devouredCount\":0,\"extraSlots\":0,\"devourThresholdPolicy\":\"ROLL_PER_INSTANCE\",\"devouredProfiles\":[],\"marks\":[],\"modes\":[],\"duplicationSpent\":false}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-014_EMPTY_CHIMERA_HISTORY",
+    "Detail": "{\"devouredCount\":0,\"extraSlots\":0,\"devourThresholdPolicy\":\"ROLL_PER_INSTANCE\",\"devouredProfiles\":[],\"marks\":[],\"modes\":[],\"duplicationSpent\":false}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_STRUCTURED_RUNTIME_STATE",
+    "Detail": "{\"learnedSkills\":[],\"borrowedSkill\":null,\"controlLease\":null,\"preparedActions\":0,\"mentalWebPrimed\":false,\"illusionVisual\":\"SELF\"}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-015_EMPTY_PUPPETEER_HISTORY",
+    "Detail": "{\"learnedSkills\":[],\"borrowedSkill\":null,\"controlLease\":null,\"preparedActions\":0,\"mentalWebPrimed\":false,\"illusionVisual\":\"SELF\"}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_STRUCTURED_RUNTIME_STATE",
+    "Detail": "{\"infectedTargets\":[],\"vaccinations\":[],\"outbreaks\":[],\"prophets\":[],\"zombies\":[],\"forearmBladeState\":\"RETRACTED\",\"chestPlatesState\":\"CLOSED\",\"cooldowns\":{}}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SENT-UNITED-016_EMPTY_PLAGUE_HISTORY",
+    "Detail": "{\"infectedTargets\":[],\"vaccinations\":[],\"outbreaks\":[],\"prophets\":[],\"zombies\":[],\"forearmBladeState\":\"RETRACTED\",\"chestPlatesState\":\"CLOSED\",\"cooldowns\":{}}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "UNITED_ORDINARY_SPECIES_COVERAGE",
+    "Detail": "covered=20/20",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "ALL_ORIGIN_SYSTEM",
+    "Detail": "all immutable",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "ALL_ITEM_IDS_KNOWN",
+    "Detail": "no invented ItemTypeID",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "ALL_ITEMS_DEEP_CLONE",
+    "Detail": "all item instances cloned",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NEIT_ALL_SEALED",
+    "Detail": "Every ITM-ARM-005 instance is sealed per CORE-053",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "ALL_ART_MAPPED",
+    "Detail": "44/44 art mappings",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-027_ROOT_FK",
+    "Detail": "nodeRef=SYM-027;root=SYM-027",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-029_ROOT_FK",
+    "Detail": "nodeRef=SYM-029;root=SYM-029",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-031_ROOT_FK",
+    "Detail": "nodeRef=SYM-031;root=SYM-031",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-033_ROOT_FK",
+    "Detail": "nodeRef=SYM-033;root=SYM-033",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-039_ROOT_FK",
+    "Detail": "nodeRef=SYM-039;root=SYM-039",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-040_ROOT_FK",
+    "Detail": "nodeRef=SYM-040;root=SYM-040",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-041_ROOT_FK",
+    "Detail": "nodeRef=SYM-041;root=SYM-041",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-042_ROOT_FK",
+    "Detail": "nodeRef=SYM-042;root=SYM-042",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-043_ROOT_FK",
+    "Detail": "nodeRef=SYM-043;root=SYM-043",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-044_ROOT_FK",
+    "Detail": "nodeRef=SYM-044;root=SYM-044",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-045_ROOT_FK",
+    "Detail": "nodeRef=SYM-045;root=SYM-045",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-047_ROOT_FK",
+    "Detail": "nodeRef=SYM-047;root=SYM-047",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-048_ROOT_FK",
+    "Detail": "nodeRef=SYM-048;root=SYM-048",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-049_ROOT_FK",
+    "Detail": "nodeRef=SYM-049;root=SYM-049",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-050_ROOT_FK",
+    "Detail": "nodeRef=SYM-050;root=SYM-050",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-051_ROOT_FK",
+    "Detail": "nodeRef=SYM-051;root=SYM-051",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-052_ROOT_FK",
+    "Detail": "nodeRef=SYM-052;root=SYM-052",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-061_ROOT_FK",
+    "Detail": "nodeRef=SYM-061;root=SYM-061",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-062_ROOT_FK",
+    "Detail": "nodeRef=SYM-062;root=SYM-062",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-063_ROOT_FK",
+    "Detail": "nodeRef=SYM-063;root=SYM-063",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-064_ROOT_FK",
+    "Detail": "nodeRef=SYM-064;root=SYM-064",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-065_ROOT_FK",
+    "Detail": "nodeRef=SYM-065;root=SYM-065",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-066_ROOT_FK",
+    "Detail": "nodeRef=SYM-066;root=SYM-066",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-068_ROOT_FK",
+    "Detail": "nodeRef=SYM-068;root=SYM-068",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-069_ROOT_FK",
+    "Detail": "nodeRef=SYM-069;root=SYM-069",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-070_ROOT_FK",
+    "Detail": "nodeRef=SYM-070;root=SYM-070",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-071_ROOT_FK",
+    "Detail": "nodeRef=SYM-071;root=SYM-071",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-072_ROOT_FK",
+    "Detail": "nodeRef=SYM-072;root=SYM-072",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-073_ROOT_FK",
+    "Detail": "nodeRef=SYM-073;root=SYM-073",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-076_ROOT_FK",
+    "Detail": "nodeRef=SYM-076;root=SYM-076",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-077_ROOT_FK",
+    "Detail": "nodeRef=SYM-077;root=SYM-077",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-078_ROOT_FK",
+    "Detail": "nodeRef=SYM-078;root=SYM-078",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-079_ROOT_FK",
+    "Detail": "nodeRef=SYM-079;root=SYM-079",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-080_ROOT_FK",
+    "Detail": "nodeRef=SYM-080;root=SYM-080",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-081_ROOT_FK",
+    "Detail": "nodeRef=SYM-081;root=SYM-081",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-084_ROOT_FK",
+    "Detail": "nodeRef=SYM-084;root=SYM-084",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-086_ROOT_FK",
+    "Detail": "nodeRef=SYM-086;root=SYM-086",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-087_ROOT_FK",
+    "Detail": "nodeRef=SYM-087;root=SYM-087",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-088_ROOT_FK",
+    "Detail": "nodeRef=SYM-088;root=SYM-088",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-089_ROOT_FK",
+    "Detail": "nodeRef=SYM-089;root=SYM-089",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-090_ROOT_FK",
+    "Detail": "nodeRef=SYM-090;root=SYM-090",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-091_ROOT_FK",
+    "Detail": "nodeRef=SYM-091;root=SYM-091",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-092_ROOT_FK",
+    "Detail": "nodeRef=SYM-092;root=SYM-092",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-093_ROOT_FK",
+    "Detail": "nodeRef=SYM-093;root=SYM-093",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-094_ROOT_FK",
+    "Detail": "nodeRef=SYM-094;root=SYM-094",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-103_ROOT_FK",
+    "Detail": "nodeRef=SYM-103;root=SYM-103",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-104_ROOT_FK",
+    "Detail": "nodeRef=SYM-104;root=SYM-104",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-105_ROOT_FK",
+    "Detail": "nodeRef=SYM-105;root=SYM-105",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-106_ROOT_FK",
+    "Detail": "nodeRef=SYM-106;root=SYM-106",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-107_ROOT_FK",
+    "Detail": "nodeRef=SYM-107;root=SYM-107",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-108_ROOT_FK",
+    "Detail": "nodeRef=SYM-108;root=SYM-108",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-110_ROOT_FK",
+    "Detail": "nodeRef=SYM-110;root=SYM-110",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-111_ROOT_FK",
+    "Detail": "nodeRef=SYM-111;root=SYM-111",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-112_ROOT_FK",
+    "Detail": "nodeRef=SYM-112;root=SYM-112",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-113_ROOT_FK",
+    "Detail": "nodeRef=SYM-113;root=SYM-113",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-114_ROOT_FK",
+    "Detail": "nodeRef=SYM-114;root=SYM-114",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-115_ROOT_FK",
+    "Detail": "nodeRef=SYM-115;root=SYM-115",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-117_ROOT_FK",
+    "Detail": "nodeRef=SYM-117;root=SYM-117",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-118_ROOT_FK",
+    "Detail": "nodeRef=SYM-118;root=SYM-118",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-119_ROOT_FK",
+    "Detail": "nodeRef=SYM-119;root=SYM-119",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-120_ROOT_FK",
+    "Detail": "nodeRef=SYM-120;root=SYM-120",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-121_ROOT_FK",
+    "Detail": "nodeRef=SYM-121;root=SYM-121",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-122_ROOT_FK",
+    "Detail": "nodeRef=SYM-122;root=SYM-122",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-124_ROOT_FK",
+    "Detail": "nodeRef=SYM-124;root=SYM-124",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-125_ROOT_FK",
+    "Detail": "nodeRef=SYM-125;root=SYM-125",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-126_ROOT_FK",
+    "Detail": "nodeRef=SYM-126;root=SYM-126",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-127_ROOT_FK",
+    "Detail": "nodeRef=SYM-127;root=SYM-127",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-128_ROOT_FK",
+    "Detail": "nodeRef=SYM-128;root=SYM-128",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-131_MI_MI_MI_ROOT_FK",
+    "Detail": "nodeRef=SYM-131#MI_MI_MI;root=SYM-131",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-131_MI_MI_MI_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=SYM-131#MI_MI_MI",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-131_OH_NICE_ROOT_FK",
+    "Detail": "nodeRef=SYM-131#OH_NICE;root=SYM-131",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-131_OH_NICE_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=SYM-131#OH_NICE",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-131_BLACK_WHITE_FEAR_ROOT_FK",
+    "Detail": "nodeRef=SYM-131#BLACK_WHITE_FEAR;root=SYM-131",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-131_BLACK_WHITE_FEAR_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=SYM-131#BLACK_WHITE_FEAR",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-132_ROOT_FK",
+    "Detail": "nodeRef=SYM-132;root=SYM-132",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-133_ROOT_FK",
+    "Detail": "nodeRef=SYM-133;root=SYM-133",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-134_ROOT_FK",
+    "Detail": "nodeRef=SYM-134;root=SYM-134",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-135_ROOT_FK",
+    "Detail": "nodeRef=SYM-135;root=SYM-135",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-152_ROOT_FK",
+    "Detail": "nodeRef=SYM-152;root=SYM-152",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-154_ROOT_FK",
+    "Detail": "nodeRef=SYM-154;root=SYM-154",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-155_ROOT_FK",
+    "Detail": "nodeRef=SYM-155;root=SYM-155",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-157_ROOT_FK",
+    "Detail": "nodeRef=SYM-157;root=SYM-157",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-159_ROOT_FK",
+    "Detail": "nodeRef=SYM-159;root=SYM-159",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-160_ROOT_FK",
+    "Detail": "nodeRef=SYM-160;root=SYM-160",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-137_ROOT_FK",
+    "Detail": "nodeRef=SYM-137;root=SYM-137",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-138_ROOT_FK",
+    "Detail": "nodeRef=SYM-138;root=SYM-138",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-139_ROOT_FK",
+    "Detail": "nodeRef=SYM-139;root=SYM-139",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-140_ROOT_FK",
+    "Detail": "nodeRef=SYM-140;root=SYM-140",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-141_ROOT_FK",
+    "Detail": "nodeRef=SYM-141;root=SYM-141",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-168_ROOT_FK",
+    "Detail": "nodeRef=SYM-168;root=SYM-168",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-169_ROOT_FK",
+    "Detail": "nodeRef=SYM-169;root=SYM-169",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-170_ROOT_FK",
+    "Detail": "nodeRef=SYM-170;root=SYM-170",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-171_ROOT_FK",
+    "Detail": "nodeRef=SYM-171;root=SYM-171",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-172_ROOT_FK",
+    "Detail": "nodeRef=SYM-172;root=SYM-172",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-173_ROOT_FK",
+    "Detail": "nodeRef=SYM-173;root=SYM-173",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-175_ROOT_FK",
+    "Detail": "nodeRef=SYM-175;root=SYM-175",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-176_ROOT_FK",
+    "Detail": "nodeRef=SYM-176;root=SYM-176",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-177_ROOT_FK",
+    "Detail": "nodeRef=SYM-177;root=SYM-177",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-178_ROOT_FK",
+    "Detail": "nodeRef=SYM-178;root=SYM-178",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-179_ROOT_FK",
+    "Detail": "nodeRef=SYM-179;root=SYM-179",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-180_ROOT_FK",
+    "Detail": "nodeRef=SYM-180;root=SYM-180",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-144_ROOT_FK",
+    "Detail": "nodeRef=SYM-144;root=SYM-144",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-145_ROOT_FK",
+    "Detail": "nodeRef=SYM-145;root=SYM-145",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-146_ROOT_FK",
+    "Detail": "nodeRef=SYM-146;root=SYM-146",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-147_ROOT_FK",
+    "Detail": "nodeRef=SYM-147;root=SYM-147",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-148_ROOT_FK",
+    "Detail": "nodeRef=SYM-148;root=SYM-148",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-149_ROOT_FK",
+    "Detail": "nodeRef=SYM-149;root=SYM-149",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-150_ROOT_FK",
+    "Detail": "nodeRef=SYM-150;root=SYM-150",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-054_ROOT_FK",
+    "Detail": "nodeRef=SYM-054;root=SYM-054",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-055_ROOT_FK",
+    "Detail": "nodeRef=SYM-055;root=SYM-055",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-056_ROOT_FK",
+    "Detail": "nodeRef=SYM-056;root=SYM-056",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-057_ROOT_FK",
+    "Detail": "nodeRef=SYM-057;root=SYM-057",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-058_ROOT_FK",
+    "Detail": "nodeRef=SYM-058;root=SYM-058",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-059_ROOT_FK",
+    "Detail": "nodeRef=SYM-059;root=SYM-059",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-156_ROOT_FK",
+    "Detail": "nodeRef=SYM-156;root=SYM-156",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-151_RAT_COMMUNICATIONS_ROOT_FK",
+    "Detail": "nodeRef=SYM-151#RAT_COMMUNICATIONS;root=SYM-151",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-151_RAT_COMMUNICATIONS_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=SYM-151#RAT_COMMUNICATIONS",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-158_ROOT_FK",
+    "Detail": "nodeRef=SYM-158;root=SYM-158",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-028_ROOT_FK",
+    "Detail": "nodeRef=SYM-028;root=SYM-028",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-030_ROOT_FK",
+    "Detail": "nodeRef=SYM-030;root=SYM-030",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-032_ROOT_FK",
+    "Detail": "nodeRef=SYM-032;root=SYM-032",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-034_ROOT_FK",
+    "Detail": "nodeRef=SYM-034;root=SYM-034",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-129_ROOT_FK",
+    "Detail": "nodeRef=SYM-129;root=SYM-129",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-096_ROOT_FK",
+    "Detail": "nodeRef=SYM-096;root=SYM-096",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-097_ROOT_FK",
+    "Detail": "nodeRef=SYM-097;root=SYM-097",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-098_ROOT_FK",
+    "Detail": "nodeRef=SYM-098;root=SYM-098",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-099_ROOT_FK",
+    "Detail": "nodeRef=SYM-099;root=SYM-099",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-100_ROOT_FK",
+    "Detail": "nodeRef=SYM-100;root=SYM-100",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-035_ROOT_FK",
+    "Detail": "nodeRef=SYM-035;root=SYM-035",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-036_ROOT_FK",
+    "Detail": "nodeRef=SYM-036;root=SYM-036",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-162_ROOT_FK",
+    "Detail": "nodeRef=SYM-162;root=SYM-162",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-163_ROOT_FK",
+    "Detail": "nodeRef=SYM-163;root=SYM-163",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-164_ROOT_FK",
+    "Detail": "nodeRef=SYM-164;root=SYM-164",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-165_ROOT_FK",
+    "Detail": "nodeRef=SYM-165;root=SYM-165",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-161_ABSOLUTE_MEMORY_ROOT_FK",
+    "Detail": "nodeRef=SYM-161#ABSOLUTE_MEMORY;root=SYM-161",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-161_ABSOLUTE_MEMORY_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=SYM-161#ABSOLUTE_MEMORY",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_SYM-166_ROOT_FK",
+    "Detail": "nodeRef=SYM-166;root=SYM-166",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-004_ROOT_FK",
+    "Detail": "nodeRef=MON-004;root=MON-004",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-008_ROOT_FK",
+    "Detail": "nodeRef=MON-008;root=MON-008",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-010_ROOT_FK",
+    "Detail": "nodeRef=MON-010;root=MON-010",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-011_ROOT_FK",
+    "Detail": "nodeRef=MON-011;root=MON-011",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-012_ROOT_FK",
+    "Detail": "nodeRef=MON-012;root=MON-012",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-013_ROOT_FK",
+    "Detail": "nodeRef=MON-013;root=MON-013",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-014_ROOT_FK",
+    "Detail": "nodeRef=MON-014;root=MON-014",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-016_ROOT_FK",
+    "Detail": "nodeRef=MON-016;root=MON-016",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-017_ROOT_FK",
+    "Detail": "nodeRef=MON-017;root=MON-017",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-018_ROOT_FK",
+    "Detail": "nodeRef=MON-018;root=MON-018",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-020_ROOT_FK",
+    "Detail": "nodeRef=MON-020;root=MON-020",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-021_ROOT_FK",
+    "Detail": "nodeRef=MON-021;root=MON-021",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-022_ROOT_FK",
+    "Detail": "nodeRef=MON-022;root=MON-022",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-023_ROOT_FK",
+    "Detail": "nodeRef=MON-023;root=MON-023",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-027_ROOT_FK",
+    "Detail": "nodeRef=MON-027;root=MON-027",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-028_ROOT_FK",
+    "Detail": "nodeRef=MON-028;root=MON-028",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-026_READ_THOUGHTS_ROOT_FK",
+    "Detail": "nodeRef=MON-026#READ_THOUGHTS;root=MON-026",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-026_READ_THOUGHTS_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=MON-026#READ_THOUGHTS",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-029_ROOT_FK",
+    "Detail": "nodeRef=MON-029;root=MON-029",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-031_ROOT_FK",
+    "Detail": "nodeRef=MON-031;root=MON-031",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-032_ROOT_FK",
+    "Detail": "nodeRef=MON-032;root=MON-032",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-033_ROOT_FK",
+    "Detail": "nodeRef=MON-033;root=MON-033",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-026_DIVERT_ATTENTION_ROOT_FK",
+    "Detail": "nodeRef=MON-026#DIVERT_ATTENTION;root=MON-026",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-026_DIVERT_ATTENTION_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=MON-026#DIVERT_ATTENTION",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-035_ROOT_FK",
+    "Detail": "nodeRef=MON-035;root=MON-035",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-036_ROOT_FK",
+    "Detail": "nodeRef=MON-036;root=MON-036",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-026_PERMANENT_ILLUSION_ROOT_FK",
+    "Detail": "nodeRef=MON-026#PERMANENT_ILLUSION;root=MON-026",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-026_PERMANENT_ILLUSION_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=MON-026#PERMANENT_ILLUSION",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-037_ROOT_FK",
+    "Detail": "nodeRef=MON-037;root=MON-037",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-038_ROOT_FK",
+    "Detail": "nodeRef=MON-038;root=MON-038",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-039_ROOT_FK",
+    "Detail": "nodeRef=MON-039;root=MON-039",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-042_ROOT_FK",
+    "Detail": "nodeRef=MON-042;root=MON-042",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-048_ROOT_FK",
+    "Detail": "nodeRef=MON-048;root=MON-048",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-049_ROOT_FK",
+    "Detail": "nodeRef=MON-049;root=MON-049",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-050_ROOT_FK",
+    "Detail": "nodeRef=MON-050;root=MON-050",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-051_ROOT_FK",
+    "Detail": "nodeRef=MON-051;root=MON-051",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-052_ROOT_FK",
+    "Detail": "nodeRef=MON-052;root=MON-052",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-053_ROOT_FK",
+    "Detail": "nodeRef=MON-053;root=MON-053",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-054_ROOT_FK",
+    "Detail": "nodeRef=MON-054;root=MON-054",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-055_ROOT_FK",
+    "Detail": "nodeRef=MON-055;root=MON-055",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-041_ONE_FAMILY_ROOT_FK",
+    "Detail": "nodeRef=MON-041#ONE_FAMILY;root=MON-041",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-041_ONE_FAMILY_COMPOSITE_DICTIONARY",
+    "Detail": "nodeRef=MON-041#ONE_FAMILY",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-056_ROOT_FK",
+    "Detail": "nodeRef=MON-056;root=MON-056",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-061_ROOT_FK",
+    "Detail": "nodeRef=MON-061;root=MON-061",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-066_ROOT_FK",
+    "Detail": "nodeRef=MON-066;root=MON-066",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-071_ROOT_FK",
+    "Detail": "nodeRef=MON-071;root=MON-071",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_MON-073_ROOT_FK",
+    "Detail": "nodeRef=MON-073;root=MON-073",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_SYM-131_MI_MI_MI",
+    "Detail": "{\"nodeRef\":\"SYM-131#MI_MI_MI\",\"rootRuleId\":\"SYM-131\",\"subnodeCode\":\"MI_MI_MI\",\"nodeTitle\":\"Ми-ми-ми\",\"level\":1}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_SYM-131_OH_NICE",
+    "Detail": "{\"nodeRef\":\"SYM-131#OH_NICE\",\"rootRuleId\":\"SYM-131\",\"subnodeCode\":\"OH_NICE\",\"nodeTitle\":\"Oh nice!\",\"level\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_SYM-131_BLACK_WHITE_FEAR",
+    "Detail": "{\"nodeRef\":\"SYM-131#BLACK_WHITE_FEAR\",\"rootRuleId\":\"SYM-131\",\"subnodeCode\":\"BLACK_WHITE_FEAR\",\"nodeTitle\":\"Чёрно-белый страх\",\"level\":3}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_SYM-151_RAT_COMMUNICATIONS",
+    "Detail": "{\"nodeRef\":\"SYM-151#RAT_COMMUNICATIONS\",\"rootRuleId\":\"SYM-151\",\"subnodeCode\":\"RAT_COMMUNICATIONS\",\"nodeTitle\":\"Крысиные коммуникации\",\"level\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_SYM-161_ABSOLUTE_MEMORY",
+    "Detail": "{\"nodeRef\":\"SYM-161#ABSOLUTE_MEMORY\",\"rootRuleId\":\"SYM-161\",\"subnodeCode\":\"ABSOLUTE_MEMORY\",\"nodeTitle\":\"Абсолютная память\",\"level\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_MON-026_READ_THOUGHTS",
+    "Detail": "{\"nodeRef\":\"MON-026#READ_THOUGHTS\",\"rootRuleId\":\"MON-026\",\"subnodeCode\":\"READ_THOUGHTS\",\"nodeTitle\":\"Чтение мыслей\",\"level\":2}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_MON-026_DIVERT_ATTENTION",
+    "Detail": "{\"nodeRef\":\"MON-026#DIVERT_ATTENTION\",\"rootRuleId\":\"MON-026\",\"subnodeCode\":\"DIVERT_ATTENTION\",\"nodeTitle\":\"Отведение внимания\",\"level\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_MON-026_PERMANENT_ILLUSION",
+    "Detail": "{\"nodeRef\":\"MON-026#PERMANENT_ILLUSION\",\"rootRuleId\":\"MON-026\",\"subnodeCode\":\"PERMANENT_ILLUSION\",\"nodeTitle\":\"Постоянная иллюзия\",\"level\":5}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_DICTIONARY_MON-041_ONE_FAMILY",
+    "Detail": "{\"nodeRef\":\"MON-041#ONE_FAMILY\",\"rootRuleId\":\"MON-041\",\"subnodeCode\":\"ONE_FAMILY\",\"nodeTitle\":\"Мы — одна семья\",\"level\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NODE_REF_FIELD_CONTRACT",
+    "Detail": "learnedNodeRefs only; RuleID#SUBNODE values resolved by nodeRefCatalog",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-001_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-001_WITNESS_STRUCTURE",
+    "Detail": "{\"R12_DMG\":8,\"R12_RANGE\":8,\"R20_RS\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-002_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-002_WITNESS_STRUCTURE",
+    "Detail": "{\"R20_DMG\":14,\"R12_RANGE\":8,\"R20_RS\":10}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-003_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-003_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_DMG\":4,\"R12_RANGE\":8,\"R20_RS\":10,\"R6_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-005_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-005_WITNESS_STRUCTURE",
+    "Detail": "{\"R20_DMG\":14,\"R20_RANGE\":14,\"R20_RS\":10,\"R6_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-006_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-006_WITNESS_STRUCTURE",
+    "Detail": "{\"R4_RS\":4,\"R4_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-007_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-007_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-008B_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-008B_WITNESS_STRUCTURE",
+    "Detail": "{\"R4_RS\":4,\"R4_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-009_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-009_WITNESS_STRUCTURE",
+    "Detail": "{\"R4_RS\":4,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-010_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-010_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R4_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-011_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-011_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-012_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-012_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R4_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-013_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-013_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R4_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-014_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-014_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-016_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-016_WITNESS_STRUCTURE",
+    "Detail": "{\"R4_RS\":4,\"R4_RD\":4}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-018_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-018_WITNESS_STRUCTURE",
+    "Detail": "{\"R6_RS\":6,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-019_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-019_WITNESS_STRUCTURE",
+    "Detail": "{\"R4_RS\":4,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-021_PROVENANCE",
+    "Detail": "formulaVersion=ITEM_FORMULAS_V1.2;statSource=PLAYER_FORMULA_VALIDATED;actorRole=SYSTEM",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "WPNPROF-SYS-021_WITNESS_STRUCTURE",
+    "Detail": "{\"R4_RS\":4,\"R6_RD\":6}",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "BASELINE_CATALOG_VERSION_V1_2",
+    "Detail": "44 payloads use SYMBIOSIS_SENTIENT_DEFAULTS_V1.2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "BASELINE_RULES_VERSION_V1_6",
+    "Detail": "44 payloads use rulesRegistryVersion=v1.6",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "BASELINE_CHARACTER_VERSION_V1_1",
+    "Detail": "44 payloads use characterSkillsSymbiontsRegistryVersion=v1.1",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "BASELINE_ITEMS_VERSION_V1_5",
+    "Detail": "44 payloads use itemRegistryVersion=v1.5_with_icons",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "BASELINE_BESTIARY_VERSION_V1_3",
+    "Detail": "44 payloads use bestiaryRegistryVersion=v1.3",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "BASELINE_SENTIENT_VERSION_V1_2",
+    "Detail": "44 payloads use sentientRegistryVersion=v1.2",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "SYSTEM_SENTIENT_ACTOR_TYPE_44",
+    "Detail": "44 payloads use actorType=SYSTEM_SENTIENT_ENEMY",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "NO_XP_PROGRESSION_44",
+    "Detail": "44 payloads and all symbiont/monster profiles use NO_XP_PROGRESSION",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "PROGRESSION_POOL_FIELDS_PROHIBITED",
+    "Detail": "symbiontXpProgressPoints and unallocatedSymbiontXp absent as state fields",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "PAYLOAD_SHA256_44",
+    "Detail": "44 non-empty lowercase SHA-256 values match canonical payload strings",
+    "Status": "PASS"
+  },
+  {
+    "CheckID": "DEPENDENCY_TUPLE_EXACT",
+    "Detail": "Rules v1.6 | Character-Skills-Symbionts v1.1 | Items v1.5_with_icons | Bestiary v1.3 | Sentient v1.2",
+    "Status": "PASS"
+  }
+]

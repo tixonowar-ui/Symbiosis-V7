@@ -15,6 +15,7 @@ import { importEffects } from './effects.js';
 import { importItems } from './items.js';
 import { ImportError } from './lib/fail.js';
 import { importRules } from './rules.js';
+import { importSentient } from './sentient.js';
 
 async function gate(): Promise<void> {
   const result = await verify();
@@ -63,6 +64,12 @@ async function main(): Promise<number> {
       `${String(bestiary.arts)} arts (${(bestiary.mediaBytes / 1024 / 1024).toFixed(1)} MiB)`,
   );
 
+  const sentient = await importSentient();
+  console.log(
+    `sentient:  ${String(sentient.templates)} frozen templates, ${String(sentient.arts)} arts, ` +
+      `pack ${String(sentient.packFiles)} files (${(sentient.mediaBytes / 1024 / 1024).toFixed(1)} MiB)`,
+  );
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
@@ -72,6 +79,7 @@ async function main(): Promise<number> {
     ...items.files,
     ...effects.files,
     ...bestiary.files,
+    ...sentient.files,
     ...atlas.files,
   ];
   const bytes =
@@ -80,6 +88,7 @@ async function main(): Promise<number> {
     items.bytesWritten +
     effects.bytesWritten +
     bestiary.bytesWritten +
+    sentient.bytesWritten +
     atlas.bytesWritten;
   const mib = (bytes / 1024 / 1024).toFixed(2);
   console.log(`written:   ${mib} MiB across ${String(files.length)} file(s) + media`);
