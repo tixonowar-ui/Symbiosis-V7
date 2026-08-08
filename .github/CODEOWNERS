@@ -1,40 +1,54 @@
 # Владелец репозитория ревьюит всё и единственный жмёт Merge.
-# @Saltbound — псевдоним владельца; замените на реальный GitHub-логин,
-# см. docs/process/setup-checklist.md.
+#
+# @codex-agent — ПЛЕЙСХОЛДЕР. GitHub App владельцем кода быть не может:
+# CODEOWNERS принимает только пользователей и команды. Заменить на реальный
+# логин бот-аккаунта, под которым Codex открывает PR, либо удалить строки с
+# ним. См. docs/process/setup-checklist.md, пункт 3.
 
-*                       @Saltbound
+*                       @tixonowar-ui
+
+# --- Прикладной код: основной автор — Codex, ревьюер — владелец -------------
+#
+# Codex указан владельцем той части, которую он и пишет. На его собственные PR
+# это не влияет: GitHub не запрашивает ревью у автора, поэтому запрос всё равно
+# уйдёт владельцу по правилу `*`.
+
+/src/                   @tixonowar-ui @codex-agent
+/tests/                 @tixonowar-ui @codex-agent
+
+# --- Границы: только владелец ----------------------------------------------
 
 # Read-only источники правды. Изменение — только новой поставкой.
-/artifacts/             @Saltbound
+/artifacts/             @tixonowar-ui
 
 # Вывод конвейера. Меняется прогоном npm run import, не руками.
-/generated/             @Saltbound
+/generated/             @tixonowar-ui
 
 # Решения проекта. Принятый ADR не редактируется по существу.
-/docs/adr/              @Saltbound
+/docs/adr/              @tixonowar-ui
 
 # Процесс, инвентаризация, очередь задач.
-/docs/                  @Saltbound
+/docs/                  @tixonowar-ui
 
 # Конвейер и проверки — то, на чём держится доверие к данным.
-/tools/import/          @Saltbound
-/tools/checksums/       @Saltbound
-/tools/validate/        @Saltbound
+/tools/import/          @tixonowar-ui
+/tools/checksums/       @tixonowar-ui
+/tools/validate/        @tixonowar-ui
 
 # CI и шаблоны.
-/.github/               @Saltbound
+/.github/               @tixonowar-ui
 
 # Конфигурация проверок. Ослабление ради прохождения задачи запрещено.
-/eslint.config.js       @Saltbound
-/tsconfig.json          @Saltbound
-/tsconfig.base.json     @Saltbound
-/tsconfig.web.json      @Saltbound
-/vitest.config.ts       @Saltbound
-/playwright.config.ts   @Saltbound
-/.prettierrc.json       @Saltbound
-/.gitattributes         @Saltbound
-/package.json           @Saltbound
+/eslint.config.js       @tixonowar-ui
+/tsconfig.json          @tixonowar-ui
+/tsconfig.base.json     @tixonowar-ui
+/tsconfig.web.json      @tixonowar-ui
+/vitest.config.ts       @tixonowar-ui
+/playwright.config.ts   @tixonowar-ui
+/.prettierrc.json       @tixonowar-ui
+/.gitattributes         @tixonowar-ui
+/package.json           @tixonowar-ui
 
 # Контракт для агентов.
-/AGENTS.md              @Saltbound
-/CLAUDE.md              @Saltbound
+/AGENTS.md              @tixonowar-ui
+/CLAUDE.md              @tixonowar-ui
