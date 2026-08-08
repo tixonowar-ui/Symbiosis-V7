@@ -38,7 +38,7 @@ jobs:
           MAX_DOC_LINES: 3000
           MAX_TOTAL_FILES: 60
         run: |
-          base="origin/${{ github.base_ref }}"
+          base="${{ github.event.pull_request.base.sha }}"
 
           stat=$(git diff --numstat "$base"...HEAD -- . \
                  ':(exclude)generated/**' ':(exclude)package-lock.json')
