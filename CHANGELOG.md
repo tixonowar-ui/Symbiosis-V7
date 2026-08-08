@@ -34,10 +34,12 @@
 - Шаблоны PR и issue, `CODEOWNERS`
 - ADR 0015 — гарантии конвейера импорта
 - ADR 0016 — что из `generated/` хранится в git
+- `generated/spec/atlas/forms-by-id.json` — индекс 376 форм атласа по ID
 
 ### Изменено
 
 - `npm run verify` дополнительно прогоняет `validate`
+- `npm run validate` сверяет ключи индекса форм с каталогом `forms.json`
 
 ## M1 — Конвейер импорта
 
