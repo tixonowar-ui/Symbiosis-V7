@@ -9,6 +9,10 @@
     "node": ">=24.19.0 <25",
     "npm": ">=11"
   },
+  "allowScripts": {
+    "better-sqlite3": false,
+    "esbuild": false
+  },
   "os": [
     "win32"
   ],
