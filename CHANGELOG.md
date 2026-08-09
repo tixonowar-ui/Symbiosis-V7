@@ -32,6 +32,9 @@
 
 ### Добавлено
 
+- [ADR 0018](docs/adr/0018-current-state-storage-and-checkpoints.md) и миграция
+  `0001`: current-state схема для `localCharacter`, `campaignCharacterCopy` и
+  `campaign`, три ревизии reconnect-контракта и атомарный checkpoint кампании
 - All Questions and Answers Registry v1.2 импортируется в
   `generated/spec/qna` и `generated/types/qna.ts`: 444 строки, 411 адресуемых
   кодов; алиас `Q-MON-089` защищён ADR 0017, ссылки старших реестров проверяются
