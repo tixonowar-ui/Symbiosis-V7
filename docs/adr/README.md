@@ -46,6 +46,9 @@
 | [0012](0012-release-hash-model.md)                        | Модель хеширования выпуска           | принято |
 | [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято |
 | [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято |
+| [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято |
+| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято |
+| [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято |
 
 ## Перенос решений аудита
 
