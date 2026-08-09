@@ -36,14 +36,15 @@ const STATUS = {
 const EXPECTED = {
   summaryRows: 24,
   questions: 444,
+  history: 444,
+  changesV11: 5,
+  changesV12: 6,
   artifactCodes: 410,
   addressedCodes: 411,
   repeatedArtifactCodes: 30,
   closed: 395,
   open: 0,
   reformulated: 49,
-  summaryRoundsCover: 391,
-  unreferencedQuestionCodes: 6,
 } as const;
 
 /**
@@ -89,7 +90,6 @@ const HISTORY_COLUMNS = [
 ] as const;
 
 export interface QnaImport {
-  readonly catalogue: ReadonlySet<string>;
   readonly questions: number;
   readonly codes: number;
   readonly bytesWritten: number;
@@ -101,6 +101,7 @@ interface SummaryCounts {
   readonly closed: number;
   readonly open: number;
   readonly reformulated: number;
+  readonly roundsCover: number;
 }
 
 export async function importQna(): Promise<QnaImport> {
@@ -125,9 +126,9 @@ export async function importQna(): Promise<QnaImport> {
     .records('ID');
 
   expectCount(WHERE, 'question rows', questions.length, EXPECTED.questions);
-  expectCount(WHERE, 'answer-history rows', history.length, 444);
-  expectCount(WHERE, 'v1.1 change rows', changesV11.length, 5);
-  expectCount(WHERE, 'v1.2 change rows', changesV12.length, 6);
+  expectCount(WHERE, 'answer-history rows', history.length, EXPECTED.history);
+  expectCount(WHERE, 'v1.1 change rows', changesV11.length, EXPECTED.changesV11);
+  expectCount(WHERE, 'v1.2 change rows', changesV12.length, EXPECTED.changesV12);
   assertNumbers(questions, history);
   assertPassChanges(changesV11, SHEET.changesV11);
   assertPassChanges(changesV12, SHEET.changesV12);
@@ -179,10 +180,8 @@ export async function importQna(): Promise<QnaImport> {
     reformulatedQuestions: summary.reformulated,
     changesV11: changesV11.length,
     changesV12: changesV12.length,
-    // The stale v1.1 side table is recorded, never summed or compared with 444.
-    summaryRoundsCover: EXPECTED.summaryRoundsCover,
-    // Derived by issue #15; resolution stays in validate, outside this importer.
-    unreferencedQuestionCodes: EXPECTED.unreferencedQuestionCodes,
+    // The stale v1.1 side table is measured, but deliberately not compared with 444.
+    summaryRoundsCover: summary.roundsCover,
     gateAllPass: true,
     aliasApplied: QNA_QUESTION_CODE_ALIAS,
     chainAnomaly: { ...CHAIN_ANOMALY, questionNumbers: [...CHAIN_ANOMALY.questionNumbers] },
@@ -195,7 +194,6 @@ export async function importQna(): Promise<QnaImport> {
   files.push('generated/types/qna.ts');
 
   return {
-    catalogue,
     questions: questions.length,
     codes: addressedGroups.size,
     bytesWritten: bytes,
@@ -306,8 +304,23 @@ function readSummary(rows: readonly Row[]): SummaryCounts {
     );
   }
 
-  // The stale columns 3–4 are not read; issue #15 records their 391 rows in meta only.
-  return { total, closed, open, reformulated };
+  return { total, closed, open, reformulated, roundsCover: readSummaryRoundsCover(rows) };
+}
+
+function readSummaryRoundsCover(rows: readonly Row[]): number {
+  const header = rows.filter(
+    (row) => cellText(row[3]) === 'Пакет / раунд' && cellText(row[4]) === 'Вопросов',
+  );
+  expectCount(WHERE, 'summary round-table headers', header.length, 1);
+  const roundRows = rows.filter((row) => !['', 'Пакет / раунд'].includes(cellText(row[3])));
+  if (roundRows.length === 0) fail(WHERE, 'summary round table has no data rows');
+  return roundRows.reduce((sum, row) => {
+    const count = row[4];
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) {
+      fail(WHERE, `summary round ${JSON.stringify(cellText(row[3]))} has invalid count`);
+    }
+    return sum + count;
+  }, 0);
 }
 
 function numericSummaryValue(rows: readonly Row[], label: string): number {

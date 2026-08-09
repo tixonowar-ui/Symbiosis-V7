@@ -8,6 +8,14 @@ export type QuestionRefSeparator = '\n' | ';' | null;
 /** Control values established by the issue #15 artifact reconnaissance. */
 export const EXPECTED_QUESTION_CODE_COUNT = 411;
 export const EXPECTED_QUESTION_REFERENCE_TOKEN_COUNT = 406;
+export const EXPECTED_UNREFERENCED_QUESTION_CODE_COUNT = 6;
+
+export interface QuestionRefValidationResult {
+  readonly questionCodes: ReadonlySet<string>;
+  readonly referencedTokens: ReadonlySet<string>;
+  readonly unresolvedTokens: readonly string[];
+  readonly unreferencedQuestionCodes: readonly string[];
+}
 
 /** This user-decision token belongs to another dictionary; it is the only exception. */
 export const ALLOWED_NON_QUESTION_TOKENS = ['USR-2026-07-30-WEB-001'] as const;
@@ -189,7 +197,7 @@ export function assertQnaAliasMatchesRule(
   }
 }
 
-export function validateQuestionRefs(specDir: string) {
+export function validateQuestionRefs(specDir: string): QuestionRefValidationResult {
   const questionCodes = questionCodesFromIndex(loadIndex(specDir));
   const referencedTokens = collectReferencedTokens(specDir);
   if (referencedTokens.size !== EXPECTED_QUESTION_REFERENCE_TOKEN_COUNT) {
@@ -199,9 +207,19 @@ export function validateQuestionRefs(specDir: string) {
     );
   }
   const unresolvedTokens = assertQuestionRefsResolve(referencedTokens, questionCodes);
+  const unreferencedQuestionCodes = [...questionCodes].filter(
+    (code) => !referencedTokens.has(code),
+  );
+  unreferencedQuestionCodes.sort();
+  if (unreferencedQuestionCodes.length !== EXPECTED_UNREFERENCED_QUESTION_CODE_COUNT) {
+    fail(
+      'question references',
+      `expected ${String(EXPECTED_UNREFERENCED_QUESTION_CODE_COUNT)} unreferenced question codes, got ${String(unreferencedQuestionCodes.length)}`,
+    );
+  }
   assertQnaAliasMatchesRule(
     loadRows(specDir, 'qna/questions.json'),
     loadRows(specDir, 'rules/rules.json'),
   );
-  return { questionCodes, referencedTokens, unresolvedTokens };
+  return { questionCodes, referencedTokens, unresolvedTokens, unreferencedQuestionCodes };
 }
