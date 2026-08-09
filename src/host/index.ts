@@ -1,7 +1,4 @@
-/**
- * Public surface of the host: the single authoritative process (Fastify + ws)
- * and the per-role projections (player / gm / system).
- *
- * Scaffold only — see ./CLAUDE.md.
- */
-export {};
+export { loadProtocolVocabulary } from './protocol-vocabulary.js';
+export { createHost, startHost } from './server.js';
+export type { HostNetworkConfig, HostServerConfig } from './server.js';
+export * from './projections/app.js';
