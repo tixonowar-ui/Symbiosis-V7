@@ -49,5 +49,9 @@ npm run verify
 ## Источник в артефактах
 
 - `generated/spec/atlas/meta.json` — роли и guard-состояния
-- `generated/spec/rules/rules.json` — 106 workflow-команд определяют, что
-  вообще может прийти от клиента
+- `generated/spec/atlas/transitions.json` — шесть command-kind и точные
+  transition tuple
+- `generated/spec/atlas/qa-scenarios.json` — 106 workflow-команд
+- `generated/spec/atlas/lifecycles.json` — lifecycle команды
+- `generated/spec/atlas/requirements.json` и `forms-by-id.json` — reconnect и
+  мастерский предикат `REQ-029` / `GM-029`
