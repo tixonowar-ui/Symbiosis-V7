@@ -16,6 +16,7 @@ import { importItems } from './items.js';
 import { ImportError } from './lib/fail.js';
 import { importQna } from './qna.js';
 import { importRules } from './rules.js';
+import { importSeed } from './seed.js';
 import { importSentient } from './sentient.js';
 
 async function gate(): Promise<void> {
@@ -77,6 +78,12 @@ async function main(): Promise<number> {
   const qna = await importQna();
   console.log(`qna:       ${String(qna.questions)} questions, ${String(qna.codes)} codes`);
 
+  const seed = importSeed();
+  console.log(
+    `seed:      ${String(seed.arrayTables)} array tables, ${String(seed.rows)} rows, ` +
+      `${String(seed.metadataRows)} metadata (${(seed.bytesWritten / 1024 / 1024).toFixed(2)} MiB)`,
+  );
+
   const files = [
     ...rules.files,
     ...character.files,
@@ -86,6 +93,7 @@ async function main(): Promise<number> {
     ...sentient.files,
     ...atlas.files,
     ...qna.files,
+    seed.file,
   ];
   const bytes =
     rules.bytesWritten +
@@ -95,7 +103,8 @@ async function main(): Promise<number> {
     bestiary.bytesWritten +
     sentient.bytesWritten +
     atlas.bytesWritten +
-    qna.bytesWritten;
+    qna.bytesWritten +
+    seed.bytesWritten;
   const mib = (bytes / 1024 / 1024).toFixed(2);
   console.log(`written:   ${mib} MiB across ${String(files.length)} file(s) + media`);
   return 0;
