@@ -32,6 +32,10 @@
 
 ### Добавлено
 
+- [ADR 0022](docs/adr/0022-operation-and-rule-handler-registries.md) и чистый
+  каркас двух handler-реестров: 70 generated operation ID отделены от 739
+  `RuleId`, duplicate/unregistered отказы fail-closed, а tombstone отличается
+  от незарегистрированного active rule без новых игровых `ERR_*`
 - [ADR 0021](docs/adr/0021-roll-model.md) и чистый контракт броска: буквальные
   конверты AUTO/MANUAL из Atlas, закрытый каталог d4/d6/d12/d20,
   source-neutral результат, host-side `node:crypto.randomInt` и replay

@@ -53,6 +53,7 @@
 | [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                |
 | [0020](0020-wire-protocol-and-shared-contracts.md)        | Wire-протокол и контракты shared     | принято                                |
 | [0021](0021-roll-model.md)                                | Модель броска AUTO и MANUAL          | принято                                |
+| [0022](0022-operation-and-rule-handler-registries.md)     | Раздельные реестры операций и правил | принято                                |
 
 ## Перенос решений аудита
 
