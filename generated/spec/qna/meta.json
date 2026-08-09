@@ -1,0 +1,29 @@
+{
+  "aliasApplied": {
+    "artifactCode": "Q-MON-083",
+    "questionNumber": 367,
+    "resolvedCode": "Q-MON-089",
+    "round": "Application QA — раунд 2",
+    "status": "Закрыт"
+  },
+  "answerHistory": 444,
+  "artifactQuestionCodes": 410,
+  "chainAnomaly": {
+    "code": "Q-MON-082",
+    "questionNumbers": [
+      247,
+      334
+    ]
+  },
+  "changesV11": 5,
+  "changesV12": 6,
+  "closedQuestions": 395,
+  "gateAllPass": true,
+  "openQuestions": 0,
+  "questionCodes": 411,
+  "questions": 444,
+  "reformulatedQuestions": 49,
+  "registryVersion": "v1.2",
+  "source": "artifacts/registries/Symbiosis_V7_All_Questions_and_Answers_Registry_v1.2.xlsx",
+  "summaryRoundsCover": 391
+}
