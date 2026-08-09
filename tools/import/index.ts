@@ -14,6 +14,7 @@ import { importBestiary } from './bestiary.js';
 import { importEffects } from './effects.js';
 import { importItems } from './items.js';
 import { ImportError } from './lib/fail.js';
+import { importQna } from './qna.js';
 import { importRules } from './rules.js';
 import { importSentient } from './sentient.js';
 
@@ -73,6 +74,9 @@ async function main(): Promise<number> {
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
+  const qna = await importQna();
+  console.log(`qna:       ${String(qna.questions)} questions, ${String(qna.codes)} codes`);
+
   const files = [
     ...rules.files,
     ...character.files,
@@ -81,6 +85,7 @@ async function main(): Promise<number> {
     ...bestiary.files,
     ...sentient.files,
     ...atlas.files,
+    ...qna.files,
   ];
   const bytes =
     rules.bytesWritten +
@@ -89,7 +94,8 @@ async function main(): Promise<number> {
     effects.bytesWritten +
     bestiary.bytesWritten +
     sentient.bytesWritten +
-    atlas.bytesWritten;
+    atlas.bytesWritten +
+    qna.bytesWritten;
   const mib = (bytes / 1024 / 1024).toFixed(2);
   console.log(`written:   ${mib} MiB across ${String(files.length)} file(s) + media`);
   return 0;

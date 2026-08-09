@@ -24,6 +24,10 @@
 
 ### Добавлено
 
+- All Questions and Answers Registry v1.2 импортируется в
+  `generated/spec/qna` и `generated/types/qna.ts`: 444 строки, 411 адресуемых
+  кодов; алиас `Q-MON-089` защищён ADR 0017, ссылки старших реестров проверяются
+  `npm run validate`
 - [ADR 0017](docs/adr/0017-qna-question-code-alias.md) — Q&A-реестр v1.2
   помечает строку №367 кодом `Q-MON-083`, который уже занят несвязанным
   вопросом; Executable Rules v1.7 адресует то же решение как `Q-MON-089`.
