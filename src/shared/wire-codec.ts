@@ -227,28 +227,43 @@ const decisionPayload = (value: unknown, path: string): MasterPredicateDecisionP
   return validated(value);
 };
 
+const malformedJsonRefusal = (
+  value: unknown,
+  path: string,
+): Extract<DecodeRefusal, { readonly code: 'MALFORMED_JSON' }> => {
+  const object = exact(value, 'code detail path', path);
+  string(object['detail'], `${path}.detail`);
+  literal(object['path'], '$', `${path}.path`);
+  return validated(value);
+};
+
+const invalidShapeRefusal = (
+  value: unknown,
+  path: string,
+): Extract<DecodeRefusal, { readonly code: 'INVALID_SHAPE' }> => {
+  const object = exact(value, 'actualType code expected path', path);
+  oneOf(object['actualType'], RUNTIME_TYPES, `${path}.actualType`);
+  string(object['expected'], `${path}.expected`);
+  string(object['path'], `${path}.path`);
+  return validated(value);
+};
+
+const unrecognizedRefusal = (
+  value: unknown,
+  path: string,
+): Extract<DecodeRefusal, { readonly code: 'UNRECOGNIZED' }> => {
+  const object = exact(value, 'code path value', path);
+  string(object['path'], `${path}.path`);
+  json(object['value'], `${path}.value`);
+  return validated(value);
+};
+
 const decodeRefusal = (value: unknown, path: string): DecodeRefusal => {
   const object = record(value, path);
   const code = string(object['code'], `${path}.code`);
-  if (code === 'MALFORMED_JSON') {
-    const exactObject = exact(object, 'code detail path', path);
-    string(exactObject['detail'], `${path}.detail`);
-    literal(exactObject['path'], '$', `${path}.path`);
-    return validated(value);
-  }
-  if (code === 'INVALID_SHAPE') {
-    const exactObject = exact(object, 'actualType code expected path', path);
-    oneOf(exactObject['actualType'], RUNTIME_TYPES, `${path}.actualType`);
-    string(exactObject['expected'], `${path}.expected`);
-    string(exactObject['path'], `${path}.path`);
-    return validated(value);
-  }
-  if (code === 'UNRECOGNIZED') {
-    const exactObject = exact(object, 'code path value', path);
-    string(exactObject['path'], `${path}.path`);
-    json(exactObject['value'], `${path}.value`);
-    return validated(value);
-  }
+  if (code === 'MALFORMED_JSON') return malformedJsonRefusal(value, path);
+  if (code === 'INVALID_SHAPE') return invalidShapeRefusal(value, path);
+  if (code === 'UNRECOGNIZED') return unrecognizedRefusal(value, path);
   return abortUnrecognized(`${path}.code`, code);
 };
 
@@ -270,124 +285,140 @@ const commandReceipt = (value: unknown): CommandReceipt => {
   return validated(value);
 };
 
-const commandRefusal = (value: unknown): CommandRefusal => {
+const idempotencyConflictRefusal = (value: unknown): CommandRefusal => {
+  const object = exact(value, 'code commandId detail', '$.refusal');
+  string(object['commandId'], '$.refusal.commandId');
+  literal(object['detail'], 'PAYLOAD_MISMATCH', '$.refusal.detail');
+  return validated(value);
+};
+
+const masterPredicateDeniedRefusal = (value: unknown): CommandRefusal => {
+  const object = exact(
+    value,
+    'code linkedActionRequestId noReservation predicateRequestId predicateState',
+    '$.refusal',
+  );
+  string(object['linkedActionRequestId'], '$.refusal.linkedActionRequestId');
+  literal(object['noReservation'], true, '$.refusal.noReservation');
+  string(object['predicateRequestId'], '$.refusal.predicateRequestId');
+  literal(object['predicateState'], 'NO_RECORDED', '$.refusal.predicateState');
+  return validated(value);
+};
+
+const staleRevisionRefusal = (value: unknown): CommandRefusal => {
+  const object = exact(value, 'actual code expected', '$.refusal');
+  revisions(object['actual'], '$.refusal.actual');
+  revisions(object['expected'], '$.refusal.expected');
+  return validated(value);
+};
+
+const commandRefusalPayload = (value: unknown): CommandRefusal => {
   const object = record(value, '$.refusal');
   const code = string(object['code'], '$.refusal.code');
-  if (code === 'INVALID_SHAPE') {
-    const item = exact(object, 'actualType code expected path', '$.refusal');
-    oneOf(item['actualType'], RUNTIME_TYPES, '$.refusal.actualType');
-    string(item['expected'], '$.refusal.expected');
-    string(item['path'], '$.refusal.path');
-    return validated(value);
-  }
-  if (code === 'UNRECOGNIZED') {
-    const item = exact(object, 'code path value', '$.refusal');
-    string(item['path'], '$.refusal.path');
-    json(item['value'], '$.refusal.value');
-    return validated(value);
-  }
+  if (code === 'INVALID_SHAPE') return invalidShapeRefusal(value, '$.refusal');
+  if (code === 'UNRECOGNIZED') return unrecognizedRefusal(value, '$.refusal');
   if (code === 'GUARD_REJECTED') {
-    exact(object, 'code', '$.refusal');
+    exact(value, 'code', '$.refusal');
     return validated(value);
   }
-  if (code === 'IDEMPOTENCY_CONFLICT') {
-    const item = exact(object, 'code commandId detail', '$.refusal');
-    string(item['commandId'], '$.refusal.commandId');
-    literal(item['detail'], 'PAYLOAD_MISMATCH', '$.refusal.detail');
-    return validated(value);
-  }
-  if (code === 'MASTER_PREDICATE_DENIED') {
-    const item = exact(
-      object,
-      'code linkedActionRequestId noReservation predicateRequestId predicateState',
-      '$.refusal',
-    );
-    string(item['linkedActionRequestId'], '$.refusal.linkedActionRequestId');
-    literal(item['noReservation'], true, '$.refusal.noReservation');
-    string(item['predicateRequestId'], '$.refusal.predicateRequestId');
-    literal(item['predicateState'], 'NO_RECORDED', '$.refusal.predicateState');
-    return validated(value);
-  }
-  if (code === 'STALE_REVISION') {
-    const item = exact(object, 'actual code expected', '$.refusal');
-    revisions(item['actual'], '$.refusal.actual');
-    revisions(item['expected'], '$.refusal.expected');
-    return validated(value);
-  }
+  if (code === 'IDEMPOTENCY_CONFLICT') return idempotencyConflictRefusal(value);
+  if (code === 'MASTER_PREDICATE_DENIED') return masterPredicateDeniedRefusal(value);
+  if (code === 'STALE_REVISION') return staleRevisionRefusal(value);
   return abortUnrecognized('$.refusal.code', code);
+};
+
+const workflowCommandRequest = (
+  value: unknown,
+  vocabulary: ProtocolVocabulary,
+): ClientToHostMessage => {
+  const object = exact(
+    value,
+    'commandId commandKind expectedRevisions messageType payload protocolVersion role workflowCommandId',
+  );
+  const command = workflowId(object['workflowCommandId'], '$.workflowCommandId', vocabulary);
+  const commandRole = role(object['role'], '$.role');
+  if (command === MASTER_PREDICATE_RESPONSE_COMMAND_ID) {
+    decisionPayload(object['payload'], '$.payload');
+    if (commandRole !== 'gm') abortUnrecognized('$.role', commandRole);
+  } else {
+    jsonObject(object['payload'], '$.payload');
+  }
+  string(object['commandId'], '$.commandId');
+  revisions(object['expectedRevisions'], '$.expectedRevisions');
+  return validated(value);
+};
+
+const operationCommandRequest = (
+  value: unknown,
+  kind: string,
+  vocabulary: ProtocolVocabulary,
+): ClientToHostMessage => {
+  const object = exact(
+    value,
+    'commandId commandKind expectedRevisions messageType payload protocolVersion role transition',
+  );
+  string(object['commandId'], '$.commandId');
+  revisions(object['expectedRevisions'], '$.expectedRevisions');
+  jsonObject(object['payload'], '$.payload');
+  role(object['role'], '$.role');
+  transition(object['transition'], '$.transition', vocabulary, new Set([kind]));
+  return validated(value);
+};
+
+const commandRequest = (
+  value: unknown,
+  object: Record<string, unknown>,
+  vocabulary: ProtocolVocabulary,
+): ClientToHostMessage => {
+  const kind = string(object['commandKind'], '$.commandKind');
+  if (kind === 'workflow-command') return workflowCommandRequest(value, vocabulary);
+  if (kind === 'operation-command') return operationCommandRequest(value, kind, vocabulary);
+  return abortUnrecognized('$.commandKind', kind);
+};
+
+const readRequest = (value: unknown, vocabulary: ProtocolVocabulary): ClientToHostMessage => {
+  const object = exact(
+    value,
+    'commandKind knownRevisions messageType parameters protocolVersion requestId role transition',
+  );
+  const kinds = new Set(['local-or-read-command', 'read-only-command']);
+  const kind = oneOf<HostReadCommandKind>(object['commandKind'], kinds, '$.commandKind');
+  const reference = transition<HostReadCommandKind>(
+    object['transition'],
+    '$.transition',
+    vocabulary,
+    kinds,
+  );
+  if (reference.kind !== kind) abortUnrecognized('$.transition.kind', reference.kind);
+  revisions(object['knownRevisions'], '$.knownRevisions');
+  jsonObject(object['parameters'], '$.parameters');
+  string(object['requestId'], '$.requestId');
+  role(object['role'], '$.role');
+  return validated(value);
+};
+
+const projectionReconnect = (value: unknown): ClientToHostMessage => {
+  const object = exact(
+    value,
+    'knownRevisions messageType projectionRole protocolVersion requestId supportedWorkflowCommandIds unacknowledgedCommandIds',
+  );
+  revisions(object['knownRevisions'], '$.knownRevisions');
+  role(object['projectionRole'], '$.projectionRole');
+  string(object['requestId'], '$.requestId');
+  list(object['supportedWorkflowCommandIds'], '$.supportedWorkflowCommandIds', capabilityId);
+  list(object['unacknowledgedCommandIds'], '$.unacknowledgedCommandIds', string);
+  return validated(value);
 };
 
 const clientValue = (value: unknown, vocabulary: ProtocolVocabulary): ClientToHostMessage => {
   const object = base(value);
   switch (object['messageType']) {
-    case 'command.request': {
-      const kind = string(object['commandKind'], '$.commandKind');
-      if (kind === 'workflow-command') {
-        const item = exact(
-          value,
-          'commandId commandKind expectedRevisions messageType payload protocolVersion role workflowCommandId',
-        );
-        const command = workflowId(item['workflowCommandId'], '$.workflowCommandId', vocabulary);
-        const commandRole = role(item['role'], '$.role');
-        if (command === MASTER_PREDICATE_RESPONSE_COMMAND_ID) {
-          decisionPayload(item['payload'], '$.payload');
-          if (commandRole !== 'gm') abortUnrecognized('$.role', commandRole);
-        } else {
-          jsonObject(item['payload'], '$.payload');
-        }
-        string(item['commandId'], '$.commandId');
-        revisions(item['expectedRevisions'], '$.expectedRevisions');
-        return validated(value);
-      }
-      if (kind === 'operation-command') {
-        const item = exact(
-          value,
-          'commandId commandKind expectedRevisions messageType payload protocolVersion role transition',
-        );
-        string(item['commandId'], '$.commandId');
-        revisions(item['expectedRevisions'], '$.expectedRevisions');
-        jsonObject(item['payload'], '$.payload');
-        role(item['role'], '$.role');
-        transition(item['transition'], '$.transition', vocabulary, new Set([kind]));
-        return validated(value);
-      }
-      return abortUnrecognized('$.commandKind', kind);
-    }
-    case 'read.request': {
-      const item = exact(
-        value,
-        'commandKind knownRevisions messageType parameters protocolVersion requestId role transition',
-      );
-      const kind = oneOf<HostReadCommandKind>(
-        item['commandKind'],
-        new Set(['local-or-read-command', 'read-only-command']),
-        '$.commandKind',
-      );
-      const reference = transition<HostReadCommandKind>(
-        item['transition'],
-        '$.transition',
-        vocabulary,
-        new Set(['local-or-read-command', 'read-only-command']),
-      );
-      if (reference.kind !== kind) abortUnrecognized('$.transition.kind', reference.kind);
-      revisions(item['knownRevisions'], '$.knownRevisions');
-      jsonObject(item['parameters'], '$.parameters');
-      string(item['requestId'], '$.requestId');
-      role(item['role'], '$.role');
-      return validated(value);
-    }
-    case 'projection.reconnect': {
-      const item = exact(
-        value,
-        'knownRevisions messageType projectionRole protocolVersion requestId supportedWorkflowCommandIds unacknowledgedCommandIds',
-      );
-      revisions(item['knownRevisions'], '$.knownRevisions');
-      role(item['projectionRole'], '$.projectionRole');
-      string(item['requestId'], '$.requestId');
-      list(item['supportedWorkflowCommandIds'], '$.supportedWorkflowCommandIds', capabilityId);
-      list(item['unacknowledgedCommandIds'], '$.unacknowledgedCommandIds', string);
-      return validated(value);
-    }
+    case 'command.request':
+      return commandRequest(value, object, vocabulary);
+    case 'read.request':
+      return readRequest(value, vocabulary);
+    case 'projection.reconnect':
+      return projectionReconnect(value);
     case 'protocol.refusal':
       return protocolRefusal(value);
     default:
@@ -403,6 +434,94 @@ const commandDelivery = (value: unknown, replay: boolean): HostToClientMessage =
   return validated(value);
 };
 
+const commandPending = (value: unknown): HostToClientMessage => {
+  const object = exact(
+    value,
+    'commandId lifecycleState messageType noReservation predicateRequestId predicateState protocolVersion revisions',
+  );
+  string(object['commandId'], '$.commandId');
+  literal(object['lifecycleState'], 'PENDING_CONSENT', '$.lifecycleState');
+  literal(object['noReservation'], true, '$.noReservation');
+  string(object['predicateRequestId'], '$.predicateRequestId');
+  literal(object['predicateState'], 'PENDING_PREDICATE', '$.predicateState');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const commandRefusalMessage = (value: unknown): HostToClientMessage => {
+  const object = exact(
+    value,
+    'commandId lastLifecycleState messageType protocolVersion refusal revisions',
+  );
+  const last = object['lastLifecycleState'];
+  if (last !== null && (last === 'COMMITTED' || last === 'IDEMPOTENT_REPLAY')) {
+    abortUnrecognized('$.lastLifecycleState', last);
+  }
+  string(object['commandId'], '$.commandId');
+  if (last !== null) lifecycle(last, '$.lastLifecycleState');
+  commandRefusalPayload(object['refusal']);
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const masterPredicateRequest = (value: unknown): HostToClientMessage => {
+  const object = exact(
+    value,
+    'audience commandState guardState linkedActionRequestId masterAuthorityRevision messageType noReservation predicateQuestion predicateRequestId predicateState predicateType protocolVersion requestingCharacterId returnContext revisions',
+  );
+  literal(object['audience'], 'gm', '$.audience');
+  literal(object['commandState'], 'PENDING_CONSENT', '$.commandState');
+  literal(object['guardState'], 'consent/masterPredicate', '$.guardState');
+  string(object['linkedActionRequestId'], '$.linkedActionRequestId');
+  revision(object['masterAuthorityRevision'], '$.masterAuthorityRevision');
+  literal(object['noReservation'], true, '$.noReservation');
+  string(object['predicateQuestion'], '$.predicateQuestion');
+  string(object['predicateRequestId'], '$.predicateRequestId');
+  literal(object['predicateState'], 'PENDING_PREDICATE', '$.predicateState');
+  string(object['predicateType'], '$.predicateType');
+  string(object['requestingCharacterId'], '$.requestingCharacterId');
+  jsonObject(object['returnContext'], '$.returnContext');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const projectionSnapshot = (
+  value: unknown,
+  vocabulary: ProtocolVocabulary,
+): HostToClientMessage => {
+  const object = exact(
+    value,
+    'executableWorkflowCommandIds messageType projection projectionRole protocolVersion requestId revisions',
+  );
+  list(object['executableWorkflowCommandIds'], '$.executableWorkflowCommandIds', (entry, path) =>
+    workflowId(entry, path, vocabulary),
+  );
+  jsonObject(object['projection'], '$.projection');
+  role(object['projectionRole'], '$.projectionRole');
+  string(object['requestId'], '$.requestId');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const readResult = (value: unknown): HostToClientMessage => {
+  const object = exact(value, 'messageType protocolVersion requestId result revisions');
+  string(object['requestId'], '$.requestId');
+  jsonObject(object['result'], '$.result');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const readRefusal = (value: unknown): HostToClientMessage => {
+  const object = exact(value, 'messageType protocolVersion refusal requestId revisions');
+  const refusal = decodeRefusal(object['refusal'], '$.refusal');
+  if (refusal.code === 'MALFORMED_JSON') {
+    return abortUnrecognized('$.refusal.code', refusal.code);
+  }
+  string(object['requestId'], '$.requestId');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
 const hostValue = (value: unknown, vocabulary: ProtocolVocabulary): HostToClientMessage => {
   const object = base(value);
   switch (object['messageType']) {
@@ -410,84 +529,18 @@ const hostValue = (value: unknown, vocabulary: ProtocolVocabulary): HostToClient
       return commandDelivery(value, false);
     case 'command.replay':
       return commandDelivery(value, true);
-    case 'command.pending': {
-      const item = exact(
-        value,
-        'commandId lifecycleState messageType noReservation predicateRequestId predicateState protocolVersion revisions',
-      );
-      string(item['commandId'], '$.commandId');
-      literal(item['lifecycleState'], 'PENDING_CONSENT', '$.lifecycleState');
-      literal(item['noReservation'], true, '$.noReservation');
-      string(item['predicateRequestId'], '$.predicateRequestId');
-      literal(item['predicateState'], 'PENDING_PREDICATE', '$.predicateState');
-      revisions(item['revisions'], '$.revisions');
-      return validated(value);
-    }
-    case 'command.refusal': {
-      const item = exact(
-        value,
-        'commandId lastLifecycleState messageType protocolVersion refusal revisions',
-      );
-      const last = item['lastLifecycleState'];
-      if (last !== null && (last === 'COMMITTED' || last === 'IDEMPOTENT_REPLAY'))
-        abortUnrecognized('$.lastLifecycleState', last);
-      string(item['commandId'], '$.commandId');
-      if (last !== null) lifecycle(last, '$.lastLifecycleState');
-      commandRefusal(item['refusal']);
-      revisions(item['revisions'], '$.revisions');
-      return validated(value);
-    }
-    case 'master-predicate.request': {
-      const item = exact(
-        value,
-        'audience commandState guardState linkedActionRequestId masterAuthorityRevision messageType noReservation predicateQuestion predicateRequestId predicateState predicateType protocolVersion requestingCharacterId returnContext revisions',
-      );
-      literal(item['audience'], 'gm', '$.audience');
-      literal(item['commandState'], 'PENDING_CONSENT', '$.commandState');
-      literal(item['guardState'], 'consent/masterPredicate', '$.guardState');
-      string(item['linkedActionRequestId'], '$.linkedActionRequestId');
-      revision(item['masterAuthorityRevision'], '$.masterAuthorityRevision');
-      literal(item['noReservation'], true, '$.noReservation');
-      string(item['predicateQuestion'], '$.predicateQuestion');
-      string(item['predicateRequestId'], '$.predicateRequestId');
-      literal(item['predicateState'], 'PENDING_PREDICATE', '$.predicateState');
-      string(item['predicateType'], '$.predicateType');
-      string(item['requestingCharacterId'], '$.requestingCharacterId');
-      jsonObject(item['returnContext'], '$.returnContext');
-      revisions(item['revisions'], '$.revisions');
-      return validated(value);
-    }
-    case 'projection.snapshot': {
-      const item = exact(
-        value,
-        'executableWorkflowCommandIds messageType projection projectionRole protocolVersion requestId revisions',
-      );
-      list(item['executableWorkflowCommandIds'], '$.executableWorkflowCommandIds', (entry, path) =>
-        workflowId(entry, path, vocabulary),
-      );
-      jsonObject(item['projection'], '$.projection');
-      role(item['projectionRole'], '$.projectionRole');
-      string(item['requestId'], '$.requestId');
-      revisions(item['revisions'], '$.revisions');
-      return validated(value);
-    }
-    case 'read.result': {
-      const item = exact(value, 'messageType protocolVersion requestId result revisions');
-      string(item['requestId'], '$.requestId');
-      jsonObject(item['result'], '$.result');
-      revisions(item['revisions'], '$.revisions');
-      return validated(value);
-    }
-    case 'read.refusal': {
-      const item = exact(value, 'messageType protocolVersion refusal requestId revisions');
-      const refusal = decodeRefusal(item['refusal'], '$.refusal');
-      if (refusal.code !== 'MALFORMED_JSON') {
-        string(item['requestId'], '$.requestId');
-        revisions(item['revisions'], '$.revisions');
-        return validated(value);
-      }
-      return abortUnrecognized('$.refusal.code', refusal.code);
-    }
+    case 'command.pending':
+      return commandPending(value);
+    case 'command.refusal':
+      return commandRefusalMessage(value);
+    case 'master-predicate.request':
+      return masterPredicateRequest(value);
+    case 'projection.snapshot':
+      return projectionSnapshot(value, vocabulary);
+    case 'read.result':
+      return readResult(value);
+    case 'read.refusal':
+      return readRefusal(value);
     case 'protocol.refusal':
       return protocolRefusal(value);
     default:
