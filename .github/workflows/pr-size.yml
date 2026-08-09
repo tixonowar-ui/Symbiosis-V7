@@ -10,12 +10,27 @@ permissions:
 # One task = one minimal diff (AGENTS.md section 6). This guards against a
 # "rebuild the whole app" PR slipping past review by being too large to read.
 #
-# Code and documentation are counted separately on purpose. A 2000-line
+# Code, tests and documentation are counted separately on purpose. A 2000-line
 # documentation PR is ordinary; a 2000-line code PR is a rewrite. One shared
 # limit would either block honest documentation work or let a rewrite through,
 # depending on where it was set. The handoff PR that introduced this workflow
 # was 1798 lines of documentation and 311 of code — exactly the shape a single
 # limit misjudges.
+#
+# Tests earned their own budget for the same reason, measured rather than
+# guessed. The first three substantial tasks came in at:
+#
+#   #13 traceability   851 lines, 193 of them tests
+#   #17 Q&A import     879 lines, 217 of them tests
+#   #20 persistence    897 lines, 331 of them tests
+#
+# Three consecutive PRs within 3% of a 900-line ceiling meant the limit had
+# stopped catching rewrites and started taxing ordinary work — and taxing it
+# hardest where coverage was best, since a test line cost exactly what an
+# implementation line did. That is a direct incentive to write fewer tests to
+# fit, which inverts the point of the guard. Implementation alone measured
+# 566–662 lines across those three, so the limits below leave real headroom
+# while still refusing a module rewrite.
 #
 # generated/ is excluded entirely: a re-imported artifact legitimately rewrites
 # megabytes, and that is pipeline output, not hand-written work.
@@ -31,10 +46,9 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          # Calibrate after Codex's first few tasks — these are starting points,
-          # not measurements.
           MAX_CODE_LINES: 900
           MAX_CODE_FILES: 25
+          MAX_TEST_LINES: 700
           MAX_DOC_LINES: 3000
           MAX_TOTAL_FILES: 60
         run: |
@@ -50,14 +64,29 @@ jobs:
             exit 0
           fi
 
-          code_files=$(echo "$stat" | grep -vE '\.(md|txt)$' | grep -c . || true)
-          code_lines=$(echo "$stat" | grep -vE '\.(md|txt)$' \
-                       | awk '{a+=$1; d+=$2} END {print a+d+0}') || true
-          doc_lines=$(echo "$stat" | grep -E '\.(md|txt)$' \
-                      | awk '{a+=$1; d+=$2} END {print a+d+0}') || true
-          total_files=$(echo "$stat" | grep -c .)
+          # Classification lives in one awk pass so a path is bucketed exactly
+          # once. Binary files report "-" instead of a count; awk reads that as
+          # zero, which is what we want — a binary blob has no reviewable lines.
+          set -- $(echo "$stat" | awk -F'\t' '
+            {
+              lines = $1 + $2
+              total_files++
+              if ($3 ~ /\.(md|txt)$/) { doc_lines += lines; next }
+              if ($3 ~ /(^|\/)tests\// || $3 ~ /\.(test|spec)\.tsx?$/) {
+                test_lines += lines; test_files++; next
+              }
+              code_lines += lines; code_files++
+            }
+            END {
+              printf "%d %d %d %d %d %d\n",
+                code_files+0, code_lines+0, test_files+0,
+                test_lines+0, doc_lines+0, total_files+0
+            }')
+          code_files=$1; code_lines=$2; test_files=$3
+          test_lines=$4; doc_lines=$5; total_files=$6
 
           echo "code:  $code_files files (limit $MAX_CODE_FILES), $code_lines lines (limit $MAX_CODE_LINES)"
+          echo "tests: $test_files files, $test_lines lines (limit $MAX_TEST_LINES)"
           echo "docs:  $doc_lines lines (limit $MAX_DOC_LINES)"
           echo "total: $total_files files (limit $MAX_TOTAL_FILES)"
           echo
@@ -66,6 +95,7 @@ jobs:
           over=""
           [ "$code_files" -gt "$MAX_CODE_FILES" ] && over="$over code-files"
           [ "$code_lines" -gt "$MAX_CODE_LINES" ] && over="$over code-lines"
+          [ "$test_lines" -gt "$MAX_TEST_LINES" ] && over="$over test-lines"
           [ "$doc_lines" -gt "$MAX_DOC_LINES" ] && over="$over doc-lines"
           [ "$total_files" -gt "$MAX_TOTAL_FILES" ] && over="$over total-files"
 
