@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 
-import type Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { openPersistenceDatabase } from './database.js';
-import { V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
-import { applyMigrations } from './migrations/index.js';
+import { migration0001, sqlStringLiteral, V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
+import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
 import {
   advanceRevisions,
   commitCampaignCheckpoint,
@@ -95,6 +95,7 @@ const revisions = (
   projectionRevision: number,
   actorVisibilityRevision: number,
 ) => ({ stateRevision, projectionRevision, actorVisibilityRevision });
+const revisionNames = ['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const;
 
 describe('persistence schema', () => {
   it('migrates an empty database to the current version and reapplies as a no-op', () => {
@@ -113,6 +114,13 @@ describe('persistence schema', () => {
       'local_character',
       'schema_migration',
     ]);
+    for (const table of ['local_character', 'campaign', 'campaign_checkpoint']) {
+      const columns = database
+        .prepare<[string], { name: string }>('SELECT name FROM pragma_table_info(?) ORDER BY cid')
+        .all(table)
+        .map(({ name }) => name);
+      expect(columns).toEqual(expect.arrayContaining([...revisionNames]));
+    }
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1);
     expect(database.pragma('synchronous', { simple: true })).toBe(2);
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
@@ -132,8 +140,46 @@ describe('persistence schema', () => {
     expect(() => applyMigrations(database)).toThrow(/migration history mismatch/);
   });
 
+  it('applies every migration while bootstrapping an empty database', () => {
+    const database = new Database(':memory:');
+    databases.push(database);
+    const probe = {
+      version: 2,
+      name: 'probe',
+      sql: 'CREATE TABLE probe_table (id INTEGER) STRICT;',
+    } as const;
+
+    expect(applyMigrationSequence(database, [migration0001, probe])).toBe(2);
+    expect(
+      database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
+    ).toEqual([
+      { version: 1, name: 'initial' },
+      { version: 2, name: 'probe' },
+    ]);
+    expect(database.prepare('SELECT * FROM probe_table').all()).toEqual([]);
+  });
+
+  it('rolls back the registry and schema when the first migration fails', () => {
+    const database = new Database(':memory:');
+    databases.push(database);
+    const failing = {
+      version: 1,
+      name: 'failing',
+      sql: 'CREATE TABLE partial_table (id INTEGER) STRICT; THIS IS NOT SQL;',
+    } as const;
+
+    expect(() => applyMigrationSequence(database, [failing])).toThrow(/near "THIS"/);
+    expect(
+      database
+        .prepare("SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
+        .all(),
+    ).toEqual([]);
+  });
+
   it('freezes artifact lifecycle states and rejects every unknown state', () => {
     const database = memoryDatabase();
+    expect(sqlStringLiteral("STATE_'_1")).toBe("'STATE_''_1'");
+    expect(() => sqlStringLiteral('STATE\0')).toThrow(/contains NUL/);
     expect([...V1_LIFECYCLE_STATES.localCharacter]).toEqual(artifactStates('localCharacter'));
     expect([...V1_LIFECYCLE_STATES.campaignCharacterCopy]).toEqual(
       artifactStates('campaignCharacterCopy'),
@@ -213,7 +259,7 @@ describe('revisions and checkpoints', () => {
 
     expect(
       Object.keys(readRevisions(database, { entity: 'campaign', entityId: 'campaign' })),
-    ).toEqual(['stateRevision', 'projectionRevision', 'actorVisibilityRevision']);
+    ).toEqual([...revisionNames]);
 
     expect(
       advanceRevisions(

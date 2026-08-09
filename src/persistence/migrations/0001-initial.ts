@@ -4,17 +4,30 @@
  */
 export const V1_LIFECYCLE_STATES = {
   ['localCharacter']: ['DRAFT', 'VALID', 'FINAL', 'EXPORTED', 'VARIANT', 'DELETED'],
-  // prettier-ignore
-  ['campaignCharacterCopy']: ['CANDIDATE', 'GM_REVIEW', 'PROPOSED', 'ACTIVE', 'DECLINED', 'ARCHIVED'],
+  ['campaignCharacterCopy']: [
+    'CANDIDATE',
+    'GM_REVIEW',
+    'PROPOSED',
+    'ACTIVE',
+    'DECLINED',
+    'ARCHIVED',
+  ],
   ['campaign']: ['DRAFT', 'PREFLIGHT', 'HOSTING', 'PAUSED', 'COMPLETED', 'IMMUTABLE_ARCHIVE'],
 } as const;
 
 /** Revisions cross the future JSON wire contract as exact JavaScript numbers. */
 export const MAX_SAFE_REVISION = Number.MAX_SAFE_INTEGER;
 
-const sqlList = (values: readonly string[]): string =>
-  values.map((value) => `'${value}'`).join(', ');
+export const sqlStringLiteral = (value: string): string => {
+  if (value.includes('\0')) {
+    throw new Error(`lifecycle state contains NUL: ${JSON.stringify(value)}`);
+  }
+  return `'${value.replaceAll("'", "''")}'`;
+};
 
+const sqlList = (values: readonly string[]): string => values.map(sqlStringLiteral).join(', ');
+
+/** Physical revision columns preserve verbatim camelCase guard names from generated/spec/atlas/meta.json. */
 const revisionColumns = `
   stateRevision INTEGER NOT NULL DEFAULT 0
     CHECK (stateRevision BETWEEN 0 AND ${MAX_SAFE_REVISION}),

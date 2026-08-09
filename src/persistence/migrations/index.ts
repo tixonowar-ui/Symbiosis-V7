@@ -15,7 +15,9 @@ interface AppliedMigrationRow {
   checksum_sha256: string;
 }
 
-const MIGRATIONS = [migration0001] as const;
+export type Migration = Readonly<{ version: number; name: string; sql: string }>;
+
+const MIGRATIONS: readonly Migration[] = [migration0001];
 
 const CREATE_MIGRATION_REGISTRY_SQL = `CREATE TABLE schema_migration (
   version INTEGER NOT NULL PRIMARY KEY CHECK (version > 0),
@@ -41,28 +43,20 @@ const schemaObjects = (database: Database.Database): SchemaObjectRow[] =>
     )
     .all();
 
-const insertMigration = (
-  database: Database.Database,
-  migration: (typeof MIGRATIONS)[number],
-): void => {
+const insertMigration = (database: Database.Database, migration: Migration): void => {
   database.exec(migration.sql);
   database
-    .prepare<{
-      version: number;
-      name: string;
-      checksum: string;
-    }>(
+    .prepare(
       `INSERT INTO schema_migration (version, name, checksum_sha256)
-       VALUES (@version, @name, @checksum)`,
+       VALUES (?, ?, ?)`,
     )
-    .run({
-      version: migration.version,
-      name: migration.name,
-      checksum: checksum(migration.sql),
-    });
+    .run(migration.version, migration.name, checksum(migration.sql));
 };
 
-const validateRegistry = (database: Database.Database): number => {
+const validateRegistry = (
+  database: Database.Database,
+  migrations: readonly Migration[],
+): number => {
   const applied = database
     .prepare<[], AppliedMigrationRow>(
       `SELECT version, name, checksum_sha256
@@ -74,14 +68,14 @@ const validateRegistry = (database: Database.Database): number => {
   if (applied.length === 0) {
     throw new Error('schema_migration exists but contains no applied migration');
   }
-  if (applied.length > MIGRATIONS.length) {
+  if (applied.length > migrations.length) {
     throw new Error(
-      `database schema version ${applied.at(-1)?.version ?? 'unknown'} is newer than supported version ${MIGRATIONS.length}`,
+      `database schema version ${applied.at(-1)?.version ?? 'unknown'} is newer than supported version ${migrations.length}`,
     );
   }
 
   for (const [index, row] of applied.entries()) {
-    const expected = MIGRATIONS[index];
+    const expected = migrations[index];
     if (
       expected === undefined ||
       row.version !== expected.version ||
@@ -97,8 +91,14 @@ const validateRegistry = (database: Database.Database): number => {
   return applied.length;
 };
 
-export const applyMigrations = (database: Database.Database): number => {
-  for (const [index, migration] of MIGRATIONS.entries()) {
+export const applyMigrationSequence = (
+  database: Database.Database,
+  migrations: readonly Migration[],
+): number => {
+  if (migrations.length === 0) {
+    throw new Error('migration sequence must contain at least one migration');
+  }
+  for (const [index, migration] of migrations.entries()) {
     if (migration.version !== index + 1) {
       throw new Error(
         `migration registry is not contiguous: expected ${index + 1}, got ${migration.version}`,
@@ -117,18 +117,21 @@ export const applyMigrations = (database: Database.Database): number => {
         `cannot bootstrap migrations over existing schema objects: ${objects.map(({ type, name }) => `${type} ${name}`).join(', ')}`,
       );
     }
-    database
-      .transaction(() => {
-        database.exec(CREATE_MIGRATION_REGISTRY_SQL);
-        insertMigration(database, migration0001);
-      })
-      .immediate();
-    return migration0001.version;
   }
 
-  const appliedCount = validateRegistry(database);
-  for (const migration of MIGRATIONS.slice(appliedCount)) {
-    database.transaction(() => insertMigration(database, migration)).immediate();
+  const appliedCount = hasRegistry ? validateRegistry(database, migrations) : 0;
+  for (const [index, migration] of migrations.slice(appliedCount).entries()) {
+    database
+      .transaction(() => {
+        if (!hasRegistry && index === 0) {
+          database.exec(CREATE_MIGRATION_REGISTRY_SQL);
+        }
+        insertMigration(database, migration);
+      })
+      .immediate();
   }
-  return MIGRATIONS.at(-1)?.version ?? 0;
+  return migrations.at(-1)?.version ?? 0;
 };
+
+export const applyMigrations = (database: Database.Database): number =>
+  applyMigrationSequence(database, MIGRATIONS);
