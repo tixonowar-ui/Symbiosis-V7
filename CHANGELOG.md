@@ -32,6 +32,10 @@
 
 ### Добавлено
 
+- [ADR 0021](docs/adr/0021-roll-model.md) и чистый контракт броска: буквальные
+  конверты AUTO/MANUAL из Atlas, закрытый каталог d4/d6/d12/d20,
+  source-neutral результат, host-side `node:crypto.randomInt` и replay
+  сохранённого random receipt без повторного RNG
 - [ADR 0020](docs/adr/0020-wire-protocol-and-shared-contracts.md) и
   fail-closed контракты `src/shared`: шесть маршрутов команд Atlas,
   типизированные request/result/refusal/replay, три reconnect-ревизии,
