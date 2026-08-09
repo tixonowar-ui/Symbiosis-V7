@@ -32,6 +32,13 @@
 
 ### Добавлено
 
+- Минимальный generic-рендерер для всех 11 форм `APP-`: идентичность, метаданные,
+  состояния, required fields, QA-сценарии и объявленные слоты читаются из
+  `generated/spec`; CTA берутся только из `actionSteps[].primaryActions`, а
+  назначения — из точного совпадения перехода по `from` и `trigger`. Поддержаны
+  типы `screen` и `dialog`; неизвестные формы, остальные четыре типа,
+  конфликтующие action steps и неоднозначные переходы отклоняются fail-closed.
+  `APP-005` без `actionSteps` показывает явное состояние без придуманных CTA
 - [ADR 0022](docs/adr/0022-operation-and-rule-handler-registries.md) и чистый
   каркас двух handler-реестров: 70 generated operation ID отделены от 739
   `RuleId`, duplicate/unregistered отказы fail-closed, а tombstone отличается
