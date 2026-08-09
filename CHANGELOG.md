@@ -37,10 +37,14 @@
 - ADR 0015 — гарантии конвейера импорта
 - ADR 0016 — что из `generated/` хранится в git
 - `generated/spec/atlas/forms-by-id.json` — индекс 376 форм атласа по ID
+- `npm run traceability` — детерминированный генератор матрицы по ID из
+  `generated/spec`, ссылкам в `src/` и прикладных тестах
 
 ### Изменено
 
 - `npm run verify` дополнительно прогоняет `validate`
+- `npm run verify` проверяет, что `docs/TRACEABILITY.md` не устарел и не содержит
+  неизвестных source-ID
 - `npm run validate` сверяет ключи индекса форм с каталогом `forms.json`
 
 ## M1 — Конвейер импорта

@@ -33,7 +33,9 @@
     "validate": "tsx tools/validate/index.ts",
     "checksums": "tsx tools/checksums/index.ts write",
     "checksums:verify": "tsx tools/checksums/index.ts verify",
-    "verify": "npm run checksums:verify && npm run typecheck && npm run lint && npm run format:check && npm run test && npm run validate"
+    "traceability": "tsx tools/traceability/index.ts",
+    "traceability:verify": "tsx tools/traceability/index.ts --check",
+    "verify": "npm run checksums:verify && npm run traceability:verify && npm run typecheck && npm run lint && npm run format:check && npm run test && npm run validate"
   },
   "dependencies": {
     "@e965/xlsx": "0.20.3",
