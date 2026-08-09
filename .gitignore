@@ -6,9 +6,12 @@ dist/
 *.tsbuildinfo
 
 # --- pipeline output that must NOT be committed ---
-# generated/spec, generated/types, generated/seed ARE committed (see CLAUDE.md);
-# media is large binary output and is rebuilt by tools/import.
+# generated/spec and generated/types ARE committed (see CLAUDE.md): they diff,
+# and typecheck needs the types. media and seed are large binary output that
+# does not diff, and tools/import rebuilds both byte for byte.
+# See ADR 0016 and ADR 0019.
 generated/media/
+generated/seed/*.sqlite
 
 # --- reports (coverage, traceability, playwright) ---
 reports/
