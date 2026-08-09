@@ -85,7 +85,7 @@ artifacts/            read-only, в git
 generated/            только вывод, руками не править
   spec/   формы, правила, journeys   (в git)
   types/  TS-типы                    (в git)
-  seed/   SQLite seed                (в git)
+  seed/   SQLite seed                (НЕ в git)
   media/  арты и иконки              (НЕ в git)
 ```
 

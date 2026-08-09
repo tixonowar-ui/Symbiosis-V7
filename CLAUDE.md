@@ -55,8 +55,9 @@ npm run checksums:verify
 `generated/` целиком производится инструментами из `tools/import`. **Руками не
 править.** Любая правка будет затёрта следующим прогоном.
 
-- `generated/spec`, `generated/types`, `generated/seed` — в git
-- `generated/media` — **не** в git (крупные бинарные файлы, пересобираются)
+- `generated/spec`, `generated/types` — в git
+- `generated/media`, `generated/seed` — **не** в git (крупные бинарные файлы,
+  пересобираются)
 
 Нужно изменить содержимое `generated/` — меняется конвейер или артефакт-источник,
 но не результат.

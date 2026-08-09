@@ -35,8 +35,9 @@ npm run import
 npm run verify
 ```
 
-**`npm run import` обязателен.** `generated/media` не хранится в git
-([ADR 0016](docs/adr/0016-what-generated-is-committed.md)) — его создаёт импорт.
+**`npm run import` обязателен.** `generated/media` и SQLite-файл в
+`generated/seed` не хранятся в git ([ADR 0016](docs/adr/0016-what-generated-is-committed.md),
+[ADR 0019](docs/adr/0019-seed-is-rebuilt-not-committed.md)) — их создаёт импорт.
 Запустишь тесты раньше, получишь:
 
 ```
@@ -97,7 +98,7 @@ artifacts/          READ-ONLY. Поставленные артефакты. Ме
 generated/          ТОЛЬКО вывод tools/import. Руками не править
   spec/             машинный вид артефактов (в git)
   types/            TS-типы, выведенные из артефактов (в git)
-  seed/             SQLite seed (НЕ в git, пересобирается) — пока пусто, это M2
+  seed/             SQLite seed (НЕ в git, пересобирается). M1 завершена
   media/            иконки и арты (НЕ в git, пересобирается)
 
 src/                приложение. СЕЙЧАС ПРАКТИЧЕСКИ ПУСТО
@@ -108,7 +109,7 @@ src/                приложение. СЕЙЧАС ПРАКТИЧЕСКИ П
   web/              React-рендерер по атласу, 16 доменов форм
 
 tools/
-  import/           artifacts → generated. РАБОТАЕТ, 7 модулей
+  import/           artifacts → generated. РАБОТАЕТ, 9 модулей
   checksums/        SHA-256 манифест артефактов. РАБОТАЕТ
   validate/         кросс-реестровая валидация generated/spec. РАБОТАЕТ
   traceability/     генератор матрицы покрытия. ПУСТО

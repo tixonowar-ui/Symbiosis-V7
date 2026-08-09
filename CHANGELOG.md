@@ -32,6 +32,9 @@
 
 ### Добавлено
 
+- `npm run import` собирает самостоятельный SQLite seed из всех 112 массивов
+  `generated/spec`: 20 535 строк, восемь паспортов разделов и отдельная
+  проверка побайтовой воспроизводимости на SQLite 3.53.4
 - [ADR 0018](docs/adr/0018-current-state-storage-and-checkpoints.md) и миграция
   `0001`: current-state схема для `localCharacter`, `campaignCharacterCopy` и
   `campaign`, три ревизии reconnect-контракта и атомарный checkpoint кампании
@@ -81,11 +84,12 @@
 
 ## M1 — Конвейер импорта
 
-Веха не закрыта: `generated/seed` перенесён на M2.
+Веха завершена 2026-08-09: все четыре категории вывода `generated/`
+производятся импортом.
 
 ### Добавлено
 
-- `tools/import` — `artifacts/` → `generated/`, семь модулей
+- `tools/import` — `artifacts/` → `generated/`, девять модулей
 - Гейт контрольных сумм перед чтением артефактов
 - Детерминизм: одинаковый вход даёт побайтово одинаковый выход
 - Атлас v1.2: 376 форм, 1672 перехода, 66 journeys, 91 requirement,
@@ -98,6 +102,9 @@
 - Canonical Bestiary v1.4: 16 видов, 17 статблоков, 16 артов
 - Default Sentient Enemy v1.2 и Runtime Pack: 44 замороженных шаблона,
   44 арта, сверка реестра с пакетом по SHA-256
+- All Questions and Answers v1.2: 444 вопроса, 411 адресуемых кодов
+- `generated/seed/seed.sqlite`: 112 таблиц массивов, 20 535 строк и восемь
+  паспортов; файл пересобирается и не хранится в git по ADR 0019
 - `generated/types` — типы, выведенные из артефактов: `FormId` (376),
   `RuleId` (739), `EffectTypeId` (67), `ItemTypeId` (64) и другие
 - Стражи ADR в импорте: 0004, 0007, 0011 сверяются с источником
