@@ -30,26 +30,27 @@
 
 ## Реестр
 
-| №                                                         | Решение                              | Статус  |
-| --------------------------------------------------------- | ------------------------------------ | ------- |
-| [0001](0001-target-platforms.md)                          | Целевые платформы                    | принято |
-| [0002](0002-stack.md)                                     | Технологический стек                 | принято |
-| [0003](0003-source-of-truth-order.md)                     | Порядок источников правды            | принято |
-| [0004](0004-gm-xp-award-is-irreversible.md)               | Начисление опыта мастером необратимо | принято |
-| [0005](0005-balanced-enemy-group-generator.md)            | Генератор сбалансированной группы    | принято |
-| [0006](0006-night-starts-at-21.md)                        | Игровая ночь начинается в 21:00      | принято |
-| [0007](0007-frozen-runtime-pack-forward-compatibility.md) | Замороженный Runtime Pack            | принято |
-| [0008](0008-hidden-actor-visibility.md)                   | Скрытый актор не утекает игроку      | принято |
-| [0009](0009-roll-request-queue-per-command.md)            | Очередь бросков привязана к команде  | принято |
-| [0010](0010-local-seat-limit.md)                          | Лимит локальных мест                 | принято |
-| [0011](0011-not-modeled-stays-tombstone.md)               | NOT_MODELED остаётся tombstone       | принято |
-| [0012](0012-release-hash-model.md)                        | Модель хеширования выпуска           | принято |
-| [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято |
-| [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято |
-| [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято |
-| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято |
-| [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято |
-| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято |
+| №                                                         | Решение                              | Статус                                 |
+| --------------------------------------------------------- | ------------------------------------ | -------------------------------------- |
+| [0001](0001-target-platforms.md)                          | Целевые платформы                    | принято                                |
+| [0002](0002-stack.md)                                     | Технологический стек                 | принято                                |
+| [0003](0003-source-of-truth-order.md)                     | Порядок источников правды            | принято                                |
+| [0004](0004-gm-xp-award-is-irreversible.md)               | Начисление опыта мастером необратимо | принято                                |
+| [0005](0005-balanced-enemy-group-generator.md)            | Генератор сбалансированной группы    | принято                                |
+| [0006](0006-night-starts-at-21.md)                        | Игровая ночь начинается в 21:00      | принято                                |
+| [0007](0007-frozen-runtime-pack-forward-compatibility.md) | Замороженный Runtime Pack            | принято                                |
+| [0008](0008-hidden-actor-visibility.md)                   | Скрытый актор не утекает игроку      | принято                                |
+| [0009](0009-roll-request-queue-per-command.md)            | Очередь бросков привязана к команде  | принято                                |
+| [0010](0010-local-seat-limit.md)                          | Лимит локальных мест                 | принято                                |
+| [0011](0011-not-modeled-stays-tombstone.md)               | NOT_MODELED остаётся tombstone       | принято                                |
+| [0012](0012-release-hash-model.md)                        | Модель хеширования выпуска           | принято                                |
+| [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято                                |
+| [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято                                |
+| [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято                                |
+| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято; строка про seed заменена 0019 |
+| [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято                                |
+| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято                                |
+| [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                |
 
 ## Перенос решений аудита
 
