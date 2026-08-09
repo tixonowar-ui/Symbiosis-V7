@@ -32,6 +32,10 @@
 
 ### Добавлено
 
+- [ADR 0020](docs/adr/0020-wire-protocol-and-shared-contracts.md) и
+  fail-closed контракты `src/shared`: шесть маршрутов команд Atlas,
+  типизированные request/result/refusal/replay, три reconnect-ревизии,
+  идемпотентные receipts и блокирующий мастерский предикат `GM-029`
 - `npm run import` собирает самостоятельный SQLite seed из всех 112 массивов
   `generated/spec`: 20 535 строк, восемь паспортов разделов и отдельная
   проверка побайтовой воспроизводимости на SQLite 3.53.4

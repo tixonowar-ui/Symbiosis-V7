@@ -51,6 +51,7 @@
 | [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято                                |
 | [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято                                |
 | [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                |
+| [0020](0020-wire-protocol-and-shared-contracts.md)        | Wire-протокол и контракты shared     | принято                                |
 
 ## Перенос решений аудита
 
