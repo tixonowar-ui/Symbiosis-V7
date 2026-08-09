@@ -49,6 +49,7 @@
 | [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято |
 | [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято |
 | [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято |
+| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято |
 
 ## Перенос решений аудита
 
