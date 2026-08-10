@@ -531,10 +531,7 @@ function escapeCell(value: string): string {
   return value.replaceAll('|', '\\|').replaceAll('\n', ' ');
 }
 
-export async function renderReport(model: CoverageModel, commitDate: string): Promise<string> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(commitDate)) {
-    throw new Error(`invalid commit date ${JSON.stringify(commitDate)}`);
-  }
+export async function renderReport(model: CoverageModel): Promise<string> {
   const lines: string[] = [
     '# Матрица трассируемости',
     '',
@@ -553,7 +550,6 @@ export async function renderReport(model: CoverageModel, commitDate: string): Pr
     '> `docs/`, `artifacts/` и весь `tools/` не являются свидетельством реализации',
     '> или покрытия приложения.',
     '',
-    `- Дата снимка (дата последнего коммита): ${commitDate}`,
     '- Источник ожидаемых значений: `generated/spec`',
     '',
     '## Сводка',

@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,17 +5,6 @@ import { buildCoverage, loadCatalog, renderReport, scanRepository } from './trac
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OUTPUT = join(REPO_ROOT, 'docs', 'TRACEABILITY.md');
-
-function commitDate(): string {
-  const value = execFileSync('git', ['log', '-1', '--format=%cs'], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-  }).trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`git returned an invalid commit date: ${JSON.stringify(value)}`);
-  }
-  return value;
-}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -27,7 +15,7 @@ async function main(): Promise<void> {
   const catalog = loadCatalog(join(REPO_ROOT, 'generated', 'spec'));
   const scans = scanRepository(REPO_ROOT);
   const model = buildCoverage(catalog, scans.implementation, scans.tests, scans.source);
-  const report = await renderReport(model, commitDate());
+  const report = await renderReport(model);
 
   if (args[0] === '--check') {
     if (readFileSync(OUTPUT, 'utf8') !== report) {
