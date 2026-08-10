@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-11`
-- Тестов: 354, все зелёные
+- Тестов: 368, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -48,7 +48,7 @@ atlas-derived срез с wire v1; остальные прикладные сл�
 | Слой                         | Состояние    | Что нужно / реализовано                                          | Веха |
 | ---------------------------- | ------------ | ---------------------------------------------------------------- | ---- |
 | `src/shared`                 | **готов**    | fail-closed wire v1, reconnect, receipts, master predicate       | M4   |
-| `src/domain/rules`           | **частично** | typed-реестры + skill-stage; handlers ещё не подключены          | M3   |
+| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-009; handlers позже              | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет    | M3   |
 | `src/persistence`            | **частично** | 3 V1-сущности, ревизии и checkpoint; 16 циклов позже             | M2   |
 | `src/persistence/migrations` | **готов**    | нумерованная forward-only `0001` для трёх V1-сущностей           | M2   |
