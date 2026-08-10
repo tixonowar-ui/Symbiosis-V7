@@ -479,6 +479,28 @@ describe('baseStats to skillStageStats', () => {
     ).toThrow('unexpected: EXTRA');
   });
 
+  it('rejects a non-safe baseStat while preserving the CORE-163 integer value 25', () => {
+    for (const value of [10.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        calculateSkillStageStats(CATALOG, {
+          baseStats: { ...base, S: value },
+          raceCode: 'FREE',
+          classCode: null,
+          creationMode: 'RANDOM',
+        }),
+      ).toThrow(`baseStats.S must be a safe integer; received ${String(value)}`);
+    }
+
+    expect(
+      calculateSkillStageStats(CATALOG, {
+        baseStats: { ...base, S: 25 },
+        raceCode: 'FREE',
+        classCode: null,
+        creationMode: 'RANDOM',
+      }).skillStageStats.S,
+    ).toBe(25);
+  });
+
   it('keeps the raw CORE-001 intermediate result even below EffectiveMin', () => {
     const modifierIds = RAW_MODIFIERS.filter(
       (entry) =>

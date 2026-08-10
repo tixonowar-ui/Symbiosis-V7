@@ -59,6 +59,9 @@ function requireBaseStats(catalog: SkillStageCatalog, value: unknown): Record<St
     if (typeof valueAtKey !== 'number' || !Number.isFinite(valueAtKey)) {
       fail(`baseStats.${stat.statCode} must be finite; received ${show(valueAtKey)}`);
     }
+    if (!Number.isSafeInteger(valueAtKey)) {
+      fail(`baseStats.${stat.statCode} must be a safe integer; received ${show(valueAtKey)}`);
+    }
     if (valueAtKey < stat.baseMin) {
       fail(
         `baseStats.${stat.statCode} must be at least BaseMin ${String(stat.baseMin)}; received ${String(valueAtKey)} (${RULES.baseMinimum})`,

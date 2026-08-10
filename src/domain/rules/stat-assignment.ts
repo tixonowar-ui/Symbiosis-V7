@@ -118,6 +118,9 @@ function requireAssignedStats(
     if (typeof assigned !== 'number' || !Number.isFinite(assigned)) {
       fail(`assignedStats.${stat.statCode} must be finite; received ${show(assigned)}`);
     }
+    if (!Number.isSafeInteger(assigned)) {
+      fail(`assignedStats.${stat.statCode} must be a safe integer; received ${show(assigned)}`);
+    }
     result[stat.statCode] = assigned;
   }
   return result;
@@ -132,6 +135,9 @@ function requireAcceptedValues(value: unknown): readonly number[] {
   for (const [index, entry] of value.entries()) {
     if (typeof entry !== 'number' || !Number.isFinite(entry)) {
       fail(`acceptedValues[${String(index)}] must be finite; received ${show(entry)}`);
+    }
+    if (!Number.isSafeInteger(entry)) {
+      fail(`acceptedValues[${String(index)}] must be a safe integer; received ${show(entry)}`);
     }
   }
   return value as readonly number[];
