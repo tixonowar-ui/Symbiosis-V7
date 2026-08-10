@@ -117,18 +117,23 @@ npm run checksums:verify
 npm run verify
 ```
 
-Полная проверка: контрольные суммы → типы → линтер → формат → тесты.
+Полная проверка: контрольные суммы → трассируемость → типы → линтер → формат →
+тесты → кросс-реестровая валидация.
 
-| Команда                           | Что делает                               |
-| --------------------------------- | ---------------------------------------- |
-| `npm run import`                  | `artifacts/` → `generated/`              |
-| `npm run checksums`               | пересчитать `artifacts/CHECKSUMS.sha256` |
-| `npm run checksums:verify`        | проверить артефакты на дрейф             |
-| `npm run typecheck`               | `tsc` по node- и web-проектам            |
-| `npm run lint` / `lint:fix`       | ESLint                                   |
-| `npm run format` / `format:check` | Prettier                                 |
-| `npm test`                        | vitest, юнит-тесты                       |
-| `npm run test:e2e`                | Playwright, e2e                          |
+| Команда                           | Что делает                                  |
+| --------------------------------- | ------------------------------------------- |
+| `npm run import`                  | `artifacts/` → `generated/`                 |
+| `npm run checksums`               | пересчитать `artifacts/CHECKSUMS.sha256`    |
+| `npm run checksums:verify`        | проверить артефакты на дрейф                |
+| `npm run traceability`            | перегенерировать матрицу покрытия           |
+| `npm run traceability:verify`     | проверить, что матрица не устарела          |
+| `npm run typecheck`               | `tsc` по node- и web-проектам               |
+| `npm run lint` / `lint:fix`       | ESLint                                      |
+| `npm run format` / `format:check` | Prettier                                    |
+| `npm test`                        | vitest, юнит-тесты                          |
+| `npm run validate`                | кросс-реестровая валидация `generated/spec` |
+| `npm run build`                   | Vite собирает веб-клиент в `dist/web`       |
+| `npm run test:e2e`                | Playwright, e2e                             |
 
 ## Соглашения по коду
 
