@@ -54,6 +54,7 @@
 | [0020](0020-wire-protocol-and-shared-contracts.md)        | Wire-протокол и контракты shared     | принято                                |
 | [0021](0021-roll-model.md)                                | Модель броска AUTO и MANUAL          | принято                                |
 | [0022](0022-operation-and-rule-handler-registries.md)     | Раздельные реестры операций и правил | принято                                |
+| [0023](0023-stat-modifier-source-key.md)                  | Источник модификатора характеристики | принято                                |
 
 ## Перенос решений аудита
 
