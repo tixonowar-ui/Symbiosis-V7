@@ -176,18 +176,15 @@ describe('report rendering', () => {
     discrepancies: [],
   };
 
-  it('is byte-stable and records the reference rule and commit date', async () => {
-    const first = await renderReport(model, '2026-08-08');
-    const second = await renderReport(model, '2026-08-08');
+  it('is byte-stable without a commit-dependent date in the compared body', async () => {
+    const first = await renderReport(model);
+    const second = await renderReport(model);
     expect(second).toBe(first);
     expect(first).toContain('Только строковый литерал');
     expect(first).toContain('Комментарии, имена файлов');
-    expect(first).toContain('Дата снимка (дата последнего коммита): 2026-08-08');
+    expect(first).not.toContain('Дата снимка');
+    expect(first).not.toMatch(/\b\d{4}-\d{2}-\d{2}\b/u);
     expect(first.endsWith('\n')).toBe(true);
     expect(first).not.toContain('\r\n');
-  });
-
-  it('rejects a non-commit date instead of guessing', async () => {
-    await expect(renderReport(model, 'today')).rejects.toThrow('invalid commit date');
   });
 });
