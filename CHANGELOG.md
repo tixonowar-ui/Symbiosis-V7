@@ -39,6 +39,11 @@
 
 ### Добавлено
 
+- [ADR 0023](docs/adr/0023-stat-modifier-source-key.md) — модификаторы
+  характеристик выбираются точной парой `SourceType` + `SourceID`, висячие
+  `StatModifierProfileID` и `ContextModifierRefs` в поставке v1.2 не
+  разыменовываются, а пустая расовая группа разрешена только для `PURE` с
+  обязательным классом. Неизвестные source-типы и ID отклоняются fail-closed
 - Точка входа web-клиента: self-contained Vite-сборка подключается к host
   `/state`, отправляет проверенный `projection.reconnect`, декодирует
   `projection.snapshot` контрактами `src/shared` и монтирует `APP-001`. Четыре
