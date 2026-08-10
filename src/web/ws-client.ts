@@ -32,6 +32,12 @@ const NO_KNOWN_REVISIONS = {
   stateRevision: 0,
 } as const satisfies RevisionVector;
 
+/**
+ * Sources: generated/spec/atlas/forms-by-id.json["APP-001"].requiredFields
+ * for the four host-owned values (`formId` is the projection identity), and
+ * generated/spec/atlas/forms-by-id.json["APP-001"].guardStates for
+ * `bootState=BOOTING|READY|ERROR`.
+ */
 const APP_001_KEYS = new Set([
   'baselineCompatibility',
   'bootState',
