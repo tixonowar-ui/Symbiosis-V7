@@ -55,6 +55,7 @@
 | [0021](0021-roll-model.md)                                | Модель броска AUTO и MANUAL          | принято                                |
 | [0022](0022-operation-and-rule-handler-registries.md)     | Раздельные реестры операций и правил | принято                                |
 | [0023](0023-stat-modifier-source-key.md)                  | Источник модификатора характеристики | принято                                |
+| [0024](0024-stat-map-integer-values.md)                   | Целочисленные значения `StatMap`     | принято                                |
 
 ## Перенос решений аудита
 

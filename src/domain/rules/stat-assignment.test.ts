@@ -119,6 +119,40 @@ describe('CHR-009 stat assignment', () => {
     ).toThrow('acceptedValues[6] must be finite');
   });
 
+  it.each(['ROLLED_BIJECTION', 'POINT_BUY_90'] as const)(
+    'rejects non-safe assignedStats in %s with its StatCode and value',
+    (assignmentMode) => {
+      const statCode = ORDERED_STATS[0]?.statCode;
+      if (statCode === undefined) throw new Error('first StatCode not found');
+      for (const value of [10.5, Number.MAX_SAFE_INTEGER + 1]) {
+        const assignedStats = statBlock([value, 19.5, 12, 12, 12, 12, 12]);
+        const input: StatAssignmentInput =
+          assignmentMode === 'ROLLED_BIJECTION'
+            ? {
+                acceptedValues: [10, 20, 12, 12, 12, 12, 12],
+                assignedStats,
+                assignmentMode,
+              }
+            : { assignedStats, assignmentMode };
+        expect(() => assignBaseStats(CATALOG, input)).toThrow(
+          `assignedStats.${statCode} must be a safe integer; received ${String(value)}`,
+        );
+      }
+    },
+  );
+
+  it('rejects a non-safe accepted rolled value with its position and value', () => {
+    for (const value of [10.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() =>
+        assignBaseStats(CATALOG, {
+          acceptedValues: [value, 2, 3, 4, 5, 6, 7],
+          assignedStats: statBlock([1, 2, 3, 4, 5, 6, 7]),
+          assignmentMode: 'ROLLED_BIJECTION',
+        }),
+      ).toThrow(`acceptedValues[0] must be a safe integer; received ${String(value)}`);
+    }
+  });
+
   it.each([
     ['POINT_BUY_90', [15, 15, 12, 12, 12, 12, 12], 90],
     ['POINT_BUY_85', [13, 12, 12, 12, 12, 12, 12], 85],
