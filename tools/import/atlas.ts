@@ -56,6 +56,104 @@ function sortedUnique(values: Iterable<string>): string[] {
   return [...new Set(values)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
+export interface RendererQueryIndexes {
+  readonly primaryActionsByForm: JsonObject;
+  readonly transitionsByForm: JsonObject;
+}
+
+export function buildRendererQueryIndexes(
+  formIds: ReadonlySet<string>,
+  requirements: readonly JsonObject[],
+  transitions: readonly JsonObject[],
+): RendererQueryIndexes {
+  const transitionsByQuery = new Map<string, Map<string, { index: number; row: JsonObject }[]>>();
+  transitions.forEach((transition, index) => {
+    const at = `transitions[${String(index)}]`;
+    const from = asString(transition['from'], WHERE, `${at}.from`);
+    const trigger = asString(transition['trigger'], WHERE, `${at}.trigger`);
+    const byTrigger =
+      transitionsByQuery.get(from) ?? new Map<string, { index: number; row: JsonObject }[]>();
+    const matches = byTrigger.get(trigger) ?? [];
+    matches.push({ index, row: transition });
+    byTrigger.set(trigger, matches);
+    transitionsByQuery.set(from, byTrigger);
+  });
+
+  const primaryActionsByForm = new Map<string, string[]>();
+  requirements.forEach((requirement, requirementIndex) => {
+    const requirementAt = `coverageRequirements[${String(requirementIndex)}]`;
+    const actionSteps = asArray(requirement['actionSteps'], WHERE, `${requirementAt}.actionSteps`);
+    actionSteps.forEach((stepValue, stepIndex) => {
+      const stepAt = `${requirementAt}.actionSteps[${String(stepIndex)}]`;
+      const step = asObject(stepValue, WHERE, stepAt);
+      const id = asString(step['formId'], WHERE, `${stepAt}.formId`);
+      if (!formIds.has(id)) {
+        fail(WHERE, `${stepAt}.formId points at unknown form ${JSON.stringify(id)}`);
+      }
+      const actions = asStringArray(step['primaryActions'], WHERE, `${stepAt}.primaryActions`);
+      if (new Set(actions).size !== actions.length) {
+        fail(WHERE, `${stepAt}.primaryActions contains duplicate actions for ${id}`);
+      }
+
+      const existing = primaryActionsByForm.get(id);
+      if (existing === undefined) {
+        primaryActionsByForm.set(id, actions);
+      } else if (
+        existing.length !== actions.length ||
+        existing.some((action, index) => action !== actions[index])
+      ) {
+        fail(
+          WHERE,
+          `${stepAt}.primaryActions conflicts with another definition for ${id}: ` +
+            `${JSON.stringify(existing)} versus ${JSON.stringify(actions)}`,
+        );
+      }
+    });
+  });
+
+  /**
+   * `(from, trigger)` is not globally unique in the atlas. The renderer asks
+   * only pairs declared as primary actions, so index that exact query domain
+   * and refuse ambiguity instead of discarding another declared destination.
+   */
+  const transitionsByForm = new Map<string, JsonObject>();
+  for (const [id, actions] of primaryActionsByForm) {
+    const indexedTransitions: [string, JsonObject][] = [];
+    for (const action of actions) {
+      const matches = transitionsByQuery.get(id)?.get(action) ?? [];
+      if (matches.length > 1) {
+        fail(
+          WHERE,
+          `ambiguous renderer transition for form ${id} and trigger ${JSON.stringify(action)}: ` +
+            `${String(matches.length)} exact matches`,
+        );
+      }
+      const match = matches[0];
+      if (match === undefined) continue;
+
+      const at = `transitions[${String(match.index)}]`;
+      indexedTransitions.push([
+        action,
+        {
+          from: asString(match.row['from'], WHERE, `${at}.from`),
+          to: asString(match.row['to'], WHERE, `${at}.to`),
+          kind: asString(match.row['kind'], WHERE, `${at}.kind`),
+          guard: asString(match.row['guard'], WHERE, `${at}.guard`),
+          trigger: asString(match.row['trigger'], WHERE, `${at}.trigger`),
+        },
+      ]);
+    }
+    if (indexedTransitions.length > 0) {
+      transitionsByForm.set(id, Object.fromEntries(indexedTransitions));
+    }
+  }
+
+  return {
+    primaryActionsByForm: Object.fromEntries(primaryActionsByForm),
+    transitionsByForm: Object.fromEntries(transitionsByForm),
+  };
+}
+
 export async function importAtlas(): Promise<AtlasImport> {
   const root = asObject(
     JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as JsonValue,
@@ -139,6 +237,7 @@ export async function importAtlas(): Promise<AtlasImport> {
   const seen = new Set<string>();
   const byDomain = new Map<string, number>();
   const formsById: JsonObject = {};
+  const rendererFormsById: JsonObject = {};
 
   forms.forEach((form, index) => {
     const at = `forms[${String(index)}]`;
@@ -149,6 +248,24 @@ export async function importAtlas(): Promise<AtlasImport> {
     formsById[id] = form;
 
     const domain = asString(form['domain'], WHERE, `${at}.domain`);
+    const rendererStates = asObject(form['states'], WHERE, `${at}.states`);
+    for (const [state, description] of Object.entries(rendererStates)) {
+      asString(description, WHERE, `${at}.states[${JSON.stringify(state)}]`);
+    }
+    rendererFormsById[id] = {
+      id,
+      type: asString(form['type'], WHERE, `${at}.type`),
+      title: asString(form['title'], WHERE, `${at}.title`),
+      route: asString(form['route'], WHERE, `${at}.route`),
+      roles: asStringArray(form['roles'], WHERE, `${at}.roles`),
+      domain,
+      contexts: asStringArray(form['contexts'], WHERE, `${at}.contexts`),
+      states: rendererStates,
+      requiredFields: asStringArray(form['requiredFields'], WHERE, `${at}.requiredFields`),
+      qaScenarioIds: asStringArray(form['qaScenarioIds'], WHERE, `${at}.qaScenarioIds`),
+      components: asStringArray(form['components'], WHERE, `${at}.components`),
+    };
+
     const prefix = DOMAIN_PREFIX.get(domain);
     if (prefix === undefined) {
       fail(
@@ -191,6 +308,9 @@ export async function importAtlas(): Promise<AtlasImport> {
     }
   });
 
+  // --- renderer query indexes --------------------------------------------
+  const rendererIndexes = buildRendererQueryIndexes(seen, requirements, transitions);
+
   // --- emit spec ----------------------------------------------------------
   const atlasSpecDir = join(SPEC_DIR, 'atlas');
   const source = 'artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json';
@@ -216,6 +336,9 @@ export async function importAtlas(): Promise<AtlasImport> {
   });
   await emit('forms.json', forms);
   await emit('forms-by-id.json', formsById);
+  await emit('renderer/forms-by-id.json', rendererFormsById);
+  await emit('renderer/primary-actions-by-form-id.json', rendererIndexes.primaryActionsByForm);
+  await emit('renderer/transitions-by-form-and-trigger.json', rendererIndexes.transitionsByForm);
   await emit('transitions.json', transitions);
   await emit('journeys.json', journeys);
   await emit('requirements.json', requirements);
