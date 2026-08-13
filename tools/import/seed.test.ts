@@ -27,7 +27,13 @@ const EXPECTED_META_PATHS = [
   'rules/meta.json',
   'sentient/meta.json',
 ] as const;
-const EXPECTED_INDEX_PATHS = ['atlas/forms-by-id.json', 'qna/questions-by-code.json'] as const;
+const EXPECTED_INDEX_PATHS = [
+  'atlas/forms-by-id.json',
+  'atlas/renderer/forms-by-id.json',
+  'atlas/renderer/primary-actions-by-form-id.json',
+  'atlas/renderer/transitions-by-form-and-trigger.json',
+  'qna/questions-by-code.json',
+] as const;
 
 type JsonObject = Record<string, unknown>;
 
@@ -134,7 +140,7 @@ const sidecars = (file: string): string[] =>
 describe('generated SQLite seed', () => {
   it('stores every source array and section passport without duplicating JSON indexes', () => {
     const source = sourceCatalogue();
-    expect(source.files).toBe(122);
+    expect(source.files).toBe(125);
     expect(source.arrays).toHaveLength(112);
     expect(source.rows).toBe(20_535);
     expect(source.metadata.map(({ path }) => path)).toEqual(EXPECTED_META_PATHS);
@@ -154,6 +160,9 @@ describe('generated SQLite seed', () => {
       );
       expect(tables).toEqual(expectedTables);
       expect(tables).not.toContain('atlas_forms_by_id');
+      expect(tables).not.toContain('atlas_renderer_forms_by_id');
+      expect(tables).not.toContain('atlas_renderer_primary_actions_by_form_id');
+      expect(tables).not.toContain('atlas_renderer_transitions_by_form_and_trigger');
       expect(tables).not.toContain('qna_questions_by_code');
 
       let actualRows = 0;

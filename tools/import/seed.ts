@@ -33,22 +33,25 @@ export const SPEC_META_PATHS = [
 ] as const;
 
 /**
- * These objects are lookup copies of the source arrays, not additional data.
- * A future query path may add real SQLite indexes; storing them as tables here
- * would create a third copy of the same 376 forms and 444 questions.
+ * These objects are lookup copies or projections of the source arrays, not
+ * additional data. A future query path may add real SQLite indexes; storing
+ * these as tables here would duplicate their source rows again.
  */
 export const SKIPPED_INDEX_PATHS = [
   'atlas/forms-by-id.json',
+  'atlas/renderer/forms-by-id.json',
+  'atlas/renderer/primary-actions-by-form-id.json',
+  'atlas/renderer/transitions-by-form-and-trigger.json',
   'qna/questions-by-code.json',
 ] as const;
 
-/** Measured from generated/spec for issue #6 and recorded by ADR 0019. */
+/** Input totals; array and row counts remain the seed contract recorded by ADR 0019. */
 const EXPECTED = {
-  files: 122,
+  files: 125,
   arrayFiles: 112,
   rows: 20_535,
   metadataFiles: 8,
-  skippedIndexes: 2,
+  skippedIndexes: 5,
 } as const;
 
 type JsonObject = Record<string, unknown>;
@@ -160,7 +163,7 @@ const listSpecFiles = (specDir: string): { file: string; path: string }[] => {
         visit(file, specPath);
       } else if (entry.isFile() && specPath === '.gitkeep') {
         // The placeholder keeps generated/spec present before its first import;
-        // it is pipeline scaffolding, not one of the 122 JSON inputs.
+        // it is pipeline scaffolding, not one of the 125 JSON inputs.
         continue;
       } else if (entry.isFile() && entry.name.endsWith('.json')) {
         files.push({ file, path: specPath });

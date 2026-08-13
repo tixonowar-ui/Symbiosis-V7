@@ -1,6 +1,6 @@
-import formsByIdSource from '@generated/spec/atlas/forms-by-id.json?raw';
-import requirementsSource from '@generated/spec/atlas/requirements.json?raw';
-import transitionsSource from '@generated/spec/atlas/transitions.json?raw';
+import formsByIdSource from '@generated/spec/atlas/renderer/forms-by-id.json?raw';
+import primaryActionsSource from '@generated/spec/atlas/renderer/primary-actions-by-form-id.json?raw';
+import transitionsSource from '@generated/spec/atlas/renderer/transitions-by-form-and-trigger.json?raw';
 import { FORM_IDS } from '@generated/types/atlas.js';
 import type { FormId, FormType } from '@generated/types/atlas.js';
 
@@ -60,6 +60,12 @@ export interface AtlasSources {
   readonly transitions: unknown;
 }
 
+export interface AtlasIndexes {
+  readonly formsById: unknown;
+  readonly primaryActionsByFormId: unknown;
+  readonly transitionsByFormAndTrigger: unknown;
+}
+
 const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
 function fail(message: string): never {
@@ -106,10 +112,13 @@ function parse(source: string, label: string): unknown {
   }
 }
 
-const ATLAS_SOURCES: AtlasSources = {
-  formsById: parse(formsByIdSource, 'forms-by-id.json'),
-  requirements: parse(requirementsSource, 'requirements.json'),
-  transitions: parse(transitionsSource, 'transitions.json'),
+const ATLAS_INDEXES: AtlasIndexes = {
+  formsById: parse(formsByIdSource, 'renderer/forms-by-id.json'),
+  primaryActionsByFormId: parse(primaryActionsSource, 'renderer/primary-actions-by-form-id.json'),
+  transitionsByFormAndTrigger: parse(
+    transitionsSource,
+    'renderer/transitions-by-form-and-trigger.json',
+  ),
 };
 
 function own(object: JsonRecord, key: string): boolean {
@@ -191,6 +200,25 @@ function primaryActions(
   return first;
 }
 
+function indexedPrimaryActions(
+  actionsByFormValue: unknown,
+  requestedFormId: AppFormId,
+): readonly string[] | null {
+  const actionsByForm = record(actionsByFormValue, 'renderer/primary-actions-by-form-id.json');
+  if (!own(actionsByForm, requestedFormId)) return null;
+
+  const actions = strings(
+    actionsByForm[requestedFormId],
+    `renderer/primary-actions-by-form-id[${JSON.stringify(requestedFormId)}]`,
+  );
+  if (new Set(actions).size !== actions.length) {
+    fail(
+      `renderer/primary-actions-by-form-id.json declares duplicate primaryActions for ${requestedFormId}`,
+    );
+  }
+  return actions;
+}
+
 function transitionFor(
   transitionsValue: unknown,
   requestedFormId: AppFormId,
@@ -225,11 +253,48 @@ function transitionFor(
   return match === undefined ? null : match;
 }
 
-export function createAtlasFormModel(
+function indexedTransitionFor(
+  transitionsByFormValue: unknown,
+  requestedFormId: AppFormId,
+  action: string,
+): AtlasTransition | null {
+  const transitionsByForm = record(
+    transitionsByFormValue,
+    'renderer/transitions-by-form-and-trigger.json',
+  );
+  if (!own(transitionsByForm, requestedFormId)) return null;
+
+  const byTriggerPath = `renderer/transitions-by-form-and-trigger[${JSON.stringify(requestedFormId)}]`;
+  const byTrigger = record(transitionsByForm[requestedFormId], byTriggerPath);
+  if (!own(byTrigger, action)) return null;
+
+  const path = `${byTriggerPath}[${JSON.stringify(action)}]`;
+  const transition = record(byTrigger[action], path);
+  const from = string(transition.from, `${path}.from`);
+  if (from !== requestedFormId) {
+    fail(`${path}.from is ${JSON.stringify(from)}, expected ${JSON.stringify(requestedFormId)}`);
+  }
+  const trigger = string(transition.trigger, `${path}.trigger`);
+  if (trigger !== action) {
+    fail(`${path}.trigger is ${JSON.stringify(trigger)}, expected ${JSON.stringify(action)}`);
+  }
+
+  return {
+    from: requestedFormId,
+    to: formId(transition.to, `${path}.to`),
+    kind: string(transition.kind, `${path}.kind`),
+    guard: string(transition.guard, `${path}.guard`),
+    trigger,
+  };
+}
+
+function atlasFormModel(
   requestedFormId: string,
-  sources: AtlasSources,
+  formsByIdValue: unknown,
+  actionLookup: (formId: AppFormId) => readonly string[] | null,
+  transitionLookup: (formId: AppFormId, action: string) => AtlasTransition | null,
 ): AtlasFormModel {
-  const formsById = record(sources.formsById, 'forms-by-id.json');
+  const formsById = record(formsByIdValue, 'forms-by-id.json');
   if (!own(formsById, requestedFormId)) {
     fail(`form ${JSON.stringify(requestedFormId)} is absent from forms-by-id.json`);
   }
@@ -247,8 +312,7 @@ export function createAtlasFormModel(
       `form ${JSON.stringify(id)} is not implemented; implemented forms: ${APP_FORM_IDS.join(', ')}`,
     );
   }
-
-  const actions = primaryActions(sources.requirements, id);
+  const actions = actionLookup(id);
 
   return {
     id,
@@ -269,12 +333,36 @@ export function createAtlasFormModel(
             kind: 'declared',
             items: actions.map((label) => ({
               label,
-              transition: transitionFor(sources.transitions, id, label),
+              transition: transitionLookup(id, label),
             })),
           },
   };
 }
 
+export function createAtlasFormModel(
+  requestedFormId: string,
+  sources: AtlasSources,
+): AtlasFormModel {
+  return atlasFormModel(
+    requestedFormId,
+    sources.formsById,
+    (formId) => primaryActions(sources.requirements, formId),
+    (formId, action) => transitionFor(sources.transitions, formId, action),
+  );
+}
+
+export function createAtlasFormModelFromIndexes(
+  requestedFormId: string,
+  indexes: AtlasIndexes,
+): AtlasFormModel {
+  return atlasFormModel(
+    requestedFormId,
+    indexes.formsById,
+    (formId) => indexedPrimaryActions(indexes.primaryActionsByFormId, formId),
+    (formId, action) => indexedTransitionFor(indexes.transitionsByFormAndTrigger, formId, action),
+  );
+}
+
 export function getAtlasFormModel(requestedFormId: string): AtlasFormModel {
-  return createAtlasFormModel(requestedFormId, ATLAS_SOURCES);
+  return createAtlasFormModelFromIndexes(requestedFormId, ATLAS_INDEXES);
 }
