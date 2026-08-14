@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3';
 
+import { V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
+
 export interface RevisionTriple {
   stateRevision: number;
   projectionRevision: number;
@@ -12,6 +14,18 @@ export interface RevisionImpact {
   actorVisibilityChanged: boolean;
 }
 
+export type LocalCharacterLifecycleState = (typeof V1_LIFECYCLE_STATES.localCharacter)[number];
+
+export interface LocalCharacter extends RevisionTriple {
+  localCharacterId: string;
+  lifecycleState: LocalCharacterLifecycleState;
+  payloadJson: string;
+}
+
+export type LocalCharacterPatch =
+  | { lifecycleState: LocalCharacterLifecycleState; payloadJson?: string }
+  | { lifecycleState?: LocalCharacterLifecycleState; payloadJson: string };
+
 export type RevisionScope =
   { entity: 'localCharacter'; entityId: string } | { entity: 'campaign'; entityId: string };
 
@@ -21,6 +35,12 @@ export interface CampaignCheckpoint extends RevisionTriple {
 }
 
 type RevisionRow = RevisionTriple;
+
+interface LocalCharacterRow extends RevisionRow {
+  local_character_id: string;
+  lifecycle_state: string;
+  payload_json: string;
+}
 
 interface CheckpointRow extends RevisionTriple {
   campaign_id: string;
@@ -47,6 +67,46 @@ const REVISION_SCOPES = {
 
 const REVISION_NAMES = ['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const;
 const IMPACT_NAMES = ['stateChanged', 'projectionChanged', 'actorVisibilityChanged'] as const;
+const LOCAL_CHARACTER_PATCH_FIELDS = ['lifecycleState', 'payloadJson'] as const;
+
+const localCharacterLabel = (localCharacterId: string): string =>
+  `localCharacter ${JSON.stringify(localCharacterId)}`;
+
+const requireTopLevelLocalCharacterWrite = (
+  database: Database.Database,
+  operation: 'create' | 'update',
+): void => {
+  if (database.inTransaction) {
+    throw new Error(`localCharacter ${operation} requires a top-level transaction`);
+  }
+};
+
+const localCharacterLifecycleState = (
+  value: string,
+  label: string,
+): LocalCharacterLifecycleState => {
+  const state = V1_LIFECYCLE_STATES.localCharacter.find((candidate) => candidate === value);
+  if (state === undefined) {
+    throw new Error(
+      `${label} has unrecognized lifecycle state ${JSON.stringify(value)}; allowed: ${V1_LIFECYCLE_STATES.localCharacter.join(', ')}`,
+    );
+  }
+  return state;
+};
+
+const localCharacterPayloadJson = (value: string, label: string): string => {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(value) as unknown;
+  } catch (cause) {
+    throw new Error(`${label} payloadJson is not valid JSON`, { cause });
+  }
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+    const kind = payload === null ? 'null' : Array.isArray(payload) ? 'array' : typeof payload;
+    throw new Error(`${label} payloadJson must encode a JSON object, got ${kind}`);
+  }
+  return value;
+};
 
 const revisionTriple = (row: RevisionRow, label: string): RevisionTriple => {
   const values = REVISION_NAMES.map((name) => row[name]);
@@ -60,6 +120,64 @@ const revisionTriple = (row: RevisionRow, label: string): RevisionTriple => {
     projectionRevision: row.projectionRevision,
     actorVisibilityRevision: row.actorVisibilityRevision,
   };
+};
+
+const localCharacterFromRow = (row: LocalCharacterRow): LocalCharacter => {
+  const label = localCharacterLabel(row.local_character_id);
+  return {
+    localCharacterId: row.local_character_id,
+    lifecycleState: localCharacterLifecycleState(row.lifecycle_state, label),
+    payloadJson: localCharacterPayloadJson(row.payload_json, label),
+    ...revisionTriple(row, label),
+  };
+};
+
+export const createLocalCharacter = (
+  database: Database.Database,
+  localCharacterId: string,
+  lifecycleState: LocalCharacterLifecycleState,
+  payloadJson: string,
+): LocalCharacter => {
+  requireTopLevelLocalCharacterWrite(database, 'create');
+  const label = localCharacterLabel(localCharacterId);
+  const row = database
+    .prepare<
+      { localCharacterId: string; lifecycleState: string; payloadJson: string },
+      LocalCharacterRow
+    >(
+      `INSERT INTO local_character (local_character_id, lifecycle_state, payload_json)
+       VALUES (@localCharacterId, @lifecycleState, @payloadJson)
+       ON CONFLICT (local_character_id) DO NOTHING
+       RETURNING local_character_id, lifecycle_state, payload_json,
+                 stateRevision, projectionRevision, actorVisibilityRevision`,
+    )
+    .get({
+      localCharacterId,
+      lifecycleState: localCharacterLifecycleState(lifecycleState, label),
+      payloadJson: localCharacterPayloadJson(payloadJson, label),
+    });
+  if (row === undefined) {
+    throw new Error(`${label} already exists`);
+  }
+  return localCharacterFromRow(row);
+};
+
+export const readLocalCharacter = (
+  database: Database.Database,
+  localCharacterId: string,
+): LocalCharacter => {
+  const row = database
+    .prepare<[string], LocalCharacterRow>(
+      `SELECT local_character_id, lifecycle_state, payload_json,
+              stateRevision, projectionRevision, actorVisibilityRevision
+       FROM local_character
+       WHERE local_character_id = ?`,
+    )
+    .get(localCharacterId);
+  if (row === undefined) {
+    throw new Error(`${localCharacterLabel(localCharacterId)} not found`);
+  }
+  return localCharacterFromRow(row);
 };
 
 export const readRevisions = (
@@ -131,6 +249,64 @@ export const advanceRevisions = (
     );
   }
   return revisionTriple(row, `${scope.entity} ${JSON.stringify(scope.entityId)}`);
+};
+
+export const updateLocalCharacter = (
+  database: Database.Database,
+  localCharacterId: string,
+  patch: LocalCharacterPatch,
+  impact: RevisionImpact,
+): LocalCharacter => {
+  requireTopLevelLocalCharacterWrite(database, 'update');
+
+  const fields = Object.keys(patch);
+  const unknownFields = fields.filter(
+    (field) => !LOCAL_CHARACTER_PATCH_FIELDS.some((candidate) => candidate === field),
+  );
+  if (unknownFields.length > 0) {
+    throw new TypeError(
+      `localCharacter update contains unrecognized fields: ${unknownFields.join(', ')}`,
+    );
+  }
+  const hasLifecycleState = Object.hasOwn(patch, 'lifecycleState');
+  const hasPayloadJson = Object.hasOwn(patch, 'payloadJson');
+  if (!hasLifecycleState && !hasPayloadJson) {
+    throw new TypeError(
+      `localCharacter update must contain ${LOCAL_CHARACTER_PATCH_FIELDS.join(' and/or ')}`,
+    );
+  }
+
+  const label = localCharacterLabel(localCharacterId);
+  const checkedLifecycleState = hasLifecycleState
+    ? localCharacterLifecycleState(patch.lifecycleState as string, label)
+    : undefined;
+  const checkedPayloadJson = hasPayloadJson
+    ? localCharacterPayloadJson(patch.payloadJson as string, label)
+    : undefined;
+
+  return database
+    .transaction(() => {
+      const current = readLocalCharacter(database, localCharacterId);
+      database
+        .prepare<{
+          localCharacterId: string;
+          lifecycleState: string;
+          payloadJson: string;
+        }>(
+          `UPDATE local_character
+           SET lifecycle_state = @lifecycleState,
+               payload_json = @payloadJson
+           WHERE local_character_id = @localCharacterId`,
+        )
+        .run({
+          localCharacterId,
+          lifecycleState: checkedLifecycleState ?? current.lifecycleState,
+          payloadJson: checkedPayloadJson ?? current.payloadJson,
+        });
+      advanceRevisions(database, { entity: 'localCharacter', entityId: localCharacterId }, impact);
+      return readLocalCharacter(database, localCharacterId);
+    })
+    .immediate();
 };
 
 const buildCampaignSnapshot = (database: Database.Database, campaignId: string): string => {
