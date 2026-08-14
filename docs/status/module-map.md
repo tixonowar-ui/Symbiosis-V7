@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-14`
-- Тестов: 425, все зелёные
+- Тестов: 438, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -50,8 +50,8 @@ atlas-derived срез с wire v1; остальные прикладные сл�
 | `src/shared`                 | **готов**    | fail-closed wire v1, reconnect, receipts, master predicate        | M4   |
 | `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже           | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет     | M3   |
-| `src/persistence`            | **частично** | `local_character` create/read/update + ревизии; 16 циклов позже   | M2   |
-| `src/persistence/migrations` | **готов**    | нумерованная forward-only `0001` для трёх V1-сущностей            | M2   |
+| `src/persistence`            | **частично** | `local_character` CRUD + draft checkpoint; 16 циклов позже        | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001` + `0002` checkpoint черновика                 | M2   |
 | `src/host`                   | **частично** | HTTP/static + wire v1 ws; полностью обслуживается только APP-001  | M4   |
 | `src/host/projections`       | **частично** | player APP-001 + 3 ревизии; gm/system и остальные формы позже     | M4   |
 | `src/web`                    | **частично** | Vite entry + player APP-001; routing/CTA, gm и формы позже        | M5   |
