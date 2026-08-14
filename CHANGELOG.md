@@ -42,6 +42,10 @@
 
 ### Добавлено
 
+- ADR 0025 определяет общий recovery-контракт и отдельное хранение checkpoint
+  черновика персонажа: собственные ID/revision и checksum, полное отображение
+  статусов восстановления, границу opaque payload и будущую forward-миграцию
+  `0002-local-character-checkpoint`, не меняющую campaign checkpoint
 - Синхронное хранилище строк `local_character`: создание и чтение явно
   отклоняют дубликаты, отсутствующие строки, неизвестные lifecycle-состояния и
   payload не в форме JSON-object; обновление payload/lifecycle и объявленной
