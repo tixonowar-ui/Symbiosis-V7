@@ -6,8 +6,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildRendererQueryIndexes } from './atlas.js';
-import { SPEC_DIR, TYPES_DIR } from './lib/paths.js';
+import { buildRendererQueryIndexes, extractWorkflowCommands } from './atlas.js';
+import type { JsonObject as ImportJsonObject } from './lib/json.js';
+import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
 
 const spec = (name: string): unknown =>
   JSON.parse(readFileSync(join(SPEC_DIR, 'atlas', name), 'utf8'));
@@ -41,6 +42,31 @@ const rendererTransition = (to: string) => ({
   guard: 'synthetic guard',
   trigger: 'Go',
 });
+
+const workflowCommand = (overrides: ImportJsonObject = {}): ImportJsonObject => ({
+  commandId: 'UI-CMD-TEST',
+  title: 'Test command',
+  formIds: ['APP-001'],
+  guards: 'Guard contract.',
+  atomicity: 'Atomic contract.',
+  reconnect: 'Reconnect contract.',
+  qa: 'QA-WORKFLOW-TEST',
+  ...overrides,
+});
+
+const workflowQa = (overrides: ImportJsonObject = {}): ImportJsonObject => ({
+  qaId: 'QA-WORKFLOW-TEST',
+  scope: 'UI-CMD-TEST',
+  expected: 'Atomic contract. Reconnect contract.',
+  ...overrides,
+});
+
+const extractSyntheticWorkflowCommands = (
+  commands: readonly ImportJsonObject[],
+  qaScenarios: readonly ImportJsonObject[] = [workflowQa()],
+  declaredCount = commands.length,
+): ImportJsonObject[] =>
+  extractWorkflowCommands({ workflowCommands: [...commands] }, qaScenarios, declaredCount);
 
 describe('generated atlas spec', () => {
   it('carries every form the atlas declares', () => {
@@ -117,6 +143,45 @@ describe('generated atlas spec', () => {
     expect(spec('qa-scenarios.json')).toHaveLength(2440);
     expect(spec('lifecycles.json')).toHaveLength(19);
     expect(spec('diagrams.json')).toHaveLength(11);
+  });
+
+  it('exports every workflow command field separately and matches its QA text', () => {
+    type WorkflowCommand = {
+      atomicity: string;
+      commandId: string;
+      formIds: string[];
+      guards: string;
+      qa: string;
+      reconnect: string;
+      title: string;
+    };
+    const atlas = JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as {
+      counts: { workflowCommands: number };
+      registryCoverage: { workflowCommands: WorkflowCommand[] };
+    };
+    const commands = spec('workflow-commands.json') as WorkflowCommand[];
+    expect(commands).toHaveLength(atlas.counts.workflowCommands);
+    expect(commands).toEqual(atlas.registryCoverage.workflowCommands);
+
+    const qaById = new Map(
+      (spec('qa-scenarios.json') as { expected: string; qaId: string; scope: string }[]).map(
+        (scenario) => [scenario.qaId, scenario],
+      ),
+    );
+    for (const command of commands) {
+      expect(Object.keys(command).sort()).toEqual([
+        'atomicity',
+        'commandId',
+        'formIds',
+        'guards',
+        'qa',
+        'reconnect',
+        'title',
+      ]);
+      const scenario = qaById.get(command.qa);
+      expect(scenario?.scope).toBe(command.commandId);
+      expect(scenario?.expected).toBe(`${command.atomicity} ${command.reconnect}`);
+    }
   });
 
   it('pins the atlas digests, so a swapped artifact is visible in the diff', () => {
@@ -214,5 +279,61 @@ describe('renderer atlas index guards', () => {
         [rendererTransition('APP-002'), rendererTransition('APP-011')],
       ),
     ).toThrow(/ambiguous renderer transition for form APP-001 and trigger "Go"/u);
+  });
+});
+
+describe('workflow command export guards', () => {
+  it('uses the declared atlas count instead of a duplicated constant', () => {
+    expect(() => extractSyntheticWorkflowCommands([workflowCommand()], undefined, 2)).toThrow(
+      /expected 2 workflow commands, got 1/u,
+    );
+  });
+
+  it('rejects an unknown record shape', () => {
+    expect(() =>
+      extractSyntheticWorkflowCommands([workflowCommand({ unexpected: 'field' })]),
+    ).toThrow(/has fields .*unexpected.* expected/u);
+  });
+
+  it('rejects duplicate command ids', () => {
+    expect(() => extractSyntheticWorkflowCommands([workflowCommand(), workflowCommand()])).toThrow(
+      /duplicate commandId "UI-CMD-TEST"/u,
+    );
+  });
+
+  it('rejects an empty required string', () => {
+    expect(() => extractSyntheticWorkflowCommands([workflowCommand({ guards: ' ' })])).toThrow(
+      /\.guards is empty/u,
+    );
+  });
+
+  it('rejects an empty form list', () => {
+    expect(() => extractSyntheticWorkflowCommands([workflowCommand({ formIds: [] })])).toThrow(
+      /\.formIds is empty/u,
+    );
+  });
+
+  it('requires exactly one linked QA scenario', () => {
+    expect(() =>
+      extractSyntheticWorkflowCommands([workflowCommand({ qa: 'QA-WORKFLOW-MISSING' })]),
+    ).toThrow(/matches 0 QA scenarios, expected 1/u);
+  });
+
+  it('requires the linked QA scope to name the command', () => {
+    expect(() =>
+      extractSyntheticWorkflowCommands(
+        [workflowCommand()],
+        [workflowQa({ scope: 'UI-CMD-OTHER' })],
+      ),
+    ).toThrow(/scope is "UI-CMD-OTHER", expected "UI-CMD-TEST"/u);
+  });
+
+  it('requires QA expected to be the exact atomicity and reconnect text', () => {
+    expect(() =>
+      extractSyntheticWorkflowCommands(
+        [workflowCommand()],
+        [workflowQa({ expected: 'Different text.' })],
+      ),
+    ).toThrow(/expected differs from .*atomicity \+ reconnect/u);
   });
 });

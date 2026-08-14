@@ -45,11 +45,11 @@ export const SKIPPED_INDEX_PATHS = [
   'qna/questions-by-code.json',
 ] as const;
 
-/** Input totals; array and row counts remain the seed contract recorded by ADR 0019. */
+/** Input totals; source arrays count as data, while lookup projections stay skipped. */
 const EXPECTED = {
-  files: 125,
-  arrayFiles: 112,
-  rows: 20_535,
+  files: 126,
+  arrayFiles: 113,
+  rows: 20_641,
   metadataFiles: 8,
   skippedIndexes: 5,
 } as const;

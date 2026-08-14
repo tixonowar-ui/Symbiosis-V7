@@ -61,6 +61,93 @@ export interface RendererQueryIndexes {
   readonly transitionsByForm: JsonObject;
 }
 
+const WORKFLOW_COMMAND_FIELDS = [
+  'commandId',
+  'title',
+  'formIds',
+  'guards',
+  'atomicity',
+  'reconnect',
+  'qa',
+] as const;
+
+const nonEmptyString = (value: JsonValue | undefined, path: string): string => {
+  const text = asString(value, WHERE, path);
+  if (text.trim() === '') fail(WHERE, `${path} is empty`);
+  return text;
+};
+
+export function extractWorkflowCommands(
+  registryCoverage: JsonObject,
+  qaScenarios: readonly JsonObject[],
+  declaredCount: number,
+): JsonObject[] {
+  const values = asArray(
+    registryCoverage['workflowCommands'],
+    WHERE,
+    'registryCoverage.workflowCommands',
+  );
+  expectCount(WHERE, 'workflow commands', values.length, declaredCount);
+
+  const qaById = new Map<string, { index: number; row: JsonObject }[]>();
+  qaScenarios.forEach((row, index) => {
+    const id = asString(row['qaId'], WHERE, `qaScenarios[${String(index)}].qaId`);
+    const matches = qaById.get(id) ?? [];
+    matches.push({ index, row });
+    qaById.set(id, matches);
+  });
+
+  const expectedFields = [...WORKFLOW_COMMAND_FIELDS].sort();
+  const seen = new Set<string>();
+  return values.map((value, index) => {
+    const at = `registryCoverage.workflowCommands[${String(index)}]`;
+    const row = asObject(value, WHERE, at);
+    const fields = Object.keys(row).sort();
+    if (JSON.stringify(fields) !== JSON.stringify(expectedFields)) {
+      fail(
+        WHERE,
+        `${at} has fields ${JSON.stringify(fields)}, expected ${JSON.stringify(expectedFields)}`,
+      );
+    }
+
+    const commandId = nonEmptyString(row['commandId'], `${at}.commandId`);
+    if (seen.has(commandId)) fail(WHERE, `${at}: duplicate commandId ${JSON.stringify(commandId)}`);
+    seen.add(commandId);
+
+    const formIds = asStringArray(row['formIds'], WHERE, `${at}.formIds`);
+    if (formIds.length === 0) fail(WHERE, `${at}.formIds is empty`);
+    formIds.forEach((formId, formIndex) => {
+      if (formId.trim() === '') fail(WHERE, `${at}.formIds[${String(formIndex)}] is empty`);
+    });
+
+    const title = nonEmptyString(row['title'], `${at}.title`);
+    const guards = nonEmptyString(row['guards'], `${at}.guards`);
+    const atomicity = nonEmptyString(row['atomicity'], `${at}.atomicity`);
+    const reconnect = nonEmptyString(row['reconnect'], `${at}.reconnect`);
+    const qa = nonEmptyString(row['qa'], `${at}.qa`);
+    const qaMatches = qaById.get(qa) ?? [];
+    if (qaMatches.length !== 1) {
+      fail(WHERE, `${at}.qa matches ${String(qaMatches.length)} QA scenarios, expected 1`);
+    }
+    const qaMatch = qaMatches[0]!;
+    const qaAt = `qaScenarios[${String(qaMatch.index)}]`;
+    const scope = nonEmptyString(qaMatch.row['scope'], `${qaAt}.scope`);
+    if (scope !== commandId) {
+      fail(
+        WHERE,
+        `${qaAt}.scope is ${JSON.stringify(scope)}, expected ${JSON.stringify(commandId)}`,
+      );
+    }
+    const qaExpected = nonEmptyString(qaMatch.row['expected'], `${qaAt}.expected`);
+    const commandExpected = `${atomicity} ${reconnect}`;
+    if (qaExpected !== commandExpected) {
+      fail(WHERE, `${qaAt}.expected differs from ${at}.atomicity + reconnect`);
+    }
+
+    return { commandId, title, formIds, guards, atomicity, reconnect, qa };
+  });
+}
+
 export function buildRendererQueryIndexes(
   formIds: ReadonlySet<string>,
   requirements: readonly JsonObject[],
@@ -231,6 +318,11 @@ export async function importAtlas(): Promise<AtlasImport> {
   expectCount(WHERE, 'entity lifecycles', lifecycles.length, 19);
   expectCount(WHERE, 'roles', roles.length, 3);
   expectCount(WHERE, 'guard states', guardStates.length, 10);
+  const workflowCommands = extractWorkflowCommands(
+    asObject(root['registryCoverage'], WHERE, 'registryCoverage'),
+    qaScenarios,
+    asNumber(counts['workflowCommands'], WHERE, 'counts.workflowCommands'),
+  );
 
   // --- forms --------------------------------------------------------------
   const formIds: string[] = [];
@@ -343,6 +435,7 @@ export async function importAtlas(): Promise<AtlasImport> {
   await emit('journeys.json', journeys);
   await emit('requirements.json', requirements);
   await emit('qa-scenarios.json', qaScenarios);
+  await emit('workflow-commands.json', workflowCommands);
   await emit('lifecycles.json', lifecycles);
   await emit('diagrams.json', diagrams);
 
