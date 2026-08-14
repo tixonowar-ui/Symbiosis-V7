@@ -140,9 +140,9 @@ const sidecars = (file: string): string[] =>
 describe('generated SQLite seed', () => {
   it('stores every source array and section passport without duplicating JSON indexes', () => {
     const source = sourceCatalogue();
-    expect(source.files).toBe(125);
-    expect(source.arrays).toHaveLength(112);
-    expect(source.rows).toBe(20_535);
+    expect(source.files).toBe(126);
+    expect(source.arrays).toHaveLength(113);
+    expect(source.rows).toBe(20_641);
     expect(source.metadata.map(({ path }) => path)).toEqual(EXPECTED_META_PATHS);
     expect(source.indexes).toEqual(EXPECTED_INDEX_PATHS);
 
@@ -164,6 +164,7 @@ describe('generated SQLite seed', () => {
       expect(tables).not.toContain('atlas_renderer_primary_actions_by_form_id');
       expect(tables).not.toContain('atlas_renderer_transitions_by_form_and_trigger');
       expect(tables).not.toContain('qna_questions_by_code');
+      expect(tables).toContain('atlas_workflow_commands');
 
       let actualRows = 0;
       for (const input of source.arrays) {
@@ -203,7 +204,7 @@ describe('generated SQLite seed', () => {
         }
         actualRows += rowIndex;
       }
-      expect(actualRows).toBe(20_535);
+      expect(actualRows).toBe(20_641);
 
       const actualMetadata = database
         .prepare<[], { payload_json: string; spec_path: string }>(

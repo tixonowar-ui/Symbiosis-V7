@@ -1,0 +1,1231 @@
+[
+  {
+    "atomicity": "Создать ровно один NPC UUID, version=1, полный snapshot и history entry одной транзакцией.",
+    "commandId": "UI-CMD-NPC-COMMIT-V1",
+    "formIds": [
+      "NPC-017"
+    ],
+    "guards": "Все восемь обязательных этапов валидны; UUID ещё не зафиксирован; revision актуальна.",
+    "qa": "QA-WORKFLOW-UI-CMD-NPC-COMMIT-V1",
+    "reconnect": "Same commandId возвращает прежнюю квитанцию и не создаёт второго НПС.",
+    "title": "Атомарно сохранить первую версию постоянного НПС"
+  },
+  {
+    "atomicity": "Записать один linked response без резерва ресурса; только положительный ответ разрешает отдельную повторно валидируемую исходную команду.",
+    "commandId": "UI-CMD-CONSENT-RESPOND",
+    "formIds": [
+      "SYS-028"
+    ],
+    "guards": "Target owner подтверждён через PLY-030; linked request=PENDING; decision=ACCEPT|DECLINE.",
+    "qa": "QA-WORKFLOW-UI-CMD-CONSENT-RESPOND",
+    "reconnect": "Закрытие/timeout/disconnect не считаются согласием; повтор ответа идемпотентен.",
+    "title": "Ответить на связанный запрос согласия"
+  },
+  {
+    "atomicity": "Записать один linked predicate response без расхода; неизвестно/закрытие блокирует исходную команду.",
+    "commandId": "UI-CMD-MASTER-PREDICATE-RESPOND",
+    "formIds": [
+      "GM-029"
+    ],
+    "guards": "Единственный master authority подтверждён через PLY-030; linked predicate=PENDING; decision=YES|NO.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-PREDICATE-RESPOND",
+    "reconnect": "Повтор того же ответа возвращает receipt; другой ответ с тем же commandId отклоняется.",
+    "title": "Ответить на связанный master predicate"
+  },
+  {
+    "atomicity": "Создать один новый local UUID либо один PENDING_OWNER_LINK candidate; несовместимый импорт создаёт ноль записей.",
+    "commandId": "UI-CMD-CHAR-IMPORT-COMMIT",
+    "formIds": [
+      "CHR-045"
+    ],
+    "guards": "CHR-044=COMPATIBLE; checksum/provenance valid; no source UUID collision.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-IMPORT-COMMIT",
+    "reconnect": "Повтор importId возвращает прежний receipt.",
+    "title": "Импортировать независимую копию персонажа"
+  },
+  {
+    "atomicity": "CLAIM создаёт одну owner link; DECLINE ничего не допускает и не обходит GM review.",
+    "commandId": "UI-CMD-IMPORTED-OWNER-CLAIM",
+    "formIds": [
+      "NET-028"
+    ],
+    "guards": "candidate=PENDING_OWNER_LINK; claiming owner/device/seat confirmed; no active slot reserved.",
+    "qa": "QA-WORKFLOW-UI-CMD-IMPORTED-OWNER-CLAIM",
+    "reconnect": "Linked decision идемпотентно восстанавливается.",
+    "title": "Принять либо отклонить владение импортированным кандидатом"
+  },
+  {
+    "atomicity": "Создать один AdmissionBatch request без занятия capacity.",
+    "commandId": "UI-CMD-DEVICE-REQUEST-SUBMIT",
+    "formIds": [
+      "NET-004"
+    ],
+    "guards": "Technical connection established; 1–3 immutable local character snapshots selected.",
+    "qa": "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-SUBMIT",
+    "reconnect": "Same requestId restores NET-005 without duplicate request.",
+    "title": "Отправить device request 1–3 персонажей"
+  },
+  {
+    "atomicity": "Publish all PROPOSED copies or none; player authority still absent until NET-027.",
+    "commandId": "UI-CMD-ADMISSION-GM-ACCEPT",
+    "formIds": [
+      "NET-021"
+    ],
+    "guards": "All 1–3 candidates reviewed; required fields complete; GM authority current.",
+    "qa": "QA-WORKFLOW-UI-CMD-ADMISSION-GM-ACCEPT",
+    "reconnect": "Batch receipt restores without duplicate copies.",
+    "title": "Опубликовать PROPOSED campaign copies AdmissionBatch"
+  },
+  {
+    "atomicity": "Reject the whole batch; local source sheets remain unchanged.",
+    "commandId": "UI-CMD-ADMISSION-GM-REJECT",
+    "formIds": [
+      "NET-022"
+    ],
+    "guards": "Batch pending; non-empty reason; GM authority current.",
+    "qa": "QA-WORKFLOW-UI-CMD-ADMISSION-GM-REJECT",
+    "reconnect": "Same decision returns prior receipt.",
+    "title": "Отклонить AdmissionBatch с причиной"
+  },
+  {
+    "atomicity": "ACCEPT activates the whole valid batch or none; DECLINE activates none.",
+    "commandId": "UI-CMD-ADMISSION-PLAYER-DECIDE",
+    "formIds": [
+      "NET-027"
+    ],
+    "guards": "Whole AdmissionBatch diff loaded; controlling device and capacity revalidated.",
+    "qa": "QA-WORKFLOW-UI-CMD-ADMISSION-PLAYER-DECIDE",
+    "reconnect": "Decision receipt restores without duplicate authority.",
+    "title": "Принять либо отклонить полный campaign-copy diff"
+  },
+  {
+    "atomicity": "Keep npcUuid; append version N+1 and history; never mutate prior snapshot.",
+    "commandId": "UI-CMD-NPC-NEW-VERSION",
+    "formIds": [
+      "NPC-003",
+      "NPC-007"
+    ],
+    "guards": "NPC persistent and not archived; active combat keeps pinned prior snapshot.",
+    "qa": "QA-WORKFLOW-UI-CMD-NPC-NEW-VERSION",
+    "reconnect": "Same version command returns the prior N+1 receipt.",
+    "title": "Создать новую полную версию NPC"
+  },
+  {
+    "atomicity": "RELEASE removes with history; ADD_NPC preserves same UUID/state; KILL enters ordinary death/corpse lifecycle.",
+    "commandId": "UI-CMD-TEMP-ACTOR-DISPOSE",
+    "formIds": [
+      "CMB-063"
+    ],
+    "guards": "Combat resolution fixed; actor temporary; decision=RELEASE|ADD_NPC|KILL.",
+    "qa": "QA-WORKFLOW-UI-CMD-TEMP-ACTOR-DISPOSE",
+    "reconnect": "Each actor decision is idempotent and mandatory before close.",
+    "title": "Разрешить временного актора после сцены"
+  },
+  {
+    "atomicity": "Patch exactly one sequential draft stage, advance its checkpoint once and issue its stage receipt without spawning an active actor or starting combat.",
+    "commandId": "UI-CMD-COMBAT-DRAFT-PATCH",
+    "formIds": [
+      "CMB-002",
+      "CMB-003",
+      "CMB-004",
+      "CMB-005",
+      "CMB-006",
+      "CMB-007",
+      "CMB-008"
+    ],
+    "guards": "GM authority current; combat=DRAFT; requested stage equals the current sequential checkpoint; every preceding stage receipt is committed; stage-specific validation and draftRevision pass.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-DRAFT-PATCH",
+    "reconnect": "Draft revision, current stage and all committed stage receipts restore exactly; generated preview seed is not rerolled and no stage is skipped.",
+    "title": "Сохранить валидный этап черновика боя"
+  },
+  {
+    "atomicity": "Freeze initiative result once and open only the legal loot/disposition branch.",
+    "commandId": "UI-CMD-COMBAT-RESULT-COMMIT",
+    "formIds": [
+      "CMB-017"
+    ],
+    "guards": "No unresolved command/reaction; winner=A|B|DRAW and reason non-empty.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-RESULT-COMMIT",
+    "reconnect": "Result receipt restores without reopening initiative.",
+    "title": "Зафиксировать исход боя"
+  },
+  {
+    "atomicity": "CONFIRM creates exactly one Guardian actor and creation receipt; DECLINE records one decision receipt while preserving the normative finish-boundary auto-create obligation; neither branch is a bare navigation route.",
+    "commandId": "UI-CMD-GUARDIAN-DECIDE",
+    "formIds": [
+      "CMB-064"
+    ],
+    "guards": "Eligible dead carrier; guardianDecisionStatus=PENDING; no prior decision or auto-create receipt; lawful player owner active; current death/combat revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-GUARDIAN-DECIDE",
+    "reconnect": "Pending decision or the exact committed receipt restores without duplicate Guardian; replay never changes CONFIRM to DECLINE or vice versa.",
+    "title": "Подтвердить либо отклонить выход Хранителя"
+  },
+  {
+    "atomicity": "Persist the local mixer snapshot; shared game state is untouched.",
+    "commandId": "UI-CMD-AUDIO-VOLUME-SET",
+    "formIds": [
+      "SET-002",
+      "SET-004"
+    ],
+    "guards": "0<=musicVolume,sfxVolume,uiVolume<=1; local settings context.",
+    "qa": "QA-WORKFLOW-UI-CMD-AUDIO-VOLUME-SET",
+    "reconnect": "Refresh restores the last local mixer values.",
+    "title": "Изменить локальную громкость или mute"
+  },
+  {
+    "atomicity": "Create final checkpoint and immutable archive once; stop host mutations.",
+    "commandId": "UI-CMD-CAMPAIGN-FINISH",
+    "formIds": [
+      "CMP-013"
+    ],
+    "guards": "Correct GM password; safe boundary; no pending operation; campaign not already completed.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-FINISH",
+    "reconnect": "Same finish command returns the archive receipt.",
+    "title": "Завершить кампанию в immutable archive"
+  },
+  {
+    "atomicity": "Create one short-lived successor transfer token without changing authority.",
+    "commandId": "UI-CMD-MASTER-TRANSFER-UNLOCK",
+    "formIds": [
+      "NET-024"
+    ],
+    "guards": "Correct transfer password; safe boundary; checkpoint complete; one current master.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK",
+    "reconnect": "Token state restores or expires closed.",
+    "title": "Разблокировать передачу мастера"
+  },
+  {
+    "atomicity": "Revoke old authority and grant successor in one transaction; never two masters.",
+    "commandId": "UI-CMD-MASTER-TRANSFER-COMMIT",
+    "formIds": [
+      "NET-025"
+    ],
+    "guards": "Valid unlock token; successor device acknowledged checkpoint; no pending operation.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT",
+    "reconnect": "Conflict freezes campaign until recovery; commit receipt is idempotent.",
+    "title": "Передать полномочия одному преемнику"
+  },
+  {
+    "atomicity": "Persist one random eligible non-Teacher XP award and audit receipt.",
+    "commandId": "UI-CMD-TEACHER-HOUR-CONFIRM",
+    "formIds": [
+      "GM-027"
+    ],
+    "guards": "Exactly one full eligible hour; GM confirmation; persisted eventId.",
+    "qa": "QA-WORKFLOW-UI-CMD-TEACHER-HOUR-CONFIRM",
+    "reconnect": "eventId replay never rerolls or awards twice.",
+    "title": "Подтвердить полный RP-час Учителя"
+  },
+  {
+    "atomicity": "Resolve exactly one blocking exposure event, including occupied-species handling.",
+    "commandId": "UI-CMD-INFECTION-EXPOSURE-RESOLVE",
+    "formIds": [
+      "GM-030"
+    ],
+    "guards": "One unresolved full-hour exposure; decision and species choice valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-INFECTION-EXPOSURE-RESOLVE",
+    "reconnect": "Unresolved event remains blocking; resolved event never repeats.",
+    "title": "Разрешить часовую экспозицию заражения"
+  },
+  {
+    "atomicity": "Append one versioned narrative note and audit entry only.",
+    "commandId": "UI-CMD-NARRATIVE-NOTE-SAVE",
+    "formIds": [
+      "GM-031"
+    ],
+    "guards": "Safe boundary; note text and reason present; no mechanical payload.",
+    "qa": "QA-WORKFLOW-UI-CMD-NARRATIVE-NOTE-SAVE",
+    "reconnect": "Same commandId returns the prior note version.",
+    "title": "Сохранить сюжетную пометку без механики"
+  },
+  {
+    "atomicity": "Apply the complete event queue or roll back every clock/effect/rest mutation.",
+    "commandId": "UI-CMD-TIME-ADVANCE-CONFIRM",
+    "formIds": [
+      "TIM-005"
+    ],
+    "guards": "Preview complete; all blocking events acknowledged; target timestamp unchanged.",
+    "qa": "QA-WORKFLOW-UI-CMD-TIME-ADVANCE-CONFIRM",
+    "reconnect": "Same transactionId restores receipt and never reticks.",
+    "title": "Подтвердить атомарное продвижение времени"
+  },
+  {
+    "atomicity": "Persist one clockMode change; dayPhase remains derived read-only.",
+    "commandId": "UI-CMD-AUTO-CLOCK-SET",
+    "formIds": [
+      "TIM-009"
+    ],
+    "guards": "Campaign running/paused transition legal; no combat time freeze conflict.",
+    "qa": "QA-WORKFLOW-UI-CMD-AUTO-CLOCK-SET",
+    "reconnect": "Clock mode and last confirmed timestamp restore exactly.",
+    "title": "Запустить либо остановить автоматические часы"
+  },
+  {
+    "atomicity": "Keep elapsed world time, discard only unfinished rest progress according to interruption rules.",
+    "commandId": "UI-CMD-REST-CANCEL",
+    "formIds": [
+      "RST-012"
+    ],
+    "guards": "Rest active or scheduled; GM authority current; reason present.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-CANCEL",
+    "reconnect": "Cancel receipt restores without a second reset.",
+    "title": "Отменить длительный отдых"
+  },
+  {
+    "atomicity": "Apply one branch; combat participants start the required new personal sleep segment on RESUME.",
+    "commandId": "UI-CMD-REST-POSTBATTLE-DECIDE",
+    "formIds": [
+      "RST-015"
+    ],
+    "guards": "Group rest paused by completed combat; decision=CANCEL|RESUME.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-POSTBATTLE-DECIDE",
+    "reconnect": "Pending decision remains blocking; response is idempotent.",
+    "title": "Отменить либо возобновить отдых после боя"
+  },
+  {
+    "atomicity": "Create one new draft UUID with no copied random results.",
+    "commandId": "UI-CMD-CHAR-VARIANT-CREATE",
+    "formIds": [
+      "APP-010"
+    ],
+    "guards": "Source local sheet FINAL; only name/description/art copied.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-VARIANT-CREATE",
+    "reconnect": "Same commandId returns the same variant UUID.",
+    "title": "Создать вариант финального локального персонажа"
+  },
+  {
+    "atomicity": "Create one browser download payload with schema/baseline/checksum/provenance; source is unchanged.",
+    "commandId": "UI-CMD-CHAR-EXPORT",
+    "formIds": [
+      "APP-010"
+    ],
+    "guards": "Local sheet or completed campaign copy is valid and readable.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-EXPORT",
+    "reconnect": "Regeneration is byte-stable for the same snapshot.",
+    "title": "Экспортировать версионированный файл персонажа"
+  },
+  {
+    "atomicity": "Detach device/seat transport once while preserving campaign character, group, inventory and reconnect binding.",
+    "commandId": "UI-CMD-CLIENT-DISCONNECT",
+    "formIds": [
+      "NET-023"
+    ],
+    "guards": "GM authority current; selected device/seat exists; safe boundary; no owned pending command; reason present.",
+    "qa": "QA-WORKFLOW-UI-CMD-CLIENT-DISCONNECT",
+    "reconnect": "Same commandId returns the disconnect receipt; later reconnect uses the preserved binding.",
+    "title": "Безопасно отключить клиент без удаления персонажа"
+  },
+  {
+    "atomicity": "Reject one request without changing game time, HP/OE, group membership or any rest progress.",
+    "commandId": "UI-CMD-REST-REQUEST-REJECT",
+    "formIds": [
+      "RST-005"
+    ],
+    "guards": "Request=PENDING; GM authority current; non-empty reason.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-REQUEST-REJECT",
+    "reconnect": "Same request decision returns the prior rejection receipt.",
+    "title": "Отклонить заявку на длительный отдых"
+  },
+  {
+    "atomicity": "Create one group rest plus required personal segments without advancing world time.",
+    "commandId": "UI-CMD-REST-START",
+    "formIds": [
+      "RST-006",
+      "RST-007"
+    ],
+    "guards": "Participants/start/watch mode valid; WITH_WATCH has complete minute coverage; no active-scene conflict.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-START",
+    "reconnect": "RestId and schedule restore exactly; repeated start does not create a second rest.",
+    "title": "Запустить валидный длительный отдых"
+  },
+  {
+    "atomicity": "Apply the exact preserve/reset rule once and create at most one new personal segment on RESUME.",
+    "commandId": "UI-CMD-REST-INTERRUPTION-RESOLVE",
+    "formIds": [
+      "RST-009"
+    ],
+    "guards": "Rest=INTERRUPTED; interruption facts persisted; decision=RESUME|CHANGE_FUTURE.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-INTERRUPTION-RESOLVE",
+    "reconnect": "Pending interruption remains blocking; receipt prevents a second reset/resume.",
+    "title": "Разрешить прерывание длительного отдыха"
+  },
+  {
+    "atomicity": "Replace only future watch segments; elapsed world time and past schedule remain byte-stable.",
+    "commandId": "UI-CMD-REST-FUTURE-SCHEDULE-SAVE",
+    "formIds": [
+      "RST-013"
+    ],
+    "guards": "Stop timestamp and reason fixed; past immutable; future coverage valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-FUTURE-SCHEDULE-SAVE",
+    "reconnect": "Schedule revision restores; stale revision is rejected before change.",
+    "title": "Сохранить только будущую часть графика отдыха"
+  },
+  {
+    "atomicity": "Create exactly one campaignId in PAUSED state, host configuration and creation receipt; zero players is valid.",
+    "commandId": "UI-CMD-CAMPAIGN-CREATE",
+    "formIds": [
+      "CMP-005"
+    ],
+    "guards": "All CMP-001..004 stages valid; baseline/catalog and host-bind preflight pass; campaignDraftId not committed.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-CREATE",
+    "reconnect": "Same commandId returns the same campaignId/receipt and never binds a second host.",
+    "title": "Атомарно создать локальную кампанию"
+  },
+  {
+    "atomicity": "Create one immutable ordered series. For first resolutionKind=ROLL publish only its AUTO/MANUAL rollRequest; for DETERMINISTIC dispatch directly to CMB-038. After each entry, the next entry follows the same typed branch; no partial reserve, reorder or client-selected route.",
+    "commandId": "UI-CMD-COMBAT-SERIES-CONFIRM",
+    "formIds": [
+      "CMB-014",
+      "CMB-024"
+    ],
+    "guards": "Effective controller owns actor; every entry remains in actor-specific availableActions with eligible targets and total cost within budget; every entry declares resolutionKind=ROLL|DETERMINISTIC; ROLL has an immutable mode snapshot and request, DETERMINISTIC has neither.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-SERIES-CONFIRM",
+    "reconnect": "Series, per-entry resolutionKind, current index, roll requests/mode snapshots, deterministic receipts and next typed stage restore without duplication or return to the editor.",
+    "title": "Подтвердить серию боевых действий"
+  },
+  {
+    "atomicity": "Acquire/release one exclusive loot lock or mark one player done; already transferred items are never rolled back.",
+    "commandId": "UI-CMD-LOOT-SESSION-SET",
+    "formIds": [
+      "PLY-021",
+      "CMB-026"
+    ],
+    "guards": "Player loot phase active; corpse policy and lock revision current; decision=ACQUIRE|RELEASE|PLAYER_DONE.",
+    "qa": "QA-WORKFLOW-UI-CMD-LOOT-SESSION-SET",
+    "reconnect": "Lock ownership and done receipt restore; stale corpse revision rejects before change.",
+    "title": "Открыть, закрыть или завершить player loot session"
+  },
+  {
+    "atomicity": "Persist one capacity value without removing or moving any character.",
+    "commandId": "UI-CMD-CAMPAIGN-CAPACITY-SET",
+    "formIds": [
+      "CMP-014"
+    ],
+    "guards": "Safe boundary; 1<=newCapacity<=5; newCapacity>=activePlayerCount; current revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-CAPACITY-SET",
+    "reconnect": "Same commandId returns the prior capacity receipt; stale revision rejects.",
+    "title": "Изменить вместимость кампании"
+  },
+  {
+    "atomicity": "Replace the local master secret once; never serialize old/new secret to a player projection or audit payload.",
+    "commandId": "UI-CMD-MASTER-PASSWORD-CHANGE",
+    "formIds": [
+      "CMP-015"
+    ],
+    "guards": "Current secret valid; new secret and confirmation match; safe boundary.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-PASSWORD-CHANGE",
+    "reconnect": "Receipt restores only success metadata, never the secret value.",
+    "title": "Сменить пароль мастера"
+  },
+  {
+    "atomicity": "PAUSE writes checkpoint+status+clock freeze together; RESUME restores the same authoritative checkpoint without duplicate host.",
+    "commandId": "UI-CMD-CAMPAIGN-PAUSE-SET",
+    "formIds": [
+      "CMP-016"
+    ],
+    "guards": "Single current host authority; reason present; safe boundary; no pending operation; decision=PAUSE|RESUME.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-PAUSE-SET",
+    "reconnect": "Status/checkpoint receipt restores exactly and conflicting master remains blocked.",
+    "title": "Поставить кампанию на паузу или возобновить"
+  },
+  {
+    "atomicity": "Set campaign HOSTING and create the initial peace scene once; free capacity remains unchanged.",
+    "commandId": "UI-CMD-CAMPAIGN-START",
+    "formIds": [
+      "NET-016"
+    ],
+    "guards": "At least one valid active PC; every included controlling device Ready; one master authority; campaign PAUSED.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-START",
+    "reconnect": "Start receipt restores without a second scene or duplicate authority.",
+    "title": "Запустить подготовленную кампанию"
+  },
+  {
+    "atomicity": "Activate combat, deep-pin exactly the checkpointed actor snapshots, freeze world clock and pause selected rest together.",
+    "commandId": "UI-CMD-COMBAT-START",
+    "formIds": [
+      "CMB-011"
+    ],
+    "guards": "Latest preflight passes at the current revision; committed sequential stage receipts exist for IDENTITY, PARTY, OPPOSITION, INSTANCES, PLACEMENT, VISIBILITY and SCENE; A/B/position/visibility valid; no pending request; initiative may still be absent.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-START",
+    "reconnect": "Start receipt restores the same draft-stage receipts, actors, clock and rest state; never starts combat twice or fills a skipped stage implicitly.",
+    "title": "Атомарно начать боевую ситуацию"
+  },
+  {
+    "atomicity": "Close the preinitiative phase once, commit one phase-close receipt and only then create initial initiative requests; never count it as round one.",
+    "commandId": "UI-CMD-AMBUSH-PHASE-CLOSE",
+    "formIds": [
+      "CMB-060"
+    ],
+    "guards": "Ambush phase ACTIVE for the combat created by the committed Start receipt; no pending command/reaction; all required CORE-088/089 choices and command receipts resolved; close receipt absent.",
+    "qa": "QA-WORKFLOW-UI-CMD-AMBUSH-PHASE-CLOSE",
+    "reconnect": "Closed receipt restores the initiative boundary without replaying ambush actions or reopening the phase.",
+    "title": "Завершить сцену нападения и открыть инициативу"
+  },
+  {
+    "atomicity": "Set lootPhaseStatus=COMPLETED, commit one loot-phase-close receipt and only then open temporary-actor disposition without rolling back any item transfer.",
+    "commandId": "UI-CMD-GM-LOOT-PHASE-CLOSE",
+    "formIds": [
+      "CMB-067"
+    ],
+    "guards": "Loot eligibility receipt committed; lootPhaseStatus=ACTIVE; all player sessions done; no active lock or pending loot command; transferred items already committed; close receipt absent.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-LOOT-PHASE-CLOSE",
+    "reconnect": "Same command returns the prior close receipt; released locks do not reappear and zero locks alone never implies completion.",
+    "title": "Завершить фазу добычи"
+  },
+  {
+    "atomicity": "Persist one packageId with one D20, D12 and D6 result tied only to that commandId.",
+    "commandId": "UI-CMD-ROLL-PACKAGE-CREATE",
+    "formIds": [
+      "CMB-065"
+    ],
+    "guards": "Current command declared; before first roll; effective controller owns command; no package exists.",
+    "qa": "QA-WORKFLOW-UI-CMD-ROLL-PACKAGE-CREATE",
+    "reconnect": "Package/results/consumption map restore; reconnect never rerolls or moves a result to another command.",
+    "title": "Создать ускоренный D20/D12/D6 пакет одной команды"
+  },
+  {
+    "atomicity": "Persist one raw face and origin receipt for one rollRequestId. ORIGINAL may start one critical chain and one deduplicated XP event according to its flags; CRITICAL_CONFIRMATION/SUBSTITUTION never starts either. Domain requestContext remains unchanged and resolution advances only the matching command/series entry.",
+    "commandId": "UI-CMD-ROLL-SUBMIT",
+    "formIds": [
+      "CMB-032",
+      "CMB-033"
+    ],
+    "guards": "Pending request; correct owner; immutable requestContext and originRollKind match the request; mode snapshot matches form; manual face in range or server auto RNG receipt valid; ORIGINAL_D20 critical/XP eligibility flags are fixed; confirmation/substitution links point to the persisted origin; for a series the request belongs to its immutable currentEntryIndex.",
+    "qa": "QA-WORKFLOW-UI-CMD-ROLL-SUBMIT",
+    "reconnect": "Same submission returns the prior face and origin linkage; different payload rejects; auto never rerolls; requestContext/originRollKind/currentEntryIndex and the next pending stage restore exactly.",
+    "title": "Зафиксировать результат адресуемого rollRequest"
+  },
+  {
+    "atomicity": "Close exactly one pending request without campaign copy, admission, capacity or local-sheet mutation.",
+    "commandId": "UI-CMD-DEVICE-REQUEST-CANCEL",
+    "formIds": [
+      "NET-005"
+    ],
+    "guards": "Request still PENDING; owner device matches; non-empty reason; requestRevision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-CANCEL",
+    "reconnect": "Same commandId returns the cancellation receipt; a concurrently committed GM decision makes cancellation stale before write.",
+    "title": "Отменить собственный pending device request"
+  },
+  {
+    "atomicity": "Create one PENDING rest request only; do not advance time or apply HP/OE/effects.",
+    "commandId": "UI-CMD-REST-REQUEST-SUBMIT",
+    "formIds": [
+      "RST-001"
+    ],
+    "guards": "Player owns an admitted campaign character in the group; desired duration positive; peace context permits a request; no duplicate pending request.",
+    "qa": "QA-WORKFLOW-UI-CMD-REST-REQUEST-SUBMIT",
+    "reconnect": "requestId restores in RST-002/GM queue and replay never creates a duplicate.",
+    "title": "Подать заявку на длительный отдых"
+  },
+  {
+    "atomicity": "Apply the ordered full-rest HP/OE/effect consequences once without advancing world time; append before/after audit.",
+    "commandId": "UI-CMD-DIRECT-FULL-REST-APPLY",
+    "formIds": [
+      "RST-014"
+    ],
+    "guards": "Living nonarchived PC/NPC; safe boundary; mandatory reason; rolling 24h benefit eligibility rechecked at commit.",
+    "qa": "QA-WORKFLOW-UI-CMD-DIRECT-FULL-REST-APPLY",
+    "reconnect": "Same commandId returns the prior receipt and never reapplies recovery.",
+    "title": "Применить полноценный отдых по решению мастера"
+  },
+  {
+    "atomicity": "Insert actor, visibility and initiative once; grant THIS_ROUND or NEXT_ROUND eligibility, never a second current-round turn.",
+    "commandId": "UI-CMD-HIDDEN-ACTOR-ENTER",
+    "formIds": [
+      "CMB-073"
+    ],
+    "guards": "CORE-090 detection committed; side/position/observer visibility valid; initiative insertion and slot-passed status computed at current combat revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-HIDDEN-ACTOR-ENTER",
+    "reconnect": "Entry receipt restores actor/initiative without duplicate insertion or information leak.",
+    "title": "Зафиксировать скрытое вступление в активный бой"
+  },
+  {
+    "atomicity": "Persist one before/after modifier mutation and recalculate derived state in one transaction.",
+    "commandId": "UI-CMD-GM-STAT-EDIT",
+    "formIds": [
+      "GM-004"
+    ],
+    "guards": "GM authority; selected stat/modifier valid; duration/source/reason present; character revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-STAT-EDIT",
+    "reconnect": "Same commandId returns receipt; stale revision changes nothing.",
+    "title": "Изменить характеристику кампанийной копии"
+  },
+  {
+    "atomicity": "Set HP and derived wound/capability state together with before/after audit.",
+    "commandId": "UI-CMD-GM-HP-EDIT",
+    "formIds": [
+      "GM-005"
+    ],
+    "guards": "GM authority; target live campaign copy; new HP within normative bounds; reason and revision valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-HP-EDIT",
+    "reconnect": "Replay returns the same receipt; no second threshold transition.",
+    "title": "Изменить currentHP кампанийной копии"
+  },
+  {
+    "atomicity": "Change only the selected instance OE and append before/after audit.",
+    "commandId": "UI-CMD-GM-OE-EDIT",
+    "formIds": [
+      "GM-006"
+    ],
+    "guards": "GM authority; exact symbiont instance exists; 0<=newOE<=computedMaxOE; reason/revision valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-OE-EDIT",
+    "reconnect": "Replay returns prior receipt; stale maxOE rejects before write.",
+    "title": "Изменить currentOE выбранного симбионта"
+  },
+  {
+    "atomicity": "Version only the campaign-copy description; never mutate the player's immutable local source or art.",
+    "commandId": "UI-CMD-GM-DESCRIPTION-EDIT",
+    "formIds": [
+      "GM-036"
+    ],
+    "guards": "GM authority; campaign copy exists; description changed; reason and revision valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-DESCRIPTION-EDIT",
+    "reconnect": "Same command returns prior version/receipt.",
+    "title": "Изменить описание кампанийной копии"
+  },
+  {
+    "atomicity": "Persist the whole before/after composition once, including ordered removals/additions and derived recalculation; no intermediate body exists.",
+    "commandId": "UI-CMD-GM-SYMBIONT-COMPOSITION",
+    "formIds": [
+      "GM-008",
+      "GM-009",
+      "GM-010"
+    ],
+    "guards": "GM authority; only allowed Free second-slot/United empty-slot addition or lawful removal; capacity, bindings, interactions, random receipts and reason validate.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-SYMBIONT-COMPOSITION",
+    "reconnect": "Draft/random receipts restore; committed command cannot reroll or partially repeat.",
+    "title": "Атомарно изменить состав симбионтов"
+  },
+  {
+    "atomicity": "Create one disease/effect instance and audit its exact parameters.",
+    "commandId": "UI-CMD-GM-DISEASE-ASSIGN",
+    "formIds": [
+      "GM-013"
+    ],
+    "guards": "GM authority; modeled disease/stage valid for target; timer/source/reason/revision valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-DISEASE-ASSIGN",
+    "reconnect": "Same commandId returns the same instance and receipt.",
+    "title": "Наложить типизированную болезнь"
+  },
+  {
+    "atomicity": "Apply one typed mutation with all linked derived consequences in one transaction.",
+    "commandId": "UI-CMD-GM-EFFECT-APPLY",
+    "formIds": [
+      "GM-014"
+    ],
+    "guards": "GM authority; modeled type/zone/stack policy/timer valid; target revision and reason current. Selectable effectTypeId must be in the server formal-effect allowlist; TRACE_ONLY EFF-FATIGUE, ORPHANED EFF-EXHAUSTION, derived EFF-TRAUMA-LIMB_DISABLED and source-specific EFF-DISEASE-INSTANCE/EFF-POISON-INSTANCE/EFF-INFECTION-LINK are rejected before write.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-EFFECT-APPLY",
+    "reconnect": "Replay returns the existing effect instance; stale request changes nothing.",
+    "title": "Наложить эффект, травму или рану"
+  },
+  {
+    "atomicity": "Remove all selected instances and linked consequences together; append before/after audit.",
+    "commandId": "UI-CMD-GM-EFFECT-REMOVE",
+    "formIds": [
+      "GM-015"
+    ],
+    "guards": "GM authority; every selected instance still exists and is removable; death is excluded; reason/revision valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-EFFECT-REMOVE",
+    "reconnect": "Replay returns prior receipt and cannot remove another instance.",
+    "title": "Снять выбранные снимаемые эффекты"
+  },
+  {
+    "atomicity": "Apply CREATE_OR_EDIT, MEMBERSHIP_SET, MOVE_MEMBER, SPLIT, MERGE or DELETE_EMPTY as one all-or-none group transaction.",
+    "commandId": "UI-CMD-GROUP-MUTATE",
+    "formIds": [
+      "GRP-002",
+      "GRP-003",
+      "GRP-005",
+      "GRP-006",
+      "GRP-007",
+      "GRP-008"
+    ],
+    "guards": "GM authority; mutationKind and exact form payload valid; all group/member/location revisions current; active combat/rest blockers absent; reason present.",
+    "qa": "QA-WORKFLOW-UI-CMD-GROUP-MUTATE",
+    "reconnect": "Same commandId returns prior group revision(s); stale revision changes no membership or marker.",
+    "title": "Изменить группу игроков/НПС"
+  },
+  {
+    "atomicity": "Persist one marker revision and publish only observer-safe location data.",
+    "commandId": "UI-CMD-MAP-MARKER-SET",
+    "formIds": [
+      "MAP-002"
+    ],
+    "guards": "GM authority; group/location/coordinates valid; map and group revisions current; reason present.",
+    "qa": "QA-WORKFLOW-UI-CMD-MAP-MARKER-SET",
+    "reconnect": "Same command returns prior marker receipt; stale drag preview is discarded.",
+    "title": "Установить или переместить метку группы"
+  },
+  {
+    "atomicity": "Patch one draft stage only; no runtime actor or currentVersion changes.",
+    "commandId": "UI-CMD-ENEMY-DRAFT-PATCH",
+    "formIds": [
+      "ENM-005",
+      "ENM-006",
+      "ENM-007",
+      "ENM-008",
+      "ENM-009",
+      "ENM-011",
+      "ENM-012",
+      "ENM-013",
+      "ENM-014",
+      "ENM-015"
+    ],
+    "guards": "GM authority; template remains DRAFT; stage-specific fields and draftRevision valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH",
+    "reconnect": "Draft revision and any committed roll receipt restore exactly.",
+    "title": "Сохранить этап шаблона врага/монстра"
+  },
+  {
+    "atomicity": "Create one template UUID, version=1, immutable snapshot and history entry.",
+    "commandId": "UI-CMD-ENEMY-COMMIT-V1",
+    "formIds": [
+      "ENM-010",
+      "ENM-016"
+    ],
+    "guards": "All mandatory wizard stages valid; template UUID not committed; inventory/ability boundaries pass.",
+    "qa": "QA-WORKFLOW-UI-CMD-ENEMY-COMMIT-V1",
+    "reconnect": "Same command returns the same template and never creates a duplicate.",
+    "title": "Сохранить первую версию шаблона врага/монстра"
+  },
+  {
+    "atomicity": "Append immutable version N+1 while preserving template UUID and all previous versions.",
+    "commandId": "UI-CMD-ENEMY-NEW-VERSION",
+    "formIds": [
+      "ENM-017"
+    ],
+    "guards": "Current user template exists; diff/reason valid; active combats keep pinned old snapshot.",
+    "qa": "QA-WORKFLOW-UI-CMD-ENEMY-NEW-VERSION",
+    "reconnect": "Same version command returns prior N+1 receipt.",
+    "title": "Выпустить новую версию пользовательского шаблона"
+  },
+  {
+    "atomicity": "Persist one seed, seven concrete stats and random receipt; result becomes immutable for the draft.",
+    "commandId": "UI-CMD-MONSTER-STATS-ROLL-ONCE",
+    "formIds": [
+      "ENM-018"
+    ],
+    "guards": "Monster draft uses ROLL_ONCE; status=NOT_ROLLED; eligible ranges and draft revision fixed.",
+    "qa": "QA-WORKFLOW-UI-CMD-MONSTER-STATS-ROLL-ONCE",
+    "reconnect": "Replay restores the same values and cannot reroll.",
+    "title": "Однократно сгенерировать характеристики монстра"
+  },
+  {
+    "atomicity": "Create one new NPC UUID/version=1 with copied static data and reset runtime state.",
+    "commandId": "UI-CMD-NPC-DUPLICATE",
+    "formIds": [
+      "NPC-008"
+    ],
+    "guards": "Source snapshot exists; new identity valid; reason present; duplicate is not already committed.",
+    "qa": "QA-WORKFLOW-UI-CMD-NPC-DUPLICATE",
+    "reconnect": "Same command returns the same duplicate UUID.",
+    "title": "Дублировать постоянного НПС"
+  },
+  {
+    "atomicity": "Mark the NPC archived and preserve immutable history.",
+    "commandId": "UI-CMD-NPC-ARCHIVE",
+    "formIds": [
+      "NPC-009"
+    ],
+    "guards": "No active group/combat/rest reference; reason and current version valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-NPC-ARCHIVE",
+    "reconnect": "Replay returns prior archive receipt.",
+    "title": "Архивировать постоянного НПС"
+  },
+  {
+    "atomicity": "Delete the unused NPC once and append a non-restorable audit tombstone.",
+    "commandId": "UI-CMD-NPC-DELETE",
+    "formIds": [
+      "NPC-010"
+    ],
+    "guards": "Server proves NPC was never used or referenced; reason present; deletion allowed at current revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-NPC-DELETE",
+    "reconnect": "Replay returns prior deletion receipt and cannot target another NPC.",
+    "title": "Удалить неиспользованного НПС"
+  },
+  {
+    "atomicity": "Persist one quantity correction and append before/after audit; no free item mechanic or unrelated stack changes.",
+    "commandId": "UI-CMD-GM-CONSUMABLE-CORRECT",
+    "formIds": [
+      "GM-035"
+    ],
+    "guards": "GM authority; exact consumable instance/stack and current inventory revision; typed correction, before/after, provenance and reason valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-CONSUMABLE-CORRECT",
+    "reconnect": "Same commandId returns the prior receipt; stale revision changes no quantity.",
+    "title": "Скорректировать количество расходника"
+  },
+  {
+    "atomicity": "Execute exactly the allowlisted selected OperationID through its GM-021 profile handler and persist one all-or-none receipt; arbitrary or mismatched OperationID is rejected before write.",
+    "commandId": "UI-CMD-GM-PROFILE-OP-CONFIRM",
+    "formIds": [
+      "SYS-020"
+    ],
+    "guards": "GM authority; selectedOperationId belongs to the closed SYS-020 allowlist and matches originatingFormId plus signed preparation envelope; before/after/reason/stateRevision final-revalidate.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-PROFILE-OP-CONFIRM",
+    "reconnect": "Same commandId and envelope return the prior operation receipt; changed ID/payload or stale revision changes nothing.",
+    "title": "Подтвердить выбранную мастерскую профильную операцию"
+  },
+  {
+    "atomicity": "Create one addressed initiativeRollRequestId for the selected actor and immutable MANUAL/AUTO mode snapshot; no initiative result is invented.",
+    "commandId": "UI-CMD-GM-INITIATIVE-REQUEST-CREATE",
+    "formIds": [
+      "CMB-009"
+    ],
+    "guards": "Combat ACTIVE at initiative boundary; selected GM-controlled actor has no result/request; mode snapshot and combat revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-INITIATIVE-REQUEST-CREATE",
+    "reconnect": "Pending request restores to the same roll surface; replay never creates a second request.",
+    "title": "Создать запрос инициативы GM-controlled актора"
+  },
+  {
+    "atomicity": "Discard only unused current-turn actions and advance initiative exactly once, applying ordered end-turn ticks before the next owner projection.",
+    "commandId": "UI-CMD-COMBAT-TURN-END",
+    "formIds": [
+      "CMB-046"
+    ],
+    "guards": "Effective controller owns current turn; no mandatory choice, unresolved command or reaction; next actor/round boundary and revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-TURN-END",
+    "reconnect": "Same turnId/commandId returns prior next-actor receipt and never skips another actor.",
+    "title": "Завершить текущий ход и перейти по инициативе"
+  },
+  {
+    "atomicity": "Set combat=CLOSED once, restore the exact precombat clockMode on the same timestamp, publish peace/group/rest projections and immutable battle history together; never infer loot completion merely from zero active locks.",
+    "commandId": "UI-CMD-COMBAT-CLOSE",
+    "formIds": [
+      "CMB-063"
+    ],
+    "guards": "Result receipt committed; lootPhaseStatus=COMPLETED|INELIGIBLE, and COMPLETED has UI-CMD-GM-LOOT-PHASE-CLOSE receipt; all temporary actors resolved; no loot lock/pending loot command/Guardian blocker; linked paused-rest publication and precombat clock restore preview valid.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-CLOSE",
+    "reconnect": "Same commandId returns the close receipt; combat never reopens and no loot/clock/rest publication repeats.",
+    "title": "Атомарно закрыть завершённую боевую ситуацию"
+  },
+  {
+    "atomicity": "Create at most one technical connection session for attemptId; never admit a character, reserve capacity or mutate local sheets.",
+    "commandId": "UI-CMD-CONNECTION-OPEN",
+    "formIds": [
+      "NET-002",
+      "NET-011"
+    ],
+    "guards": "Address/QR parses to allowed host/port and protocol; one fresh attemptId; local device identity present; retry uses the persisted last address.",
+    "qa": "QA-WORKFLOW-UI-CMD-CONNECTION-OPEN",
+    "reconnect": "Failure yields NET-011 with unchanged local data; same attemptId is reconciled, while Retry creates an explicit new attemptId.",
+    "title": "Открыть или повторить техническое подключение"
+  },
+  {
+    "atomicity": "Freeze one reinforcementDraft envelope and create exactly one addressed initiativeRollRequestId; do not instantiate, insert, expose, target or spend for the actor yet.",
+    "commandId": "UI-CMD-COMBAT-REINFORCEMENT-INITIATIVE-REQUEST",
+    "formIds": [
+      "CMB-016"
+    ],
+    "guards": "GM authority; combat ACTIVE; eligible source not active/dead/archived; no duplicate pending entry; side, entry moment/position, observer visibility, controller and roll-mode snapshot valid at current revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-REINFORCEMENT-INITIATIVE-REQUEST",
+    "reconnect": "Draft, mode snapshot and pending request restore exactly; same commandId returns the prior request and never rerolls or creates a second draft.",
+    "title": "Создать адресный запрос инициативы подкрепления"
+  },
+  {
+    "atomicity": "Exactly once reuse a reserve actor or deep-clone and pin the current template snapshot, then assign side/controller/position/observer visibility, insert one initiative row and publish projections; NEXT_ROUND when the slot passed or actor already acted, otherwise THIS_ROUND; never grant a second current-round turn.",
+    "commandId": "UI-CMD-COMBAT-REINFORCEMENT-ENTER",
+    "formIds": [
+      "CMB-016"
+    ],
+    "guards": "GM authority; combat ACTIVE; source still eligible and not already active; matching addressed initiative receipt belongs to the same draft/revision; side/position/visibility/controller valid; no conflicting pending command/reaction; firstTurnEligibility server-computed.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-REINFORCEMENT-ENTER",
+    "reconnect": "Same command/draft returns the same actor UUID, pinned snapshot, position, initiative and first-turn receipt; never reinstantiate, reroll or duplicate a turn.",
+    "title": "Атомарно ввести подкрепление после инициативы"
+  },
+  {
+    "atomicity": "Mark the reinforcement draft and any pending addressed roll request CANCELED exactly once, persist a cancel receipt and make every late initiative receipt for that request unusable; do not instantiate the actor, alter initiative, reveal it or consume any resource.",
+    "commandId": "UI-CMD-COMBAT-REINFORCEMENT-CANCEL",
+    "formIds": [
+      "CMB-016"
+    ],
+    "guards": "GM authority; entryStatus=DRAFT, or AWAITING_ROLL with initiativeReceiptId absent and no committed roll result; source remains outside combat; current revision; cancellation absent in READY_TO_COMMIT/COMMITTED/CANCELED.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-REINFORCEMENT-CANCEL",
+    "reconnect": "CANCELED and its receipt restore exactly; replay returns the same receipt; a late roll/result cannot reopen, reroll or commit this draft.",
+    "title": "Отменить подкрепление до первого зафиксированного результата инициативы"
+  },
+  {
+    "atomicity": "Persist WAITING_FOR_OWNER while preserving the exact turn, action budget and confirmed checkpoint; do not start a timeout, select an action/defense, spend, roll, create a lease or advance initiative.",
+    "commandId": "UI-CMD-DISCONNECTED-TURN-WAIT",
+    "formIds": [
+      "CMB-066"
+    ],
+    "guards": "GM authority; owning controller DISCONNECTED; actor owns the current turn or pending decision; confirmed checkpoint and revisions current; no unresolved command/reaction whose partial state would change.",
+    "qa": "QA-WORKFLOW-UI-CMD-DISCONNECTED-TURN-WAIT",
+    "reconnect": "The identical wait state restores; replay has no extra effect and owner reconnect ends waiting only at a safe boundary.",
+    "title": "Явно ждать возврата owningController"
+  },
+  {
+    "atomicity": "Keep owningController immutable; ACTIVATE creates one lease and sets effectiveController for every decision including defense without move/spend/reroll; END invalidates old projection/hotkeys and restores previousEffectiveController or owningController while preserving turn, budget and confirmed command ownership; CANCEL clears only the pending lease/handoff envelope, commits one reason-specific cancellation receipt and follows its server-signed return path without changing a controller, action, resource, roll, turn or projection except the required privacy return receipt.",
+    "commandId": "UI-CMD-COMBAT-CONTROL-LEASE-SET",
+    "formIds": [
+      "CMB-047"
+    ],
+    "guards": "ACTIVATE: GM authority, active living actor, authorized target controller, no conflicting lease or unresolved intent; local-human target has completed PLY-030 acknowledgement and prior projection erasure. END: active lease, owner available or explicit end selected, safe boundary and no uncommitted intent; current revision. CANCEL: GM authority; leaseStatus=PENDING_ACK; lease not activated; no controller/action/resource mutation; leaseReason and server-signed returnFormId match OWNER_DISCONNECTED→CMB-066, LOCAL_HANDOFF→PLY-030, or RULE_EFFECT/owner already reconnected→CMB-029; current revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-CONTROL-LEASE-SET",
+    "reconnect": "Same command and decision return the same receipt; active lease restores exactly; owner reconnect queues END at a safe boundary and never creates an extra turn; canceled pending lease restores CANCELED with the identical return context and cannot later activate.",
+    "title": "Активировать, завершить или отменить временный ControlLease"
+  },
+  {
+    "atomicity": "Persist the eligible pool and hash, seed, exactly one selectedTargetId and receipt and attach them to the origin command; perform no action/resource spend and never select outside an explicit rule.",
+    "commandId": "UI-CMD-COMBAT-RANDOM-TARGET-SELECT",
+    "formIds": [
+      "CMB-048"
+    ],
+    "guards": "An explicit active rule requires randomness and excludes manual choice for this occurrence; server-derived legal, visible and targetable actor-specific pool is nonempty/current; GM omniscience does not enlarge it; no prior receipt; origin command remains pending before spend/roll.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-RANDOM-TARGET-SELECT",
+    "reconnect": "Same command/request returns the same pool, seed and target; never reroll. Later target invalidation follows the origin command's normal revalidation/failure and does not invent a second target unless an explicit rule says so.",
+    "title": "Однократно выбрать случайную цель по явному правилу"
+  },
+  {
+    "atomicity": "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates.",
+    "commandId": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
+    "formIds": [
+      "PLY-030"
+    ],
+    "guards": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType!=HOST_LOCAL_CANDIDATE, target GM/seat is admitted and authorized. For handoffType=HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority.",
+    "qa": "QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
+    "reconnect": "Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response.",
+    "title": "Подтвердить локальную privacy-передачу активного контекста"
+  },
+  {
+    "atomicity": "Create one linked PENDING CONSENT or MASTER_PREDICATE request with originating command/owner/return context; reserve no OE, action, item, dose, roll or target state.",
+    "commandId": "UI-CMD-PEACE-DEPENDENCY-REQUEST-CREATE",
+    "formIds": [
+      "PLY-019"
+    ],
+    "guards": "Selected ability remains in the current peace action envelope; target/parameters are eligible; exactly one required dependency kind and recipient are resolved; no prior pending response; state/projection revisions current.",
+    "qa": "QA-WORKFLOW-UI-CMD-PEACE-DEPENDENCY-REQUEST-CREATE",
+    "reconnect": "Same commandId restores the identical pending request and response if present; replay never creates a duplicate or changes a response.",
+    "title": "Создать адресный запрос согласия или master predicate для мирной способности"
+  },
+  {
+    "atomicity": "Create one commandId and freeze action, targets, parameters, costs and next-stage envelope; create at most one addressed rollRequestId or deterministic resolver intent; spend nothing until the resolver's final revalidation and never let the client choose a route.",
+    "commandId": "UI-CMD-COMBAT-SINGLE-ACTION-DECLARE",
+    "formIds": [
+      "CMB-013",
+      "CMB-022",
+      "CMB-023"
+    ],
+    "guards": "Effective controller owns the active actor/turn; selected action remains in its signed actor-specific availableActions; all required targets/parameters are eligible for the observer; budget, visibility and revisions current; server computes the exact next state and immutable MANUAL/AUTO snapshot.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-SINGLE-ACTION-DECLARE",
+    "reconnect": "Same commandId restores the exact target/parameter/roll-mode/next-stage envelope; replay cannot change mode, retarget, reroll or duplicate spend.",
+    "title": "Зафиксировать одиночную боевую команду и следующий адресный этап"
+  },
+  {
+    "atomicity": "Create exactly one addressed rollRequestId linked to the pending peace command without reserving OE or applying any effect; persist the mode snapshot and return context.",
+    "commandId": "UI-CMD-PEACE-ROLL-REQUEST-CREATE",
+    "formIds": [
+      "PLY-019"
+    ],
+    "guards": "Selected peace ability and target/parameters remain in the signed envelope; every required dependency is positively resolved or explicitly exempt; requiresRoll=true; no prior request/result; immutable MANUAL/AUTO mode snapshot and revisions current.",
+    "qa": "QA-WORKFLOW-UI-CMD-PEACE-ROLL-REQUEST-CREATE",
+    "reconnect": "The same command restores the same pending roll request and can never switch mode, reroll or duplicate the eventual ability operation.",
+    "title": "Создать адресный бросок мирной способности"
+  },
+  {
+    "atomicity": "ABANDON_AND_CREATE irreversibly closes exactly that return window and records one receipt without creating a character; CANCEL changes nothing and creates no draft.",
+    "commandId": "UI-CMD-POSTDEATH-RETURN-WINDOW-DECIDE",
+    "formIds": [
+      "SYS-027"
+    ],
+    "guards": "Dead character and deathEvent match; modeled source-specific return window is still AVAILABLE; decision=ABANDON_AND_CREATE|CANCEL; player owner and state revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-POSTDEATH-RETURN-WINDOW-DECIDE",
+    "reconnect": "Same decision returns the prior receipt; missing/closed/disconnected response is never treated as abandonment.",
+    "title": "Подтвердить либо отменить отказ от окна возвращения перед новым героем"
+  },
+  {
+    "atomicity": "Persist one whole stage snapshot, the next signed stage, branch-cache hash and receipt together; never create a final character, runtime authority or partial stage; previously displayed random results remain byte-stable.",
+    "commandId": "UI-CMD-CHAR-WIZARD-CHECKPOINT",
+    "formIds": [
+      "CHR-001",
+      "CHR-009",
+      "CHR-012",
+      "CHR-014",
+      "CHR-015",
+      "CHR-018",
+      "CHR-019",
+      "CHR-021",
+      "CHR-022",
+      "CHR-024",
+      "CHR-025",
+      "CHR-032",
+      "CHR-037",
+      "CHR-038"
+    ],
+    "guards": "Player owns the characterDraftId; stage-specific fields validate; draftRevision and wizardCheckpointId are current; every referenced random/decision receipt belongs to this draft and branch; a locked result is never replaceable.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-WIZARD-CHECKPOINT",
+    "reconnect": "Same command returns the same checkpoint; refresh restores the last complete stage and immutable branch receipts, while an incomplete tail is ignored.",
+    "title": "Атомарно сохранить валидный этап создания персонажа"
+  },
+  {
+    "atomicity": "Persist exactly one face/result, receipt and resulting next-state pointer; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.",
+    "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+    "formIds": [
+      "CHR-003",
+      "CHR-004",
+      "CHR-020",
+      "CHR-021",
+      "CHR-022",
+      "CHR-037",
+      "CHR-038"
+    ],
+    "guards": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+    "reconnect": "Same request/command returns the stored result; a changed payload rejects and no replacement request is created.",
+    "title": "Зафиксировать адресуемый бросок или ручной ввод создания персонажа"
+  },
+  {
+    "atomicity": "Persist one decision receipt and server-signed next branch; abandonment never deletes provenance, branch restore never generates a seed, and cancel before commit changes nothing.",
+    "commandId": "UI-CMD-CHAR-CREATION-SET-DECIDE",
+    "formIds": [
+      "CHR-002",
+      "CHR-005",
+      "CHR-006",
+      "CHR-007",
+      "CHR-008",
+      "CHR-010",
+      "CHR-011",
+      "CHR-016",
+      "CHR-028",
+      "CHR-029",
+      "CHR-036",
+      "CHR-042"
+    ],
+    "guards": "Player owns the current draft/branch; decision belongs to the closed state-specific domain; referenced set/branch receipts and revision are current; an abandonment or interaction consequence is confirmed explicitly before its irreversible boundary.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-SET-DECIDE",
+    "reconnect": "Committed decision and destination restore exactly; missing/closed/disconnected input is not a decision and cannot reroll or revive an abandoned set.",
+    "title": "Зафиксировать выбор ветви или необратимое решение wizard"
+  },
+  {
+    "atomicity": "Publish one restore receipt with the exact signed resumeFormId and immutable branch-cache/random receipts; do not apply an uncommitted tail, reroll, mutate a final sheet or let a client route select the destination.",
+    "commandId": "UI-CMD-LOCAL-CHECKPOINT-RESTORE",
+    "formIds": [
+      "CHR-026",
+      "APP-009"
+    ],
+    "guards": "Checkpoint owner and entity kind match the active local owner; integrity/hash and lastCompleteCheckpointRevision validate; resumeFormId is on the entity-specific server/local-authoritative allowlist; corrupt incomplete tail is excluded.",
+    "qa": "QA-WORKFLOW-UI-CMD-LOCAL-CHECKPOINT-RESTORE",
+    "reconnect": "Same restore command returns the same receipt and destination; a corrupt or missing checkpoint exposes only a diagnostic and role-safe local return.",
+    "title": "Восстановить последний целый локальный checkpoint"
+  },
+  {
+    "atomicity": "Append one local metadata revision without changing stats, skills, symbionts, inventory, random provenance, candidate snapshots or campaign copies.",
+    "commandId": "UI-CMD-CHAR-LOCAL-METADATA-PATCH",
+    "formIds": [
+      "CHR-040"
+    ],
+    "guards": "Local owner controls the final sheet; only name, description and art asset fields differ; mechanics checksum, creation receipts and final snapshot remain identical; metadata revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHAR-LOCAL-METADATA-PATCH",
+    "reconnect": "Same command returns the same metadata version; stale revision changes nothing.",
+    "title": "Версионно изменить локальные метаданные финального персонажа"
+  },
+  {
+    "atomicity": "Persist one immutable proposed profile, validation proof/receipt and PENDING_GM request without creating/equipping a weapon or changing another draft stage.",
+    "commandId": "UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT",
+    "formIds": [
+      "CHR-023"
+    ],
+    "guards": "Owned unfinished character draft; weapon type/variant allowed; one common L/Lw/Ls witness makes every requested output reachable; independent manufacturing dice and draft revision fixed; no prior request receipt.",
+    "qa": "QA-WORKFLOW-UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT",
+    "reconnect": "Same request/command restores the identical profile and receipt; changed witness/dice/profile is rejected and never creates a second request.",
+    "title": "Отправить валидированную заявку оружия игрока"
+  },
+  {
+    "atomicity": "Spend exact XP, lock the chosen exclusive branch when applicable, learn one node and recalculate level/maxOE together; no partial spend or second node.",
+    "commandId": "UI-CMD-SYMBIONT-NODE-PURCHASE",
+    "formIds": [
+      "PLY-008"
+    ],
+    "guards": "Owned xpEligible symbiont; exact nodeRef not learned; prerequisites and AND/OR/XOR branch valid; enough XP; tree/state revisions current.",
+    "qa": "QA-WORKFLOW-UI-CMD-SYMBIONT-NODE-PURCHASE",
+    "reconnect": "Same command returns the prior node/XP/branch receipt; stale tree or replay never spends twice.",
+    "title": "Купить один узел развития симбионта"
+  },
+  {
+    "atomicity": "In one transaction subtract exactly amount from unallocated XP and add exactly amount×allocationXpMultiplier to one symbiont. Apply the race multiplier once and persist debit, credited XP, multiplier and resulting balances in one receipt.",
+    "commandId": "UI-CMD-SYMBIONT-XP-ALLOCATE",
+    "formIds": [
+      "PLY-010"
+    ],
+    "guards": "Owned character and xpEligible symbiont; integer amount 1..unallocatedXpBefore; allocationXpMultiplier is server-derived from the current owner race snapshot (FREE=2, every other race=1); GM_DIRECT source is not converted through this balance; state revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-SYMBIONT-XP-ALLOCATE",
+    "reconnect": "Same command returns the prior debit/multiplier/credit receipt; stale race, balance or changed amount writes nothing and replay never applies ×2 twice.",
+    "title": "Распределить нераспределённый XP симбионту"
+  },
+  {
+    "atomicity": "Consume the exact slot/source and append one skill learn/upgrade receipt together; no illegal prerequisite bypass or partial slot spend.",
+    "commandId": "UI-CMD-SKILL-LEARN",
+    "formIds": [
+      "PLY-022"
+    ],
+    "guards": "Skill/sourcePool allowed; requirements and slot source valid at skill-stage/current state; targetBonus is exactly next legal value and below absolute cap; revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-SKILL-LEARN",
+    "reconnect": "Same command returns the prior skill/slot receipt; stale requirements or replay never upgrades twice.",
+    "title": "Изучить или повысить один навык"
+  },
+  {
+    "atomicity": "Persist one seed, chosen percent, immutable generated composition, preview receipt/hash and constraints; create no runtime actor or template write.",
+    "commandId": "UI-CMD-ENEMY-GROUP-GENERATE-PREVIEW",
+    "formIds": [
+      "ENM-024"
+    ],
+    "guards": "GM authority; stable eligible partyGroupSnapshot and allowedOrigins; generator status NOT_GENERATED; 80..150 percent and caps valid; combat draft revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-ENEMY-GROUP-GENERATE-PREVIEW",
+    "reconnect": "Same command restores the exact seed/composition/hash; replay cannot reroll.",
+    "title": "Однократно сгенерировать preview группы противников"
+  },
+  {
+    "atomicity": "Deep-clone every accepted generated row into independent runtime UUIDs and attach all to the combat draft, or create none; templates remain unchanged.",
+    "commandId": "UI-CMD-ENEMY-GROUP-GENERATE-ACCEPT",
+    "formIds": [
+      "ENM-026"
+    ],
+    "guards": "GM authority; decision=ACCEPT; preview receipt/hash and party snapshot current; all generated rows still allowed; combat draft current; no prior acceptance.",
+    "qa": "QA-WORKFLOW-UI-CMD-ENEMY-GROUP-GENERATE-ACCEPT",
+    "reconnect": "Same command returns the same runtime UUID set; changed preview/hash is rejected before clone.",
+    "title": "Принять сгенерированную группу противников"
+  },
+  {
+    "atomicity": "Move exact ammo and spend full reload action cost in one transaction, updating weapon/source stack and availableActions together; otherwise move/spend none.",
+    "commandId": "UI-CMD-COMBAT-RELOAD",
+    "formIds": [
+      "CMB-069"
+    ],
+    "guards": "Effective controller owns active actor; OP-RELOAD is in fresh availableActions; exact weapon/magazine/ammo compatible; source quantity and full action budget sufficient; revisions current.",
+    "qa": "QA-WORKFLOW-UI-CMD-COMBAT-RELOAD",
+    "reconnect": "Same command returns prior ammo/action receipt; stale inventory or budget changes nothing.",
+    "title": "Атомарно перезарядить оружие"
+  },
+  {
+    "atomicity": "Remove the world instance and add the same item instance/quantity to actor inventory while spending the exact action cost, all or none.",
+    "commandId": "UI-CMD-RUNTIME-ITEM-PICKUP",
+    "formIds": [
+      "CMB-072"
+    ],
+    "guards": "operationKind=PICKUP; effective controller owns actor; item visible, available and adjacent at exact scenePoint; capacity/action cost and revisions valid; OP-PICKUP available.",
+    "qa": "QA-WORKFLOW-UI-CMD-RUNTIME-ITEM-PICKUP",
+    "reconnect": "Same command restores the ownership receipt; item cannot be picked up twice or from a stale point.",
+    "title": "Подобрать соседний runtime-предмет"
+  },
+  {
+    "atomicity": "Remove the world instance and restore the exact item instance/quantity to its original thrower once without template mutation or duplication.",
+    "commandId": "UI-CMD-RUNTIME-ITEM-RETURN",
+    "formIds": [
+      "CMB-072"
+    ],
+    "guards": "operationKind=RETURN; committed eligible player-victory result; runtime item remains unpicked and returnable; originalThrowerId/inventory/capacity current; no prior return.",
+    "qa": "QA-WORKFLOW-UI-CMD-RUNTIME-ITEM-RETURN",
+    "reconnect": "Same command returns prior return receipt; picked, ineligible or already returned item changes nothing.",
+    "title": "Вернуть неподыбранный брошенный предмет метателю"
+  },
+  {
+    "atomicity": "Resolve one request and create one unequipped WeaponProfileVersion in the campaign copy. APPROVE preserves validated profile; override persists typed diff/reason. No source local-sheet mutation.",
+    "commandId": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
+    "formIds": [
+      "GM-019"
+    ],
+    "guards": "GM authority; mode=REQUEST_REVIEW; exact PENDING request and OP-REQ-VALIDATE receipt; common L/Lw/Ls witness/profile current; decision APPROVE or MASTER_OVERRIDE; override is structurally allowed and has reason.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
+    "reconnect": "Same request/command returns the prior version/decision receipt; opposite or changed payload is rejected.",
+    "title": "Утвердить или типизированно переопределить оружейную заявку"
+  },
+  {
+    "atomicity": "Create the wound if needed and its one per-wound bleeding instance with source/damage together; append audit; never encode death as removable effect.",
+    "commandId": "UI-CMD-GM-BLEEDING-APPLY",
+    "formIds": [
+      "GM-032"
+    ],
+    "guards": "GM authority; target/region/source valid; exact existing or newly prepared woundInstanceId; positive damagePerTick; EFF-WOUND-BLEEDING schema/stack and state revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-BLEEDING-APPLY",
+    "reconnect": "Same command returns prior wound/bleeding receipt; stale/replay never creates a second instance or tick.",
+    "title": "Создать рану и применить кровотечение"
+  },
+  {
+    "atomicity": "Create burning or merge by maximum remaining duration and maximum damagePerTick, with no immediate extra tick; append one audit receipt.",
+    "commandId": "UI-CMD-GM-BURNING-APPLY",
+    "formIds": [
+      "GM-033"
+    ],
+    "guards": "GM authority; target, positive duration/damage and source valid; EFF-FIRE-BURNING schema and state revision current.",
+    "qa": "QA-WORKFLOW-UI-CMD-GM-BURNING-APPLY",
+    "reconnect": "Same command returns prior merged values; stale/replay never adds a tick or extends twice.",
+    "title": "Применить или усилить горение"
+  },
+  {
+    "atomicity": "Append exactly one house-rule version with conflictId, short text, scene scope, reason, author and timestamp; increment version once and create one clarification receipt. Existing versions are immutable and no gameplay delta occurs in this commit.",
+    "commandId": "UI-CMD-LAST-CLARITY-SAVE",
+    "formIds": [
+      "GM-038"
+    ],
+    "guards": "Confirmed sole GM authority; exact campaign/conflict and sceneScope; shortRuleText and reason present; beforeRoll=true and no linked roll receipt exists; houseRuleVersionBefore and state/master revisions current; payload contains no action, target, resource, effect, die or free mechanical field.",
+    "qa": "QA-WORKFLOW-UI-CMD-LAST-CLARITY-SAVE",
+    "reconnect": "Same commandId returns the identical version/receipt; stale version, post-roll submission or changed payload writes nothing and cannot replace an earlier version.",
+    "title": "Сохранить версионированное уточнение Last clarity"
+  },
+  {
+    "atomicity": "Re-read both currentOE values immediately before one outcome. GREATER: subtract victim currentOE, destroy that victim and occupy its slot. LOWER: destroy Guardian and subtract its pre-battle currentOE from the winner. EQUAL: change no OE, expel Guardian to target coordinates and block another capture this turn. Never choose a hidden/random victim.",
+    "commandId": "UI-CMD-GUARDIAN-BODY-CAPTURE",
+    "formIds": [
+      "PLY-033"
+    ],
+    "guards": "Owned Guardian is OUTSIDE_BODY; target is a voluntary, unconscious or fully immobilized United/Free body with at least one symbiont; selected victim belongs to the complete disclosed target list; one action, target position and revisions are current; same-turn tie retry is absent.",
+    "qa": "QA-WORKFLOW-UI-CMD-GUARDIAN-BODY-CAPTURE",
+    "reconnect": "Same commandId returns the identical comparison and outcome receipt; a changed victim, target or revision is rejected before action/OE/body mutation.",
+    "title": "Разрешить захват выбранного тела Хранителем"
+  },
+  {
+    "atomicity": "PAUSE preserves every participant and reservation. RESOLVE_ONE applies the strict currentOE result once: win deletes the victim, spends its OE and reserves one random fitting absent saved species without duplication; loss destroys Guardian; tie changes no OE and pauses. The player may leave any unselected resident symbiont.",
+    "commandId": "UI-CMD-GUARDIAN-COMPANION-RESOLVE",
+    "formIds": [
+      "PLY-033"
+    ],
+    "guards": "First slot was won in a United host; configuration is not FINALIZED; decision=RESOLVE_ONE|PAUSE; for RESOLVE_ONE the player selected one remaining resident symbiont and both currentOE values plus capacity/template set are current.",
+    "qa": "QA-WORKFLOW-UI-CMD-GUARDIAN-COMPANION-RESOLVE",
+    "reconnect": "Each duel/decision ID restores the same result, random saved-species reservation and pause state; replay never repeats deletion, OE spend or selection.",
+    "title": "Разрешить либо приостановить следующий бой Попутчиков"
+  },
+  {
+    "atomicity": "Keep selected survivors and current reservations, irreversibly discard every unrecovered saved template, close the automatic duel sequence and persist one final configuration receipt. A Free host has no sequence and loses companion genetic material by rule.",
+    "commandId": "UI-CMD-GUARDIAN-COMPANION-FINALIZE",
+    "formIds": [
+      "PLY-033"
+    ],
+    "guards": "Guardian owns the captured United host; companion sequence is ACTIVE or PAUSED; full survivors, growing reservations, free capacity and unrecovered saved templates are displayed; explicit irreversible confirmation and current revision present.",
+    "qa": "QA-WORKFLOW-UI-CMD-GUARDIAN-COMPANION-FINALIZE",
+    "reconnect": "Same finalization returns the prior receipt; after commit no duel or discarded-template restoration CTA can reappear.",
+    "title": "Необратимо подтвердить финальную конфигурацию Попутчиков"
+  },
+  {
+    "atomicity": "Mark the selected assistant infections destroyed together without action/OE cost. Do not remove a separate plague disease and do not undo an already fully resolved effect; invalidate only still-pending assistant-dependent resolutions according to their normal guard.",
+    "commandId": "UI-CMD-PLAGUE-ASSISTANTS-DESTROY",
+    "formIds": [
+      "PLY-035"
+    ],
+    "guards": "Player owns this PLAGUE_DOCTOR instance; every selected infection is ACTIVE and was created by this exact Doctor; selection and infectedRegistryRevision current; command may occur free/out-of-turn, including after another action declaration but before its resolution.",
+    "qa": "QA-WORKFLOW-UI-CMD-PLAGUE-ASSISTANTS-DESTROY",
+    "reconnect": "Same commandId returns the identical destroyed set and receipt; stale or foreign infection IDs change nothing.",
+    "title": "Добровольно уничтожить выбранных ассистентов Чумного доктора"
+  },
+  {
+    "atomicity": "Persist the three interval values, their three cumulative sums and a locked GM-only receipt together; player projections expose only devouredCount and opened slots, never intervals, thresholds or distance to next threshold.",
+    "commandId": "UI-CMD-CHIMERA-THRESHOLDS-SET",
+    "formIds": [
+      "GM-039"
+    ],
+    "guards": "Confirmed GM authority; exact CHIMERA instance; exactly three independently entered integers 10..22; threshold configuration UNSET; current authority/state revision.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHIMERA-THRESHOLDS-SET",
+    "reconnect": "Same commandId returns the locked configuration; changed payload or later edit is rejected without replacing values.",
+    "title": "Зафиксировать три скрытых интервала Химеры"
+  },
+  {
+    "atomicity": "Append one EXTERNAL history event, increment devouredCount once and open at most the newly crossed hidden slots in one transaction. Ordinary app-run completions are rejected from this command and are recorded automatically by OP-CHIMERA-DEVOUR.",
+    "commandId": "UI-CMD-CHIMERA-EXTERNAL-DEVOURING-RECORD",
+    "formIds": [
+      "GM-039"
+    ],
+    "guards": "Confirmed GM authority; thresholds locked; event happened outside the application or before import; unique externalEventId, occurredAt, target reference, provenance and completion evidence valid; no app-runtime receipt or prior event match.",
+    "qa": "QA-WORKFLOW-UI-CMD-CHIMERA-EXTERNAL-DEVOURING-RECORD",
+    "reconnect": "Same externalEventId/payload returns the prior receipt; duplicate, changed or app-runtime events never increment count or slots.",
+    "title": "Зафиксировать внешнее завершённое Пожирание Химеры"
+  }
+]
