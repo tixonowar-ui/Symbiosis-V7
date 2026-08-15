@@ -1,0 +1,1420 @@
+[
+  {
+    "contractId": "platform",
+    "value": {
+      "delivery": "desktop-first local web application served over HTTP by a bundled local server; file:// is unsupported",
+      "sharedState": "The host local server is authoritative for campaign, battle, clock, seats and shared runtime state; browser clients are projections.",
+      "soundtrack": "Soundtrack files are supplied outside this work; Track_ID routing, synchronization, local volume and silent fallback remain mandatory.",
+      "storage": "Local durable data with explicit schema/baseline version, checksum, migration gate, checkpoints and immutable campaign archive.",
+      "transport": "HTTP for shell/assets/snapshots and WebSocket for revisions, prompts, handoffs and reconnect-aware events."
+    }
+  },
+  {
+    "contractId": "sourcePriority",
+    "value": [
+      "1. Direct requirements of the atlas prompt and later author decisions, only where they do not contradict senior baseline artifacts.",
+      "2. Delivery Manifest v1.2 for line composition, compatibility and frozen-artifact boundaries.",
+      "3. The relevant senior domain registry: Executable Rules, Character/Skills/Symbionts, Items, Effects/Diseases, Bestiary or Default Sentient Enemy Registry.",
+      "4. The relevant implementation specification: Soundtrack Registry for music and this cleaned atlas for UI.",
+      "5. All Questions and Answers Registry only when the decision is not already materialized in a senior registry.",
+      "6. Frozen runtime pack only for exact system templates and art, never for new rules.",
+      "7. Cross-Registry Audit as consistency evidence, not an independent mechanics source.",
+      "8. Symbiosis_V7_print_final only as a lower-priority narrative/visual aid; it cannot override any development artifact or revive excluded automation."
+    ]
+  },
+  {
+    "contractId": "availableActions",
+    "value": {
+      "commitBoundary": "Immediately before the first state write, recompute guards using the signed action envelope. Reject stale/direct-invalid requests before any reserve, roll, dose, XP, item or action spend.",
+      "exceptionBanners": "Rule banners are only a race-condition/direct-request safety net and explain the human rule without internal codes; they are not the normal menu filter.",
+      "inputs": [
+        "actorId",
+        "effectiveController",
+        "controllerSeat",
+        "projectionRole",
+        "scene",
+        "phase",
+        "turnOrReactionWindow",
+        "stateRevision",
+        "projectionRevision",
+        "actorVisibilityRevision",
+        "HP/OE/effects/position/range",
+        "inventory/equipment/ammo/cooldowns",
+        "consent/masterPredicate state",
+        "game time/local context"
+      ],
+      "invalidation": "Recalculate after every confirmed resource, HP, OE, effect, position, visibility, inventory, equipment, ammo, cooldown, turn, phase, controller, consent, predicate, clock or campaign-state change.",
+      "negativeSpace": "Forbidden or unavailable player/effective-controller commands, targets and parameter values do not exist in the network projection, DOM, accessibility tree, hotkeys or client cache. Read-only catalogs remain separate.",
+      "outputChannels": [
+        "selectableActions",
+        "eligibleTargetsByAction",
+        "parameterDomains",
+        "pendingConsentOrPredicate",
+        "mandatoryChoices",
+        "reactions",
+        "forcedSystemTriggers",
+        "gmAdministrativeActionsSeparate"
+      ]
+    }
+  },
+  {
+    "contractId": "authorityPrivacy",
+    "value": {
+      "handoff": "Every in-session player↔player, player↔GM and forced local-owner switch uses PLY-030; prior projection is erased before target acknowledgement. The sole exception is APP-002/APP-011→APP-001 at a launch shell with no active campaign/host/player projection, no pending command or authority handoff, after the entire prior role DOM/a11y/hotkey/cache namespace is disposed.",
+      "hostDevice": "GM context plus 0–3 admitted local player seats; local-player bootstrap is provisional until normal admission completes.",
+      "master": "Exactly one active master authority; the GM tab exists only on the host computer.",
+      "ordinaryDevice": "Exactly 0–3 admitted local player seats and never a GM tab or GM projection."
+    }
+  },
+  {
+    "contractId": "atomicityReconnect",
+    "value": {
+      "commandIds": "Mutation commands and one-shot generators use stable IDs. Same ID/same payload returns the previous receipt; same ID/different payload rejects.",
+      "offline": "No shared mutation is accepted offline. Reconnect restores server-confirmed seat, observer projection, initiative, timers and pending context.",
+      "randomness": "Random seed/result and roll mode snapshot are persisted before dependent resolution and never regenerated on reconnect."
+    }
+  },
+  {
+    "contractId": "accessibility",
+    "value": {
+      "reducedMotion": "All animations have a static/opacity alternative that preserves result visibility and mandatory timing without flashing or camera motion.",
+      "standard": "WCAG AA contrast, keyboard completion, logical focus, screen-reader announcements and no information encoded by color alone."
+    }
+  },
+  {
+    "contractId": "directAuthorDecisions2026-08-01",
+    "value": {
+      "chimeraCompletionOwnership": "App-run completed Devouring is recorded automatically and atomically; GM confirms only external or earlier events with deduplication.",
+      "conditionalScreens": "PLY-033, PLY-034 and PLY-035 exist in a player projection only while the corresponding campaign-bound KEEPER, CHIMERA or PLAGUE_DOCTOR ownership guard is true.",
+      "guardianTargetVisibility": "For the exact selected eligible capture body, the Guardian player sees every resident symbiont's species name, level and current OE; Q-SYM-092's former hidden/random-victim branch is superseded.",
+      "peaceWorldMap": "PLY-001 → MAP-005 and MAP-006/MAP-007 already provide the player's observer-safe own location or explicit unknown state; this contour is retained unchanged.",
+      "plagueDoctorMonitor": "For each infection of this Doctor: seven characteristics, known identity, alive, available, offMap and currentHP; no coordinates or unrelated hidden data."
+    }
+  },
+  {
+    "contractId": "soundtrackSourceContract",
+    "value": {
+      "eventIds": [
+        "EV-01",
+        "EV-02",
+        "EV-03",
+        "EV-04",
+        "EV-05",
+        "EV-06",
+        "EV-07",
+        "EV-08",
+        "EV-09",
+        "EV-10",
+        "EV-11",
+        "EV-12"
+      ],
+      "events": [
+        {
+          "condition": "No active campaign scene",
+          "event": "Open pre-campaign menu",
+          "eventId": "EV-01",
+          "requiredAction": "Activate POOL_MENU; preserve current menu track across menu screens."
+        },
+        {
+          "condition": "Eligible group exists",
+          "event": "Start/load campaign",
+          "eventId": "EV-02",
+          "requiredAction": "Resolve determining group, phase and zone; apply focus activation entry rules."
+        },
+        {
+          "condition": "Marker enters a new zone",
+          "event": "Place/move determining marker",
+          "eventId": "EV-03",
+          "requiredAction": "Re-resolve context. Settlement/location entry opener may force a switch."
+        },
+        {
+          "condition": "Effective pool unchanged",
+          "event": "Move within same zone",
+          "eventId": "EV-04",
+          "requiredAction": "Continue current track."
+        },
+        {
+          "condition": "Largest group may change",
+          "event": "Change group membership",
+          "eventId": "EV-05",
+          "requiredAction": "Recalculate headcount and determining group."
+        },
+        {
+          "condition": "Group count tie possible",
+          "event": "Create another group",
+          "eventId": "EV-06",
+          "requiredAction": "Use largest headcount; tie uses earlier creationSequence."
+        },
+        {
+          "condition": "At least one active battle",
+          "event": "Start battle",
+          "eventId": "EV-07",
+          "requiredAction": "Immediately activate determining battle music; night is ignored."
+        },
+        {
+          "condition": "No active battles remain",
+          "event": "End battle",
+          "eventId": "EV-08",
+          "requiredAction": "Re-evaluate current ambient context; no automatic city-entry replay."
+        },
+        {
+          "condition": "No battle",
+          "event": "Clock reaches 21:00",
+          "eventId": "EV-09",
+          "requiredAction": "Activate night context; only night-eligible tracks."
+        },
+        {
+          "condition": "No battle",
+          "event": "Clock reaches 06:00",
+          "eventId": "EV-10",
+          "requiredAction": "Activate day context; only day-eligible tracks."
+        },
+        {
+          "condition": "Context unchanged",
+          "event": "Track ends",
+          "eventId": "EV-11",
+          "requiredAction": "Take next item from effective shuffle bag."
+        },
+        {
+          "condition": "Master reachable",
+          "event": "Reconnect client",
+          "eventId": "EV-12",
+          "requiredAction": "Apply master track/offset/pool state; preserve local mute/volume."
+        }
+      ],
+      "locationIds": [
+        "CITY_FREE_SIRRINH",
+        "CITY_FREE_BRANTA",
+        "CITY_FREE_INSHANOST",
+        "CITY_FREE_NELES",
+        "CITY_FREE_KISHKA",
+        "CITY_FREE_DANMUR",
+        "CITY_FREE_URAHANTA",
+        "CITY_FREE_ASGANA",
+        "CITY_FREE_CHADO",
+        "CITY_FREE_JASMEBERG",
+        "CITY_FREE_KERIGATE",
+        "CITY_UNITED_BREABLEGO",
+        "CITY_UNITED_STRORA",
+        "CITY_UNITED_GRAGOS",
+        "CITY_UNITED_AGREMOND",
+        "CITY_UNITED_SADENA",
+        "CITY_UNITED_YOSHIGAN",
+        "CITY_UNITED_HEYDERON",
+        "CITY_UNITED_BRUL",
+        "CITY_UNITED_OGRANTA",
+        "CITY_PURE_NEIT",
+        "CITY_PURE_KENSI",
+        "CITY_PURE_CESMOR",
+        "CITY_PURE_KASTELCROSS",
+        "CITY_PURE_GLENHEIM",
+        "CITY_PURE_KORNADORA",
+        "CITY_PURE_BLARADE",
+        "CITY_PURE_ERIVEL",
+        "CITY_PURE_AINZBERN",
+        "CITY_PURE_ESTREFORD",
+        "GARRISON_FREE_NW",
+        "GARRISON_FREE_CENTRAL",
+        "GARRISON_FREE_SW"
+      ],
+      "locations": [
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Сирринх",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_SIRRINH",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_NORTH",
+          "type": "CITY",
+          "u": 0.331,
+          "v": 0.07
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Бранта",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_BRANTA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_NORTH",
+          "type": "CITY",
+          "u": 0.289,
+          "v": 0.136
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-017"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Иншаност",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_INSHANOST",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_NORTH",
+          "type": "CITY",
+          "u": 0.236,
+          "v": 0.235
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-018"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Нелес",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_NELES",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_NORTH",
+          "type": "CITY",
+          "u": 0.14,
+          "v": 0.278
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Кишка",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_KISHKA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_NORTH",
+          "type": "CITY",
+          "u": 0.331,
+          "v": 0.262
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Данмур",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_DANMUR",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_NORTH",
+          "type": "CITY",
+          "u": 0.224,
+          "v": 0.335
+        },
+        {
+          "dayEntryMode": "RANDOM_LOCAL_TRACKS",
+          "dayEntryTrackIds": [
+            "MUS-020",
+            "MUS-014"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Ураханта",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_URAHANTA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_SOUTH",
+          "type": "CITY",
+          "u": 0.059,
+          "v": 0.46
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-013"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Асгана",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_ASGANA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_SOUTH",
+          "type": "CITY",
+          "u": 0.059,
+          "v": 0.561
+        },
+        {
+          "dayEntryMode": "RANDOM_LOCAL_TRACKS",
+          "dayEntryTrackIds": [
+            "MUS-021",
+            "MUS-012"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Чэдо",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_CHADO",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_SOUTH",
+          "type": "CITY",
+          "u": 0.23,
+          "v": 0.6
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-016"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Джасмеберг",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_JASMEBERG",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_SOUTH",
+          "type": "CITY",
+          "u": 0.154,
+          "v": 0.691
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Керигейт",
+          "faction": "FREE",
+          "locationId": "CITY_FREE_KERIGATE",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "radiusUv": 0.018,
+          "subregion": "FREE_SOUTH",
+          "type": "CITY",
+          "u": 0.19,
+          "v": 0.814
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-024"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Бреаблего",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_BREABLEGO",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_NORTH",
+          "type": "CITY",
+          "u": 0.434,
+          "v": 0.084
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-030"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Строра",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_STRORA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_NORTH",
+          "type": "CITY",
+          "u": 0.548,
+          "v": 0.043
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-026"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Грагос",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_GRAGOS",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_NORTH",
+          "type": "CITY",
+          "u": 0.543,
+          "v": 0.112
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-023"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Агремонд",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_AGREMOND",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_NORTH",
+          "type": "CITY",
+          "u": 0.678,
+          "v": 0.128
+        },
+        {
+          "dayEntryMode": "RANDOM_LOCAL_TRACKS",
+          "dayEntryTrackIds": [
+            "MUS-029",
+            "MUS-032"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Садена",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_SADENA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_NORTH",
+          "type": "CITY",
+          "u": 0.615,
+          "v": 0.173
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-027"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Йошиган",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_YOSHIGAN",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_NORTH",
+          "type": "CITY",
+          "u": 0.735,
+          "v": 0.206
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-031"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Хэйдерон",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_HEYDERON",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_GENERAL",
+          "type": "CITY",
+          "u": 0.756,
+          "v": 0.32
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-025"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Брул",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_BRUL",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_GENERAL",
+          "type": "CITY",
+          "u": 0.605,
+          "v": 0.358
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-028"
+          ],
+          "dayPoolId": "POOL_UNITED_CITY_DAY",
+          "displayName": "Огранта",
+          "faction": "UNITED",
+          "locationId": "CITY_UNITED_OGRANTA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_UNITED_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "UNITED_GENERAL",
+          "type": "CITY",
+          "u": 0.477,
+          "v": 0.449
+        },
+        {
+          "dayEntryMode": "RANDOM_FROM_POOL",
+          "dayEntryTrackIds": [],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Нэйт",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_NEIT",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.442,
+          "v": 0.64
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-037"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Кенси",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_KENSI",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.588,
+          "v": 0.692
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-040"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Цесмор",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_CESMOR",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.734,
+          "v": 0.684
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-036"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Кастелькросс",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_KASTELCROSS",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.804,
+          "v": 0.736
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-035"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Гленхейм",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_GLENHEIM",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.64,
+          "v": 0.76
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-038"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Корнадора",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_KORNADORA",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.529,
+          "v": 0.755
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-034"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Бларадэ",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_BLARADE",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.439,
+          "v": 0.772
+        },
+        {
+          "dayEntryMode": "RANDOM_FROM_POOL",
+          "dayEntryTrackIds": [],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Эривел",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_ERIVEL",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.434,
+          "v": 0.876
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-033"
+          ],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Айнцберн",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_AINZBERN",
+          "nightEntryMode": "FIXED_TRACK",
+          "nightEntryTrackIds": [
+            "MUS-062"
+          ],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.682,
+          "v": 0.883
+        },
+        {
+          "dayEntryMode": "RANDOM_FROM_POOL",
+          "dayEntryTrackIds": [],
+          "dayPoolId": "POOL_PURE_CITY_DAY",
+          "displayName": "Эстрефорд",
+          "faction": "PURE",
+          "locationId": "CITY_PURE_ESTREFORD",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_PURE_CITY_NIGHT",
+          "radiusUv": 0.018,
+          "subregion": "PURE",
+          "type": "CITY",
+          "u": 0.355,
+          "v": 0.934
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Северо-западный гарнизон",
+          "faction": "FREE",
+          "locationId": "GARRISON_FREE_NW",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.012,
+          "subregion": "FREE_NORTH",
+          "type": "GARRISON",
+          "u": 0.4,
+          "v": 0.071
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Центральный гарнизон",
+          "faction": "FREE",
+          "locationId": "GARRISON_FREE_CENTRAL",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "radiusUv": 0.012,
+          "subregion": "FREE_NORTH",
+          "type": "GARRISON",
+          "u": 0.417,
+          "v": 0.429
+        },
+        {
+          "dayEntryMode": "FIXED_TRACK",
+          "dayEntryTrackIds": [
+            "MUS-015"
+          ],
+          "dayPoolId": "POOL_FREE_CITY_DAY",
+          "displayName": "Юго-западный гарнизон",
+          "faction": "FREE",
+          "locationId": "GARRISON_FREE_SW",
+          "nightEntryMode": "RANDOM_FROM_POOL",
+          "nightEntryTrackIds": [],
+          "nightPoolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "radiusUv": 0.012,
+          "subregion": "FREE_SOUTH",
+          "type": "GARRISON",
+          "u": 0.273,
+          "v": 0.885
+        }
+      ],
+      "parameterValues": {
+        "BOUNDARY_EPSILON_UV": 0.005,
+        "CITY_RADIUS_UV": 0.018,
+        "CROSSFADE_MS": 2000,
+        "DAY_START_HOUR": 6,
+        "GARRISON_RADIUS_UV": 0.012,
+        "GROUP_TIE_BREAK": "creationSequence ASC",
+        "NIGHT_START_HOUR": 21,
+        "NO_GROUP_POLICY": "SILENCE",
+        "ZONE_HYSTERESIS_UV": 0.01
+      },
+      "poolIds": [
+        "POOL_MENU",
+        "POOL_COMBAT_GENERAL",
+        "POOL_COMBAT_PURE_OPENERS",
+        "POOL_COMBAT_PURE_CONTINUATION",
+        "POOL_FREE_CITY_DAY",
+        "POOL_FREE_CITY_NIGHT_NORTH",
+        "POOL_FREE_CITY_NIGHT_SOUTH",
+        "POOL_UNITED_CITY_DAY",
+        "POOL_UNITED_CITY_NIGHT",
+        "POOL_PURE_CITY_DAY",
+        "POOL_PURE_CITY_NIGHT",
+        "POOL_FREE_OUTSIDE_DAY_NORTH",
+        "POOL_FREE_OUTSIDE_DAY_SOUTH",
+        "POOL_FREE_OUTSIDE_NIGHT_NORTH",
+        "POOL_FREE_OUTSIDE_NIGHT_SOUTH",
+        "POOL_UNITED_OUTSIDE_DAY_GENERAL",
+        "POOL_UNITED_OUTSIDE_DAY_NORTH",
+        "POOL_UNITED_OUTSIDE_NIGHT",
+        "POOL_PURE_OUTSIDE_DAY",
+        "POOL_PURE_OUTSIDE_NIGHT",
+        "POOL_NML_DAY",
+        "POOL_NML_COAST_ENTRY",
+        "POOL_NML_NIGHT",
+        "POOL_SEA_DAY",
+        "POOL_SEA_NIGHT_ENTRY",
+        "POOL_SEA_NIGHT_CONTINUATION"
+      ],
+      "pools": [
+        {
+          "context": "MENU",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "MENU",
+          "phase": "ANY",
+          "poolId": "POOL_MENU",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "N/A",
+          "trackIds": [
+            "MUS-008",
+            "MUS-009",
+            "MUS-010",
+            "MUS-011"
+          ]
+        },
+        {
+          "context": "BATTLE",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "BATTLE",
+          "phase": "ANY",
+          "poolId": "POOL_COMBAT_GENERAL",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "VARIABLE",
+          "trackIds": [
+            "MUS-002",
+            "MUS-005",
+            "MUS-006",
+            "MUS-007"
+          ]
+        },
+        {
+          "context": "BATTLE",
+          "initialRule": "Required first-track pool",
+          "locationMode": "BATTLE",
+          "phase": "ANY",
+          "poolId": "POOL_COMBAT_PURE_OPENERS",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "VARIABLE",
+          "trackIds": [
+            "MUS-003",
+            "MUS-004"
+          ]
+        },
+        {
+          "context": "BATTLE",
+          "initialRule": "Used after a Pure-specific opener",
+          "locationMode": "BATTLE",
+          "phase": "ANY",
+          "poolId": "POOL_COMBAT_PURE_CONTINUATION",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "VARIABLE",
+          "trackIds": [
+            "MUS-002",
+            "MUS-003",
+            "MUS-004",
+            "MUS-005",
+            "MUS-006",
+            "MUS-007"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Local entry rule; otherwise pool random",
+          "locationMode": "CITY_OR_GARRISON",
+          "phase": "DAY",
+          "poolId": "POOL_FREE_CITY_DAY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-012",
+            "MUS-013",
+            "MUS-014",
+            "MUS-015",
+            "MUS-016",
+            "MUS-017",
+            "MUS-018",
+            "MUS-020",
+            "MUS-021",
+            "MUS-022"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "CITY_OR_GARRISON",
+          "phase": "NIGHT",
+          "poolId": "POOL_FREE_CITY_NIGHT_NORTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-019",
+            "MUS-066",
+            "MUS-067",
+            "MUS-068",
+            "MUS-069",
+            "MUS-076"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "CITY_OR_GARRISON",
+          "phase": "NIGHT",
+          "poolId": "POOL_FREE_CITY_NIGHT_SOUTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-019",
+            "MUS-066",
+            "MUS-067",
+            "MUS-068",
+            "MUS-069"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Local entry rule",
+          "locationMode": "CITY",
+          "phase": "DAY",
+          "poolId": "POOL_UNITED_CITY_DAY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "UNITED",
+          "trackIds": [
+            "MUS-023",
+            "MUS-024",
+            "MUS-025",
+            "MUS-026",
+            "MUS-027",
+            "MUS-028",
+            "MUS-029",
+            "MUS-030",
+            "MUS-031",
+            "MUS-032"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "CITY",
+          "phase": "NIGHT",
+          "poolId": "POOL_UNITED_CITY_NIGHT",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "UNITED",
+          "trackIds": [
+            "MUS-070",
+            "MUS-071"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Local entry rule; random pool for cities without a named track",
+          "locationMode": "CITY",
+          "phase": "DAY",
+          "poolId": "POOL_PURE_CITY_DAY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "PURE",
+          "trackIds": [
+            "MUS-001",
+            "MUS-033",
+            "MUS-034",
+            "MUS-035",
+            "MUS-036",
+            "MUS-037",
+            "MUS-038",
+            "MUS-040"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Ainzbern local entry; otherwise pool random",
+          "locationMode": "CITY",
+          "phase": "NIGHT",
+          "poolId": "POOL_PURE_CITY_NIGHT",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "PURE",
+          "trackIds": [
+            "MUS-062",
+            "MUS-072",
+            "MUS-073"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_FREE_OUTSIDE_DAY_NORTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-080",
+            "MUS-087",
+            "MUS-088"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_FREE_OUTSIDE_DAY_SOUTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-080"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "NIGHT",
+          "poolId": "POOL_FREE_OUTSIDE_NIGHT_NORTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-061",
+            "MUS-078"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "NIGHT",
+          "poolId": "POOL_FREE_OUTSIDE_NIGHT_SOUTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "FREE",
+          "trackIds": [
+            "MUS-061",
+            "MUS-065",
+            "MUS-079"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_UNITED_OUTSIDE_DAY_GENERAL",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "UNITED",
+          "trackIds": [
+            "MUS-083",
+            "MUS-084",
+            "MUS-085"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_UNITED_OUTSIDE_DAY_NORTH",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "UNITED",
+          "trackIds": [
+            "MUS-083",
+            "MUS-084",
+            "MUS-085",
+            "MUS-089"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "NIGHT",
+          "poolId": "POOL_UNITED_OUTSIDE_NIGHT",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "UNITED",
+          "trackIds": [
+            "MUS-064",
+            "MUS-077"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_PURE_OUTSIDE_DAY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "PURE",
+          "trackIds": [
+            "MUS-039",
+            "MUS-041",
+            "MUS-081",
+            "MUS-082",
+            "MUS-086"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "NIGHT",
+          "poolId": "POOL_PURE_OUTSIDE_NIGHT",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "PURE",
+          "trackIds": [
+            "MUS-062",
+            "MUS-072",
+            "MUS-073"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_NML_DAY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "NO_MANS",
+          "trackIds": [
+            "MUS-049",
+            "MUS-050",
+            "MUS-051",
+            "MUS-052",
+            "MUS-053",
+            "MUS-054",
+            "MUS-056",
+            "MUS-057",
+            "MUS-060"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Required entry track",
+          "locationMode": "OUTSIDE",
+          "phase": "DAY",
+          "poolId": "POOL_NML_COAST_ENTRY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "NO_MANS",
+          "trackIds": [
+            "MUS-048"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "OUTSIDE",
+          "phase": "NIGHT",
+          "poolId": "POOL_NML_NIGHT",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "NO_MANS",
+          "trackIds": [
+            "MUS-055",
+            "MUS-058",
+            "MUS-059",
+            "MUS-063",
+            "MUS-074",
+            "MUS-075"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Random from shuffle bag",
+          "locationMode": "SEA",
+          "phase": "DAY",
+          "poolId": "POOL_SEA_DAY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "SEA",
+          "trackIds": [
+            "MUS-042",
+            "MUS-043",
+            "MUS-044",
+            "MUS-045",
+            "MUS-046"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Required entry track",
+          "locationMode": "SEA",
+          "phase": "NIGHT",
+          "poolId": "POOL_SEA_NIGHT_ENTRY",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "SEA",
+          "trackIds": [
+            "MUS-047"
+          ]
+        },
+        {
+          "context": "AMBIENT",
+          "initialRule": "Used after the night entry track",
+          "locationMode": "SEA",
+          "phase": "NIGHT",
+          "poolId": "POOL_SEA_NIGHT_CONTINUATION",
+          "randomization": "SHUFFLE_BAG",
+          "territory": "SEA",
+          "trackIds": [
+            "MUS-042",
+            "MUS-043",
+            "MUS-044",
+            "MUS-045",
+            "MUS-046"
+          ]
+        }
+      ],
+      "ruleIds": [
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-004",
+        "R-005",
+        "R-006",
+        "R-007",
+        "R-008",
+        "R-009",
+        "R-010",
+        "R-011",
+        "R-012",
+        "R-013",
+        "R-014",
+        "R-015",
+        "R-016",
+        "R-017",
+        "R-018",
+        "R-019",
+        "R-020",
+        "R-021",
+        "R-022",
+        "R-023",
+        "R-024",
+        "R-025"
+      ],
+      "rules": [
+        {
+          "area": "Source of truth",
+          "requirement": "The master's computer owns the active logical track, playback position, start timestamp, active pool and shuffle-bag state. Clients reproduce this state.",
+          "ruleId": "R-001"
+        },
+        {
+          "area": "Priority",
+          "requirement": "BATTLE > NIGHT AMBIENT > DAY AMBIENT. Menu music applies only on pre-campaign menu flows.",
+          "ruleId": "R-002"
+        },
+        {
+          "area": "Determining battle",
+          "requirement": "Any active battle globally enables battle music. If several battles exist, use the battle involving the largest eligible group; ties use the older group.",
+          "ruleId": "R-003"
+        },
+        {
+          "area": "Determining group",
+          "requirement": "Outside battle, use the location of the eligible group with the greatest headcount. Ties use immutable creationSequence ascending.",
+          "ruleId": "R-004"
+        },
+        {
+          "area": "Headcount",
+          "requirement": "Count living active player characters and allied NPCs explicitly included in the group. Exclude enemies, dead characters and removed/inactive members.",
+          "ruleId": "R-005"
+        },
+        {
+          "area": "Location precedence",
+          "requirement": "City/garrison circle > No-Man's coastal overlay > No-Man's polygon > faction territory > Sea. Nэйт is always a Pure city override.",
+          "ruleId": "R-006"
+        },
+        {
+          "area": "Night interval",
+          "requirement": "Night is [21:00, 06:00). Day is [06:00, 21:00). Use campaign game time/dayPhase; master-set localLighting never changes the music phase.",
+          "ruleId": "R-007"
+        },
+        {
+          "area": "Context switch",
+          "requirement": "Switch immediately with a 2,000 ms crossfade when battle, dayPhase, determining group or spatial context changes. At exactly 21:00 outside battle, resolve the night pool.",
+          "ruleId": "R-008"
+        },
+        {
+          "area": "Same-pool stability",
+          "requirement": "Do not interrupt the current track when the effective pool remains unchanged, except for a required settlement/location entry opener.",
+          "ruleId": "R-009"
+        },
+        {
+          "area": "Settlement entry",
+          "requirement": "On every new entry, marker placement or focus activation in a settlement, apply its entry rule. Movement within the same settlement does not restart music; exit and re-entry does.",
+          "ruleId": "R-010"
+        },
+        {
+          "area": "Local alternatives",
+          "requirement": "Chado, Urahanta and Sadena choose randomly among their two local entry tracks. No separate Arena/Centre/Swamp sublocation field exists.",
+          "ruleId": "R-011"
+        },
+        {
+          "area": "Continuation",
+          "requirement": "After an opener ends, use the location's continuation pool. Named city tracks may then appear in other cities of the same faction.",
+          "ruleId": "R-012"
+        },
+        {
+          "area": "Shuffle bag",
+          "requirement": "Play every eligible track once before refilling the bag. Do not select the just-finished track when another option exists.",
+          "ruleId": "R-013"
+        },
+        {
+          "area": "Opener consumption",
+          "requirement": "If an opener also belongs to the continuation pool, mark it as consumed in the current bag to prevent immediate repetition.",
+          "ruleId": "R-014"
+        },
+        {
+          "area": "Pure combat",
+          "requirement": "If the determining battle includes at least one Pure participant, choose the first track from POOL_COMBAT_PURE_OPENERS, then use POOL_COMBAT_PURE_CONTINUATION.",
+          "ruleId": "R-015"
+        },
+        {
+          "area": "Combat exit",
+          "requirement": "On battle end, re-evaluate group, phase and zone. Resume a random eligible ambient track; do not replay a city opener unless a new entry/focus activation occurred.",
+          "ruleId": "R-016"
+        },
+        {
+          "area": "Sea at night",
+          "requirement": "On entering the Sea of Solitude at night, or when night begins at sea, play MUS-047 first, then POOL_SEA_NIGHT_CONTINUATION.",
+          "ruleId": "R-017"
+        },
+        {
+          "area": "No-Man's coast",
+          "requirement": "On daytime entry to NML_COASTAL, play MUS-048 first, then POOL_NML_DAY. Other No-Man's names do not imply extra map subzones.",
+          "ruleId": "R-018"
+        },
+        {
+          "area": "Garrisons",
+          "requirement": "All three red border garrisons are Free settlements and use the corresponding north/south Free city pools.",
+          "ruleId": "R-019"
+        },
+        {
+          "area": "Pure territory at night",
+          "requirement": "Outside Pure cities at night, use POOL_PURE_OUTSIDE_NIGHT, which reuses all Pure city-night tracks.",
+          "ruleId": "R-020"
+        },
+        {
+          "area": "Duplicate audio",
+          "requirement": "MUS-009 and MUS-041 have identical bytes. Keep two logical uses: menu and daytime Pure territory outside cities. Runtime asset deduplication is allowed.",
+          "ruleId": "R-021"
+        },
+        {
+          "area": "No groups",
+          "requirement": "If a campaign has no eligible group and no battle, fade to silence. Do not invent a map location.",
+          "ruleId": "R-022"
+        },
+        {
+          "area": "Persistence",
+          "requirement": "Persist active track, offset, pool, remaining shuffle bag and RNG state in the campaign save. Resume without reselecting on load.",
+          "ruleId": "R-023"
+        },
+        {
+          "area": "Disconnected client",
+          "requirement": "A disconnected client continues the last known track locally. On reconnect it accepts the master's state and resynchronizes with a crossfade/seek.",
+          "ruleId": "R-024"
+        },
+        {
+          "area": "Unavailable asset",
+          "requirement": "If a file is missing or fails the size/CRC integrity check, log the Track_ID and select the next eligible item. Never cross into another context pool.",
+          "ruleId": "R-025"
+        }
+      ],
+      "selectionSnapshot": {
+        "determiningBattle": "Largest eligible involved group headcount; ties use the older group.",
+        "determiningGroup": "Largest eligible headcount; ties use immutable creationSequence ascending.",
+        "eligibleHeadcount": "Living active PCs plus allied NPCs explicitly included; exclude enemies, dead and removed/inactive members.",
+        "locationPrecedence": "CITY_OR_GARRISON > NML_COASTAL > NML_POLYGON > FACTION_TERRITORY > SEA",
+        "persistence": "Persist active Track_ID, offset, pool, remaining shuffle bag and RNG state; reconnect resumes the host state without reselecting.",
+        "samePoolAndOpener": "Keep the current track when the pool is unchanged, except a required new-entry opener; consume an opener also present in its continuation bag."
+      },
+      "sourceFile": "Symbiosis_V7_Soundtrack_Playback_Registry_v1.1.xlsx"
+    }
+  }
+]

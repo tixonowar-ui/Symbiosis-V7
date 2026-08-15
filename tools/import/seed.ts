@@ -47,9 +47,9 @@ export const SKIPPED_INDEX_PATHS = [
 
 /** Input totals; source arrays count as data, while lookup projections stay skipped. */
 const EXPECTED = {
-  files: 126,
-  arrayFiles: 113,
-  rows: 20_641,
+  files: 127,
+  arrayFiles: 114,
+  rows: 20_649,
   metadataFiles: 8,
   skippedIndexes: 5,
 } as const;

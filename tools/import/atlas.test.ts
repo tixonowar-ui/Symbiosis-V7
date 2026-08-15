@@ -6,12 +6,27 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildRendererQueryIndexes, extractWorkflowCommands } from './atlas.js';
+import {
+  assertAtlasCounts,
+  auditAtlasSections,
+  buildRendererQueryIndexes,
+  extractGlobalContracts,
+  extractWorkflowCommands,
+} from './atlas.js';
 import type { JsonObject as ImportJsonObject } from './lib/json.js';
 import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
 
 const spec = (name: string): unknown =>
   JSON.parse(readFileSync(join(SPEC_DIR, 'atlas', name), 'utf8'));
+
+const atlasArtifact = JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as ImportJsonObject;
+
+const atlasObject = (value: unknown): ImportJsonObject => value as ImportJsonObject;
+
+const clonedAtlas = (): ImportJsonObject => structuredClone(atlasArtifact);
+
+const clonedGlobalContracts = (): ImportJsonObject =>
+  structuredClone(atlasObject(atlasArtifact['globalContracts']));
 
 type JsonObject = Record<string, unknown>;
 
@@ -184,6 +199,20 @@ describe('generated atlas spec', () => {
     }
   });
 
+  it('exports every global contract without changing its section contents', () => {
+    type GlobalContract = { contractId: string; value: unknown };
+    const source = atlasObject(atlasArtifact['globalContracts']);
+    const contracts = spec('global-contracts.json') as GlobalContract[];
+
+    expect(contracts).toHaveLength(Object.keys(source).length);
+    expect(contracts.every((row) => Object.keys(row).sort().join(',') === 'contractId,value')).toBe(
+      true,
+    );
+    expect(
+      Object.fromEntries(contracts.map(({ contractId, value }) => [contractId, value])),
+    ).toEqual(source);
+  });
+
   it('pins the atlas digests, so a swapped artifact is visible in the diff', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
@@ -212,6 +241,99 @@ describe('generated atlas spec', () => {
     expect(byDomain.get('Создание локального персонажа')).toBe(44);
     expect(byDomain.get('Настройки')).toBe(6);
     expect([...byDomain.values()].reduce((a, b) => a + b, 0)).toBe(376);
+  });
+});
+
+describe('atlas section coverage guards', () => {
+  it('rejects an unknown top-level section and names it', () => {
+    expect(() => auditAtlasSections({ ...atlasArtifact, futureSection: {} })).toThrow(
+      /unknown \["futureSection"\]/u,
+    );
+  });
+
+  it('rejects an unknown globalContracts subsection and names it', () => {
+    const root = clonedAtlas();
+    root['globalContracts'] = {
+      ...atlasObject(root['globalContracts']),
+      futureContract: {},
+    };
+    expect(() => auditAtlasSections(root)).toThrow(/globalContracts.*futureContract/u);
+  });
+
+  it('rejects an unknown registryCoverage subsection and names it', () => {
+    const root = clonedAtlas();
+    root['registryCoverage'] = {
+      ...atlasObject(root['registryCoverage']),
+      futureCoverage: [],
+    };
+    expect(() => auditAtlasSections(root)).toThrow(/registryCoverage.*futureCoverage/u);
+  });
+
+  it('rejects a missing section instead of treating it as an intentional skip', () => {
+    const root = clonedAtlas();
+    delete root['sourceRefs'];
+    expect(() => auditAtlasSections(root)).toThrow(/missing \["sourceRefs"\]/u);
+  });
+
+  it('uses atlas.counts for a registry subsection that is consciously not exported', () => {
+    const root = clonedAtlas();
+    const counts = atlasObject(root['counts']);
+    counts['activeRules'] = (counts['activeRules'] as number) + 1;
+    expect(() => assertAtlasCounts(root)).toThrow(/expected 700 activeRules, got 699/u);
+  });
+
+  it('rejects swapping a current and legacy form while preserving every count', () => {
+    const root = clonedAtlas();
+    const changeControl = atlasObject(root['changeControl']);
+    const legacyFormIds = structuredClone(changeControl['legacyFormIds']) as string[];
+    const newFormIds = structuredClone(changeControl['newFormIds']) as string[];
+    [legacyFormIds[0], newFormIds[0]] = [newFormIds[0]!, legacyFormIds[0]!];
+    changeControl['legacyFormIds'] = legacyFormIds;
+    changeControl['newFormIds'] = newFormIds;
+    expect(() => assertAtlasCounts(root)).toThrow(
+      /changeControl\.newFormIds classification mismatch/u,
+    );
+  });
+});
+
+describe('global contract export guards', () => {
+  it('rejects nested field drift', () => {
+    const contracts = clonedGlobalContracts();
+    contracts['platform'] = {
+      ...atlasObject(contracts['platform']),
+      futureField: 'drift',
+    };
+    expect(() => extractGlobalContracts(contracts)).toThrow(/platform has fields .*futureField/u);
+  });
+
+  it('rejects an empty required contract value', () => {
+    const contracts = clonedGlobalContracts();
+    contracts['platform'] = { ...atlasObject(contracts['platform']), delivery: ' ' };
+    expect(() => extractGlobalContracts(contracts)).toThrow(/platform.*delivery.*is empty/u);
+  });
+
+  it('rejects duplicate soundtrack identifiers', () => {
+    const contracts = clonedGlobalContracts();
+    const soundtrack = atlasObject(contracts['soundtrackSourceContract']);
+    const rules = structuredClone(soundtrack['rules']) as ImportJsonObject[];
+    rules[1] = { ...rules[1], ruleId: rules[0]!['ruleId']! };
+    soundtrack['rules'] = rules;
+    expect(() => extractGlobalContracts(contracts)).toThrow(/rules\.ruleId.*duplicates "R-001"/u);
+  });
+
+  it('requires soundtrack id lists to match their record catalogs', () => {
+    const contracts = clonedGlobalContracts();
+    const soundtrack = atlasObject(contracts['soundtrackSourceContract']);
+    const ruleIds = structuredClone(soundtrack['ruleIds']) as string[];
+    ruleIds[0] = 'R-999';
+    soundtrack['ruleIds'] = ruleIds;
+    expect(() => extractGlobalContracts(contracts)).toThrow(
+      /ruleIds differs from .*rules\[\]\.ruleId/u,
+    );
+  });
+
+  it('preserves intentionally empty soundtrack entry-track lists', () => {
+    expect(() => extractGlobalContracts(clonedGlobalContracts())).not.toThrow();
   });
 });
 
