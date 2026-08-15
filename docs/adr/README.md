@@ -57,6 +57,7 @@
 | [0023](0023-stat-modifier-source-key.md)                  | Источник модификатора характеристики | принято                                |
 | [0024](0024-stat-map-integer-values.md)                   | Целочисленные значения `StatMap`     | принято                                |
 | [0025](0025-character-draft-checkpoint-scope.md)          | Checkpoint черновика персонажа       | принято                                |
+| [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                |
 
 ## Перенос решений аудита
 
