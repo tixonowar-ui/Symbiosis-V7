@@ -23,8 +23,115 @@ import {
 import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
 
 const WHERE = 'atlas';
+const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
 const ATLAS_VERSION = '1.2';
+/** `counts.byOrigin` names the forms introduced by this pinned Atlas version. */
+const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
+
+type SectionVerdict = { readonly output: string } | { readonly reason: string };
+
+const output = (path: string): SectionVerdict => ({ output: path });
+const skip = (reason: string): SectionVerdict => ({ reason });
+
+/**
+ * Every top-level Atlas section has an import verdict. The values are kept next
+ * to the guard deliberately: adding a source section requires choosing an
+ * output or recording why it is not runtime data before the import can resume.
+ */
+const ATLAS_SECTION_VERDICTS = {
+  $schema: skip('File-schema identity; validated below instead of copied to runtime data.'),
+  schemaVersion: output('generated/spec/atlas/meta.json'),
+  atlasVersion: output('generated/spec/atlas/meta.json'),
+  title: skip('Descriptive artifact metadata; it does not identify a runtime contract.'),
+  language: skip('Artifact locale metadata; imported contract text remains verbatim.'),
+  releaseDate: skip('Artifact provenance metadata, not runtime data.'),
+  normativeStatus: output('generated/spec/atlas/meta.json'),
+  sourceRefs: skip(
+    'Artifact provenance is owned by the delivery manifest, checksums, and ADR 0003.',
+  ),
+  globalContracts: output('generated/spec/atlas/global-contracts.json'),
+  roles: output('generated/spec/atlas/meta.json and generated/types/atlas.ts'),
+  guardStates: output('generated/spec/atlas/meta.json and generated/types/atlas.ts'),
+  entityLifecycles: output('generated/spec/atlas/lifecycles.json and generated/types/atlas.ts'),
+  diagrams: output('generated/spec/atlas/diagrams.json'),
+  journeys: output('generated/spec/atlas/journeys.json and generated/types/atlas.ts'),
+  coverageRequirements: output(
+    'generated/spec/atlas/requirements.json, renderer/primary-actions-by-form-id.json, and generated/types/atlas.ts',
+  ),
+  forms: output(
+    'generated/spec/atlas/forms.json, forms-by-id.json, renderer/forms-by-id.json, and generated/types/atlas.ts',
+  ),
+  transitions: output(
+    'generated/spec/atlas/transitions.json, renderer/transitions-by-form-and-trigger.json, and generated/types/atlas.ts',
+  ),
+  qaScenarios: output('generated/spec/atlas/qa-scenarios.json and generated/types/atlas.ts'),
+  registryCoverage: output(
+    'generated/spec/atlas/workflow-commands.json; remaining subsection verdicts are below',
+  ),
+  changeControl: skip(
+    'Release-to-release provenance; its current/new totals are validation inputs, not runtime rows.',
+  ),
+  counts: output('generated/spec/atlas/meta.json'),
+  coverage: skip('Derived Atlas self-audit; consumed as an import gate, not runtime data.'),
+  graphDigest: output('generated/spec/atlas/meta.json'),
+  contentDigest: output('generated/spec/atlas/meta.json'),
+} as const satisfies Readonly<Record<string, SectionVerdict>>;
+
+const GLOBAL_CONTRACT_VERDICTS = {
+  platform: output('generated/spec/atlas/global-contracts.json'),
+  sourcePriority: output('generated/spec/atlas/global-contracts.json'),
+  availableActions: output('generated/spec/atlas/global-contracts.json'),
+  authorityPrivacy: output('generated/spec/atlas/global-contracts.json'),
+  atomicityReconnect: output('generated/spec/atlas/global-contracts.json'),
+  accessibility: output('generated/spec/atlas/global-contracts.json'),
+  'directAuthorDecisions2026-08-01': output('generated/spec/atlas/global-contracts.json'),
+  soundtrackSourceContract: output('generated/spec/atlas/global-contracts.json'),
+} as const satisfies Readonly<Record<string, SectionVerdict>>;
+
+/**
+ * These are mixed coverage/cross-reference projections, not senior-registry
+ * replacements. ADR 0003 keeps the referenced registries authoritative; a
+ * future export would first need an ADR defining the owned projection fields.
+ */
+const REGISTRY_COVERAGE_VERDICTS = {
+  gapReferencePolicy: skip(
+    'GAP provenance interpretation delegates normative behavior to the senior operation row.',
+  ),
+  activeRules: skip('Coverage projection over the senior Executable Rules registry.'),
+  tombstoneRules: skip('Coverage projection over senior rule tombstones.'),
+  operations: skip('Mixed senior-operation, form, handler, and QA cross-reference projection.'),
+  workflowCommands: output('generated/spec/atlas/workflow-commands.json'),
+  qna: skip('Mixed Q&A text and Atlas coverage projection; Q&A has its own importer.'),
+  abilities: skip('Mixed senior ability data and Atlas animation/form coverage.'),
+  modeledEffectTypes: skip('Mixed senior effect data and Atlas form/QA coverage.'),
+  excludedEffectTypes: skip('Mixed senior effect exclusion and Atlas form/QA coverage.'),
+  manualOnlyNodes: skip('Coverage classification without an executable runtime command.'),
+} as const satisfies Readonly<Record<string, SectionVerdict>>;
+
+const COUNT_FIELDS = [
+  'forms',
+  'legacyFormsPreserved',
+  'newForms',
+  'transitions',
+  'journeys',
+  'requirements',
+  'qaScenarios',
+  'activeRules',
+  'tombstoneRules',
+  'operations',
+  'workflowCommands',
+  'qnaRows',
+  'qnaUniqueIds',
+  'automatedAbilities',
+  'modeledEffectTypes',
+  'excludedEffectTypes',
+  'manualOnlyNodes',
+  'diagrams',
+  'byOrigin',
+  'byType',
+  'byDomain',
+] as const;
 
 /** Atlas domain → the `src/web/forms/` folder and form-ID prefix it maps to. */
 const DOMAIN_PREFIX: ReadonlyMap<string, string> = new Map([
@@ -71,6 +178,381 @@ const WORKFLOW_COMMAND_FIELDS = [
   'qa',
 ] as const;
 
+const SOUNDTRACK_CONTRACT_FIELDS = [
+  'sourceFile',
+  'ruleIds',
+  'rules',
+  'parameterValues',
+  'eventIds',
+  'events',
+  'poolIds',
+  'pools',
+  'locationIds',
+  'locations',
+  'selectionSnapshot',
+] as const;
+
+const SOUNDTRACK_PARAMETER_FIELDS = [
+  'NIGHT_START_HOUR',
+  'DAY_START_HOUR',
+  'CROSSFADE_MS',
+  'CITY_RADIUS_UV',
+  'GARRISON_RADIUS_UV',
+  'BOUNDARY_EPSILON_UV',
+  'ZONE_HYSTERESIS_UV',
+  'NO_GROUP_POLICY',
+  'GROUP_TIE_BREAK',
+] as const;
+
+const SOUNDTRACK_SELECTION_FIELDS = [
+  'determiningBattle',
+  'determiningGroup',
+  'eligibleHeadcount',
+  'locationPrecedence',
+  'samePoolAndOpener',
+  'persistence',
+] as const;
+
+function assertExactFields(
+  value: JsonValue | undefined,
+  path: string,
+  expected: readonly string[],
+): JsonObject {
+  const object = asObject(value, WHERE, path);
+  const actualFields = Object.keys(object).sort();
+  const expectedFields = [...expected].sort();
+  if (JSON.stringify(actualFields) !== JSON.stringify(expectedFields)) {
+    fail(
+      WHERE,
+      `${path} has fields ${JSON.stringify(actualFields)}, expected ${JSON.stringify(expectedFields)}`,
+    );
+  }
+  return object;
+}
+
+function assertSectionVerdicts(
+  value: JsonObject,
+  verdicts: Readonly<Record<string, SectionVerdict>>,
+  path: string,
+): void {
+  const actual = Object.keys(value);
+  const expected = Object.keys(verdicts);
+  const expectedSet = new Set(expected);
+  const actualSet = new Set(actual);
+  const unknown = actual.filter((key) => !expectedSet.has(key)).sort();
+  const missing = expected.filter((key) => !actualSet.has(key)).sort();
+  if (unknown.length > 0 || missing.length > 0) {
+    fail(
+      WHERE,
+      `${path} section verdict mismatch: unknown ${JSON.stringify(unknown)}, missing ${JSON.stringify(missing)}`,
+    );
+  }
+}
+
+function assertContractValue(value: JsonValue | undefined, path: string): void {
+  if (value === undefined || value === null) fail(WHERE, `${path} is empty`);
+  if (typeof value === 'string') {
+    nonEmptyString(value, path);
+  } else if (typeof value === 'number') {
+    asNumber(value, WHERE, path);
+  } else if (typeof value === 'boolean') {
+    return;
+  } else if (Array.isArray(value)) {
+    value.forEach((item, index) => assertContractValue(item, `${path}[${String(index)}]`));
+  } else {
+    const fields = Object.keys(value);
+    if (fields.length === 0) fail(WHERE, `${path} is empty`);
+    fields.forEach((field) =>
+      assertContractValue(value[field], `${path}[${JSON.stringify(field)}]`),
+    );
+  }
+}
+
+function stringArray(value: JsonValue | undefined, path: string): string[] {
+  const strings = asStringArray(value, WHERE, path);
+  strings.forEach((item, index) => nonEmptyString(item, `${path}[${String(index)}]`));
+  return strings;
+}
+
+function requiredStringArray(value: JsonValue | undefined, path: string): string[] {
+  const strings = stringArray(value, path);
+  if (strings.length === 0) fail(WHERE, `${path} is empty`);
+  return strings;
+}
+
+function assertStringFields(object: JsonObject, path: string, fields: readonly string[]): void {
+  fields.forEach((field) => nonEmptyString(object[field], `${path}.${field}`));
+}
+
+function assertUniqueStrings(values: readonly string[], path: string): void {
+  const seen = new Set<string>();
+  values.forEach((value, index) => {
+    if (seen.has(value)) {
+      fail(WHERE, `${path}[${String(index)}] duplicates ${JSON.stringify(value)}`);
+    }
+    seen.add(value);
+  });
+}
+
+function assertSameStringSet(
+  actual: readonly string[],
+  expected: readonly string[],
+  path: string,
+): void {
+  const actualSet = new Set(actual);
+  const expectedSet = new Set(expected);
+  const missing = expected.filter((value) => !actualSet.has(value));
+  const unknown = actual.filter((value) => !expectedSet.has(value));
+  if (missing.length > 0 || unknown.length > 0) {
+    fail(
+      WHERE,
+      `${path} classification mismatch: missing ${JSON.stringify(missing)}, unknown ${JSON.stringify(unknown)}`,
+    );
+  }
+}
+
+function assertMirroredCatalog(
+  contract: JsonObject,
+  idsField: string,
+  rowsField: string,
+  idField: string,
+  rowFields: readonly string[],
+  validateRow?: (row: JsonObject, path: string) => void,
+): void {
+  const idsPath = `globalContracts.soundtrackSourceContract.${idsField}`;
+  const rowsPath = `globalContracts.soundtrackSourceContract.${rowsField}`;
+  const ids = requiredStringArray(contract[idsField], idsPath);
+  assertUniqueStrings(ids, idsPath);
+  const rowIds = asArray(contract[rowsField], WHERE, rowsPath).map((value, index) => {
+    const at = `${rowsPath}[${String(index)}]`;
+    const row = assertExactFields(value, at, rowFields);
+    assertContractValue(row, at);
+    validateRow?.(row, at);
+    return nonEmptyString(row[idField], `${at}.${idField}`);
+  });
+  assertUniqueStrings(rowIds, `${rowsPath}.${idField}`);
+  if (JSON.stringify(ids) !== JSON.stringify(rowIds)) {
+    fail(WHERE, `${idsPath} differs from ${rowsPath}[].${idField}`);
+  }
+}
+
+export function auditAtlasSections(root: JsonObject): {
+  readonly counts: JsonObject;
+  readonly globalContracts: JsonObject;
+  readonly registryCoverage: JsonObject;
+} {
+  assertSectionVerdicts(root, ATLAS_SECTION_VERDICTS, '<root>');
+  const globalContracts = asObject(root['globalContracts'], WHERE, 'globalContracts');
+  assertSectionVerdicts(globalContracts, GLOBAL_CONTRACT_VERDICTS, 'globalContracts');
+  const registryCoverage = asObject(root['registryCoverage'], WHERE, 'registryCoverage');
+  assertSectionVerdicts(registryCoverage, REGISTRY_COVERAGE_VERDICTS, 'registryCoverage');
+  const counts = assertExactFields(root['counts'], 'counts', COUNT_FIELDS);
+  return { counts, globalContracts, registryCoverage };
+}
+
+export function extractGlobalContracts(globalContracts: JsonObject): JsonObject[] {
+  assertSectionVerdicts(globalContracts, GLOBAL_CONTRACT_VERDICTS, 'globalContracts');
+  const platformFields = ['delivery', 'sharedState', 'transport', 'storage', 'soundtrack'] as const;
+  const platform = assertExactFields(
+    globalContracts['platform'],
+    'globalContracts.platform',
+    platformFields,
+  );
+  assertStringFields(platform, 'globalContracts.platform', platformFields);
+  requiredStringArray(globalContracts['sourcePriority'], 'globalContracts.sourcePriority');
+  const availableActions = assertExactFields(
+    globalContracts['availableActions'],
+    'globalContracts.availableActions',
+    [
+      'inputs',
+      'outputChannels',
+      'negativeSpace',
+      'invalidation',
+      'commitBoundary',
+      'exceptionBanners',
+    ],
+  );
+  requiredStringArray(availableActions['inputs'], 'globalContracts.availableActions.inputs');
+  requiredStringArray(
+    availableActions['outputChannels'],
+    'globalContracts.availableActions.outputChannels',
+  );
+  assertStringFields(availableActions, 'globalContracts.availableActions', [
+    'negativeSpace',
+    'invalidation',
+    'commitBoundary',
+    'exceptionBanners',
+  ]);
+  const authorityFields = ['master', 'ordinaryDevice', 'hostDevice', 'handoff'] as const;
+  const authority = assertExactFields(
+    globalContracts['authorityPrivacy'],
+    'globalContracts.authorityPrivacy',
+    authorityFields,
+  );
+  assertStringFields(authority, 'globalContracts.authorityPrivacy', authorityFields);
+  const atomicityFields = ['commandIds', 'randomness', 'offline'] as const;
+  const atomicity = assertExactFields(
+    globalContracts['atomicityReconnect'],
+    'globalContracts.atomicityReconnect',
+    atomicityFields,
+  );
+  assertStringFields(atomicity, 'globalContracts.atomicityReconnect', atomicityFields);
+  const accessibilityFields = ['standard', 'reducedMotion'] as const;
+  const accessibility = assertExactFields(
+    globalContracts['accessibility'],
+    'globalContracts.accessibility',
+    accessibilityFields,
+  );
+  assertStringFields(accessibility, 'globalContracts.accessibility', accessibilityFields);
+  const decisionFields = [
+    'guardianTargetVisibility',
+    'plagueDoctorMonitor',
+    'chimeraCompletionOwnership',
+    'peaceWorldMap',
+    'conditionalScreens',
+  ] as const;
+  const decisions = assertExactFields(
+    globalContracts['directAuthorDecisions2026-08-01'],
+    'globalContracts.directAuthorDecisions2026-08-01',
+    decisionFields,
+  );
+  assertStringFields(decisions, 'globalContracts.directAuthorDecisions2026-08-01', decisionFields);
+
+  const soundtrack = assertExactFields(
+    globalContracts['soundtrackSourceContract'],
+    'globalContracts.soundtrackSourceContract',
+    SOUNDTRACK_CONTRACT_FIELDS,
+  );
+  assertExactFields(
+    soundtrack['parameterValues'],
+    'globalContracts.soundtrackSourceContract.parameterValues',
+    SOUNDTRACK_PARAMETER_FIELDS,
+  );
+  assertExactFields(
+    soundtrack['selectionSnapshot'],
+    'globalContracts.soundtrackSourceContract.selectionSnapshot',
+    SOUNDTRACK_SELECTION_FIELDS,
+  );
+  nonEmptyString(soundtrack['sourceFile'], 'globalContracts.soundtrackSourceContract.sourceFile');
+  const parameters = asObject(
+    soundtrack['parameterValues'],
+    WHERE,
+    'globalContracts.soundtrackSourceContract.parameterValues',
+  );
+  for (const field of SOUNDTRACK_PARAMETER_FIELDS.slice(0, 7)) {
+    asNumber(
+      parameters[field],
+      WHERE,
+      `globalContracts.soundtrackSourceContract.parameterValues.${field}`,
+    );
+  }
+  assertStringFields(
+    parameters,
+    'globalContracts.soundtrackSourceContract.parameterValues',
+    SOUNDTRACK_PARAMETER_FIELDS.slice(7),
+  );
+  assertStringFields(
+    asObject(
+      soundtrack['selectionSnapshot'],
+      WHERE,
+      'globalContracts.soundtrackSourceContract.selectionSnapshot',
+    ),
+    'globalContracts.soundtrackSourceContract.selectionSnapshot',
+    SOUNDTRACK_SELECTION_FIELDS,
+  );
+  assertMirroredCatalog(
+    soundtrack,
+    'ruleIds',
+    'rules',
+    'ruleId',
+    ['ruleId', 'area', 'requirement'],
+    (row, path) => assertStringFields(row, path, ['ruleId', 'area', 'requirement']),
+  );
+  assertMirroredCatalog(
+    soundtrack,
+    'eventIds',
+    'events',
+    'eventId',
+    ['eventId', 'event', 'condition', 'requiredAction'],
+    (row, path) =>
+      assertStringFields(row, path, ['eventId', 'event', 'condition', 'requiredAction']),
+  );
+  assertMirroredCatalog(
+    soundtrack,
+    'poolIds',
+    'pools',
+    'poolId',
+    [
+      'poolId',
+      'context',
+      'territory',
+      'locationMode',
+      'phase',
+      'initialRule',
+      'trackIds',
+      'randomization',
+    ],
+    (row, path) => {
+      assertStringFields(row, path, [
+        'poolId',
+        'context',
+        'territory',
+        'locationMode',
+        'phase',
+        'initialRule',
+        'randomization',
+      ]);
+      requiredStringArray(row['trackIds'], `${path}.trackIds`);
+    },
+  );
+  assertMirroredCatalog(
+    soundtrack,
+    'locationIds',
+    'locations',
+    'locationId',
+    [
+      'locationId',
+      'displayName',
+      'type',
+      'faction',
+      'subregion',
+      'u',
+      'v',
+      'radiusUv',
+      'dayEntryMode',
+      'dayEntryTrackIds',
+      'dayPoolId',
+      'nightEntryMode',
+      'nightEntryTrackIds',
+      'nightPoolId',
+    ],
+    (row, path) => {
+      assertStringFields(row, path, [
+        'locationId',
+        'displayName',
+        'type',
+        'faction',
+        'subregion',
+        'dayEntryMode',
+        'dayPoolId',
+        'nightEntryMode',
+        'nightPoolId',
+      ]);
+      for (const field of ['u', 'v', 'radiusUv'] as const) {
+        asNumber(row[field], WHERE, `${path}.${field}`);
+      }
+      stringArray(row['dayEntryTrackIds'], `${path}.dayEntryTrackIds`);
+      stringArray(row['nightEntryTrackIds'], `${path}.nightEntryTrackIds`);
+    },
+  );
+  assertContractValue(globalContracts, 'globalContracts');
+
+  return Object.keys(GLOBAL_CONTRACT_VERDICTS).map((contractId) => ({
+    contractId,
+    value: globalContracts[contractId]!,
+  }));
+}
+
 const nonEmptyString = (value: JsonValue | undefined, path: string): string => {
   const text = asString(value, WHERE, path);
   if (text.trim() === '') fail(WHERE, `${path} is empty`);
@@ -97,18 +579,10 @@ export function extractWorkflowCommands(
     qaById.set(id, matches);
   });
 
-  const expectedFields = [...WORKFLOW_COMMAND_FIELDS].sort();
   const seen = new Set<string>();
   return values.map((value, index) => {
     const at = `registryCoverage.workflowCommands[${String(index)}]`;
-    const row = asObject(value, WHERE, at);
-    const fields = Object.keys(row).sort();
-    if (JSON.stringify(fields) !== JSON.stringify(expectedFields)) {
-      fail(
-        WHERE,
-        `${at} has fields ${JSON.stringify(fields)}, expected ${JSON.stringify(expectedFields)}`,
-      );
-    }
+    const row = assertExactFields(value, at, WORKFLOW_COMMAND_FIELDS);
 
     const commandId = nonEmptyString(row['commandId'], `${at}.commandId`);
     if (seen.has(commandId)) fail(WHERE, `${at}: duplicate commandId ${JSON.stringify(commandId)}`);
@@ -146,6 +620,169 @@ export function extractWorkflowCommands(
 
     return { commandId, title, formIds, guards, atomicity, reconnect, qa };
   });
+}
+
+function expectArrayCount(
+  value: JsonValue | undefined,
+  path: string,
+  label: string,
+  declared: JsonValue | undefined,
+): JsonValue[] {
+  const rows = asArray(value, WHERE, path);
+  expectCount(WHERE, label, rows.length, asNumber(declared, WHERE, `counts.${label}`));
+  return rows;
+}
+
+function assertFormBreakdown(
+  forms: readonly JsonObject[],
+  field: string,
+  declared: JsonValue | undefined,
+  path: string,
+): void {
+  const actual = new Map<string, number>();
+  forms.forEach((form, index) => {
+    const value = asString(form[field], WHERE, `forms[${String(index)}].${field}`);
+    actual.set(value, (actual.get(value) ?? 0) + 1);
+  });
+  const declaredObject = assertExactFields(declared, path, [...actual.keys()]);
+  for (const [value, count] of actual) {
+    expectCount(
+      WHERE,
+      `${path}[${JSON.stringify(value)}]`,
+      count,
+      asNumber(declaredObject[value], WHERE, `${path}[${JSON.stringify(value)}]`),
+    );
+  }
+}
+
+export function assertAtlasCounts(root: JsonObject): ReturnType<typeof auditAtlasSections> {
+  const audited = auditAtlasSections(root);
+  const { counts, registryCoverage } = audited;
+  const forms = asArray(root['forms'], WHERE, 'forms').map((value, index) =>
+    asObject(value, WHERE, `forms[${String(index)}]`),
+  );
+
+  expectCount(WHERE, 'forms', forms.length, asNumber(counts['forms'], WHERE, 'counts.forms'));
+  expectArrayCount(root['transitions'], 'transitions', 'transitions', counts['transitions']);
+  expectArrayCount(root['journeys'], 'journeys', 'journeys', counts['journeys']);
+  expectArrayCount(
+    root['coverageRequirements'],
+    'coverageRequirements',
+    'requirements',
+    counts['requirements'],
+  );
+  expectArrayCount(root['qaScenarios'], 'qaScenarios', 'qaScenarios', counts['qaScenarios']);
+  expectArrayCount(root['diagrams'], 'diagrams', 'diagrams', counts['diagrams']);
+
+  expectArrayCount(
+    registryCoverage['activeRules'],
+    'registryCoverage.activeRules',
+    'activeRules',
+    counts['activeRules'],
+  );
+  expectArrayCount(
+    registryCoverage['tombstoneRules'],
+    'registryCoverage.tombstoneRules',
+    'tombstoneRules',
+    counts['tombstoneRules'],
+  );
+  expectArrayCount(
+    registryCoverage['operations'],
+    'registryCoverage.operations',
+    'operations',
+    counts['operations'],
+  );
+  expectArrayCount(
+    registryCoverage['workflowCommands'],
+    'registryCoverage.workflowCommands',
+    'workflowCommands',
+    counts['workflowCommands'],
+  );
+  const qna = expectArrayCount(
+    registryCoverage['qna'],
+    'registryCoverage.qna',
+    'qnaRows',
+    counts['qnaRows'],
+  );
+  const uniqueQnaIds = new Set(
+    qna.map((value, index) => {
+      const row = asObject(value, WHERE, `registryCoverage.qna[${String(index)}]`);
+      return nonEmptyString(row['qnaId'], `registryCoverage.qna[${String(index)}].qnaId`);
+    }),
+  );
+  expectCount(
+    WHERE,
+    'unique registry coverage Q&A ids',
+    uniqueQnaIds.size,
+    asNumber(counts['qnaUniqueIds'], WHERE, 'counts.qnaUniqueIds'),
+  );
+  expectArrayCount(
+    registryCoverage['abilities'],
+    'registryCoverage.abilities',
+    'automatedAbilities',
+    counts['automatedAbilities'],
+  );
+  expectArrayCount(
+    registryCoverage['modeledEffectTypes'],
+    'registryCoverage.modeledEffectTypes',
+    'modeledEffectTypes',
+    counts['modeledEffectTypes'],
+  );
+  expectArrayCount(
+    registryCoverage['excludedEffectTypes'],
+    'registryCoverage.excludedEffectTypes',
+    'excludedEffectTypes',
+    counts['excludedEffectTypes'],
+  );
+  expectArrayCount(
+    registryCoverage['manualOnlyNodes'],
+    'registryCoverage.manualOnlyNodes',
+    'manualOnlyNodes',
+    counts['manualOnlyNodes'],
+  );
+
+  const changeControl = asObject(root['changeControl'], WHERE, 'changeControl');
+  const legacyFormIds = requiredStringArray(
+    changeControl['legacyFormIds'],
+    'changeControl.legacyFormIds',
+  );
+  const newFormIds = requiredStringArray(changeControl['newFormIds'], 'changeControl.newFormIds');
+  expectCount(
+    WHERE,
+    'legacy forms preserved',
+    legacyFormIds.length,
+    asNumber(counts['legacyFormsPreserved'], WHERE, 'counts.legacyFormsPreserved'),
+  );
+  expectCount(
+    WHERE,
+    'new forms',
+    newFormIds.length,
+    asNumber(counts['newForms'], WHERE, 'counts.newForms'),
+  );
+  const changeControlIds = [...legacyFormIds, ...newFormIds];
+  assertUniqueStrings(changeControlIds, 'changeControl legacyFormIds + newFormIds');
+  const formIds = forms.map((form, index) =>
+    nonEmptyString(form['id'], `forms[${String(index)}].id`),
+  );
+  assertUniqueStrings(formIds, 'forms.id');
+  assertSameStringSet(changeControlIds, formIds, 'changeControl form partition');
+  const currentFormIds: string[] = [];
+  const legacyOriginFormIds: string[] = [];
+  forms.forEach((form, index) => {
+    const id = formIds[index]!;
+    const origin = asString(form['origin'], WHERE, `forms[${String(index)}].origin`);
+    (origin === CURRENT_ATLAS_FORM_ORIGIN ? currentFormIds : legacyOriginFormIds).push(id);
+  });
+  assertSameStringSet(newFormIds, currentFormIds, 'changeControl.newFormIds');
+  assertSameStringSet(legacyFormIds, legacyOriginFormIds, 'changeControl.legacyFormIds');
+
+  assertFormBreakdown(forms, 'origin', counts['byOrigin'], 'counts.byOrigin');
+  assertFormBreakdown(forms, 'type', counts['byType'], 'counts.byType');
+  assertFormBreakdown(forms, 'domain', counts['byDomain'], 'counts.byDomain');
+
+  const coverage = asObject(root['coverage'], WHERE, 'coverage');
+  expectString(coverage['status'], WHERE, 'coverage.status', 'PASS');
+  return audited;
 }
 
 export function buildRendererQueryIndexes(
@@ -247,13 +884,21 @@ export async function importAtlas(): Promise<AtlasImport> {
     WHERE,
     '<root>',
   );
+  const { counts, globalContracts, registryCoverage } = assertAtlasCounts(root);
 
   // --- identity -----------------------------------------------------------
+  expectString(root['$schema'], WHERE, '$schema', SCHEMA_URI);
   expectString(root['schemaVersion'], WHERE, 'schemaVersion', SCHEMA_VERSION);
   expectString(root['atlasVersion'], WHERE, 'atlasVersion', ATLAS_VERSION);
+  nonEmptyString(root['title'], 'title');
+  nonEmptyString(root['language'], 'language');
+  nonEmptyString(root['releaseDate'], 'releaseDate');
   const graphDigest = asString(root['graphDigest'], WHERE, 'graphDigest');
   const contentDigest = asString(root['contentDigest'], WHERE, 'contentDigest');
   const normativeStatus = asString(root['normativeStatus'], WHERE, 'normativeStatus');
+  asArray(root['sourceRefs'], WHERE, 'sourceRefs').forEach((value, index) =>
+    asObject(value, WHERE, `sourceRefs[${String(index)}]`),
+  );
 
   // --- collections --------------------------------------------------------
   const forms = asArray(root['forms'], WHERE, 'forms').map((f, i) =>
@@ -281,45 +926,14 @@ export async function importAtlas(): Promise<AtlasImport> {
     asObject(r, WHERE, `roles[${String(i)}]`),
   );
   const guardStates = asStringArray(root['guardStates'], WHERE, 'guardStates');
+  const globalContractRows = extractGlobalContracts(globalContracts);
 
   // --- the atlas must agree with its own counts ---------------------------
-  const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'forms', forms.length, asNumber(counts['forms'], WHERE, 'counts.forms'));
-  expectCount(
-    WHERE,
-    'transitions',
-    transitions.length,
-    asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-  );
-  expectCount(
-    WHERE,
-    'journeys',
-    journeys.length,
-    asNumber(counts['journeys'], WHERE, 'counts.journeys'),
-  );
-  expectCount(
-    WHERE,
-    'requirements',
-    requirements.length,
-    asNumber(counts['requirements'], WHERE, 'counts.requirements'),
-  );
-  expectCount(
-    WHERE,
-    'qaScenarios',
-    qaScenarios.length,
-    asNumber(counts['qaScenarios'], WHERE, 'counts.qaScenarios'),
-  );
-  expectCount(
-    WHERE,
-    'diagrams',
-    diagrams.length,
-    asNumber(counts['diagrams'], WHERE, 'counts.diagrams'),
-  );
   expectCount(WHERE, 'entity lifecycles', lifecycles.length, 19);
   expectCount(WHERE, 'roles', roles.length, 3);
   expectCount(WHERE, 'guard states', guardStates.length, 10);
   const workflowCommands = extractWorkflowCommands(
-    asObject(root['registryCoverage'], WHERE, 'registryCoverage'),
+    registryCoverage,
     qaScenarios,
     asNumber(counts['workflowCommands'], WHERE, 'counts.workflowCommands'),
   );
@@ -327,7 +941,6 @@ export async function importAtlas(): Promise<AtlasImport> {
   // --- forms --------------------------------------------------------------
   const formIds: string[] = [];
   const seen = new Set<string>();
-  const byDomain = new Map<string, number>();
   const formsById: JsonObject = {};
   const rendererFormsById: JsonObject = {};
 
@@ -375,19 +988,7 @@ export async function importAtlas(): Promise<AtlasImport> {
           `(prefix ${prefix}) but its id uses prefix ${JSON.stringify(idPrefix)}`,
       );
     }
-    byDomain.set(domain, (byDomain.get(domain) ?? 0) + 1);
   });
-
-  // Declared per-domain totals must match what we counted.
-  const declaredByDomain = asObject(counts['byDomain'], WHERE, 'counts.byDomain');
-  for (const [domain, actual] of byDomain) {
-    expectCount(
-      WHERE,
-      `forms in ${JSON.stringify(domain)}`,
-      actual,
-      asNumber(declaredByDomain[domain], WHERE, `counts.byDomain[${JSON.stringify(domain)}]`),
-    );
-  }
 
   // --- the transition graph must close over the form catalogue ------------
   transitions.forEach((transition, index) => {
@@ -435,6 +1036,7 @@ export async function importAtlas(): Promise<AtlasImport> {
   await emit('journeys.json', journeys);
   await emit('requirements.json', requirements);
   await emit('qa-scenarios.json', qaScenarios);
+  await emit('global-contracts.json', globalContractRows);
   await emit('workflow-commands.json', workflowCommands);
   await emit('lifecycles.json', lifecycles);
   await emit('diagrams.json', diagrams);
