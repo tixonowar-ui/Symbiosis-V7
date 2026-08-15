@@ -2,6 +2,7 @@ export type {
   CampaignCheckpoint,
   LocalCharacter,
   LocalCharacterCheckpoint,
+  LocalCharacterCheckpointCreator,
   LocalCharacterCheckpointWriter,
   LocalCharacterLifecycleState,
   LocalCharacterPatch,

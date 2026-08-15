@@ -47,6 +47,10 @@
   snapshot только в wire v2, direct URL проходит host validation, signed
   recovery destination не становится client choice, а device-local settings
   остаются вне campaign projection.
+- Первый checkpoint черновика персонажа теперь может атомарно создать строку
+  `local_character` и собственную строку checkpoint одним `BEGIN IMMEDIATE`:
+  начальная корневая тройка проверяется как `0/0/0`, точные байты payload входят
+  в snapshot, а любая ошибка откатывает обе записи.
 - Полнота импорта атласа закреплена явными вердиктами для всех 24 корневых
   секций, 8 `globalContracts` и 10 подразделов `registryCoverage`: неизвестный
   ключ теперь останавливает импорт, а все 21 контрольное значение `counts`
