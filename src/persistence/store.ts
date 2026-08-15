@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
+
 import type Database from 'better-sqlite3';
 
-import { V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
+import { MAX_SAFE_REVISION, V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
 
 export interface RevisionTriple {
   stateRevision: number;
@@ -26,6 +28,19 @@ export type LocalCharacterPatch =
   | { lifecycleState: LocalCharacterLifecycleState; payloadJson?: string }
   | { lifecycleState?: LocalCharacterLifecycleState; payloadJson: string };
 
+export interface LocalCharacterCheckpoint extends RevisionTriple {
+  checkpointId: string;
+  localCharacterId: string;
+  checkpointRevision: number;
+  snapshotJson: string;
+  snapshotSha256: string;
+}
+
+export type LocalCharacterCheckpointWriter = (
+  patch: LocalCharacterPatch,
+  impact: RevisionImpact,
+) => LocalCharacter;
+
 export type RevisionScope =
   { entity: 'localCharacter'; entityId: string } | { entity: 'campaign'; entityId: string };
 
@@ -41,6 +56,16 @@ interface LocalCharacterRow extends RevisionRow {
   lifecycle_state: string;
   payload_json: string;
 }
+
+interface DraftCheckpointRow extends RevisionRow {
+  checkpoint_id: string;
+  local_character_id: string;
+  checkpoint_revision: number;
+  snapshot_json: string;
+  snapshot_sha256: string;
+}
+
+type DraftCheckpointState = LocalCharacter & { snapshotJson: string };
 
 interface CheckpointRow extends RevisionTriple {
   campaign_id: string;
@@ -251,14 +276,12 @@ export const advanceRevisions = (
   return revisionTriple(row, `${scope.entity} ${JSON.stringify(scope.entityId)}`);
 };
 
-export const updateLocalCharacter = (
+const writeLocalCharacterUpdate = (
   database: Database.Database,
   localCharacterId: string,
   patch: LocalCharacterPatch,
   impact: RevisionImpact,
 ): LocalCharacter => {
-  requireTopLevelLocalCharacterWrite(database, 'update');
-
   const fields = Object.keys(patch);
   const unknownFields = fields.filter(
     (field) => !LOCAL_CHARACTER_PATCH_FIELDS.some((candidate) => candidate === field),
@@ -307,6 +330,131 @@ export const updateLocalCharacter = (
       return readLocalCharacter(database, localCharacterId);
     })
     .immediate();
+};
+
+export const updateLocalCharacter = (
+  database: Database.Database,
+  localCharacterId: string,
+  patch: LocalCharacterPatch,
+  impact: RevisionImpact,
+): LocalCharacter => {
+  requireTopLevelLocalCharacterWrite(database, 'update');
+  return writeLocalCharacterUpdate(database, localCharacterId, patch, impact);
+};
+
+const buildDraftSnapshot = (
+  database: Database.Database,
+  localCharacterId: string,
+): DraftCheckpointState => {
+  const localCharacter = readLocalCharacter(database, localCharacterId);
+  const { lifecycleState, payloadJson } = localCharacter;
+  return {
+    ...localCharacter,
+    snapshotJson: JSON.stringify({
+      localCharacter: { localCharacterId, lifecycleState, payloadJson },
+    }),
+  };
+};
+
+const snapshotSha256 = (snapshotJson: string): string =>
+  createHash('sha256').update(snapshotJson, 'utf8').digest('hex');
+
+const draftCheckpointFromRow = (row: DraftCheckpointRow): LocalCharacterCheckpoint => {
+  const label = `localCharacter checkpoint ${JSON.stringify(row.checkpoint_id)}`;
+  return {
+    checkpointId: row.checkpoint_id,
+    localCharacterId: row.local_character_id,
+    checkpointRevision: row.checkpoint_revision,
+    snapshotJson: row.snapshot_json,
+    snapshotSha256: row.snapshot_sha256,
+    ...revisionTriple(row, label),
+  };
+};
+
+const DRAFT_CHECKPOINT_COLUMNS = `checkpoint_id, local_character_id,
+  checkpoint_revision, snapshot_json, snapshot_sha256,
+  stateRevision, projectionRevision, actorVisibilityRevision`;
+
+const readDraftCheckpointRow = (
+  database: Database.Database,
+  localCharacterId: string,
+): DraftCheckpointRow | undefined =>
+  database
+    .prepare<[string], DraftCheckpointRow>(
+      `SELECT ${DRAFT_CHECKPOINT_COLUMNS}
+       FROM local_character_checkpoint
+       WHERE local_character_id = ?`,
+    )
+    .get(localCharacterId);
+
+const validateStoredDraftCheckpoint = (
+  row: DraftCheckpointRow,
+  current: DraftCheckpointState,
+): LocalCharacterCheckpoint => {
+  const checkpoint = draftCheckpointFromRow(row);
+  const label = `localCharacter checkpoint ${JSON.stringify(checkpoint.checkpointId)}`;
+  if (snapshotSha256(checkpoint.snapshotJson) !== checkpoint.snapshotSha256) {
+    throw new Error(`${label} checksum does not match its snapshot`);
+  }
+  if (checkpoint.snapshotJson !== current.snapshotJson) {
+    throw new Error(`${label} snapshot does not match current state`);
+  }
+  if (REVISION_NAMES.some((name) => checkpoint[name] !== current[name])) {
+    throw new Error(`${label} revisions do not match current state`);
+  }
+  return checkpoint;
+};
+
+const resolveDraftCheckpointRow = (
+  database: Database.Database,
+  localCharacterId: string,
+  checkpointId: string,
+): DraftCheckpointRow | undefined => {
+  const row = database
+    .prepare<{ localCharacterId: string; checkpointId: string }, DraftCheckpointRow>(
+      `SELECT ${DRAFT_CHECKPOINT_COLUMNS}
+       FROM local_character_checkpoint
+       WHERE local_character_id = @localCharacterId OR checkpoint_id = @checkpointId
+       ORDER BY local_character_id = @localCharacterId DESC`,
+    )
+    .get({ localCharacterId, checkpointId });
+  if (row !== undefined && row.local_character_id !== localCharacterId) {
+    throw new Error(
+      `localCharacter checkpoint ${JSON.stringify(checkpointId)} belongs to ${JSON.stringify(row.local_character_id)}, not ${JSON.stringify(localCharacterId)}`,
+    );
+  }
+  if (row !== undefined && row.checkpoint_id !== checkpointId) {
+    throw new Error(
+      `${localCharacterLabel(localCharacterId)} checkpoint is fixed as ${JSON.stringify(row.checkpoint_id)}, not ${JSON.stringify(checkpointId)}`,
+    );
+  }
+  return row;
+};
+
+const validateDraftCheckpointAdvance = (
+  previous: DraftCheckpointState,
+  current: DraftCheckpointState,
+): void => {
+  const stateDelta = current.stateRevision - previous.stateRevision;
+  const projectionDelta = current.projectionRevision - previous.projectionRevision;
+  const visibilityDelta = current.actorVisibilityRevision - previous.actorVisibilityRevision;
+  const deltas = [stateDelta, projectionDelta, visibilityDelta];
+  if (deltas.some((delta) => delta < 0 || delta > 1)) {
+    throw new Error(
+      `${localCharacterLabel(current.localCharacterId)} revisions must advance by at most one per checkpoint: ${deltas.join(', ')}`,
+    );
+  }
+  if (visibilityDelta === 1 && projectionDelta !== 1) {
+    throw new Error(
+      `${localCharacterLabel(current.localCharacterId)} visibility revision advanced without projection revision`,
+    );
+  }
+  const snapshotChanged = current.snapshotJson !== previous.snapshotJson;
+  if ((stateDelta === 1) !== snapshotChanged) {
+    throw new Error(
+      `${localCharacterLabel(current.localCharacterId)} stateRevision and snapshot change disagree`,
+    );
+  }
 };
 
 const buildCampaignSnapshot = (database: Database.Database, campaignId: string): string => {
@@ -381,6 +529,94 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   (typeof value === 'object' || typeof value === 'function') &&
   'then' in value &&
   typeof value.then === 'function';
+
+export const commitLocalCharacterCheckpoint = <T>(
+  database: Database.Database,
+  localCharacterId: string,
+  checkpointId: string,
+  write: (
+    update: LocalCharacterCheckpointWriter,
+  ) => T & (T extends PromiseLike<unknown> ? never : unknown),
+): { result: T; checkpoint: LocalCharacterCheckpoint } => {
+  if (database.inTransaction) {
+    throw new Error('localCharacter checkpoint requires a top-level transaction');
+  }
+  if (checkpointId === localCharacterId) {
+    throw new Error('localCharacter checkpointId must differ from localCharacterId');
+  }
+  if (Object.prototype.toString.call(write) === '[object AsyncFunction]') {
+    throw new TypeError('localCharacter checkpoint callback must be synchronous');
+  }
+  return database
+    .transaction(() => {
+      const previousRow = resolveDraftCheckpointRow(database, localCharacterId, checkpointId);
+      const before = buildDraftSnapshot(database, localCharacterId);
+      const previous =
+        previousRow === undefined ? undefined : validateStoredDraftCheckpoint(previousRow, before);
+
+      let writerActive = true;
+      try {
+        const result = write((patch, impact) => {
+          if (!writerActive) {
+            throw new Error('localCharacter checkpoint writer is no longer active');
+          }
+          writerActive = false;
+          return writeLocalCharacterUpdate(database, localCharacterId, patch, impact);
+        });
+        if (isPromiseLike(result)) {
+          throw new TypeError('localCharacter checkpoint callback must be synchronous');
+        }
+
+        const current = buildDraftSnapshot(database, localCharacterId);
+        validateDraftCheckpointAdvance(before, current);
+        const snapshotChanged =
+          previous !== undefined && previous.snapshotJson !== current.snapshotJson;
+        if (snapshotChanged && previous?.checkpointRevision === MAX_SAFE_REVISION) {
+          throw new Error(
+            `localCharacter checkpoint ${JSON.stringify(checkpointId)} revision overflow`,
+          );
+        }
+        const checkpoint: LocalCharacterCheckpoint = {
+          checkpointId,
+          localCharacterId,
+          checkpointRevision:
+            previous === undefined ? 0 : previous.checkpointRevision + Number(snapshotChanged),
+          snapshotJson: current.snapshotJson,
+          snapshotSha256: snapshotSha256(current.snapshotJson),
+          stateRevision: current.stateRevision,
+          projectionRevision: current.projectionRevision,
+          actorVisibilityRevision: current.actorVisibilityRevision,
+        };
+        database
+          .prepare<LocalCharacterCheckpoint>(
+            `INSERT INTO local_character_checkpoint
+            (${DRAFT_CHECKPOINT_COLUMNS}) VALUES
+            (@checkpointId, @localCharacterId, @checkpointRevision, @snapshotJson, @snapshotSha256,
+             @stateRevision, @projectionRevision, @actorVisibilityRevision)
+            ON CONFLICT (checkpoint_id) DO UPDATE SET
+              checkpoint_revision=excluded.checkpoint_revision, snapshot_json=excluded.snapshot_json,
+              snapshot_sha256=excluded.snapshot_sha256, stateRevision=excluded.stateRevision,
+              projectionRevision=excluded.projectionRevision, actorVisibilityRevision=excluded.actorVisibilityRevision`,
+          )
+          .run(checkpoint);
+        return { result, checkpoint };
+      } finally {
+        writerActive = false;
+      }
+    })
+    .immediate();
+};
+
+export const loadLocalCharacterCheckpoint = (
+  database: Database.Database,
+  localCharacterId: string,
+): LocalCharacterCheckpoint => {
+  const row = readDraftCheckpointRow(database, localCharacterId);
+  if (row === undefined) {
+    throw new Error(`${localCharacterLabel(localCharacterId)} has no checkpoint`);
+  }
+  return validateStoredDraftCheckpoint(row, buildDraftSnapshot(database, localCharacterId));
+};
 
 const validateCheckpointAdvance = (
   previous: CampaignCheckpoint,

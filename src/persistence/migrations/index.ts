@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 
 import { migration0001 } from './0001-initial.js';
+import { migration0002 } from './0002-local-character-checkpoint.js';
 
 interface SchemaObjectRow {
   name: string;
@@ -17,7 +18,7 @@ interface AppliedMigrationRow {
 
 export type Migration = Readonly<{ version: number; name: string; sql: string }>;
 
-const MIGRATIONS: readonly Migration[] = [migration0001];
+const MIGRATIONS: readonly Migration[] = [migration0001, migration0002];
 
 const CREATE_MIGRATION_REGISTRY_SQL = `CREATE TABLE schema_migration (
   version INTEGER NOT NULL PRIMARY KEY CHECK (version > 0),
