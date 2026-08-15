@@ -8,10 +8,12 @@ import { MAX_SAFE_REVISION, migration0001 } from './migrations/0001-initial.js';
 import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
 import {
   commitLocalCharacterCheckpoint,
+  commitNewLocalCharacterCheckpoint,
   createLocalCharacter,
   loadLocalCharacterCheckpoint,
   readLocalCharacter,
   readRevisions,
+  type LocalCharacterCheckpointCreator,
   type LocalCharacterCheckpointWriter,
   type RevisionTriple,
 } from './store.js';
@@ -45,6 +47,29 @@ const createDraft = (
   payloadJson = '{}',
 ): void => {
   createLocalCharacter(database, localCharacterId, 'DRAFT', payloadJson);
+};
+
+const commitNewDraft = (
+  database: Database.Database,
+  localCharacterId = 'character',
+  checkpointId = 'checkpoint',
+  payloadJson = '{}',
+) =>
+  commitNewLocalCharacterCheckpoint(database, localCharacterId, checkpointId, (create) =>
+    create('DRAFT', payloadJson),
+  );
+
+const expectRowCounts = (
+  database: Database.Database,
+  localCharacters: number,
+  checkpoints: number,
+): void => {
+  expect(database.prepare('SELECT count(*) AS count FROM local_character').get()).toEqual({
+    count: localCharacters,
+  });
+  expect(
+    database.prepare('SELECT count(*) AS count FROM local_character_checkpoint').get(),
+  ).toEqual({ count: checkpoints });
 };
 
 interface CheckpointInsert extends RevisionTriple {
@@ -192,7 +217,6 @@ describe('local character checkpoint store', () => {
   it('commits revision zero with the exact noncanonical payload string and SHA-256', () => {
     const database = memoryDatabase();
     const payloadJson = '{  "z":1, "a" : [ 2, 3 ] }';
-    createDraft(database, 'character', payloadJson);
     const snapshotJson = JSON.stringify({
       localCharacter: {
         localCharacterId: 'character',
@@ -201,11 +225,14 @@ describe('local character checkpoint store', () => {
       },
     });
 
-    const committed = commitLocalCharacterCheckpoint(
+    const committed = commitNewLocalCharacterCheckpoint(
       database,
       'character',
       'checkpoint',
-      () => 'saved',
+      (create) => {
+        create('DRAFT', payloadJson);
+        return 'saved';
+      },
     );
     expect(committed.result).toBe('saved');
     expect(committed.checkpoint).toEqual({
@@ -219,18 +246,21 @@ describe('local character checkpoint store', () => {
       actorVisibilityRevision: 0,
     });
     expect(committed.checkpoint.snapshotSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(readLocalCharacter(database, 'character')).toEqual({
+      localCharacterId: 'character',
+      lifecycleState: 'DRAFT',
+      payloadJson,
+      stateRevision: 0,
+      projectionRevision: 0,
+      actorVisibilityRevision: 0,
+    });
+    expectRowCounts(database, 1, 1);
     expect(loadLocalCharacterCheckpoint(database, 'character')).toEqual(committed.checkpoint);
   });
 
   it('increments only for a new snapshot and keeps root revisions still on replay and refresh', () => {
     const database = memoryDatabase();
-    createDraft(database, 'character', '{"version":1}');
-    const first = commitLocalCharacterCheckpoint(
-      database,
-      'character',
-      'checkpoint',
-      () => undefined,
-    ).checkpoint;
+    const first = commitNewDraft(database, 'character', 'checkpoint', '{"version":1}').checkpoint;
 
     const changed = commitLocalCharacterCheckpoint(database, 'character', 'checkpoint', (update) =>
       update({ payloadJson: '{"version":2}' }, impact(true, false, false)),
@@ -256,6 +286,203 @@ describe('local character checkpoint store', () => {
       projectionRevision: 0,
       actorVisibilityRevision: 0,
     });
+  });
+
+  it('rejects new-over-existing and update-on-missing modes before invoking callbacks', () => {
+    const existingDatabase = memoryDatabase();
+    createDraft(existingDatabase, 'character', '{"version":1}');
+    let createInvoked = false;
+
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(existingDatabase, 'character', 'checkpoint', () => {
+        createInvoked = true;
+      }),
+    ).toThrow(/localCharacter "character" already exists; cannot create first checkpoint/);
+    expect(createInvoked).toBe(false);
+    expect(readLocalCharacter(existingDatabase, 'character').payloadJson).toBe('{"version":1}');
+    expectRowCounts(existingDatabase, 1, 0);
+
+    const missingDatabase = memoryDatabase();
+    let updateInvoked = false;
+    expect(() =>
+      commitLocalCharacterCheckpoint(missingDatabase, 'missing', 'checkpoint', () => {
+        updateInvoked = true;
+      }),
+    ).toThrow(/localCharacter "missing" not found/);
+    expect(updateInvoked).toBe(false);
+    expectRowCounts(missingDatabase, 0, 0);
+
+    const unusedCreatorDatabase = memoryDatabase();
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(
+        unusedCreatorDatabase,
+        'missing',
+        'checkpoint',
+        () => undefined,
+      ),
+    ).toThrow(/localCharacter "missing" was not created by checkpoint callback/);
+    expectRowCounts(unusedCreatorDatabase, 0, 0);
+
+    const occupiedIdentityDatabase = memoryDatabase();
+    commitNewDraft(occupiedIdentityDatabase, 'character-a', 'checkpoint-a');
+    let collisionCallbackInvoked = false;
+    const collide = (create: LocalCharacterCheckpointCreator): void => {
+      collisionCallbackInvoked = true;
+      create('DRAFT', '{}');
+    };
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(
+        occupiedIdentityDatabase,
+        'character-b',
+        'checkpoint-a',
+        collide,
+      ),
+    ).toThrow(/checkpoint "checkpoint-a" belongs to "character-a", not "character-b"/);
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(
+        occupiedIdentityDatabase,
+        'character-a',
+        'checkpoint-b',
+        collide,
+      ),
+    ).toThrow(/checkpoint is fixed as "checkpoint-a", not "checkpoint-b"/);
+    expect(collisionCallbackInvoked).toBe(false);
+    expectRowCounts(occupiedIdentityDatabase, 1, 1);
+
+    const sameIdentityDatabase = memoryDatabase();
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(
+        sameIdentityDatabase,
+        'same-identity',
+        'same-identity',
+        collide,
+      ),
+    ).toThrow(/checkpointId must differ from localCharacterId/);
+    expect(collisionCallbackInvoked).toBe(false);
+    expectRowCounts(sameIdentityDatabase, 0, 0);
+  });
+
+  it('validates the exact created baseline instead of skipping a missing before snapshot', () => {
+    for (const sabotage of [
+      {
+        sql: `UPDATE local_character SET stateRevision = 1
+              WHERE local_character_id = 'character'`,
+        expected: /initial revisions must be 0, 0, 0; got 1, 0, 0/,
+      },
+      {
+        sql: `UPDATE local_character SET payload_json = '{"tampered":true}'
+              WHERE local_character_id = 'character'`,
+        expected: /changed after creation before checkpoint/,
+      },
+    ]) {
+      const database = memoryDatabase();
+      expect(() =>
+        commitNewLocalCharacterCheckpoint(database, 'character', 'checkpoint', (create) => {
+          create('DRAFT', '{"version":1}');
+          database.exec(sabotage.sql);
+        }),
+      ).toThrow(sabotage.expected);
+      expectRowCounts(database, 0, 0);
+    }
+  });
+
+  it('rolls back both rows when the callback or first-checkpoint insertion fails', () => {
+    const callbackDatabase = memoryDatabase();
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(callbackDatabase, 'character', 'checkpoint', (create) => {
+        create('DRAFT', '{}');
+        throw new Error('fail after create');
+      }),
+    ).toThrow(/fail after create/);
+    expectRowCounts(callbackDatabase, 0, 0);
+
+    const database = memoryDatabase();
+    database.exec(`CREATE TEMP TRIGGER ignore_first_local_character_checkpoint
+      BEFORE INSERT ON local_character_checkpoint
+      BEGIN SELECT RAISE(IGNORE); END;`);
+
+    expect(() => commitNewDraft(database)).toThrow(/checkpoint "checkpoint" was not inserted/);
+    expectRowCounts(database, 0, 0);
+
+    for (const sabotage of [
+      {
+        sql: `UPDATE local_character_checkpoint SET snapshot_sha256 = '${'0'.repeat(64)}'
+              WHERE checkpoint_id = NEW.checkpoint_id`,
+        expected: /checkpoint "checkpoint" checksum does not match its snapshot/,
+      },
+      {
+        sql: `UPDATE local_character_checkpoint SET checkpoint_revision = 1
+              WHERE checkpoint_id = NEW.checkpoint_id`,
+        expected: /checkpoint "checkpoint" first revision must be 0; got 1/,
+      },
+      {
+        sql: `UPDATE local_character SET payload_json = '{"tampered":true}'
+              WHERE local_character_id = NEW.local_character_id`,
+        expected: /changed after creation before checkpoint/,
+      },
+    ]) {
+      const corruptDatabase = memoryDatabase();
+      corruptDatabase.exec(`CREATE TEMP TRIGGER corrupt_first_checkpoint
+        AFTER INSERT ON local_character_checkpoint
+        BEGIN ${sabotage.sql}; END;`);
+      expect(() => commitNewDraft(corruptDatabase)).toThrow(sabotage.expected);
+      expectRowCounts(corruptDatabase, 0, 0);
+    }
+  });
+
+  it('keeps the first-checkpoint creator synchronous, one-shot, and transaction-scoped', async () => {
+    const nestedDatabase = memoryDatabase();
+    const nested = nestedDatabase.transaction(() => commitNewDraft(nestedDatabase));
+    expect(() => nested.immediate()).toThrow(/requires a top-level transaction/);
+    expectRowCounts(nestedDatabase, 0, 0);
+
+    const asyncDatabase = memoryDatabase();
+    const asyncWrite = async (_create: LocalCharacterCheckpointCreator): Promise<void> => {
+      await Promise.resolve();
+    };
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(
+        asyncDatabase,
+        'character',
+        'checkpoint',
+        asyncWrite as never,
+      ),
+    ).toThrow(/must be synchronous/);
+    await Promise.resolve();
+    expectRowCounts(asyncDatabase, 0, 0);
+
+    const thenableDatabase = memoryDatabase();
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(thenableDatabase, 'character', 'checkpoint', (create) => {
+        create('DRAFT', '{}');
+        return { then: (): void => undefined };
+      }),
+    ).toThrow(/must be synchronous/);
+    expectRowCounts(thenableDatabase, 0, 0);
+
+    const repeatedDatabase = memoryDatabase();
+    expect(() =>
+      commitNewLocalCharacterCheckpoint(repeatedDatabase, 'character', 'checkpoint', (create) => {
+        create('DRAFT', '{}');
+        try {
+          create('DRAFT', '{}');
+        } catch {
+          // The outer transaction must still observe and reject a swallowed creator failure.
+        }
+      }),
+    ).toThrow(/creator is no longer active/);
+    expectRowCounts(repeatedDatabase, 0, 0);
+
+    const leakedDatabase = memoryDatabase();
+    let leakedCreator: LocalCharacterCheckpointCreator | undefined;
+    commitNewLocalCharacterCheckpoint(leakedDatabase, 'character', 'checkpoint', (create) => {
+      leakedCreator = create;
+      create('DRAFT', '{}');
+    });
+    expect(() => leakedCreator?.('DRAFT', '{"leaked":true}')).toThrow(
+      /creator is no longer active/,
+    );
+    expectRowCounts(leakedDatabase, 1, 1);
   });
 
   it('rejects reused identities in either direction before invoking the callback', () => {
@@ -412,8 +639,7 @@ describe('local character checkpoint store', () => {
 
   it('loads fail-closed when the stored checksum is corrupt', () => {
     const database = memoryDatabase();
-    createDraft(database, 'character');
-    commitLocalCharacterCheckpoint(database, 'character', 'checkpoint', () => undefined);
+    commitNewDraft(database);
     database
       .prepare('UPDATE local_character_checkpoint SET snapshot_sha256 = ?')
       .run('0'.repeat(64));
@@ -425,8 +651,7 @@ describe('local character checkpoint store', () => {
 
   it('loads fail-closed when a validly hashed snapshot differs from the builder', () => {
     const database = memoryDatabase();
-    createDraft(database, 'character');
-    commitLocalCharacterCheckpoint(database, 'character', 'checkpoint', () => undefined);
+    commitNewDraft(database);
     const snapshotJson = '{"localCharacter":{"tampered":true}}';
     database
       .prepare(
@@ -442,8 +667,7 @@ describe('local character checkpoint store', () => {
 
   it('loads fail-closed when the stored revision triple differs from the owner', () => {
     const database = memoryDatabase();
-    createDraft(database, 'character');
-    commitLocalCharacterCheckpoint(database, 'character', 'checkpoint', () => undefined);
+    commitNewDraft(database);
     database.prepare('UPDATE local_character_checkpoint SET projectionRevision = 1').run();
 
     expect(() => loadLocalCharacterCheckpoint(database, 'character')).toThrow(
