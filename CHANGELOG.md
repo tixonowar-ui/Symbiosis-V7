@@ -45,9 +45,16 @@
 
 ### Добавлено
 
+- Первый production adoption wire v2: host отдаёт durable `deviceId` через
+  same-origin `no-store` endpoint, повторно сверяет locator при
+  `session.reconnect` и публикует обязательную пару capabilities → role-neutral
+  `APP-001`; web применяет пару одним commit только при точном
+  correlation/reason/revisions. Командные и read-маршруты wire v1 сохранены,
+  pre-adoption окно ADR 0028 закрыто.
 - `src/shared` кодирует exact `session.reconnect` и staged capability frame wire
   v2: device identity проверяется как canonical UUID v4, executable command IDs
-  — словарём, bootstrap role допускает явный `null`; production consumers нет.
+  — словарём, bootstrap role допускает явный `null`; контракт попал в main до
+  первого production adoption.
 - ADR 0028 задаёт симметричный `session.reconnect` wire v2, staged capability
   pair для команд v1, nullable bootstrap role и одноразовую pre-adoption
   границу, после которой v2 замораживается.

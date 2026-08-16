@@ -1,14 +1,16 @@
 import { join } from 'node:path';
 
-import { FORM_IDS, type FormId } from '@generated/types/atlas.js';
+import { FORM_IDS, type ActionKey, type FormId } from '@generated/types/atlas.js';
 import type {
   AtlasTransitionReference,
   HostReadCommandKind,
   ProtocolVocabulary,
   WorkflowCommandId,
 } from '@shared/wire-protocol.js';
+import type { AddressableRouteTemplate, WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
 
 import { array, readJsonFile, record, string } from './json-source.js';
+import { APP_001_ACTION_KEYS } from './projections/app.js';
 
 const WORKFLOW_QA_PREFIX = 'QA-WORKFLOW-';
 const WORKFLOW_COMMAND = /^UI-CMD-[A-Z0-9-]+$/u;
@@ -17,6 +19,7 @@ const HOST_TRANSITION_KINDS = new Set([
   'operation-command',
   'read-only-command',
 ]);
+const APP_001_ACTION_KEY_SET: ReadonlySet<string> = new Set(APP_001_ACTION_KEYS);
 
 const jsonFile = (path: string): Promise<unknown> =>
   readJsonFile(path, 'protocol vocabulary source');
@@ -30,7 +33,9 @@ function transitionKey(value: {
   return JSON.stringify([value.from, value.to, value.kind, value.trigger]);
 }
 
-export async function loadProtocolVocabulary(projectRoot: string): Promise<ProtocolVocabulary> {
+export async function loadProtocolVocabulary(
+  projectRoot: string,
+): Promise<ProtocolVocabulary & WireV2Vocabulary> {
   const atlasDirectory = join(projectRoot, 'generated', 'spec', 'atlas');
   const [qaSource, transitionSource] = await Promise.all([
     jsonFile(join(atlasDirectory, 'qa-scenarios.json')),
@@ -88,10 +93,19 @@ export async function loadProtocolVocabulary(projectRoot: string): Promise<Proto
   }
 
   return {
+    isAddressableRouteTemplate: (_value): _value is AddressableRouteTemplate => false,
+    isClientRouteBindings: () => false,
+    isFormActionKey: (sourceFormId, value): value is ActionKey =>
+      sourceFormId === 'APP-001' && APP_001_ACTION_KEY_SET.has(value),
     isFormId: (value): value is FormId => formIds.has(value),
     isHostTransition: (
       value: AtlasTransitionReference<HostReadCommandKind | 'operation-command'>,
     ): boolean => hostTransitions.has(transitionKey(value)),
+    isPresentedForm: (formId, formType, routeTemplate, bindings) =>
+      formId === 'APP-001' &&
+      formType === 'screen' &&
+      routeTemplate === '/' &&
+      bindings.length === 0,
     isWorkflowCommandId: (value): value is WorkflowCommandId => workflowCommandIds.has(value),
   };
 }

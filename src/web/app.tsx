@@ -18,14 +18,14 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
       return (
         <section role="status" data-client-state={state.kind}>
           <h1>Ожидание APP-001</h1>
-          <p>projection.reconnect отправлен; клиент ждёт проверенный snapshot хоста.</p>
+          <p>session.reconnect отправлен; клиент ждёт проверенную пару хоста.</p>
         </section>
       );
     case 'ready':
       return (
         <section role="status" data-client-state={state.kind}>
           <h1>APP-001 получен от хоста</h1>
-          <p>Показана последняя подтверждённая проекция player.</p>
+          <p>Показана последняя подтверждённая role-neutral проекция.</p>
         </section>
       );
     case 'host-refusal':
@@ -38,7 +38,7 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
     case 'protocol-error':
       return (
         <section role="alert" data-client-state={state.kind}>
-          <h1>Ошибка wire v1</h1>
+          <h1>Ошибка wire-протокола</h1>
           <p>{state.detail}</p>
           <pre>{JSON.stringify(state.refusal, null, 2)}</pre>
         </section>
