@@ -58,6 +58,7 @@
 | [0024](0024-stat-map-integer-values.md)                   | Целочисленные значения `StatMap`     | принято                                |
 | [0025](0025-character-draft-checkpoint-scope.md)          | Checkpoint черновика персонажа       | принято                                |
 | [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                |
+| [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято                                |
 
 ## Перенос решений аудита
 

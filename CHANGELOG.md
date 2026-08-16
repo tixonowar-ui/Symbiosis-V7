@@ -42,6 +42,7 @@
 
 ### Добавлено
 
+- ADR 0027 фиксирует shell context; `APP-002` требует identity/seat subsystems.
 - `src/shared` получил отдельный exact codec wire v2 для form-action и
   addressable-route intents, составной presentation snapshot и двух закрытых
   typed refusal; wire v1 остаётся без изменений сообщений и семантики.
