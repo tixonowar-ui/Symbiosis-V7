@@ -59,6 +59,7 @@
 | [0025](0025-character-draft-checkpoint-scope.md)          | Checkpoint черновика персонажа       | принято                                |
 | [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                |
 | [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято                                |
+| [0028](0028-wire-v2-reconnect.md)                         | Инициация reconnect в wire v2        | принято                                |
 
 ## Перенос решений аудита
 
