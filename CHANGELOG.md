@@ -45,6 +45,11 @@
 
 ### Добавлено
 
+- ADR 0029 задаёт initial payload wizard-черновика: незаполненные и optional
+  значения и отсутствующая текущая команда выражаются JSON `null` при
+  обязательном key, `wizardCheckpointId` выделяется до первого snapshot,
+  `draftRevision` начинается с 0, а `IDENTITY_INCOMPLETE` существует только как
+  отсутствие Continue в `availableActionKeys`.
 - Первый production adoption wire v2: host отдаёт durable `deviceId` через
   same-origin `no-store` endpoint, повторно сверяет locator при
   `session.reconnect` и публикует обязательную пару capabilities → role-neutral

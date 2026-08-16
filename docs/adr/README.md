@@ -60,6 +60,7 @@
 | [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                |
 | [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято                                |
 | [0028](0028-wire-v2-reconnect.md)                         | Инициация reconnect в wire v2        | принято                                |
+| [0029](0029-wizard-draft-initial-payload.md)              | Начальный payload wizard-черновика   | принято                                |
 
 ## Перенос решений аудита
 
