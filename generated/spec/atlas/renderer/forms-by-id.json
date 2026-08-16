@@ -577,9 +577,7 @@
       "contextId",
       "stateRevision",
       "projectionRevision",
-      "deviceId",
-      "controllerSeat",
-      "connectionState"
+      "deviceId"
     ],
     "roles": [
       "player"
@@ -655,7 +653,7 @@
   "APP-004": {
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Библиотека локальных персонажей активного локального владельца: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. На host-компьютере она сериализуется только после committed HOST_LOCAL_CANDIDATE privacy handoff как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются.",
+      "Содержательная область: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
       "Индикатор связи и ревизии"
@@ -670,7 +668,7 @@
       "QA-CHANGE-APP-004"
     ],
     "requiredFields": [
-      "localOwnerId",
+      "localOwnerIdOrNull",
       "localCharacterLibraryRevision",
       "draftCharacterIds[]",
       "finalCharacterIds[]",

@@ -248,13 +248,13 @@
   {
     "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна.",
     "qaId": "QA-FORM-APP-002",
-    "scenario": "Проверить буквальное назначение APP-002: Локальная библиотека персонажей, создание/черновик, импорт/экспорт, подключение/переподключение и настройки; мастерских entry points нет. Поля: contextId, stateRevision, projectionRevision, deviceId, controllerSeat, connectionState. CTA: Локальные персонажи, Создать персонажа, Импортировать персонажа, Подключиться, Переподключиться к сохранённой сессии, Продолжить допущенную кампанию, Настройки, Сменить режим.",
+    "scenario": "Проверить буквальное назначение APP-002: Локальная библиотека персонажей, создание/черновик, импорт/экспорт, подключение/переподключение и настройки; мастерских entry points нет. Поля: contextId, stateRevision, projectionRevision, deviceId. CTA: Локальные персонажи, Создать персонажа, Импортировать персонажа, Подключиться, Переподключиться к сохранённой сессии, Продолжить допущенную кампанию, Настройки, Сменить режим.",
     "scope": "APP-002"
   },
   {
     "expected": "Старый противоречащий текст, CTA, component или переход отсутствует; эффективны только purpose/components/actions/states текущей записи.",
     "qaId": "QA-CHANGE-APP-002",
-    "scenario": "Регрессионно проверить новую/переопределённую семантику «Главное меню игрока», включая superseded negative-space, exact operations и все специальные states.",
+    "scenario": "Регрессионно проверить новую/переопределённую семантику «Главное меню игрока», включая superseded negative-space, exact operations и все специальные states; requiredFields содержат ровно contextId, stateRevision, projectionRevision и deviceId, а inputOwner не требует active controllerSeat или campaign authority.",
     "scope": "APP-002"
   },
   {
@@ -272,13 +272,13 @@
   {
     "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна.",
     "qaId": "QA-FORM-APP-004",
-    "scenario": "Проверить буквальное назначение APP-004: Библиотека локальных персонажей активного локального владельца: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. На host-компьютере она сериализуется только после committed HOST_LOCAL_CANDIDATE privacy handoff как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. Поля: localOwnerId, localCharacterLibraryRevision, draftCharacterIds[], finalCharacterIds[], launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE, handoffIdOrNull, handoffReceiptIdOrNull, returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE, campaignAuthority=false when HOST_LOCAL_CANDIDATE, stateRevision, projectionRevision. CTA: Открыть «Создание персонажа: идентичность», Открыть «Выбор локального профиля и места», Открыть «Проверка совместимости сохранения», Открыть «Подтверждение выхода», Вернуться в главное меню игрока, Импортировать персонажа.",
+    "scenario": "Проверить буквальное назначение APP-004: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. Поля: localOwnerIdOrNull, localCharacterLibraryRevision, draftCharacterIds[], finalCharacterIds[], launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE, handoffIdOrNull, handoffReceiptIdOrNull, returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE, campaignAuthority=false when HOST_LOCAL_CANDIDATE, stateRevision, projectionRevision. CTA: Открыть «Создание персонажа: идентичность», Открыть «Выбор локального профиля и места», Открыть «Проверка совместимости сохранения», Открыть «Подтверждение выхода», Вернуться в главное меню игрока, Импортировать персонажа.",
     "scope": "APP-004"
   },
   {
     "expected": "Старый противоречащий текст, CTA, component или переход отсутствует; эффективны только purpose/components/actions/states текущей записи.",
     "qaId": "QA-CHANGE-APP-004",
-    "scenario": "Регрессионно проверить новую/переопределённую семантику «Список локальных персонажей», включая superseded negative-space, exact operations и все специальные states.",
+    "scenario": "Регрессионно проверить новую/переопределённую семантику «Список локальных персонажей», включая superseded negative-space, exact operations и все специальные states; requiredFields использует localOwnerIdOrNull, а режимы библиотеки проверяются раздельно: null означает deviceId-owned библиотеку без owner-match check, non-null требует active acknowledged local owner и committed HOST_LOCAL_CANDIDATE handoffReceiptId на host-компьютере.",
     "scope": "APP-004"
   },
   {
