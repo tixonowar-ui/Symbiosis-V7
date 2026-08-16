@@ -1,3 +1,5 @@
+export { bootstrapDeviceIdentity, loadDeviceId, resetDeviceIdentity } from './device-identity.js';
+export type { DeviceBindingsInvalidator, DeviceId } from './device-identity.js';
 export type {
   CampaignCheckpoint,
   LocalCharacter,

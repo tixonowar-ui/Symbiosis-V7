@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { openPersistenceDatabase } from './database.js';
 import { MAX_SAFE_REVISION, migration0001 } from './migrations/0001-initial.js';
-import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
+import { migration0002 } from './migrations/0002-local-character-checkpoint.js';
+import { applyMigrationSequence } from './migrations/index.js';
 import {
   commitLocalCharacterCheckpoint,
   commitNewLocalCharacterCheckpoint,
@@ -122,7 +123,7 @@ describe('local character checkpoint migration', () => {
     expect(applyMigrationSequence(database, [migration0001])).toBe(1);
     createDraft(database, 'preserved', '{ "source": "v1" }');
 
-    expect(applyMigrations(database)).toBe(2);
+    expect(applyMigrationSequence(database, [migration0001, migration0002])).toBe(2);
     expect(
       database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
     ).toEqual([
