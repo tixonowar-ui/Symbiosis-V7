@@ -13,3 +13,5 @@ export {
   encodeHostMessage,
 } from './wire-codec.js';
 export * from './wire-protocol.js';
+export * from './wire-v2-codec.js';
+export * from './wire-v2-protocol.js';

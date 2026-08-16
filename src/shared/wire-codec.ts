@@ -599,3 +599,22 @@ export const encodeHostMessage = (
   value: HostToClientMessage,
   vocabulary: ProtocolVocabulary,
 ): EncodeResult => encode(value, (candidate) => hostValue(candidate, vocabulary));
+
+/** @internal Validation machinery shared by closed, version-specific codecs. */
+export const wireCodecPrimitives = {
+  abortInvalid,
+  abortUnrecognized,
+  encode,
+  exact,
+  json,
+  jsonObject,
+  literal,
+  oneOf,
+  parse,
+  record,
+  revision,
+  revisions,
+  role,
+  string,
+  validated,
+} as const;
