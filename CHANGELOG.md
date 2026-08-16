@@ -45,6 +45,9 @@
 
 ### Добавлено
 
+- ADR 0028 задаёт симметричный `session.reconnect` wire v2, staged capability
+  pair для команд v1, nullable bootstrap role и одноразовую pre-adoption
+  границу, после которой v2 замораживается.
 - Device-local identity store сохраняет один canonical lowercase UUID v4 в
   SQLite через forward-миграцию `0003`: bootstrap отличает первую инициализацию
   от missing/malformed состояния, а explicit reset сначала инвалидирует
