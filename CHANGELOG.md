@@ -45,6 +45,10 @@
 
 ### Добавлено
 
+- Device-local identity store сохраняет один canonical lowercase UUID v4 в
+  SQLite через forward-миграцию `0003`: bootstrap отличает первую инициализацию
+  от missing/malformed состояния, а explicit reset сначала инвалидирует
+  известные bindings и не создаёт новый ID сам.
 - ADR 0027 фиксирует shell context; `APP-002` требует identity/seat subsystems.
 - `src/shared` получил отдельный exact codec wire v2 для form-action и
   addressable-route intents, составной presentation snapshot и двух закрытых
