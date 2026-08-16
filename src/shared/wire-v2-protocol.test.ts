@@ -22,6 +22,7 @@ import type {
   FormActionIntentV2Message,
   FormActionRefusalV2Message,
   HostToClientV2Message,
+  InteractiveRole,
   ProtocolVocabulary,
   ProjectionSnapshotV2Message,
   RevisionVector,
@@ -58,6 +59,7 @@ const vocabulary: WireV2Vocabulary = {
   isPresentedForm: (formId, formType, routeTemplate, bindings) =>
     assignedPresentations.get(`${formId}|${formType}|${routeTemplate}`) ===
     JSON.stringify(bindings),
+  isWorkflowCommandId: (_value): _value is never => false,
 };
 const v1Vocabulary: ProtocolVocabulary = {
   isFormId: (value) => vocabulary.isFormId(value),
@@ -261,6 +263,39 @@ describe('wire v2 navigation contracts', () => {
     expect(reduced.presentation.base).toEqual(decoded.presentation.base);
     expect(reduced.presentation.layers).toHaveLength(1);
   });
+
+  it('round-trips only player, gm, or explicit null projection roles', () => {
+    expectTypeOf<
+      ProjectionSnapshotV2Message['projectionRole']
+    >().toEqualTypeOf<InteractiveRole | null>();
+    for (const projectionRole of ['player', 'gm', null] as const) {
+      const value = { ...snapshot, projectionRole } satisfies ProjectionSnapshotV2Message;
+      expect((hostRoundTrip(value) as ProjectionSnapshotV2Message).projectionRole).toBe(
+        projectionRole,
+      );
+    }
+  });
+
+  it('requires the projectionRole key even though its value may be null', () => {
+    const { projectionRole: _omitted, ...missing } = snapshot;
+    expect(refuseHost(missing)).toEqual({
+      actualType: 'undefined',
+      code: 'INVALID_SHAPE',
+      expected: 'required enumerable field',
+      path: '$.projectionRole',
+    });
+  });
+
+  it.each(['system', 'spectator'])(
+    'rejects non-interactive projection role %s',
+    (projectionRole) => {
+      expect(refuseHost({ ...snapshot, projectionRole })).toEqual({
+        code: 'UNRECOGNIZED',
+        path: '$.projectionRole',
+        value: projectionRole,
+      });
+    },
+  );
 
   it.each([
     'FORM_ACTION',

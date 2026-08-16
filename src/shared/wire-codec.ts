@@ -604,10 +604,12 @@ export const encodeHostMessage = (
 export const wireCodecPrimitives = {
   abortInvalid,
   abortUnrecognized,
+  capabilityId,
   encode,
   exact,
   json,
   jsonObject,
+  list,
   literal,
   oneOf,
   parse,
