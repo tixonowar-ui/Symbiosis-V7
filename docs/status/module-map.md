@@ -47,7 +47,7 @@ atlas-derived срез с wire v1; остальные прикладные сл�
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                | Веха |
 | ---------------------------- | ------------ | ---------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact navigation wire v2, composite snapshot/refusals        | M4   |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect, snapshot/capability/refusals  | M4   |
 | `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже                | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет          | M3   |
 | `src/persistence`            | **частично** | CRUD + checkpoint черновика + durable device identity; 16 циклов позже | M2   |

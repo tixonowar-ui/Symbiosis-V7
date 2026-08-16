@@ -45,6 +45,9 @@
 
 ### Добавлено
 
+- `src/shared` кодирует exact `session.reconnect` и staged capability frame wire
+  v2: device identity проверяется как canonical UUID v4, executable command IDs
+  — словарём, bootstrap role допускает явный `null`; production consumers нет.
 - ADR 0028 задаёт симметричный `session.reconnect` wire v2, staged capability
   pair для команд v1, nullable bootstrap role и одноразовую pre-adoption
   границу, после которой v2 замораживается.

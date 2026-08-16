@@ -1,6 +1,12 @@
 import type { ActionKey, FormId, FormType } from '@generated/types/atlas.js';
 
-import type { InteractiveRole, JsonObject, RevisionVector } from './wire-protocol.js';
+import type {
+  InteractiveRole,
+  JsonObject,
+  RevisionVector,
+  WorkflowCommandCapabilityId,
+  WorkflowCommandId,
+} from './wire-protocol.js';
 
 export const WIRE_PROTOCOL_V2_VERSION = 2 as const;
 declare const addressableRouteTemplate: unique symbol;
@@ -69,6 +75,14 @@ export interface AddressableRouteIntentV2Message extends WireV2Envelope<'navigat
   readonly routeTemplate: AddressableRouteTemplate;
 }
 
+export interface SessionReconnectV2Message extends WireV2Envelope<'session.reconnect'> {
+  readonly deviceId: string;
+  readonly knownRevisions: RevisionVector;
+  readonly reconnectRequestId: string;
+  readonly supportedWorkflowCommandIds: readonly WorkflowCommandCapabilityId[];
+  readonly unacknowledgedCommandIds: readonly string[];
+}
+
 export type NavigationCommonRefusal =
   | {
       readonly actualProjectionRevision: number;
@@ -99,14 +113,24 @@ export type AddressableRouteRefusalV2Message = NavigationRefusalV2Message<
 
 export interface ProjectionSnapshotV2Message extends WireV2Envelope<'projection.snapshot'> {
   readonly presentation: AssignedPresentation;
-  readonly projectionRole: InteractiveRole;
+  readonly projectionRole: InteractiveRole | null;
   readonly revisions: RevisionVector;
 }
 
-export type ClientToHostV2Message = AddressableRouteIntentV2Message | FormActionIntentV2Message;
+export interface SessionReconnectCapabilitiesV2Message extends WireV2Envelope<'session.reconnect.capabilities'> {
+  readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
+  readonly reconnectRequestId: string;
+  readonly revisions: RevisionVector;
+}
+
+export type ClientToHostV2Message =
+  AddressableRouteIntentV2Message | FormActionIntentV2Message | SessionReconnectV2Message;
 
 export type HostToClientV2Message =
-  AddressableRouteRefusalV2Message | FormActionRefusalV2Message | ProjectionSnapshotV2Message;
+  | AddressableRouteRefusalV2Message
+  | FormActionRefusalV2Message
+  | ProjectionSnapshotV2Message
+  | SessionReconnectCapabilitiesV2Message;
 
 export interface WireV2Vocabulary {
   isAddressableRouteTemplate(value: string): value is AddressableRouteTemplate;
@@ -122,4 +146,5 @@ export interface WireV2Vocabulary {
   ): boolean;
   isFormActionKey(sourceFormId: FormId, value: string): value is ActionKey;
   isFormId(value: string): value is FormId;
+  isWorkflowCommandId(value: string): value is WorkflowCommandId;
 }

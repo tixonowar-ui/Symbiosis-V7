@@ -10,9 +10,11 @@ import type {
   PresentedBaseForm,
   PresentedLayerForm,
   ProjectionSnapshotV2Message,
+  SessionReconnectCapabilitiesV2Message,
+  SessionReconnectV2Message,
   WireV2Vocabulary,
 } from './wire-v2-protocol.js';
-import type { DecodeResult, EncodeResult } from './wire-protocol.js';
+import type { DecodeResult, EncodeResult, WorkflowCommandId } from './wire-protocol.js';
 
 const LAYER_TYPES = new Set(['banner', 'component', 'dialog', 'overlay', 'specification']);
 const BINDING_SOURCES = new Set(['client-selected', 'executor-allocated', 'inherited']);
@@ -24,14 +26,22 @@ const ASSIGNMENT_REASONS = new Set([
   'RECONNECT',
 ]);
 
+/**
+ * The wire boundary validates the representation locally so a lower-layer
+ * brand does not reverse the dependency direction.
+ */
+const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
 const {
   abortInvalid: invalid,
   abortUnrecognized: unrecognized,
+  capabilityId,
   encode,
   exact,
   json: jsonValue,
   jsonObject,
   literal,
+  list,
   oneOf,
   parse,
   record,
@@ -82,6 +92,22 @@ const assignedBinding = (value: unknown, path: string): AssignedRouteBinding => 
 const formId = (value: unknown, path: string, vocabulary: WireV2Vocabulary) => {
   const candidate = text(value, path);
   if (vocabulary.isFormId(candidate)) return candidate;
+  return unrecognized(path, candidate);
+};
+
+const deviceId = (value: unknown, path: string): string => {
+  const candidate = text(value, path);
+  if (DEVICE_ID_PATTERN.test(candidate)) return candidate;
+  return unrecognized(path, candidate);
+};
+
+const workflowCommandId = (
+  value: unknown,
+  path: string,
+  vocabulary: WireV2Vocabulary,
+): WorkflowCommandId => {
+  const candidate = text(value, path);
+  if (vocabulary.isWorkflowCommandId(candidate)) return candidate;
   return unrecognized(path, candidate);
 };
 
@@ -187,6 +213,20 @@ const routeIntent = (
   return validated(value);
 };
 
+const sessionReconnect = (value: unknown): SessionReconnectV2Message => {
+  const object = exact(
+    value,
+    'deviceId knownRevisions messageType protocolVersion reconnectRequestId supportedWorkflowCommandIds unacknowledgedCommandIds',
+  );
+  literal(object['messageType'], 'session.reconnect', '$.messageType');
+  deviceId(object['deviceId'], '$.deviceId');
+  revisions(object['knownRevisions'], '$.knownRevisions');
+  text(object['reconnectRequestId'], '$.reconnectRequestId');
+  list(object['supportedWorkflowCommandIds'], '$.supportedWorkflowCommandIds', capabilityId);
+  list(object['unacknowledgedCommandIds'], '$.unacknowledgedCommandIds', text);
+  return validated(value);
+};
+
 const refusalPayload = (value: unknown, path: string, route: boolean): void => {
   const object = record(value, path);
   const code = text(object['code'], `${path}.code`);
@@ -225,7 +265,24 @@ const snapshot = (value: unknown, vocabulary: WireV2Vocabulary): ProjectionSnaps
   const object = exact(value, 'messageType presentation projectionRole protocolVersion revisions');
   literal(object['messageType'], 'projection.snapshot', '$.messageType');
   presentation(object['presentation'], vocabulary);
-  role(object['projectionRole'], '$.projectionRole');
+  if (object['projectionRole'] !== null) role(object['projectionRole'], '$.projectionRole');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const sessionReconnectCapabilities = (
+  value: unknown,
+  vocabulary: WireV2Vocabulary,
+): SessionReconnectCapabilitiesV2Message => {
+  const object = exact(
+    value,
+    'executableWorkflowCommandIds messageType protocolVersion reconnectRequestId revisions',
+  );
+  literal(object['messageType'], 'session.reconnect.capabilities', '$.messageType');
+  list(object['executableWorkflowCommandIds'], '$.executableWorkflowCommandIds', (entry, path) =>
+    workflowCommandId(entry, path, vocabulary),
+  );
+  text(object['reconnectRequestId'], '$.reconnectRequestId');
   revisions(object['revisions'], '$.revisions');
   return validated(value);
 };
@@ -238,6 +295,7 @@ const clientValue = (value: unknown, vocabulary: WireV2Vocabulary): ClientToHost
   if (object['messageType'] === 'navigation.addressable-route') {
     return routeIntent(value, vocabulary);
   }
+  if (object['messageType'] === 'session.reconnect') return sessionReconnect(value);
   return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));
 };
 
@@ -248,6 +306,9 @@ const hostValue = (value: unknown, vocabulary: WireV2Vocabulary): HostToClientV2
   }
   if (object['messageType'] === 'navigation.addressable-route.refusal') {
     return refusalMessage(value, true);
+  }
+  if (object['messageType'] === 'session.reconnect.capabilities') {
+    return sessionReconnectCapabilities(value, vocabulary);
   }
   if (object['messageType'] === 'projection.snapshot') return snapshot(value, vocabulary);
   return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));
