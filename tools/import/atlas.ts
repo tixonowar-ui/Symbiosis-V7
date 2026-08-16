@@ -28,6 +28,8 @@ const SCHEMA_VERSION = '1.2.0';
 const ATLAS_VERSION = '1.2';
 /** `counts.byOrigin` names the forms introduced by this pinned Atlas version. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
+/** Atlas v1.2 `forms[*].actions.ctaAvailabilityByAction`: 1,242 rows and distinct keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_242;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -927,6 +929,7 @@ export async function importAtlas(): Promise<AtlasImport> {
   );
   const guardStates = asStringArray(root['guardStates'], WHERE, 'guardStates');
   const globalContractRows = extractGlobalContracts(globalContracts);
+  const actionKeys = extractActionKeys(forms);
 
   // --- the atlas must agree with its own counts ---------------------------
   expectCount(WHERE, 'entity lifecycles', lifecycles.length, 19);
@@ -1048,6 +1051,7 @@ export async function importAtlas(): Promise<AtlasImport> {
       source,
       graphDigest,
       formIds,
+      actionKeys,
       forms,
       journeys,
       requirements,
@@ -1063,10 +1067,49 @@ export async function importAtlas(): Promise<AtlasImport> {
   return { formIds, bytesWritten: bytes, files };
 }
 
+export function extractActionKeys(forms: readonly JsonObject[]): string[] {
+  const actionKeys: string[] = [];
+  const firstLocationByKey = new Map<string, string>();
+
+  forms.forEach((form, formIndex) => {
+    const formAt = `forms[${String(formIndex)}]`;
+    const formId = asString(form['id'], WHERE, `${formAt}.id`);
+    const actions = asObject(form['actions'], WHERE, `${formAt}.actions`);
+    const rows = asArray(
+      actions['ctaAvailabilityByAction'],
+      WHERE,
+      `${formAt}.actions.ctaAvailabilityByAction`,
+    );
+
+    rows.forEach((value, actionIndex) => {
+      const actionAt = `${formAt}.actions.ctaAvailabilityByAction[${String(actionIndex)}]`;
+      const row = asObject(value, WHERE, actionAt);
+      if (!Object.hasOwn(row, 'actionKey')) {
+        fail(WHERE, `${actionAt}.actionKey is missing for form ${JSON.stringify(formId)}`);
+      }
+      const keyAt = `${actionAt}.actionKey for form ${JSON.stringify(formId)}`;
+      const actionKey = asString(row['actionKey'], WHERE, keyAt);
+      const firstLocation = firstLocationByKey.get(actionKey);
+      if (firstLocation !== undefined) {
+        fail(
+          WHERE,
+          `${keyAt} duplicates ${JSON.stringify(actionKey)} first declared at ${firstLocation}`,
+        );
+      }
+      firstLocationByKey.set(actionKey, keyAt);
+      actionKeys.push(actionKey);
+    });
+  });
+
+  expectCount(WHERE, 'action keys', actionKeys.length, EXPECTED_ACTION_KEY_COUNT);
+  return actionKeys;
+}
+
 interface RenderInput {
   readonly source: string;
   readonly graphDigest: string;
   readonly formIds: readonly string[];
+  readonly actionKeys: readonly string[];
   readonly forms: readonly JsonObject[];
   readonly journeys: readonly JsonObject[];
   readonly requirements: readonly JsonObject[];
@@ -1111,6 +1154,8 @@ function renderTypes(input: RenderInput): string {
     tsUnion('RequirementId', field(input.requirements, 'requirementId')),
     '',
     tsUnion('QaScenarioId', field(input.qaScenarios, 'qaId')),
+    '',
+    tsUnion('ActionKey', input.actionKeys, 'Every CTA action key in Atlas form order.'),
     '',
     tsUnion('TransitionKind', field(input.transitions, 'kind')),
     '',

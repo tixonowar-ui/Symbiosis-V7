@@ -5,11 +5,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ActionKey } from '@generated/types/atlas.js';
 import { describe, expect, it } from 'vitest';
 import {
   assertAtlasCounts,
   auditAtlasSections,
   buildRendererQueryIndexes,
+  extractActionKeys,
   extractGlobalContracts,
   extractWorkflowCommands,
 } from './atlas.js';
@@ -24,6 +26,18 @@ const atlasArtifact = JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as Im
 const atlasObject = (value: unknown): ImportJsonObject => value as ImportJsonObject;
 
 const clonedAtlas = (): ImportJsonObject => structuredClone(atlasArtifact);
+
+const clonedForms = (): ImportJsonObject[] =>
+  structuredClone(atlasArtifact['forms']) as ImportJsonObject[];
+
+const firstFormActionRows = (forms: ImportJsonObject[]): ImportJsonObject[] => {
+  const firstForm = forms[0];
+  if (firstForm === undefined || firstForm['id'] !== 'APP-001') {
+    throw new Error('expected APP-001 as the first Atlas form');
+  }
+  const actions = atlasObject(firstForm['actions']);
+  return actions['ctaAvailabilityByAction'] as ImportJsonObject[];
+};
 
 const clonedGlobalContracts = (): ImportJsonObject =>
   structuredClone(atlasObject(atlasArtifact['globalContracts']));
@@ -356,9 +370,87 @@ describe('generated atlas types', () => {
     expect(union![1]!.trimEnd().split('\n')).toHaveLength(376);
   });
 
+  it('emits one exact ActionKey literal per CTA row', () => {
+    const declaration = source
+      .split('export type ActionKey =\n')[1]
+      ?.split('\n\nexport type TransitionKind =')[0];
+    expect(declaration).toBeDefined();
+    const members = declaration!
+      .trimEnd()
+      .split('\n')
+      .map((line) => JSON.parse(line.replace(/^ {2}\| /u, '').replace(/;$/u, '')) as string);
+    const known: ActionKey = 'APP-002::CTA::007';
+    // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
+    const absent: ActionKey = 'APP-002::CTA::999';
+    expect(members).toHaveLength(1_242);
+    expect(members).toEqual(extractActionKeys(clonedForms()));
+    expect(members).toContain(known);
+    expect(members).not.toContain(absent);
+  });
+
   it('maps every domain to the src/web/forms folder that owns it', () => {
     expect(source).toContain('"Боевая ситуация": "CMB"');
     expect(source).toContain('"Приложение и локальные данные": "APP"');
+  });
+});
+
+describe('action key export guards', () => {
+  it('preserves Atlas form and CTA row order without collapsing keys', () => {
+    const forms = clonedForms();
+    const rows = firstFormActionRows(forms);
+    [rows[0], rows[1]] = [rows[1]!, rows[0]!];
+    const actionKeys = extractActionKeys(forms);
+
+    expect(actionKeys).toHaveLength(1_242);
+    expect(new Set(actionKeys).size).toBe(1_242);
+    expect(actionKeys.slice(0, 4)).toEqual([
+      'APP-001::CTA::002',
+      'APP-001::CTA::001',
+      'APP-001::CTA::003',
+      'APP-001::CTA::004',
+    ]);
+  });
+
+  it('rejects a missing actionKey and names its form and row', () => {
+    const forms = clonedForms();
+    delete firstFormActionRows(forms)[0]!['actionKey'];
+
+    expect(() => extractActionKeys(forms)).toThrow(
+      /forms\[0\].*ctaAvailabilityByAction\[0\]\.actionKey is missing for form "APP-001"/u,
+    );
+  });
+
+  it('rejects a non-string actionKey and names its form and row', () => {
+    const forms = clonedForms();
+    firstFormActionRows(forms)[0]!['actionKey'] = 7;
+
+    expect(() => extractActionKeys(forms)).toThrow(
+      /forms\[0\].*ctaAvailabilityByAction\[0\]\.actionKey for form "APP-001" is not a string \(got number\)/u,
+    );
+  });
+
+  it('rejects a duplicate actionKey and names both Atlas locations', () => {
+    const forms = clonedForms();
+    const firstRows = firstFormActionRows(forms);
+    const secondForm = forms[1];
+    if (secondForm === undefined || secondForm['id'] !== 'APP-002') {
+      throw new Error('expected APP-002 as the second Atlas form');
+    }
+    const secondRows = atlasObject(secondForm['actions'])[
+      'ctaAvailabilityByAction'
+    ] as ImportJsonObject[];
+    secondRows[0]!['actionKey'] = firstRows[0]!['actionKey'];
+
+    expect(() => extractActionKeys(forms)).toThrow(
+      /forms\[1\].*ctaAvailabilityByAction\[0\].*form "APP-002" duplicates "APP-001::CTA::001".*forms\[0\].*ctaAvailabilityByAction\[0\].*form "APP-001"/u,
+    );
+  });
+
+  it('rejects a valid but incomplete action-key catalogue', () => {
+    const forms = clonedForms();
+    firstFormActionRows(forms).pop();
+
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1242 action keys, got 1241/u);
   });
 });
 

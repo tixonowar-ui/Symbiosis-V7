@@ -42,6 +42,9 @@
 
 ### Добавлено
 
+- Импортёр атласа выводит точный `ActionKey` union из всех 1 242 строк
+  `ctaAvailabilityByAction` в исходном порядке и fail-closed отклоняет
+  отсутствующие, нестроковые и глобально дублирующиеся ключи.
 - ADR 0026 разделяет выбор доступного form action и подтверждённое назначение
   составной presentation: server-backed навигация получает exact intent и full
   snapshot только в wire v2, direct URL проходит host validation, signed
