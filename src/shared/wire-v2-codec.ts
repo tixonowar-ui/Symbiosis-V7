@@ -1,0 +1,274 @@
+import { wireCodecPrimitives } from './wire-codec.js';
+import { WIRE_PROTOCOL_V2_VERSION } from './wire-v2-protocol.js';
+import type {
+  AddressableRouteIntentV2Message,
+  AssignedRouteBinding,
+  ClientSelectedRouteBinding,
+  ClientToHostV2Message,
+  FormActionIntentV2Message,
+  HostToClientV2Message,
+  PresentedBaseForm,
+  PresentedLayerForm,
+  ProjectionSnapshotV2Message,
+  WireV2Vocabulary,
+} from './wire-v2-protocol.js';
+import type { DecodeResult, EncodeResult } from './wire-protocol.js';
+
+const LAYER_TYPES = new Set(['banner', 'component', 'dialog', 'overlay', 'specification']);
+const BINDING_SOURCES = new Set(['client-selected', 'executor-allocated', 'inherited']);
+const ASSIGNMENT_REASONS = new Set([
+  'ADDRESSABLE_ROUTE',
+  'COMMAND_DESTINATION',
+  'FORM_ACTION',
+  'HOST_SYSTEM_EVENT',
+  'RECONNECT',
+]);
+
+const {
+  abortInvalid: invalid,
+  abortUnrecognized: unrecognized,
+  encode,
+  exact,
+  json: jsonValue,
+  jsonObject,
+  literal,
+  oneOf,
+  parse,
+  record,
+  revision: integer,
+  revisions,
+  role,
+  string: text,
+  validated,
+} = wireCodecPrimitives;
+
+const array = (value: unknown, path: string): readonly unknown[] => {
+  if (!Array.isArray(value)) return invalid(path, 'array', value);
+  return value;
+};
+
+const bindingList = <T extends { readonly parameterIndex: number }>(
+  value: unknown,
+  path: string,
+  read: (item: unknown, itemPath: string) => T,
+): readonly T[] => {
+  const result = array(value, path).map((item, index) => read(item, `${path}[${String(index)}]`));
+  const seen = new Set<number>();
+  result.forEach((binding, index) => {
+    if (seen.has(binding.parameterIndex)) {
+      unrecognized(`${path}[${String(index)}].parameterIndex`, binding.parameterIndex);
+    }
+    seen.add(binding.parameterIndex);
+  });
+  return result;
+};
+
+const clientBinding = (value: unknown, path: string): ClientSelectedRouteBinding => {
+  const object = exact(value, 'parameterIndex source value', path);
+  integer(object['parameterIndex'], `${path}.parameterIndex`);
+  literal(object['source'], 'client-selected', `${path}.source`);
+  text(object['value'], `${path}.value`);
+  return validated(value);
+};
+
+const assignedBinding = (value: unknown, path: string): AssignedRouteBinding => {
+  const object = exact(value, 'parameterIndex source value', path);
+  integer(object['parameterIndex'], `${path}.parameterIndex`);
+  oneOf(object['source'], BINDING_SOURCES, `${path}.source`);
+  text(object['value'], `${path}.value`);
+  return validated(value);
+};
+
+const formId = (value: unknown, path: string, vocabulary: WireV2Vocabulary) => {
+  const candidate = text(value, path);
+  if (vocabulary.isFormId(candidate)) return candidate;
+  return unrecognized(path, candidate);
+};
+
+const presentedForm = (
+  value: unknown,
+  path: string,
+  layer: boolean,
+  vocabulary: WireV2Vocabulary,
+): PresentedBaseForm | PresentedLayerForm => {
+  const object = exact(
+    value,
+    'availableActionKeys formId formType roleFilteredPayload routeBindings routeTemplate',
+    path,
+  );
+  const id = formId(object['formId'], `${path}.formId`, vocabulary);
+  const formType = layer
+    ? oneOf<PresentedLayerForm['formType']>(object['formType'], LAYER_TYPES, `${path}.formType`)
+    : literal(object['formType'], 'screen', `${path}.formType`);
+  const keys = array(object['availableActionKeys'], `${path}.availableActionKeys`);
+  const seenKeys = new Set<string>();
+  keys.forEach((item, index) => {
+    const keyPath = `${path}.availableActionKeys[${String(index)}]`;
+    const key = text(item, keyPath);
+    if (!vocabulary.isFormActionKey(id, key)) unrecognized(keyPath, key);
+    if (seenKeys.has(key)) unrecognized(keyPath, key);
+    seenKeys.add(key);
+  });
+  jsonObject(object['roleFilteredPayload'], `${path}.roleFilteredPayload`);
+  const bindings = bindingList(object['routeBindings'], `${path}.routeBindings`, assignedBinding);
+  const routeTemplate = text(object['routeTemplate'], `${path}.routeTemplate`);
+  if (!vocabulary.isPresentedForm(id, formType, routeTemplate, bindings)) {
+    unrecognized(path, jsonValue(value, path));
+  }
+  return validated(value);
+};
+
+const presentation = (value: unknown, vocabulary: WireV2Vocabulary): void => {
+  const object = exact(value, 'assignment base layers', '$.presentation');
+  const assignment = exact(
+    object['assignment'],
+    'correlationId reason',
+    '$.presentation.assignment',
+  );
+  text(assignment['correlationId'], '$.presentation.assignment.correlationId');
+  oneOf(assignment['reason'], ASSIGNMENT_REASONS, '$.presentation.assignment.reason');
+  presentedForm(object['base'], '$.presentation.base', false, vocabulary);
+  array(object['layers'], '$.presentation.layers').forEach((item, index) =>
+    presentedForm(item, `$.presentation.layers[${String(index)}]`, true, vocabulary),
+  );
+};
+
+const base = (value: unknown): Record<string, unknown> => {
+  const object = record(value, '$');
+  if (!Object.hasOwn(object, 'protocolVersion')) {
+    invalid('$.protocolVersion', 'required field', undefined);
+  }
+  if (object['protocolVersion'] !== WIRE_PROTOCOL_V2_VERSION) {
+    unrecognized('$.protocolVersion', jsonValue(object['protocolVersion'], '$.protocolVersion'));
+  }
+  if (!Object.hasOwn(object, 'messageType')) invalid('$.messageType', 'required field', undefined);
+  text(object['messageType'], '$.messageType');
+  return object;
+};
+
+const formActionIntent = (
+  value: unknown,
+  vocabulary: WireV2Vocabulary,
+): FormActionIntentV2Message => {
+  const object = exact(
+    value,
+    'actionKey expectedProjectionRevision messageType navigationRequestId protocolVersion sourceFormId',
+  );
+  literal(object['messageType'], 'navigation.form-action', '$.messageType');
+  const sourceFormId = formId(object['sourceFormId'], '$.sourceFormId', vocabulary);
+  const actionKey = text(object['actionKey'], '$.actionKey');
+  if (!vocabulary.isFormActionKey(sourceFormId, actionKey)) {
+    unrecognized('$.actionKey', actionKey);
+  }
+  integer(object['expectedProjectionRevision'], '$.expectedProjectionRevision');
+  text(object['navigationRequestId'], '$.navigationRequestId');
+  return validated(value);
+};
+
+const routeIntent = (
+  value: unknown,
+  vocabulary: WireV2Vocabulary,
+): AddressableRouteIntentV2Message => {
+  const object = exact(
+    value,
+    'bindings expectedProjectionRevision messageType navigationRequestId protocolVersion routeTemplate',
+  );
+  literal(object['messageType'], 'navigation.addressable-route', '$.messageType');
+  const bindings = bindingList(object['bindings'], '$.bindings', clientBinding);
+  integer(object['expectedProjectionRevision'], '$.expectedProjectionRevision');
+  text(object['navigationRequestId'], '$.navigationRequestId');
+  const routeTemplate = text(object['routeTemplate'], '$.routeTemplate');
+  if (!vocabulary.isAddressableRouteTemplate(routeTemplate)) {
+    return unrecognized('$.routeTemplate', routeTemplate);
+  }
+  if (!vocabulary.isClientRouteBindings(routeTemplate, bindings)) {
+    unrecognized('$.bindings', jsonValue(object['bindings'], '$.bindings'));
+  }
+  return validated(value);
+};
+
+const refusalPayload = (value: unknown, path: string, route: boolean): void => {
+  const object = record(value, path);
+  const code = text(object['code'], `${path}.code`);
+  if (code === 'NAVIGATION_UNAVAILABLE' || (route && code === 'INVALID_BINDINGS')) {
+    exact(value, 'code', path);
+  } else if (code === 'IDEMPOTENCY_CONFLICT') {
+    const conflict = exact(value, 'code detail', path);
+    literal(conflict['detail'], 'PAYLOAD_MISMATCH', `${path}.detail`);
+  } else if (code === 'STALE_PROJECTION') {
+    const stale = exact(value, 'actualProjectionRevision code expectedProjectionRevision', path);
+    integer(stale['actualProjectionRevision'], `${path}.actualProjectionRevision`);
+    integer(stale['expectedProjectionRevision'], `${path}.expectedProjectionRevision`);
+  } else {
+    unrecognized(`${path}.code`, code);
+  }
+};
+
+const refusalMessage = (value: unknown, route: boolean): HostToClientV2Message => {
+  const object = exact(
+    value,
+    'messageType navigationRequestId presentationUnchanged protocolVersion refusal revisions',
+  );
+  literal(
+    object['messageType'],
+    route ? 'navigation.addressable-route.refusal' : 'navigation.form-action.refusal',
+    '$.messageType',
+  );
+  text(object['navigationRequestId'], '$.navigationRequestId');
+  literal(object['presentationUnchanged'], true, '$.presentationUnchanged');
+  refusalPayload(object['refusal'], '$.refusal', route);
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const snapshot = (value: unknown, vocabulary: WireV2Vocabulary): ProjectionSnapshotV2Message => {
+  const object = exact(value, 'messageType presentation projectionRole protocolVersion revisions');
+  literal(object['messageType'], 'projection.snapshot', '$.messageType');
+  presentation(object['presentation'], vocabulary);
+  role(object['projectionRole'], '$.projectionRole');
+  revisions(object['revisions'], '$.revisions');
+  return validated(value);
+};
+
+const clientValue = (value: unknown, vocabulary: WireV2Vocabulary): ClientToHostV2Message => {
+  const object = base(value);
+  if (object['messageType'] === 'navigation.form-action') {
+    return formActionIntent(value, vocabulary);
+  }
+  if (object['messageType'] === 'navigation.addressable-route') {
+    return routeIntent(value, vocabulary);
+  }
+  return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));
+};
+
+const hostValue = (value: unknown, vocabulary: WireV2Vocabulary): HostToClientV2Message => {
+  const object = base(value);
+  if (object['messageType'] === 'navigation.form-action.refusal') {
+    return refusalMessage(value, false);
+  }
+  if (object['messageType'] === 'navigation.addressable-route.refusal') {
+    return refusalMessage(value, true);
+  }
+  if (object['messageType'] === 'projection.snapshot') return snapshot(value, vocabulary);
+  return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));
+};
+
+export const decodeClientMessageV2 = (
+  source: string,
+  vocabulary: WireV2Vocabulary,
+): DecodeResult<ClientToHostV2Message> => parse(source, (value) => clientValue(value, vocabulary));
+
+export const decodeHostMessageV2 = (
+  source: string,
+  vocabulary: WireV2Vocabulary,
+): DecodeResult<HostToClientV2Message> => parse(source, (value) => hostValue(value, vocabulary));
+
+export const encodeClientMessageV2 = (
+  value: ClientToHostV2Message,
+  vocabulary: WireV2Vocabulary,
+): EncodeResult => encode(value, (candidate) => clientValue(candidate, vocabulary));
+
+export const encodeHostMessageV2 = (
+  value: HostToClientV2Message,
+  vocabulary: WireV2Vocabulary,
+): EncodeResult => encode(value, (candidate) => hostValue(candidate, vocabulary));

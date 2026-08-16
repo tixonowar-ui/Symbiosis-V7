@@ -42,6 +42,9 @@
 
 ### Добавлено
 
+- `src/shared` получил отдельный exact codec wire v2 для form-action и
+  addressable-route intents, составной presentation snapshot и двух закрытых
+  typed refusal; wire v1 остаётся без изменений сообщений и семантики.
 - Импортёр атласа выводит точный `ActionKey` union из всех 1 242 строк
   `ctaAvailabilityByAction` в исходном порядке и fail-closed отклоняет
   отсутствующие, нестроковые и глобально дублирующиеся ключи.
