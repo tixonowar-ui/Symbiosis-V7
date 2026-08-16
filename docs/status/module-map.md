@@ -3,8 +3,8 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-08-16`
-- Тестов: 505, все зелёные
+- Снимок: `2026-08-17`
+- Тестов: 558, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -39,11 +39,11 @@
 
 ## src/ — приложение
 
-Shared wire v1, минимальный roll contract и каркас handler-реестров готовы,
+Shared wire v1/v2, минимальный roll contract и каркас handler-реестров готовы,
 persistence реализует первый V1-срез, web собирается в self-contained статику и
-открывает `APP-001` из проверенного host snapshot, а host соединяет этот
-atlas-derived срез с wire v1; остальные прикладные слои остаются частичными,
-заглушками или не начаты.
+открывает `APP-001` через атомарную reconnect-пару wire v2, а host сохраняет
+wire v1 для command/read и выдаёт role-neutral bootstrap; остальные прикладные
+слои остаются частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                | Веха |
 | ---------------------------- | ------------ | ---------------------------------------------------------------------- | ---- |
@@ -52,9 +52,9 @@ atlas-derived срез с wire v1; остальные прикладные сл�
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет          | M3   |
 | `src/persistence`            | **частично** | CRUD + checkpoint черновика + durable device identity; 16 циклов позже | M2   |
 | `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity     | M2   |
-| `src/host`                   | **частично** | HTTP/static + wire v1 ws; полностью обслуживается только APP-001       | M4   |
-| `src/host/projections`       | **частично** | player APP-001 + 3 ревизии; gm/system и остальные формы позже          | M4   |
-| `src/web`                    | **частично** | Vite entry + player APP-001; routing/CTA, gm и формы позже             | M5   |
+| `src/host`                   | **частично** | device identity HTTP; wire v1 + v2 reconnect; только APP-001           | M4   |
+| `src/host/projections`       | **частично** | player и role-neutral APP-001 + 3 ревизии; остальные формы позже       | M4   |
+| `src/web`                    | **частично** | Vite + atomic v2 reconnect для APP-001; navigation, gm и формы позже   | M5   |
 | `src/web/renderer`           | **частично** | 11 форм `APP-` из компактных индексов; остальные типы fail-closed      | M5   |
 | `src/web/forms`              | **частично** | домен `app` реализован, остальные 15 каталогов пусты                   | M6   |
 

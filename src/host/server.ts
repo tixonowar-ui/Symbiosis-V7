@@ -7,20 +7,38 @@ import Fastify from 'fastify';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { RawData, WebSocket } from 'ws';
 
-import { decodeClientMessage, encodeHostMessage, WIRE_PROTOCOL_VERSION } from '@shared/index.js';
+import {
+  decodeClientMessage,
+  decodeClientMessageV2,
+  encodeHostMessage,
+  encodeHostMessageV2,
+  WIRE_PROTOCOL_VERSION,
+  WIRE_PROTOCOL_V2_VERSION,
+} from '@shared/index.js';
 import type {
   ClientToHostMessage,
+  ClientToHostV2Message,
   CommandRefusalMessage,
   HostToClientMessage,
+  HostToClientV2Message,
   ProtocolVocabulary,
   RevisionVector,
+  WireV2Vocabulary,
+  WorkflowCommandId,
 } from '@shared/index.js';
 
+import { loadDeviceId } from '../persistence/index.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
-import { loadAppProjectionCatalog, projectAppForm } from './projections/app.js';
+import {
+  APP_001_ACTION_KEYS,
+  loadAppProjectionCatalog,
+  projectApp001Bootstrap,
+  projectAppForm,
+} from './projections/app.js';
 import type { AppProjectionCatalog } from './projections/app.js';
 
 export interface HostServerConfig {
+  readonly database: Parameters<typeof loadDeviceId>[0];
   readonly onFrameError: (error: unknown) => void;
   readonly projectRoot: string;
   readonly readRevisions: () => RevisionVector;
@@ -33,6 +51,7 @@ export interface HostNetworkConfig {
 }
 
 type CommandRequest = Extract<ClientToHostMessage, { readonly messageType: 'command.request' }>;
+type HostVocabulary = ProtocolVocabulary & WireV2Vocabulary;
 type CommandJournal = Map<
   string,
   { readonly refusal: CommandRefusalMessage; readonly request: CommandRequest }
@@ -83,6 +102,18 @@ function sendChecked(
   socket.send(encoded.text);
 }
 
+function sendCheckedV2(
+  socket: WebSocket,
+  message: HostToClientV2Message,
+  vocabulary: WireV2Vocabulary,
+): void {
+  const encoded = encodeHostMessageV2(message, vocabulary);
+  if (!encoded.ok) {
+    throw new Error(`host produced an invalid wire v2 message: ${JSON.stringify(encoded.refusal)}`);
+  }
+  socket.send(encoded.text);
+}
+
 function sendProtocolRefusal(
   socket: WebSocket,
   vocabulary: ProtocolVocabulary,
@@ -115,25 +146,14 @@ function commandRefusal(
   };
 }
 
-function handleReconnect(
+function replayUnacknowledgedCommands(
   socket: WebSocket,
-  message: Extract<ClientToHostMessage, { readonly messageType: 'projection.reconnect' }>,
-  catalog: AppProjectionCatalog,
+  commandIds: readonly string[],
+  revisions: RevisionVector,
   vocabulary: ProtocolVocabulary,
-  readRevisions: HostServerConfig['readRevisions'],
   commandJournal: CommandJournal,
 ): void {
-  if (message.projectionRole !== 'player') {
-    sendProtocolRefusal(socket, vocabulary, {
-      code: 'UNRECOGNIZED',
-      path: '$.projectionRole',
-      value: message.projectionRole,
-    });
-    return;
-  }
-
-  const revisions = checkedRevisions(readRevisions());
-  for (const [index, commandId] of message.unacknowledgedCommandIds.entries()) {
+  for (const [index, commandId] of commandIds.entries()) {
     const known = commandJournal.get(commandId);
     if (known !== undefined) {
       sendChecked(socket, known.refusal, vocabulary);
@@ -153,6 +173,33 @@ function handleReconnect(
       vocabulary,
     );
   }
+}
+
+function handleReconnect(
+  socket: WebSocket,
+  message: Extract<ClientToHostMessage, { readonly messageType: 'projection.reconnect' }>,
+  catalog: AppProjectionCatalog,
+  vocabulary: ProtocolVocabulary,
+  readRevisions: HostServerConfig['readRevisions'],
+  commandJournal: CommandJournal,
+): void {
+  if (message.projectionRole !== 'player') {
+    sendProtocolRefusal(socket, vocabulary, {
+      code: 'UNRECOGNIZED',
+      path: '$.projectionRole',
+      value: message.projectionRole,
+    });
+    return;
+  }
+
+  const revisions = checkedRevisions(readRevisions());
+  replayUnacknowledgedCommands(
+    socket,
+    message.unacknowledgedCommandIds,
+    revisions,
+    vocabulary,
+    commandJournal,
+  );
 
   const projected = projectAppForm(catalog, 'player', 'APP-001');
   if (!projected.ok) throw new Error(`APP-001 refused: ${JSON.stringify(projected.refusal)}`);
@@ -169,6 +216,73 @@ function handleReconnect(
     },
     vocabulary,
   );
+}
+
+function handleReconnectV2(
+  socket: WebSocket,
+  message: Extract<ClientToHostV2Message, { readonly messageType: 'session.reconnect' }>,
+  catalog: AppProjectionCatalog,
+  vocabulary: HostVocabulary,
+  database: HostServerConfig['database'],
+  readRevisions: HostServerConfig['readRevisions'],
+  commandJournal: CommandJournal,
+): void {
+  const deviceId = loadDeviceId(database);
+  if (message.deviceId !== deviceId) {
+    sendProtocolRefusal(socket, vocabulary, {
+      code: 'UNRECOGNIZED',
+      path: '$.deviceId',
+      value: message.deviceId,
+    });
+    return;
+  }
+
+  const revisions = checkedRevisions(readRevisions());
+  replayUnacknowledgedCommands(
+    socket,
+    message.unacknowledgedCommandIds,
+    revisions,
+    vocabulary,
+    commandJournal,
+  );
+  const executableWorkflowCommandIds = [
+    ...new Set(
+      message.supportedWorkflowCommandIds.filter((commandId): commandId is WorkflowCommandId =>
+        vocabulary.isWorkflowCommandId(commandId),
+      ),
+    ),
+  ];
+  const capabilities = {
+    executableWorkflowCommandIds,
+    messageType: 'session.reconnect.capabilities',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    reconnectRequestId: message.reconnectRequestId,
+    revisions,
+  } as const satisfies HostToClientV2Message;
+  const snapshot = {
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment: {
+        correlationId: message.reconnectRequestId,
+        reason: 'RECONNECT',
+      },
+      base: {
+        availableActionKeys: APP_001_ACTION_KEYS,
+        formId: 'APP-001',
+        formType: 'screen',
+        roleFilteredPayload: projectApp001Bootstrap(catalog),
+        routeBindings: [],
+        routeTemplate: '/',
+      },
+      layers: [],
+    },
+    projectionRole: null,
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions,
+  } as const satisfies HostToClientV2Message;
+
+  sendCheckedV2(socket, capabilities, vocabulary);
+  sendCheckedV2(socket, snapshot, vocabulary);
 }
 
 function handleClientMessage(
@@ -246,12 +360,54 @@ function handleClientMessage(
   }
 }
 
+function handleClientMessageV2(
+  socket: WebSocket,
+  message: ClientToHostV2Message,
+  catalog: AppProjectionCatalog,
+  vocabulary: HostVocabulary,
+  database: HostServerConfig['database'],
+  readRevisions: HostServerConfig['readRevisions'],
+  commandJournal: CommandJournal,
+): void {
+  switch (message.messageType) {
+    case 'session.reconnect':
+      handleReconnectV2(
+        socket,
+        message,
+        catalog,
+        vocabulary,
+        database,
+        readRevisions,
+        commandJournal,
+      );
+      return;
+    case 'navigation.form-action':
+    case 'navigation.addressable-route':
+      throw new Error(
+        `wire v2 ${message.messageType} is unavailable in the APP-001 bootstrap slice`,
+      );
+  }
+}
+
+function messageProtocolVersion(source: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(source);
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return (parsed as Readonly<Record<string, unknown>>)['protocolVersion'];
+    }
+  } catch {
+    // The v1 codec below owns the canonical malformed-JSON diagnostic.
+  }
+  return undefined;
+}
+
 function handleFrame(
   socket: WebSocket,
   data: RawData,
   isBinary: boolean,
   catalog: AppProjectionCatalog,
-  vocabulary: ProtocolVocabulary,
+  vocabulary: HostVocabulary,
+  database: HostServerConfig['database'],
   readRevisions: HostServerConfig['readRevisions'],
   commandJournal: CommandJournal,
 ): void {
@@ -264,7 +420,25 @@ function handleFrame(
     });
     return;
   }
-  const decoded = decodeClientMessage(rawDataText(data), vocabulary);
+  const source = rawDataText(data);
+  if (messageProtocolVersion(source) === WIRE_PROTOCOL_V2_VERSION) {
+    const decoded = decodeClientMessageV2(source, vocabulary);
+    if (!decoded.ok) {
+      sendProtocolRefusal(socket, vocabulary, decoded.refusal);
+      return;
+    }
+    handleClientMessageV2(
+      socket,
+      decoded.value,
+      catalog,
+      vocabulary,
+      database,
+      readRevisions,
+      commandJournal,
+    );
+    return;
+  }
+  const decoded = decodeClientMessage(source, vocabulary);
   if (!decoded.ok) {
     sendProtocolRefusal(socket, vocabulary, decoded.refusal);
     return;
@@ -282,6 +456,12 @@ function rawDataText(data: RawData): string {
 function notFound(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error)) return false;
   return error.code === 'ENOENT' || error.code === 'ENOTDIR';
+}
+
+function errorDiagnostic(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const encoded = JSON.stringify(error);
+  return encoded === undefined ? String(error) : encoded;
 }
 
 async function sendStaticFile(
@@ -356,6 +536,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
           isBinary,
           catalog,
           vocabulary,
+          config.database,
           config.readRevisions,
           commandJournal,
         );
@@ -368,6 +549,19 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
 
   app.get('/health', async (_request, reply) => {
     await reply.code(204).send();
+  });
+  app.get('/device-identity', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    let deviceId: ReturnType<typeof loadDeviceId>;
+    try {
+      deviceId = loadDeviceId(config.database);
+    } catch (error: unknown) {
+      await reply.code(503).send({
+        error: `device identity unavailable: ${errorDiagnostic(error)}`,
+      });
+      return;
+    }
+    await reply.send({ deviceId });
   });
   app.get('/', async (_request, reply) => {
     await sendStaticFile(staticRoot, 'index.html', reply);

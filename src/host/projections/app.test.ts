@@ -8,6 +8,7 @@ import {
   APP_001_BOOT_STATES,
   APP_FORM_IDS,
   loadAppProjectionCatalog,
+  projectApp001Bootstrap,
   projectAppForm,
 } from './app.js';
 import type { AppProjectionCatalog } from './app.js';
@@ -78,6 +79,18 @@ describe('APP host projection', () => {
       'formId',
       'integrityStatus',
     ]);
+  });
+
+  it('builds the role-neutral APP-001 bootstrap through an explicit field filter', () => {
+    const sourceWithFutureRoleData = {
+      ...catalog,
+      app001: { ...catalog.app001, gmOnlyFutureField: 'must not cross bootstrap boundary' },
+    } satisfies AppProjectionCatalog;
+
+    expect(projectApp001Bootstrap(sourceWithFutureRoleData)).toEqual(catalog.app001);
+    expect(projectApp001Bootstrap(sourceWithFutureRoleData)).not.toHaveProperty(
+      'gmOnlyFutureField',
+    );
   });
 
   it('refuses APP-002 through APP-011 with their exact artifact fields', () => {

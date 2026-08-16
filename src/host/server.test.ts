@@ -7,17 +7,31 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RawData, WebSocket } from 'ws';
 
-import { decodeHostMessage, encodeClientMessage, WIRE_PROTOCOL_VERSION } from '@shared/index.js';
+import {
+  decodeHostMessage,
+  decodeHostMessageV2,
+  encodeClientMessage,
+  encodeClientMessageV2,
+  WIRE_PROTOCOL_VERSION,
+  WIRE_PROTOCOL_V2_VERSION,
+} from '@shared/index.js';
 import type {
   ClientToHostMessage,
+  ClientToHostV2Message,
   HostToClientMessage,
+  HostToClientV2Message,
   ProjectionReconnectMessage,
   ProtocolVocabulary,
   RevisionVector,
+  SessionReconnectV2Message,
+  WireV2Vocabulary,
 } from '@shared/index.js';
 
+import { openPersistenceDatabase } from '../persistence/database.js';
+import { bootstrapDeviceIdentity, loadDeviceId } from '../persistence/index.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
-import { loadAppProjectionCatalog } from './projections/app.js';
+import { loadAppProjectionCatalog, projectApp001Bootstrap } from './projections/app.js';
+import type { App001Projection } from './projections/app.js';
 import { createHost, startHost } from './server.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -47,8 +61,30 @@ function reconnect(
   };
 }
 
+function reconnectV2(
+  deviceId: string,
+  overrides: Partial<SessionReconnectV2Message> = {},
+): SessionReconnectV2Message {
+  return {
+    deviceId,
+    knownRevisions: CLIENT_REVISIONS,
+    messageType: 'session.reconnect',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    reconnectRequestId: 'reconnect-v2-1',
+    supportedWorkflowCommandIds: [],
+    unacknowledgedCommandIds: [],
+    ...overrides,
+  };
+}
+
 function clientText(message: ClientToHostMessage, vocabulary: ProtocolVocabulary): string {
   const encoded = encodeClientMessage(message, vocabulary);
+  if (!encoded.ok) throw new Error(JSON.stringify(encoded.refusal));
+  return encoded.text;
+}
+
+function clientTextV2(message: ClientToHostV2Message, vocabulary: WireV2Vocabulary): string {
+  const encoded = encodeClientMessageV2(message, vocabulary);
   if (!encoded.ok) throw new Error(JSON.stringify(encoded.refusal));
   return encoded.text;
 }
@@ -87,6 +123,24 @@ function receiveFrames(socket: WebSocket, count: number): Promise<readonly strin
   });
 }
 
+async function receiveSettledFrames(
+  socket: WebSocket,
+  minimumCount: number,
+): Promise<readonly string[]> {
+  const result: string[] = [];
+  const collect = (data: RawData): void => {
+    result.push(rawDataText(data));
+  };
+  socket.on('message', collect);
+  try {
+    await receiveFrames(socket, minimumCount);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return result;
+  } finally {
+    socket.off('message', collect);
+  }
+}
+
 function rawDataText(data: RawData): string {
   if (Buffer.isBuffer(data)) return data.toString('utf8');
   if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
@@ -100,13 +154,23 @@ function hostMessage(text: string, vocabulary: ProtocolVocabulary): HostToClient
   return decoded.value;
 }
 
+function hostMessageV2(text: string, vocabulary: WireV2Vocabulary): HostToClientV2Message {
+  const decoded = decodeHostMessageV2(text, vocabulary);
+  if (!decoded.ok) throw new Error(JSON.stringify(decoded.refusal));
+  return decoded.value;
+}
+
 describe('configured Fastify and ws host shell', () => {
   let app: FastifyInstance;
+  let app001Bootstrap: App001Projection;
   let currentRevisions: RevisionVector = ACTUAL_REVISIONS;
+  let database: ReturnType<typeof openPersistenceDatabase>;
+  let deviceId: string;
   const frameErrors: unknown[] = [];
   let gmOnlyFields: readonly string[];
+  let revisionReads = 0;
   let staticRoot: string;
-  let vocabulary: ProtocolVocabulary;
+  let vocabulary: ProtocolVocabulary & WireV2Vocabulary;
 
   beforeAll(async () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-host-static-'));
@@ -114,17 +178,24 @@ describe('configured Fastify and ws host shell', () => {
       writeFile(join(staticRoot, 'index.html'), '<main data-form="APP-001">shell</main>', 'utf8'),
       writeFile(join(staticRoot, 'app.js'), 'globalThis.symbiosis = true;', 'utf8'),
     ]);
+    database = openPersistenceDatabase(':memory:');
+    deviceId = bootstrapDeviceIdentity(database);
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
     const catalog = await loadAppProjectionCatalog(PROJECT_ROOT);
+    app001Bootstrap = projectApp001Bootstrap(catalog);
     gmOnlyFields = (['APP-005', 'APP-011'] as const).flatMap((formId) => {
       const form = catalog.forms.get(formId);
       if (form === undefined) throw new Error(`missing APP contract ${formId}`);
       return form.requiredFields.map((field) => field.replace(/(?:\[\]|=.*)$/u, ''));
     });
     app = await createHost({
+      database,
       onFrameError: (error) => frameErrors.push(error),
       projectRoot: PROJECT_ROOT,
-      readRevisions: () => currentRevisions,
+      readRevisions: () => {
+        revisionReads += 1;
+        return currentRevisions;
+      },
       staticRoot,
     });
     await startHost(app, { interface: '127.0.0.1', port: 0 });
@@ -132,6 +203,7 @@ describe('configured Fastify and ws host shell', () => {
 
   afterAll(async () => {
     await app.close();
+    database.close();
     await rm(staticRoot, { force: true, recursive: true });
   });
 
@@ -154,6 +226,54 @@ describe('configured Fastify and ws host shell', () => {
     expect(script.headers['content-type']).toContain('text/javascript');
     const missing = await app.inject({ method: 'GET', url: '/not-built.js' });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it('serves the persisted device identity without caching or rotating it', async () => {
+    const first = await app.inject({ method: 'GET', url: '/device-identity' });
+    expect(first.statusCode).toBe(200);
+    expect(first.headers['cache-control']).toBe('no-store');
+    expect(JSON.parse(first.body)).toEqual({ deviceId });
+
+    const second = await app.inject({ method: 'GET', url: '/device-identity' });
+    expect(second.statusCode).toBe(200);
+    expect(second.headers['cache-control']).toBe('no-store');
+    expect(second.body).toBe(first.body);
+    expect(loadDeviceId(database)).toBe(deviceId);
+  });
+
+  it('diagnoses an unavailable device identity without silently bootstrapping it', async () => {
+    const uninitializedDatabase = openPersistenceDatabase(':memory:');
+    const endpointErrors: unknown[] = [];
+    const uninitializedHost = await createHost({
+      database: uninitializedDatabase,
+      onFrameError: (error) => endpointErrors.push(error),
+      projectRoot: PROJECT_ROOT,
+      readRevisions: () => CLIENT_REVISIONS,
+      staticRoot,
+    });
+    try {
+      const response = await uninitializedHost.inject({
+        method: 'GET',
+        url: '/device-identity',
+      });
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(JSON.parse(response.body)).toEqual({
+        error: 'device identity unavailable: device identity is not initialized',
+      });
+      expect(endpointErrors).toEqual([]);
+      expect(() => loadDeviceId(uninitializedDatabase)).toThrow('not initialized');
+      expect(
+        uninitializedDatabase
+          .prepare<[], { device_id: string | null; initialized: number }>(
+            'SELECT device_id, initialized FROM device_identity WHERE identity_slot = 1',
+          )
+          .get(),
+      ).toEqual({ device_id: null, initialized: 0 });
+    } finally {
+      await uninitializedHost.close();
+      uninitializedDatabase.close();
+    }
   });
 
   it('rejects invalid network configuration before listening', async () => {
@@ -213,6 +333,85 @@ describe('configured Fastify and ws host shell', () => {
       expect(text).not.toContain(forbidden);
     }
     socket.terminate();
+  });
+
+  it('answers v2 reconnect with exactly one adjacent empty-capabilities and APP-001 pair', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionReads = 0;
+    try {
+      const response = receiveSettledFrames(socket, 2);
+      socket.send(clientTextV2(reconnectV2(deviceId), vocabulary));
+      const texts = await response;
+      expect(texts).toHaveLength(2);
+      const messages = texts.map((text) => hostMessageV2(text, vocabulary));
+      expect(messages[0]).toEqual({
+        executableWorkflowCommandIds: [],
+        messageType: 'session.reconnect.capabilities',
+        protocolVersion: 2,
+        reconnectRequestId: 'reconnect-v2-1',
+        revisions: CLIENT_REVISIONS,
+      });
+      expect(messages[1]).toEqual({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: {
+            correlationId: 'reconnect-v2-1',
+            reason: 'RECONNECT',
+          },
+          base: {
+            availableActionKeys: [
+              'APP-001::CTA::001',
+              'APP-001::CTA::002',
+              'APP-001::CTA::003',
+              'APP-001::CTA::004',
+            ],
+            formId: 'APP-001',
+            formType: 'screen',
+            roleFilteredPayload: app001Bootstrap,
+            routeBindings: [],
+            routeTemplate: '/',
+          },
+          layers: [],
+        },
+        projectionRole: null,
+        protocolVersion: 2,
+        revisions: CLIENT_REVISIONS,
+      });
+      expect(revisionReads).toBe(1);
+      for (const forbidden of ['APP-005', 'APP-011', ...gmOnlyFields]) {
+        expect(texts.join('\n')).not.toContain(forbidden);
+      }
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it('refuses a different valid device locator without publishing a v2 pair', async () => {
+    const socket = await app.injectWS('/state');
+    revisionReads = 0;
+    try {
+      const response = receiveSettledFrames(socket, 1);
+      const foreignDeviceId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      socket.send(clientTextV2(reconnectV2(foreignDeviceId), vocabulary));
+      const texts = await response;
+      expect(texts).toHaveLength(1);
+      expect(hostMessage(texts[0] ?? '', vocabulary)).toEqual({
+        messageType: 'protocol.refusal',
+        protocolVersion: 1,
+        refusal: {
+          code: 'UNRECOGNIZED',
+          path: '$.deviceId',
+          value: foreignDeviceId,
+        },
+        relatedCommandId: null,
+      });
+      expect(texts[0]).not.toContain(deviceId);
+      expect(revisionReads).toBe(0);
+    } finally {
+      socket.terminate();
+    }
   });
 
   it('returns a checked protocol refusal for malformed JSON', async () => {

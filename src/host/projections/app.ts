@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, posix, relative, resolve, sep } from 'node:path';
 
+import type { ActionKey } from '@generated/types/atlas.js';
 import type { InteractiveRole, JsonObject } from '@shared/wire-protocol.js';
 
 import { array, readJsonFile, record, string } from '../json-source.js';
@@ -23,6 +24,14 @@ export type AppFormId = (typeof APP_FORM_IDS)[number];
 
 export const APP_001_BOOT_STATES = ['BOOTING', 'READY', 'ERROR'] as const;
 export type App001BootState = (typeof APP_001_BOOT_STATES)[number];
+
+/** Source: forms-by-id.json["APP-001"].actions.ctaAvailabilityByAction. */
+export const APP_001_ACTION_KEYS = [
+  'APP-001::CTA::001',
+  'APP-001::CTA::002',
+  'APP-001::CTA::003',
+  'APP-001::CTA::004',
+] as const satisfies readonly ActionKey[];
 
 const APP_001_REQUIRED_FIELDS = [
   'buildVersion',
@@ -296,6 +305,21 @@ export async function loadAppProjectionCatalog(projectRoot: string): Promise<App
     integrityStatus,
   } as const satisfies App001Projection;
   return { app001, forms };
+}
+
+/**
+ * Role-neutral bootstrap is a separate least-privilege projection. Keeping its
+ * field list explicit prevents a later role-specific catalog addition from
+ * leaking merely because APP-001 remains the reconnect destination.
+ */
+export function projectApp001Bootstrap(catalog: AppProjectionCatalog): App001Projection {
+  return {
+    baselineCompatibility: catalog.app001.baselineCompatibility,
+    bootState: catalog.app001.bootState,
+    buildVersion: catalog.app001.buildVersion,
+    formId: catalog.app001.formId,
+    integrityStatus: catalog.app001.integrityStatus,
+  };
 }
 
 export function projectAppForm(
