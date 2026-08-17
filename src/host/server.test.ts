@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { RawData, WebSocket } from 'ws';
 
 import {
@@ -18,6 +18,7 @@ import {
 import type {
   ClientToHostMessage,
   ClientToHostV2Message,
+  FormActionIntentV2Message,
   HostToClientMessage,
   HostToClientV2Message,
   ProjectionReconnectMessage,
@@ -28,7 +29,12 @@ import type {
 } from '@shared/index.js';
 
 import { openPersistenceDatabase } from '../persistence/database.js';
-import { bootstrapDeviceIdentity, loadDeviceId } from '../persistence/index.js';
+import {
+  bootstrapDeviceIdentity,
+  loadDeviceId,
+  resetDeviceIdentity,
+} from '../persistence/index.js';
+import type { RevisionImpact } from '../persistence/index.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { loadAppProjectionCatalog, projectApp001Bootstrap } from './projections/app.js';
 import type { App001Projection } from './projections/app.js';
@@ -74,6 +80,22 @@ function reconnectV2(
     supportedWorkflowCommandIds: [],
     unacknowledgedCommandIds: [],
     ...overrides,
+  };
+}
+
+function formAction(
+  navigationRequestId: string,
+  sourceFormId: FormActionIntentV2Message['sourceFormId'],
+  actionKey: FormActionIntentV2Message['actionKey'],
+  expectedProjectionRevision: number,
+): FormActionIntentV2Message {
+  return {
+    actionKey,
+    expectedProjectionRevision,
+    messageType: 'navigation.form-action',
+    navigationRequestId,
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    sourceFormId,
   };
 }
 
@@ -163,14 +185,20 @@ function hostMessageV2(text: string, vocabulary: WireV2Vocabulary): HostToClient
 describe('configured Fastify and ws host shell', () => {
   let app: FastifyInstance;
   let app001Bootstrap: App001Projection;
+  let contextIdOverride: string | null = null;
   let currentRevisions: RevisionVector = ACTUAL_REVISIONS;
   let database: ReturnType<typeof openPersistenceDatabase>;
   let deviceId: string;
   const frameErrors: unknown[] = [];
   let gmOnlyFields: readonly string[];
+  let localCharacterIdOverride: string | null = null;
+  const revisionWrites: RevisionImpact[] = [];
   let revisionReads = 0;
   let staticRoot: string;
+  let uuidSequence = 0;
   let vocabulary: ProtocolVocabulary & WireV2Vocabulary;
+  let wizardCheckpointIdOverride: string | null = null;
+  let wizardSequence = 0;
 
   beforeAll(async () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-host-static-'));
@@ -189,6 +217,24 @@ describe('configured Fastify and ws host shell', () => {
       return form.requiredFields.map((field) => field.replace(/(?:\[\]|=.*)$/u, ''));
     });
     app = await createHost({
+      advanceRevisions: (impact) => {
+        revisionWrites.push(impact);
+        currentRevisions = {
+          actorVisibilityRevision:
+            currentRevisions.actorVisibilityRevision + Number(impact.actorVisibilityChanged),
+          projectionRevision:
+            currentRevisions.projectionRevision + Number(impact.projectionChanged),
+          stateRevision: currentRevisions.stateRevision + Number(impact.stateChanged),
+        };
+        return currentRevisions;
+      },
+      allocateContextId: () =>
+        contextIdOverride ?? `00000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`,
+      allocateLocalCharacterId: () =>
+        localCharacterIdOverride ??
+        `10000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`,
+      allocateWizardCheckpointId: () =>
+        wizardCheckpointIdOverride ?? `opaque-wizard-${String(++wizardSequence)}`,
       database,
       onFrameError: (error) => frameErrors.push(error),
       projectRoot: PROJECT_ROOT,
@@ -205,6 +251,12 @@ describe('configured Fastify and ws host shell', () => {
     await app.close();
     database.close();
     await rm(staticRoot, { force: true, recursive: true });
+  });
+
+  afterEach(() => {
+    contextIdOverride = null;
+    localCharacterIdOverride = null;
+    wizardCheckpointIdOverride = null;
   });
 
   it('listens on the configured interface and port and serves HTTP/static files', async () => {
@@ -245,6 +297,10 @@ describe('configured Fastify and ws host shell', () => {
     const uninitializedDatabase = openPersistenceDatabase(':memory:');
     const endpointErrors: unknown[] = [];
     const uninitializedHost = await createHost({
+      advanceRevisions: () => CLIENT_REVISIONS,
+      allocateContextId: () => '00000000-0000-4000-8000-000000000001',
+      allocateLocalCharacterId: () => '10000000-0000-4000-8000-000000000001',
+      allocateWizardCheckpointId: () => 'opaque-wizard-uninitialized',
       database: uninitializedDatabase,
       onFrameError: (error) => endpointErrors.push(error),
       projectRoot: PROJECT_ROOT,
@@ -382,6 +438,452 @@ describe('configured Fastify and ws host shell', () => {
       for (const forbidden of ['APP-005', 'APP-011', ...gmOnlyFields]) {
         expect(texts.join('\n')).not.toContain(forbidden);
       }
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it('navigates APP-001 to APP-002 and CHR-001 without creating a character row', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    try {
+      let response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(reconnectV2(deviceId, { reconnectRequestId: 'nav-reconnect' }), vocabulary),
+      );
+      await response;
+
+      const openPlayer = formAction('navigation-player', 'APP-001', 'APP-001::CTA::001', 0);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(openPlayer, vocabulary));
+      const app002Text = (await response)[0] ?? '';
+      const app002 = hostMessageV2(app002Text, vocabulary);
+      expect(app002).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: 'navigation-player', reason: 'FORM_ACTION' },
+          base: {
+            availableActionKeys: ['APP-002::CTA::007'],
+            formId: 'APP-002',
+            routeBindings: [],
+            routeTemplate: '/player',
+          },
+          layers: [],
+        },
+        projectionRole: 'player',
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 1 },
+      });
+      if (app002.messageType !== 'projection.snapshot') throw new Error('missing APP-002 snapshot');
+      const projectedContextId = app002.presentation.base.roleFilteredPayload['contextId'];
+      if (typeof projectedContextId !== 'string') throw new Error('missing APP-002 contextId');
+      expect(projectedContextId).toMatch(/^[0-9a-f-]{36}$/u);
+      expect(app002.presentation.base.roleFilteredPayload).toEqual({
+        contextId: projectedContextId,
+        deviceId,
+        projectionRevision: 1,
+        stateRevision: 0,
+      });
+
+      const createCharacter = formAction('navigation-character', 'APP-002', 'APP-002::CTA::007', 1);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(createCharacter, vocabulary));
+      const chr001Text = (await response)[0] ?? '';
+      const chr001 = hostMessageV2(chr001Text, vocabulary);
+      if (chr001.messageType !== 'projection.snapshot') throw new Error('missing CHR-001 snapshot');
+      const payload = chr001.presentation.base.roleFilteredPayload;
+      expect(chr001).toMatchObject({
+        presentation: {
+          assignment: { correlationId: 'navigation-character', reason: 'FORM_ACTION' },
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-001',
+            routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
+          },
+        },
+        projectionRole: 'player',
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
+      });
+      expect(Object.keys(payload).sort()).toEqual([
+        'age',
+        'anatomyProfile',
+        'artAssetKeyOrLocalFile',
+        'characterDraftId',
+        'commandId',
+        'description',
+        'draftRevision',
+        'massApprovalStatus',
+        'massKg',
+        'name',
+        'wizardCheckpointId',
+      ]);
+      expect(payload).toMatchObject({
+        age: null,
+        anatomyProfile: 'STANDARD_HUMANOID',
+        artAssetKeyOrLocalFile: null,
+        commandId: null,
+        description: null,
+        draftRevision: 0,
+        massApprovalStatus: 'PENDING_GM',
+        massKg: null,
+        name: null,
+      });
+      expect(chr001.presentation.base.routeBindings).toEqual([
+        { parameterIndex: 0, source: 'executor-allocated', value: payload['characterDraftId'] },
+      ]);
+      expect(payload['wizardCheckpointId']).toMatch(/^opaque-wizard-/u);
+      expect(payload['wizardCheckpointId']).not.toBe(payload['characterDraftId']);
+      expect(revisionWrites).toEqual([
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      ]);
+      expect(database.prepare('SELECT count(*) AS count FROM local_character').get()).toEqual({
+        count: 0,
+      });
+
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(createCharacter, vocabulary));
+      expect((await response)[0]).toBe(chr001Text);
+      expect(revisionWrites).toHaveLength(2);
+
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2({ ...createCharacter, expectedProjectionRevision: 2 }, vocabulary));
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
+      });
+      expect(revisionWrites).toHaveLength(2);
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it('requires session.reconnect before replaying a navigation result on a new transport', async () => {
+    const firstSocket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    const action = formAction('transport-replay-action', 'APP-001', 'APP-001::CTA::001', 0);
+    let originalSnapshot: string;
+    try {
+      let response = receiveFrames(firstSocket, 2);
+      firstSocket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'transport-first-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+      response = receiveFrames(firstSocket, 1);
+      firstSocket.send(clientTextV2(action, vocabulary));
+      originalSnapshot = (await response)[0] ?? '';
+    } finally {
+      firstSocket.terminate();
+    }
+
+    const replaySocket = await app.injectWS('/state');
+    try {
+      let response = receiveFrames(replaySocket, 1);
+      replaySocket.send(clientTextV2(action, vocabulary));
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        presentationUnchanged: true,
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 1 },
+      });
+
+      response = receiveFrames(replaySocket, 2);
+      replaySocket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'transport-second-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+      response = receiveFrames(replaySocket, 1);
+      replaySocket.send(clientTextV2(action, vocabulary));
+      expect((await response)[0]).toBe(originalSnapshot);
+      expect(revisionWrites).toEqual([
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      ]);
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      replaySocket.terminate();
+    }
+  });
+
+  it('rejects a player-local context allocator that reuses the durable device identity', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    contextIdOverride = deviceId;
+    const errorCount = frameErrors.length;
+    try {
+      const response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'duplicate-context-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+
+      const closed = new Promise<number>((resolve) => {
+        socket.once('close', (code: number) => resolve(code));
+      });
+      socket.send(
+        clientTextV2(
+          formAction('duplicate-context-action', 'APP-001', 'APP-001::CTA::001', 0),
+          vocabulary,
+        ),
+      );
+
+      await expect(closed).resolves.toBe(1011);
+      expect(frameErrors.slice(errorCount).map(String)).toEqual([
+        'Error: player-local context allocator reused the durable device ID',
+      ]);
+      expect(currentRevisions).toEqual(CLIENT_REVISIONS);
+      expect(revisionWrites).toEqual([]);
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it.each([
+    {
+      expectedError: 'local character allocator returned',
+      localCharacterId: '00000000-0000-0000-0000-000000000000',
+      requestId: 'zero-local-id',
+      wizardCheckpointId: 'unused-wizard',
+    },
+    {
+      expectedError: 'expected a real opaque ID',
+      localCharacterId: '20000000-0000-4000-8000-000000000001',
+      requestId: 'blank-wizard-id',
+      wizardCheckpointId: '   ',
+    },
+    {
+      expectedError: 'expected a real opaque ID',
+      localCharacterId: '20000000-0000-4000-8000-000000000002',
+      requestId: 'none-wizard-id',
+      wizardCheckpointId: 'NONE',
+    },
+    {
+      expectedError: 'expected a real opaque ID',
+      localCharacterId: '20000000-0000-4000-8000-000000000003',
+      requestId: 'zero-wizard-id',
+      wizardCheckpointId: '00000000-0000-0000-0000-000000000000',
+    },
+    {
+      expectedError: 'reused the character draft ID',
+      localCharacterId: '20000000-0000-4000-8000-000000000004',
+      requestId: 'reused-wizard-id',
+      wizardCheckpointId: '20000000-0000-4000-8000-000000000004',
+    },
+  ])(
+    'rejects invalid pre-commit allocator output: $requestId',
+    async ({ expectedError, localCharacterId, requestId, wizardCheckpointId }) => {
+      const socket = await app.injectWS('/state');
+      currentRevisions = CLIENT_REVISIONS;
+      revisionWrites.length = 0;
+      localCharacterIdOverride = localCharacterId;
+      wizardCheckpointIdOverride = wizardCheckpointId;
+      const errorCount = frameErrors.length;
+      try {
+        let response = receiveFrames(socket, 2);
+        socket.send(
+          clientTextV2(
+            reconnectV2(deviceId, { reconnectRequestId: `${requestId}-reconnect` }),
+            vocabulary,
+          ),
+        );
+        await response;
+        response = receiveFrames(socket, 1);
+        socket.send(
+          clientTextV2(
+            formAction(`${requestId}-player`, 'APP-001', 'APP-001::CTA::001', 0),
+            vocabulary,
+          ),
+        );
+        await response;
+
+        const closed = new Promise<number>((resolve) => {
+          socket.once('close', (code: number) => resolve(code));
+        });
+        socket.send(
+          clientTextV2(
+            formAction(`${requestId}-character`, 'APP-002', 'APP-002::CTA::007', 1),
+            vocabulary,
+          ),
+        );
+
+        await expect(closed).resolves.toBe(1011);
+        expect(String(frameErrors[errorCount])).toContain(expectedError);
+        expect(currentRevisions).toEqual({ ...CLIENT_REVISIONS, projectionRevision: 1 });
+        expect(revisionWrites).toEqual([
+          { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+        ]);
+        expect(database.prepare('SELECT count(*) AS count FROM local_character').get()).toEqual({
+          count: 0,
+        });
+      } finally {
+        currentRevisions = ACTUAL_REVISIONS;
+        socket.terminate();
+      }
+    },
+  );
+
+  it('refuses APP-002 when the durable device identity disappears after reconnect', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    const errorCount = frameErrors.length;
+    try {
+      let response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'missing-device-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+      resetDeviceIdentity(database, () => undefined);
+
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(
+          formAction('missing-device-action', 'APP-001', 'APP-001::CTA::001', 0),
+          vocabulary,
+        ),
+      );
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        presentationUnchanged: true,
+        revisions: CLIENT_REVISIONS,
+      });
+      expect(currentRevisions).toEqual(CLIENT_REVISIONS);
+      expect(revisionWrites).toEqual([]);
+      expect(frameErrors.slice(errorCount).map(String)).toEqual([
+        'Error: device identity is not initialized',
+      ]);
+    } finally {
+      deviceId = bootstrapDeviceIdentity(database);
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it('does not replay a player-local snapshot after its durable device identity is reset', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    const errorCount = frameErrors.length;
+    try {
+      let response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'replay-reset-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+
+      const action = formAction('replay-reset-action', 'APP-001', 'APP-001::CTA::001', 0);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(action, vocabulary));
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: { base: { formId: 'APP-002' } },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 1 },
+      });
+      resetDeviceIdentity(database, () => undefined);
+
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(action, vocabulary));
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        presentationUnchanged: true,
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 1 },
+      });
+      expect(revisionWrites).toEqual([
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      ]);
+      expect(frameErrors.slice(errorCount).map(String)).toEqual([
+        'Error: device identity is not initialized',
+      ]);
+    } finally {
+      deviceId = bootstrapDeviceIdentity(database);
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it('refuses stale, unavailable, unknown, and foreign-form actions without advancing revisions', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    try {
+      let response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'refusal-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(formAction('stale-action', 'APP-001', 'APP-001::CTA::001', 1), vocabulary),
+      );
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        refusal: {
+          actualProjectionRevision: 0,
+          code: 'STALE_PROJECTION',
+          expectedProjectionRevision: 1,
+        },
+        presentationUnchanged: true,
+        revisions: CLIENT_REVISIONS,
+      });
+
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(formAction('gm-action', 'APP-001', 'APP-001::CTA::002', 0), vocabulary),
+      );
+      const unavailableText = (await response)[0] ?? '';
+      expect(hostMessageV2(unavailableText, vocabulary)).toMatchObject({
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        presentationUnchanged: true,
+        revisions: CLIENT_REVISIONS,
+      });
+      expect(unavailableText).not.toContain('contextId');
+      expect(unavailableText).not.toContain('characterDraftId');
+      expect(unavailableText).not.toContain('APP-002');
+      expect(unavailableText).not.toContain('CHR-001');
+
+      for (const [requestId, actionKey] of [
+        ['unknown-action', 'APP-001::CTA::999'],
+        ['foreign-action', 'APP-002::CTA::007'],
+      ] as const) {
+        response = receiveFrames(socket, 1);
+        socket.send(
+          JSON.stringify({
+            ...formAction(requestId, 'APP-001', 'APP-001::CTA::001', 0),
+            actionKey,
+          }),
+        );
+        expect(hostMessage((await response)[0] ?? '', vocabulary)).toMatchObject({
+          messageType: 'protocol.refusal',
+          refusal: { code: 'UNRECOGNIZED', path: '$.actionKey', value: actionKey },
+        });
+      }
+      expect(currentRevisions).toEqual(CLIENT_REVISIONS);
+      expect(revisionWrites).toEqual([]);
     } finally {
       currentRevisions = ACTUAL_REVISIONS;
       socket.terminate();

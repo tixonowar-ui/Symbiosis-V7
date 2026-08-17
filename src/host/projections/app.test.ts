@@ -68,6 +68,24 @@ describe('APP host projection', () => {
     });
   });
 
+  it('loads the two slice transitions with their exact source-owned guards', () => {
+    expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
+      from: 'APP-001',
+      guard:
+        'otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; bootState=READY',
+      kind: 'role-branch',
+      to: 'APP-002',
+      trigger: 'Игрок',
+    });
+    expect(catalog.actions.get('APP-002::CTA::007')).toEqual({
+      from: 'APP-002',
+      guard: 'player launch-mode; new immutable draft UUID',
+      kind: 'normative',
+      to: 'CHR-001',
+      trigger: 'Создать персонажа',
+    });
+  });
+
   it('fully projects APP-001 for player without placeholder fields', () => {
     const result = projectAppForm(catalog, 'player', 'APP-001');
     expect(result.ok).toBe(true);

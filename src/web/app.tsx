@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
 import { AtlasForm } from './renderer/atlas-form.js';
-import { connectApp001Projection } from './ws-client.js';
-import type { ConfirmedApp001Snapshot, WebClientState } from './ws-client.js';
+import { connectProjection } from './ws-client.js';
+import type {
+  App001Projection,
+  ConfirmedProjectionSnapshot,
+  ProjectionConnection,
+  WebClientState,
+} from './ws-client.js';
 
 function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactElement {
   switch (state.kind) {
@@ -24,8 +29,15 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
     case 'ready':
       return (
         <section role="status" data-client-state={state.kind}>
-          <h1>APP-001 получен от хоста</h1>
-          <p>Показана последняя подтверждённая role-neutral проекция.</p>
+          <h1>{state.snapshot.formId} получена от хоста</h1>
+          <p>Показана последняя подтверждённая проекция.</p>
+        </section>
+      );
+    case 'navigation-refusal':
+      return (
+        <section role="alert" data-client-state={state.kind}>
+          <h1>Переход отклонён хостом</h1>
+          <pre>{JSON.stringify(state.refusal, null, 2)}</pre>
         </section>
       );
     case 'host-refusal':
@@ -66,10 +78,10 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
   }
 }
 
-function confirmedSnapshot(state: WebClientState): ConfirmedApp001Snapshot | null {
+function confirmedSnapshot(state: WebClientState): ConfirmedProjectionSnapshot | null {
   switch (state.kind) {
     case 'ready':
-      return state.snapshot;
+    case 'navigation-refusal':
     case 'disconnected':
     case 'host-refusal':
     case 'protocol-error':
@@ -81,24 +93,45 @@ function confirmedSnapshot(state: WebClientState): ConfirmedApp001Snapshot | nul
   }
 }
 
-function HostProjection({ snapshot }: { readonly snapshot: ConfirmedApp001Snapshot }) {
-  const { projection } = snapshot;
+function displayValue(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+}
+
+function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSnapshot }) {
+  if (snapshot.formId === 'APP-001') {
+    const projection = snapshot.projection as App001Projection;
+    return (
+      <section aria-labelledby="app-001-host-data" data-app-001-host-data>
+        <h2 id="app-001-host-data">Обязательные поля из projection.snapshot</h2>
+        <dl>
+          <dt>buildVersion</dt>
+          <dd data-host-field="buildVersion">{projection.buildVersion}</dd>
+          <dt>baselineCompatibility</dt>
+          <dd data-host-field="baselineCompatibility">
+            <pre>{JSON.stringify(projection.baselineCompatibility, null, 2)}</pre>
+          </dd>
+          <dt>integrityStatus</dt>
+          <dd data-host-field="integrityStatus">
+            <pre>{JSON.stringify(projection.integrityStatus, null, 2)}</pre>
+          </dd>
+          <dt>bootState</dt>
+          <dd data-host-field="bootState">{projection.bootState}</dd>
+        </dl>
+      </section>
+    );
+  }
   return (
-    <section aria-labelledby="app-001-host-data" data-app-001-host-data>
-      <h2 id="app-001-host-data">Обязательные поля из projection.snapshot</h2>
+    <section aria-labelledby="host-projection-data" data-host-projection={snapshot.formId}>
+      <h2 id="host-projection-data">Поля из projection.snapshot</h2>
       <dl>
-        <dt>buildVersion</dt>
-        <dd data-host-field="buildVersion">{projection.buildVersion}</dd>
-        <dt>baselineCompatibility</dt>
-        <dd data-host-field="baselineCompatibility">
-          <pre>{JSON.stringify(projection.baselineCompatibility, null, 2)}</pre>
-        </dd>
-        <dt>integrityStatus</dt>
-        <dd data-host-field="integrityStatus">
-          <pre>{JSON.stringify(projection.integrityStatus, null, 2)}</pre>
-        </dd>
-        <dt>bootState</dt>
-        <dd data-host-field="bootState">{projection.bootState}</dd>
+        {Object.entries(snapshot.projection).map(([key, value]) => (
+          <div key={key}>
+            <dt>{key}</dt>
+            <dd data-host-field={key}>
+              <pre>{displayValue(value)}</pre>
+            </dd>
+          </div>
+        ))}
       </dl>
     </section>
   );
@@ -107,15 +140,23 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedApp001Snapsh
 export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const connectionRef = useRef<ProjectionConnection | null>(null);
 
   useEffect(() => {
-    const connection = connectApp001Projection(setState);
+    const connection = connectProjection(setState);
+    connectionRef.current = connection;
     return () => {
+      connectionRef.current = null;
       connection.disconnect();
     };
   }, []);
 
   const snapshot = confirmedSnapshot(state);
+  const interactive = state.kind === 'ready' || state.kind === 'navigation-refusal';
+  useEffect(() => {
+    if (state.kind !== 'ready') return;
+    window.history.replaceState(null, '', state.snapshot.path);
+  }, [state]);
   return (
     <>
       <ConnectionBanner state={state} />
@@ -127,14 +168,19 @@ export function App(): ReactElement {
       ) : (
         <>
           <HostProjection snapshot={snapshot} />
-          <fieldset disabled={state.kind !== 'ready'}>
-            <legend>AtlasForm APP-001</legend>
+          <fieldset disabled={!interactive}>
+            <legend>AtlasForm {snapshot.formId}</legend>
             <AtlasForm
-              formId="APP-001"
+              availableActionKeys={snapshot.availableActionKeys}
+              formId={snapshot.formId}
               onAction={(selection) => {
-                setActionNotice(
-                  `Переход «${selection.label}» не отправлен: маршрутизация и CTA не входят в issue #36.`,
-                );
+                const connection = connectionRef.current;
+                if (connection === null) {
+                  setActionNotice('Переход не отправлен: соединение ещё не готово.');
+                  return;
+                }
+                const result = connection.requestFormAction(selection.actionKey);
+                setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
               }}
             />
           </fieldset>

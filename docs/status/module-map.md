@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-17`
-- Тестов: 558, все зелёные
+- Тестов: 574, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -41,9 +41,9 @@
 
 Shared wire v1/v2, минимальный roll contract и каркас handler-реестров готовы,
 persistence реализует первый V1-срез, web собирается в self-contained статику и
-открывает `APP-001` через атомарную reconnect-пару wire v2, а host сохраняет
-wire v1 для command/read и выдаёт role-neutral bootstrap; остальные прикладные
-слои остаются частичными, заглушками или не начаты.
+проходит `APP-001 → APP-002 → CHR-001` по подтверждённым presentation wire v2,
+а host сохраняет wire v1 для command/read и выдаёт role-neutral bootstrap;
+остальные прикладные слои остаются частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                | Веха |
 | ---------------------------- | ------------ | ---------------------------------------------------------------------- | ---- |
@@ -52,11 +52,11 @@ wire v1 для command/read и выдаёт role-neutral bootstrap; осталь
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет          | M3   |
 | `src/persistence`            | **частично** | CRUD + checkpoint черновика + durable device identity; 16 циклов позже | M2   |
 | `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity     | M2   |
-| `src/host`                   | **частично** | device identity HTTP; wire v1 + v2 reconnect; только APP-001           | M4   |
-| `src/host/projections`       | **частично** | player и role-neutral APP-001 + 3 ревизии; остальные формы позже       | M4   |
-| `src/web`                    | **частично** | Vite + atomic v2 reconnect для APP-001; navigation, gm и формы позже   | M5   |
-| `src/web/renderer`           | **частично** | 11 форм `APP-` из компактных индексов; остальные типы fail-closed      | M5   |
-| `src/web/forms`              | **частично** | домен `app` реализован, остальные 15 каталогов пусты                   | M6   |
+| `src/host`                   | **частично** | device HTTP; v2 reconnect + form action до CHR-001; gm позже           | M4   |
+| `src/host/projections`       | **частично** | role-neutral APP-001, player APP-002/CHR-001 + 3 ревизии               | M4   |
+| `src/web`                    | **частично** | atomic v2 reconnect/navigation для APP-001/002 и CHR-001; gm позже     | M5   |
+| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001; остальные формы и типы fail-closed           | M5   |
+| `src/web/forms`              | **частично** | домен `app` и CHR-001; остальные каталоги пусты                        | M6   |
 
 ## generated/ — вывод конвейера
 

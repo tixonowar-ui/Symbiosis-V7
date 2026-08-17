@@ -1,21 +1,26 @@
 import type { ReactElement } from 'react';
 
+import type { ActionKey } from '@generated/types/atlas.js';
+
+import { availableFormActions } from '../forms/index.js';
+import type { ImplementedFormAction, ImplementedFormId } from '../forms/index.js';
 import { getAtlasFormModel } from './atlas-data.js';
-import type { AtlasAction, AtlasFormModel, AtlasTransition } from './atlas-data.js';
-import type { AppFormId } from '../forms/app/index.js';
+import type { AtlasFormModel } from './atlas-data.js';
 
 export interface AtlasActionSelection {
-  readonly formId: AppFormId;
+  readonly actionKey: ActionKey;
+  readonly formId: ImplementedFormId;
   readonly label: string;
-  readonly transition: AtlasTransition | null;
 }
 
 export interface AtlasFormProps {
+  readonly availableActionKeys: readonly ActionKey[];
   readonly formId: string;
   readonly onAction: (selection: AtlasActionSelection) => void;
 }
 
 interface AtlasFormContentProps {
+  readonly availableActionKeys: AtlasFormProps['availableActionKeys'];
   readonly model: AtlasFormModel;
   readonly onAction: AtlasFormProps['onAction'];
 }
@@ -32,34 +37,13 @@ function StringList({ values, attribute }: { values: readonly string[]; attribut
   );
 }
 
-function Transition({ value }: { value: AtlasTransition | null }): ReactElement {
-  if (value === null) {
-    return <p data-atlas-transition="none">Точный переход для этого CTA в атласе не объявлен.</p>;
-  }
-
-  return (
-    <dl data-atlas-transition="exact">
-      <dt>From</dt>
-      <dd>{value.from}</dd>
-      <dt>To</dt>
-      <dd>{value.to}</dd>
-      <dt>Kind</dt>
-      <dd>{value.kind}</dd>
-      <dt>Trigger</dt>
-      <dd>{value.trigger}</dd>
-      <dt>Guard</dt>
-      <dd>{value.guard}</dd>
-    </dl>
-  );
-}
-
 function Action({
   action,
   formId,
   onAction,
 }: {
-  readonly action: AtlasAction;
-  readonly formId: AppFormId;
+  readonly action: ImplementedFormAction;
+  readonly formId: ImplementedFormId;
   readonly onAction: AtlasFormProps['onAction'];
 }): ReactElement {
   return (
@@ -67,40 +51,36 @@ function Action({
       <button
         type="button"
         data-atlas-action={action.label}
+        data-atlas-action-key={action.actionKey}
         onClick={() => {
-          onAction({ formId, label: action.label, transition: action.transition });
+          onAction({ actionKey: action.actionKey, formId, label: action.label });
         }}
       >
         {action.label}
       </button>
-      <Transition value={action.transition} />
     </li>
   );
 }
 
-function Actions({ model, onAction }: AtlasFormContentProps): ReactElement {
-  if (model.actions.kind === 'not-declared') {
-    return (
-      <p data-atlas-actions="not-declared">
-        В requirements.json для {model.id} actionSteps не объявлены.
-      </p>
-    );
-  }
-
-  if (model.actions.items.length === 0) {
-    return <p data-atlas-actions="declared-empty">Массив primaryActions объявлен пустым.</p>;
-  }
+function Actions({ availableActionKeys, model, onAction }: AtlasFormContentProps): ReactElement {
+  const actions = availableFormActions(model.id, availableActionKeys);
+  if (actions.length === 0)
+    return <p data-atlas-actions="available-empty">Хост не назначил доступных действий.</p>;
 
   return (
-    <ul data-atlas-actions="declared">
-      {model.actions.items.map((action) => (
-        <Action key={action.label} action={action} formId={model.id} onAction={onAction} />
+    <ul data-atlas-actions="available">
+      {actions.map((action) => (
+        <Action key={action.actionKey} action={action} formId={model.id} onAction={onAction} />
       ))}
     </ul>
   );
 }
 
-function AtlasFormContent({ model, onAction }: AtlasFormContentProps): ReactElement {
+function AtlasFormContent({
+  availableActionKeys,
+  model,
+  onAction,
+}: AtlasFormContentProps): ReactElement {
   return (
     <>
       <header>
@@ -151,16 +131,18 @@ function AtlasFormContent({ model, onAction }: AtlasFormContentProps): ReactElem
       </section>
 
       <section aria-labelledby={`${model.id}-actions`}>
-        <h2 id={`${model.id}-actions`}>Primary actions</h2>
-        <Actions model={model} onAction={onAction} />
+        <h2 id={`${model.id}-actions`}>Доступные действия</h2>
+        <Actions availableActionKeys={availableActionKeys} model={model} onAction={onAction} />
       </section>
     </>
   );
 }
 
-export function AtlasForm({ formId, onAction }: AtlasFormProps): ReactElement {
+export function AtlasForm({ availableActionKeys, formId, onAction }: AtlasFormProps): ReactElement {
   const model = getAtlasFormModel(formId);
-  const content = <AtlasFormContent model={model} onAction={onAction} />;
+  const content = (
+    <AtlasFormContent availableActionKeys={availableActionKeys} model={model} onAction={onAction} />
+  );
 
   if (model.type === 'screen') {
     return (

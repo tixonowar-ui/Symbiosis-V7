@@ -4,8 +4,8 @@ import transitionsSource from '@generated/spec/atlas/renderer/transitions-by-for
 import { FORM_IDS } from '@generated/types/atlas.js';
 import type { FormId, FormType } from '@generated/types/atlas.js';
 
-import { APP_FORM_IDS, isAppFormId } from '../forms/app/index.js';
-import type { AppFormId } from '../forms/app/index.js';
+import { IMPLEMENTED_FORM_IDS, isImplementedFormId } from '../forms/index.js';
+import type { ImplementedFormId } from '../forms/index.js';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -17,7 +17,7 @@ export interface AtlasState {
 }
 
 export interface AtlasTransition {
-  readonly from: AppFormId;
+  readonly from: ImplementedFormId;
   readonly to: FormId;
   readonly kind: string;
   readonly guard: string;
@@ -40,7 +40,7 @@ export type AtlasActions =
     };
 
 export interface AtlasFormModel {
-  readonly id: AppFormId;
+  readonly id: ImplementedFormId;
   readonly type: ImplementedFormType;
   readonly title: string;
   readonly route: string;
@@ -157,7 +157,7 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
 
 function primaryActions(
   requirementsValue: unknown,
-  requestedFormId: AppFormId,
+  requestedFormId: ImplementedFormId,
 ): readonly string[] | null {
   const definitions: string[][] = [];
 
@@ -202,7 +202,7 @@ function primaryActions(
 
 function indexedPrimaryActions(
   actionsByFormValue: unknown,
-  requestedFormId: AppFormId,
+  requestedFormId: ImplementedFormId,
 ): readonly string[] | null {
   const actionsByForm = record(actionsByFormValue, 'renderer/primary-actions-by-form-id.json');
   if (!own(actionsByForm, requestedFormId)) return null;
@@ -221,7 +221,7 @@ function indexedPrimaryActions(
 
 function transitionFor(
   transitionsValue: unknown,
-  requestedFormId: AppFormId,
+  requestedFormId: ImplementedFormId,
   action: string,
 ): AtlasTransition | null {
   const matches: AtlasTransition[] = [];
@@ -255,7 +255,7 @@ function transitionFor(
 
 function indexedTransitionFor(
   transitionsByFormValue: unknown,
-  requestedFormId: AppFormId,
+  requestedFormId: ImplementedFormId,
   action: string,
 ): AtlasTransition | null {
   const transitionsByForm = record(
@@ -291,8 +291,8 @@ function indexedTransitionFor(
 function atlasFormModel(
   requestedFormId: string,
   formsByIdValue: unknown,
-  actionLookup: (formId: AppFormId) => readonly string[] | null,
-  transitionLookup: (formId: AppFormId, action: string) => AtlasTransition | null,
+  actionLookup: (formId: ImplementedFormId) => readonly string[] | null,
+  transitionLookup: (formId: ImplementedFormId, action: string) => AtlasTransition | null,
 ): AtlasFormModel {
   const formsById = record(formsByIdValue, 'forms-by-id.json');
   if (!own(formsById, requestedFormId)) {
@@ -307,9 +307,9 @@ function atlasFormModel(
   }
 
   const type = implementedType(form.type, requestedFormId);
-  if (!isAppFormId(id)) {
+  if (!isImplementedFormId(id)) {
     fail(
-      `form ${JSON.stringify(id)} is not implemented; implemented forms: ${APP_FORM_IDS.join(', ')}`,
+      `form ${JSON.stringify(id)} is not implemented; implemented forms: ${IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   }
   const actions = actionLookup(id);
