@@ -972,6 +972,7 @@ export async function importAtlas(): Promise<AtlasImport> {
       requiredFields: asStringArray(form['requiredFields'], WHERE, `${at}.requiredFields`),
       qaScenarioIds: asStringArray(form['qaScenarioIds'], WHERE, `${at}.qaScenarioIds`),
       components: asStringArray(form['components'], WHERE, `${at}.components`),
+      actions: projectRendererFormActions(form, index),
     };
 
     const prefix = DOMAIN_PREFIX.get(domain);
@@ -1103,6 +1104,41 @@ export function extractActionKeys(forms: readonly JsonObject[]): string[] {
 
   expectCount(WHERE, 'action keys', actionKeys.length, EXPECTED_ACTION_KEY_COUNT);
   return actionKeys;
+}
+
+export function projectRendererFormActions(form: JsonObject, formIndex: number): JsonObject {
+  const formAt = `forms[${String(formIndex)}]`;
+  const formId = asString(form['id'], WHERE, `${formAt}.id`);
+  const actions = asObject(form['actions'], WHERE, `${formAt}.actions`);
+  const rows = asArray(
+    actions['ctaAvailabilityByAction'],
+    WHERE,
+    `${formAt}.actions.ctaAvailabilityByAction`,
+  );
+
+  return {
+    ctaAvailabilityByAction: rows.map((value, actionIndex) => {
+      const actionAt = `${formAt}.actions.ctaAvailabilityByAction[${String(actionIndex)}]`;
+      const row = asObject(value, WHERE, actionAt);
+      for (const field of ['actionKey', 'label'] as const) {
+        if (!Object.hasOwn(row, field)) {
+          fail(WHERE, `${actionAt}.${field} is missing for form ${JSON.stringify(formId)}`);
+        }
+      }
+      return {
+        actionKey: asString(
+          row['actionKey'],
+          WHERE,
+          `${actionAt}.actionKey for form ${JSON.stringify(formId)}`,
+        ),
+        label: asString(
+          row['label'],
+          WHERE,
+          `${actionAt}.label for form ${JSON.stringify(formId)}`,
+        ),
+      };
+    }),
+  };
 }
 
 interface RenderInput {

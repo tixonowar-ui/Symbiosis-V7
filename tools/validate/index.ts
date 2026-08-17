@@ -15,6 +15,11 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SPEC_DIR } from '../import/lib/paths.js';
+import {
+  validateDetailedFormIndexKeys,
+  validateRendererFormCatalogue,
+  validateRendererFormGraph,
+} from './atlas.js';
 import { validateQuestionRefs } from './question-refs.js';
 
 interface Problem {
@@ -53,11 +58,14 @@ function rows(relative: string): Record<string, unknown>[] {
   return value as Record<string, unknown>[];
 }
 
-function object(relative: string): Record<string, unknown> | null {
+function object(
+  relative: string,
+  expected = 'expected an object keyed by id',
+): Record<string, unknown> | null {
   const value = load(relative);
   if (value === undefined) return null;
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    report(relative, '-', 'expected an object keyed by id');
+    report(relative, '-', expected);
     return null;
   }
   return value as Record<string, unknown>;
@@ -121,40 +129,6 @@ function checkRefs(
   });
 }
 
-/** Catalogue entries nothing points at — reported, never auto-removed. */
-function checkOrphans(
-  file: string,
-  catalogue: ReadonlySet<string>,
-  referenced: ReadonlySet<string>,
-  what: string,
-): void {
-  for (const id of catalogue) {
-    if (!referenced.has(id)) {
-      report(file, id, `${what} is defined but never referenced`);
-    }
-  }
-}
-
-/** An index must contain every catalogue id and no undeclared keys. */
-function checkIndexKeys(
-  file: string,
-  index: Readonly<Record<string, unknown>>,
-  catalogue: ReadonlySet<string>,
-  target: string,
-): void {
-  const keys = new Set(Object.keys(index));
-  for (const id of catalogue) {
-    if (!keys.has(id)) {
-      report(file, id, `key is missing for id declared in ${target}`);
-    }
-  }
-  for (const key of keys) {
-    if (!catalogue.has(key)) {
-      report(file, key, `key is not declared in ${target}`);
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 
 /**
@@ -178,11 +152,35 @@ const ID = {
 const ruleRows = rows('rules/rules.json');
 const rules = checkIds('rules/rules.json', ruleRows, 'Rule ID', ID.rule);
 
-const formRows = rows('atlas/forms.json');
-const forms = checkIds('atlas/forms.json', formRows, 'id', ID.form);
-const formsById = object('atlas/forms-by-id.json');
-if (formsById !== null) {
-  checkIndexKeys('atlas/forms-by-id.json', formsById, forms, 'atlas/forms.json');
+let expectedFormCount: number | null = null;
+const atlasMeta = object('atlas/meta.json', 'expected an object');
+if (atlasMeta !== null) {
+  const counts = atlasMeta['counts'];
+  if (typeof counts !== 'object' || counts === null || Array.isArray(counts)) {
+    report('atlas/meta.json', 'counts', 'expected an object');
+  } else {
+    const value = (counts as Record<string, unknown>)['forms'];
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+      report('atlas/meta.json', 'counts.forms', 'expected a non-negative safe integer');
+    } else {
+      expectedFormCount = value;
+    }
+  }
+}
+
+let forms: ReadonlySet<string> = new Set();
+const rendererFormsById = object('atlas/renderer/forms-by-id.json');
+if (rendererFormsById !== null) {
+  const validation = validateRendererFormCatalogue(rendererFormsById, ID.form, expectedFormCount);
+  forms = validation.forms;
+  validation.problems.forEach((problem) => report(problem.file, problem.id, problem.message));
+}
+
+const detailedFormsById = object('atlas/forms-by-id.json');
+if (rendererFormsById !== null && detailedFormsById !== null) {
+  validateDetailedFormIndexKeys(detailedFormsById, forms).forEach((problem) =>
+    report(problem.file, problem.id, problem.message),
+  );
 }
 
 const effectRows = rows('effects/effect-types.json');
@@ -306,17 +304,19 @@ try {
 
 // --- orphans ---------------------------------------------------------------
 
-const formsReferenced = new Set<string>();
-for (const transition of rows('atlas/transitions.json')) {
-  formsReferenced.add(str(transition, 'from'));
-  formsReferenced.add(str(transition, 'to'));
+const transitionRows = rows('atlas/transitions.json');
+if (rendererFormsById !== null) {
+  validateRendererFormGraph(forms, transitionRows).forEach((problem) =>
+    report(problem.file, problem.id, problem.message),
+  );
 }
-// A form nobody can reach is a real defect in the UI graph, but the atlas is
-// the authority: report, never repair.
-checkOrphans('atlas/forms.json', forms, formsReferenced, 'form');
 
 const speciesReferenced = new Set(templateRows.map((row) => str(row, 'Species ID')));
-checkOrphans('bestiary/species.json', species, speciesReferenced, 'species');
+for (const id of species) {
+  if (!speciesReferenced.has(id)) {
+    report('bestiary/species.json', id, 'species is defined but never referenced');
+  }
+}
 
 // --- output ----------------------------------------------------------------
 

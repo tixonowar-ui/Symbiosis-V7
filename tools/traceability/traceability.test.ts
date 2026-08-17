@@ -30,6 +30,36 @@ function write(root: string, relative: string, source: string): void {
   writeFileSync(path, source, 'utf8');
 }
 
+function writeJson(root: string, relative: string, value: unknown): void {
+  write(root, relative, `${JSON.stringify(value)}\n`);
+}
+
+function catalogFixture(formsById: unknown, declaredFormCount: number): string {
+  const root = mkdtempSync(join(tmpdir(), 'symbiosis-traceability-catalog-'));
+  temporaryRoots.push(root);
+  const specRoot = join(root, 'generated', 'spec');
+  writeJson(specRoot, 'atlas/renderer/forms-by-id.json', formsById);
+  writeJson(specRoot, 'atlas/transitions.json', []);
+  writeJson(specRoot, 'atlas/journeys.json', []);
+  writeJson(specRoot, 'atlas/requirements.json', []);
+  writeJson(specRoot, 'atlas/qa-scenarios.json', []);
+  writeJson(specRoot, 'atlas/lifecycles.json', []);
+  writeJson(specRoot, 'atlas/meta.json', {
+    counts: {
+      forms: declaredFormCount,
+      transitions: 0,
+      journeys: 0,
+      requirements: 0,
+      qaScenarios: 0,
+    },
+    guardStates: [],
+    roles: [],
+  });
+  writeJson(specRoot, 'rules/rules.json', []);
+  writeJson(specRoot, 'rules/meta.json', { active: 0, tombstone: 0 });
+  return specRoot;
+}
+
 function fixtureCatalog(transition: TransitionReference): Catalog {
   return {
     categories: [
@@ -74,6 +104,62 @@ describe('catalog extraction', () => {
     expect(model.types).toHaveLength(6);
     expect(model.domains.reduce((sum, row) => sum + row.total, 0)).toBe(376);
     expect(model.types.reduce((sum, row) => sum + row.total, 0)).toBe(376);
+  });
+});
+
+describe('renderer form index validation', () => {
+  const form = { id: 'ZZZ-901', domain: 'Тестовый домен', type: 'screen' };
+
+  it('preserves form rows and category references from the object index', () => {
+    const catalog = loadCatalog(catalogFixture({ 'ZZZ-901': form }, 1));
+
+    expect(catalog.forms).toEqual([form]);
+    expect(catalog.categories.find(({ key }) => key === 'forms')?.references).toEqual(['ZZZ-901']);
+  });
+
+  it('rejects a non-object renderer form index', () => {
+    expect(() => loadCatalog(catalogFixture([form], 1))).toThrow(
+      'atlas/renderer/forms-by-id.json: expected object',
+    );
+  });
+
+  it('rejects duplicate embedded form ids', () => {
+    expect(() =>
+      loadCatalog(
+        catalogFixture(
+          {
+            'ZZZ-901': form,
+            'ZZZ-902': form,
+          },
+          2,
+        ),
+      ),
+    ).toThrow('forms: duplicate "ZZZ-901"');
+  });
+
+  it('rejects an index key that does not match the embedded form id', () => {
+    expect(() => loadCatalog(catalogFixture({ 'ZZZ-902': form }, 1))).toThrow(
+      'atlas/renderer/forms-by-id.json["ZZZ-902"].id: index key does not match "ZZZ-901"',
+    );
+  });
+
+  it.each(['id', 'domain', 'type'] as const)('requires a non-empty form %s', (fieldName) => {
+    expect(() =>
+      loadCatalog(
+        catalogFixture(
+          {
+            'ZZZ-901': { ...form, [fieldName]: '' },
+          },
+          1,
+        ),
+      ),
+    ).toThrow(`atlas/renderer/forms-by-id.json["ZZZ-901"].${fieldName}: expected non-empty string`);
+  });
+
+  it('checks the renderer form count against atlas metadata', () => {
+    expect(() => loadCatalog(catalogFixture({ 'ZZZ-901': form }, 2))).toThrow(
+      'atlas counts.forms: declared 2, found 1',
+    );
   });
 });
 
