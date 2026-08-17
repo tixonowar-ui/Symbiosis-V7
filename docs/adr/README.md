@@ -58,9 +58,10 @@
 | [0024](0024-stat-map-integer-values.md)                   | Целочисленные значения `StatMap`     | принято                                |
 | [0025](0025-character-draft-checkpoint-scope.md)          | Checkpoint черновика персонажа       | принято                                |
 | [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                |
-| [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято                                |
+| [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято; APP-002-часть заменена 0030   |
 | [0028](0028-wire-v2-reconnect.md)                         | Инициация reconnect в wire v2        | принято                                |
 | [0029](0029-wizard-draft-initial-payload.md)              | Начальный payload wizard-черновика   | принято                                |
+| [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                |
 
 ## Перенос решений аудита
 
