@@ -32,6 +32,30 @@ permissions:
 # 566–662 lines across those three, so the limits below leave real headroom
 # while still refusing a module rewrite.
 #
+# A 2026-08-17 follow-up recorded in #90 measured a 45-commit main sample with
+# the same buckets. The largest ordinary changes again clustered near both ceilings:
+#
+#   PR    code added/deleted    tests added/deleted
+#   #27              896/2                  700/0
+#   #43              892/0                  690/0
+#   #37              856/7                  571/0
+#   #38              717/0                  392/0
+#   #63             660/58                  128/5
+#   #87            603/166                 549/59
+#
+# The split exposed the metric mismatch: additions measure review growth, while
+# deletions measure replacement. #30 was only +257/-204 code, and the pending
+# #62 slice was +1044/-203 code — 1247 lines under the old aggregate metric.
+# Charging both directions to one budget made additive work spend replacement
+# headroom and replacement work spend additive headroom.
+#
+# The owner-set ceilings therefore allow 1500 code additions (20% above #62's
+# old 1247-line calibration point) but only 400 deletions, below the 1088-line
+# smallest code layer. Tests get 1200 additions because the observed 700-line
+# maximum had already been shaped by its ceiling, and 200 deletions so API
+# migrations remain possible without allowing wholesale removal. Documentation
+# remains aggregate churn.
+#
 # generated/ is excluded entirely: a re-imported artifact legitimately rewrites
 # megabytes, and that is pipeline output, not hand-written work.
 jobs:
@@ -46,9 +70,11 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          MAX_CODE_LINES: 900
+          MAX_CODE_ADDED: 1500
+          MAX_CODE_DELETED: 400
           MAX_CODE_FILES: 25
-          MAX_TEST_LINES: 700
+          MAX_TEST_ADDED: 1200
+          MAX_TEST_DELETED: 200
           MAX_DOC_LINES: 3000
           MAX_TOTAL_FILES: 60
         run: |
@@ -69,24 +95,31 @@ jobs:
           # zero, which is what we want — a binary blob has no reviewable lines.
           set -- $(echo "$stat" | awk -F'\t' '
             {
-              lines = $1 + $2
+              added = $1 + 0
+              deleted = $2 + 0
               total_files++
-              if ($3 ~ /\.(md|txt)$/) { doc_lines += lines; next }
-              if ($3 ~ /(^|\/)tests\// || $3 ~ /\.(test|spec)\.tsx?$/) {
-                test_lines += lines; test_files++; next
+              if ($3 ~ /\.(md|txt)$/) {
+                doc_lines += added + deleted; next
               }
-              code_lines += lines; code_files++
+              if ($3 ~ /(^|\/)tests\// || $3 ~ /\.(test|spec)\.tsx?$/) {
+                test_added += added; test_deleted += deleted
+                test_files++; next
+              }
+              code_added += added; code_deleted += deleted
+              code_files++
             }
             END {
-              printf "%d %d %d %d %d %d\n",
-                code_files+0, code_lines+0, test_files+0,
-                test_lines+0, doc_lines+0, total_files+0
+              printf "%d %d %d %d %d %d %d %d\n",
+                code_files+0, code_added+0, code_deleted+0,
+                test_files+0, test_added+0, test_deleted+0,
+                doc_lines+0, total_files+0
             }')
-          code_files=$1; code_lines=$2; test_files=$3
-          test_lines=$4; doc_lines=$5; total_files=$6
+          code_files=$1; code_added=$2; code_deleted=$3
+          test_files=$4; test_added=$5; test_deleted=$6
+          doc_lines=$7; total_files=$8
 
-          echo "code:  $code_files files (limit $MAX_CODE_FILES), $code_lines lines (limit $MAX_CODE_LINES)"
-          echo "tests: $test_files files, $test_lines lines (limit $MAX_TEST_LINES)"
+          echo "code:  $code_files files (limit $MAX_CODE_FILES), +$code_added (limit $MAX_CODE_ADDED), -$code_deleted (limit $MAX_CODE_DELETED)"
+          echo "tests: $test_files files, +$test_added (limit $MAX_TEST_ADDED), -$test_deleted (limit $MAX_TEST_DELETED)"
           echo "docs:  $doc_lines lines (limit $MAX_DOC_LINES)"
           echo "total: $total_files files (limit $MAX_TOTAL_FILES)"
           echo
@@ -94,8 +127,10 @@ jobs:
 
           over=""
           [ "$code_files" -gt "$MAX_CODE_FILES" ] && over="$over code-files"
-          [ "$code_lines" -gt "$MAX_CODE_LINES" ] && over="$over code-lines"
-          [ "$test_lines" -gt "$MAX_TEST_LINES" ] && over="$over test-lines"
+          [ "$code_added" -gt "$MAX_CODE_ADDED" ] && over="$over code-added"
+          [ "$code_deleted" -gt "$MAX_CODE_DELETED" ] && over="$over code-deleted"
+          [ "$test_added" -gt "$MAX_TEST_ADDED" ] && over="$over test-added"
+          [ "$test_deleted" -gt "$MAX_TEST_DELETED" ] && over="$over test-deleted"
           [ "$doc_lines" -gt "$MAX_DOC_LINES" ] && over="$over doc-lines"
           [ "$total_files" -gt "$MAX_TOTAL_FILES" ] && over="$over total-files"
 
