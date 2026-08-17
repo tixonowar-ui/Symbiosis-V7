@@ -3,8 +3,14 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { APP_FORM_IDS } from '../forms/app/index.js';
-import type { AppFormId } from '../forms/app/index.js';
+import type { ActionKey } from '@generated/types/atlas.js';
+
+import {
+  IMPLEMENTED_FORM_IDS,
+  implementedFormActions,
+  isImplementedFormId,
+} from '../forms/index.js';
+import type { ImplementedFormId } from '../forms/index.js';
 import { createAtlasFormModel, getAtlasFormModel } from './atlas-data.js';
 import type { AtlasSources } from './atlas-data.js';
 import { AtlasForm } from './atlas-form.js';
@@ -16,7 +22,7 @@ const reactTestGlobal = globalThis as typeof globalThis & {
 reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Exact literals are intentional: applied traceability requires every implemented form in a test. */
-const TEST_APP_FORM_IDS = [
+const TEST_IMPLEMENTED_FORM_IDS = [
   'APP-001',
   'APP-002',
   'APP-003',
@@ -28,7 +34,8 @@ const TEST_APP_FORM_IDS = [
   'APP-009',
   'APP-010',
   'APP-011',
-] as const satisfies readonly AppFormId[];
+  'CHR-001',
+] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
   readonly container: HTMLDivElement;
@@ -46,7 +53,7 @@ afterEach(() => {
   }
 });
 
-function renderAtlas(formId: string) {
+function renderAtlas(formId: string, availableActionKeys?: readonly ActionKey[]) {
   const onAction = vi.fn<AtlasFormProps['onAction']>();
   const container = document.createElement('div');
   document.body.append(container);
@@ -55,7 +62,18 @@ function renderAtlas(formId: string) {
   mountedRoots.push(mounted);
 
   act(() => {
-    root.render(<AtlasForm formId={formId} onAction={onAction} />);
+    root.render(
+      <AtlasForm
+        availableActionKeys={
+          availableActionKeys ??
+          (isImplementedFormId(formId)
+            ? implementedFormActions(formId).map((action) => action.actionKey)
+            : [])
+        }
+        formId={formId}
+        onAction={onAction}
+      />,
+    );
   });
 
   return { ...mounted, onAction };
@@ -129,13 +147,13 @@ function fixtureSources({
   };
 }
 
-describe('atlas APP renderer', () => {
-  it('registers and renders all eleven APP forms with their atlas type', () => {
-    expect(APP_FORM_IDS).toEqual(TEST_APP_FORM_IDS);
+describe('atlas implemented-form renderer', () => {
+  it('registers and renders all APP forms plus CHR-001 with their atlas type', () => {
+    expect(IMPLEMENTED_FORM_IDS).toEqual(TEST_IMPLEMENTED_FORM_IDS);
 
     let screens = 0;
     let dialogs = 0;
-    for (const id of TEST_APP_FORM_IDS) {
+    for (const id of TEST_IMPLEMENTED_FORM_IDS) {
       const { container } = renderAtlas(id);
       const form = requiredElement(
         container.querySelector<HTMLElement>(`[data-atlas-form-id=${JSON.stringify(id)}]`),
@@ -147,7 +165,7 @@ describe('atlas APP renderer', () => {
     }
 
     // Issue #33 fixes the APP inventory at nine screens and two dialogs.
-    expect(screens).toBe(9);
+    expect(screens).toBe(10);
     expect(dialogs).toBe(2);
   });
 
@@ -161,9 +179,6 @@ describe('atlas APP renderer', () => {
       'Повторить проверку сборки',
       'Открыть диагностику запуска',
     ]);
-    expect(container.querySelectorAll('[data-atlas-transition="exact"]')).toHaveLength(2);
-    expect(container.querySelectorAll('[data-atlas-transition="none"]')).toHaveLength(2);
-
     const stateNames = [...container.querySelectorAll<HTMLElement>('[data-atlas-state]')].map(
       (element) => element.dataset.atlasState,
     );
@@ -181,17 +196,11 @@ describe('atlas APP renderer', () => {
     });
 
     expect(onAction).toHaveBeenCalledTimes(1);
-    expect(onAction.mock.calls[0]?.[0]).toMatchObject({
+    expect(onAction.mock.calls[0]?.[0]).toEqual({
+      actionKey: 'APP-001::CTA::001',
       formId: 'APP-001',
       label: 'Игрок',
-      transition: {
-        from: 'APP-001',
-        to: 'APP-002',
-        kind: 'role-branch',
-        trigger: 'Игрок',
-      },
     });
-    expect(typeof onAction.mock.calls[0]?.[0].transition?.guard).toBe('string');
     expect(container.querySelector('[data-atlas-form-id="APP-001"]')).not.toBeNull();
 
     const retry = requiredElement(
@@ -202,9 +211,9 @@ describe('atlas APP renderer', () => {
       retry.click();
     });
     expect(onAction).toHaveBeenLastCalledWith({
+      actionKey: 'APP-001::CTA::003',
       formId: 'APP-001',
       label: 'Повторить проверку сборки',
-      transition: null,
     });
   });
 
@@ -216,20 +225,18 @@ describe('atlas APP renderer', () => {
       'Открыть «Выбор локального профиля и места»',
       'Открыть «Проверка совместимости сохранения»',
       'Открыть «Подтверждение выхода»',
+      'Открыть «Создание персонажа: идентичность»',
+      'Открыть «Создание персонажа: идентичность»',
       'Вернуться в главное меню игрока',
       'Импортировать персонажа',
     ]);
-    expect(container.querySelectorAll('[data-atlas-transition="none"]')).toHaveLength(4);
-    expect(container.querySelectorAll('[data-atlas-transition="exact"]')).toHaveLength(2);
   });
 
-  it('renders APP-005 as explicitly lacking actionSteps without inventing CTA', () => {
-    const { container } = renderAtlas('APP-005');
+  it('renders no action when the host supplies an empty availableActionKeys list', () => {
+    const { container } = renderAtlas('APP-005', []);
 
     expect(buttons(container)).toHaveLength(0);
-    expect(container.querySelector('[data-atlas-actions="not-declared"]')?.textContent).toContain(
-      'APP-005',
-    );
+    expect(container.querySelector('[data-atlas-actions="available-empty"]')).not.toBeNull();
     expect(values(container, 'declared-slot')).toEqual([
       'Создать кампанию',
       'Открыть draft',
@@ -237,7 +244,17 @@ describe('atlas APP renderer', () => {
       'Immutable archives',
       'Возврат в APP-011',
     ]);
-    expect(container.querySelector('[data-atlas-transition]')).toBeNull();
+  });
+
+  it('renders CHR-001 as incomplete when the host supplies no executable action', () => {
+    const { container, onAction } = renderAtlas('CHR-001', []);
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
+    expect(values(container, 'required-field')).toHaveLength(11);
+    expect(container.querySelector('[data-atlas-state="IDENTITY_INCOMPLETE"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-001::CTA::001"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-001::CTA::002"]')).toBeNull();
+    expect(onAction).not.toHaveBeenCalled();
   });
 
   it('keeps dialog routes and required-field notation as inert atlas text', () => {
@@ -258,7 +275,7 @@ describe('atlas APP renderer', () => {
   });
 
   it('matches the artifact-derived APP action and transition totals', () => {
-    const models = TEST_APP_FORM_IDS.map((id) => getAtlasFormModel(id));
+    const models = TEST_IMPLEMENTED_FORM_IDS.slice(0, 11).map((id) => getAtlasFormModel(id));
     const actions = models.flatMap((model) => model.actions.items);
 
     // Measured from requirements.json and the exact (from, trigger) join in issue #33.
@@ -286,6 +303,12 @@ describe('atlas APP renderer', () => {
     const otherForm = 'other-form';
     expect(() => createAtlasFormModel(otherForm, fixtureSources({ id: otherForm }))).toThrow(
       'form "other-form" is not implemented',
+    );
+  });
+
+  it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
+    expect(() => getAtlasFormModel('CHR-002')).toThrow(
+      `form "CHR-002" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 

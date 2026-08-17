@@ -6,6 +6,7 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { InteractiveRole, JsonObject } from '@shared/wire-protocol.js';
 
 import { array, readJsonFile, record, string } from '../json-source.js';
+import { CHR_001_FORM_ID, CHR_001_ROUTE } from './chr.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -33,13 +34,41 @@ export const APP_001_ACTION_KEYS = [
   'APP-001::CTA::004',
 ] as const satisfies readonly ActionKey[];
 
+export const APP_002_CREATE_CHARACTER_ACTION_KEY = 'APP-002::CTA::007' as const satisfies ActionKey;
+/** Guard passes and its target is implemented by this vertical. */
+export const APP_002_VERTICAL_ACTION_KEYS = [
+  APP_002_CREATE_CHARACTER_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const APP_001_PLAYER_ACTION_KEY = 'APP-001::CTA::001' as const satisfies ActionKey;
+export const APP_001_ROUTE = '/' as const;
+export const APP_002_ROUTE = '/player' as const;
+
 const APP_001_REQUIRED_FIELDS = [
   'buildVersion',
   'baselineCompatibility',
   'integrityStatus',
   'bootState',
 ] as const;
+const APP_002_REQUIRED_FIELDS = [
+  'contextId',
+  'stateRevision',
+  'projectionRevision',
+  'deviceId',
+] as const;
 const APP_001_BOOT_GUARD = 'bootState=BOOTING|READY|ERROR';
+const CHR_001_REQUIRED_FIELDS = [
+  'characterDraftId=characterUuid(immutable)',
+  'name(required)',
+  'description(optional)',
+  'artAssetKeyOrLocalFile(optional)',
+  'age(required)',
+  'massKg(number>0; step=0.1; no invented upper bound)',
+  'massApprovalStatus=PENDING_GM',
+  'anatomyProfile=STANDARD_HUMANOID',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
 const CHECKSUM_LINE = /^(?<digest>[0-9a-f]{64}) {2}(?<path>.+)$/u;
 
 export interface BaselineValue extends JsonObject {
@@ -69,15 +98,75 @@ export interface App001Projection extends JsonObject {
   readonly integrityStatus: IntegrityStatus;
 }
 
+export interface App002Projection extends JsonObject {
+  readonly contextId: string;
+  readonly deviceId: string;
+  readonly projectionRevision: number;
+  readonly stateRevision: number;
+}
+
+export type AppProjection = App001Projection | App002Projection;
+
 export interface AppFormContract {
   readonly id: AppFormId;
   readonly requiredFields: readonly string[];
   readonly roles: readonly InteractiveRole[];
 }
 
+export interface AppNavigationAction {
+  readonly from: AppFormId;
+  readonly guard: string;
+  readonly kind: string;
+  readonly to: string;
+  readonly trigger: string;
+}
+
 export interface AppProjectionCatalog {
+  readonly actions: ReadonlyMap<ActionKey, AppNavigationAction>;
   readonly app001: App001Projection;
   readonly forms: ReadonlyMap<AppFormId, AppFormContract>;
+}
+
+function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNavigationAction> {
+  const forms = record(source, 'forms-by-id.json');
+  const result = new Map<ActionKey, AppNavigationAction>();
+  for (const [sourceFormId, actionKey, expectedGuard] of [
+    [
+      'APP-001',
+      APP_001_PLAYER_ACTION_KEY,
+      'otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; bootState=READY',
+    ],
+    [
+      'APP-002',
+      APP_002_CREATE_CHARACTER_ACTION_KEY,
+      'player launch-mode; new immutable draft UUID',
+    ],
+  ] as const) {
+    const label = `${sourceFormId}.actions.ctaAvailabilityByAction`;
+    const matches = array(
+      record(record(forms[sourceFormId], label)['actions'], label)['ctaAvailabilityByAction'],
+      label,
+    )
+      .map((value) => record(value, label))
+      .filter((action) => action['actionKey'] === actionKey);
+    if (matches.length !== 1) throw new Error(`${label}: expected exactly one ${actionKey}`);
+    const match = matches[0];
+    if (match === undefined) throw new Error(`${label}: missing ${actionKey}`);
+    const guard = string(match['guard'], `${label}.${actionKey}.guard`);
+    if (guard !== expectedGuard) {
+      throw new Error(
+        `${label}.${actionKey}.guard is ${JSON.stringify(guard)}, expected ${JSON.stringify(expectedGuard)}`,
+      );
+    }
+    result.set(actionKey, {
+      from: sourceFormId,
+      guard,
+      kind: string(match['kind'], `${label}.${actionKey}.kind`),
+      to: string(match['targetFormId'], `${label}.${actionKey}.targetFormId`),
+      trigger: string(match['label'], `${label}.${actionKey}.label`),
+    });
+  }
+  return result;
 }
 
 export type AppProjectionRefusal =
@@ -99,7 +188,7 @@ export type AppProjectionRefusal =
 
 export type AppProjectionResult =
   | { readonly ok: false; readonly refusal: AppProjectionRefusal }
-  | { readonly ok: true; readonly projection: App001Projection };
+  | { readonly ok: true; readonly projection: AppProjection };
 
 function strings(value: unknown, label: string): string[] {
   return array(value, label).map((item, index) => string(item, `${label}[${String(index)}]`));
@@ -116,6 +205,26 @@ function interactiveRole(value: unknown, label: string): InteractiveRole {
   if (candidate !== 'player' && candidate !== 'gm')
     throw new Error(`${label}: unsupported interactive role ${JSON.stringify(candidate)}`);
   return candidate;
+}
+
+function assertScreenContract(
+  forms: Record<string, unknown>,
+  formId: string,
+  requiredFields: readonly string[],
+  route: string,
+): void {
+  const form = record(forms[formId], `forms-by-id.json[${JSON.stringify(formId)}]`);
+  const actualFields = strings(form['requiredFields'], `${formId}.requiredFields`);
+  const actualRoles = strings(form['roles'], `${formId}.roles`);
+  if (
+    string(form['id'], `${formId}.id`) !== formId ||
+    string(form['type'], `${formId}.type`) !== 'screen' ||
+    string(form['route'], `${formId}.route`) !== route ||
+    !sameStrings(actualRoles, ['player']) ||
+    !sameStrings(actualFields, requiredFields)
+  ) {
+    throw new Error(`${formId} does not match its source-owned player screen contract`);
+  }
 }
 
 function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContract> {
@@ -166,6 +275,9 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   for (const state of APP_001_BOOT_STATES) {
     string(states[state], `forms-by-id.json["APP-001"].states.${state}`);
   }
+
+  assertScreenContract(forms, 'APP-002', APP_002_REQUIRED_FIELDS, APP_002_ROUTE);
+  assertScreenContract(forms, CHR_001_FORM_ID, CHR_001_REQUIRED_FIELDS, CHR_001_ROUTE);
   return result;
 }
 
@@ -304,7 +416,7 @@ export async function loadAppProjectionCatalog(projectRoot: string): Promise<App
     formId: 'APP-001',
     integrityStatus,
   } as const satisfies App001Projection;
-  return { app001, forms };
+  return { actions: appNavigationActions(formsSource), app001, forms };
 }
 
 /**
@@ -319,6 +431,35 @@ export function projectApp001Bootstrap(catalog: AppProjectionCatalog): App001Pro
     buildVersion: catalog.app001.buildVersion,
     formId: catalog.app001.formId,
     integrityStatus: catalog.app001.integrityStatus,
+  };
+}
+
+export function projectApp002(
+  catalog: AppProjectionCatalog,
+  requestedRole: InteractiveRole,
+  values: App002Projection,
+): AppProjectionResult {
+  const form = catalog.forms.get('APP-002');
+  if (form === undefined) throw new Error('APP-002 contract is missing from the checked catalog');
+  if (!form.roles.includes(requestedRole)) {
+    return {
+      ok: false,
+      refusal: {
+        allowedRoles: form.roles,
+        formId: form.id,
+        kind: 'ROLE_NOT_ALLOWED',
+        requestedRole,
+      },
+    };
+  }
+  return {
+    ok: true,
+    projection: {
+      contextId: values.contextId,
+      deviceId: values.deviceId,
+      projectionRevision: values.projectionRevision,
+      stateRevision: values.stateRevision,
+    },
   };
 }
 

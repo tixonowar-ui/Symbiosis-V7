@@ -19,25 +19,45 @@ import type {
   ClientToHostMessage,
   ClientToHostV2Message,
   CommandRefusalMessage,
+  FormActionIntentV2Message,
+  FormActionRefusalV2Message,
   HostToClientMessage,
   HostToClientV2Message,
+  ProjectionSnapshotV2Message,
   ProtocolVocabulary,
+  PresentedBaseForm,
   RevisionVector,
   WireV2Vocabulary,
   WorkflowCommandId,
 } from '@shared/index.js';
 
 import { loadDeviceId } from '../persistence/index.js';
+import type { RevisionImpact } from '../persistence/index.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import {
   APP_001_ACTION_KEYS,
+  APP_001_PLAYER_ACTION_KEY,
+  APP_002_CREATE_CHARACTER_ACTION_KEY,
+  APP_002_VERTICAL_ACTION_KEYS,
+  APP_002_ROUTE,
   loadAppProjectionCatalog,
   projectApp001Bootstrap,
+  projectApp002,
   projectAppForm,
 } from './projections/app.js';
 import type { AppProjectionCatalog } from './projections/app.js';
+import {
+  CHR_001_FORM_ID,
+  CHR_001_INITIAL_ACTION_KEYS,
+  CHR_001_ROUTE,
+  projectInitialChr001,
+} from './projections/chr.js';
 
 export interface HostServerConfig {
+  readonly advanceRevisions: (impact: RevisionImpact) => RevisionVector;
+  readonly allocateContextId: () => string;
+  readonly allocateLocalCharacterId: () => string;
+  readonly allocateWizardCheckpointId: () => string;
   readonly database: Parameters<typeof loadDeviceId>[0];
   readonly onFrameError: (error: unknown) => void;
   readonly projectRoot: string;
@@ -52,10 +72,40 @@ export interface HostNetworkConfig {
 
 type CommandRequest = Extract<ClientToHostMessage, { readonly messageType: 'command.request' }>;
 type HostVocabulary = ProtocolVocabulary & WireV2Vocabulary;
+type FormActionTerminal = FormActionRefusalV2Message | ProjectionSnapshotV2Message;
 type CommandJournal = Map<
   string,
   { readonly refusal: CommandRefusalMessage; readonly request: CommandRequest }
 >;
+interface ConfirmedNavigationContext {
+  readonly contextId: string | null;
+  readonly deviceId: string;
+  readonly formId: 'APP-001' | 'APP-002' | typeof CHR_001_FORM_ID;
+}
+type NavigationJournal = Map<
+  string,
+  {
+    readonly nextContext: ConfirmedNavigationContext | undefined;
+    readonly request: FormActionIntentV2Message;
+    readonly terminal: FormActionTerminal;
+  }
+>;
+interface ConnectionNavigation {
+  current: ConfirmedNavigationContext | null;
+  sessionEstablished: boolean;
+}
+interface NavigationDependencies {
+  readonly advanceRevisions: HostServerConfig['advanceRevisions'];
+  readonly allocateContextId: HostServerConfig['allocateContextId'];
+  readonly allocateLocalCharacterId: HostServerConfig['allocateLocalCharacterId'];
+  readonly allocateWizardCheckpointId: HostServerConfig['allocateWizardCheckpointId'];
+  readonly catalog: AppProjectionCatalog;
+  readonly database: HostServerConfig['database'];
+  readonly journal: NavigationJournal;
+  readonly onFrameError: HostServerConfig['onFrameError'];
+  readonly readRevisions: HostServerConfig['readRevisions'];
+  readonly vocabulary: HostVocabulary;
+}
 
 const STATIC_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.css': 'text/css; charset=utf-8',
@@ -69,6 +119,9 @@ const STATIC_CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.webp': 'image/webp',
   '.woff2': 'font/woff2',
 };
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 
 function checkedRevisions(value: RevisionVector): RevisionVector {
   const keys = Object.keys(value);
@@ -88,6 +141,85 @@ function checkedRevisions(value: RevisionVector): RevisionVector {
     throw new Error('actorVisibilityRevision cannot exceed projectionRevision');
   }
   return { ...value };
+}
+
+function allocatedId(allocator: () => string, label: string, pattern = UUID_PATTERN): string {
+  const value: unknown = allocator();
+  if (typeof value !== 'string' || !pattern.test(value) || value === ZERO_UUID) {
+    throw new Error(`${label} allocator returned ${JSON.stringify(value)}, expected a UUID`);
+  }
+  return value;
+}
+
+function allocatedWizardCheckpointId(allocator: () => string, characterDraftId: string): string {
+  const value: unknown = allocator();
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    value === 'NONE' ||
+    value === ZERO_UUID
+  ) {
+    throw new Error(
+      `wizard checkpoint allocator returned ${JSON.stringify(value)}, expected a real opaque ID`,
+    );
+  }
+  if (value === characterDraftId) {
+    throw new Error('wizard checkpoint allocator reused the character draft ID');
+  }
+  return value;
+}
+
+function advanceProjection(
+  before: RevisionVector,
+  writer: HostServerConfig['advanceRevisions'],
+): RevisionVector {
+  const after = checkedRevisions(
+    writer({ actorVisibilityChanged: false, projectionChanged: true, stateChanged: false }),
+  );
+  if (
+    after.stateRevision !== before.stateRevision ||
+    after.projectionRevision !== before.projectionRevision + 1 ||
+    after.actorVisibilityRevision !== before.actorVisibilityRevision
+  ) {
+    throw new Error(
+      `projection-only revision writer returned ${JSON.stringify(after)} after ${JSON.stringify(before)}`,
+    );
+  }
+  return after;
+}
+
+function projectionSnapshot(
+  correlationId: string,
+  base: PresentedBaseForm,
+  projectionRole: 'player' | null,
+  revisions: RevisionVector,
+): ProjectionSnapshotV2Message {
+  return {
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment: { correlationId, reason: 'FORM_ACTION' },
+      base,
+      layers: [],
+    },
+    projectionRole,
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions,
+  };
+}
+
+function formActionRefusal(
+  message: FormActionIntentV2Message,
+  refusal: FormActionRefusalV2Message['refusal'],
+  revisions: RevisionVector,
+): FormActionRefusalV2Message {
+  return {
+    messageType: 'navigation.form-action.refusal',
+    navigationRequestId: message.navigationRequestId,
+    presentationUnchanged: true,
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    refusal,
+    revisions,
+  };
 }
 
 function sendChecked(
@@ -112,6 +244,195 @@ function sendCheckedV2(
     throw new Error(`host produced an invalid wire v2 message: ${JSON.stringify(encoded.refusal)}`);
   }
   socket.send(encoded.text);
+}
+
+function handleFormAction(
+  socket: WebSocket,
+  message: FormActionIntentV2Message,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): void {
+  const known = dependencies.journal.get(message.navigationRequestId);
+  if (known !== undefined) {
+    if (isDeepStrictEqual(known.request, message)) {
+      if (!connection.sessionEstablished) {
+        sendCheckedV2(
+          socket,
+          formActionRefusal(
+            message,
+            { code: 'NAVIGATION_UNAVAILABLE' },
+            checkedRevisions(dependencies.readRevisions()),
+          ),
+          dependencies.vocabulary,
+        );
+        return;
+      }
+      if (
+        known.nextContext !== undefined &&
+        !deviceIdentityMatches(dependencies, known.nextContext.deviceId)
+      ) {
+        sendCheckedV2(
+          socket,
+          formActionRefusal(
+            message,
+            { code: 'NAVIGATION_UNAVAILABLE' },
+            checkedRevisions(dependencies.readRevisions()),
+          ),
+          dependencies.vocabulary,
+        );
+        return;
+      }
+      if (known.nextContext !== undefined) connection.current = known.nextContext;
+      sendCheckedV2(socket, known.terminal, dependencies.vocabulary);
+    } else {
+      const revisions = checkedRevisions(dependencies.readRevisions());
+      sendCheckedV2(
+        socket,
+        formActionRefusal(
+          message,
+          { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' },
+          revisions,
+        ),
+        dependencies.vocabulary,
+      );
+    }
+    return;
+  }
+
+  const finish = (terminal: FormActionTerminal, nextContext?: ConfirmedNavigationContext): void => {
+    dependencies.journal.set(message.navigationRequestId, {
+      nextContext,
+      request: message,
+      terminal,
+    });
+    if (nextContext !== undefined) connection.current = nextContext;
+    sendCheckedV2(socket, terminal, dependencies.vocabulary);
+  };
+  const revisions = checkedRevisions(dependencies.readRevisions());
+  if (message.expectedProjectionRevision !== revisions.projectionRevision) {
+    finish(
+      formActionRefusal(
+        message,
+        {
+          actualProjectionRevision: revisions.projectionRevision,
+          code: 'STALE_PROJECTION',
+          expectedProjectionRevision: message.expectedProjectionRevision,
+        },
+        revisions,
+      ),
+    );
+    return;
+  }
+
+  const current = connection.current;
+  const action = dependencies.catalog.actions.get(message.actionKey);
+  if (
+    current === null ||
+    current.formId !== message.sourceFormId ||
+    action?.from !== message.sourceFormId
+  ) {
+    finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    return;
+  }
+  if (
+    action.to === 'APP-002' &&
+    current.formId === 'APP-001' &&
+    message.actionKey === APP_001_PLAYER_ACTION_KEY &&
+    dependencies.catalog.app001.bootState === 'READY'
+  ) {
+    if (!deviceIdentityMatches(dependencies, current.deviceId)) {
+      finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+      return;
+    }
+    const contextId = allocatedId(
+      dependencies.allocateContextId,
+      'player-local context',
+      UUID_V4_PATTERN,
+    );
+    if (contextId === current.deviceId) {
+      throw new Error('player-local context allocator reused the durable device ID');
+    }
+    const after = advanceProjection(revisions, dependencies.advanceRevisions);
+    const projected = projectApp002(dependencies.catalog, 'player', {
+      contextId,
+      deviceId: current.deviceId,
+      projectionRevision: after.projectionRevision,
+      stateRevision: after.stateRevision,
+    });
+    if (!projected.ok) throw new Error(`APP-002 refused: ${JSON.stringify(projected.refusal)}`);
+    finish(
+      projectionSnapshot(
+        message.navigationRequestId,
+        {
+          availableActionKeys: APP_002_VERTICAL_ACTION_KEYS,
+          formId: 'APP-002',
+          formType: 'screen',
+          roleFilteredPayload: projected.projection,
+          routeBindings: [],
+          routeTemplate: APP_002_ROUTE,
+        },
+        'player',
+        after,
+      ),
+      {
+        contextId,
+        deviceId: current.deviceId,
+        formId: 'APP-002',
+      },
+    );
+    return;
+  }
+  if (
+    action.to === CHR_001_FORM_ID &&
+    current.formId === 'APP-002' &&
+    current.contextId !== null &&
+    message.actionKey === APP_002_CREATE_CHARACTER_ACTION_KEY &&
+    deviceIdentityMatches(dependencies, current.deviceId)
+  ) {
+    const characterDraftId = allocatedId(dependencies.allocateLocalCharacterId, 'local character');
+    const wizardCheckpointId = allocatedWizardCheckpointId(
+      dependencies.allocateWizardCheckpointId,
+      characterDraftId,
+    );
+    const after = advanceProjection(revisions, dependencies.advanceRevisions);
+    finish(
+      projectionSnapshot(
+        message.navigationRequestId,
+        {
+          availableActionKeys: CHR_001_INITIAL_ACTION_KEYS,
+          formId: CHR_001_FORM_ID,
+          formType: 'screen',
+          roleFilteredPayload: projectInitialChr001(characterDraftId, wizardCheckpointId),
+          routeBindings: [
+            { parameterIndex: 0, source: 'executor-allocated', value: characterDraftId },
+          ],
+          routeTemplate: CHR_001_ROUTE,
+        },
+        'player',
+        after,
+      ),
+      { contextId: current.contextId, deviceId: current.deviceId, formId: CHR_001_FORM_ID },
+    );
+    return;
+  }
+  finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+}
+
+function deviceIdentityMatches(
+  dependencies: NavigationDependencies,
+  expectedDeviceId: string,
+): boolean {
+  try {
+    const actualDeviceId = loadDeviceId(dependencies.database);
+    if (actualDeviceId === expectedDeviceId) return true;
+    dependencies.onFrameError(
+      new Error('durable device identity no longer matches the confirmed navigation context'),
+    );
+    return false;
+  } catch (error: unknown) {
+    dependencies.onFrameError(error);
+    return false;
+  }
 }
 
 function sendProtocolRefusal(
@@ -226,6 +547,7 @@ function handleReconnectV2(
   database: HostServerConfig['database'],
   readRevisions: HostServerConfig['readRevisions'],
   commandJournal: CommandJournal,
+  connection: ConnectionNavigation,
 ): void {
   const deviceId = loadDeviceId(database);
   if (message.deviceId !== deviceId) {
@@ -283,6 +605,8 @@ function handleReconnectV2(
 
   sendCheckedV2(socket, capabilities, vocabulary);
   sendCheckedV2(socket, snapshot, vocabulary);
+  connection.current = { contextId: null, deviceId, formId: 'APP-001' };
+  connection.sessionEstablished = true;
 }
 
 function handleClientMessage(
@@ -363,28 +687,29 @@ function handleClientMessage(
 function handleClientMessageV2(
   socket: WebSocket,
   message: ClientToHostV2Message,
-  catalog: AppProjectionCatalog,
-  vocabulary: HostVocabulary,
-  database: HostServerConfig['database'],
-  readRevisions: HostServerConfig['readRevisions'],
+  dependencies: NavigationDependencies,
   commandJournal: CommandJournal,
+  connection: ConnectionNavigation,
 ): void {
   switch (message.messageType) {
     case 'session.reconnect':
       handleReconnectV2(
         socket,
         message,
-        catalog,
-        vocabulary,
-        database,
-        readRevisions,
+        dependencies.catalog,
+        dependencies.vocabulary,
+        dependencies.database,
+        dependencies.readRevisions,
         commandJournal,
+        connection,
       );
       return;
     case 'navigation.form-action':
+      handleFormAction(socket, message, connection, dependencies);
+      return;
     case 'navigation.addressable-route':
       throw new Error(
-        `wire v2 ${message.messageType} is unavailable in the APP-001 bootstrap slice`,
+        `wire v2 ${message.messageType} is unavailable in the implemented navigation slice`,
       );
   }
 }
@@ -405,14 +730,12 @@ function handleFrame(
   socket: WebSocket,
   data: RawData,
   isBinary: boolean,
-  catalog: AppProjectionCatalog,
-  vocabulary: HostVocabulary,
-  database: HostServerConfig['database'],
-  readRevisions: HostServerConfig['readRevisions'],
+  dependencies: NavigationDependencies,
   commandJournal: CommandJournal,
+  connection: ConnectionNavigation,
 ): void {
   if (isBinary) {
-    sendProtocolRefusal(socket, vocabulary, {
+    sendProtocolRefusal(socket, dependencies.vocabulary, {
       actualType: 'object',
       code: 'INVALID_SHAPE',
       expected: 'text application frame',
@@ -422,28 +745,27 @@ function handleFrame(
   }
   const source = rawDataText(data);
   if (messageProtocolVersion(source) === WIRE_PROTOCOL_V2_VERSION) {
-    const decoded = decodeClientMessageV2(source, vocabulary);
+    const decoded = decodeClientMessageV2(source, dependencies.vocabulary);
     if (!decoded.ok) {
-      sendProtocolRefusal(socket, vocabulary, decoded.refusal);
+      sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
-    handleClientMessageV2(
-      socket,
-      decoded.value,
-      catalog,
-      vocabulary,
-      database,
-      readRevisions,
-      commandJournal,
-    );
+    handleClientMessageV2(socket, decoded.value, dependencies, commandJournal, connection);
     return;
   }
-  const decoded = decodeClientMessage(source, vocabulary);
+  const decoded = decodeClientMessage(source, dependencies.vocabulary);
   if (!decoded.ok) {
-    sendProtocolRefusal(socket, vocabulary, decoded.refusal);
+    sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
     return;
   }
-  handleClientMessage(socket, decoded.value, catalog, vocabulary, readRevisions, commandJournal);
+  handleClientMessage(
+    socket,
+    decoded.value,
+    dependencies.catalog,
+    dependencies.vocabulary,
+    dependencies.readRevisions,
+    commandJournal,
+  );
 }
 
 function rawDataText(data: RawData): string {
@@ -512,8 +834,16 @@ async function sendStaticFile(
 }
 
 export async function createHost(config: HostServerConfig): Promise<FastifyInstance> {
-  if (typeof config.readRevisions !== 'function')
-    throw new TypeError('host readRevisions configuration must be a function');
+  for (const [name, value] of Object.entries({
+    advanceRevisions: config.advanceRevisions,
+    allocateContextId: config.allocateContextId,
+    allocateLocalCharacterId: config.allocateLocalCharacterId,
+    allocateWizardCheckpointId: config.allocateWizardCheckpointId,
+    readRevisions: config.readRevisions,
+  })) {
+    if (typeof value !== 'function')
+      throw new TypeError(`host ${name} configuration must be a function`);
+  }
   if (typeof config.onFrameError !== 'function')
     throw new TypeError('host onFrameError configuration must be a function');
   const projectRoot = resolve(config.projectRoot);
@@ -525,21 +855,25 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
 
   const app = Fastify({ logger: false });
   const commandJournal: CommandJournal = new Map();
+  const dependencies: NavigationDependencies = {
+    advanceRevisions: config.advanceRevisions,
+    allocateContextId: config.allocateContextId,
+    allocateLocalCharacterId: config.allocateLocalCharacterId,
+    allocateWizardCheckpointId: config.allocateWizardCheckpointId,
+    catalog,
+    database: config.database,
+    journal: new Map(),
+    onFrameError: config.onFrameError,
+    readRevisions: config.readRevisions,
+    vocabulary,
+  };
   await app.register(websocket);
 
   app.get('/state', { websocket: true }, (socket) => {
+    const connection: ConnectionNavigation = { current: null, sessionEstablished: false };
     socket.on('message', (data: RawData, isBinary: boolean) => {
       try {
-        handleFrame(
-          socket,
-          data,
-          isBinary,
-          catalog,
-          vocabulary,
-          config.database,
-          config.readRevisions,
-          commandJournal,
-        );
+        handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
       } catch (error: unknown) {
         config.onFrameError(error);
         socket.close(1011, 'host frame processing failed');

@@ -12,6 +12,8 @@ import type {
   AddressableRouteTemplate,
   DecodeRefusal,
   DecodeResult,
+  FormActionIntentV2Message,
+  FormActionRefusalV2Message,
   JsonObject,
   JsonValue,
   ProjectionSnapshotV2Message,
@@ -24,31 +26,34 @@ import type {
   WorkflowCommandId,
 } from '@shared/index.js';
 
+import { isImplementedFormActionKey, presentedFormDefinition } from './forms/index.js';
+
 const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
-/** Source: generated/spec/atlas/forms-by-id.json["APP-001"].actions.ctaAvailabilityByAction. */
-const APP_001_ACTION_KEYS = [
-  'APP-001::CTA::001',
-  'APP-001::CTA::002',
-  'APP-001::CTA::003',
-  'APP-001::CTA::004',
-] as const satisfies readonly ActionKey[];
-const APP_001_ACTION_KEY_SET: ReadonlySet<string> = new Set(APP_001_ACTION_KEYS);
-
 /**
- * This slice implements no command or navigation handling. The combined
- * vocabulary keeps accepted v1 command traffic separate while constraining a
- * v2 presentation to the one role-neutral APP-001 shape the client can apply.
+ * The three presentation shapes are the exact issue #62 slice. Addressable
+ * routes remain out of scope and therefore fail closed.
  */
 export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV2Vocabulary = {
   isAddressableRouteTemplate: (_value): _value is AddressableRouteTemplate => false,
   isClientRouteBindings: () => false,
-  isFormActionKey: (sourceFormId, value): value is ActionKey =>
-    sourceFormId === 'APP-001' && APP_001_ACTION_KEY_SET.has(value),
+  isFormActionKey: isImplementedFormActionKey,
   isFormId: (value): value is FormId => FORM_ID_SET.has(value),
   isHostTransition: () => false,
-  isPresentedForm: (formId, formType, routeTemplate, bindings) =>
-    formId === 'APP-001' && formType === 'screen' && routeTemplate === '/' && bindings.length === 0,
+  isPresentedForm: (formId, formType, routeTemplate, bindings) => {
+    const definition = presentedFormDefinition(formId);
+    if (definition === null || formType !== 'screen' || routeTemplate !== definition.route)
+      return false;
+    if (formId !== 'CHR-001') return bindings.length === 0;
+    const binding = bindings[0];
+    return (
+      bindings.length === 1 &&
+      binding !== undefined &&
+      binding.parameterIndex === 0 &&
+      binding.source === 'executor-allocated' &&
+      UUID_PATTERN.test(binding.value)
+    );
+  },
   isWorkflowCommandId: (_value): _value is WorkflowCommandId => false,
 };
 
@@ -60,6 +65,7 @@ const NO_KNOWN_REVISIONS = {
 const DEVICE_ID_KEYS = new Set(['deviceId']);
 const DEVICE_ID_ERROR_KEYS = new Set(['error']);
 const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 /**
  * Sources: generated/spec/atlas/forms-by-id.json["APP-001"].requiredFields
@@ -75,6 +81,7 @@ const APP_001_KEYS = new Set([
   'integrityStatus',
 ]);
 const APP_001_BOOT_STATES: ReadonlySet<string> = new Set(['BOOTING', 'READY', 'ERROR']);
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 const BASELINE_COMPATIBILITY_KEYS = new Set([
   'builtAgainstTuple',
   'catalogVersion',
@@ -110,9 +117,12 @@ export interface App001Projection extends JsonObject {
   readonly integrityStatus: IntegrityStatus;
 }
 
-export interface ConfirmedApp001Snapshot {
+export interface ConfirmedProjectionSnapshot {
+  readonly availableActionKeys: readonly ActionKey[];
   readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
-  readonly projection: App001Projection;
+  readonly formId: 'APP-001' | 'APP-002' | 'CHR-001';
+  readonly path: string;
+  readonly projection: JsonObject;
   readonly revisions: RevisionVector;
 }
 
@@ -124,23 +134,32 @@ export type WebClientState =
       readonly code: number | null;
       readonly detail: string;
       readonly kind: 'disconnected';
-      readonly snapshot: ConfirmedApp001Snapshot | null;
+      readonly snapshot: ConfirmedProjectionSnapshot | null;
     }
   | {
       readonly kind: 'host-refusal';
       readonly refusal: DecodeRefusal;
-      readonly snapshot: ConfirmedApp001Snapshot | null;
+      readonly snapshot: ConfirmedProjectionSnapshot | null;
     }
   | {
       readonly detail: string;
       readonly kind: 'protocol-error';
       readonly refusal: DecodeRefusal;
-      readonly snapshot: ConfirmedApp001Snapshot | null;
+      readonly snapshot: ConfirmedProjectionSnapshot | null;
     }
-  | { readonly kind: 'ready'; readonly snapshot: ConfirmedApp001Snapshot };
+  | {
+      readonly kind: 'navigation-refusal';
+      readonly refusal: FormActionRefusalV2Message['refusal'];
+      readonly snapshot: ConfirmedProjectionSnapshot;
+    }
+  | { readonly kind: 'ready'; readonly snapshot: ConfirmedProjectionSnapshot };
+
+export type FormActionRequestResult =
+  { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
   disconnect(): void;
+  requestFormAction(actionKey: ActionKey): FormActionRequestResult;
 }
 
 function refused<T>(refusal: DecodeRefusal): DecodeResult<T> {
@@ -353,11 +372,130 @@ function decodeApp001Projection(value: JsonObject, path: string): DecodeResult<A
   return { ok: true, value: value as App001Projection };
 }
 
-function decodeSnapshot(
+type FieldPredicate = (value: JsonValue) => boolean;
+
+function decodeProjection(
+  value: JsonObject,
+  path: string,
+  fields: Readonly<Record<string, FieldPredicate>>,
+): DecodeResult<JsonObject> {
+  const keys = exactObjectKeys(value, new Set(Object.keys(fields)), path);
+  if (!keys.ok) return keys;
+  for (const [key, valid] of Object.entries(fields)) {
+    const field = value[key];
+    if (field === undefined) {
+      return refused({
+        actualType: 'undefined',
+        code: 'INVALID_SHAPE',
+        expected: 'required JSON value',
+        path: `${path}.${key}`,
+      });
+    }
+    if (!valid(field)) return unrecognized(`${path}.${key}`, field);
+  }
+  return { ok: true, value };
+}
+
+function decodeApp002Projection(value: JsonObject, path: string, revisions: RevisionVector) {
+  const result = decodeProjection(value, path, {
+    contextId: (field) => typeof field === 'string' && DEVICE_ID_PATTERN.test(field),
+    deviceId: (field) => typeof field === 'string' && DEVICE_ID_PATTERN.test(field),
+    projectionRevision: (field) => field === revisions.projectionRevision,
+    stateRevision: (field) => field === revisions.stateRevision,
+  });
+  const contextId = value['contextId'];
+  if (result.ok && contextId !== undefined && contextId === value['deviceId']) {
+    return unrecognized<JsonObject>(`${path}.contextId`, contextId);
+  }
+  return result;
+}
+
+function decodeChr001Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const characterDraftId = value['characterDraftId'];
+  return decodeProjection(value, path, {
+    age: (field) => field === null,
+    anatomyProfile: (field) => field === 'STANDARD_HUMANOID',
+    artAssetKeyOrLocalFile: (field) => field === null,
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === null,
+    description: (field) => field === null,
+    draftRevision: (field) => field === 0,
+    massApprovalStatus: (field) => field === 'PENDING_GM',
+    massKg: (field) => field === null,
+    name: (field) => field === null,
+    wizardCheckpointId: (field) =>
+      typeof field === 'string' &&
+      field.trim().length > 0 &&
+      field !== 'NONE' &&
+      field !== ZERO_UUID &&
+      field !== characterDraftId,
+  });
+}
+
+function decodeConfirmedSnapshot(
+  message: ProjectionSnapshotV2Message,
+  executableWorkflowCommandIds: readonly WorkflowCommandId[],
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const base = message.presentation.base;
+  const expectedRole = base.formId === 'APP-001' ? null : 'player';
+  if (message.projectionRole !== expectedRole) {
+    return unrecognized('$.projectionRole', message.projectionRole);
+  }
+  let projection: DecodeResult<JsonObject>;
+  switch (base.formId) {
+    case 'APP-001':
+      projection = decodeApp001Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      break;
+    case 'APP-002':
+      projection = decodeApp002Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        message.revisions,
+      );
+      break;
+    case 'CHR-001':
+      projection = decodeChr001Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      break;
+    default:
+      return unrecognized('$.presentation.base.formId', base.formId);
+  }
+  if (!projection.ok) return projection;
+  const common = {
+    availableActionKeys: [...base.availableActionKeys],
+    executableWorkflowCommandIds: [...executableWorkflowCommandIds],
+    path:
+      base.routeBindings.length === 0
+        ? base.routeTemplate
+        : base.routeTemplate.replace(/:[^/]+/u, encodeURIComponent(base.routeBindings[0]!.value)),
+    revisions: { ...message.revisions },
+  } as const;
+  return {
+    ok: true,
+    value: {
+      ...common,
+      formId: base.formId,
+      projection: projection.value,
+    },
+  };
+}
+
+function decodeReconnectSnapshot(
   message: ProjectionSnapshotV2Message,
   capabilities: SessionReconnectCapabilitiesV2Message,
   requestId: string,
-): DecodeResult<ConfirmedApp001Snapshot> {
+): DecodeResult<ConfirmedProjectionSnapshot> {
   if (capabilities.reconnectRequestId !== requestId) {
     return unrecognized('$.reconnectRequestId', capabilities.reconnectRequestId);
   }
@@ -377,29 +515,34 @@ function decodeSnapshot(
   ) {
     return unrecognized('$.revisions', { ...message.revisions });
   }
-  if (message.projectionRole !== null) {
-    return unrecognized('$.projectionRole', message.projectionRole);
+  if (message.presentation.base.formId !== 'APP-001') {
+    return unrecognized('$.presentation.base.formId', message.presentation.base.formId);
   }
-  const availableActionKeys = message.presentation.base.availableActionKeys;
+  return decodeConfirmedSnapshot(message, capabilities.executableWorkflowCommandIds);
+}
+
+function decodeFormActionSnapshot(
+  message: ProjectionSnapshotV2Message,
+  pending: FormActionIntentV2Message,
+  previous: ConfirmedProjectionSnapshot,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (message.presentation.assignment.correlationId !== pending.navigationRequestId) {
+    return unrecognized(
+      '$.presentation.assignment.correlationId',
+      message.presentation.assignment.correlationId,
+    );
+  }
+  if (message.presentation.assignment.reason !== 'FORM_ACTION') {
+    return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
+  }
   if (
-    availableActionKeys.length !== APP_001_ACTION_KEYS.length ||
-    APP_001_ACTION_KEYS.some((actionKey, index) => availableActionKeys[index] !== actionKey)
+    message.revisions.stateRevision !== previous.revisions.stateRevision ||
+    message.revisions.actorVisibilityRevision !== previous.revisions.actorVisibilityRevision ||
+    message.revisions.projectionRevision !== previous.revisions.projectionRevision + 1
   ) {
-    return unrecognized('$.presentation.base.availableActionKeys', [...availableActionKeys]);
+    return unrecognized('$.revisions', { ...message.revisions });
   }
-  const projection = decodeApp001Projection(
-    message.presentation.base.roleFilteredPayload,
-    '$.presentation.base.roleFilteredPayload',
-  );
-  if (!projection.ok) return projection;
-  return {
-    ok: true,
-    value: {
-      executableWorkflowCommandIds: [...capabilities.executableWorkflowCommandIds],
-      projection: projection.value,
-      revisions: { ...message.revisions },
-    },
-  };
+  return decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
 }
 
 function decodeDeviceIdentity(value: unknown): DecodeResult<string> {
@@ -467,9 +610,9 @@ function diagnostic(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createRequestId(): string {
+function createRequestId(prefix: 'navigation' | 'reconnect'): string {
   const entropy = crypto.getRandomValues(new Uint32Array(4));
-  return `reconnect-${[...entropy].map((value) => value.toString(16).padStart(8, '0')).join('')}`;
+  return `${prefix}-${[...entropy].map((value) => value.toString(16).padStart(8, '0')).join('')}`;
 }
 
 function envelopeProtocolVersion(source: string): unknown {
@@ -481,12 +624,11 @@ function envelopeProtocolVersion(source: string): unknown {
   }
 }
 
-export function connectApp001Projection(
-  onState: (state: WebClientState) => void,
-): ProjectionConnection {
+export function connectProjection(onState: (state: WebClientState) => void): ProjectionConnection {
   let disposed = false;
   let terminal = false;
-  let lastSnapshot: ConfirmedApp001Snapshot | null = null;
+  let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
+  let pendingFormAction: FormActionIntentV2Message | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
 
@@ -502,6 +644,7 @@ export function connectApp001Projection(
   const failProtocol = (refusal: DecodeRefusal, detail: string) => {
     if (disposed || terminal) return;
     terminal = true;
+    pendingFormAction = null;
     stagedCapabilities = null;
     const response = {
       messageType: 'protocol.refusal',
@@ -633,23 +776,54 @@ export function connectApp001Projection(
         return;
       }
       if (message.messageType === 'projection.snapshot') {
-        if (lastSnapshot !== null || stagedCapabilities === null) {
-          failUnexpected(
-            '$.messageType',
-            message.messageType,
-            'Reconnect snapshot arrived without exactly one adjacent capability frame.',
-          );
-          return;
+        let snapshot: DecodeResult<ConfirmedProjectionSnapshot>;
+        if (lastSnapshot === null) {
+          if (stagedCapabilities === null) {
+            failUnexpected(
+              '$.messageType',
+              message.messageType,
+              'Reconnect snapshot arrived without exactly one adjacent capability frame.',
+            );
+            return;
+          }
+          const capabilities = stagedCapabilities;
+          stagedCapabilities = null;
+          snapshot = decodeReconnectSnapshot(message, capabilities, requestId);
+        } else {
+          if (stagedCapabilities !== null || pendingFormAction === null) {
+            failUnexpected(
+              '$.messageType',
+              message.messageType,
+              'Form-action snapshot arrived without exactly one pending form action.',
+            );
+            return;
+          }
+          snapshot = decodeFormActionSnapshot(message, pendingFormAction, lastSnapshot);
+          pendingFormAction = null;
         }
-        const capabilities = stagedCapabilities;
-        stagedCapabilities = null;
-        const snapshot = decodeSnapshot(message, capabilities, requestId);
         if (!snapshot.ok) {
-          failProtocol(snapshot.refusal, 'Host sent an invalid APP-001 reconnect pair.');
+          failProtocol(snapshot.refusal, 'Host sent an invalid projection snapshot.');
           return;
         }
         lastSnapshot = snapshot.value;
         onState({ kind: 'ready', snapshot: snapshot.value });
+        return;
+      }
+      if (message.messageType === 'navigation.form-action.refusal') {
+        if (
+          lastSnapshot === null ||
+          pendingFormAction === null ||
+          message.navigationRequestId !== pendingFormAction.navigationRequestId
+        ) {
+          failUnexpected(
+            '$.navigationRequestId',
+            message.navigationRequestId,
+            'Host form-action refusal does not match the pending request.',
+          );
+          return;
+        }
+        pendingFormAction = null;
+        onState({ kind: 'navigation-refusal', refusal: message.refusal, snapshot: lastSnapshot });
         return;
       }
       failUnexpected(
@@ -662,6 +836,7 @@ export function connectApp001Projection(
     activeSocket.onerror = () => {
       if (disposed || terminal) return;
       terminal = true;
+      pendingFormAction = null;
       stagedCapabilities = null;
       onState({
         code: null,
@@ -675,6 +850,7 @@ export function connectApp001Projection(
     activeSocket.onclose = (event) => {
       if (disposed || terminal) return;
       terminal = true;
+      pendingFormAction = null;
       stagedCapabilities = null;
       const reason = event.reason.length === 0 ? 'no close reason' : event.reason;
       onState({
@@ -710,7 +886,7 @@ export function connectApp001Projection(
     }
     if (disposed) return;
 
-    const requestId = createRequestId();
+    const requestId = createRequestId('reconnect');
     const reconnect = {
       deviceId: identity.value,
       knownRevisions: NO_KNOWN_REVISIONS,
@@ -740,6 +916,7 @@ export function connectApp001Projection(
     disconnect: () => {
       if (disposed) return;
       disposed = true;
+      pendingFormAction = null;
       stagedCapabilities = null;
       if (
         socket !== null &&
@@ -747,6 +924,46 @@ export function connectApp001Projection(
       ) {
         socket.close(1000, 'web client unmounted');
       }
+    },
+    requestFormAction: (actionKey) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (lastSnapshot === null)
+        return { ok: false, detail: 'no confirmed projection is available' };
+      if (pendingFormAction !== null) {
+        return { ok: false, detail: 'a form action is already awaiting host confirmation' };
+      }
+      if (!lastSnapshot.availableActionKeys.includes(actionKey)) {
+        return {
+          ok: false,
+          detail: `action ${JSON.stringify(actionKey)} is absent from the confirmed availableActionKeys`,
+        };
+      }
+      if (socket === null || socket.readyState !== WebSocket.OPEN) {
+        return { ok: false, detail: 'WebSocket is not open' };
+      }
+      const request = {
+        actionKey,
+        expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+        messageType: 'navigation.form-action',
+        navigationRequestId: createRequestId('navigation'),
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        sourceFormId: lastSnapshot.formId,
+      } as const satisfies FormActionIntentV2Message;
+      const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) {
+        return {
+          ok: false,
+          detail: `form action failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+        };
+      }
+      pendingFormAction = request;
+      try {
+        socket.send(encoded.text);
+      } catch (error: unknown) {
+        pendingFormAction = null;
+        return { ok: false, detail: `form action could not be sent: ${diagnostic(error)}` };
+      }
+      return { ok: true };
     },
   };
 }

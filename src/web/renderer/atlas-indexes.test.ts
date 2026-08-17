@@ -3,7 +3,7 @@ import requirementsSource from '@generated/spec/atlas/requirements.json?raw';
 import transitionsSource from '@generated/spec/atlas/transitions.json?raw';
 import { describe, expect, it } from 'vitest';
 
-import { APP_FORM_IDS } from '../forms/app/index.js';
+import { IMPLEMENTED_FORM_IDS } from '../forms/index.js';
 import {
   createAtlasFormModel,
   createAtlasFormModelFromIndexes,
@@ -57,7 +57,7 @@ const INDEXED_TRANSITION = {
 
 describe('atlas renderer indexes', () => {
   it('preserves the full-source model for every implemented form', () => {
-    for (const formId of APP_FORM_IDS) {
+    for (const formId of IMPLEMENTED_FORM_IDS) {
       expect(getAtlasFormModel(formId)).toEqual(createAtlasFormModel(formId, FULL_ATLAS_SOURCES));
     }
   });

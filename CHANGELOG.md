@@ -48,6 +48,10 @@
 
 ### Добавлено
 
+- Первый сквозной путь создания персонажа проходит по подтверждённой host
+  presentation `APP-001 → APP-002 → CHR-001`: form-action wire v2 сохраняет
+  exact replay и ревизии, initial identity payload следует ADR 0029 без записи
+  `local_character`, а web показывает только присланные хостом доступные CTA.
 - ADR 0029 задаёт initial payload wizard-черновика: незаполненные и optional
   значения и отсутствующая текущая команда выражаются JSON `null` при
   обязательном key, `wizardCheckpointId` выделяется до первого snapshot,

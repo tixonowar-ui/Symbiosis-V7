@@ -10,7 +10,6 @@ import type {
 import type { AddressableRouteTemplate, WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
 
 import { array, readJsonFile, record, string } from './json-source.js';
-import { APP_001_ACTION_KEYS } from './projections/app.js';
 
 const WORKFLOW_QA_PREFIX = 'QA-WORKFLOW-';
 const WORKFLOW_COMMAND = /^UI-CMD-[A-Z0-9-]+$/u;
@@ -19,7 +18,6 @@ const HOST_TRANSITION_KINDS = new Set([
   'operation-command',
   'read-only-command',
 ]);
-const APP_001_ACTION_KEY_SET: ReadonlySet<string> = new Set(APP_001_ACTION_KEYS);
 
 const jsonFile = (path: string): Promise<unknown> =>
   readJsonFile(path, 'protocol vocabulary source');
@@ -37,12 +35,40 @@ export async function loadProtocolVocabulary(
   projectRoot: string,
 ): Promise<ProtocolVocabulary & WireV2Vocabulary> {
   const atlasDirectory = join(projectRoot, 'generated', 'spec', 'atlas');
-  const [qaSource, transitionSource] = await Promise.all([
+  const [formSource, qaSource, transitionSource] = await Promise.all([
+    jsonFile(join(atlasDirectory, 'forms-by-id.json')),
     jsonFile(join(atlasDirectory, 'qa-scenarios.json')),
     jsonFile(join(atlasDirectory, 'transitions.json')),
   ]);
 
   const formIds = new Set<string>(FORM_IDS);
+  const forms = record(formSource, 'forms-by-id.json');
+  const actionKeys = new Map<string, ReadonlySet<string>>();
+  const presentedForms = new Map<string, { readonly route: string; readonly type: string }>();
+  for (const formId of FORM_IDS) {
+    const label = `forms-by-id.json[${JSON.stringify(formId)}]`;
+    const form = record(forms[formId], label);
+    if (string(form['id'], `${label}.id`) !== formId) {
+      throw new Error(`${label}.id does not match its key`);
+    }
+    const keys = array(
+      record(form['actions'], `${label}.actions`)['ctaAvailabilityByAction'],
+      `${label}.actions.ctaAvailabilityByAction`,
+    ).map((action, index) =>
+      string(
+        record(action, `${label}.actions.ctaAvailabilityByAction[${String(index)}]`)['actionKey'],
+        `${label}.actions.ctaAvailabilityByAction[${String(index)}].actionKey`,
+      ),
+    );
+    if (new Set(keys).size !== keys.length) throw new Error(`${label}: duplicate actionKey`);
+    actionKeys.set(formId, new Set(keys));
+    if (formId === 'APP-001' || formId === 'APP-002' || formId === 'CHR-001') {
+      presentedForms.set(formId, {
+        route: string(form['route'], `${label}.route`),
+        type: string(form['type'], `${label}.type`),
+      });
+    }
+  }
   const workflowCommandIds = new Set<string>();
   for (const [index, value] of array(qaSource, 'qa-scenarios.json').entries()) {
     const qaId = string(record(value, `qa-scenarios.json[${String(index)}]`)['qaId'], 'qaId');
@@ -96,16 +122,24 @@ export async function loadProtocolVocabulary(
     isAddressableRouteTemplate: (_value): _value is AddressableRouteTemplate => false,
     isClientRouteBindings: () => false,
     isFormActionKey: (sourceFormId, value): value is ActionKey =>
-      sourceFormId === 'APP-001' && APP_001_ACTION_KEY_SET.has(value),
+      actionKeys.get(sourceFormId)?.has(value) === true,
     isFormId: (value): value is FormId => formIds.has(value),
     isHostTransition: (
       value: AtlasTransitionReference<HostReadCommandKind | 'operation-command'>,
     ): boolean => hostTransitions.has(transitionKey(value)),
-    isPresentedForm: (formId, formType, routeTemplate, bindings) =>
-      formId === 'APP-001' &&
-      formType === 'screen' &&
-      routeTemplate === '/' &&
-      bindings.length === 0,
+    isPresentedForm: (formId, formType, routeTemplate, bindings) => {
+      const form = presentedForms.get(formId);
+      if (form === undefined || form.type !== formType || form.route !== routeTemplate)
+        return false;
+      if (formId === 'APP-001' || formId === 'APP-002') return bindings.length === 0;
+      return (
+        formId === 'CHR-001' &&
+        bindings.length === 1 &&
+        bindings[0]?.parameterIndex === 0 &&
+        bindings[0].source === 'executor-allocated' &&
+        bindings[0].value.length > 0
+      );
+    },
     isWorkflowCommandId: (value): value is WorkflowCommandId => workflowCommandIds.has(value),
   };
 }

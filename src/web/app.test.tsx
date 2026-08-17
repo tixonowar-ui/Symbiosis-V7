@@ -29,12 +29,17 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 const DEVICE_ID = '123e4567-e89b-42d3-a456-426614174000';
 const REQUEST_ID = 'reconnect-00000001000000020000000300000004';
+const PLAYER_NAVIGATION_REQUEST_ID = 'navigation-00000005000000060000000700000008';
+const CHARACTER_NAVIGATION_REQUEST_ID = 'navigation-000000090000000a0000000b0000000c';
 const APP_001_ACTION_KEYS = [
   'APP-001::CTA::001',
   'APP-001::CTA::002',
   'APP-001::CTA::003',
   'APP-001::CTA::004',
 ] as const;
+const CHARACTER_DRAFT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const CONTEXT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const WIZARD_CHECKPOINT_ID = 'opaque-wizard-checkpoint';
 const REVISIONS = {
   actorVisibilityRevision: 3,
   projectionRevision: 8,
@@ -57,6 +62,25 @@ const HOST_PROJECTION = {
     untracked: [],
   },
 } as const satisfies App001Projection;
+const APP_002_PROJECTION = {
+  contextId: CONTEXT_ID,
+  deviceId: DEVICE_ID,
+  projectionRevision: 9,
+  stateRevision: 5,
+} as const;
+const CHR_001_PROJECTION = {
+  age: null,
+  anatomyProfile: 'STANDARD_HUMANOID',
+  artAssetKeyOrLocalFile: null,
+  characterDraftId: CHARACTER_DRAFT_ID,
+  commandId: null,
+  description: null,
+  draftRevision: 0,
+  massApprovalStatus: 'PENDING_GM',
+  massKg: null,
+  name: null,
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
 
 class FakeWebSocket {
   static readonly CONNECTING = 0;
@@ -139,9 +163,11 @@ function identityResponse(value: unknown = { deviceId: DEVICE_ID }, status = 200
 function mountClient(
   response: Promise<Response> = Promise.resolve(identityResponse()),
 ): MountedClient {
+  let entropyCall = 0;
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
-      values.set([1, 2, 3, 4]);
+      const offset = entropyCall++ * 4;
+      values.set([offset + 1, offset + 2, offset + 3, offset + 4]);
       return values;
     },
   });
@@ -227,6 +253,24 @@ function snapshot(
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
     revisions: REVISIONS,
     ...overrides,
+  };
+}
+
+function navigationSnapshot(
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  projectionRevision: number,
+  correlationId: string,
+): ProjectionSnapshotV2Message {
+  return {
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment: { correlationId, reason: 'FORM_ACTION' },
+      base,
+      layers: [],
+    },
+    projectionRole: 'player',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions: { ...REVISIONS, projectionRevision },
   };
 }
 
@@ -327,7 +371,7 @@ describe('APP-001 web entry', () => {
     expect(url.pathname).toBe('/state');
   });
 
-  it('stages capabilities invisibly and atomically renders the matching APP-001 snapshot', async () => {
+  it('renders the confirmed APP-001 to APP-002 to CHR-001 path without optimistic navigation', async () => {
     const { container, socket } = await connectClient();
     open(socket);
     deliver(socket, checkedHostTextV2(capabilities()));
@@ -351,6 +395,9 @@ describe('APP-001 web entry', () => {
       '"tracked": 36',
     );
 
+    expect(socket.sent).toHaveLength(1);
+    const initialUrl = window.location.href;
+
     const player = requiredElement(
       container.querySelector<HTMLButtonElement>('[data-atlas-action="Игрок"]'),
       'APP-001 player action',
@@ -358,17 +405,187 @@ describe('APP-001 web entry', () => {
     act(() => {
       player.click();
     });
-    expect(container.textContent).toContain('маршрутизация и CTA не входят в issue #36');
 
-    const master = requiredElement(
-      container.querySelector<HTMLButtonElement>('[data-atlas-action="Мастер"]'),
-      'APP-001 gm action',
+    expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-001"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-002"]')).toBeNull();
+    expect(window.location.href).toBe(initialUrl);
+    expect(decodedClientMessageV2(socket, 1)).toMatchObject({
+      actionKey: 'APP-001::CTA::001',
+      expectedProjectionRevision: 8,
+      navigationRequestId: PLAYER_NAVIGATION_REQUEST_ID,
+      sourceFormId: 'APP-001',
+    });
+
+    deliver(
+      socket,
+      checkedHostTextV2(
+        navigationSnapshot(
+          {
+            availableActionKeys: ['APP-002::CTA::007'],
+            formId: 'APP-002',
+            formType: 'screen',
+            roleFilteredPayload: APP_002_PROJECTION,
+            routeBindings: [],
+            routeTemplate: '/player',
+          },
+          9,
+          PLAYER_NAVIGATION_REQUEST_ID,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="APP-002"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(4);
+    expect(window.location.pathname).toBe('/player');
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Создать персонажа"]'),
+        'APP-002 create-character action',
+      ).click();
+    });
+
+    expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-002"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).toBeNull();
+    expect(window.location.pathname).toBe('/player');
+    expect(decodedClientMessageV2(socket, 2)).toMatchObject({
+      actionKey: 'APP-002::CTA::007',
+      expectedProjectionRevision: 9,
+      navigationRequestId: CHARACTER_NAVIGATION_REQUEST_ID,
+      sourceFormId: 'APP-002',
+    });
+
+    deliver(
+      socket,
+      checkedHostTextV2(
+        navigationSnapshot(
+          {
+            availableActionKeys: [],
+            formId: 'CHR-001',
+            formType: 'screen',
+            roleFilteredPayload: CHR_001_PROJECTION,
+            routeBindings: [
+              { parameterIndex: 0, source: 'executor-allocated', value: CHARACTER_DRAFT_ID },
+            ],
+            routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
+          },
+          10,
+          CHARACTER_NAVIGATION_REQUEST_ID,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-001`,
+    );
+    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(11);
+    expect(container.querySelector('[data-host-field="massKg"]')?.textContent).toContain('null');
+    expect(
+      container.querySelector('[data-host-field="wizardCheckpointId"]')?.textContent,
+    ).toContain(WIZARD_CHECKPOINT_ID);
+    expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(0);
+    expect(
+      container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
+    ).toBeNull();
+  });
+
+  it('rejects a whitespace-only wizard checkpoint identity before caching CHR-001', async () => {
+    const { container, socket } = await connectClient();
+    open(socket);
+    deliverPair(socket);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Игрок"]'),
+        'APP-001 player action',
+      ).click();
+    });
+    deliver(
+      socket,
+      checkedHostTextV2(
+        navigationSnapshot(
+          {
+            availableActionKeys: ['APP-002::CTA::007'],
+            formId: 'APP-002',
+            formType: 'screen',
+            roleFilteredPayload: APP_002_PROJECTION,
+            routeBindings: [],
+            routeTemplate: '/player',
+          },
+          9,
+          PLAYER_NAVIGATION_REQUEST_ID,
+        ),
+      ),
     );
     act(() => {
-      master.click();
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Создать персонажа"]'),
+        'APP-002 create-character action',
+      ).click();
     });
-    expect(container.textContent).toContain('Переход «Мастер» не отправлен');
-    expect(socket.sent).toHaveLength(1);
+    deliver(
+      socket,
+      checkedHostTextV2(
+        navigationSnapshot(
+          {
+            availableActionKeys: [],
+            formId: 'CHR-001',
+            formType: 'screen',
+            roleFilteredPayload: { ...CHR_001_PROJECTION, wizardCheckpointId: '   ' },
+            routeBindings: [
+              { parameterIndex: 0, source: 'executor-allocated', value: CHARACTER_DRAFT_ID },
+            ],
+            routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
+          },
+          10,
+          CHARACTER_NAVIGATION_REQUEST_ID,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).toBeNull();
+    expect(decodedClientMessageV1(socket, 3)).toMatchObject({
+      messageType: 'protocol.refusal',
+      refusal: {
+        code: 'UNRECOGNIZED',
+        path: '$.presentation.base.roleFilteredPayload.wizardCheckpointId',
+        value: '   ',
+      },
+    });
+  });
+
+  it('keeps the prior presentation after a matching navigation refusal', async () => {
+    const { container, socket } = await connectClient();
+    open(socket);
+    deliverPair(socket);
+    const confirmedUrl = window.location.href;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Игрок"]'),
+        'APP-001 player action',
+      ).click();
+    });
+
+    deliver(
+      socket,
+      checkedHostTextV2({
+        messageType: 'navigation.form-action.refusal',
+        navigationRequestId: PLAYER_NAVIGATION_REQUEST_ID,
+        presentationUnchanged: true,
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        revisions: REVISIONS,
+      }),
+    );
+
+    expect(container.querySelector('[data-client-state="navigation-refusal"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-001"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-002"]')).toBeNull();
+    expect(window.location.href).toBe(confirmedUrl);
+    expect(container.textContent).toContain('NAVIGATION_UNAVAILABLE');
   });
 
   it('rejects missing or malformed host fields without rendering a fallback', async () => {
@@ -571,7 +788,7 @@ describe('APP-001 web entry', () => {
         deliverPair(socket, capabilities(), { ...snapshot(), projectionRole: 'gm' }),
     },
     {
-      expectedPath: '$.presentation.base.availableActionKeys',
+      expectedPath: null,
       label: 'partial action set',
       send: (socket: FakeWebSocket) => {
         const value = snapshot();
@@ -584,12 +801,17 @@ describe('APP-001 web entry', () => {
         });
       },
     },
-  ])('rejects $label without committing APP-001', async ({ expectedPath, send }) => {
+  ])('handles $label fail closed or as negative space', async ({ expectedPath, send }) => {
     const { container, socket } = await connectClient();
     open(socket);
 
     send(socket);
 
+    if (expectedPath === null) {
+      expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
+      expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(3);
+      return;
+    }
     expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-form-id="APP-001"]')).toBeNull();
     expect(decodedClientMessageV1(socket, 1)).toMatchObject({
