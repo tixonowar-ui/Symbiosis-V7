@@ -25,7 +25,6 @@ const ID = {
 describe('id patterns accept every id the artifacts actually use', () => {
   const cases: [string, string, string, RegExp][] = [
     ['rules/rules.json', 'Rule ID', 'rule', ID.rule],
-    ['atlas/forms.json', 'id', 'form', ID.form],
     ['effects/effect-types.json', 'EffectTypeID', 'effect', ID.effect],
     ['effects/families.json', 'FamilyCode', 'family', ID.family],
     ['items/catalogue.json', 'ItemTypeID', 'item', ID.item],
@@ -40,6 +39,13 @@ describe('id patterns accept every id the artifacts actually use', () => {
       expect(ids.filter((id) => !pattern.test(id))).toEqual([]);
     });
   }
+
+  it('accepts every form id in the renderer catalogue', () => {
+    const forms = Object.values(
+      spec<Record<string, { id: string }>>('atlas/renderer/forms-by-id.json'),
+    );
+    expect(forms.map((form) => form.id).filter((id) => !ID.form.test(id))).toEqual([]);
+  });
 
   it('covers the shapes that broke the first attempt', () => {
     // Underscores inside a segment, and a two-segment effect id.
@@ -63,7 +69,6 @@ describe('id patterns accept every id the artifacts actually use', () => {
 describe('ids are unique within each catalogue', () => {
   const cases: [string, string][] = [
     ['rules/rules.json', 'Rule ID'],
-    ['atlas/forms.json', 'id'],
     ['effects/effect-types.json', 'EffectTypeID'],
     ['items/catalogue.json', 'ItemTypeID'],
     ['bestiary/species.json', 'Species ID'],
@@ -76,11 +81,22 @@ describe('ids are unique within each catalogue', () => {
       expect(new Set(ids).size).toBe(ids.length);
     });
   }
+
+  it('has no duplicate embedded ids in the renderer form catalogue', () => {
+    const ids = Object.values(
+      spec<Record<string, { id: string }>>('atlas/renderer/forms-by-id.json'),
+    ).map((form) => form.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
 
 describe('no orphans in the graphs the atlas and bestiary define', () => {
   it('leaves no form outside the transition graph', () => {
-    const forms = new Set(spec<{ id: string }[]>('atlas/forms.json').map((f) => f.id));
+    const forms = new Set(
+      Object.values(spec<Record<string, { id: string }>>('atlas/renderer/forms-by-id.json')).map(
+        (form) => form.id,
+      ),
+    );
     const reached = new Set<string>();
     for (const t of spec<{ from: string; to: string }[]>('atlas/transitions.json')) {
       reached.add(t.from);

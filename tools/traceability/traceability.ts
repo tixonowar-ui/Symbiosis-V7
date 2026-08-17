@@ -186,15 +186,35 @@ function assertCount(actual: number, expected: unknown, label: string): void {
 
 export function loadCatalog(specRoot: string): Catalog {
   const atlasRoot = join(specRoot, 'atlas');
-  const forms = rows(join(atlasRoot, 'forms.json')).map((row, index) => ({
-    id: field(row, 'id', `forms[${String(index)}]`),
-    domain: field(row, 'domain', `forms[${String(index)}]`),
-    type: field(row, 'type', `forms[${String(index)}]`),
-  }));
+  const formIndexLabel = 'atlas/renderer/forms-by-id.json';
+  const formIndex = asRecord(
+    readJson(join(atlasRoot, 'renderer', 'forms-by-id.json')),
+    formIndexLabel,
+  );
+  const indexedForms = Object.entries(formIndex).map(([key, value]) => {
+    const label = `${formIndexLabel}[${JSON.stringify(key)}]`;
+    const row = asRecord(value, label);
+    return {
+      key,
+      form: {
+        id: field(row, 'id', label),
+        domain: field(row, 'domain', label),
+        type: field(row, 'type', label),
+      },
+    };
+  });
   unique(
-    forms.map((form) => form.id),
+    indexedForms.map(({ form }) => form.id),
     'forms',
   );
+  for (const { key, form } of indexedForms) {
+    if (form.id !== key) {
+      throw new Error(
+        `${formIndexLabel}[${JSON.stringify(key)}].id: index key does not match ${JSON.stringify(form.id)}`,
+      );
+    }
+  }
+  const forms = indexedForms.map(({ form }) => form);
 
   const transitions = rows(join(atlasRoot, 'transitions.json')).map((row, index) => ({
     from: field(row, 'from', `transitions[${String(index)}]`),

@@ -1,4 +1,4 @@
-import formsByIdSource from '@generated/spec/atlas/forms-by-id.json?raw';
+import rendererFormsByIdSource from '@generated/spec/atlas/renderer/forms-by-id.json?raw';
 import type { ActionKey, FormId } from '@generated/types/atlas.js';
 
 import { APP_FORM_IDS } from './app/index.js';
@@ -46,18 +46,18 @@ function text(value: unknown, path: string): string {
 
 let parsed: unknown;
 try {
-  parsed = JSON.parse(formsByIdSource) as unknown;
+  parsed = JSON.parse(rendererFormsByIdSource) as unknown;
 } catch (error: unknown) {
   fail(
-    'forms-by-id.json',
+    'renderer/forms-by-id.json',
     `malformed JSON: ${error instanceof Error ? error.message : String(error)}`,
   );
 }
-const forms = record(parsed, 'forms-by-id.json');
+const forms = record(parsed, 'renderer/forms-by-id.json');
 const definitions = new Map<ImplementedFormId, PresentedFormDefinition>();
 
 for (const formId of IMPLEMENTED_FORM_IDS) {
-  const path = `forms-by-id.json[${JSON.stringify(formId)}]`;
+  const path = `renderer/forms-by-id.json[${JSON.stringify(formId)}]`;
   const form = record(forms[formId], path);
   if (text(form['id'], `${path}.id`) !== formId) fail(`${path}.id`, `expected ${formId}`);
   const rows = record(form['actions'], `${path}.actions`)['ctaAvailabilityByAction'];

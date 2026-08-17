@@ -14,6 +14,7 @@ import {
   extractActionKeys,
   extractGlobalContracts,
   extractWorkflowCommands,
+  projectRendererFormActions,
 } from './atlas.js';
 import type { JsonObject as ImportJsonObject } from './lib/json.js';
 import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
@@ -57,6 +58,12 @@ const RENDERER_FORM_FIELDS = [
   'qaScenarioIds',
   'components',
 ] as const;
+
+const rendererActions = (form: JsonObject): JsonObject => ({
+  ctaAvailabilityByAction: (
+    (form['actions'] as JsonObject)['ctaAvailabilityByAction'] as JsonObject[]
+  ).map((row) => ({ actionKey: row['actionKey'], label: row['label'] })),
+});
 
 const SYNTHETIC_FORM_IDS: ReadonlySet<string> = new Set(['APP-001', 'APP-002', 'APP-011']);
 
@@ -115,7 +122,10 @@ describe('generated atlas spec', () => {
     const expectedForms = Object.fromEntries(
       Object.entries(formsById).map(([id, form]) => [
         id,
-        Object.fromEntries(RENDERER_FORM_FIELDS.map((field) => [field, form[field]])),
+        {
+          ...Object.fromEntries(RENDERER_FORM_FIELDS.map((field) => [field, form[field]])),
+          actions: rendererActions(form),
+        },
       ]),
     );
     expect(Object.keys(expectedForms)).toHaveLength(376);
@@ -455,6 +465,36 @@ describe('action key export guards', () => {
 });
 
 describe('renderer atlas index guards', () => {
+  it('projects only actionKey and label for each CTA row', () => {
+    const forms = clonedForms();
+    const rows = firstFormActionRows(forms);
+
+    expect(projectRendererFormActions(forms[0]!, 0)).toEqual({
+      ctaAvailabilityByAction: rows.map((row) => ({
+        actionKey: row['actionKey'],
+        label: row['label'],
+      })),
+    });
+  });
+
+  it('rejects a missing projected action label and names its form and row', () => {
+    const forms = clonedForms();
+    delete firstFormActionRows(forms)[0]!['label'];
+
+    expect(() => projectRendererFormActions(forms[0]!, 0)).toThrow(
+      /forms\[0\].*ctaAvailabilityByAction\[0\]\.label is missing for form "APP-001"/u,
+    );
+  });
+
+  it('rejects a non-string projected action label and names its form and row', () => {
+    const forms = clonedForms();
+    firstFormActionRows(forms)[0]!['label'] = 7;
+
+    expect(() => projectRendererFormActions(forms[0]!, 0)).toThrow(
+      /forms\[0\].*ctaAvailabilityByAction\[0\]\.label for form "APP-001" is not a string \(got number\)/u,
+    );
+  });
+
   it('preserves declared empty actions separately from an absent form key', () => {
     const indexes = buildRendererQueryIndexes(SYNTHETIC_FORM_IDS, [rendererRequirement([])], []);
 
