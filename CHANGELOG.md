@@ -52,6 +52,11 @@
 
 ### Добавлено
 
+- ADR 0031 назначает shell-тройку одному runtime-агрегату на host instance:
+  scope начинает с `0/0/0`, переживает смену context и transport reconnect, но
+  завершается при host restart; entity snapshot переключает source на
+  независимую тройку `local_character` либо `campaign` без SQLite
+  singleton и копирования чисел между scopes.
 - Первый сквозной путь создания персонажа проходит по подтверждённой host
   presentation `APP-001 → APP-002 → CHR-001`: form-action wire v2 сохраняет
   exact replay и ревизии, initial identity payload следует ADR 0029 без записи
