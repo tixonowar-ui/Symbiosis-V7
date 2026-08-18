@@ -31,8 +31,8 @@ const DEVICE_ID = '123e4567-e89b-42d3-a456-426614174000';
 const REQUEST_ID = 'reconnect-00000001000000020000000300000004';
 const PLAYER_NAVIGATION_REQUEST_ID = 'navigation-00000005000000060000000700000008';
 const CHARACTER_NAVIGATION_REQUEST_ID = 'navigation-000000090000000a0000000b0000000c';
-const LIBRARY_NAVIGATION_REQUEST_ID = 'navigation-0000000d0000000e0000000f00000010';
-const MENU_NAVIGATION_REQUEST_ID = 'navigation-00000011000000120000001300000014';
+const LIBRARY_NAVIGATION_REQUEST_ID = 'navigation-00000015000000160000001700000018';
+const MENU_NAVIGATION_REQUEST_ID = 'navigation-000000190000001a0000001b0000001c';
 const APP_001_ACTION_KEYS = [
   'APP-001::CTA::001',
   'APP-001::CTA::002',
@@ -275,11 +275,12 @@ function navigationSnapshot(
   base: ProjectionSnapshotV2Message['presentation']['base'],
   projectionRevision: number,
   correlationId: string,
+  reason: 'FORM_ACTION' | 'RECONNECT' = 'FORM_ACTION',
 ): ProjectionSnapshotV2Message {
   return {
     messageType: 'projection.snapshot',
     presentation: {
-      assignment: { correlationId, reason: 'FORM_ACTION' },
+      assignment: { correlationId, reason },
       base,
       layers: [],
     },
@@ -288,6 +289,17 @@ function navigationSnapshot(
     revisions: { ...REVISIONS, projectionRevision },
   };
 }
+
+const chr001Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] = CHR_001_PROJECTION,
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: ['CHR-001::CTA::002'],
+  formId: 'CHR-001',
+  formType: 'screen',
+  roleFilteredPayload: projection,
+  routeBindings: [{ parameterIndex: 0, source: 'executor-allocated', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
+});
 
 function open(socket: FakeWebSocket): void {
   act(() => {
@@ -313,6 +325,15 @@ function deliverPair(
 function requiredElement<T extends Element>(value: T | null, label: string): T {
   if (value === null) throw new Error(`test setup: ${label} not found`);
   return value;
+}
+
+function enter(input: HTMLInputElement, value: string): void {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (descriptor?.set === undefined) throw new Error('test setup: input value setter not found');
+  act(() => {
+    descriptor.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 function decodedClientMessageV2(socket: FakeWebSocket, index: number) {
@@ -387,7 +408,9 @@ describe('APP-001 web entry', () => {
   });
 
   it('renders the full confirmed APP-001 to APP-002 to CHR-001 to APP-004 to APP-002 path', async () => {
-    const { container, socket } = await connectClient();
+    const connection = await connectClient();
+    const { container } = connection;
+    let { socket } = connection;
     open(socket);
     deliver(socket, checkedHostTextV2(capabilities()));
 
@@ -474,22 +497,7 @@ describe('APP-001 web entry', () => {
 
     deliver(
       socket,
-      checkedHostTextV2(
-        navigationSnapshot(
-          {
-            availableActionKeys: ['CHR-001::CTA::002'],
-            formId: 'CHR-001',
-            formType: 'screen',
-            roleFilteredPayload: CHR_001_PROJECTION,
-            routeBindings: [
-              { parameterIndex: 0, source: 'executor-allocated', value: CHARACTER_DRAFT_ID },
-            ],
-            routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
-          },
-          10,
-          CHARACTER_NAVIGATION_REQUEST_ID,
-        ),
-      ),
+      checkedHostTextV2(navigationSnapshot(chr001Base(), 10, CHARACTER_NAVIGATION_REQUEST_ID)),
     );
 
     expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
@@ -506,6 +514,72 @@ describe('APP-001 web entry', () => {
       container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
     ).toBeNull();
 
+    enter(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-identity-field="name"]'),
+        'CHR-001 name input',
+      ),
+      ' Alice ',
+    );
+    const identity = decodedClientMessageV2(socket, 3);
+    expect(identity).toMatchObject({
+      expectedDraftRevision: 0,
+      expectedRevisions: { ...REVISIONS, projectionRevision: 10 },
+      messageType: 'character.identity-draft.replace',
+      scope: {
+        characterDraftId: CHARACTER_DRAFT_ID,
+        contextId: CONTEXT_ID,
+        sourceFormId: 'CHR-001',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      values: {
+        age: null,
+        artAssetKeyOrLocalFile: null,
+        description: null,
+        massKg: null,
+        name: ' Alice ',
+      },
+    });
+    if (identity.messageType !== 'character.identity-draft.replace') {
+      throw new Error('test setup: identity replacement not sent');
+    }
+    const identityText = socket.sent[3];
+    act(() => socket.serverClose(1006, 'identity result lost'));
+    act(() => requiredElement(container.querySelector('button'), 'reconnect action').click());
+    socket = FakeWebSocket.instances.at(-1)!;
+    open(socket);
+    const resumed = decodedClientMessageV2(socket, 0);
+    if (resumed.messageType !== 'session.reconnect') throw new Error('missing reconnect request');
+    deliverPair(
+      socket,
+      capabilities({
+        reconnectRequestId: resumed.reconnectRequestId,
+        revisions: { ...REVISIONS, projectionRevision: 10 },
+      }),
+      navigationSnapshot(chr001Base(), 10, resumed.reconnectRequestId, 'RECONNECT'),
+    );
+    expect(socket.sent[1]).toBe(identityText);
+    deliver(
+      socket,
+      checkedHostTextV2({
+        draftRevision: 1,
+        draftUpdateId: identity.draftUpdateId,
+        messageType: 'character.identity-draft.result',
+        presentation: {
+          base: chr001Base({ ...CHR_001_PROJECTION, draftRevision: 1, name: 'Alice' }),
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        revisions: { ...REVISIONS, projectionRevision: 11 },
+        scope: identity.scope,
+      }),
+    );
+    expect(container.querySelector<HTMLInputElement>('[data-identity-field="name"]')?.value).toBe(
+      'Alice',
+    );
+    expect(container.querySelector('[data-identity-dirty="false"]')).not.toBeNull();
+
     act(() => {
       requiredElement(
         container.querySelector<HTMLButtonElement>('[data-atlas-action="Отменить новый черновик"]'),
@@ -515,9 +589,9 @@ describe('APP-001 web entry', () => {
 
     expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-form-id="APP-004"]')).toBeNull();
-    expect(decodedClientMessageV2(socket, 3)).toMatchObject({
+    expect(decodedClientMessageV2(socket, 2)).toMatchObject({
       actionKey: 'CHR-001::CTA::002',
-      expectedProjectionRevision: 10,
+      expectedProjectionRevision: 11,
       navigationRequestId: LIBRARY_NAVIGATION_REQUEST_ID,
       sourceFormId: 'CHR-001',
     });
@@ -530,11 +604,11 @@ describe('APP-001 web entry', () => {
             availableActionKeys: ['APP-004::CTA::001', 'APP-004::CTA::007'],
             formId: 'APP-004',
             formType: 'screen',
-            roleFilteredPayload: APP_004_PROJECTION,
+            roleFilteredPayload: { ...APP_004_PROJECTION, projectionRevision: 12 },
             routeBindings: [],
             routeTemplate: '/player/characters',
           },
-          11,
+          12,
           LIBRARY_NAVIGATION_REQUEST_ID,
         ),
       ),
@@ -566,9 +640,9 @@ describe('APP-001 web entry', () => {
 
     expect(container.querySelector('[data-atlas-form-id="APP-004"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-form-id="APP-002"]')).toBeNull();
-    expect(decodedClientMessageV2(socket, 4)).toMatchObject({
+    expect(decodedClientMessageV2(socket, 3)).toMatchObject({
       actionKey: 'APP-004::CTA::007',
-      expectedProjectionRevision: 11,
+      expectedProjectionRevision: 12,
       navigationRequestId: MENU_NAVIGATION_REQUEST_ID,
       sourceFormId: 'APP-004',
     });
@@ -581,11 +655,11 @@ describe('APP-001 web entry', () => {
             availableActionKeys: ['APP-002::CTA::002', 'APP-002::CTA::007'],
             formId: 'APP-002',
             formType: 'screen',
-            roleFilteredPayload: { ...APP_002_PROJECTION, projectionRevision: 12 },
+            roleFilteredPayload: { ...APP_002_PROJECTION, projectionRevision: 13 },
             routeBindings: [],
             routeTemplate: '/player',
           },
-          12,
+          13,
           MENU_NAVIGATION_REQUEST_ID,
         ),
       ),
@@ -842,6 +916,23 @@ describe('APP-001 web entry', () => {
       },
     },
     {
+      expectedPath: '$.messageType',
+      label: 'v2 frame before capabilities',
+      send: (socket: FakeWebSocket) => {
+        deliver(
+          socket,
+          checkedHostTextV2({
+            messageType: 'navigation.form-action.refusal',
+            navigationRequestId: 'intervening-navigation',
+            presentationUnchanged: true,
+            protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+            refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+            revisions: REVISIONS,
+          }),
+        );
+      },
+    },
+    {
       expectedPath: '$.presentation.assignment.correlationId',
       label: 'correlation mismatch',
       send: (socket: FakeWebSocket) => {
@@ -892,6 +983,21 @@ describe('APP-001 web entry', () => {
     },
     {
       expectedPath: null,
+      label: 'read-only CHR-001 without a retained player context',
+      send: (socket: FakeWebSocket) => {
+        const value = snapshot();
+        deliverPair(socket, capabilities(), {
+          ...value,
+          presentation: {
+            ...value.presentation,
+            base: chr001Base(),
+          },
+          projectionRole: 'player',
+        });
+      },
+    },
+    {
+      expectedPath: null,
       label: 'partial action set',
       send: (socket: FakeWebSocket) => {
         const value = snapshot();
@@ -904,7 +1010,7 @@ describe('APP-001 web entry', () => {
         });
       },
     },
-  ])('handles $label fail closed or as negative space', async ({ expectedPath, send }) => {
+  ])('handles $label fail closed or as negative space', async ({ expectedPath, label, send }) => {
     const { container, socket } = await connectClient();
     open(socket);
 
@@ -912,7 +1018,9 @@ describe('APP-001 web entry', () => {
 
     if (expectedPath === null) {
       expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
-      expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(3);
+      expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(
+        label.startsWith('read-only') ? 1 : 3,
+      );
       return;
     }
     expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();

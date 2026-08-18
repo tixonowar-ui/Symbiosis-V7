@@ -14,6 +14,7 @@ import { importBestiary } from './bestiary.js';
 import { importEffects } from './effects.js';
 import { importItems } from './items.js';
 import { ImportError } from './lib/fail.js';
+import { importLocalCharacterPortraits } from './local-character-portraits.js';
 import { importQna } from './qna.js';
 import { importRules } from './rules.js';
 import { importSeed } from './seed.js';
@@ -72,6 +73,12 @@ async function main(): Promise<number> {
       `pack ${String(sentient.packFiles)} files (${(sentient.mediaBytes / 1024 / 1024).toFixed(1)} MiB)`,
   );
 
+  const portraits = await importLocalCharacterPortraits();
+  console.log(
+    `portraits: ${String(portraits.assets)} local-character assets ` +
+      `(${(portraits.mediaBytes / 1024).toFixed(0)} KiB)`,
+  );
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
@@ -91,6 +98,7 @@ async function main(): Promise<number> {
     ...effects.files,
     ...bestiary.files,
     ...sentient.files,
+    ...portraits.files,
     ...atlas.files,
     ...qna.files,
     seed.file,
@@ -102,6 +110,7 @@ async function main(): Promise<number> {
     effects.bytesWritten +
     bestiary.bytesWritten +
     sentient.bytesWritten +
+    portraits.bytesWritten +
     atlas.bytesWritten +
     qna.bytesWritten +
     seed.bytesWritten;

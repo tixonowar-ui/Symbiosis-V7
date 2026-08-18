@@ -23,6 +23,7 @@ const EXPECTED_META_PATHS = [
   'character/meta.json',
   'effects/meta.json',
   'items/meta.json',
+  'local-character-portraits/meta.json',
   'qna/meta.json',
   'rules/meta.json',
   'sentient/meta.json',
@@ -140,9 +141,9 @@ const sidecars = (file: string): string[] =>
 describe('generated SQLite seed', () => {
   it('stores every source array and section passport without duplicating JSON indexes', () => {
     const source = sourceCatalogue();
-    expect(source.files).toBe(127);
-    expect(source.arrays).toHaveLength(114);
-    expect(source.rows).toBe(20_649);
+    expect(source.files).toBe(129);
+    expect(source.arrays).toHaveLength(115);
+    expect(source.rows).toBe(20_655);
     expect(source.arrays.map(({ path }) => path)).toContain('atlas/global-contracts.json');
     expect(source.metadata.map(({ path }) => path)).toEqual(EXPECTED_META_PATHS);
     expect(source.indexes).toEqual(EXPECTED_INDEX_PATHS);
@@ -205,7 +206,7 @@ describe('generated SQLite seed', () => {
         }
         actualRows += rowIndex;
       }
-      expect(actualRows).toBe(20_649);
+      expect(actualRows).toBe(20_655);
 
       const actualMetadata = database
         .prepare<[], { payload_json: string; spec_path: string }>(

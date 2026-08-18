@@ -52,6 +52,13 @@
 
 ### Добавлено
 
+- Первый законченный срез ввода идентичности `CHR-001`: три additive wire v2
+  сообщения передают exact full replacement, host канонизирует и журналирует
+  runtime-черновик, а web сохраняет dirty-buffer и повторяет outstanding update
+  после reconnect того же mounted instance; новый instance принимает CHR-001
+  read-only. Continue не публикуется до checkpoint-среза. ADR 0034–0036
+  закрывают initial `CHR-010`, Unicode-отказы имени и exact каталог из шести
+  поставленных портретов; importer воспроизводит его spec, типы и media.
 - ADR 0033 задаёт host-confirmed full replacement для значений идентичности
   `CHR-001`: additive wire v2 messages, отдельную `draftRevision`, точную
   проверку массы и durable checkpoint receipt без SQLite-строки для pre-commit
