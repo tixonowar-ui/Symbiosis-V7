@@ -89,9 +89,24 @@ Generated entries совпадают:
 [`$.forms[59].references`, строки 54848–54855](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54848-L54855),
 [`$.coverageRequirements[1].actionSteps[34]`, строки 12275–12292](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L12275-L12292),
 [`requirements.json[1].actionSteps[34]`, строки 497–515](../../generated/spec/atlas/requirements.json#L497-L515).
-Полнотекстовый scan raw Atlas и всего `generated/spec` по camel/snake/kebab/
-spaced и русским вариантам field/input value, widget buffer, form/identity/
-draft patch, update/change/onChange механизма не нашёл.
+Atlas всё же задаёт `local-draft-command`: exact scan даёт 21 same-form CTA на
+11 формах. ADR 0020 §2 уже маршрутизирует этот kind только в client draft: в
+wire он не попадает, host видит лишь последующее подтверждение. У `CHR-001`
+исчерпывающий массив содержит только workflow checkpoint и safe-return:
+[`$.forms[59].actions.ctaAvailabilityByAction[0..1]`, строки 54560–54681](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54560-L54681),
+[`forms-by-id.json["CHR-001"].actions.ctaAvailabilityByAction[0..1]`, строки 9862–9982](../../generated/spec/atlas/forms-by-id.json#L9862-L9982).
+`CHR-037` доказывает local mutation с typed category и `quantity>0`, но Atlas
+не задаёт invocation/payload shape, а fixed `actionKey` не переносит произвольные
+`name`, `age`, `massKg`:
+[`$.forms[87].actions.ctaAvailabilityByAction[2]`, строки 68380–68439](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L68380-L68439),
+[`forms.json[87].actions.ctaAvailabilityByAction[2]`, строки 40594–40652](../../generated/spec/atlas/forms.json#L40594-L40652).
+Поэтому identity replacement подтверждает form values, но не переопределяет
+`local-draft-command`. Среди остальных 13 checkpoint-форм этот kind есть лишь у
+`CHR-015`, `CHR-018`, `CHR-037`:
+[`$.transitions[1655..1656], $.transitions[1661]`, строки 227032–227044, 227074–227079](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L227032-L227079),
+[`transitions.json[1655..1656], transitions.json[1661]`, строки 11589–11600, 11631–11636](../../generated/spec/atlas/transitions.json#L11589-L11636).
+Их mutation остаётся client-only; host получает whole stage последующей checkpoint-командой. Exact payload остальных
+stages вне scope, а отсутствие kind у десяти форм ничего не подразумевает.
 
 ### Проверка гипотез
 
@@ -164,6 +179,8 @@ fail-closed отвергает discriminator, response получает толь
   запрещены. `description` не trim'ится, non-null непустое и не длиннее 2000 code points. Source limits:
   [`$.registryCoverage.qna[296]`, строки 264088–264104](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L264088-L264104),
   [`questions.json[296]`, строки 2997–3004](../../generated/spec/qna/questions.json#L2997-L3004).
+  Единицы — project choice из различия формулировок: «видимые символы» имени считаются grapheme clusters, а
+  немаркированные «символы» description — Unicode code points, не UTF-16 code units.
 - `age` — `null` либо finite JSON number. Source не задаёт sign, integer,
   range или rounding, и ADR их не добавляет.
 - `massKg` — `null` либо finite number `>0`, где `Number.isInteger(x)||Number.isInteger(x*10)`; epsilon, clamp,
@@ -295,26 +312,37 @@ Commit и delivery разделены только для recovery: durable rece
 `command.result|replay` → full CHR-010 snapshot из signed destination. Это одна
 успешная операция; бесконечно оставлять CHR-001 в `CHECKPOINTED` нельзя.
 
-Но source не задаёт exact first CHR-010 projection: required fields не дают
-initial shape/default для `raceConsequencesPreview` и `choiceLockStatus`:
+Парадокса selector CTA нет. Raw Atlas не задаёт формальную grammar строки
+`guard`; сопоставление exact `local-draft-command` records показывает, что
+equality поля, которое называет действие, задаёт выбираемое local-draft значение,
+а остальные clauses — eligibility. У `CHR-011` три выбора имеют только
+`pureClass=SEEKER|STALKER|SOLDIER`, иначе state `UNSELECTED` был бы недостижим:
+[`$.forms[71].states.UNSELECTED`, строка 60816](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L60816),
+[`$.transitions[1652..1654]`, строки 227011–227030](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L227011-L227030),
+[`transitions.json[1652..1654]`, строки 11566–11586](../../generated/spec/atlas/transitions.json#L11566-L11586).
+Это не позиционная грамматика: у `CHR-016` первая clause `raceChoice=UNITED|FREE`
+является eligibility, а вторая `acquisitionMode=MANUAL|RANDOM` — выбором:
+[`$.transitions[1641..1642]`, строки 226934–226946](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L226934-L226946),
+[`transitions.json[1641..1642]`, строки 11489–11502](../../generated/spec/atlas/transitions.json#L11489-L11502).
+Следовательно, `CHR-010::CTA::004..006` выбирают race, а `Ancient absent` ограничивает их:
+[`$.transitions[1638..1640]`, строки 226913–226932](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L226913-L226932),
+[`transitions.json[1638..1640]`, строки 11469–11488](../../generated/spec/atlas/transitions.json#L11469-L11488).
+
+Граница CHR-010 уже: ADR 0029 §1 даёт ещё не введённому `raceChoice` JSON
+`null`, но source не задаёт initial shape/default для двух required fields —
+`raceConsequencesPreview` и `choiceLockStatus`:
 [`$.forms[60].requiredFields[0..7]`, строки 54916–54924](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54916-L54924),
 [`forms.json[60].requiredFields[0..7]`, строки 27750–27758](../../generated/spec/atlas/forms.json#L27750-L27758).
-`UNSELECTED` обещает три выбора, но их CTA guards уже требуют выбранный
-`raceChoice` и guard-false omission:
-[`$.forms[60].actions.ctaAvailabilityByAction[3..5]/states.UNSELECTED`, строки 55193–55378, 55443](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L55193-L55443).
-Safe-return `CTA::003` при сохранённом identity checkpoint ведёт назад в уже
-durable CHR-001: [`forms-by-id.json["CHR-010"].actions.ctaAvailabilityByAction[2]`, строки 13999–14058](../../generated/spec/atlas/forms-by-id.json#L13999-L14058).
-
-Следовательно, #97 не может честно добавить «minimal CHR-010 без действий»:
-это нарушит literal `UNSELECTED`/safe-return, а возврат требует отдельного
-контракта persisted identity editing и повторного checkpoint. До нового ADR о
-CHR-010 initial input/actions/return successful checkpoint #97 **blocked**.
+Selector и safe-return tuples определены Atlas и не являются blocker. До узкого
+решения exact initial values этих двух полей successful checkpoint #97
+**blocked**: placeholder нарушил бы required payload, хотя action vocabulary уже
+известен.
 #97 не публикует Continue без executable checkpoint+destination capability;
 отдельный меньший slice может реализовать только draft replace/result/refusal.
 
 ## Совместимость
 
-- **ADR 0020:** v1 command/idempotency/receipt order сохранён; новый v2 discriminator не переосмысляет existing message.
+- **ADR 0020:** v1 command/idempotency/receipt order и client-only `local-draft-command` сохранены; identity replacement — отдельный v2 discriminator.
 - **ADR 0025:** ID/revision независимы; §6 уточнён лишь для empty IDENTITY cache и durable request/receipt.
 - **ADR 0026:** host подтверждает payload/actions; command result предшествует target snapshot, browser не выбирает его.
 - **ADR 0027:** IDs не дают authority; current player-local assignment проверен.
@@ -334,17 +362,17 @@ checkpoint/root axes. Host result одним событием обновляет
 | --------------------------------------- | ------------------------------------------------- |
 | Values только в checkpoint              | CTA deadlock из guard/negative space              |
 | Client сам показывает Continue          | Второй authority, обход server evaluator          |
-| Выдумать wizard field-patch command     | Такого Atlas capability нет                       |
+| Добавить local-draft CTA на CHR-001     | Kind существует, но CTA/payload/wire здесь нет    |
 | Sparse patch/каждый keystroke           | Ordering и число increments неоднозначны          |
 | Расширить navigation/snapshot           | Меняет adopted exact v2 shape/value domain        |
 | Поднять весь wire до v3                 | Additive correlated cases не меняют old semantics |
 | Связать draft/checkpoint/root revisions | Нарушает независимые axes ADR 0025/0029           |
 | Округлить массу или ввести max          | Источник требует exact step и запрещает max       |
 | Остаться на CHR-001 после commit        | Exact transition ведёт в CHR-010                  |
-| Пустая CHR-010 как заглушка             | Скрывает unresolved input/actions/safe-return     |
+| Пустая CHR-010 как заглушка             | Скрывает два undefined required initial fields    |
 
 ## Последствия
 
-- #97 получает exact identity-draft transport/envelope, но successful checkpoint заблокирован границей CHR-010;
-  placeholder запрещён.
+- #97 получает exact identity-draft transport/envelope; successful checkpoint ждёт только exact initial values
+  `raceConsequencesPreview` и `choiceLockStatus`, не решения selector actions.
 - Новый age/art/input contract либо непустой branch cache требует отдельного ADR; decoder не расширяется по аналогии.
