@@ -49,15 +49,45 @@ permissions:
 # Charging both directions to one budget made additive work spend replacement
 # headroom and replacement work spend additive headroom.
 #
-# The owner-set ceilings therefore allow 1500 code additions (20% above #62's
-# old 1247-line calibration point) but only 400 deletions, below the 1088-line
-# smallest code layer. Tests get 1200 additions because the observed 700-line
-# maximum had already been shaped by its ceiling, and 200 deletions so API
-# migrations remain possible without allowing wholesale removal. Documentation
-# remains aggregate churn.
+# That round set 1500 code additions (20% above #62's old 1247-line
+# calibration point) with 400 deletions, and 1200 test additions with 200
+# deletions. Those four numbers were superseded on 2026-08-18; the reasoning
+# above is kept because the next recalibration rests on it.
+#
+# Third round, issue #103, measured the 14 most recent first-parent merges with
+# the buckets below:
+#
+#   PR    code added/deleted    tests added/deleted
+#   #102          1488/111               1195/9
+#   #92           1112/203                812/47
+#   #100           731/99                 810/9
+#   #87           603/166                 549/59
+#   #94            276/60                 230/4
+#   #81            193/1                  313/4
+#
+# Two of six pressed against the addition ceilings — #102 finished with 12
+# lines of code headroom and 5 of test headroom — while deletions never came
+# near theirs: 203 observed against a limit of 400. The guard was therefore
+# rationing the quantity that says nothing about rewriting, and barely
+# exercising the one that does. Worse, the pressure was paid in agent effort:
+# work was split at boundaries the task did not have, purely to fit.
+#
+# The ceilings below keep the shape and raise the additive room: 4000 code and
+# 3000 test additions, against observed maxima of 1488 and 1195. Deletions
+# double to 800 and 400, still well under a module rewrite but no longer
+# punishing an authorised generalisation like #100's navigation switch (-99) or
+# #92's (-203). Code files go to 40 against an observed 20.
 #
 # generated/ is excluded entirely: a re-imported artifact legitimately rewrites
 # megabytes, and that is pipeline output, not hand-written work.
+#
+# artifacts/ gets its own aggregate budget rather than counting as code. A
+# delivered artifact is authored outside the repository and reaches it only
+# with the owner's explicit sanction, so its diff size measures nothing about
+# review risk — while its checksum manifest quietly charged 39 lines to #102's
+# code budget. The 2000-line ceiling stays only as a tripwire: it still fails a
+# PR that accidentally re-serialises the 275k-line atlas, which is the one
+# artifact accident worth catching automatically.
 jobs:
   size:
     runs-on: ubuntu-latest
@@ -70,12 +100,13 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          MAX_CODE_ADDED: 1500
-          MAX_CODE_DELETED: 400
-          MAX_CODE_FILES: 25
-          MAX_TEST_ADDED: 1200
-          MAX_TEST_DELETED: 200
+          MAX_CODE_ADDED: 4000
+          MAX_CODE_DELETED: 800
+          MAX_CODE_FILES: 40
+          MAX_TEST_ADDED: 3000
+          MAX_TEST_DELETED: 400
           MAX_DOC_LINES: 3000
+          MAX_ARTIFACT_LINES: 2000
           MAX_TOTAL_FILES: 60
         run: |
           base="${{ github.event.pull_request.base.sha }}"
@@ -93,11 +124,19 @@ jobs:
           # Classification lives in one awk pass so a path is bucketed exactly
           # once. Binary files report "-" instead of a count; awk reads that as
           # zero, which is what we want — a binary blob has no reviewable lines.
+          #
+          # artifacts/ is tested first on purpose: the delivered atlas ships as
+          # both .json and .md, and neither is project documentation. Ordering
+          # this branch after the .md test would file half a delivery under
+          # docs and the other half under code.
           set -- $(echo "$stat" | awk -F'\t' '
             {
               added = $1 + 0
               deleted = $2 + 0
               total_files++
+              if ($3 ~ /^artifacts\//) {
+                artifact_lines += added + deleted; next
+              }
               if ($3 ~ /\.(md|txt)$/) {
                 doc_lines += added + deleted; next
               }
@@ -109,18 +148,19 @@ jobs:
               code_files++
             }
             END {
-              printf "%d %d %d %d %d %d %d %d\n",
+              printf "%d %d %d %d %d %d %d %d %d\n",
                 code_files+0, code_added+0, code_deleted+0,
                 test_files+0, test_added+0, test_deleted+0,
-                doc_lines+0, total_files+0
+                doc_lines+0, artifact_lines+0, total_files+0
             }')
           code_files=$1; code_added=$2; code_deleted=$3
           test_files=$4; test_added=$5; test_deleted=$6
-          doc_lines=$7; total_files=$8
+          doc_lines=$7; artifact_lines=$8; total_files=$9
 
           echo "code:  $code_files files (limit $MAX_CODE_FILES), +$code_added (limit $MAX_CODE_ADDED), -$code_deleted (limit $MAX_CODE_DELETED)"
           echo "tests: $test_files files, +$test_added (limit $MAX_TEST_ADDED), -$test_deleted (limit $MAX_TEST_DELETED)"
           echo "docs:  $doc_lines lines (limit $MAX_DOC_LINES)"
+          echo "artifacts: $artifact_lines lines (limit $MAX_ARTIFACT_LINES)"
           echo "total: $total_files files (limit $MAX_TOTAL_FILES)"
           echo
           echo "$stat" | sort -k3
@@ -132,6 +172,7 @@ jobs:
           [ "$test_added" -gt "$MAX_TEST_ADDED" ] && over="$over test-added"
           [ "$test_deleted" -gt "$MAX_TEST_DELETED" ] && over="$over test-deleted"
           [ "$doc_lines" -gt "$MAX_DOC_LINES" ] && over="$over doc-lines"
+          [ "$artifact_lines" -gt "$MAX_ARTIFACT_LINES" ] && over="$over artifact-lines"
           [ "$total_files" -gt "$MAX_TOTAL_FILES" ] && over="$over total-files"
 
           if [ -n "$over" ]; then
