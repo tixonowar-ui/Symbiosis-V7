@@ -21,6 +21,7 @@ import type {
   FormActionIntentV2Message,
   HostToClientMessage,
   HostToClientV2Message,
+  IdentityDraftReplaceV2Message,
   ProjectionReconnectMessage,
   ProtocolVocabulary,
   RevisionVector,
@@ -445,7 +446,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('navigates the full APP-001 to APP-002 to CHR-001 to APP-004 to APP-002 path', async () => {
-    const socket = await app.injectWS('/state');
+    let socket = await app.injectWS('/state');
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     try {
@@ -556,7 +557,86 @@ describe('configured Fastify and ws host shell', () => {
       });
       expect(revisionWrites).toHaveLength(2);
 
-      const cancelDraft = formAction('navigation-library', 'CHR-001', 'CHR-001::CTA::002', 2);
+      const scope = {
+        characterDraftId: payload['characterDraftId'] as string,
+        contextId: projectedContextId,
+        sourceFormId: 'CHR-001',
+        wizardCheckpointId: payload['wizardCheckpointId'] as string,
+      } as const;
+      const identityRequest = {
+        draftUpdateId: 'identity-valid',
+        expectedDraftRevision: 0,
+        expectedRevisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
+        messageType: 'character.identity-draft.replace',
+        protocolVersion: 2,
+        scope,
+        values: {
+          age: 24,
+          artAssetKeyOrLocalFile: {
+            kind: 'asset-key',
+            assetKey: 'symbiosis_placeholder_free_female',
+          },
+          description: null,
+          massKg: 70.1,
+          name: '  Alice  ',
+        },
+      } as const satisfies IdentityDraftReplaceV2Message;
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(
+          {
+            ...identityRequest,
+            draftUpdateId: 'identity-invalid',
+            values: { ...identityRequest.values, name: '\u200B' },
+          },
+          vocabulary,
+        ),
+      );
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'character.identity-draft.refusal',
+        refusal: { code: 'INVALID_FIELD', error: { field: 'name', reason: 'NO_VISIBLE_GRAPHEME' } },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
+      });
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(identityRequest, vocabulary));
+      const identityText = (await response)[0] ?? '';
+      const identityResult = hostMessageV2(identityText, vocabulary);
+      expect(identityResult).toMatchObject({
+        draftRevision: 1,
+        messageType: 'character.identity-draft.result',
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-001::CTA::002'],
+            roleFilteredPayload: { age: 24, draftRevision: 1, massKg: 70.1, name: 'Alice' },
+          },
+        },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
+      });
+      expect(revisionWrites).toHaveLength(3);
+
+      socket.terminate();
+      socket = await app.injectWS('/state');
+      response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'identity-reconnect' }),
+          vocabulary,
+        ),
+      );
+      const reconnectFrames = await response;
+      expect(hostMessageV2(reconnectFrames[1] ?? '', vocabulary)).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: {
+          base: { formId: 'CHR-001', roleFilteredPayload: { draftRevision: 1, name: 'Alice' } },
+        },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
+      });
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(identityRequest, vocabulary));
+      expect((await response)[0]).toBe(identityText);
+      expect(revisionWrites).toHaveLength(3);
+
+      const cancelDraft = formAction('navigation-library', 'CHR-001', 'CHR-001::CTA::002', 3);
       response = receiveFrames(socket, 1);
       socket.send(clientTextV2(cancelDraft, vocabulary));
       const app004Text = (await response)[0] ?? '';
@@ -574,7 +654,7 @@ describe('configured Fastify and ws host shell', () => {
           layers: [],
         },
         projectionRole: 'player',
-        revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 4 },
       });
       if (app004.messageType !== 'projection.snapshot') throw new Error('missing APP-004 snapshot');
       expect(app004.presentation.base.roleFilteredPayload).toEqual({
@@ -586,7 +666,7 @@ describe('configured Fastify and ws host shell', () => {
         launchContext: 'PLAYER_MENU',
         localCharacterLibraryRevision: 0,
         localOwnerIdOrNull: null,
-        projectionRevision: 3,
+        projectionRevision: 4,
         returnContext: 'PLAYER_MENU',
         stateRevision: 0,
       });
@@ -594,9 +674,36 @@ describe('configured Fastify and ws host shell', () => {
       response = receiveFrames(socket, 1);
       socket.send(clientTextV2(cancelDraft, vocabulary));
       expect((await response)[0]).toBe(app004Text);
-      expect(revisionWrites).toHaveLength(3);
+      expect(revisionWrites).toHaveLength(4);
 
-      const returnToMenu = formAction('navigation-menu', 'APP-004', 'APP-004::CTA::007', 3);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(createCharacter, vocabulary));
+      expect((await response)[0]).toBe(chr001Text);
+
+      const createAgain = formAction(
+        'navigation-character-again',
+        'APP-004',
+        'APP-004::CTA::001',
+        4,
+      );
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(createAgain, vocabulary));
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'projection.snapshot',
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 5 },
+      });
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(cancelDraft, vocabulary));
+      expect((await response)[0]).toBe(app004Text);
+      const cancelAgain = formAction('navigation-library-again', 'CHR-001', 'CHR-001::CTA::002', 5);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(cancelAgain, vocabulary));
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'projection.snapshot',
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 6 },
+      });
+
+      const returnToMenu = formAction('navigation-menu', 'APP-004', 'APP-004::CTA::007', 6);
       response = receiveFrames(socket, 1);
       socket.send(clientTextV2(returnToMenu, vocabulary));
       const returned = hostMessageV2((await response)[0] ?? '', vocabulary);
@@ -611,7 +718,7 @@ describe('configured Fastify and ws host shell', () => {
             routeTemplate: '/player',
           },
         },
-        revisions: { ...CLIENT_REVISIONS, projectionRevision: 4 },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 7 },
       });
       if (returned.messageType !== 'projection.snapshot') {
         throw new Error('missing returned APP-002 snapshot');
@@ -619,11 +726,11 @@ describe('configured Fastify and ws host shell', () => {
       expect(returned.presentation.base.roleFilteredPayload).toEqual({
         contextId: projectedContextId,
         deviceId,
-        projectionRevision: 4,
+        projectionRevision: 7,
         stateRevision: 0,
       });
       expect(revisionWrites).toEqual(
-        Array.from({ length: 4 }, () => ({
+        Array.from({ length: 7 }, () => ({
           actorVisibilityChanged: false,
           projectionChanged: true,
           stateChanged: false,
@@ -737,6 +844,14 @@ describe('configured Fastify and ws host shell', () => {
       expect(payload['characterDraftId']).not.toBe(contextId);
       expect(payload['wizardCheckpointId']).not.toBe(payload['characterDraftId']);
       expect(revisionWrites).toHaveLength(3);
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(
+          formAction('library-direct-cancel', 'CHR-001', 'CHR-001::CTA::002', 3),
+          vocabulary,
+        ),
+      );
+      await response;
     } finally {
       currentRevisions = ACTUAL_REVISIONS;
       socket.terminate();
@@ -787,7 +902,19 @@ describe('configured Fastify and ws host shell', () => {
       response = receiveFrames(replaySocket, 1);
       replaySocket.send(clientTextV2(action, vocabulary));
       expect((await response)[0]).toBe(originalSnapshot);
+      response = receiveFrames(replaySocket, 1);
+      replaySocket.send(
+        clientTextV2(
+          formAction('transport-replay-library', 'APP-002', 'APP-002::CTA::002', 1),
+          vocabulary,
+        ),
+      );
+      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: { base: { formId: 'APP-004' } },
+      });
       expect(revisionWrites).toEqual([
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
       ]);
     } finally {

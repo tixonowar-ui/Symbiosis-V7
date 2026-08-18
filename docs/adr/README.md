@@ -64,7 +64,10 @@
 | [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                |
 | [0031](0031-shell-revision-scope.md)                      | Владелец shell-ревизий               | принято                                |
 | [0032](0032-local-character-library-projection.md)        | Ревизия локальной библиотеки         | принято                                |
-| [0033](0033-chr-001-identity-input-contract.md)           | Ввод идентичности `CHR-001`          | принято                                |
+| [0033](0033-chr-001-identity-input-contract.md)           | Ввод идентичности `CHR-001`          | принято; name — 0035; asset — 0036     |
+| [0034](0034-chr-010-initial-projection.md)                | Начальная проекция `CHR-010`         | принято                                |
+| [0035](0035-identity-draft-name-refusals.md)              | Отказы имени identity draft          | принято                                |
+| [0036](0036-local-character-portrait-catalog.md)          | Каталог портретов `CHR-001`          | принято                                |
 
 ## Перенос решений аудита
 

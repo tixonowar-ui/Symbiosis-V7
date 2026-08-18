@@ -1,0 +1,32 @@
+[
+  {
+    "assetKey": "symbiosis_placeholder_free_female",
+    "file": "symbiosis_placeholder_free_female.png",
+    "sha256": "f697680fd9f354a751b257f4045f1da194694712b6cfa6cd04f6fad59439ab23"
+  },
+  {
+    "assetKey": "symbiosis_placeholder_free_male",
+    "file": "symbiosis_placeholder_free_male.png",
+    "sha256": "ce629280b1133ddc467f18684b91f0a75caa8a4ca20b1786ad174141c2232520"
+  },
+  {
+    "assetKey": "symbiosis_placeholder_pure_female",
+    "file": "symbiosis_placeholder_pure_female.png",
+    "sha256": "ef688744336a9d56170f290c824d4a980a48c89d636223e6f9f4c46072927bf8"
+  },
+  {
+    "assetKey": "symbiosis_placeholder_pure_male",
+    "file": "symbiosis_placeholder_pure_male.png",
+    "sha256": "db71e0f5855e5d389cb3929675a16dc76ed34aa32e8012d35eb92f02e9a7c9c5"
+  },
+  {
+    "assetKey": "symbiosis_placeholder_unified_female",
+    "file": "symbiosis_placeholder_unified_female.png",
+    "sha256": "3bbc3a641e8960aaa9b0c0938952736c50fe67ffa69550bf402f791039cedf3e"
+  },
+  {
+    "assetKey": "symbiosis_placeholder_unified_male",
+    "file": "symbiosis_placeholder_unified_male.png",
+    "sha256": "cc5deb29cbaff56fe089dbde7738a6c3905b02ee5c1c8ede2791f472f7463530"
+  }
+]

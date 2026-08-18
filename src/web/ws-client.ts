@@ -14,6 +14,7 @@ import type {
   DecodeResult,
   FormActionIntentV2Message,
   FormActionRefusalV2Message,
+  IdentityDraftValues,
   JsonObject,
   JsonValue,
   ProjectionSnapshotV2Message,
@@ -27,6 +28,13 @@ import type {
 } from '@shared/index.js';
 
 import { isImplementedFormActionKey, presentedFormDefinition } from './forms/index.js';
+import {
+  IdentityDraftClient,
+  type IdentityDraftClientState,
+  type IdentityDraftSnapshot,
+} from './identity-draft-client.js';
+
+export type { IdentityDraftClientState, IdentityDraftValues };
 
 const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
@@ -173,6 +181,8 @@ export type FormActionRequestResult =
 
 export interface ProjectionConnection {
   disconnect(): void;
+  reconnect(): FormActionRequestResult;
+  replaceIdentityDraft(values: IdentityDraftValues): FormActionRequestResult;
   requestFormAction(actionKey: ActionKey): FormActionRequestResult;
 }
 
@@ -462,6 +472,23 @@ function decodeApp004Projection(
     : unrecognized(`${path}.finalCharacterIds`, [...finalIds]);
 }
 
+function isIdentityArt(value: JsonValue): boolean {
+  if (value === null) return true;
+  if (!isJsonObject(value) || typeof value['kind'] !== 'string') return false;
+  if (value['kind'] === 'asset-key') {
+    return (
+      Object.keys(value).sort().join(',') === 'assetKey,kind' &&
+      typeof value['assetKey'] === 'string'
+    );
+  }
+  return (
+    value['kind'] === 'local-file' &&
+    Object.keys(value).sort().join(',') === 'bytesBase64,kind,mediaType' &&
+    typeof value['bytesBase64'] === 'string' &&
+    (value['mediaType'] === 'image/png' || value['mediaType'] === 'image/jpeg')
+  );
+}
+
 function decodeChr001Projection(
   value: JsonObject,
   path: string,
@@ -469,17 +496,23 @@ function decodeChr001Projection(
 ): DecodeResult<JsonObject> {
   const characterDraftId = value['characterDraftId'];
   return decodeProjection(value, path, {
-    age: (field) => field === null,
+    age: (field) => field === null || (typeof field === 'number' && Number.isFinite(field)),
     anatomyProfile: (field) => field === 'STANDARD_HUMANOID',
-    artAssetKeyOrLocalFile: (field) => field === null,
+    artAssetKeyOrLocalFile: isIdentityArt,
     characterDraftId: (field) =>
       typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
     commandId: (field) => field === null,
-    description: (field) => field === null,
-    draftRevision: (field) => field === 0,
+    description: (field) => field === null || typeof field === 'string',
+    draftRevision: (field) =>
+      typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
     massApprovalStatus: (field) => field === 'PENDING_GM',
-    massKg: (field) => field === null,
-    name: (field) => field === null,
+    massKg: (field) =>
+      field === null ||
+      (typeof field === 'number' &&
+        Number.isFinite(field) &&
+        field > 0 &&
+        (Number.isInteger(field) || Number.isInteger(field * 10))),
+    name: (field) => field === null || typeof field === 'string',
     wizardCheckpointId: (field) =>
       typeof field === 'string' &&
       field.trim().length > 0 &&
@@ -550,6 +583,47 @@ function decodeConfirmedSnapshot(
   };
 }
 
+function identitySnapshot(
+  snapshot: ConfirmedProjectionSnapshot,
+  contextId: string | null,
+): IdentityDraftSnapshot | null {
+  if (snapshot.formId !== 'CHR-001' || contextId === null) return null;
+  const value = snapshot.projection;
+  return {
+    draftRevision: value['draftRevision'] as number,
+    revisions: snapshot.revisions,
+    scope: {
+      characterDraftId: value['characterDraftId'] as string,
+      contextId,
+      sourceFormId: 'CHR-001',
+      wizardCheckpointId: value['wizardCheckpointId'] as string,
+    },
+    values: {
+      age: value['age'] as number | null,
+      artAssetKeyOrLocalFile: value[
+        'artAssetKeyOrLocalFile'
+      ] as IdentityDraftValues['artAssetKeyOrLocalFile'],
+      description: value['description'] as string | null,
+      massKg: value['massKg'] as number | null,
+      name: value['name'] as string | null,
+    },
+  };
+}
+
+function visibleSnapshot(
+  snapshot: ConfirmedProjectionSnapshot,
+  identity: IdentityDraftClient | null,
+): ConfirmedProjectionSnapshot {
+  return snapshot.formId === 'CHR-001' && identity?.state.dirty
+    ? {
+        ...snapshot,
+        availableActionKeys: snapshot.availableActionKeys.filter(
+          (key) => key !== 'CHR-001::CTA::001',
+        ),
+      }
+    : snapshot;
+}
+
 function decodeReconnectSnapshot(
   message: ProjectionSnapshotV2Message,
   capabilities: SessionReconnectCapabilitiesV2Message,
@@ -573,9 +647,6 @@ function decodeReconnectSnapshot(
     capabilities.revisions.stateRevision !== message.revisions.stateRevision
   ) {
     return unrecognized('$.revisions', { ...message.revisions });
-  }
-  if (message.presentation.base.formId !== 'APP-001') {
-    return unrecognized('$.presentation.base.formId', message.presentation.base.formId);
   }
   return decodeConfirmedSnapshot(message, capabilities.executableWorkflowCommandIds);
 }
@@ -669,7 +740,7 @@ function diagnostic(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createRequestId(prefix: 'navigation' | 'reconnect'): string {
+function createRequestId(prefix: 'identity' | 'navigation' | 'reconnect'): string {
   const entropy = crypto.getRandomValues(new Uint32Array(4));
   return `${prefix}-${[...entropy].map((value) => value.toString(16).padStart(8, '0')).join('')}`;
 }
@@ -683,13 +754,21 @@ function envelopeProtocolVersion(source: string): unknown {
   }
 }
 
-export function connectProjection(onState: (state: WebClientState) => void): ProjectionConnection {
+export function connectProjection(
+  onState: (state: WebClientState) => void,
+  onIdentityDraft: (state: IdentityDraftClientState | null) => void = () => {},
+): ProjectionConnection {
+  let deviceId: string | null = null;
   let disposed = false;
+  let identity: IdentityDraftClient | null = null;
   let terminal = false;
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
   let pendingFormAction: FormActionIntentV2Message | null = null;
+  let playerContextId: string | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
+  const visibleLast = () =>
+    lastSnapshot === null ? null : visibleSnapshot(lastSnapshot, identity);
 
   const closeAfterTerminalState = () => {
     if (
@@ -728,40 +807,64 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
       detail: `${detail}${deliveryDetail}`,
       kind: 'protocol-error',
       refusal,
-      snapshot: lastSnapshot,
+      snapshot: visibleLast(),
     });
     closeAfterTerminalState();
   };
   const failUnexpected = (path: string, value: JsonValue, detail: string): void =>
     failProtocol({ code: 'UNRECOGNIZED', path, value }, detail);
 
+  const sendIdentity = (request: ReturnType<IdentityDraftClient['edit']>): boolean => {
+    if (request === null || socket === null || socket.readyState !== WebSocket.OPEN) return false;
+    const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok)
+      throw new Error(`identity draft encoding failed: ${JSON.stringify(encoded.refusal)}`);
+    socket.send(encoded.text);
+    return true;
+  };
+
+  const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
+    lastSnapshot = next;
+    if (next.formId === 'APP-001') playerContextId = null;
+    else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
+    const draft = identitySnapshot(next, playerContextId);
+    let replay = null;
+    if (draft === null) identity = null;
+    else if (identity === null || !reconnect)
+      identity = new IdentityDraftClient(draft, () => createRequestId('identity'));
+    else replay = identity.resumeAfterSnapshot(draft);
+    onIdentityDraft(identity?.state ?? null);
+    onState({ kind: 'ready', snapshot: visibleSnapshot(next, identity) });
+    sendIdentity(replay);
+  };
+
   const attachSocket = (
     activeSocket: WebSocket,
     requestId: string,
     reconnectText: string,
   ): void => {
+    let expectingCapabilities = true;
     socket = activeSocket;
 
     activeSocket.onopen = () => {
-      if (disposed || terminal) return;
+      if (disposed || terminal || socket !== activeSocket) return;
       try {
         activeSocket.send(reconnectText);
       } catch (error: unknown) {
-        terminal = true;
+        socket = null;
         onState({
           code: null,
           detail: `session.reconnect could not be sent: ${diagnostic(error)}`,
           kind: 'disconnected',
-          snapshot: lastSnapshot,
+          snapshot: visibleLast(),
         });
-        closeAfterTerminalState();
         return;
       }
       onState({ kind: 'awaiting-snapshot' });
     };
 
     activeSocket.onmessage = (event) => {
-      if (disposed || terminal) return;
+      if (disposed || terminal || socket !== activeSocket) return;
       const frame: unknown = event.data as unknown;
       if (typeof frame !== 'string') {
         failProtocol(
@@ -795,7 +898,7 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
           onState({
             kind: 'host-refusal',
             refusal: decoded.value.refusal,
-            snapshot: lastSnapshot,
+            snapshot: visibleLast(),
           });
           closeAfterTerminalState();
           return;
@@ -814,8 +917,19 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
         return;
       }
       const message = decoded.value;
+      if (
+        (expectingCapabilities && message.messageType !== 'session.reconnect.capabilities') ||
+        (stagedCapabilities !== null && message.messageType !== 'projection.snapshot')
+      ) {
+        failUnexpected(
+          '$.messageType',
+          message.messageType,
+          'A wire v2 frame interrupted the staged reconnect pair.',
+        );
+        return;
+      }
       if (message.messageType === 'session.reconnect.capabilities') {
-        if (lastSnapshot !== null || stagedCapabilities !== null) {
+        if (!expectingCapabilities || stagedCapabilities !== null) {
           failUnexpected(
             '$.messageType',
             message.messageType,
@@ -823,6 +937,7 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
           );
           return;
         }
+        expectingCapabilities = false;
         if (message.reconnectRequestId !== requestId) {
           failUnexpected(
             '$.reconnectRequestId',
@@ -836,16 +951,9 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
       }
       if (message.messageType === 'projection.snapshot') {
         let snapshot: DecodeResult<ConfirmedProjectionSnapshot>;
-        if (lastSnapshot === null) {
-          if (stagedCapabilities === null) {
-            failUnexpected(
-              '$.messageType',
-              message.messageType,
-              'Reconnect snapshot arrived without exactly one adjacent capability frame.',
-            );
-            return;
-          }
-          const capabilities = stagedCapabilities;
+        const reconnecting = stagedCapabilities !== null;
+        if (reconnecting) {
+          const capabilities = stagedCapabilities!;
           stagedCapabilities = null;
           snapshot = decodeReconnectSnapshot(message, capabilities, requestId);
         } else {
@@ -857,15 +965,61 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
             );
             return;
           }
-          snapshot = decodeFormActionSnapshot(message, pendingFormAction, lastSnapshot);
+          snapshot = decodeFormActionSnapshot(message, pendingFormAction, lastSnapshot!);
           pendingFormAction = null;
         }
         if (!snapshot.ok) {
           failProtocol(snapshot.refusal, 'Host sent an invalid projection snapshot.');
           return;
         }
-        lastSnapshot = snapshot.value;
-        onState({ kind: 'ready', snapshot: snapshot.value });
+        adoptSnapshot(snapshot.value, reconnecting);
+        return;
+      }
+      if (message.messageType === 'character.identity-draft.result') {
+        if (identity === null || lastSnapshot === null) return;
+        const candidate = decodeConfirmedSnapshot(
+          {
+            messageType: 'projection.snapshot',
+            presentation: {
+              assignment: { correlationId: message.draftUpdateId, reason: 'FORM_ACTION' },
+              ...message.presentation,
+            },
+            projectionRole: message.projectionRole,
+            protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+            revisions: message.revisions,
+          },
+          lastSnapshot.executableWorkflowCommandIds,
+        );
+        if (!candidate.ok) {
+          failProtocol(candidate.refusal, 'Host sent an invalid identity draft result.');
+          return;
+        }
+        const draft = identitySnapshot(candidate.value, playerContextId);
+        if (draft === null) return;
+        const outstanding = identity.state.outstanding;
+        const applicable =
+          outstanding?.draftUpdateId === message.draftUpdateId &&
+          message.scope.contextId === playerContextId &&
+          outstanding.scope.contextId === message.scope.contextId &&
+          outstanding.scope.characterDraftId === message.scope.characterDraftId &&
+          outstanding.scope.wizardCheckpointId === message.scope.wizardCheckpointId &&
+          message.draftRevision >= (lastSnapshot.projection['draftRevision'] as number) &&
+          (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
+            (axis) => message.revisions[axis] >= lastSnapshot!.revisions[axis],
+          );
+        const next = identity.receiveResult(message, draft.values);
+        if (applicable) lastSnapshot = candidate.value;
+        onIdentityDraft(identity.state);
+        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+        sendIdentity(next);
+        return;
+      }
+      if (message.messageType === 'character.identity-draft.refusal') {
+        if (identity === null || lastSnapshot === null) return;
+        const next = identity.receiveRefusal(message);
+        onIdentityDraft(identity.state);
+        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+        sendIdentity(next);
         return;
       }
       if (message.messageType === 'navigation.form-action.refusal') {
@@ -882,7 +1036,11 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
           return;
         }
         pendingFormAction = null;
-        onState({ kind: 'navigation-refusal', refusal: message.refusal, snapshot: lastSnapshot });
+        onState({
+          kind: 'navigation-refusal',
+          refusal: message.refusal,
+          snapshot: visibleSnapshot(lastSnapshot, identity),
+        });
         return;
       }
       failUnexpected(
@@ -893,22 +1051,21 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
     };
 
     activeSocket.onerror = () => {
-      if (disposed || terminal) return;
-      terminal = true;
+      if (disposed || terminal || socket !== activeSocket) return;
+      socket = null;
       pendingFormAction = null;
       stagedCapabilities = null;
       onState({
         code: null,
         detail: 'WebSocket transport reported an error.',
         kind: 'disconnected',
-        snapshot: lastSnapshot,
+        snapshot: visibleLast(),
       });
-      closeAfterTerminalState();
     };
 
     activeSocket.onclose = (event) => {
-      if (disposed || terminal) return;
-      terminal = true;
+      if (disposed || terminal || socket !== activeSocket) return;
+      socket = null;
       pendingFormAction = null;
       stagedCapabilities = null;
       const reason = event.reason.length === 0 ? 'no close reason' : event.reason;
@@ -916,9 +1073,29 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
         code: event.code,
         detail: `WebSocket closed with code ${String(event.code)}: ${reason}.`,
         kind: 'disconnected',
-        snapshot: lastSnapshot,
+        snapshot: visibleLast(),
       });
     };
+  };
+
+  const openTransport = (currentDeviceId: string): void => {
+    const requestId = createRequestId('reconnect');
+    const reconnect = {
+      deviceId: currentDeviceId,
+      knownRevisions: lastSnapshot?.revisions ?? NO_KNOWN_REVISIONS,
+      messageType: 'session.reconnect',
+      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      reconnectRequestId: requestId,
+      supportedWorkflowCommandIds: [],
+      unacknowledgedCommandIds: [],
+    } as const satisfies SessionReconnectV2Message;
+    const encoded = encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok)
+      throw new Error(
+        `session.reconnect failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+      );
+    stagedCapabilities = null;
+    attachSocket(new WebSocket(stateSocketUrl(window.location.href)), requestId, encoded.text);
   };
 
   const start = async (): Promise<void> => {
@@ -944,24 +1121,8 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
       throw new Error(`device identity response refused: ${JSON.stringify(identity.refusal)}`);
     }
     if (disposed) return;
-
-    const requestId = createRequestId('reconnect');
-    const reconnect = {
-      deviceId: identity.value,
-      knownRevisions: NO_KNOWN_REVISIONS,
-      messageType: 'session.reconnect',
-      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
-      reconnectRequestId: requestId,
-      supportedWorkflowCommandIds: [],
-      unacknowledgedCommandIds: [],
-    } as const satisfies SessionReconnectV2Message;
-    const encoded = encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY);
-    if (!encoded.ok) {
-      throw new Error(
-        `session.reconnect failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
-      );
-    }
-    attachSocket(new WebSocket(stateSocketUrl(window.location.href)), requestId, encoded.text);
+    deviceId = identity.value;
+    openTransport(deviceId);
   };
 
   void start().catch((error: unknown) => {
@@ -984,6 +1145,33 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
         socket.close(1000, 'web client unmounted');
       }
     },
+    reconnect: () => {
+      if (disposed || terminal || deviceId === null)
+        return { ok: false, detail: 'projection connection cannot reconnect' };
+      if (socket !== null) return { ok: false, detail: 'WebSocket is already open or connecting' };
+      try {
+        openTransport(deviceId);
+        return { ok: true };
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+    },
+    replaceIdentityDraft: (values) => {
+      if (identity === null) return { ok: false, detail: 'no active CHR-001 draft scope' };
+      if ([values.age, values.massKg].some((value) => value !== null && !Number.isFinite(value)))
+        return { ok: false, detail: 'identity draft numbers must be finite' };
+      const request = identity.edit(values);
+      onIdentityDraft(identity.state);
+      if (lastSnapshot !== null)
+        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+      try {
+        return request === null || sendIdentity(request)
+          ? { ok: true }
+          : { ok: false, detail: 'WebSocket is not open' };
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+    },
     requestFormAction: (actionKey) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (lastSnapshot === null)
@@ -991,7 +1179,7 @@ export function connectProjection(onState: (state: WebClientState) => void): Pro
       if (pendingFormAction !== null) {
         return { ok: false, detail: 'a form action is already awaiting host confirmation' };
       }
-      if (!lastSnapshot.availableActionKeys.includes(actionKey)) {
+      if (!visibleSnapshot(lastSnapshot, identity).availableActionKeys.includes(actionKey)) {
         return {
           ok: false,
           detail: `action ${JSON.stringify(actionKey)} is absent from the confirmed availableActionKeys`,

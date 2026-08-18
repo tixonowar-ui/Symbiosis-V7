@@ -1,5 +1,6 @@
 import type { ActionKey } from '@generated/types/atlas.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
+import type { IdentityDraftValues } from '@shared/wire-v2-protocol.js';
 
 export const CHR_001_FORM_ID = 'CHR-001' as const;
 export const CHR_001_ROUTE = '/player/characters/:localCharacterId/create/chr-001' as const;
@@ -9,21 +10,32 @@ export const CHR_001_INITIAL_ACTION_KEYS = [
   CHR_001_CANCEL_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
 
+export function projectChr001(
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  draftRevision: number,
+  values: IdentityDraftValues,
+): JsonObject {
+  return {
+    ...values,
+    anatomyProfile: 'STANDARD_HUMANOID',
+    characterDraftId,
+    commandId: null,
+    draftRevision,
+    massApprovalStatus: 'PENDING_GM',
+    wizardCheckpointId,
+  };
+}
+
 export function projectInitialChr001(
   characterDraftId: string,
   wizardCheckpointId: string,
 ): JsonObject {
-  return {
+  return projectChr001(characterDraftId, wizardCheckpointId, 0, {
     age: null,
-    anatomyProfile: 'STANDARD_HUMANOID',
     artAssetKeyOrLocalFile: null,
-    characterDraftId,
-    commandId: null,
     description: null,
-    draftRevision: 0,
-    massApprovalStatus: 'PENDING_GM',
     massKg: null,
     name: null,
-    wizardCheckpointId,
-  };
+  });
 }

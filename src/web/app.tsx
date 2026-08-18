@@ -6,6 +6,8 @@ import { connectProjection } from './ws-client.js';
 import type {
   App001Projection,
   ConfirmedProjectionSnapshot,
+  IdentityDraftClientState,
+  IdentityDraftValues,
   ProjectionConnection,
   WebClientState,
 } from './ws-client.js';
@@ -137,13 +139,70 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
   );
 }
 
+function IdentityFields({
+  draft,
+  onChange,
+}: {
+  readonly draft: IdentityDraftClientState;
+  readonly onChange: (values: IdentityDraftValues) => void;
+}) {
+  const values = draft.widgetValues;
+  const replace = (patch: Partial<IdentityDraftValues>) => onChange({ ...values, ...patch });
+  const number = (raw: string): number | null => (raw === '' ? null : Number(raw));
+  return (
+    <section aria-label="Черновик идентичности" data-identity-dirty={draft.dirty}>
+      {(
+        [
+          ['Имя', 'name', 'text', undefined],
+          ['Возраст', 'age', 'number', 'any'],
+          ['Масса, кг', 'massKg', 'number', '0.1'],
+          ['Описание', 'description', 'text', undefined],
+          ['Ключ портрета', 'artAssetKeyOrLocalFile', 'text', undefined],
+        ] as const
+      ).map(([label, key, type, step]) => {
+        const value =
+          key === 'artAssetKeyOrLocalFile'
+            ? values[key]?.kind === 'asset-key'
+              ? values[key].assetKey
+              : ''
+            : (values[key] ?? '');
+        return (
+          <label key={key}>
+            {label}{' '}
+            <input
+              data-identity-field={key}
+              type={type}
+              step={step}
+              value={value}
+              onChange={(event) => {
+                const raw = event.target.value;
+                replace(
+                  key === 'artAssetKeyOrLocalFile'
+                    ? { [key]: raw === '' ? null : { kind: 'asset-key', assetKey: raw } }
+                    : {
+                        [key]: type === 'number' ? number(raw) : raw || null,
+                      },
+                );
+              }}
+            />
+          </label>
+        );
+      })}
+      {draft.lastRefusal === null ? null : (
+        <pre role="alert">{JSON.stringify(draft.lastRefusal, null, 2)}</pre>
+      )}
+    </section>
+  );
+}
+
 export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
   useEffect(() => {
-    const connection = connectProjection(setState);
+    const connection = connectProjection(setState, setIdentityDraft);
     connectionRef.current = connection;
     return () => {
       connectionRef.current = null;
@@ -160,6 +219,9 @@ export function App(): ReactElement {
   return (
     <>
       <ConnectionBanner state={state} />
+      {state.kind === 'disconnected' ? (
+        <button onClick={() => connectionRef.current?.reconnect()}>Переподключиться</button>
+      ) : null}
       {snapshot === null ? (
         <section data-app-001-data="missing">
           <h2>Данные APP-001 отсутствуют</h2>
@@ -170,6 +232,12 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive}>
             <legend>AtlasForm {snapshot.formId}</legend>
+            {snapshot.formId === 'CHR-001' && identityDraft !== null ? (
+              <IdentityFields
+                draft={identityDraft}
+                onChange={(values) => connectionRef.current?.replaceIdentityDraft(values)}
+              />
+            ) : null}
             <AtlasForm
               availableActionKeys={snapshot.availableActionKeys}
               formId={snapshot.formId}

@@ -3,8 +3,8 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-08-18`
-- Тестов: 613, все зелёные
+- Снимок: `2026-08-19`
+- Тестов: 678, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -31,8 +31,9 @@
 | `tools/import/effects`   | **готов**    | 15       | 67 типов эффектов, 66 моделируемых                                                            |
 | `tools/import/bestiary`  | **готов**    | 12       | 16 видов, 17 статблоков, 16 артов                                                             |
 | `tools/import/sentient`  | **готов**    | 16       | 44 замороженных шаблона, 44 арта, Runtime Pack                                                |
+| `tools/import/portraits` | **готов**    | 9        | exact пакет из 6 портретов локального персонажа по ADR 0036                                   |
 | `tools/import/qna`       | **готов**    | 11       | 444 вопроса, 411 адресуемых кодов, алиас `Q-MON-089` по ADR 0017                              |
-| `tools/import/seed`      | **готов**    | 5        | 114 таблиц, 20 649 строк, 8 паспортов; детерминизм на SQLite 3.53.4                           |
+| `tools/import/seed`      | **готов**    | 5        | 115 таблиц, 20 655 строк, 9 паспортов; детерминизм на SQLite 3.53.4                           |
 | `tools/validate`         | **готов**    | 29       | кросс-реестровая валидация, renderer-каталог форм, ссылки на вопросы и страж №367 ↔ `AQ2-001` |
 | `tools/traceability`     | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм                |
 | `tools/package`          | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                      |
@@ -42,31 +43,35 @@
 Shared wire v1/v2, минимальный roll contract и каркас handler-реестров готовы,
 persistence реализует первый V1-срез, web собирается в self-contained статику,
 а штатный `npm start` замыкает подтверждённый presentation-путь
-`APP-001 → APP-002 → CHR-001 → APP-004 → APP-002`. Host сохраняет wire v1 для
-command/read и выдаёт role-neutral bootstrap; остальные прикладные слои
-остаются частичными, заглушками или не начаты.
+`APP-001 → APP-002 → CHR-001 → APP-004 → APP-002`. Первый срез identity-draft
+подтверждает full replacement на host и восстанавливает outstanding update после
+reconnect того же mounted instance; новый instance принимает CHR-001 read-only.
+Continue, durable checkpoint и `CHR-010` остаются следующим срезом
+issue #97. Host сохраняет wire v1 для command/read и выдаёт role-neutral
+bootstrap; остальные прикладные слои остаются частичными, заглушками или не
+начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                               | Веха |
-| ---------------------------- | ------------ | --------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect, snapshot/capability/refusals | M4   |
-| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже               | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет         | M3   |
-| `src/persistence`            | **частично** | CRUD + checkpoint, список local characters, durable device identity   | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity    | M2   |
-| `src/host`                   | **частично** | `npm start`; shell revisions; v2 path до APP-004 и обратно; gm позже  | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001, shell/library revisions и role filtering    | M4   |
-| `src/web`                    | **частично** | atomic v2 reconnect и замкнутый APP-001/002/004 ↔ CHR-001 path        | M5   |
-| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001; остальные формы и типы fail-closed          | M5   |
-| `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001                   | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                             | Веха |
+| ---------------------------- | ------------ | ------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect/identity-draft              | M4   |
+| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже             | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет       | M3   |
+| `src/persistence`            | **частично** | CRUD + checkpoint, список local characters, durable device identity | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity  | M2   |
+| `src/host`                   | **частично** | `npm start`; shell revisions; identity runtime; checkpoint позже    | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001 initial/confirmed, role filtering          | M4   |
+| `src/web`                    | **частично** | atomic reconnect, identity dirty-buffer и APP-001/002/004 ↔ CHR-001 | M5   |
+| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001; остальные формы и типы fail-closed        | M5   |
+| `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001                 | M6   |
 
 ## generated/ — вывод конвейера
 
-| Каталог           | Состояние | В git | Объём                                   |
-| ----------------- | --------- | ----- | --------------------------------------- |
-| `generated/spec`  | **готов** | да    | 127 JSON-файлов, 37,9 МБ                |
-| `generated/types` | **готов** | да    | 9 файлов                                |
-| `generated/media` | **готов** | нет   | 124 изображения, 22,5 МБ                |
-| `generated/seed`  | **готов** | нет   | 1 SQLite-файл, 30,43 МБ; пересобирается |
+| Каталог           | Состояние | В git | Объём                                    |
+| ----------------- | --------- | ----- | ---------------------------------------- |
+| `generated/spec`  | **готов** | да    | 129 JSON-файлов, 37,89 МиБ               |
+| `generated/types` | **готов** | да    | 10 TS-файлов                             |
+| `generated/media` | **готов** | нет   | 130 изображений, 23,64 МиБ               |
+| `generated/seed`  | **готов** | нет   | 1 SQLite-файл, 29,03 МиБ; пересобирается |
 
 ## tests/
 
