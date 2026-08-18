@@ -219,6 +219,17 @@ export const readLocalCharacter = (
   return localCharacterFromRow(row);
 };
 
+export const listLocalCharacters = (database: Database.Database): readonly LocalCharacter[] =>
+  database
+    .prepare<[], LocalCharacterRow>(
+      `SELECT local_character_id, lifecycle_state, payload_json,
+              stateRevision, projectionRevision, actorVisibilityRevision
+       FROM local_character
+       ORDER BY local_character_id`,
+    )
+    .all()
+    .map(localCharacterFromRow);
+
 export const readRevisions = (
   database: Database.Database,
   scope: RevisionScope,

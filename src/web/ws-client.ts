@@ -31,7 +31,7 @@ import { isImplementedFormActionKey, presentedFormDefinition } from './forms/ind
 const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
 /**
- * The three presentation shapes are the exact issue #62 slice. Addressable
+ * The four presentation shapes are the exact implemented slice. Addressable
  * routes remain out of scope and therefore fail closed.
  */
 export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV2Vocabulary = {
@@ -117,10 +117,24 @@ export interface App001Projection extends JsonObject {
   readonly integrityStatus: IntegrityStatus;
 }
 
+export interface App004Projection extends JsonObject {
+  readonly campaignAuthority: false;
+  readonly draftCharacterIds: readonly string[];
+  readonly finalCharacterIds: readonly string[];
+  readonly handoffIdOrNull: null;
+  readonly handoffReceiptIdOrNull: null;
+  readonly launchContext: 'PLAYER_MENU';
+  readonly localCharacterLibraryRevision: number;
+  readonly localOwnerIdOrNull: null;
+  readonly projectionRevision: number;
+  readonly returnContext: 'PLAYER_MENU';
+  readonly stateRevision: number;
+}
+
 export interface ConfirmedProjectionSnapshot {
   readonly availableActionKeys: readonly ActionKey[];
   readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
-  readonly formId: 'APP-001' | 'APP-002' | 'CHR-001';
+  readonly formId: 'APP-001' | 'APP-002' | 'APP-004' | 'CHR-001';
   readonly path: string;
   readonly projection: JsonObject;
   readonly revisions: RevisionVector;
@@ -410,6 +424,44 @@ function decodeApp002Projection(value: JsonObject, path: string, revisions: Revi
   return result;
 }
 
+function isCanonicalCharacterIdList(value: JsonValue): value is readonly string[] {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) return false;
+  const ids = value as string[];
+  return (
+    new Set(ids).size === ids.length &&
+    ids.every((entry, index) => index === 0 || ids[index - 1]! < entry)
+  );
+}
+
+function decodeApp004Projection(
+  value: JsonObject,
+  path: string,
+  revisions: RevisionVector,
+): DecodeResult<JsonObject> {
+  const result = decodeProjection(value, path, {
+    campaignAuthority: (field) => field === false,
+    draftCharacterIds: isCanonicalCharacterIdList,
+    finalCharacterIds: isCanonicalCharacterIdList,
+    handoffIdOrNull: (field) => field === null,
+    handoffReceiptIdOrNull: (field) => field === null,
+    launchContext: (field) => field === 'PLAYER_MENU',
+    localCharacterLibraryRevision: (field) =>
+      typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
+    localOwnerIdOrNull: (field) => field === null,
+    projectionRevision: (field) => field === revisions.projectionRevision,
+    returnContext: (field) => field === 'PLAYER_MENU',
+    stateRevision: (field) => field === revisions.stateRevision,
+  });
+  if (!result.ok) return result;
+  const draftIds = value['draftCharacterIds'] as readonly string[];
+  const finalIds = value['finalCharacterIds'] as readonly string[];
+  const draftIdSet = new Set(draftIds);
+  const duplicate = finalIds.find((id) => draftIdSet.has(id));
+  return duplicate === undefined
+    ? result
+    : unrecognized(`${path}.finalCharacterIds`, [...finalIds]);
+}
+
 function decodeChr001Projection(
   value: JsonObject,
   path: string,
@@ -456,6 +508,13 @@ function decodeConfirmedSnapshot(
       break;
     case 'APP-002':
       projection = decodeApp002Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        message.revisions,
+      );
+      break;
+    case 'APP-004':
+      projection = decodeApp004Projection(
         base.roleFilteredPayload,
         '$.presentation.base.roleFilteredPayload',
         message.revisions,

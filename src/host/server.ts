@@ -31,22 +31,29 @@ import type {
   WorkflowCommandId,
 } from '@shared/index.js';
 
-import { loadDeviceId } from '../persistence/index.js';
-import type { RevisionImpact } from '../persistence/index.js';
+import { listLocalCharacters, loadDeviceId } from '../persistence/index.js';
+import type { LocalCharacter, RevisionImpact } from '../persistence/index.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import {
   APP_001_ACTION_KEYS,
   APP_001_PLAYER_ACTION_KEY,
   APP_002_CREATE_CHARACTER_ACTION_KEY,
+  APP_002_LOCAL_CHARACTERS_ACTION_KEY,
   APP_002_VERTICAL_ACTION_KEYS,
   APP_002_ROUTE,
+  APP_004_CREATE_CHARACTER_ACTION_KEY,
+  APP_004_RETURN_TO_PLAYER_MENU_ACTION_KEY,
+  APP_004_ROUTE,
+  APP_004_VERTICAL_ACTION_KEYS,
   loadAppProjectionCatalog,
   projectApp001Bootstrap,
   projectApp002,
+  projectApp004,
   projectAppForm,
 } from './projections/app.js';
 import type { AppProjectionCatalog } from './projections/app.js';
 import {
+  CHR_001_CANCEL_ACTION_KEY,
   CHR_001_FORM_ID,
   CHR_001_INITIAL_ACTION_KEYS,
   CHR_001_ROUTE,
@@ -80,8 +87,9 @@ type CommandJournal = Map<
 interface ConfirmedNavigationContext {
   readonly contextId: string | null;
   readonly deviceId: string;
-  readonly formId: 'APP-001' | 'APP-002' | typeof CHR_001_FORM_ID;
+  readonly formId: 'APP-001' | 'APP-002' | 'APP-004' | typeof CHR_001_FORM_ID;
 }
+type ConfirmedPlayerContext = ConfirmedNavigationContext & { readonly contextId: string };
 type NavigationJournal = Map<
   string,
   {
@@ -102,9 +110,14 @@ interface NavigationDependencies {
   readonly catalog: AppProjectionCatalog;
   readonly database: HostServerConfig['database'];
   readonly journal: NavigationJournal;
+  readonly libraryEntries: readonly LocalCharacter[];
   readonly onFrameError: HostServerConfig['onFrameError'];
   readonly readRevisions: HostServerConfig['readRevisions'];
   readonly vocabulary: HostVocabulary;
+}
+interface NavigationSuccess {
+  readonly nextContext: ConfirmedNavigationContext;
+  readonly snapshot: ProjectionSnapshotV2Message;
 }
 
 const STATIC_CONTENT_TYPES: Readonly<Record<string, string>> = {
@@ -204,6 +217,109 @@ function projectionSnapshot(
     projectionRole,
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
     revisions,
+  };
+}
+
+function confirmedPlayerContext(
+  current: ConfirmedNavigationContext,
+  dependencies: NavigationDependencies,
+): current is ConfirmedPlayerContext {
+  return current.contextId !== null && deviceIdentityMatches(dependencies, current.deviceId);
+}
+
+function app002Navigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  dependencies: NavigationDependencies,
+): NavigationSuccess {
+  const after = advanceProjection(before, dependencies.advanceRevisions);
+  const projected = projectApp002(dependencies.catalog, 'player', {
+    contextId: current.contextId,
+    deviceId: current.deviceId,
+    projectionRevision: after.projectionRevision,
+    stateRevision: after.stateRevision,
+  });
+  if (!projected.ok) throw new Error(`APP-002 refused: ${JSON.stringify(projected.refusal)}`);
+  return {
+    nextContext: { ...current, formId: 'APP-002' },
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      {
+        availableActionKeys: APP_002_VERTICAL_ACTION_KEYS,
+        formId: 'APP-002',
+        formType: 'screen',
+        roleFilteredPayload: projected.projection,
+        routeBindings: [],
+        routeTemplate: APP_002_ROUTE,
+      },
+      'player',
+      after,
+    ),
+  };
+}
+
+function app004Navigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  dependencies: NavigationDependencies,
+): NavigationSuccess {
+  const after = advanceProjection(before, dependencies.advanceRevisions);
+  const projected = projectApp004(dependencies.catalog, 'player', {
+    libraryEntries: dependencies.libraryEntries,
+    localCharacterLibraryRevision: 0,
+    projectionRevision: after.projectionRevision,
+    stateRevision: after.stateRevision,
+  });
+  if (!projected.ok) throw new Error(`APP-004 refused: ${JSON.stringify(projected.refusal)}`);
+  return {
+    nextContext: { ...current, formId: 'APP-004' },
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      {
+        availableActionKeys: APP_004_VERTICAL_ACTION_KEYS,
+        formId: 'APP-004',
+        formType: 'screen',
+        roleFilteredPayload: projected.projection,
+        routeBindings: [],
+        routeTemplate: APP_004_ROUTE,
+      },
+      'player',
+      after,
+    ),
+  };
+}
+
+function chr001Navigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  dependencies: NavigationDependencies,
+): NavigationSuccess {
+  const characterDraftId = allocatedId(dependencies.allocateLocalCharacterId, 'local character');
+  const wizardCheckpointId = allocatedWizardCheckpointId(
+    dependencies.allocateWizardCheckpointId,
+    characterDraftId,
+  );
+  const after = advanceProjection(before, dependencies.advanceRevisions);
+  return {
+    nextContext: { ...current, formId: CHR_001_FORM_ID },
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      {
+        availableActionKeys: CHR_001_INITIAL_ACTION_KEYS,
+        formId: CHR_001_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectInitialChr001(characterDraftId, wizardCheckpointId),
+        routeBindings: [
+          { parameterIndex: 0, source: 'executor-allocated', value: characterDraftId },
+        ],
+        routeTemplate: CHR_001_ROUTE,
+      },
+      'player',
+      after,
+    ),
   };
 }
 
@@ -334,85 +450,83 @@ function handleFormAction(
     finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
     return;
   }
-  if (
-    action.to === 'APP-002' &&
-    current.formId === 'APP-001' &&
-    message.actionKey === APP_001_PLAYER_ACTION_KEY &&
-    dependencies.catalog.app001.bootState === 'READY'
-  ) {
-    if (!deviceIdentityMatches(dependencies, current.deviceId)) {
-      finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
-      return;
+  let success: NavigationSuccess | undefined;
+  switch (message.actionKey) {
+    case APP_001_PLAYER_ACTION_KEY: {
+      if (
+        action.to !== 'APP-002' ||
+        current.formId !== 'APP-001' ||
+        dependencies.catalog.app001.bootState !== 'READY' ||
+        !deviceIdentityMatches(dependencies, current.deviceId)
+      ) {
+        break;
+      }
+      const contextId = allocatedId(
+        dependencies.allocateContextId,
+        'player-local context',
+        UUID_V4_PATTERN,
+      );
+      if (contextId === current.deviceId) {
+        throw new Error('player-local context allocator reused the durable device ID');
+      }
+      success = app002Navigation(
+        message,
+        { contextId, deviceId: current.deviceId, formId: 'APP-001' },
+        revisions,
+        dependencies,
+      );
+      break;
     }
-    const contextId = allocatedId(
-      dependencies.allocateContextId,
-      'player-local context',
-      UUID_V4_PATTERN,
-    );
-    if (contextId === current.deviceId) {
-      throw new Error('player-local context allocator reused the durable device ID');
-    }
-    const after = advanceProjection(revisions, dependencies.advanceRevisions);
-    const projected = projectApp002(dependencies.catalog, 'player', {
-      contextId,
-      deviceId: current.deviceId,
-      projectionRevision: after.projectionRevision,
-      stateRevision: after.stateRevision,
-    });
-    if (!projected.ok) throw new Error(`APP-002 refused: ${JSON.stringify(projected.refusal)}`);
-    finish(
-      projectionSnapshot(
-        message.navigationRequestId,
-        {
-          availableActionKeys: APP_002_VERTICAL_ACTION_KEYS,
-          formId: 'APP-002',
-          formType: 'screen',
-          roleFilteredPayload: projected.projection,
-          routeBindings: [],
-          routeTemplate: APP_002_ROUTE,
-        },
-        'player',
-        after,
-      ),
-      {
-        contextId,
-        deviceId: current.deviceId,
-        formId: 'APP-002',
-      },
-    );
-    return;
+    case APP_002_LOCAL_CHARACTERS_ACTION_KEY:
+      if (
+        action.to === 'APP-004' &&
+        current.formId === 'APP-002' &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = app004Navigation(message, current, revisions, dependencies);
+      }
+      break;
+    case APP_002_CREATE_CHARACTER_ACTION_KEY:
+      if (
+        action.to === CHR_001_FORM_ID &&
+        current.formId === 'APP-002' &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = chr001Navigation(message, current, revisions, dependencies);
+      }
+      break;
+    case CHR_001_CANCEL_ACTION_KEY:
+      if (
+        action.to === 'APP-004' &&
+        current.formId === CHR_001_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = app004Navigation(message, current, revisions, dependencies);
+      }
+      break;
+    case APP_004_CREATE_CHARACTER_ACTION_KEY:
+      if (
+        action.to === CHR_001_FORM_ID &&
+        current.formId === 'APP-004' &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = chr001Navigation(message, current, revisions, dependencies);
+      }
+      break;
+    case APP_004_RETURN_TO_PLAYER_MENU_ACTION_KEY:
+      if (
+        action.to === 'APP-002' &&
+        current.formId === 'APP-004' &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = app002Navigation(message, current, revisions, dependencies);
+      }
+      break;
+    default:
+      break;
   }
-  if (
-    action.to === CHR_001_FORM_ID &&
-    current.formId === 'APP-002' &&
-    current.contextId !== null &&
-    message.actionKey === APP_002_CREATE_CHARACTER_ACTION_KEY &&
-    deviceIdentityMatches(dependencies, current.deviceId)
-  ) {
-    const characterDraftId = allocatedId(dependencies.allocateLocalCharacterId, 'local character');
-    const wizardCheckpointId = allocatedWizardCheckpointId(
-      dependencies.allocateWizardCheckpointId,
-      characterDraftId,
-    );
-    const after = advanceProjection(revisions, dependencies.advanceRevisions);
-    finish(
-      projectionSnapshot(
-        message.navigationRequestId,
-        {
-          availableActionKeys: CHR_001_INITIAL_ACTION_KEYS,
-          formId: CHR_001_FORM_ID,
-          formType: 'screen',
-          roleFilteredPayload: projectInitialChr001(characterDraftId, wizardCheckpointId),
-          routeBindings: [
-            { parameterIndex: 0, source: 'executor-allocated', value: characterDraftId },
-          ],
-          routeTemplate: CHR_001_ROUTE,
-        },
-        'player',
-        after,
-      ),
-      { contextId: current.contextId, deviceId: current.deviceId, formId: CHR_001_FORM_ID },
-    );
+  if (success !== undefined) {
+    finish(success.snapshot, success.nextContext);
     return;
   }
   finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
@@ -863,6 +977,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     catalog,
     database: config.database,
     journal: new Map(),
+    libraryEntries: listLocalCharacters(config.database),
     onFrameError: config.onFrameError,
     readRevisions: config.readRevisions,
     vocabulary,

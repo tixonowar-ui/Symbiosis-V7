@@ -6,7 +6,7 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { InteractiveRole, JsonObject } from '@shared/wire-protocol.js';
 
 import { array, readJsonFile, record, string } from '../json-source.js';
-import { CHR_001_FORM_ID, CHR_001_ROUTE } from './chr.js';
+import { CHR_001_CANCEL_ACTION_KEY, CHR_001_FORM_ID, CHR_001_ROUTE } from './chr.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -35,13 +35,23 @@ export const APP_001_ACTION_KEYS = [
 ] as const satisfies readonly ActionKey[];
 
 export const APP_002_CREATE_CHARACTER_ACTION_KEY = 'APP-002::CTA::007' as const satisfies ActionKey;
+export const APP_002_LOCAL_CHARACTERS_ACTION_KEY = 'APP-002::CTA::002' as const satisfies ActionKey;
 /** Guard passes and its target is implemented by this vertical. */
 export const APP_002_VERTICAL_ACTION_KEYS = [
+  APP_002_LOCAL_CHARACTERS_ACTION_KEY,
   APP_002_CREATE_CHARACTER_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const APP_004_CREATE_CHARACTER_ACTION_KEY = 'APP-004::CTA::001' as const satisfies ActionKey;
+export const APP_004_RETURN_TO_PLAYER_MENU_ACTION_KEY =
+  'APP-004::CTA::007' as const satisfies ActionKey;
+export const APP_004_VERTICAL_ACTION_KEYS = [
+  APP_004_CREATE_CHARACTER_ACTION_KEY,
+  APP_004_RETURN_TO_PLAYER_MENU_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
 export const APP_001_PLAYER_ACTION_KEY = 'APP-001::CTA::001' as const satisfies ActionKey;
 export const APP_001_ROUTE = '/' as const;
 export const APP_002_ROUTE = '/player' as const;
+export const APP_004_ROUTE = '/player/characters' as const;
 
 const APP_001_REQUIRED_FIELDS = [
   'buildVersion',
@@ -54,6 +64,19 @@ const APP_002_REQUIRED_FIELDS = [
   'stateRevision',
   'projectionRevision',
   'deviceId',
+] as const;
+const APP_004_REQUIRED_FIELDS = [
+  'localOwnerIdOrNull',
+  'localCharacterLibraryRevision',
+  'draftCharacterIds[]',
+  'finalCharacterIds[]',
+  'launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE',
+  'handoffIdOrNull',
+  'handoffReceiptIdOrNull',
+  'returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE',
+  'campaignAuthority=false when HOST_LOCAL_CANDIDATE',
+  'stateRevision',
+  'projectionRevision',
 ] as const;
 const APP_001_BOOT_GUARD = 'bootState=BOOTING|READY|ERROR';
 const CHR_001_REQUIRED_FIELDS = [
@@ -105,7 +128,33 @@ export interface App002Projection extends JsonObject {
   readonly stateRevision: number;
 }
 
-export type AppProjection = App001Projection | App002Projection;
+export interface App004Projection extends JsonObject {
+  readonly campaignAuthority: false;
+  readonly draftCharacterIds: readonly string[];
+  readonly finalCharacterIds: readonly string[];
+  readonly handoffIdOrNull: null;
+  readonly handoffReceiptIdOrNull: null;
+  readonly launchContext: 'PLAYER_MENU';
+  readonly localCharacterLibraryRevision: number;
+  readonly localOwnerIdOrNull: null;
+  readonly projectionRevision: number;
+  readonly returnContext: 'PLAYER_MENU';
+  readonly stateRevision: number;
+}
+
+export interface App004LibraryEntry {
+  readonly lifecycleState: string;
+  readonly localCharacterId: string;
+}
+
+export interface App004ProjectionValues {
+  readonly libraryEntries: readonly App004LibraryEntry[];
+  readonly localCharacterLibraryRevision: number;
+  readonly projectionRevision: number;
+  readonly stateRevision: number;
+}
+
+export type AppProjection = App001Projection | App002Projection | App004Projection;
 
 export interface AppFormContract {
   readonly id: AppFormId;
@@ -114,7 +163,7 @@ export interface AppFormContract {
 }
 
 export interface AppNavigationAction {
-  readonly from: AppFormId;
+  readonly from: AppFormId | typeof CHR_001_FORM_ID;
   readonly guard: string;
   readonly kind: string;
   readonly to: string;
@@ -136,10 +185,26 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       APP_001_PLAYER_ACTION_KEY,
       'otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; bootState=READY',
     ],
+    ['APP-002', APP_002_LOCAL_CHARACTERS_ACTION_KEY, 'player launch-mode'],
     [
       'APP-002',
       APP_002_CREATE_CHARACTER_ACTION_KEY,
       'player launch-mode; new immutable draft UUID',
+    ],
+    [
+      CHR_001_FORM_ID,
+      CHR_001_CANCEL_ACTION_KEY,
+      'draft has no irreversible displayed result; deleting this draft requires explicit confirmation elsewhere and any later draft receives a new UUID',
+    ],
+    [
+      'APP-004',
+      APP_004_CREATE_CHARACTER_ACTION_KEY,
+      'Новый immutable UUID; обязательны имя, возраст и положительная massKg 0,1; описание/арт необязательны.',
+    ],
+    [
+      'APP-004',
+      APP_004_RETURN_TO_PLAYER_MENU_ACTION_KEY,
+      'activeRole=PLAYER; launchContext=PLAYER_MENU; handoffType!=HOST_LOCAL_CANDIDATE; no uncommitted irreversible wizard or import commit; draft checkpoints preserved',
     ],
   ] as const) {
     const label = `${sourceFormId}.actions.ctaAvailabilityByAction`;
@@ -277,6 +342,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   }
 
   assertScreenContract(forms, 'APP-002', APP_002_REQUIRED_FIELDS, APP_002_ROUTE);
+  assertScreenContract(forms, 'APP-004', APP_004_REQUIRED_FIELDS, APP_004_ROUTE);
   assertScreenContract(forms, CHR_001_FORM_ID, CHR_001_REQUIRED_FIELDS, CHR_001_ROUTE);
   return result;
 }
@@ -458,6 +524,87 @@ export function projectApp002(
       contextId: values.contextId,
       deviceId: values.deviceId,
       projectionRevision: values.projectionRevision,
+      stateRevision: values.stateRevision,
+    },
+  };
+}
+
+function sortedLibraryBuckets(
+  entries: readonly App004LibraryEntry[],
+): Pick<App004Projection, 'draftCharacterIds' | 'finalCharacterIds'> {
+  const draftCharacterIds: string[] = [];
+  const finalCharacterIds: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (seen.has(entry.localCharacterId)) {
+      throw new Error(
+        `APP-004 library contains duplicate localCharacterId ${JSON.stringify(entry.localCharacterId)}`,
+      );
+    }
+    seen.add(entry.localCharacterId);
+    switch (entry.lifecycleState) {
+      case 'DRAFT':
+      case 'VALID':
+      case 'VARIANT':
+        draftCharacterIds.push(entry.localCharacterId);
+        break;
+      case 'FINAL':
+      case 'EXPORTED':
+        finalCharacterIds.push(entry.localCharacterId);
+        break;
+      case 'DELETED':
+        break;
+      default:
+        throw new Error(
+          `APP-004 localCharacter ${JSON.stringify(entry.localCharacterId)} has unrecognized lifecycle state ${JSON.stringify(entry.lifecycleState)}`,
+        );
+    }
+  }
+  draftCharacterIds.sort();
+  finalCharacterIds.sort();
+  return { draftCharacterIds, finalCharacterIds };
+}
+
+export function projectApp004(
+  catalog: AppProjectionCatalog,
+  requestedRole: InteractiveRole,
+  values: App004ProjectionValues,
+): AppProjectionResult {
+  const form = catalog.forms.get('APP-004');
+  if (form === undefined) throw new Error('APP-004 contract is missing from the checked catalog');
+  if (!form.roles.includes(requestedRole)) {
+    return {
+      ok: false,
+      refusal: {
+        allowedRoles: form.roles,
+        formId: form.id,
+        kind: 'ROLE_NOT_ALLOWED',
+        requestedRole,
+      },
+    };
+  }
+  if (
+    !Number.isSafeInteger(values.localCharacterLibraryRevision) ||
+    values.localCharacterLibraryRevision < 0
+  ) {
+    throw new Error(
+      `APP-004 localCharacterLibraryRevision must be a non-negative safe integer, got ${JSON.stringify(values.localCharacterLibraryRevision)}`,
+    );
+  }
+  const buckets = sortedLibraryBuckets(values.libraryEntries);
+  return {
+    ok: true,
+    projection: {
+      campaignAuthority: false,
+      draftCharacterIds: buckets.draftCharacterIds,
+      finalCharacterIds: buckets.finalCharacterIds,
+      handoffIdOrNull: null,
+      handoffReceiptIdOrNull: null,
+      launchContext: 'PLAYER_MENU',
+      localCharacterLibraryRevision: values.localCharacterLibraryRevision,
+      localOwnerIdOrNull: null,
+      projectionRevision: values.projectionRevision,
+      returnContext: 'PLAYER_MENU',
       stateRevision: values.stateRevision,
     },
   };
