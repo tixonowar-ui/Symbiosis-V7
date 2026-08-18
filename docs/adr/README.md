@@ -49,7 +49,7 @@
 | [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято                                |
 | [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято; строка про seed заменена 0019 |
 | [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято                                |
-| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято                                |
+| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято; список owners дополнен 0031   |
 | [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                |
 | [0020](0020-wire-protocol-and-shared-contracts.md)        | Wire-протокол и контракты shared     | принято                                |
 | [0021](0021-roll-model.md)                                | Модель броска AUTO и MANUAL          | принято                                |
@@ -62,6 +62,7 @@
 | [0028](0028-wire-v2-reconnect.md)                         | Инициация reconnect в wire v2        | принято                                |
 | [0029](0029-wizard-draft-initial-payload.md)              | Начальный payload wizard-черновика   | принято                                |
 | [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                |
+| [0031](0031-shell-revision-scope.md)                      | Владелец shell-ревизий               | принято                                |
 
 ## Перенос решений аудита
 
