@@ -52,6 +52,10 @@
 
 ### Добавлено
 
+- ADR 0033 задаёт host-confirmed full replacement для значений идентичности
+  `CHR-001`: additive wire v2 messages, отдельную `draftRevision`, точную
+  проверку массы и durable checkpoint receipt без SQLite-строки для pre-commit
+  draft; успешный переход в `CHR-010` заблокирован его неописанным input/actions.
 - Штатный `npm start` поднимает host из явной npm-конфигурации на стабильной
   базе в `LOCALAPPDATA`, отказывает с подсказкой при отсутствии `dist/web` и
   использует runtime shell-тройку ADR 0031. Player-путь теперь замкнут через

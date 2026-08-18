@@ -64,6 +64,7 @@
 | [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                |
 | [0031](0031-shell-revision-scope.md)                      | Владелец shell-ревизий               | принято                                |
 | [0032](0032-local-character-library-projection.md)        | Ревизия локальной библиотеки         | принято                                |
+| [0033](0033-chr-001-identity-input-contract.md)           | Ввод идентичности `CHR-001`          | принято                                |
 
 ## Перенос решений аудита
 
