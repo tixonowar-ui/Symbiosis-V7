@@ -31,6 +31,8 @@ const DEVICE_ID = '123e4567-e89b-42d3-a456-426614174000';
 const REQUEST_ID = 'reconnect-00000001000000020000000300000004';
 const PLAYER_NAVIGATION_REQUEST_ID = 'navigation-00000005000000060000000700000008';
 const CHARACTER_NAVIGATION_REQUEST_ID = 'navigation-000000090000000a0000000b0000000c';
+const LIBRARY_NAVIGATION_REQUEST_ID = 'navigation-0000000d0000000e0000000f00000010';
+const MENU_NAVIGATION_REQUEST_ID = 'navigation-00000011000000120000001300000014';
 const APP_001_ACTION_KEYS = [
   'APP-001::CTA::001',
   'APP-001::CTA::002',
@@ -80,6 +82,19 @@ const CHR_001_PROJECTION = {
   massKg: null,
   name: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const APP_004_PROJECTION = {
+  campaignAuthority: false,
+  draftCharacterIds: [],
+  finalCharacterIds: [],
+  handoffIdOrNull: null,
+  handoffReceiptIdOrNull: null,
+  launchContext: 'PLAYER_MENU',
+  localCharacterLibraryRevision: 0,
+  localOwnerIdOrNull: null,
+  projectionRevision: 11,
+  returnContext: 'PLAYER_MENU',
+  stateRevision: 5,
 } as const;
 
 class FakeWebSocket {
@@ -371,7 +386,7 @@ describe('APP-001 web entry', () => {
     expect(url.pathname).toBe('/state');
   });
 
-  it('renders the confirmed APP-001 to APP-002 to CHR-001 path without optimistic navigation', async () => {
+  it('renders the full confirmed APP-001 to APP-002 to CHR-001 to APP-004 to APP-002 path', async () => {
     const { container, socket } = await connectClient();
     open(socket);
     deliver(socket, checkedHostTextV2(capabilities()));
@@ -422,7 +437,7 @@ describe('APP-001 web entry', () => {
       checkedHostTextV2(
         navigationSnapshot(
           {
-            availableActionKeys: ['APP-002::CTA::007'],
+            availableActionKeys: ['APP-002::CTA::002', 'APP-002::CTA::007'],
             formId: 'APP-002',
             formType: 'screen',
             roleFilteredPayload: APP_002_PROJECTION,
@@ -462,7 +477,7 @@ describe('APP-001 web entry', () => {
       checkedHostTextV2(
         navigationSnapshot(
           {
-            availableActionKeys: [],
+            availableActionKeys: ['CHR-001::CTA::002'],
             formId: 'CHR-001',
             formType: 'screen',
             roleFilteredPayload: CHR_001_PROJECTION,
@@ -486,10 +501,98 @@ describe('APP-001 web entry', () => {
     expect(
       container.querySelector('[data-host-field="wizardCheckpointId"]')?.textContent,
     ).toContain(WIZARD_CHECKPOINT_ID);
-    expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(1);
     expect(
       container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
     ).toBeNull();
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Отменить новый черновик"]'),
+        'CHR-001 cancel action',
+      ).click();
+    });
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-004"]')).toBeNull();
+    expect(decodedClientMessageV2(socket, 3)).toMatchObject({
+      actionKey: 'CHR-001::CTA::002',
+      expectedProjectionRevision: 10,
+      navigationRequestId: LIBRARY_NAVIGATION_REQUEST_ID,
+      sourceFormId: 'CHR-001',
+    });
+
+    deliver(
+      socket,
+      checkedHostTextV2(
+        navigationSnapshot(
+          {
+            availableActionKeys: ['APP-004::CTA::001', 'APP-004::CTA::007'],
+            formId: 'APP-004',
+            formType: 'screen',
+            roleFilteredPayload: APP_004_PROJECTION,
+            routeBindings: [],
+            routeTemplate: '/player/characters',
+          },
+          11,
+          LIBRARY_NAVIGATION_REQUEST_ID,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="APP-004"]')).not.toBeNull();
+    expect(window.location.pathname).toBe('/player/characters');
+    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(11);
+    expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(2);
+    for (const actionKey of [
+      'APP-004::CTA::002',
+      'APP-004::CTA::003',
+      'APP-004::CTA::004',
+      'APP-004::CTA::005',
+      'APP-004::CTA::006',
+      'APP-004::CTA::008',
+    ]) {
+      expect(container.querySelector(`[data-atlas-action-key="${actionKey}"]`)).toBeNull();
+    }
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Вернуться в главное меню игрока"]',
+        ),
+        'APP-004 return action',
+      ).click();
+    });
+
+    expect(container.querySelector('[data-atlas-form-id="APP-004"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="APP-002"]')).toBeNull();
+    expect(decodedClientMessageV2(socket, 4)).toMatchObject({
+      actionKey: 'APP-004::CTA::007',
+      expectedProjectionRevision: 11,
+      navigationRequestId: MENU_NAVIGATION_REQUEST_ID,
+      sourceFormId: 'APP-004',
+    });
+
+    deliver(
+      socket,
+      checkedHostTextV2(
+        navigationSnapshot(
+          {
+            availableActionKeys: ['APP-002::CTA::002', 'APP-002::CTA::007'],
+            formId: 'APP-002',
+            formType: 'screen',
+            roleFilteredPayload: { ...APP_002_PROJECTION, projectionRevision: 12 },
+            routeBindings: [],
+            routeTemplate: '/player',
+          },
+          12,
+          MENU_NAVIGATION_REQUEST_ID,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="APP-002"]')).not.toBeNull();
+    expect(window.location.pathname).toBe('/player');
   });
 
   it('rejects a whitespace-only wizard checkpoint identity before caching CHR-001', async () => {

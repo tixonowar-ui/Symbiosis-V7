@@ -1,6 +1,8 @@
 export { bootstrapDeviceIdentity, loadDeviceId, resetDeviceIdentity } from './device-identity.js';
 export type { DeviceBindingsInvalidator, DeviceId } from './device-identity.js';
-export { advanceRevisions, readRevisions } from './store.js';
+export { openPersistenceDatabase } from './database.js';
+export { applyMigrations } from './migrations/index.js';
+export { advanceRevisions, listLocalCharacters, readRevisions } from './store.js';
 export type {
   CampaignCheckpoint,
   LocalCharacter,

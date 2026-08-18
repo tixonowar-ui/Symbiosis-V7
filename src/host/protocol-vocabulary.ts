@@ -62,7 +62,12 @@ export async function loadProtocolVocabulary(
     );
     if (new Set(keys).size !== keys.length) throw new Error(`${label}: duplicate actionKey`);
     actionKeys.set(formId, new Set(keys));
-    if (formId === 'APP-001' || formId === 'APP-002' || formId === 'CHR-001') {
+    if (
+      formId === 'APP-001' ||
+      formId === 'APP-002' ||
+      formId === 'APP-004' ||
+      formId === 'CHR-001'
+    ) {
       presentedForms.set(formId, {
         route: string(form['route'], `${label}.route`),
         type: string(form['type'], `${label}.type`),
@@ -131,14 +136,15 @@ export async function loadProtocolVocabulary(
       const form = presentedForms.get(formId);
       if (form === undefined || form.type !== formType || form.route !== routeTemplate)
         return false;
-      if (formId === 'APP-001' || formId === 'APP-002') return bindings.length === 0;
-      return (
-        formId === 'CHR-001' &&
-        bindings.length === 1 &&
-        bindings[0]?.parameterIndex === 0 &&
-        bindings[0].source === 'executor-allocated' &&
-        bindings[0].value.length > 0
-      );
+      if (formId === 'CHR-001') {
+        return (
+          bindings.length === 1 &&
+          bindings[0]?.parameterIndex === 0 &&
+          bindings[0].source === 'executor-allocated' &&
+          bindings[0].value.length > 0
+        );
+      }
+      return bindings.length === 0;
     },
     isWorkflowCommandId: (value): value is WorkflowCommandId => workflowCommandIds.has(value),
   };

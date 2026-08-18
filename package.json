@@ -9,6 +9,10 @@
     "node": ">=24.19.0 <25",
     "npm": ">=11"
   },
+  "config": {
+    "host_interface": "127.0.0.1",
+    "host_port": "3000"
+  },
   "allowScripts": {
     "better-sqlite3": false,
     "esbuild": false
@@ -20,6 +24,7 @@
     "x64"
   ],
   "scripts": {
+    "start": "tsx src/host/main.ts",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.web.json",
     "lint": "eslint .",

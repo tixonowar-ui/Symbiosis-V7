@@ -3,8 +3,11 @@ import type { JsonObject } from '@shared/wire-protocol.js';
 
 export const CHR_001_FORM_ID = 'CHR-001' as const;
 export const CHR_001_ROUTE = '/player/characters/:localCharacterId/create/chr-001' as const;
-/** Continue is guard-hidden; Cancel targets APP-004, which this vertical does not implement. */
-export const CHR_001_INITIAL_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+export const CHR_001_CANCEL_ACTION_KEY = 'CHR-001::CTA::002' as const satisfies ActionKey;
+/** Continue remains guard-hidden until its required identity fields are confirmed. */
+export const CHR_001_INITIAL_ACTION_KEYS = [
+  CHR_001_CANCEL_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
 
 export function projectInitialChr001(
   characterDraftId: string,

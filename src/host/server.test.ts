@@ -444,7 +444,7 @@ describe('configured Fastify and ws host shell', () => {
     }
   });
 
-  it('navigates APP-001 to APP-002 and CHR-001 without creating a character row', async () => {
+  it('navigates the full APP-001 to APP-002 to CHR-001 to APP-004 to APP-002 path', async () => {
     const socket = await app.injectWS('/state');
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
@@ -465,7 +465,7 @@ describe('configured Fastify and ws host shell', () => {
         presentation: {
           assignment: { correlationId: 'navigation-player', reason: 'FORM_ACTION' },
           base: {
-            availableActionKeys: ['APP-002::CTA::007'],
+            availableActionKeys: ['APP-002::CTA::002', 'APP-002::CTA::007'],
             formId: 'APP-002',
             routeBindings: [],
             routeTemplate: '/player',
@@ -497,7 +497,7 @@ describe('configured Fastify and ws host shell', () => {
         presentation: {
           assignment: { correlationId: 'navigation-character', reason: 'FORM_ACTION' },
           base: {
-            availableActionKeys: [],
+            availableActionKeys: ['CHR-001::CTA::002'],
             formId: 'CHR-001',
             routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
           },
@@ -555,6 +555,188 @@ describe('configured Fastify and ws host shell', () => {
         revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
       });
       expect(revisionWrites).toHaveLength(2);
+
+      const cancelDraft = formAction('navigation-library', 'CHR-001', 'CHR-001::CTA::002', 2);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(cancelDraft, vocabulary));
+      const app004Text = (await response)[0] ?? '';
+      const app004 = hostMessageV2(app004Text, vocabulary);
+      expect(app004).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: 'navigation-library', reason: 'FORM_ACTION' },
+          base: {
+            availableActionKeys: ['APP-004::CTA::001', 'APP-004::CTA::007'],
+            formId: 'APP-004',
+            routeBindings: [],
+            routeTemplate: '/player/characters',
+          },
+          layers: [],
+        },
+        projectionRole: 'player',
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
+      });
+      if (app004.messageType !== 'projection.snapshot') throw new Error('missing APP-004 snapshot');
+      expect(app004.presentation.base.roleFilteredPayload).toEqual({
+        campaignAuthority: false,
+        draftCharacterIds: [],
+        finalCharacterIds: [],
+        handoffIdOrNull: null,
+        handoffReceiptIdOrNull: null,
+        launchContext: 'PLAYER_MENU',
+        localCharacterLibraryRevision: 0,
+        localOwnerIdOrNull: null,
+        projectionRevision: 3,
+        returnContext: 'PLAYER_MENU',
+        stateRevision: 0,
+      });
+
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(cancelDraft, vocabulary));
+      expect((await response)[0]).toBe(app004Text);
+      expect(revisionWrites).toHaveLength(3);
+
+      const returnToMenu = formAction('navigation-menu', 'APP-004', 'APP-004::CTA::007', 3);
+      response = receiveFrames(socket, 1);
+      socket.send(clientTextV2(returnToMenu, vocabulary));
+      const returned = hostMessageV2((await response)[0] ?? '', vocabulary);
+      expect(returned).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: 'navigation-menu', reason: 'FORM_ACTION' },
+          base: {
+            availableActionKeys: ['APP-002::CTA::002', 'APP-002::CTA::007'],
+            formId: 'APP-002',
+            routeBindings: [],
+            routeTemplate: '/player',
+          },
+        },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 4 },
+      });
+      if (returned.messageType !== 'projection.snapshot') {
+        throw new Error('missing returned APP-002 snapshot');
+      }
+      expect(returned.presentation.base.roleFilteredPayload).toEqual({
+        contextId: projectedContextId,
+        deviceId,
+        projectionRevision: 4,
+        stateRevision: 0,
+      });
+      expect(revisionWrites).toEqual(
+        Array.from({ length: 4 }, () => ({
+          actorVisibilityChanged: false,
+          projectionChanged: true,
+          stateChanged: false,
+        })),
+      );
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
+  it('opens APP-004 from the menu and starts a fresh CHR-001 subflow', async () => {
+    const socket = await app.injectWS('/state');
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    try {
+      let response = receiveFrames(socket, 2);
+      socket.send(
+        clientTextV2(
+          reconnectV2(deviceId, { reconnectRequestId: 'library-direct-reconnect' }),
+          vocabulary,
+        ),
+      );
+      await response;
+
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(
+          formAction('library-direct-player', 'APP-001', 'APP-001::CTA::001', 0),
+          vocabulary,
+        ),
+      );
+      const app002 = hostMessageV2((await response)[0] ?? '', vocabulary);
+      if (app002.messageType !== 'projection.snapshot') throw new Error('missing APP-002 snapshot');
+      const contextId = app002.presentation.base.roleFilteredPayload['contextId'];
+      if (typeof contextId !== 'string') throw new Error('missing APP-002 contextId');
+
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(
+          formAction('library-direct-open', 'APP-002', 'APP-002::CTA::002', 1),
+          vocabulary,
+        ),
+      );
+      const app004 = hostMessageV2((await response)[0] ?? '', vocabulary);
+      expect(app004).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: {
+          base: {
+            availableActionKeys: ['APP-004::CTA::001', 'APP-004::CTA::007'],
+            formId: 'APP-004',
+            routeBindings: [],
+            routeTemplate: '/player/characters',
+          },
+        },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
+      });
+
+      for (const [index, actionKey] of (
+        [
+          'APP-004::CTA::002',
+          'APP-004::CTA::003',
+          'APP-004::CTA::004',
+          'APP-004::CTA::005',
+          'APP-004::CTA::006',
+          'APP-004::CTA::008',
+        ] as const
+      ).entries()) {
+        response = receiveFrames(socket, 1);
+        socket.send(
+          clientTextV2(
+            formAction(`library-omitted-${String(index)}`, 'APP-004', actionKey, 2),
+            vocabulary,
+          ),
+        );
+        const refusalText = (await response)[0] ?? '';
+        expect(hostMessageV2(refusalText, vocabulary)).toMatchObject({
+          messageType: 'navigation.form-action.refusal',
+          refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+          revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
+        });
+        expect(refusalText).not.toContain('characterDraftId');
+      }
+      expect(revisionWrites).toHaveLength(2);
+
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV2(
+          formAction('library-direct-create', 'APP-004', 'APP-004::CTA::001', 2),
+          vocabulary,
+        ),
+      );
+      const chr001 = hostMessageV2((await response)[0] ?? '', vocabulary);
+      expect(chr001).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: 'library-direct-create', reason: 'FORM_ACTION' },
+          base: {
+            availableActionKeys: ['CHR-001::CTA::002'],
+            formId: 'CHR-001',
+            routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
+          },
+        },
+        revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
+      });
+      if (chr001.messageType !== 'projection.snapshot') throw new Error('missing CHR-001 snapshot');
+      const payload = chr001.presentation.base.roleFilteredPayload;
+      expect(chr001.presentation.base.routeBindings).toEqual([
+        { parameterIndex: 0, source: 'executor-allocated', value: payload['characterDraftId'] },
+      ]);
+      expect(payload['characterDraftId']).not.toBe(contextId);
+      expect(payload['wizardCheckpointId']).not.toBe(payload['characterDraftId']);
+      expect(revisionWrites).toHaveLength(3);
     } finally {
       currentRevisions = ACTUAL_REVISIONS;
       socket.terminate();

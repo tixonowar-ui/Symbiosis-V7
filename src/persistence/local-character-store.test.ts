@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { openPersistenceDatabase } from './database.js';
 import { V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
-import { createLocalCharacter, readLocalCharacter, updateLocalCharacter } from './store.js';
+import {
+  createLocalCharacter,
+  listLocalCharacters,
+  readLocalCharacter,
+  updateLocalCharacter,
+} from './store.js';
 
 const CREATION_FORM_ID = 'CHR-001';
 const databases: Database.Database[] = [];
@@ -47,6 +52,16 @@ describe(CREATION_FORM_ID, () => {
       projectionRevision: 0,
       actorVisibilityRevision: 0,
     });
+  });
+
+  it('lists every confirmed local character in deterministic ID order', () => {
+    const database = memoryDatabase();
+    expect(listLocalCharacters(database)).toEqual([]);
+
+    const second = createLocalCharacter(database, 'character-b', 'FINAL', '{"order":2}');
+    const first = createLocalCharacter(database, 'character-a', 'DRAFT', '{"order":1}');
+
+    expect(listLocalCharacters(database)).toEqual([first, second]);
   });
 
   it('rejects unknown lifecycle states with the complete frozen allow-list', () => {

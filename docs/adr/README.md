@@ -63,6 +63,7 @@
 | [0029](0029-wizard-draft-initial-payload.md)              | Начальный payload wizard-черновика   | принято                                |
 | [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                |
 | [0031](0031-shell-revision-scope.md)                      | Владелец shell-ревизий               | принято                                |
+| [0032](0032-local-character-library-projection.md)        | Ревизия локальной библиотеки         | принято                                |
 
 ## Перенос решений аудита
 

@@ -52,6 +52,12 @@
 
 ### Добавлено
 
+- Штатный `npm start` поднимает host из явной npm-конфигурации на стабильной
+  базе в `LOCALAPPDATA`, отказывает с подсказкой при отсутствии `dist/web` и
+  использует runtime shell-тройку ADR 0031. Player-путь теперь замкнут через
+  `APP-001 → APP-002 → CHR-001 → APP-004 → APP-002`; ADR 0032 фиксирует
+  отдельную runtime-ревизию локальной библиотеки и lifecycle buckets её
+  device-owned проекции.
 - ADR 0031 назначает shell-тройку одному runtime-агрегату на host instance:
   scope начинает с `0/0/0`, переживает смену context и transport reconnect, но
   завершается при host restart; entity snapshot переключает source на

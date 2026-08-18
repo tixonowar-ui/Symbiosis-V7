@@ -8,10 +8,10 @@ import type { ChrFormId } from './chr/index.js';
 
 export const IMPLEMENTED_FORM_IDS = [...APP_FORM_IDS, ...CHR_FORM_IDS] as const;
 export type ImplementedFormId = AppFormId | ChrFormId;
-export type SupportedPresentationFormId = 'APP-001' | 'APP-002' | 'CHR-001';
+export type SupportedPresentationFormId = 'APP-001' | 'APP-002' | 'APP-004' | 'CHR-001';
 
 const IMPLEMENTED = new Set<string>(IMPLEMENTED_FORM_IDS);
-const SUPPORTED = new Set<FormId>(['APP-001', 'APP-002', 'CHR-001']);
+const SUPPORTED = new Set<FormId>(['APP-001', 'APP-002', 'APP-004', 'CHR-001']);
 
 export function isImplementedFormId(value: string): value is ImplementedFormId {
   return IMPLEMENTED.has(value);
