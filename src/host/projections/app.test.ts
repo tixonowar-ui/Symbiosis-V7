@@ -9,12 +9,27 @@ import {
   APP_004_VERTICAL_ACTION_KEYS,
   APP_001_BOOT_STATES,
   APP_FORM_IDS,
+  assertScreenContract,
   loadAppProjectionCatalog,
   projectApp001Bootstrap,
   projectApp004,
   projectAppForm,
 } from './app.js';
 import type { AppProjectionCatalog } from './app.js';
+import {
+  CHR_002_FORM_ID,
+  CHR_002_REQUIRED_FIELDS,
+  CHR_002_ROUTE,
+  CHR_010_FORM_ID,
+  CHR_010_REQUIRED_FIELDS,
+  CHR_010_ROUTE,
+  CHR_016_FORM_ID,
+  CHR_016_REQUIRED_FIELDS,
+  CHR_016_ROUTE,
+  CHR_036_FORM_ID,
+  CHR_036_REQUIRED_FIELDS,
+  CHR_036_ROUTE,
+} from './chr.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 
@@ -123,6 +138,24 @@ describe('APP host projection', () => {
       trigger: 'Вернуться в главное меню игрока',
     });
   });
+
+  it.each([
+    [CHR_002_FORM_ID, CHR_002_ROUTE, CHR_002_REQUIRED_FIELDS],
+    [CHR_010_FORM_ID, CHR_010_ROUTE, CHR_010_REQUIRED_FIELDS],
+    [CHR_016_FORM_ID, CHR_016_ROUTE, CHR_016_REQUIRED_FIELDS],
+    [CHR_036_FORM_ID, CHR_036_ROUTE, CHR_036_REQUIRED_FIELDS],
+  ] as const)(
+    'rejects a one-literal requiredFields drift for %s',
+    (formId, route, requiredFields) => {
+      expect(() => assertScreenContract(forms, formId, requiredFields, route)).not.toThrow();
+
+      const driftedFields: string[] = [...requiredFields];
+      driftedFields[0] = `${requiredFields[0]}-drift`;
+      expect(() => assertScreenContract(forms, formId, driftedFields, route)).toThrow(
+        `${formId} does not match its source-owned player screen contract`,
+      );
+    },
+  );
 
   it('projects the canonical device-owned APP-004 library by lifecycle', () => {
     const result = projectApp004(catalog, 'player', {

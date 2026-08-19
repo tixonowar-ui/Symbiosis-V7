@@ -33,6 +33,17 @@ export const CHR_001_CHECKPOINT_ACTION_KEYS = [
 
 export const CHR_010_FORM_ID = 'CHR-010' as const;
 export const CHR_010_ROUTE = '/player/characters/:localCharacterId/create/chr-010' as const;
+/** Source: forms-by-id.json["CHR-010"].requiredFields. */
+export const CHR_010_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'raceChoice=UNITED|FREE|PURE',
+  'ancientOptionSerialized=false',
+  'raceConsequencesPreview',
+  'choiceLockStatus',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
 export const CHR_010_CONFIRM_SYMBIONT_RACE_ACTION_KEY =
   'CHR-010::CTA::001' as const satisfies ActionKey;
 export const CHR_010_CONFIRM_PURE_RACE_ACTION_KEY =
@@ -49,6 +60,17 @@ export const CHR_010_INITIAL_ACTION_KEYS = [
 
 export const CHR_016_FORM_ID = 'CHR-016' as const;
 export const CHR_016_ROUTE = '/player/characters/:localCharacterId/create/chr-016' as const;
+/** Source: forms-by-id.json["CHR-016"].requiredFields. */
+export const CHR_016_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'raceChoice=UNITED|FREE',
+  'symbiontAcquisitionMode=MANUAL|RANDOM',
+  'modeConsequences',
+  'choiceLockStatus',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
 export const CHR_016_CONFIRM_ACTION_KEY = 'CHR-016::CTA::001' as const satisfies ActionKey;
 export const CHR_016_SET_DECIDE_ACTION_KEYS = [
   CHR_016_CONFIRM_ACTION_KEY,
@@ -60,6 +82,16 @@ export const CHR_016_INITIAL_ACTION_KEYS = [
 
 export const CHR_036_FORM_ID = 'CHR-036' as const;
 export const CHR_036_ROUTE = '/player/characters/:localCharacterId/create/chr-036' as const;
+/** Source: forms-by-id.json["CHR-036"].requiredFields. */
+export const CHR_036_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'diceInputMode=AUTO|MANUAL',
+  'appliesToAllCreationRolls=true',
+  'choiceLockStatus',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
 export const CHR_036_CONFIRM_ACTION_KEY = 'CHR-036::CTA::001' as const satisfies ActionKey;
 export const CHR_036_SET_DECIDE_ACTION_KEYS = [
   CHR_036_CONFIRM_ACTION_KEY,
@@ -71,6 +103,16 @@ export const CHR_036_INITIAL_ACTION_KEYS = [
 
 export const CHR_002_FORM_ID = 'CHR-002' as const;
 export const CHR_002_ROUTE = '/player/characters/:localCharacterId/create/chr-002' as const;
+/** Source: forms-by-id.json["CHR-002"].requiredFields. */
+export const CHR_002_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'statMethod=CLASSIC|ADVENTUROUS|ALL_OR_NOTHING',
+  'methodConsequences',
+  'choiceLockStatus',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
 export const CHR_002_INITIAL_ACTION_KEYS = [
   'CHR-002::CTA::003',
   'CHR-002::CTA::004',
