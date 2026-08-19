@@ -50,6 +50,10 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-002',
   'CHR-003',
   'CHR-004',
+  'CHR-005',
+  'CHR-006',
+  'CHR-007',
+  'CHR-008',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -67,7 +71,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
   isHostTransition: () => false,
   isPresentedForm: (formId, formType, routeTemplate, bindings) => {
     const definition = presentedFormDefinition(formId);
-    if (definition === null || formType !== 'screen' || routeTemplate !== definition.route)
+    if (definition === null || formType !== definition.type || routeTemplate !== definition.route)
       return false;
     if (formId !== 'CHR-001' && !INHERITED_CHARACTER_WIZARD_FORM_IDS.has(formId)) {
       return bindings.length === 0;
@@ -126,6 +130,69 @@ const CHR_003_PENDING_ACTION_KEYS = [
 const CHR_004_PENDING_ACTION_KEYS = [
   CHR_004_ROLL_COMMIT_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
+const CREATION_SET_DECISION_FORM_IDS = ['CHR-005', 'CHR-006', 'CHR-007', 'CHR-008'] as const;
+type CreationSetDecisionFormId = (typeof CREATION_SET_DECISION_FORM_IDS)[number];
+const CREATION_SET_DECISION_FORM_ID_SET: ReadonlySet<string> = new Set(
+  CREATION_SET_DECISION_FORM_IDS,
+);
+const CHR_028_ACTION_KEYS = [
+  'CHR-028::CTA::001',
+  'CHR-028::CTA::002',
+] as const satisfies readonly ActionKey[];
+/** ADR 0043 section 2 and Atlas CTA keys; validation only, never host mechanics authority. */
+const CREATION_SET_DECISION_FORMS = {
+  'CHR-005': {
+    acceptActionKey: 'CHR-005::CTA::001',
+    alternateActionKey: 'CHR-005::CTA::002',
+    alternateDecision: 'USE_POINT_BUY_90',
+    attempt: 1,
+    method: 'CLASSIC',
+    receiptKey: 'acceptedSetReceiptId',
+    transitionKind: 'CLASSIC_TO_90',
+  },
+  'CHR-006': {
+    acceptActionKey: 'CHR-006::CTA::001',
+    alternateActionKey: 'CHR-006::CTA::002',
+    alternateDecision: 'GO_ATTEMPT_2',
+    attempt: 1,
+    method: 'ADVENTUROUS',
+    receiptKey: 'setReceiptId',
+    transitionKind: 'ADVENTUROUS_TO_SECOND',
+  },
+  'CHR-007': {
+    acceptActionKey: 'CHR-007::CTA::001',
+    alternateActionKey: 'CHR-007::CTA::002',
+    alternateDecision: 'USE_POINT_BUY_85',
+    attempt: 2,
+    method: 'ADVENTUROUS',
+    receiptKey: 'setReceiptId',
+    transitionKind: 'ADVENTUROUS_TO_85',
+  },
+  'CHR-008': {
+    acceptActionKey: 'CHR-008::CTA::001',
+    alternateActionKey: 'CHR-008::CTA::002',
+    alternateDecision: 'GO_NEXT_ATTEMPT',
+    attempt: null,
+    method: 'ALL_OR_NOTHING',
+    receiptKey: 'setReceiptId',
+    transitionKind: 'ALL_OR_NOTHING_NEXT',
+  },
+} as const satisfies Readonly<
+  Record<
+    CreationSetDecisionFormId,
+    {
+      readonly acceptActionKey: ActionKey;
+      readonly alternateActionKey: ActionKey;
+      readonly alternateDecision:
+        'GO_ATTEMPT_2' | 'GO_NEXT_ATTEMPT' | 'USE_POINT_BUY_85' | 'USE_POINT_BUY_90';
+      readonly attempt: 1 | 2 | null;
+      readonly method: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
+      readonly receiptKey: 'acceptedSetReceiptId' | 'setReceiptId';
+      readonly transitionKind:
+        'ADVENTUROUS_TO_85' | 'ADVENTUROUS_TO_SECOND' | 'ALL_OR_NOTHING_NEXT' | 'CLASSIC_TO_90';
+    }
+  >
+>;
 const NO_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
 const EMPTY_BRANCH_CACHE_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 
@@ -269,6 +336,47 @@ export interface Chr004Projection extends JsonObject {
   readonly originFace: 1 | 20;
   readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
   readonly setRollReceiptId: string;
+  readonly wizardCheckpointId: string;
+}
+
+export interface CharacterSetDecisionProjection extends JsonObject {
+  readonly acceptedSetReceiptId?: string;
+  readonly attemptIndex?: number;
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly decision:
+    | 'ACCEPT_SET'
+    | 'GO_ATTEMPT_2'
+    | 'GO_NEXT_ATTEMPT'
+    | 'PENDING'
+    | 'USE_POINT_BUY_85'
+    | 'USE_POINT_BUY_90';
+  readonly decisionReceiptIdOrNull: string | null;
+  readonly draftRevision: number;
+  readonly fifthAttemptMandatoryAccept?: boolean;
+  readonly setReceiptId?: string;
+  readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
+  readonly wizardCheckpointId: string;
+}
+
+export interface CharacterSetAbandonmentConsequences extends JsonObject {
+  readonly creationCriticalConsequencesDiscarded: true;
+  readonly exactPointBuyTotalOrNull: 85 | 90 | null;
+  readonly nextAttemptIndexOrNull: 2 | 3 | 4 | 5 | null;
+  readonly setValuesDiscarded: true;
+}
+
+export interface Chr028Projection extends JsonObject {
+  readonly abandonedSetReceiptIds: readonly [string];
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly decision: 'CONFIRM' | null;
+  readonly decisionReceiptIdOrNull: string | null;
+  readonly draftRevision: number;
+  readonly irreversibleConsequences: CharacterSetAbandonmentConsequences;
+  readonly originDecisionFormId: CreationSetDecisionFormId;
+  readonly transitionKind:
+    'ADVENTUROUS_TO_85' | 'ADVENTUROUS_TO_SECOND' | 'ALL_OR_NOTHING_NEXT' | 'CLASSIC_TO_90';
   readonly wizardCheckpointId: string;
 }
 
@@ -463,8 +571,31 @@ interface StatMethodDecisionPayload extends SetDecisionCommonPayload {
 type SetDecisionPayload =
   | DiceInputDecisionPayload
   | RaceDecisionPayload
+  | StatRollAcceptSetPayload
+  | StatRollDialogDecisionPayload
   | StatMethodDecisionPayload
   | SymbiontAcquisitionDecisionPayload;
+type RaceMethodSetDecisionPayload = Exclude<
+  SetDecisionPayload,
+  StatRollAcceptSetPayload | StatRollDialogDecisionPayload
+>;
+
+interface StatRollDecisionCommonPayload extends JsonObject {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly stage: 'STAT_ROLLS';
+  readonly wizardCheckpointId: string;
+}
+
+interface StatRollAcceptSetPayload extends StatRollDecisionCommonPayload {
+  readonly decision: 'ACCEPT_SET';
+  readonly sourceFormId: CreationSetDecisionFormId;
+}
+
+interface StatRollDialogDecisionPayload extends StatRollDecisionCommonPayload {
+  readonly decision: 'CANCEL' | 'CONFIRM';
+  readonly sourceFormId: 'CHR-028';
+}
 
 type SetDecisionRequest = WorkflowCommandRequestMessage<
   typeof SET_DECIDE_WORKFLOW_COMMAND_ID,
@@ -509,15 +640,62 @@ interface StatMethodDecisionResult extends SetDecisionResultCommon {
 }
 
 type SetDecisionResult =
+  | CreationSetAbandonmentResult
+  | CreationSetAcceptanceResult
+  | CreationSetCancelResult
   | DiceInputDecisionResult
   | RaceDecisionResult
   | StatMethodDecisionResult
   | SymbiontAcquisitionDecisionResult;
 
+interface StatRollSetDecisionResultCommon extends JsonObject {
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly stage: 'STAT_ROLLS';
+}
+
+interface CreationSetAcceptanceResult extends StatRollSetDecisionResultCommon {
+  readonly acceptedSetReceiptId: string;
+  readonly assignmentMode: 'ROLLED_BIJECTION';
+  readonly decision: 'ACCEPT_SET';
+  readonly nextFormId: 'CHR-009';
+  readonly sourceFormId: CreationSetDecisionFormId;
+}
+
+interface CreationSetAbandonmentResult extends StatRollSetDecisionResultCommon {
+  readonly abandonedSetReceiptIds: readonly [string];
+  readonly alternateDecision:
+    'GO_ATTEMPT_2' | 'GO_NEXT_ATTEMPT' | 'USE_POINT_BUY_85' | 'USE_POINT_BUY_90';
+  readonly assignmentModeOrNull: 'POINT_BUY_85' | 'POINT_BUY_90' | null;
+  readonly decision: 'CONFIRM';
+  readonly irreversibleConsequences: CharacterSetAbandonmentConsequences;
+  readonly nextAttemptIndexOrNull: 2 | 3 | 4 | 5 | null;
+  readonly nextFormId: 'CHR-003' | 'CHR-009';
+  readonly nextSetRollRequestIdOrNull: string | null;
+  readonly originDecisionFormId: CreationSetDecisionFormId;
+  readonly sourceFormId: 'CHR-028';
+  readonly sourceSetReceiptIdOrNull: null;
+  readonly transitionKind: Chr028Projection['transitionKind'];
+}
+
+interface CreationSetCancelResult extends StatRollSetDecisionResultCommon {
+  readonly decision: 'CANCEL';
+  readonly decisionReceiptIdOrNull: null;
+  readonly nextFormId: CreationSetDecisionFormId;
+  readonly originDecisionFormId: CreationSetDecisionFormId;
+  readonly sourceFormId: 'CHR-028';
+}
+
 interface PendingSetDecision {
-  readonly choice: CharacterCreationChoiceDraft;
+  readonly choice: CharacterCreationChoiceDraft | null;
   readonly request: SetDecisionRequest;
   readonly receipt: CommandReceipt<SetDecisionResult> | null;
+  readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
 interface RollCommitCommonPayload extends JsonObject {
@@ -599,9 +777,17 @@ export interface ConfirmedProjectionSnapshot {
   readonly availableActionKeys: readonly ActionKey[];
   readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
   readonly formId: SupportedPresentationFormId;
+  readonly layers: readonly ConfirmedPresentationLayer[];
   readonly path: string;
   readonly projection: JsonObject;
   readonly revisions: RevisionVector;
+}
+
+export interface ConfirmedPresentationLayer {
+  readonly availableActionKeys: readonly ActionKey[];
+  readonly formId: 'CHR-028';
+  readonly path: '@dialog/chr-028';
+  readonly projection: Chr028Projection;
 }
 
 export type WebClientState =
@@ -1246,6 +1432,165 @@ function decodeChr004Projection(
   return result;
 }
 
+function isCreationSetDecisionFormId(value: string): value is CreationSetDecisionFormId {
+  return CREATION_SET_DECISION_FORM_ID_SET.has(value);
+}
+
+function decodeCharacterSetDecisionProjection(
+  formId: CreationSetDecisionFormId,
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const rule = CREATION_SET_DECISION_FORMS[formId];
+  const fields: Record<string, FieldPredicate> = {
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === null || isNonEmptyString(field),
+    decision: (field) =>
+      field === 'PENDING' || field === 'ACCEPT_SET' || field === rule.alternateDecision,
+    decisionReceiptIdOrNull: (field) => field === null || isNonEmptyString(field),
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    [rule.receiptKey]: isNonEmptyString,
+    statMethod: (field) => field === rule.method,
+    wizardCheckpointId: isNonEmptyString,
+  };
+  if (formId !== 'CHR-005') {
+    fields['attemptIndex'] = (field) =>
+      formId === 'CHR-008' ? isSafeIntegerAtLeast(field, 1) && field <= 5 : field === rule.attempt;
+  }
+  if (formId === 'CHR-008') {
+    fields['fifthAttemptMandatoryAccept'] = (field) => field === (value['attemptIndex'] === 5);
+  }
+  const decoded = decodeProjection(value, path, fields);
+  if (!decoded.ok) return decoded;
+  const pending = value['decision'] === 'PENDING';
+  if (
+    pending !== (value['decisionReceiptIdOrNull'] === null) ||
+    pending !== (value['commandId'] === null)
+  ) {
+    return unrecognized(`${path}.decisionReceiptIdOrNull`, value['decisionReceiptIdOrNull']!);
+  }
+  const ids = [
+    value['characterDraftId'],
+    value['wizardCheckpointId'],
+    value[rule.receiptKey],
+    value['decisionReceiptIdOrNull'],
+    value['commandId'],
+  ].filter((entry): entry is string => typeof entry === 'string');
+  if (new Set(ids).size !== ids.length) {
+    return unrecognized(`${path}.${rule.receiptKey}`, value[rule.receiptKey]!);
+  }
+  return decoded;
+}
+
+function expectedAbandonmentConsequences(
+  formId: CreationSetDecisionFormId,
+  projection: JsonObject,
+): CharacterSetAbandonmentConsequences {
+  switch (formId) {
+    case 'CHR-005':
+      return {
+        creationCriticalConsequencesDiscarded: true,
+        exactPointBuyTotalOrNull: 90,
+        nextAttemptIndexOrNull: null,
+        setValuesDiscarded: true,
+      };
+    case 'CHR-006':
+      return {
+        creationCriticalConsequencesDiscarded: true,
+        exactPointBuyTotalOrNull: null,
+        nextAttemptIndexOrNull: 2,
+        setValuesDiscarded: true,
+      };
+    case 'CHR-007':
+      return {
+        creationCriticalConsequencesDiscarded: true,
+        exactPointBuyTotalOrNull: 85,
+        nextAttemptIndexOrNull: null,
+        setValuesDiscarded: true,
+      };
+    case 'CHR-008':
+      return {
+        creationCriticalConsequencesDiscarded: true,
+        exactPointBuyTotalOrNull: null,
+        nextAttemptIndexOrNull: ((projection['attemptIndex'] as 1 | 2 | 3 | 4) + 1) as
+          2 | 3 | 4 | 5,
+        setValuesDiscarded: true,
+      };
+  }
+}
+
+function decodeAbandonmentConsequences(
+  value: JsonValue,
+  path: string,
+  expected: CharacterSetAbandonmentConsequences,
+): DecodeResult<CharacterSetAbandonmentConsequences> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const decoded = decodeProjection(value, path, {
+    creationCriticalConsequencesDiscarded: (field) =>
+      field === expected.creationCriticalConsequencesDiscarded,
+    exactPointBuyTotalOrNull: (field) => field === expected.exactPointBuyTotalOrNull,
+    nextAttemptIndexOrNull: (field) => field === expected.nextAttemptIndexOrNull,
+    setValuesDiscarded: (field) => field === expected.setValuesDiscarded,
+  });
+  return decoded.ok ? { ok: true, value: value as CharacterSetAbandonmentConsequences } : decoded;
+}
+
+function decodeChr028Projection(
+  value: JsonObject,
+  path: string,
+  originFormId: CreationSetDecisionFormId,
+  originProjection: JsonObject,
+): DecodeResult<Chr028Projection> {
+  const rule = CREATION_SET_DECISION_FORMS[originFormId];
+  const consequences = expectedAbandonmentConsequences(originFormId, originProjection);
+  const decodedConsequences = decodeAbandonmentConsequences(
+    value['irreversibleConsequences']!,
+    `${path}.irreversibleConsequences`,
+    consequences,
+  );
+  if (!decodedConsequences.ok) return decodedConsequences;
+  const setReceiptId = originProjection[rule.receiptKey];
+  const receiptIds = value['abandonedSetReceiptIds'];
+  const decoded = decodeProjection(value, path, {
+    abandonedSetReceiptIds: (field) =>
+      Array.isArray(field) && field.length === 1 && field[0] === setReceiptId,
+    characterDraftId: (field) => field === originProjection['characterDraftId'],
+    commandId: (field) => field === null || isNonEmptyString(field),
+    decision: (field) => field === null || field === 'CONFIRM',
+    decisionReceiptIdOrNull: (field) => field === null || isNonEmptyString(field),
+    draftRevision: (field) => field === originProjection['draftRevision'],
+    irreversibleConsequences: (field) => field === value['irreversibleConsequences'],
+    originDecisionFormId: (field) => field === originFormId,
+    transitionKind: (field) => field === rule.transitionKind,
+    wizardCheckpointId: (field) => field === originProjection['wizardCheckpointId'],
+  });
+  if (!decoded.ok) return decoded;
+  const warning = value['decision'] === null;
+  if (
+    warning !== (value['decisionReceiptIdOrNull'] === null) ||
+    warning !== (value['commandId'] === null) ||
+    originProjection['decision'] !== (warning ? 'PENDING' : rule.alternateDecision) ||
+    (!warning && originFormId !== 'CHR-005' && originFormId !== 'CHR-007')
+  ) {
+    return unrecognized(`${path}.decision`, value['decision']!);
+  }
+  if (!Array.isArray(receiptIds))
+    return unrecognized(`${path}.abandonedSetReceiptIds`, receiptIds!);
+  const ids = [
+    value['characterDraftId'],
+    value['wizardCheckpointId'],
+    receiptIds[0],
+    value['decisionReceiptIdOrNull'],
+    value['commandId'],
+  ].filter((entry): entry is string => typeof entry === 'string');
+  if (new Set(ids).size !== ids.length) {
+    return unrecognized(`${path}.abandonedSetReceiptIds`, receiptIds);
+  }
+  return { ok: true, value: value as unknown as Chr028Projection };
+}
+
 function exactActionKeys(
   actual: readonly ActionKey[],
   expected: readonly ActionKey[],
@@ -1257,6 +1602,81 @@ function exactActionKeys(
   )
     return { ok: true, value: null };
   return unrecognized(path, [...actual]);
+}
+
+function expectedCreationSetDecisionActionKeys(
+  formId: CreationSetDecisionFormId,
+  projection: JsonObject,
+  executableWorkflowCommandIds: readonly WorkflowCommandId[],
+): readonly ActionKey[] {
+  if (
+    projection['decision'] !== 'PENDING' ||
+    !executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID)
+  ) {
+    return NO_ACTION_KEYS;
+  }
+  const rule = CREATION_SET_DECISION_FORMS[formId];
+  return formId === 'CHR-008' && projection['fifthAttemptMandatoryAccept'] === true
+    ? [rule.acceptActionKey]
+    : [rule.acceptActionKey, rule.alternateActionKey];
+}
+
+function decodePresentationLayers(
+  message: ProjectionSnapshotV2Message,
+  baseFormId: SupportedPresentationFormId,
+  baseProjection: JsonObject,
+  executableWorkflowCommandIds: readonly WorkflowCommandId[],
+): DecodeResult<readonly ConfirmedPresentationLayer[]> {
+  const layers = message.presentation.layers;
+  if (layers.length === 0) return { ok: true, value: [] };
+  if (!isCreationSetDecisionFormId(baseFormId) || layers.length !== 1) {
+    return unrecognized(
+      '$.presentation.layers',
+      layers.map((layer) => layer.formId),
+    );
+  }
+  if (baseFormId === 'CHR-008' && baseProjection['fifthAttemptMandatoryAccept'] === true) {
+    return unrecognized('$.presentation.layers[0].formId', layers[0]!.formId);
+  }
+  const layer = layers[0]!;
+  if (layer.formId !== 'CHR-028') {
+    return unrecognized('$.presentation.layers[0].formId', layer.formId);
+  }
+  if (layer.routeBindings.length !== 0) {
+    return unrecognized(
+      '$.presentation.layers[0].routeBindings',
+      layer.routeBindings as unknown as JsonValue,
+    );
+  }
+  const projection = decodeChr028Projection(
+    layer.roleFilteredPayload,
+    '$.presentation.layers[0].roleFilteredPayload',
+    baseFormId,
+    baseProjection,
+  );
+  if (!projection.ok) return projection;
+  const expectedActions =
+    projection.value.decision === null &&
+    executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID)
+      ? CHR_028_ACTION_KEYS
+      : NO_ACTION_KEYS;
+  const actions = exactActionKeys(
+    layer.availableActionKeys,
+    expectedActions,
+    '$.presentation.layers[0].availableActionKeys',
+  );
+  if (!actions.ok) return actions;
+  return {
+    ok: true,
+    value: [
+      {
+        availableActionKeys: [...layer.availableActionKeys],
+        formId: 'CHR-028',
+        path: '@dialog/chr-028',
+        projection: projection.value,
+      },
+    ],
+  };
 }
 
 function decodeConfirmedSnapshot(
@@ -1393,6 +1813,29 @@ function decodeConfirmedSnapshot(
         if (!actions.ok) return actions;
       }
       break;
+    case 'CHR-005':
+    case 'CHR-006':
+    case 'CHR-007':
+    case 'CHR-008':
+      projection = decodeCharacterSetDecisionProjection(
+        base.formId,
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          expectedCreationSetDecisionActionKeys(
+            base.formId,
+            projection.value,
+            executableWorkflowCommandIds,
+          ),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
     default:
       return unrecognized('$.presentation.base.formId', base.formId);
   }
@@ -1418,6 +1861,13 @@ function decodeConfirmedSnapshot(
       return unrecognized('$.presentation.base.availableActionKeys', [...base.availableActionKeys]);
     }
   }
+  const layers = decodePresentationLayers(
+    message,
+    base.formId,
+    projection.value,
+    executableWorkflowCommandIds,
+  );
+  if (!layers.ok) return layers;
   const common = {
     availableActionKeys: [...base.availableActionKeys],
     executableWorkflowCommandIds: [...executableWorkflowCommandIds],
@@ -1432,6 +1882,7 @@ function decodeConfirmedSnapshot(
     value: {
       ...common,
       formId: base.formId,
+      layers: layers.value,
       projection: projection.value,
     },
   };
@@ -1510,6 +1961,11 @@ function visibleSnapshot(
       ),
     };
   }
+  const visibleLayers = commandPending
+    ? snapshot.layers.map((layer) => ({ ...layer, availableActionKeys: NO_ACTION_KEYS }))
+    : snapshot.layers;
+  const presentation =
+    visibleLayers === snapshot.layers ? snapshot : { ...snapshot, layers: visibleLayers };
   let availableActionKeys = [...snapshot.availableActionKeys];
   if (snapshot.formId === 'CHR-003') {
     const executable =
@@ -1533,11 +1989,13 @@ function visibleSnapshot(
         (key) => key !== CHR_004_ROLL_COMMIT_ACTION_KEY,
       );
     }
+  } else if (isCreationSetDecisionFormId(snapshot.formId) && commandPending) {
+    availableActionKeys = [];
   }
   const visible =
     availableActionKeys.length === snapshot.availableActionKeys.length
-      ? snapshot
-      : { ...snapshot, availableActionKeys };
+      ? presentation
+      : { ...presentation, availableActionKeys };
   if (
     commandPending ||
     creationChoice === null ||
@@ -1550,6 +2008,27 @@ function visibleSnapshot(
     ...visible,
     availableActionKeys: [creationChoice.confirmationActionKey, ...availableActionKeys],
   };
+}
+
+function activePresentedForm(snapshot: ConfirmedProjectionSnapshot): {
+  readonly availableActionKeys: readonly ActionKey[];
+  readonly formId: SupportedPresentationFormId;
+  readonly projection: JsonObject;
+} {
+  return snapshot.layers.at(-1) ?? snapshot;
+}
+
+function sameBasePresentation(
+  left: ConfirmedProjectionSnapshot,
+  right: ConfirmedProjectionSnapshot,
+): boolean {
+  return (
+    left.formId === right.formId &&
+    left.path === right.path &&
+    left.availableActionKeys.length === right.availableActionKeys.length &&
+    left.availableActionKeys.every((key, index) => key === right.availableActionKeys[index]) &&
+    sameJson(left.projection, right.projection)
+  );
 }
 
 function decodeReconnectSnapshot(
@@ -1600,7 +2079,24 @@ function decodeFormActionSnapshot(
   ) {
     return unrecognized('$.revisions', { ...message.revisions });
   }
-  return decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+  const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+  if (!decoded.ok) return decoded;
+  if (
+    isCreationSetDecisionFormId(pending.sourceFormId) &&
+    pending.actionKey === CREATION_SET_DECISION_FORMS[pending.sourceFormId].alternateActionKey
+  ) {
+    if (
+      previous.layers.length !== 0 ||
+      decoded.value.layers.length !== 1 ||
+      !sameBasePresentation(decoded.value, previous)
+    ) {
+      return unrecognized(
+        '$.presentation.layers',
+        message.presentation.layers.map((layer) => layer.formId),
+      );
+    }
+  }
+  return decoded;
 }
 
 function decodeCheckpointTerminal(
@@ -1659,7 +2155,7 @@ function sameCheckpointReceipt(
 }
 
 function expectedSetDecisionNextForm(
-  payload: SetDecisionPayload,
+  payload: RaceMethodSetDecisionPayload,
 ): 'CHR-002' | 'CHR-003' | 'CHR-016' | 'CHR-036' {
   switch (payload.sourceFormId) {
     case 'CHR-002':
@@ -1671,6 +2167,105 @@ function expectedSetDecisionNextForm(
     case 'CHR-036':
       return 'CHR-002';
   }
+}
+
+function decodeStatRollSetDecisionTerminal(
+  receipt: CommandReceipt<JsonObject>,
+  pending: PendingSetDecision,
+  payload: StatRollAcceptSetPayload | StatRollDialogDecisionPayload,
+): DecodeResult<CommandReceipt<SetDecisionResult>> {
+  const source = pending.sourceSnapshot;
+  const active = activePresentedForm(source);
+  const durable = payload.decision !== 'CANCEL';
+  const common = {
+    branchCacheHash: (field: JsonValue) => field === EMPTY_BRANCH_CACHE_HASH,
+    branchUuid: isNonEmptyString,
+    characterDraftId: (field: JsonValue) => field === payload.characterDraftId,
+    checkpointId: (field: JsonValue) => field === payload.wizardCheckpointId,
+    checkpointOwnerId: (field: JsonValue) => field === payload.characterDraftId,
+    checkpointRevision: (field: JsonValue) => isSafeIntegerAtLeast(field, 1),
+    draftRevision: (field: JsonValue) => field === payload.draftRevision + (durable ? 1 : 0),
+    sourceFormId: (field: JsonValue) => field === payload.sourceFormId,
+    stage: (field: JsonValue) => field === 'STAT_ROLLS',
+  };
+  let decoded: DecodeResult<JsonObject>;
+  if (payload.sourceFormId !== 'CHR-028') {
+    if (active.formId !== payload.sourceFormId || source.layers.length !== 0) {
+      return unrecognized('$.receipt.result.sourceFormId', payload.sourceFormId);
+    }
+    const rule = CREATION_SET_DECISION_FORMS[payload.sourceFormId];
+    decoded = decodeProjection(receipt.result, '$.receipt.result', {
+      ...common,
+      acceptedSetReceiptId: (field) => field === source.projection[rule.receiptKey],
+      assignmentMode: (field) => field === 'ROLLED_BIJECTION',
+      decision: (field) => field === 'ACCEPT_SET',
+      nextFormId: (field) => field === 'CHR-009',
+    });
+  } else {
+    if (active.formId !== 'CHR-028' || source.layers.length !== 1) {
+      return unrecognized('$.receipt.result.sourceFormId', payload.sourceFormId);
+    }
+    const dialog = active.projection as Chr028Projection;
+    const originRule = CREATION_SET_DECISION_FORMS[dialog.originDecisionFormId];
+    if (payload.decision === 'CANCEL') {
+      decoded = decodeProjection(receipt.result, '$.receipt.result', {
+        ...common,
+        decision: (field) => field === 'CANCEL',
+        decisionReceiptIdOrNull: (field) => field === null,
+        nextFormId: (field) => field === dialog.originDecisionFormId,
+        originDecisionFormId: (field) => field === dialog.originDecisionFormId,
+      });
+    } else {
+      const pointBuy = dialog.irreversibleConsequences.exactPointBuyTotalOrNull;
+      const nextAttempt = dialog.irreversibleConsequences.nextAttemptIndexOrNull;
+      decoded = decodeProjection(receipt.result, '$.receipt.result', {
+        ...common,
+        abandonedSetReceiptIds: (field) => sameJson(field, dialog.abandonedSetReceiptIds),
+        alternateDecision: (field) => field === originRule.alternateDecision,
+        assignmentModeOrNull: (field) =>
+          field === (pointBuy === 90 ? 'POINT_BUY_90' : pointBuy === 85 ? 'POINT_BUY_85' : null),
+        decision: (field) => field === 'CONFIRM',
+        irreversibleConsequences: (field) => sameJson(field, dialog.irreversibleConsequences),
+        nextAttemptIndexOrNull: (field) => field === nextAttempt,
+        nextFormId: (field) => field === (nextAttempt === null ? 'CHR-009' : 'CHR-003'),
+        nextSetRollRequestIdOrNull: (field) =>
+          nextAttempt === null ? field === null : isNonEmptyString(field),
+        originDecisionFormId: (field) => field === dialog.originDecisionFormId,
+        sourceSetReceiptIdOrNull: (field) => field === null,
+        transitionKind: (field) => field === dialog.transitionKind,
+      });
+    }
+  }
+  if (!decoded.ok) return decoded;
+  const sourceSetReceiptIds =
+    payload.decision === 'CANCEL'
+      ? (active.projection as Chr028Projection).abandonedSetReceiptIds
+      : [];
+  const resultIds = [
+    payload.characterDraftId,
+    payload.wizardCheckpointId,
+    pending.request.commandId,
+    receipt.receiptId,
+    receipt.result['branchUuid'],
+    receipt.result['acceptedSetReceiptId'],
+    receipt.result['nextSetRollRequestIdOrNull'],
+    ...(Array.isArray(receipt.result['abandonedSetReceiptIds'])
+      ? (receipt.result['abandonedSetReceiptIds'] as readonly JsonValue[])
+      : []),
+    ...sourceSetReceiptIds,
+  ].filter((entry): entry is string => typeof entry === 'string');
+  if (new Set(resultIds).size !== resultIds.length) {
+    return unrecognized('$.receipt.result.branchUuid', receipt.result['branchUuid']!);
+  }
+  const expected = pending.request.expectedRevisions;
+  if (
+    receipt.revisions.stateRevision !== expected.stateRevision + (durable ? 1 : 0) ||
+    receipt.revisions.projectionRevision !== expected.projectionRevision + (durable ? 1 : 0) ||
+    receipt.revisions.actorVisibilityRevision !== expected.actorVisibilityRevision
+  ) {
+    return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+  }
+  return { ok: true, value: receipt as CommandReceipt<SetDecisionResult> };
 }
 
 function decodeSetDecisionTerminal(
@@ -1688,6 +2283,9 @@ function decodeSetDecisionTerminal(
     return unrecognized('$.receipt.receiptId', receipt.receiptId);
   }
   const payload = pending.request.payload;
+  if (payload.stage === 'STAT_ROLLS') {
+    return decodeStatRollSetDecisionTerminal(receipt, pending, payload);
+  }
   const expectedNextForm = expectedSetDecisionNextForm(payload);
   const common = {
     branchCacheHash: (field: JsonValue) => field === EMPTY_BRANCH_CACHE_HASH,
@@ -1761,19 +2359,7 @@ function sameSetDecisionReceipt(
   left: CommandReceipt<SetDecisionResult>,
   right: CommandReceipt<SetDecisionResult>,
 ): boolean {
-  const leftKeys = Object.keys(left.result).sort();
-  const rightKeys = Object.keys(right.result).sort();
-  return (
-    left.commandId === right.commandId &&
-    left.receiptId === right.receiptId &&
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) => key === rightKeys[index] && left.result[key] === right.result[key],
-    ) &&
-    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
-      (axis) => left.revisions[axis] === right.revisions[axis],
-    )
-  );
+  return sameJson(left as unknown as JsonValue, right as unknown as JsonValue);
 }
 
 function decodeCreationCriticalOutcome(
@@ -1970,7 +2556,86 @@ function checkpointSnapshotMatchesReceipt(
 function setDecisionSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<SetDecisionResult>,
+  source: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (receipt.result.stage === 'STAT_ROLLS') {
+    const result = receipt.result;
+    const projection = snapshot.projection;
+    const exactReceiptRevisions = (projectionOffset: number) =>
+      snapshot.revisions.actorVisibilityRevision === receipt.revisions.actorVisibilityRevision &&
+      snapshot.revisions.projectionRevision ===
+        receipt.revisions.projectionRevision + projectionOffset &&
+      snapshot.revisions.stateRevision === receipt.revisions.stateRevision;
+    if (result.decision === 'CANCEL') {
+      if (
+        snapshot.formId !== result.originDecisionFormId ||
+        snapshot.layers.length !== 0 ||
+        !sameBasePresentation(snapshot, source) ||
+        !exactReceiptRevisions(1)
+      ) {
+        return unrecognized('$.presentation.base.formId', snapshot.formId);
+      }
+      return { ok: true, value: snapshot };
+    }
+    if (!exactReceiptRevisions(0)) {
+      return unrecognized('$.revisions', { ...snapshot.revisions });
+    }
+    if (
+      projection['characterDraftId'] !== result.characterDraftId ||
+      projection['wizardCheckpointId'] !== result.checkpointId ||
+      projection['draftRevision'] !== result.draftRevision
+    ) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.draftRevision',
+        projection['draftRevision']!,
+      );
+    }
+    if (result.decision === 'ACCEPT_SET') {
+      const rule = CREATION_SET_DECISION_FORMS[result.sourceFormId];
+      if (
+        snapshot.formId !== result.sourceFormId ||
+        snapshot.layers.length !== 0 ||
+        projection[rule.receiptKey] !== result.acceptedSetReceiptId ||
+        projection['attemptIndex'] !== source.projection['attemptIndex'] ||
+        projection['decision'] !== 'ACCEPT_SET' ||
+        projection['decisionReceiptIdOrNull'] !== receipt.receiptId ||
+        projection['commandId'] !== receipt.commandId
+      ) {
+        return unrecognized('$.presentation.base.formId', snapshot.formId);
+      }
+      return { ok: true, value: snapshot };
+    }
+    if (result.nextFormId === 'CHR-003') {
+      if (
+        snapshot.formId !== 'CHR-003' ||
+        snapshot.layers.length !== 0 ||
+        projection['branchUuid'] !== result.branchUuid ||
+        projection['attemptIndex'] !== result.nextAttemptIndexOrNull ||
+        projection['setRollRequestId'] !== result.nextSetRollRequestIdOrNull
+      ) {
+        return unrecognized('$.presentation.base.formId', snapshot.formId);
+      }
+      return { ok: true, value: snapshot };
+    }
+    const layer = snapshot.layers[0];
+    const rule = CREATION_SET_DECISION_FORMS[result.originDecisionFormId];
+    if (
+      snapshot.formId !== result.originDecisionFormId ||
+      snapshot.layers.length !== 1 ||
+      layer === undefined ||
+      layer.projection.decision !== 'CONFIRM' ||
+      layer.projection.decisionReceiptIdOrNull !== receipt.receiptId ||
+      layer.projection.commandId !== receipt.commandId ||
+      projection[rule.receiptKey] !== result.abandonedSetReceiptIds[0] ||
+      projection['attemptIndex'] !== source.projection['attemptIndex'] ||
+      projection['decision'] !== result.alternateDecision ||
+      projection['decisionReceiptIdOrNull'] !== receipt.receiptId ||
+      projection['commandId'] !== receipt.commandId
+    ) {
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+    return { ok: true, value: snapshot };
+  }
   let advance: number | null = null;
   switch (receipt.result.sourceFormId) {
     case 'CHR-010':
@@ -2052,6 +2717,34 @@ function setDecisionSnapshotMatchesReceipt(
         return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]!);
       }
     }
+  }
+  return { ok: true, value: snapshot };
+}
+
+function reconnectSnapshotMatchesUnjournaledCancel(
+  snapshot: ConfirmedProjectionSnapshot,
+  pending: PendingSetDecision,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const payload = pending.request.payload;
+  const source = pending.sourceSnapshot;
+  const dialog = source.layers[0];
+  if (
+    payload.stage !== 'STAT_ROLLS' ||
+    payload.decision !== 'CANCEL' ||
+    source.layers.length !== 1 ||
+    dialog === undefined ||
+    snapshot.formId !== dialog.projection.originDecisionFormId ||
+    snapshot.layers.length !== 0 ||
+    !sameBasePresentation(snapshot, source)
+  ) {
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  }
+  if (
+    snapshot.revisions.actorVisibilityRevision !== source.revisions.actorVisibilityRevision ||
+    snapshot.revisions.stateRevision !== source.revisions.stateRevision ||
+    snapshot.revisions.projectionRevision < source.revisions.projectionRevision
+  ) {
+    return unrecognized('$.revisions', { ...snapshot.revisions });
   }
   return { ok: true, value: snapshot };
 }
@@ -2203,7 +2896,9 @@ function decodeSetDecisionDestinationSnapshot(
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
-  return decoded.ok ? setDecisionSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
+  return decoded.ok
+    ? setDecisionSnapshotMatchesReceipt(decoded.value, pending.receipt, previous)
+    : decoded;
 }
 
 function decodeRollCommitDestinationSnapshot(
@@ -2352,6 +3047,32 @@ function setDecisionPayload(
     case 'CHR-002':
       return { ...common, sourceFormId: choice.formId, statMethod: choice.value };
   }
+}
+
+function statRollSetDecisionPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+  actionKey: ActionKey,
+): StatRollAcceptSetPayload | StatRollDialogDecisionPayload | null {
+  const active = activePresentedForm(snapshot);
+  const common = {
+    characterDraftId: active.projection['characterDraftId'] as string,
+    draftRevision: active.projection['draftRevision'] as number,
+    stage: 'STAT_ROLLS',
+    wizardCheckpointId: active.projection['wizardCheckpointId'] as string,
+  } as const;
+  if (isCreationSetDecisionFormId(active.formId)) {
+    const rule = CREATION_SET_DECISION_FORMS[active.formId];
+    return actionKey === rule.acceptActionKey
+      ? { ...common, decision: 'ACCEPT_SET', sourceFormId: active.formId }
+      : null;
+  }
+  if (active.formId !== 'CHR-028') return null;
+  if (actionKey === 'CHR-028::CTA::001') {
+    return { ...common, decision: 'CONFIRM', sourceFormId: 'CHR-028' };
+  }
+  return actionKey === 'CHR-028::CTA::002'
+    ? { ...common, decision: 'CANCEL', sourceFormId: 'CHR-028' }
+    : null;
 }
 
 function rollCommitPayload(
@@ -2877,11 +3598,15 @@ export function connectProjection(
             }
           } else if (snapshot.ok && pendingSetDecision !== null) {
             if (pendingSetDecision.receipt === null) {
-              snapshot = unrecognized('$.messageType', message.messageType);
+              snapshot = reconnectSnapshotMatchesUnjournaledCancel(
+                snapshot.value,
+                pendingSetDecision,
+              );
             } else {
               snapshot = setDecisionSnapshotMatchesReceipt(
                 snapshot.value,
                 pendingSetDecision.receipt,
+                pendingSetDecision.sourceSnapshot,
               );
             }
           } else if (snapshot.ok && pendingRollCommit !== null) {
@@ -3206,15 +3931,15 @@ export function connectProjection(
       if (commandPending()) {
         return { ok: false, detail: 'a wizard command is awaiting host delivery' };
       }
-      if (
-        !visibleSnapshot(
-          lastSnapshot,
-          identity,
-          commandPending(),
-          creationChoiceDraft,
-          creationRollDraft,
-        ).availableActionKeys.includes(actionKey)
-      ) {
+      const visible = visibleSnapshot(
+        lastSnapshot,
+        identity,
+        false,
+        creationChoiceDraft,
+        creationRollDraft,
+      );
+      const activeForm = activePresentedForm(visible);
+      if (!activeForm.availableActionKeys.includes(actionKey)) {
         return {
           ok: false,
           detail: `action ${JSON.stringify(actionKey)} is absent from the confirmed availableActionKeys`,
@@ -3224,7 +3949,7 @@ export function connectProjection(
         return { ok: false, detail: 'WebSocket is not open' };
       }
       const selectedChoice = CHARACTER_CREATION_SELECTOR_CHOICES.get(actionKey);
-      if (selectedChoice !== undefined && selectedChoice.formId === lastSnapshot.formId) {
+      if (selectedChoice !== undefined && selectedChoice.formId === activeForm.formId) {
         creationChoiceDraft = selectedChoice;
         onCreationChoiceDraft(creationChoiceDraft);
         onState({
@@ -3239,7 +3964,7 @@ export function connectProjection(
         });
         return { ok: true };
       }
-      if (lastSnapshot.formId === 'CHR-001' && actionKey === IDENTITY_CHECKPOINT_ACTION_KEY) {
+      if (activeForm.formId === 'CHR-001' && actionKey === IDENTITY_CHECKPOINT_ACTION_KEY) {
         const request = {
           commandId: createRequestId('command'),
           commandKind: 'workflow-command',
@@ -3281,7 +4006,7 @@ export function connectProjection(
       }
       if (
         creationChoiceDraft !== null &&
-        creationChoiceDraft.formId === lastSnapshot.formId &&
+        creationChoiceDraft.formId === activeForm.formId &&
         creationChoiceDraft.confirmationActionKey === actionKey
       ) {
         const request = {
@@ -3301,7 +4026,58 @@ export function connectProjection(
             detail: `SET-DECIDE failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
           };
         }
-        pendingSetDecision = { choice: creationChoiceDraft, receipt: null, request };
+        pendingSetDecision = {
+          choice: creationChoiceDraft,
+          receipt: null,
+          request,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingSetDecision = null;
+          return {
+            ok: false,
+            detail: `SET-DECIDE could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      const statRollDecision = statRollSetDecisionPayload(lastSnapshot, actionKey);
+      if (statRollDecision !== null) {
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload: statRollDecision,
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+        } as const satisfies SetDecisionRequest;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `SET-DECIDE failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingSetDecision = {
+          choice: null,
+          receipt: null,
+          request,
+          sourceSnapshot: lastSnapshot,
+        };
         try {
           socket.send(encoded.text);
         } catch (error: unknown) {
@@ -3324,8 +4100,8 @@ export function connectProjection(
         return { ok: true };
       }
       if (
-        (lastSnapshot.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
-        (lastSnapshot.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY)
+        (activeForm.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
+        (activeForm.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY)
       ) {
         let request: RollCommitRequest;
         try {
@@ -3379,7 +4155,7 @@ export function connectProjection(
         messageType: 'navigation.form-action',
         navigationRequestId: createRequestId('navigation'),
         protocolVersion: WIRE_PROTOCOL_V2_VERSION,
-        sourceFormId: lastSnapshot.formId,
+        sourceFormId: activeForm.formId,
       } as const satisfies FormActionIntentV2Message;
       const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
       if (!encoded.ok) {

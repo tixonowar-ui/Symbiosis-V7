@@ -19,6 +19,7 @@ import type {
 } from '@shared/wire-protocol.js';
 
 import {
+  currentStatRollAttempt,
   loadCreationWizardCheckpoint,
   validateDurableCreationWizardCheckpoint,
   type CreationCriticalOutcome,
@@ -29,6 +30,7 @@ import {
   type CriticalConfirmationRollRecord,
   type DurableCreationWizardCheckpoint,
   type StatRollStage,
+  type StatRollAttempt,
   type StatSetRollRecord,
 } from './creation-set-decide.js';
 import { EMPTY_IDENTITY_BRANCH_CACHE_HASH } from './identity-checkpoint.js';
@@ -264,11 +266,11 @@ const incrementedRevisions = (revisions: RevisionVector): RevisionVector => {
 
 const allRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   ...(checkpoint.raceAndMethodStage?.decisionRecords ?? []),
-  ...(checkpoint.statRollStage?.setRecord === null ||
-  checkpoint.statRollStage?.setRecord === undefined
-    ? []
-    : [checkpoint.statRollStage.setRecord]),
-  ...(checkpoint.statRollStage?.confirmationRecords ?? []),
+  ...(checkpoint.statRollStage?.attempts.flatMap((attempt) => [
+    ...(attempt.setRecord === null ? [] : [attempt.setRecord]),
+    ...attempt.confirmationRecords,
+    ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
+  ]) ?? []),
 ];
 
 const durableIds = (checkpoint: DurableCreationWizardCheckpoint): ReadonlySet<string> =>
@@ -279,17 +281,21 @@ const durableIds = (checkpoint: DurableCreationWizardCheckpoint): ReadonlySet<st
       checkpoint.identityStage.request.commandId,
       checkpoint.identityStage.receipt.receiptId,
       checkpoint.statRollStage?.branchUuid,
-      checkpoint.statRollStage?.setRollRequestId,
-      checkpoint.statRollStage?.setRecord?.receipt.receiptId,
-      checkpoint.statRollStage?.confirmationRollRequestIdOrNull,
+      ...(checkpoint.statRollStage?.attempts.flatMap((attempt) => [
+        attempt.setRollRequestId,
+        attempt.setRecord?.receipt.receiptId,
+        attempt.confirmationRollRequestIdOrNull,
+      ]) ?? []),
       ...allRecords(checkpoint).flatMap(({ request, receipt }) => [
         request.commandId,
         receipt.receiptId,
       ]),
-      ...(checkpoint.statRollStage?.confirmationRecords.flatMap(({ receipt }) => [
-        receipt.result.confirmationRollRequestId,
-        receipt.result.nextConfirmationRollRequestIdOrNull,
-      ]) ?? []),
+      ...(checkpoint.statRollStage?.attempts.flatMap((attempt) =>
+        attempt.confirmationRecords.flatMap(({ receipt }) => [
+          receipt.result.confirmationRollRequestId,
+          receipt.result.nextConfirmationRollRequestIdOrNull,
+        ]),
+      ) ?? []),
     ].filter((id): id is string => typeof id === 'string' && id.length > 0),
   );
 
@@ -297,7 +303,7 @@ const assertCommitAllowed = (
   checkpoint: DurableCreationWizardCheckpoint,
   request: CreationRollCommitCommandRequest,
   receiptId?: string,
-): StatRollStage => {
+): { readonly attempt: StatRollAttempt; readonly stage: StatRollStage } => {
   const previous = [
     { request: checkpoint.identityStage.request, receipt: checkpoint.identityStage.receipt },
     ...allRecords(checkpoint),
@@ -322,9 +328,11 @@ const assertCommitAllowed = (
     });
   }
   const stage = checkpoint.statRollStage;
+  const attempt = stage === null ? null : currentStatRollAttempt(stage);
   const occupied = durableIds(checkpoint);
   if (
     stage === null ||
+    attempt === null ||
     request.payload.characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     request.payload.wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
     request.payload.draftRevision !== checkpoint.receipt.result.draftRevision ||
@@ -344,23 +352,23 @@ const assertCommitAllowed = (
   if ((stage.diceInputModeSnapshot === 'AUTO') !== (manual === null)) return guardRejected();
   if (request.payload.sourceFormId === 'CHR-003') {
     if (
-      stage.state !== 'REQUEST_READY' ||
-      stage.setRecord !== null ||
-      request.payload.setRollRequestId !== stage.setRollRequestId
+      attempt.state !== 'REQUEST_READY' ||
+      attempt.setRecord !== null ||
+      request.payload.setRollRequestId !== attempt.setRollRequestId
     ) {
       return guardRejected();
     }
   } else if (
-    stage.state !== 'CRITICALS_PENDING' ||
-    stage.setRecord === null ||
-    request.payload.setRollReceiptId !== stage.setRecord.receipt.receiptId ||
-    request.payload.criticalQueueIndex !== stage.criticalQueueIndexOrNull ||
-    request.payload.confirmationRollRequestId !== stage.confirmationRollRequestIdOrNull
+    attempt.state !== 'CRITICALS_PENDING' ||
+    attempt.setRecord === null ||
+    request.payload.setRollReceiptId !== attempt.setRecord.receipt.receiptId ||
+    request.payload.criticalQueueIndex !== attempt.criticalQueueIndexOrNull ||
+    request.payload.confirmationRollRequestId !== attempt.confirmationRollRequestIdOrNull
   ) {
     return guardRejected();
   }
   incrementedRevisions(actual);
-  return stage;
+  return { attempt, stage };
 };
 
 const allocatedRequestId = (
@@ -383,21 +391,21 @@ const sampledFace = (sample: () => number): number => {
   return face;
 };
 
-const nextEnvelope = (
-  formId: 'CHR-003' | 'CHR-004',
+const nextEnvelope = <TFormId extends 'CHR-004' | 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008'>(
+  formId: TFormId,
   characterDraftId: string,
-): CreationNextStageEnvelope<'CHR-003' | 'CHR-004'> => ({
+): CreationNextStageEnvelope<TFormId> => ({
   formId,
   routeBindings: [{ parameterIndex: 0, source: 'inherited', value: characterDraftId }],
 });
 
-const currentChain = (stage: StatRollStage): CreationStatCriticalChainState => {
-  const index = stage.criticalQueueIndexOrNull;
+const currentChain = (attempt: StatRollAttempt): CreationStatCriticalChainState => {
+  const index = attempt.criticalQueueIndexOrNull;
   if (index === null) return guardRejected();
   let chain = createCreationCriticalChain(
-    stage.naturalCriticalQueue[index]! as Parameters<typeof createCreationCriticalChain>[0],
+    attempt.naturalCriticalQueue[index]! as Parameters<typeof createCreationCriticalChain>[0],
   );
-  for (const record of stage.confirmationRecords) {
+  for (const record of attempt.confirmationRecords) {
     if (record.receipt.result.criticalQueueIndex === index) {
       chain = commitCreationCriticalConfirmation(chain, {
         dieSides: 20,
@@ -433,12 +441,6 @@ export function commitCreationRoll(
   const normalized = normalizeCreationRollCommitRequest(request);
   const preflight = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
   assertCommitAllowed(preflight, normalized, receiptId);
-  const candidateRequestId = allocatedRequestId(
-    preflight,
-    normalized,
-    receiptId,
-    dependencies.allocateRollRequestId,
-  );
   const committed = commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
@@ -448,10 +450,12 @@ export function commitCreationRoll(
         database,
         normalized.payload.characterDraftId,
       );
-      const stage = assertCommitAllowed(checkpoint, normalized, receiptId);
+      const { attempt, stage } = assertCommitAllowed(checkpoint, normalized, receiptId);
       const revisions = incrementedRevisions(currentRevisions(checkpoint));
       const checkpointRevision = checkpoint.checkpoint.checkpointRevision + 1;
       const draftRevision = checkpoint.receipt.result.draftRevision + 1;
+      const allocateNextRequest = (): string =>
+        allocatedRequestId(checkpoint, normalized, receiptId, dependencies.allocateRollRequestId);
       const manual =
         normalized.payload.sourceFormId === 'CHR-003'
           ? normalized.payload.manualFacesOrNull
@@ -462,9 +466,11 @@ export function commitCreationRoll(
           : typeof manual === 'number'
             ? manual
             : manual[index]!;
-      let nextStage: StatRollStage;
+      let nextAttempt: StatRollAttempt;
       let receipt: CreationRollCommitReceipt;
-      let destination: CreationNextStageEnvelope<'CHR-003' | 'CHR-004'>;
+      let destination: CreationNextStageEnvelope<
+        'CHR-004' | 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008'
+      >;
       if (normalized.payload.sourceFormId === 'CHR-003') {
         const set = resolveCreationStatSet(
           Array.from({ length: 7 }, (_, index) => ({ dieSides: 20, rawFace: takeFace(index) })),
@@ -474,9 +480,9 @@ export function commitCreationRoll(
           originFace,
           setEntryIndex,
         }));
-        const confirmationRollRequestIdOrNull = queue.length === 0 ? null : candidateRequestId;
+        const confirmationRollRequestIdOrNull = queue.length === 0 ? null : allocateNextRequest();
         const setDestination = nextEnvelope(
-          queue.length === 0 ? 'CHR-003' : 'CHR-004',
+          queue.length === 0 ? attempt.returnDecisionFormId : 'CHR-004',
           normalized.payload.characterDraftId,
         );
         destination = setDestination;
@@ -498,14 +504,14 @@ export function commitCreationRoll(
             naturalCriticalQueue: queue,
             nextFormId: setDestination.formId,
             setRollReceiptId: receiptId,
-            setRollRequestId: stage.setRollRequestId,
+            setRollRequestId: attempt.setRollRequestId,
             shownResultLocked: true,
             sourceFormId: 'CHR-003',
             stage: 'STAT_ROLLS',
           },
         };
-        nextStage = {
-          ...stage,
+        nextAttempt = {
+          ...attempt,
           confirmationRollRequestIdOrNull,
           criticalQueueIndexOrNull: queue.length === 0 ? null : 0,
           naturalCriticalQueue: queue,
@@ -517,11 +523,11 @@ export function commitCreationRoll(
           state: queue.length === 0 ? 'DECISION_READY' : 'CRITICALS_PENDING',
         };
       } else {
-        const setRecord = stage.setRecord!;
-        const index = stage.criticalQueueIndexOrNull!;
-        const item = stage.naturalCriticalQueue[index]!;
+        const setRecord = attempt.setRecord!;
+        const index = attempt.criticalQueueIndexOrNull!;
+        const item = attempt.naturalCriticalQueue[index]!;
         const face = takeFace();
-        const chain = commitCreationCriticalConfirmation(currentChain(stage), {
+        const chain = commitCreationCriticalConfirmation(currentChain(attempt), {
           dieSides: 20,
           rawFace: face,
         });
@@ -530,14 +536,14 @@ export function commitCreationRoll(
         const nextIndex =
           outcome === null
             ? index
-            : index + 1 < stage.naturalCriticalQueue.length
+            : index + 1 < attempt.naturalCriticalQueue.length
               ? index + 1
               : null;
-        const nextRequest = nextIndex === null ? null : candidateRequestId;
+        const nextRequest = nextIndex === null ? null : allocateNextRequest();
         const confirmationDestination = nextEnvelope(
-          'CHR-004',
+          nextIndex === null ? attempt.returnDecisionFormId : 'CHR-004',
           normalized.payload.characterDraftId,
-        ) as CreationNextStageEnvelope<'CHR-004'>;
+        );
         destination = confirmationDestination;
         receipt = {
           commandId: normalized.commandId,
@@ -556,19 +562,19 @@ export function commitCreationRoll(
             criticalQueueIndex: index,
             draftRevision,
             nextConfirmationRollRequestIdOrNull: nextRequest,
-            nextFormId: 'CHR-004',
+            nextFormId: confirmationDestination.formId,
             originFace: item.originFace,
             outcomeOrNull: outcome,
-            returnDecisionFormId: stage.returnDecisionFormId,
+            returnDecisionFormId: attempt.returnDecisionFormId,
             setRollReceiptId: setRecord.receipt.receiptId,
             sourceFormId: 'CHR-004',
             stage: 'STAT_ROLLS',
           },
         };
-        nextStage = {
-          ...stage,
+        nextAttempt = {
+          ...attempt,
           confirmationRecords: [
-            ...stage.confirmationRecords,
+            ...attempt.confirmationRecords,
             {
               nextStageEnvelope: confirmationDestination,
               receipt: receipt as CriticalConfirmationRollRecord['receipt'],
@@ -577,7 +583,7 @@ export function commitCreationRoll(
           ],
           confirmationRollRequestIdOrNull: nextRequest,
           criticalQueueIndexOrNull: nextIndex ?? index,
-          outcomes: outcome === null ? stage.outcomes : [...stage.outcomes, outcome],
+          outcomes: outcome === null ? attempt.outcomes : [...attempt.outcomes, outcome],
           state: nextIndex === null ? 'CHAIN_COMPLETE' : 'CRITICALS_PENDING',
         };
       }
@@ -602,7 +608,12 @@ export function commitCreationRoll(
             : checkpoint.durablePayload.randomReceiptIds,
         receipt,
         selectedBranchUuidOrNull: null,
-        statRollStage: nextStage,
+        statRollStage: {
+          ...stage,
+          attempts: stage.attempts.map((stored) =>
+            stored.attemptIndex === attempt.attemptIndex ? nextAttempt : stored,
+          ),
+        },
       };
       return update(
         { payloadJson: JSON.stringify(payload) },

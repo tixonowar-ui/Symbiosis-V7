@@ -10,8 +10,10 @@ import type {
   App001Projection,
   CharacterCreationChoiceDraft,
   CharacterCreationRollDraft,
+  CharacterSetDecisionProjection,
   Chr003Projection,
   Chr004Projection,
+  ConfirmedPresentationLayer,
   ConfirmedProjectionSnapshot,
   FormActionRequestResult,
   IdentityDraftClientState,
@@ -510,6 +512,81 @@ function CharacterCreationRollFields({
   );
 }
 
+function CharacterSetDecisionFields({
+  snapshot,
+}: {
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (
+    snapshot.formId !== 'CHR-005' &&
+    snapshot.formId !== 'CHR-006' &&
+    snapshot.formId !== 'CHR-007' &&
+    snapshot.formId !== 'CHR-008'
+  ) {
+    return null;
+  }
+  const projection = snapshot.projection as CharacterSetDecisionProjection;
+  const setReceiptId = projection.acceptedSetReceiptId ?? projection.setReceiptId;
+  return (
+    <section
+      aria-labelledby="character-set-decision-title"
+      data-character-set-decision={projection.decision}
+      data-character-set-decision-form={snapshot.formId}
+    >
+      <h2 id="character-set-decision-title">Зафиксированный набор</h2>
+      <dl>
+        <dt>statMethod</dt>
+        <dd>{projection.statMethod}</dd>
+        {projection.attemptIndex === undefined ? null : (
+          <>
+            <dt>attemptIndex</dt>
+            <dd>{projection.attemptIndex}</dd>
+          </>
+        )}
+        <dt>setReceiptId</dt>
+        <dd data-character-set-receipt>{setReceiptId}</dd>
+        <dt>decision</dt>
+        <dd>{projection.decision}</dd>
+      </dl>
+      {projection.fifthAttemptMandatoryAccept === true ? (
+        <p data-fifth-attempt-mandatory-accept>Пятая попытка допускает только принятие.</p>
+      ) : null}
+    </section>
+  );
+}
+
+function AbandonmentDialogFields({
+  layer,
+}: {
+  readonly layer: ConfirmedPresentationLayer;
+}): ReactElement {
+  const projection = layer.projection;
+  return (
+    <section
+      aria-labelledby="chr-028-warning-title"
+      data-chr-028-decision={projection.decision ?? 'WARNING'}
+    >
+      <h2 id="chr-028-warning-title">
+        {projection.decision === null ? 'Необратимый отказ от набора' : 'Отказ подтверждён'}
+      </h2>
+      <dl>
+        <dt>originDecisionFormId</dt>
+        <dd>{projection.originDecisionFormId}</dd>
+        <dt>transitionKind</dt>
+        <dd>{projection.transitionKind}</dd>
+        <dt>abandonedSetReceiptIds</dt>
+        <dd>
+          <pre>{JSON.stringify(projection.abandonedSetReceiptIds, null, 2)}</pre>
+        </dd>
+        <dt>irreversibleConsequences</dt>
+        <dd>
+          <pre>{JSON.stringify(projection.irreversibleConsequences, null, 2)}</pre>
+        </dd>
+      </dl>
+    </section>
+  );
+}
+
 export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
@@ -551,6 +628,7 @@ export function App(): ReactElement {
           (actionKey) => actionKey !== CHR_001_CHECKPOINT_ACTION_KEY,
         )
       : snapshot?.availableActionKeys;
+  const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
     creationChoiceDraft?.formId === snapshot?.formId ? creationChoiceDraft : null;
   return (
@@ -567,7 +645,7 @@ export function App(): ReactElement {
       ) : (
         <>
           <HostProjection snapshot={snapshot} />
-          <fieldset disabled={!interactive}>
+          <fieldset disabled={!interactive || layers.length > 0}>
             <legend>AtlasForm {snapshot.formId}</legend>
             {snapshot.formId === 'CHR-001' && identityDraft !== null ? (
               <IdentityFields
@@ -628,6 +706,7 @@ export function App(): ReactElement {
                 );
               }}
             />
+            <CharacterSetDecisionFields snapshot={snapshot} />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}
@@ -649,6 +728,25 @@ export function App(): ReactElement {
               }}
             />
           </fieldset>
+          {layers.map((layer) => (
+            <fieldset key={layer.formId} disabled={!interactive} data-presentation-layer>
+              <legend>AtlasForm {layer.formId}</legend>
+              <AtlasForm
+                availableActionKeys={layer.availableActionKeys}
+                formId={layer.formId}
+                projectionContent={<AbandonmentDialogFields layer={layer} />}
+                onAction={(selection) => {
+                  const connection = connectionRef.current;
+                  if (connection === null) {
+                    setActionNotice('Переход не отправлен: соединение ещё не готово.');
+                    return;
+                  }
+                  const result = connection.requestFormAction(selection.actionKey);
+                  setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
+                }}
+              />
+            </fieldset>
+          ))}
           {actionNotice === null ? null : <p role="status">{actionNotice}</p>}
         </>
       )}

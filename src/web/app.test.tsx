@@ -490,6 +490,137 @@ const chr004Base = (
   routeTemplate: '/player/characters/:localCharacterId/create/chr-004',
 });
 
+type DecisionFormId = 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+const SET_DECISION_RULES = {
+  'CHR-005': {
+    alternateDecision: 'USE_POINT_BUY_90',
+    attemptIndex: 1,
+    method: 'CLASSIC',
+    receiptField: 'acceptedSetReceiptId',
+    transitionKind: 'CLASSIC_TO_90',
+  },
+  'CHR-006': {
+    alternateDecision: 'GO_ATTEMPT_2',
+    attemptIndex: 1,
+    method: 'ADVENTUROUS',
+    receiptField: 'setReceiptId',
+    transitionKind: 'ADVENTUROUS_TO_SECOND',
+  },
+  'CHR-007': {
+    alternateDecision: 'USE_POINT_BUY_85',
+    attemptIndex: 2,
+    method: 'ADVENTUROUS',
+    receiptField: 'setReceiptId',
+    transitionKind: 'ADVENTUROUS_TO_85',
+  },
+  'CHR-008': {
+    alternateDecision: 'GO_NEXT_ATTEMPT',
+    attemptIndex: 1,
+    method: 'ALL_OR_NOTHING',
+    receiptField: 'setReceiptId',
+    transitionKind: 'ALL_OR_NOTHING_NEXT',
+  },
+} as const;
+const DECISION_SET_RECEIPT_ID = 'decision-set-receipt-current';
+
+function setDecisionProjection(
+  formId: DecisionFormId,
+  {
+    attemptIndex = SET_DECISION_RULES[formId].attemptIndex,
+    commandId = null,
+    decision = 'PENDING',
+    decisionReceiptIdOrNull = null,
+    draftRevision = 6,
+  }: {
+    readonly attemptIndex?: number;
+    readonly commandId?: string | null;
+    readonly decision?: string;
+    readonly decisionReceiptIdOrNull?: string | null;
+    readonly draftRevision?: number;
+  } = {},
+): ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] {
+  const rule = SET_DECISION_RULES[formId];
+  return {
+    ...(formId === 'CHR-005' ? {} : { attemptIndex }),
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId,
+    decision,
+    decisionReceiptIdOrNull,
+    draftRevision,
+    ...(formId === 'CHR-008' ? { fifthAttemptMandatoryAccept: attemptIndex === 5 } : {}),
+    [rule.receiptField]: DECISION_SET_RECEIPT_ID,
+    statMethod: rule.method,
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function setDecisionBase(
+  formId: DecisionFormId,
+  projection = setDecisionProjection(formId),
+): ProjectionSnapshotV2Message['presentation']['base'] {
+  const mandatory = projection['fifthAttemptMandatoryAccept'] === true;
+  const pending = projection['decision'] === 'PENDING';
+  return {
+    availableActionKeys: pending
+      ? mandatory
+        ? [`${formId}::CTA::001`]
+        : [`${formId}::CTA::001`, `${formId}::CTA::002`]
+      : [],
+    formId,
+    formType: 'screen',
+    roleFilteredPayload: projection,
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`,
+  };
+}
+
+function abandonmentConsequences(formId: DecisionFormId, attemptIndex: number) {
+  return {
+    creationCriticalConsequencesDiscarded: true,
+    exactPointBuyTotalOrNull: formId === 'CHR-005' ? 90 : formId === 'CHR-007' ? 85 : null,
+    nextAttemptIndexOrNull:
+      formId === 'CHR-006' ? 2 : formId === 'CHR-008' ? attemptIndex + 1 : null,
+    setValuesDiscarded: true,
+  } as const;
+}
+
+function chr028Layer(
+  originDecisionFormId: DecisionFormId,
+  {
+    commandId = null,
+    decision = null,
+    decisionReceiptIdOrNull = null,
+    draftRevision = 6,
+    attemptIndex = SET_DECISION_RULES[originDecisionFormId].attemptIndex,
+  }: {
+    readonly attemptIndex?: number;
+    readonly commandId?: string | null;
+    readonly decision?: 'CONFIRM' | null;
+    readonly decisionReceiptIdOrNull?: string | null;
+    readonly draftRevision?: number;
+  } = {},
+): ProjectionSnapshotV2Message['presentation']['layers'][number] {
+  return {
+    availableActionKeys: decision === null ? ['CHR-028::CTA::001', 'CHR-028::CTA::002'] : [],
+    formId: 'CHR-028',
+    formType: 'dialog',
+    roleFilteredPayload: {
+      abandonedSetReceiptIds: [DECISION_SET_RECEIPT_ID],
+      characterDraftId: CHARACTER_DRAFT_ID,
+      commandId,
+      decision,
+      decisionReceiptIdOrNull,
+      draftRevision,
+      irreversibleConsequences: abandonmentConsequences(originDecisionFormId, attemptIndex),
+      originDecisionFormId,
+      transitionKind: SET_DECISION_RULES[originDecisionFormId].transitionKind,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    },
+    routeBindings: [],
+    routeTemplate: '@dialog/chr-028',
+  };
+}
+
 type SetDecisionFixture =
   | {
       readonly branchUuid: string;
@@ -613,6 +744,49 @@ function setDecisionDestinationSnapshot(
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
     revisions: entityRevisions(revision),
   };
+}
+
+function setDecisionPresentationSnapshot(
+  correlationId: string,
+  reason: 'COMMAND_DESTINATION' | 'FORM_ACTION' | 'RECONNECT',
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  layers: ProjectionSnapshotV2Message['presentation']['layers'],
+  revisions: ProjectionSnapshotV2Message['revisions'],
+): ProjectionSnapshotV2Message {
+  return {
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment: { correlationId, reason },
+      base,
+      layers,
+    },
+    projectionRole: 'player',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions,
+  };
+}
+
+function statSetDecisionTerminal(
+  commandId: string,
+  receiptId: string,
+  result: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'],
+  revisions: ProjectionSnapshotV2Message['revisions'],
+  replay = false,
+): Extract<HostToClientMessage, { readonly messageType: 'command.replay' | 'command.result' }> {
+  const receipt = { commandId, receiptId, result, revisions };
+  return replay
+    ? {
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        messageType: 'command.replay',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      }
+    : {
+        lifecycleState: 'COMMITTED',
+        messageType: 'command.result',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      };
 }
 
 function reconnectWizardSnapshot(
@@ -857,6 +1031,48 @@ function decodedClientMessageV1(socket: FakeWebSocket, index: number) {
     throw new Error(`test setup: invalid client frame ${JSON.stringify(decoded.refusal)}`);
   }
   return decoded.value;
+}
+
+function openSetAbandonmentDialog(
+  container: HTMLDivElement,
+  socket: FakeWebSocket,
+  formId: DecisionFormId,
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  revision: number,
+) {
+  act(() => {
+    requiredElement(
+      container.querySelector<HTMLButtonElement>(`[data-atlas-action-key="${formId}::CTA::002"]`),
+      `${formId} warning action`,
+    ).click();
+  });
+  const request = decodedClientMessageV2(socket, socket.sent.length - 1);
+  if (request.messageType !== 'navigation.form-action') {
+    throw new Error('test setup: warning did not send form action');
+  }
+  expect(request).toMatchObject({
+    actionKey: `${formId}::CTA::002`,
+    expectedProjectionRevision: revision,
+    sourceFormId: formId,
+  });
+  const openRevisions = {
+    actorVisibilityRevision: 0,
+    projectionRevision: revision + 1,
+    stateRevision: revision,
+  } as const;
+  deliver(
+    socket,
+    checkedHostTextV2(
+      setDecisionPresentationSnapshot(
+        request.navigationRequestId,
+        'FORM_ACTION',
+        base,
+        [chr028Layer(formId)],
+        openRevisions,
+      ),
+    ),
+  );
+  return { openRevisions, request };
 }
 
 describe('APP-001 web entry', () => {
@@ -3041,5 +3257,464 @@ describe('APP-001 web entry', () => {
       messageType: 'protocol.refusal',
       refusal: { code: 'UNRECOGNIZED', path: '$.messageType', value: 'read.result' },
     });
+  });
+
+  it.each(['CHR-005', 'CHR-006', 'CHR-007', 'CHR-008'] as const)(
+    'sends the exact field-minimal ACCEPT_SET payload from %s',
+    async (formId) => {
+      const { container, socket } = await connectToWizardBase(setDecisionBase(formId), 6);
+      expect(
+        container.querySelector(
+          `[data-host-field="${formId === 'CHR-005' ? 'acceptedSetReceiptId' : 'setReceiptId'}"]`,
+        ),
+      ).not.toBeNull();
+      expect(
+        container.querySelector(
+          `[data-host-field="${formId === 'CHR-005' ? 'setReceiptId' : 'acceptedSetReceiptId'}"]`,
+        ),
+      ).toBeNull();
+
+      act(() => {
+        requiredElement(
+          container.querySelector<HTMLButtonElement>(
+            `[data-atlas-action-key="${formId}::CTA::001"]`,
+          ),
+          `${formId} accept action`,
+        ).click();
+      });
+      const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+      expect(request).toMatchObject({
+        messageType: 'command.request',
+        workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+      });
+      if (request.messageType !== 'command.request') throw new Error('missing accept command');
+      expect(request.payload).toEqual({
+        characterDraftId: CHARACTER_DRAFT_ID,
+        decision: 'ACCEPT_SET',
+        draftRevision: 6,
+        sourceFormId: formId,
+        stage: 'STAT_ROLLS',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      });
+      expect(container.querySelector(`[data-atlas-action-key^="${formId}::CTA::"]`)).toBeNull();
+    },
+  );
+
+  it('accepts an immutable set through exact result, replay and actionless signed CHR-009 boundary', async () => {
+    const formId = 'CHR-005';
+    const { container, socket } = await connectToWizardBase(setDecisionBase(formId), 6);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-005::CTA::001"]'),
+        'CHR-005 accept action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing accept command');
+    const receiptId = 'accepted-decision-receipt';
+    const revisions = entityRevisions(7);
+    const result = {
+      acceptedSetReceiptId: DECISION_SET_RECEIPT_ID,
+      assignmentMode: 'ROLLED_BIJECTION',
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 7,
+      decision: 'ACCEPT_SET',
+      draftRevision: 7,
+      nextFormId: 'CHR-009',
+      sourceFormId: formId,
+      stage: 'STAT_ROLLS',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(statSetDecisionTerminal(request.commandId, receiptId, result, revisions)),
+    );
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, receiptId, result, revisions, true),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.commandId,
+          'COMMAND_DESTINATION',
+          setDecisionBase(
+            formId,
+            setDecisionProjection(formId, {
+              commandId: request.commandId,
+              decision: 'ACCEPT_SET',
+              decisionReceiptIdOrNull: receiptId,
+              draftRevision: 7,
+            }),
+          ),
+          [],
+          revisions,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-character-set-decision="ACCEPT_SET"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-009"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key^="CHR-005::CTA::"]')).toBeNull();
+  });
+
+  it('opens CHR-028 as an unbound semantic top layer and CANCEL restores the unchanged set', async () => {
+    const formId = 'CHR-005';
+    const base = setDecisionBase(formId);
+    const { container, socket } = await connectToWizardBase(base, 6);
+    const { openRevisions } = openSetAbandonmentDialog(container, socket, formId, base, 6);
+    const dialog = requiredElement(
+      container.querySelector<HTMLDialogElement>('dialog[open][data-atlas-form-id="CHR-028"]'),
+      'CHR-028 dialog',
+    );
+    expect(dialog.getAttribute('aria-labelledby')).toBe('CHR-028-title');
+    const underlay = requiredElement(
+      container.querySelector<HTMLElement>('main[data-atlas-form-id="CHR-005"]'),
+      'CHR-005 underlay',
+    ).closest('fieldset');
+    expect(underlay?.hasAttribute('disabled')).toBe(true);
+    expect(
+      requiredElement(
+        dialog.querySelector('[data-chr-028-decision]'),
+        'CHR-028 role-filtered details',
+      ).textContent,
+    ).not.toMatch(/branchUuid|random|seed|Rule ID/u);
+
+    act(() => {
+      requiredElement(
+        dialog.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-028::CTA::002"]'),
+        'CHR-028 cancel action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing cancel command');
+    expect(request.expectedRevisions).toEqual(openRevisions);
+    expect(request.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      decision: 'CANCEL',
+      draftRevision: 6,
+      sourceFormId: 'CHR-028',
+      stage: 'STAT_ROLLS',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const receiptId = 'cancel-wire-receipt';
+    const result = {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 6,
+      decision: 'CANCEL',
+      decisionReceiptIdOrNull: null,
+      draftRevision: 6,
+      nextFormId: formId,
+      originDecisionFormId: formId,
+      sourceFormId: 'CHR-028',
+      stage: 'STAT_ROLLS',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, receiptId, result, openRevisions),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, receiptId, result, openRevisions, true),
+      ),
+    );
+    const closedRevisions = { ...openRevisions, projectionRevision: 8 };
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.commandId,
+          'COMMAND_DESTINATION',
+          base,
+          [],
+          closedRevisions,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-028"]')).toBeNull();
+    expect(container.querySelector('[data-character-set-decision="PENDING"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-005::CTA::002"]')).not.toBeNull();
+  });
+
+  it('refuses a CANCEL receipt whose branch ID collides with the current set receipt', async () => {
+    const formId = 'CHR-005';
+    const base = setDecisionBase(formId);
+    const { container, socket } = await connectToWizardBase(base, 6);
+    const { openRevisions } = openSetAbandonmentDialog(container, socket, formId, base, 6);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-028::CTA::002"]'),
+        'CHR-028 cancel action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing cancel command');
+
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(
+          request.commandId,
+          'cancel-collision-receipt',
+          {
+            branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+            branchUuid: DECISION_SET_RECEIPT_ID,
+            characterDraftId: CHARACTER_DRAFT_ID,
+            checkpointId: WIZARD_CHECKPOINT_ID,
+            checkpointOwnerId: CHARACTER_DRAFT_ID,
+            checkpointRevision: 6,
+            decision: 'CANCEL',
+            decisionReceiptIdOrNull: null,
+            draftRevision: 6,
+            nextFormId: formId,
+            originDecisionFormId: formId,
+            sourceFormId: 'CHR-028',
+            stage: 'STAT_ROLLS',
+          },
+          openRevisions,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(decodedClientMessageV1(socket, socket.sent.length - 1)).toMatchObject({
+      messageType: 'protocol.refusal',
+      refusal: { path: '$.receipt.result.branchUuid' },
+    });
+  });
+
+  it('reconciles a lost transient CANCEL when reconnect restores the exact durable origin', async () => {
+    const formId = 'CHR-005';
+    const base = setDecisionBase(formId);
+    const { container, socket } = await connectToWizardBase(base, 6);
+    openSetAbandonmentDialog(container, socket, formId, base, 6);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-028::CTA::002"]'),
+        'CHR-028 cancel action',
+      ).click();
+    });
+    const cancel = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (cancel.messageType !== 'command.request') throw new Error('missing cancel command');
+    act(() => socket.serverClose(1006, 'host restarted before transient receipt'));
+    act(() => {
+      requiredElement(
+        [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+          (button) => button.textContent === 'Переподключиться',
+        ) ?? null,
+        'reconnect button',
+      ).click();
+    });
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect request');
+    expect(reconnect.unacknowledgedCommandIds).toEqual([cancel.commandId]);
+    const revisions = { actorVisibilityRevision: 0, projectionRevision: 8, stateRevision: 6 };
+    deliverPair(
+      resumedSocket,
+      capabilities({ reconnectRequestId: reconnect.reconnectRequestId, revisions }),
+      setDecisionPresentationSnapshot(
+        reconnect.reconnectRequestId,
+        'RECONNECT',
+        base,
+        [],
+        revisions,
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-028"]')).toBeNull();
+    expect(container.querySelector('[data-character-set-decision="PENDING"]')).not.toBeNull();
+  });
+
+  it('CONFIRM point-buy keeps an actionless CHR-028/COMMITTED layer and CHR-009 unpublished', async () => {
+    const formId = 'CHR-005';
+    const base = setDecisionBase(formId);
+    const { container, socket } = await connectToWizardBase(base, 6);
+    const { openRevisions } = openSetAbandonmentDialog(container, socket, formId, base, 6);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-028::CTA::001"]'),
+        'CHR-028 confirm action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing confirm command');
+    expect(request.expectedRevisions).toEqual(openRevisions);
+    expect(request.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      decision: 'CONFIRM',
+      draftRevision: 6,
+      sourceFormId: 'CHR-028',
+      stage: 'STAT_ROLLS',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const receiptId = 'point-buy-decision-receipt';
+    const consequences = abandonmentConsequences(formId, 1);
+    const revisions = { actorVisibilityRevision: 0, projectionRevision: 8, stateRevision: 7 };
+    const result = {
+      abandonedSetReceiptIds: [DECISION_SET_RECEIPT_ID],
+      alternateDecision: 'USE_POINT_BUY_90',
+      assignmentModeOrNull: 'POINT_BUY_90',
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 7,
+      decision: 'CONFIRM',
+      draftRevision: 7,
+      irreversibleConsequences: consequences,
+      nextAttemptIndexOrNull: null,
+      nextFormId: 'CHR-009',
+      nextSetRollRequestIdOrNull: null,
+      originDecisionFormId: formId,
+      sourceFormId: 'CHR-028',
+      sourceSetReceiptIdOrNull: null,
+      stage: 'STAT_ROLLS',
+      transitionKind: 'CLASSIC_TO_90',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(statSetDecisionTerminal(request.commandId, receiptId, result, revisions)),
+    );
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, receiptId, result, revisions, true),
+      ),
+    );
+    const committedBase = setDecisionBase(
+      formId,
+      setDecisionProjection(formId, {
+        commandId: request.commandId,
+        decision: 'USE_POINT_BUY_90',
+        decisionReceiptIdOrNull: receiptId,
+        draftRevision: 7,
+      }),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.commandId,
+          'COMMAND_DESTINATION',
+          committedBase,
+          [
+            chr028Layer(formId, {
+              commandId: request.commandId,
+              decision: 'CONFIRM',
+              decisionReceiptIdOrNull: receiptId,
+              draftRevision: 7,
+            }),
+          ],
+          revisions,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-chr-028-decision="CONFIRM"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-009"]')).toBeNull();
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+  });
+
+  it('CONFIRM adventurous abandonment lands on the exact fresh CHR-003 attempt', async () => {
+    const formId = 'CHR-006';
+    const base = setDecisionBase(formId);
+    const { container, socket } = await connectToWizardBase(base, 6);
+    const { openRevisions } = openSetAbandonmentDialog(container, socket, formId, base, 6);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-028::CTA::001"]'),
+        'CHR-028 confirm action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing confirm command');
+    expect(request.expectedRevisions).toEqual(openRevisions);
+    const receiptId = 'next-attempt-decision-receipt';
+    const nextSetRollRequestId = 'set-roll-request-2';
+    const consequences = abandonmentConsequences(formId, 1);
+    const revisions = { actorVisibilityRevision: 0, projectionRevision: 8, stateRevision: 7 };
+    const result = {
+      abandonedSetReceiptIds: [DECISION_SET_RECEIPT_ID],
+      alternateDecision: 'GO_ATTEMPT_2',
+      assignmentModeOrNull: null,
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 7,
+      decision: 'CONFIRM',
+      draftRevision: 7,
+      irreversibleConsequences: consequences,
+      nextAttemptIndexOrNull: 2,
+      nextFormId: 'CHR-003',
+      nextSetRollRequestIdOrNull: nextSetRollRequestId,
+      originDecisionFormId: formId,
+      sourceFormId: 'CHR-028',
+      sourceSetReceiptIdOrNull: null,
+      stage: 'STAT_ROLLS',
+      transitionKind: 'ADVENTUROUS_TO_SECOND',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(statSetDecisionTerminal(request.commandId, receiptId, result, revisions)),
+    );
+    const nextProjection = {
+      ...CHR_003_AUTO_PROJECTION,
+      attemptIndex: 2,
+      branchUuid: BRANCH_UUID,
+      draftRevision: 7,
+      setRollRequestId: nextSetRollRequestId,
+      statMethod: 'ADVENTUROUS',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.commandId,
+          'COMMAND_DESTINATION',
+          chr003Base(nextProjection),
+          [],
+          revisions,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-003"]')).not.toBeNull();
+    expect(container.querySelector('[data-host-field="attemptIndex"]')?.textContent).toBe('2');
+    expect(container.querySelector('[data-atlas-form-id="CHR-028"]')).toBeNull();
+  });
+
+  it('omits the CHR-008 warning capability and dialog path on mandatory attempt five', async () => {
+    const formId = 'CHR-008';
+    const projection = setDecisionProjection(formId, { attemptIndex: 5 });
+    const { container } = await connectToWizardBase(setDecisionBase(formId, projection), 9);
+
+    expect(container.querySelector('[data-fifth-attempt-mandatory-accept]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-008::CTA::001"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-008::CTA::002"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-028"]')).toBeNull();
   });
 });

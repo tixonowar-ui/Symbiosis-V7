@@ -83,3 +83,28 @@ describe('ROLL-COMMIT web form registry', () => {
     expect(availableFormActions(formId, keys).map(({ actionKey }) => actionKey)).toEqual(keys);
   });
 });
+
+describe('STAT_ROLLS set-decision web form registry', () => {
+  it.each([
+    ['CHR-005', '/player/characters/:localCharacterId/create/chr-005'],
+    ['CHR-006', '/player/characters/:localCharacterId/create/chr-006'],
+    ['CHR-007', '/player/characters/:localCharacterId/create/chr-007'],
+    ['CHR-008', '/player/characters/:localCharacterId/create/chr-008'],
+  ] as const)('publishes the exact %s screen and its two Atlas actions', (formId, route) => {
+    const definition = presentedFormDefinition(formId);
+    expect(definition).toMatchObject({ route, type: 'screen' });
+    expect(definition?.actions.map(({ actionKey }) => actionKey)).toEqual([
+      `${formId}::CTA::001`,
+      `${formId}::CTA::002`,
+    ]);
+  });
+
+  it('publishes CHR-028 only as the unbound dialog with exact actions', () => {
+    const definition = presentedFormDefinition('CHR-028');
+    expect(definition).toMatchObject({ route: '@dialog/chr-028', type: 'dialog' });
+    expect(definition?.actions.map(({ actionKey }) => actionKey)).toEqual([
+      'CHR-028::CTA::001',
+      'CHR-028::CTA::002',
+    ]);
+  });
+});

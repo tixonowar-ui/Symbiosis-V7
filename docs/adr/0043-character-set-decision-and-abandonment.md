@@ -296,10 +296,11 @@ revisions `+0`. Закрытие окна без команды также не 
 attempt.
 
 Host restart завершает неперсистентный command journal, поэтому cancel receipt
-после restart не восстанавливается. Это безопасно и намеренно: durable mechanics
-не менялась, abandonment не состоялся, а reconnect снова публикует origin form
-с тем же current immutable set. Повторный cancel без открытого signed dialog
-context guard-rejected; он не может отказаться от набора.
+после restart не восстанавливается: `commandId` больше не связан с checkpoint и
+получает `UNRECOGNIZED`. Recovery либо возвращает current set по более ранней
+durable command, либо ведёт в `APP-001`, не изобретая receipt и decision. В том же
+host process origin восстанавливается из session. Durable mechanics не менялась,
+abandonment не состоялся, а cancel без signed dialog context guard-rejected.
 
 ### 9. CONFIRM, acceptance и H5
 

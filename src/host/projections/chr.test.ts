@@ -10,6 +10,8 @@ import {
   CHR_003_REQUEST_ACTION_KEYS,
   CHR_004_COMPLETE_ACTION_KEYS,
   CHR_004_PENDING_ACTION_KEYS,
+  CHR_028_COMMITTED_ACTION_KEYS,
+  CHR_028_WARNING_ACTION_KEYS,
   CHR_010_INITIAL_ACTION_KEYS,
   CHR_010_SET_DECIDE_ACTION_KEYS,
   CHR_016_INITIAL_ACTION_KEYS,
@@ -17,6 +19,7 @@ import {
   CHR_036_INITIAL_ACTION_KEYS,
   CHR_036_SET_DECIDE_ACTION_KEYS,
   DICE_INPUT_MODES,
+  CREATION_SET_DECISION_FORMS,
   RACE_CHOICES,
   SET_DECIDE_ACTION_KEYS_BY_FORM,
   SET_DECIDE_CAPABLE_FORM_IDS,
@@ -28,6 +31,9 @@ import {
   projectInitialChr036,
   projectChr003,
   projectChr004,
+  projectChr028,
+  projectCreationSetDecision,
+  creationSetDecisionPendingActionKeys,
 } from './chr.js';
 
 describe('CHR host projection vocabulary', () => {
@@ -61,13 +67,174 @@ describe('CHR host projection vocabulary', () => {
       'CHR-002::CTA::005',
     ]);
     expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-002::CTA::001']);
-    expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual(['CHR-002', 'CHR-010', 'CHR-016', 'CHR-036']);
+    expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual([
+      'CHR-002',
+      'CHR-005',
+      'CHR-006',
+      'CHR-007',
+      'CHR-008',
+      'CHR-010',
+      'CHR-016',
+      'CHR-028',
+      'CHR-036',
+    ]);
     expect(SET_DECIDE_ACTION_KEYS_BY_FORM).toEqual({
       'CHR-002': ['CHR-002::CTA::001'],
+      'CHR-005': ['CHR-005::CTA::001'],
+      'CHR-006': ['CHR-006::CTA::001'],
+      'CHR-007': ['CHR-007::CTA::001'],
+      'CHR-008': ['CHR-008::CTA::001'],
       'CHR-010': ['CHR-010::CTA::001', 'CHR-010::CTA::002'],
       'CHR-016': ['CHR-016::CTA::001'],
+      'CHR-028': ['CHR-028::CTA::001', 'CHR-028::CTA::002'],
       'CHR-036': ['CHR-036::CTA::001'],
     });
+  });
+
+  it('owns the four UI contracts while domain rules own method and abandonment mechanics', () => {
+    expect(CREATION_SET_DECISION_FORMS).toEqual([
+      expect.objectContaining({
+        formId: 'CHR-005',
+        route: '/player/characters/:localCharacterId/create/chr-005',
+        warningActionKey: 'CHR-005::CTA::002',
+      }),
+      expect.objectContaining({
+        formId: 'CHR-006',
+        route: '/player/characters/:localCharacterId/create/chr-006',
+        warningActionKey: 'CHR-006::CTA::002',
+      }),
+      expect.objectContaining({
+        formId: 'CHR-007',
+        route: '/player/characters/:localCharacterId/create/chr-007',
+        warningActionKey: 'CHR-007::CTA::002',
+      }),
+      expect.objectContaining({
+        formId: 'CHR-008',
+        route: '/player/characters/:localCharacterId/create/chr-008',
+        warningActionKey: 'CHR-008::CTA::002',
+      }),
+    ]);
+  });
+
+  it.each([
+    ['CHR-005', 1, 'acceptedSetReceiptId', 'USE_POINT_BUY_90'],
+    ['CHR-006', 1, 'setReceiptId', 'GO_ATTEMPT_2'],
+    ['CHR-007', 2, 'setReceiptId', 'USE_POINT_BUY_85'],
+    ['CHR-008', 4, 'setReceiptId', 'GO_NEXT_ATTEMPT'],
+  ] as const)(
+    'projects exact pending and alternate-decision payloads for %s',
+    (formId, attemptIndex, receiptField, alternateDecision) => {
+      const common = {
+        attemptIndex,
+        characterDraftId: 'character-draft',
+        draftRevision: 17,
+        formId,
+        setReceiptId: 'set-receipt',
+        wizardCheckpointId: 'wizard-checkpoint',
+      } as const;
+      const pending = projectCreationSetDecision({
+        ...common,
+        commandId: null,
+        decision: 'PENDING',
+        decisionReceiptIdOrNull: null,
+      });
+      expect(pending).toMatchObject({
+        characterDraftId: 'character-draft',
+        commandId: null,
+        decision: 'PENDING',
+        decisionReceiptIdOrNull: null,
+        [receiptField]: 'set-receipt',
+      });
+      expect(Object.hasOwn(pending, receiptField)).toBe(true);
+      expect(
+        Object.hasOwn(
+          pending,
+          receiptField === 'setReceiptId' ? 'acceptedSetReceiptId' : 'setReceiptId',
+        ),
+      ).toBe(false);
+      expect(Object.hasOwn(pending, 'attemptIndex')).toBe(formId !== 'CHR-005');
+
+      expect(
+        projectCreationSetDecision({
+          ...common,
+          commandId: 'decision-command',
+          decision: alternateDecision,
+          decisionReceiptIdOrNull: 'decision-receipt',
+        }),
+      ).toMatchObject({
+        commandId: 'decision-command',
+        decision: alternateDecision,
+        decisionReceiptIdOrNull: 'decision-receipt',
+      });
+    },
+  );
+
+  it('derives fifth-attempt mandatory acceptance and hides its warning action', () => {
+    const values = {
+      characterDraftId: 'character-draft',
+      commandId: null,
+      decision: 'PENDING' as const,
+      decisionReceiptIdOrNull: null,
+      draftRevision: 17,
+      formId: 'CHR-008' as const,
+      setReceiptId: 'set-receipt',
+      wizardCheckpointId: 'wizard-checkpoint',
+    };
+    expect(projectCreationSetDecision({ ...values, attemptIndex: 4 })).toMatchObject({
+      fifthAttemptMandatoryAccept: false,
+    });
+    expect(projectCreationSetDecision({ ...values, attemptIndex: 5 })).toMatchObject({
+      fifthAttemptMandatoryAccept: true,
+    });
+    expect(creationSetDecisionPendingActionKeys('CHR-008', 4)).toEqual([
+      'CHR-008::CTA::001',
+      'CHR-008::CTA::002',
+    ]);
+    expect(creationSetDecisionPendingActionKeys('CHR-008', 5)).toEqual(['CHR-008::CTA::001']);
+  });
+
+  it('projects the exact signed CHR-028 warning and rejects mismatched consequences', () => {
+    const warning = {
+      abandonedSetReceiptIds: ['set-receipt'] as const,
+      attemptIndex: 1,
+      characterDraftId: 'character-draft',
+      commandId: null,
+      decision: null,
+      decisionReceiptIdOrNull: null,
+      draftRevision: 17,
+      irreversibleConsequences: {
+        creationCriticalConsequencesDiscarded: true,
+        exactPointBuyTotalOrNull: 90,
+        nextAttemptIndexOrNull: null,
+        setValuesDiscarded: true,
+      } as const,
+      originDecisionFormId: 'CHR-005' as const,
+      transitionKind: 'CLASSIC_TO_90' as const,
+      wizardCheckpointId: 'wizard-checkpoint',
+    };
+    expect(projectChr028(warning)).toEqual({
+      abandonedSetReceiptIds: ['set-receipt'],
+      characterDraftId: 'character-draft',
+      commandId: null,
+      decision: null,
+      decisionReceiptIdOrNull: null,
+      draftRevision: 17,
+      irreversibleConsequences: warning.irreversibleConsequences,
+      originDecisionFormId: 'CHR-005',
+      transitionKind: 'CLASSIC_TO_90',
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(CHR_028_WARNING_ACTION_KEYS).toEqual(['CHR-028::CTA::001', 'CHR-028::CTA::002']);
+    expect(CHR_028_COMMITTED_ACTION_KEYS).toEqual([]);
+    expect(() =>
+      projectChr028({
+        ...warning,
+        irreversibleConsequences: {
+          ...warning.irreversibleConsequences,
+          exactPointBuyTotalOrNull: 85,
+        },
+      }),
+    ).toThrow('irreversibleConsequences do not match');
   });
 
   it('projects the superseding exact initial CHR-010 payload', () => {
