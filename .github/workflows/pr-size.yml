@@ -145,9 +145,21 @@ jobs:
         run: |
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
-          git fetch --no-tags --depth=1 origin "$base" "$head"
+          git fetch --no-tags origin "$base" "$head"
 
-          stat=$(git diff --numstat "$base" "$head" -- . \
+          # Measure from the merge base, not from the base branch tip. A plain
+          # two-dot diff against a main that moved ahead reports everything the
+          # branch is missing as deletions: this very PR was first failed by its
+          # own gate for "deleting" the 3686 lines #121 had merged meanwhile.
+          # The merge base is the only point against which a branch's own change
+          # is what it is, whether or not the branch is up to date.
+          merge_base=$(git merge-base "$base" "$head") || {
+            echo "::error::cannot determine the merge base of $base and $head"
+            exit 1
+          }
+          echo "measuring $merge_base..$head"
+
+          stat=$(git diff --numstat "$merge_base" "$head" -- . \
                  ':(exclude)generated/**' ':(exclude)package-lock.json')
 
           if [ -z "$stat" ]; then
