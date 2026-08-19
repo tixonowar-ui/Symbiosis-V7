@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-character-portraits.js';
 import {
   decodeClientMessage,
   decodeClientMessageV2,
@@ -177,6 +178,33 @@ class FakeWebSocket {
   }
 }
 
+class DeferredFileReader {
+  static readonly instances: DeferredFileReader[] = [];
+
+  readonly #listeners = new Map<string, EventListenerOrEventListenerObject>();
+  result: ArrayBuffer | null = null;
+
+  constructor() {
+    DeferredFileReader.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
+    if (listener !== null) this.#listeners.set(type, listener);
+  }
+
+  readAsArrayBuffer(): void {}
+
+  complete(bytes: Uint8Array): void {
+    this.result = Uint8Array.from(bytes).buffer;
+    const listener = this.#listeners.get('load');
+    if (typeof listener === 'function') {
+      listener.call(this as unknown as FileReader, new ProgressEvent('load'));
+    } else {
+      listener?.handleEvent(new ProgressEvent('load'));
+    }
+  }
+}
+
 interface MountedClient {
   readonly container: HTMLDivElement;
   readonly root: Root;
@@ -196,6 +224,7 @@ afterEach(() => {
     mounted.container.remove();
   }
   FakeWebSocket.instances.splice(0);
+  DeferredFileReader.instances.splice(0);
   vi.unstubAllGlobals();
 });
 
@@ -491,6 +520,18 @@ function select(selectElement: HTMLSelectElement, value: string): void {
     descriptor.set!.call(selectElement, value);
     selectElement.dispatchEvent(new Event('change', { bubbles: true }));
   });
+}
+
+async function chooseFile(input: HTMLInputElement, file: File): Promise<void> {
+  Object.defineProperty(input, 'files', {
+    configurable: true,
+    value: [file],
+  });
+  act(() => {
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await flushAsyncWork();
+  await flushAsyncWork();
 }
 
 function decodedClientMessageV2(socket: FakeWebSocket, index: number) {
@@ -836,6 +877,364 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-atlas-form-id="APP-002"]')).not.toBeNull();
     expect(window.location.pathname).toBe('/player');
   });
+
+  it('offers the exact six CHR-001 catalog placeholders and sends a selected asset key', async () => {
+    const { container, socket } = await connectToValidChr001();
+    const placeholder = requiredElement(
+      container.querySelector<HTMLSelectElement>('[data-character-art-placeholder]'),
+      'CHR-001 portrait placeholder selector',
+    );
+
+    expect([...placeholder.options].map((option) => option.value)).toEqual([
+      '',
+      ...LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS,
+    ]);
+    expect(container.textContent).not.toContain('Ключ портрета');
+
+    select(placeholder, LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[0]);
+
+    expect(decodedClientMessageV3(socket, 3)).toMatchObject({
+      messageType: 'character.identity-draft.replace',
+      scope: { sourceFormId: 'CHR-001' },
+      values: {
+        artAssetKeyOrLocalFile: {
+          assetKey: LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[0],
+          kind: 'asset-key',
+        },
+      },
+    });
+    expect(container.querySelector('[data-character-art-current]')?.textContent).toContain(
+      LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[0],
+    );
+  });
+
+  it('derives local-file media type from bytes, replaces the file, and clears art to null', async () => {
+    const { container, socket } = await connectToValidChr001();
+    const png = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+      'renamed.jpg',
+      { type: 'image/jpeg' },
+    );
+    await chooseFile(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-character-art-file]'),
+        'CHR-001 character art file input',
+      ),
+      png,
+    );
+
+    const pngRequest = decodedClientMessageV3(socket, 3);
+    expect(pngRequest).toMatchObject({
+      messageType: 'character.identity-draft.replace',
+      scope: { sourceFormId: 'CHR-001' },
+      values: {
+        artAssetKeyOrLocalFile: {
+          bytesBase64: 'iVBORw0KGgo=',
+          kind: 'local-file',
+          mediaType: 'image/png',
+        },
+      },
+    });
+    expect(container.querySelector('[data-character-art-status]')?.textContent).toContain(
+      'отправлен хосту',
+    );
+    expect(
+      container
+        .querySelector('[data-character-art-file]')
+        ?.closest('fieldset')
+        ?.getAttribute('aria-busy'),
+    ).toBe('false');
+    if (pngRequest.messageType !== 'character.identity-draft.replace') {
+      throw new Error('test setup: PNG identity replacement not sent');
+    }
+    deliver(
+      socket,
+      checkedHostTextV3({
+        draftRevision: 1,
+        draftUpdateId: pngRequest.draftUpdateId,
+        messageType: 'character.identity-draft.result',
+        presentation: {
+          base: {
+            ...chr001Base({
+              ...VALID_CHR_001_PROJECTION,
+              artAssetKeyOrLocalFile: pngRequest.values.artAssetKeyOrLocalFile,
+              draftRevision: 1,
+            }),
+            availableActionKeys: ['CHR-001::CTA::001', 'CHR-001::CTA::002'],
+          },
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V3_VERSION,
+        revisions: { ...REVISIONS, projectionRevision: 11 },
+        scope: pngRequest.scope,
+      }),
+    );
+    expect(container.querySelector('[data-character-art-current]')?.textContent).toContain(
+      'image/png',
+    );
+    const confirmedArtText =
+      container.querySelector('[data-host-field="artAssetKeyOrLocalFile"]')?.textContent ?? '';
+    expect(confirmedArtText).toContain('[omitted from presentation]');
+    expect(confirmedArtText).not.toContain('iVBORw0KGgo=');
+
+    const jpeg = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'renamed.png', {
+      type: 'image/png',
+    });
+    await chooseFile(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-character-art-file]'),
+        'CHR-001 character art replacement input',
+      ),
+      jpeg,
+    );
+    const jpegRequest = decodedClientMessageV3(socket, 4);
+    expect(jpegRequest).toMatchObject({
+      values: {
+        artAssetKeyOrLocalFile: {
+          bytesBase64: '/9j/',
+          kind: 'local-file',
+          mediaType: 'image/jpeg',
+        },
+      },
+    });
+    if (jpegRequest.messageType !== 'character.identity-draft.replace') {
+      throw new Error('test setup: JPEG identity replacement not sent');
+    }
+    deliver(
+      socket,
+      checkedHostTextV3({
+        draftRevision: 2,
+        draftUpdateId: jpegRequest.draftUpdateId,
+        messageType: 'character.identity-draft.result',
+        presentation: {
+          base: {
+            ...chr001Base({
+              ...VALID_CHR_001_PROJECTION,
+              artAssetKeyOrLocalFile: jpegRequest.values.artAssetKeyOrLocalFile,
+              draftRevision: 2,
+            }),
+            availableActionKeys: ['CHR-001::CTA::001', 'CHR-001::CTA::002'],
+          },
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V3_VERSION,
+        revisions: { ...REVISIONS, projectionRevision: 12 },
+        scope: jpegRequest.scope,
+      }),
+    );
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-character-art-clear]'),
+        'CHR-001 clear character art action',
+      ).click();
+    });
+    expect(decodedClientMessageV3(socket, 5)).toMatchObject({
+      values: { artAssetKeyOrLocalFile: null },
+    });
+  });
+
+  it('preserves a newer identity edit when a pending file read completes', async () => {
+    vi.stubGlobal('FileReader', DeferredFileReader);
+    const { container, socket } = await connectToValidChr001();
+    const fileInput = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-character-art-file]'),
+      'CHR-001 character art file input',
+    );
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [new File([new Uint8Array([0])], 'deferred.png')],
+    });
+    act(() => {
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(DeferredFileReader.instances).toHaveLength(1);
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-identity-field="sex"]'),
+        'CHR-001 sex selector',
+      ),
+      'MALE',
+    );
+    const sexRequest = decodedClientMessageV3(socket, 3);
+    if (sexRequest.messageType !== 'character.identity-draft.replace') {
+      throw new Error('test setup: sex identity replacement not sent');
+    }
+    act(() => {
+      DeferredFileReader.instances[0]?.complete(
+        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      );
+    });
+    await flushAsyncWork();
+    expect(socket.sent).toHaveLength(4);
+
+    deliver(
+      socket,
+      checkedHostTextV3({
+        draftRevision: 1,
+        draftUpdateId: sexRequest.draftUpdateId,
+        messageType: 'character.identity-draft.result',
+        presentation: {
+          base: {
+            ...chr001Base({ ...VALID_CHR_001_PROJECTION, draftRevision: 1, sex: 'MALE' }),
+            availableActionKeys: ['CHR-001::CTA::001', 'CHR-001::CTA::002'],
+          },
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V3_VERSION,
+        revisions: { ...REVISIONS, projectionRevision: 11 },
+        scope: sexRequest.scope,
+      }),
+    );
+
+    expect(decodedClientMessageV3(socket, 4)).toMatchObject({
+      values: {
+        artAssetKeyOrLocalFile: {
+          bytesBase64: 'iVBORw0KGgo=',
+          kind: 'local-file',
+          mediaType: 'image/png',
+        },
+        sex: 'MALE',
+      },
+    });
+  });
+
+  it('keeps the confirmed CHR-001 read-only when a pending file finishes after disconnect', async () => {
+    vi.stubGlobal('FileReader', DeferredFileReader);
+    const { container, socket } = await connectToValidChr001();
+    const fileInput = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-character-art-file]'),
+      'CHR-001 character art file input',
+    );
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [new File([new Uint8Array([0])], 'deferred.png')],
+    });
+    act(() => {
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(DeferredFileReader.instances).toHaveLength(1);
+
+    act(() => socket.serverClose(1006, 'connection lost during file read'));
+    expect(container.querySelector('[data-client-state="disconnected"]')).not.toBeNull();
+
+    act(() => {
+      DeferredFileReader.instances[0]?.complete(
+        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      );
+    });
+    await flushAsyncWork();
+
+    expect(socket.sent).toHaveLength(3);
+    expect(container.querySelector('[data-client-state="disconnected"]')).not.toBeNull();
+    expect(container.querySelector('[data-client-state="ready"]')).toBeNull();
+    expect(container.textContent).toContain('Переподключиться');
+    expect(container.querySelector('[data-character-art-local-error]')?.textContent).toContain(
+      'черновик недоступен',
+    );
+  });
+
+  it('does not guess an unsupported file type or leave Continue active while reading', async () => {
+    vi.stubGlobal('FileReader', DeferredFileReader);
+    const { container, socket } = await connectToValidChr001();
+    const continueAction = requiredElement(
+      container.querySelector<HTMLButtonElement>(
+        '[data-atlas-action="Сохранить идентичность и продолжить"]',
+      ),
+      'CHR-001 Continue action',
+    );
+    const fileInput = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-character-art-file]'),
+      'CHR-001 character art file input',
+    );
+    Object.defineProperty(fileInput, 'files', {
+      configurable: true,
+      value: [new File([new Uint8Array([0x47, 0x49, 0x46])], 'not-an-image.png')],
+    });
+    act(() => {
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(fileInput.closest('fieldset')?.getAttribute('aria-busy')).toBe('true');
+    expect(container.querySelector('[data-character-art-status]')?.textContent).toContain(
+      'Чтение файла',
+    );
+    expect(
+      container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
+    ).toBeNull();
+    const sentWhileReading = socket.sent.length;
+    act(() => continueAction.click());
+    expect(socket.sent).toHaveLength(sentWhileReading);
+
+    act(() => {
+      DeferredFileReader.instances[0]?.complete(new Uint8Array([0x47, 0x49, 0x46]));
+    });
+    await flushAsyncWork();
+    expect(socket.sent).toHaveLength(3);
+    expect(container.querySelector('[data-character-art-local-error]')?.textContent).toContain(
+      'не является PNG или JPEG',
+    );
+    expect(fileInput.closest('fieldset')?.getAttribute('aria-busy')).toBe('false');
+    expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
+  });
+
+  it.each([
+    ['FILE_TOO_LARGE', '12 МБ'],
+    ['MEDIA_SIGNATURE_MISMATCH', 'Сигнатура файла'],
+  ] as const)(
+    'shows host art refusal %s as a field error without internal identifiers',
+    async (reason, expectedText) => {
+      const { container, socket } = await connectToValidChr001();
+      await chooseFile(
+        requiredElement(
+          container.querySelector<HTMLInputElement>('[data-character-art-file]'),
+          'CHR-001 character art file input',
+        ),
+        new File(
+          [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+          'portrait.png',
+        ),
+      );
+      const request = decodedClientMessageV3(socket, 3);
+      if (request.messageType !== 'character.identity-draft.replace') {
+        throw new Error('test setup: art identity replacement not sent');
+      }
+
+      deliver(
+        socket,
+        checkedHostTextV3({
+          draftUpdateId: request.draftUpdateId,
+          messageType: 'character.identity-draft.refusal',
+          presentationUnchanged: true,
+          protocolVersion: WIRE_PROTOCOL_V3_VERSION,
+          refusal: {
+            code: 'INVALID_FIELD',
+            error: { field: 'artAssetKeyOrLocalFile', reason },
+          },
+          revisions: { ...REVISIONS, projectionRevision: 10 },
+          scope: request.scope,
+        }),
+      );
+
+      const alert = requiredElement(
+        container.querySelector<HTMLElement>(
+          '[data-identity-refusal-field="artAssetKeyOrLocalFile"]',
+        ),
+        'CHR-001 character art host refusal',
+      );
+      expect(alert.closest('fieldset')?.querySelector('[data-character-art-file]')).not.toBeNull();
+      expect(alert.textContent).toContain('Поле «Арт персонажа»');
+      expect(alert.textContent).toContain(expectedText);
+      expect(alert.textContent).not.toContain(reason);
+      expect(alert.textContent).not.toContain('INVALID_FIELD');
+      expect(alert.textContent).not.toMatch(/Rule ID/iu);
+      expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
+    },
+  );
 
   it('removes Continue from the executable DOM cache while confirmed CHR-001 values are dirty', async () => {
     const { container, socket } = await connectToValidChr001();

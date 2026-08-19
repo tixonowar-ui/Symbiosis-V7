@@ -1,17 +1,34 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
+import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-character-portraits.js';
+
+import { CHARACTER_ART_ACCEPT, characterArtFromFile } from './character-art.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
   App001Projection,
   ConfirmedProjectionSnapshot,
+  FormActionRequestResult,
   IdentityDraftClientState,
   IdentityDraftValues,
   ProjectionConnection,
   RaceChoiceDraft,
   WebClientState,
 } from './ws-client.js';
+
+const LOCAL_CHARACTER_PORTRAIT_ASSET_KEY_SET: ReadonlySet<string> = new Set(
+  LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS,
+);
+const CHR_001_CHECKPOINT_ACTION_KEY = 'CHR-001::CTA::001';
+
+const ART_REFUSAL_MESSAGES = {
+  ASSET_NOT_FOUND: 'Выбранная заглушка отсутствует в каталоге хоста.',
+  EMPTY_ASSET_KEY: 'Выберите непустой ключ заглушки.',
+  FILE_TOO_LARGE: 'Файл превышает допустимый размер 12 МБ.',
+  MEDIA_SIGNATURE_MISMATCH: 'Сигнатура файла не совпала с подтверждённым типом PNG или JPEG.',
+  NON_CANONICAL_BASE64: 'Хост не смог подтвердить каноническое содержимое файла.',
+} as const;
 
 function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactElement {
   switch (state.kind) {
@@ -104,7 +121,24 @@ function confirmedSnapshot(state: WebClientState): ConfirmedProjectionSnapshot |
   }
 }
 
-function displayValue(value: unknown): string {
+function displayValue(key: string, value: unknown): string {
+  if (
+    key === 'artAssetKeyOrLocalFile' &&
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>)['kind'] === 'local-file'
+  ) {
+    const localFile = value as Record<string, unknown>;
+    return JSON.stringify(
+      {
+        bytesBase64: '[omitted from presentation]',
+        kind: localFile['kind'],
+        mediaType: localFile['mediaType'],
+      },
+      null,
+      2,
+    );
+  }
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 }
 
@@ -139,7 +173,7 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
           <div key={key}>
             <dt>{key}</dt>
             <dd data-host-field={key}>
-              <pre>{displayValue(value)}</pre>
+              <pre>{displayValue(key, value)}</pre>
             </dd>
           </div>
         ))}
@@ -148,16 +182,68 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
   );
 }
 
+function IdentityRefusalAlert({
+  refusal,
+}: {
+  readonly refusal: NonNullable<IdentityDraftClientState['lastRefusal']>;
+}): ReactElement {
+  if (refusal.code === 'INVALID_FIELD' && refusal.error.field === 'artAssetKeyOrLocalFile') {
+    return (
+      <section role="alert" data-identity-refusal-field="artAssetKeyOrLocalFile">
+        <strong>Поле «Арт персонажа» отклонено хостом.</strong>
+        <p>{ART_REFUSAL_MESSAGES[refusal.error.reason]}</p>
+      </section>
+    );
+  }
+  return <pre role="alert">{JSON.stringify(refusal, null, 2)}</pre>;
+}
+
 function IdentityFields({
   draft,
+  fileReadPending,
   onChange,
+  onFileReadPendingChange,
 }: {
   readonly draft: IdentityDraftClientState;
-  readonly onChange: (values: IdentityDraftValues) => void;
+  readonly fileReadPending: boolean;
+  readonly onChange: (values: IdentityDraftValues) => FormActionRequestResult;
+  readonly onFileReadPendingChange: (pending: boolean) => void;
 }) {
   const values = draft.widgetValues;
-  const replace = (patch: Partial<IdentityDraftValues>) => onChange({ ...values, ...patch });
+  const valuesRef = useRef(values);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingFileReadRef = useRef<object | null>(null);
+  const [localArtError, setLocalArtError] = useState<string | null>(null);
+  const [localArtStatus, setLocalArtStatus] = useState<string | null>(null);
+  const replace = (patch: Partial<IdentityDraftValues>) => {
+    const next = { ...valuesRef.current, ...patch };
+    valuesRef.current = next;
+    return onChange(next);
+  };
   const number = (raw: string): number | null => (raw === '' ? null : Number(raw));
+  const art = values.artAssetKeyOrLocalFile;
+  const invalidatePendingFileRead = () => {
+    pendingFileReadRef.current = null;
+    onFileReadPendingChange(false);
+    setLocalArtStatus(null);
+    if (fileInputRef.current !== null) fileInputRef.current.value = '';
+  };
+  const artRefusal =
+    draft.lastRefusal?.code === 'INVALID_FIELD' &&
+    draft.lastRefusal.error.field === 'artAssetKeyOrLocalFile'
+      ? draft.lastRefusal
+      : null;
+  const artFeedbackId =
+    localArtError === null && artRefusal === null ? undefined : 'chr-001-character-art-feedback';
+  useLayoutEffect(() => {
+    valuesRef.current = values;
+  }, [values]);
+  useEffect(() => {
+    return () => {
+      pendingFileReadRef.current = null;
+      onFileReadPendingChange(false);
+    };
+  }, [onFileReadPendingChange]);
   return (
     <section aria-label="Черновик идентичности" data-identity-dirty={draft.dirty}>
       {(
@@ -166,15 +252,9 @@ function IdentityFields({
           ['Возраст', 'age', 'number', 'any'],
           ['Масса, кг', 'massKg', 'number', '0.1'],
           ['Описание', 'description', 'text', undefined],
-          ['Ключ портрета', 'artAssetKeyOrLocalFile', 'text', undefined],
         ] as const
       ).map(([label, key, type, step]) => {
-        const value =
-          key === 'artAssetKeyOrLocalFile'
-            ? values[key]?.kind === 'asset-key'
-              ? values[key].assetKey
-              : ''
-            : (values[key] ?? '');
+        const value = values[key] ?? '';
         return (
           <label key={key}>
             {label}{' '}
@@ -186,10 +266,10 @@ function IdentityFields({
               onChange={(event) => {
                 const raw = event.target.value;
                 replace(
-                  key === 'artAssetKeyOrLocalFile'
-                    ? { [key]: raw === '' ? null : { kind: 'asset-key', assetKey: raw } }
+                  type === 'number'
+                    ? { [key]: number(raw) }
                     : {
-                        [key]: type === 'number' ? number(raw) : raw || null,
+                        [key]: raw || null,
                       },
                 );
               }}
@@ -197,6 +277,125 @@ function IdentityFields({
           </label>
         );
       })}
+      <fieldset aria-busy={fileReadPending}>
+        <legend>Арт персонажа</legend>
+        <label>
+          Заглушка из каталога{' '}
+          <select
+            aria-describedby={artFeedbackId}
+            aria-invalid={artFeedbackId === undefined ? undefined : true}
+            data-character-art-placeholder
+            value={art?.kind === 'asset-key' ? art.assetKey : ''}
+            onChange={(event) => {
+              const assetKey = event.target.value;
+              if (assetKey !== '' && !LOCAL_CHARACTER_PORTRAIT_ASSET_KEY_SET.has(assetKey)) {
+                throw new Error(
+                  `unrecognized CHR-001 portrait asset key ${JSON.stringify(assetKey)}`,
+                );
+              }
+              invalidatePendingFileRead();
+              setLocalArtError(null);
+              replace({
+                artAssetKeyOrLocalFile: assetKey === '' ? null : { assetKey, kind: 'asset-key' },
+              });
+            }}
+          >
+            <option value="">—</option>
+            {LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS.map((assetKey) => (
+              <option key={assetKey} value={assetKey}>
+                {assetKey}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Файл PNG или JPEG{' '}
+          <input
+            ref={fileInputRef}
+            accept={CHARACTER_ART_ACCEPT}
+            aria-describedby={artFeedbackId}
+            aria-invalid={artFeedbackId === undefined ? undefined : true}
+            data-character-art-file
+            type="file"
+            onChange={(event) => {
+              const input = event.currentTarget;
+              const file = input.files?.[0];
+              input.value = '';
+              if (file === undefined) return;
+              const readToken = {};
+              pendingFileReadRef.current = readToken;
+              onFileReadPendingChange(true);
+              setLocalArtError(null);
+              setLocalArtStatus('Чтение файла…');
+              void characterArtFromFile(file)
+                .then((result) => {
+                  if (pendingFileReadRef.current !== readToken) return;
+                  pendingFileReadRef.current = null;
+                  if (!result.ok) {
+                    onFileReadPendingChange(false);
+                    setLocalArtStatus(null);
+                    setLocalArtError(
+                      result.reason === 'FILE_TOO_LARGE'
+                        ? 'Поле «Арт персонажа»: файл превышает допустимый размер 12 МБ.'
+                        : 'Поле «Арт персонажа»: содержимое файла не является PNG или JPEG.',
+                    );
+                    return;
+                  }
+                  const update = replace({ artAssetKeyOrLocalFile: result.value });
+                  onFileReadPendingChange(false);
+                  if (!update.ok) {
+                    setLocalArtStatus(null);
+                    setLocalArtError(
+                      'Поле «Арт персонажа»: изменение не отправлено; черновик недоступен.',
+                    );
+                  } else {
+                    setLocalArtStatus('Файл прочитан и отправлен хосту.');
+                  }
+                })
+                .catch(() => {
+                  if (pendingFileReadRef.current !== readToken) return;
+                  pendingFileReadRef.current = null;
+                  onFileReadPendingChange(false);
+                  setLocalArtStatus(null);
+                  setLocalArtError('Поле «Арт персонажа»: файл не удалось прочитать.');
+                });
+            }}
+          />
+        </label>
+        <p data-character-art-current>
+          {art === null
+            ? 'Арт не выбран.'
+            : art.kind === 'asset-key'
+              ? `Заглушка: ${art.assetKey}`
+              : `Локальный файл: ${art.mediaType}`}
+        </p>
+        <button
+          data-character-art-clear
+          type="button"
+          onClick={() => {
+            invalidatePendingFileRead();
+            setLocalArtError(null);
+            replace({ artAssetKeyOrLocalFile: null });
+          }}
+        >
+          Снять арт
+        </button>
+        {localArtStatus === null ? null : (
+          <p aria-live="polite" data-character-art-status role="status">
+            {localArtStatus}
+          </p>
+        )}
+        {artFeedbackId === undefined ? null : (
+          <div id={artFeedbackId}>
+            {localArtError === null ? null : (
+              <p role="alert" data-character-art-local-error>
+                {localArtError}
+              </p>
+            )}
+            {artRefusal === null ? null : <IdentityRefusalAlert refusal={artRefusal} />}
+          </div>
+        )}
+      </fieldset>
       <label>
         Пол{' '}
         <select
@@ -215,8 +414,8 @@ function IdentityFields({
           <option value="FEMALE">FEMALE</option>
         </select>
       </label>
-      {draft.lastRefusal === null ? null : (
-        <pre role="alert">{JSON.stringify(draft.lastRefusal, null, 2)}</pre>
+      {draft.lastRefusal === null || artRefusal !== null ? null : (
+        <IdentityRefusalAlert refusal={draft.lastRefusal} />
       )}
     </section>
   );
@@ -227,6 +426,7 @@ export function App(): ReactElement {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
   const [raceChoiceDraft, setRaceChoiceDraft] = useState<RaceChoiceDraft>(null);
+  const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
   useEffect(() => {
@@ -247,6 +447,12 @@ export function App(): ReactElement {
     if (state.kind !== 'ready') return;
     window.history.replaceState(null, '', state.snapshot.path);
   }, [state]);
+  const availableActionKeys =
+    characterArtReadPending && snapshot?.formId === 'CHR-001'
+      ? snapshot.availableActionKeys.filter(
+          (actionKey) => actionKey !== CHR_001_CHECKPOINT_ACTION_KEY,
+        )
+      : snapshot?.availableActionKeys;
   return (
     <>
       <ConnectionBanner state={state} />
@@ -266,7 +472,14 @@ export function App(): ReactElement {
             {snapshot.formId === 'CHR-001' && identityDraft !== null ? (
               <IdentityFields
                 draft={identityDraft}
-                onChange={(values) => connectionRef.current?.replaceIdentityDraft(values)}
+                fileReadPending={characterArtReadPending}
+                onChange={(values) =>
+                  connectionRef.current?.replaceIdentityDraft(values) ?? {
+                    detail: 'projection connection is not ready',
+                    ok: false,
+                  }
+                }
+                onFileReadPendingChange={setCharacterArtReadPending}
               />
             ) : null}
             {snapshot.formId === 'CHR-010' ? (
@@ -279,9 +492,16 @@ export function App(): ReactElement {
               </section>
             ) : null}
             <AtlasForm
-              availableActionKeys={snapshot.availableActionKeys}
+              availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}
               onAction={(selection) => {
+                if (
+                  characterArtReadPending &&
+                  selection.actionKey === CHR_001_CHECKPOINT_ACTION_KEY
+                ) {
+                  setActionNotice('Переход не отправлен: дождитесь чтения файла арта.');
+                  return;
+                }
                 const connection = connectionRef.current;
                 if (connection === null) {
                   setActionNotice('Переход не отправлен: соединение ещё не готово.');

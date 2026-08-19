@@ -1548,6 +1548,10 @@ export function connectProjection(
       }
     },
     replaceIdentityDraft: (values) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (socket === null || socket.readyState !== WebSocket.OPEN) {
+        return { ok: false, detail: 'WebSocket is not open' };
+      }
       if (identity === null) return { ok: false, detail: 'no active CHR-001 draft scope' };
       if (pendingCheckpoint !== null)
         return { ok: false, detail: 'identity is frozen while checkpoint delivery is pending' };
