@@ -169,7 +169,7 @@ Initial `CHR-001.artAssetKeyOrLocalFile` остаётся `null`, пока по�
 
 Владение `raceChoice` следующей формой подтверждают
 [`$.forms[60].requiredFields[0..7]`, строки 54916–54924](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54916-L54924)
-и [`forms.json[60].requiredFields[0..7]`, строки 27750–27758](../../generated/spec/atlas/forms.json#L27750-L27758).
+и [`forms-by-id.json["CHR-010"].requiredFields[0..7]`, строки 14407–14416](../../generated/spec/atlas/forms-by-id.json#L14407-L14416).
 
 Этот ADR не вводит mapping, в особенности не сопоставляет substring `unified`
 с race enum `UNITED`.

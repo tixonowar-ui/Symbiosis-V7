@@ -25,13 +25,13 @@ safe-return `CHR-010::CTA::003` после identity checkpoint истинен, �
 спорных полей даёт только имена:
 
 - [`$.forms[60].requiredFields[0..7]`, строки 54916–54924](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54916-L54924);
-- [`forms.json[60].requiredFields[0..7]`, строки 27750–27758](../../generated/spec/atlas/forms.json#L27750-L27758).
+- [`forms-by-id.json["CHR-010"].requiredFields[0..7]`, строки 14407–14416](../../generated/spec/atlas/forms-by-id.json#L14407-L14416).
 
 Начальное состояние формы называется `UNSELECTED`, а `SELECTED_UNLOCKED`
 появляется после выбора и показывает последствия до первого результата:
 
 - [`$.forms[60].states.UNSELECTED/SELECTED_UNLOCKED`, строки 55443–55445](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L55443-L55445);
-- [`forms.json[60].states.UNSELECTED/SELECTED_UNLOCKED`, строки 27764–27767](../../generated/spec/atlas/forms.json#L27764-L27767).
+- [`forms-by-id.json["CHR-010"].states.UNSELECTED/SELECTED_UNLOCKED`, строки 14421–14424](../../generated/spec/atlas/forms-by-id.json#L14421-L14424).
 
 QA также требует показать последствия расы до продолжения, но не определяет
 initial preview shape:
@@ -49,14 +49,14 @@ Safe-return tuple однозначен: target `CHR-001`, guard `first creation 
 absent; identity checkpoint preserved`, kind `safe-return`:
 
 - [`$.forms[60].actions.ctaAvailabilityByAction[2]`, строки 55131–55136](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L55131-L55136);
-- [`forms.json[60].actions.ctaAvailabilityByAction[2]`, строки 27342–27402](../../generated/spec/atlas/forms.json#L27342-L27402);
+- [`forms-by-id.json["CHR-010"].actions.ctaAvailabilityByAction[2]`, строки 13999–14060](../../generated/spec/atlas/forms-by-id.json#L13999-L14060);
 - [`$.transitions[1337]`, строки 224806–224811](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L224806-L224811);
 - [`transitions.json[1337]`, строки 9361–9367](../../generated/spec/atlas/transitions.json#L9361-L9367).
 
 `CTA::001/002` требуют committed race и ведут в `CHR-016`/`CHR-036`:
 
 - [`$.forms[60].actions.ctaAvailabilityByAction[0..1]`, строки 55006–55074](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L55006-L55074);
-- [`forms.json[60].actions.ctaAvailabilityByAction[0..1]`, строки 27217–27340](../../generated/spec/atlas/forms.json#L27217-L27340).
+- [`forms-by-id.json["CHR-010"].actions.ctaAvailabilityByAction[0..1]`, строки 13875–13998](../../generated/spec/atlas/forms-by-id.json#L13875-L13998).
 
 [ADR 0029](0029-wizard-draft-initial-payload.md) задаёт `null` для ещё не
 введённого `raceChoice` и отсутствие текущей команды. [ADR 0033](0033-chr-001-identity-input-contract.md)

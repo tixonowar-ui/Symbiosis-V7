@@ -185,7 +185,7 @@ if (rendererFormsById !== null && detailedFormsById !== null) {
   );
 }
 
-const formRows = rows('atlas/forms.json');
+const formRows = detailedFormsById === null ? [] : Object.values(detailedFormsById);
 const qaScenarioRows = rows('atlas/qa-scenarios.json');
 validateAtlasFormQaMirrors(formRows, qaScenarioRows).forEach((problem) =>
   report(problem.file, problem.id, problem.message),

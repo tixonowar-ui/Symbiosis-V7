@@ -130,7 +130,7 @@ tests/
   fixtures/         ПУСТО
 
 docs/
-  adr/              37 решений + README. Высший источник правды
+  adr/              38 решений + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

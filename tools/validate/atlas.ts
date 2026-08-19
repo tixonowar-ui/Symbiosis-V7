@@ -11,7 +11,7 @@ export interface RendererFormCatalogueValidation {
 
 const FORM_INDEX_FILE = 'atlas/renderer/forms-by-id.json';
 const DETAILED_FORM_INDEX_FILE = 'atlas/forms-by-id.json';
-const FORMS_FILE = 'atlas/forms.json';
+const FORMS_FILE = DETAILED_FORM_INDEX_FILE;
 const JOURNEYS_FILE = 'atlas/journeys.json';
 const QA_SCENARIOS_FILE = 'atlas/qa-scenarios.json';
 const TRANSITIONS_FILE = 'atlas/transitions.json';
