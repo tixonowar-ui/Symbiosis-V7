@@ -18,6 +18,22 @@ const HOST_TRANSITION_KINDS = new Set([
   'operation-command',
   'read-only-command',
 ]);
+const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'APP-001',
+  'APP-002',
+  'APP-004',
+  'CHR-001',
+  'CHR-002',
+  'CHR-010',
+  'CHR-016',
+  'CHR-036',
+]);
+const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
+  'CHR-002',
+  'CHR-010',
+  'CHR-016',
+  'CHR-036',
+]);
 
 const jsonFile = (path: string): Promise<unknown> =>
   readJsonFile(path, 'protocol vocabulary source');
@@ -62,13 +78,7 @@ export async function loadProtocolVocabulary(
     );
     if (new Set(keys).size !== keys.length) throw new Error(`${label}: duplicate actionKey`);
     actionKeys.set(formId, new Set(keys));
-    if (
-      formId === 'APP-001' ||
-      formId === 'APP-002' ||
-      formId === 'APP-004' ||
-      formId === 'CHR-001' ||
-      formId === 'CHR-010'
-    ) {
+    if (PRESENTED_FORM_IDS.has(formId)) {
       presentedForms.set(formId, {
         route: string(form['route'], `${label}.route`),
         type: string(form['type'], `${label}.type`),
@@ -145,7 +155,7 @@ export async function loadProtocolVocabulary(
           bindings[0].value.length > 0
         );
       }
-      if (formId === 'CHR-010') {
+      if (INHERITED_CHARACTER_CREATION_FORM_IDS.has(formId)) {
         return (
           bindings.length === 1 &&
           bindings[0]?.parameterIndex === 0 &&

@@ -23,6 +23,7 @@ import type {
   ClientToHostMessage,
   ClientToHostV2Message,
   CommandRefusalMessage,
+  CommandReceipt,
   CommandReplayMessage,
   CommandResultMessage,
   FormActionIntentV2Message,
@@ -43,16 +44,26 @@ import type {
   WorkflowCommandId,
 } from '@shared/index.js';
 
-import { listLocalCharacters, loadDeviceId } from '../persistence/index.js';
+import { listLocalCharacters, loadDeviceId, readLocalCharacter } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
 import { createIdentityDraftRuntime } from './identity-draft.js';
 import type { IdentityDraftRuntime } from './identity-draft.js';
 import {
+  commitCreationSetDecide,
+  CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
+  CreationSetDecideApplicationError,
+  loadCreationWizardCheckpoint,
+  loadCreationWizardCommandByCommandId,
+  normalizeCreationSetDecideRequest,
+} from './creation-set-decide.js';
+import type {
+  CreationSetDecideCommandRequest,
+  DurableCreationWizardCheckpoint,
+} from './creation-set-decide.js';
+import {
   commitIdentityCheckpoint,
   IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
   IdentityCheckpointApplicationError,
-  loadIdentityCheckpoint,
-  loadIdentityCheckpointByCommandId,
   normalizeIdentityCheckpointRequest,
   validateIdentityCheckpointRequest,
 } from './identity-checkpoint.js';
@@ -85,12 +96,24 @@ import {
   CHR_001_FORM_ID,
   CHR_001_INITIAL_ACTION_KEYS,
   CHR_001_ROUTE,
+  CHR_002_FORM_ID,
+  CHR_002_INITIAL_ACTION_KEYS,
+  CHR_002_ROUTE,
   CHR_010_FORM_ID,
   CHR_010_INITIAL_ACTION_KEYS,
   CHR_010_ROUTE,
+  CHR_016_FORM_ID,
+  CHR_016_INITIAL_ACTION_KEYS,
+  CHR_016_ROUTE,
+  CHR_036_FORM_ID,
+  CHR_036_INITIAL_ACTION_KEYS,
+  CHR_036_ROUTE,
   projectChr001,
   projectInitialChr001,
+  projectInitialChr002,
   projectInitialChr010,
+  projectInitialChr016,
+  projectInitialChr036,
 } from './projections/chr.js';
 
 export interface HostServerConfig {
@@ -116,7 +139,7 @@ type HostVocabulary = ProtocolVocabulary & WireV3Vocabulary;
 type FormActionTerminal = FormActionRefusalV2Message | ProjectionSnapshotV2Message;
 type CommandTerminal = CommandRefusalMessage | CommandResultMessage;
 interface CommandJournalEntry {
-  readonly durableCheckpoint?: DurableIdentityCheckpoint;
+  readonly durableCharacterId?: string;
   readonly request: CommandRequest;
   readonly terminal: CommandTerminal;
 }
@@ -127,7 +150,14 @@ interface ConfirmedNavigationContext {
   readonly entityLocalCharacterId: string | null;
   readonly entityRevisions: RevisionVector | null;
   readonly formId:
-    'APP-001' | 'APP-002' | 'APP-004' | typeof CHR_001_FORM_ID | typeof CHR_010_FORM_ID;
+    | 'APP-001'
+    | 'APP-002'
+    | 'APP-004'
+    | typeof CHR_002_FORM_ID
+    | typeof CHR_001_FORM_ID
+    | typeof CHR_010_FORM_ID
+    | typeof CHR_016_FORM_ID
+    | typeof CHR_036_FORM_ID;
   readonly identityDraftScope: IdentityDraftScope | null;
 }
 type ConfirmedPlayerContext = ConfirmedNavigationContext & { readonly contextId: string };
@@ -234,7 +264,7 @@ function allocatedWizardCheckpointId(allocator: () => string, characterDraftId: 
 
 function allocatedReceiptId(
   allocator: () => string,
-  request: IdentityCheckpointCommandRequest,
+  request: CreationSetDecideCommandRequest | IdentityCheckpointCommandRequest,
 ): string {
   const value: unknown = allocator();
   if (
@@ -255,6 +285,33 @@ function allocatedReceiptId(
     throw new Error('command receipt allocator reused a command, character, or checkpoint ID');
   }
   return value;
+}
+
+function creationRequestMatchesCheckpoint(
+  request: CreationSetDecideCommandRequest,
+  checkpoint: DurableCreationWizardCheckpoint,
+): boolean {
+  const identity = checkpoint.identityStage.request.payload;
+  return (
+    request.payload.sourceFormId !== CHR_002_FORM_ID &&
+    checkpoint.nextStageEnvelope.formId === request.payload.sourceFormId &&
+    request.payload.characterDraftId === identity.characterDraftId &&
+    request.payload.wizardCheckpointId === identity.wizardCheckpointId &&
+    request.payload.draftRevision === checkpoint.receipt.result.draftRevision &&
+    isDeepStrictEqual(request.expectedRevisions, checkpoint.receipt.revisions)
+  );
+}
+
+function preflightCreationDecision(checkpoint: DurableCreationWizardCheckpoint): void {
+  const revisions = checkpoint.receipt.revisions;
+  if (
+    checkpoint.receipt.result.draftRevision === Number.MAX_SAFE_INTEGER ||
+    checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||
+    revisions.projectionRevision === Number.MAX_SAFE_INTEGER ||
+    revisions.stateRevision === Number.MAX_SAFE_INTEGER
+  ) {
+    throw new RangeError('creation decision revisions cannot advance past MAX_SAFE_INTEGER');
+  }
 }
 
 function createLibraryRevisionRuntime(): LibraryRevisionRuntime {
@@ -473,9 +530,16 @@ function currentNavigationRevisions(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
 ): RevisionVector {
-  return connection.current?.entityRevisions === null || connection.current === null
-    ? checkedRevisions(dependencies.readRevisions())
-    : checkedRevisions(connection.current.entityRevisions);
+  const current = connection.current;
+  if (current === null || current.entityLocalCharacterId === null) {
+    return checkedRevisions(dependencies.readRevisions());
+  }
+  const localCharacter = readLocalCharacter(dependencies.database, current.entityLocalCharacterId);
+  return checkedRevisions({
+    actorVisibilityRevision: localCharacter.actorVisibilityRevision,
+    projectionRevision: localCharacter.projectionRevision,
+    stateRevision: localCharacter.stateRevision,
+  });
 }
 
 function sendChecked(
@@ -534,7 +598,13 @@ function adoptNavigationContext(
     dependencies.identitySessions.delete(next.deviceId);
   }
   connection.current = next;
-  if (next.identityDraftScope !== null || next.formId === CHR_010_FORM_ID) {
+  if (
+    next.identityDraftScope !== null ||
+    next.formId === CHR_010_FORM_ID ||
+    next.formId === CHR_016_FORM_ID ||
+    next.formId === CHR_036_FORM_ID ||
+    next.formId === CHR_002_FORM_ID
+  ) {
     dependencies.identitySessions.set(next.deviceId, next);
   }
 }
@@ -584,6 +654,74 @@ function identityCheckpointBase(checkpoint: DurableIdentityCheckpoint): Presente
     routeBindings: [{ parameterIndex: 0, source: 'inherited', value: result.characterDraftId }],
     routeTemplate: CHR_010_ROUTE,
   };
+}
+
+function creationWizardBase(checkpoint: DurableCreationWizardCheckpoint): PresentedBaseForm {
+  const { characterDraftId, wizardCheckpointId } = checkpoint.identityStage.request.payload;
+  const draftRevision = checkpoint.receipt.result.draftRevision;
+  const routeBindings = checkpoint.nextStageEnvelope.routeBindings;
+  switch (checkpoint.nextStageEnvelope.formId) {
+    case CHR_010_FORM_ID:
+      return {
+        availableActionKeys: CHR_010_INITIAL_ACTION_KEYS,
+        formId: CHR_010_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectInitialChr010(
+          characterDraftId,
+          wizardCheckpointId,
+          draftRevision,
+        ),
+        routeBindings,
+        routeTemplate: CHR_010_ROUTE,
+      };
+    case CHR_016_FORM_ID: {
+      const raceChoice = checkpoint.raceAndMethodStage?.race?.value;
+      if (raceChoice !== 'UNITED' && raceChoice !== 'FREE') {
+        throw new Error(`durable CHR-016 destination has raceChoice ${JSON.stringify(raceChoice)}`);
+      }
+      return {
+        availableActionKeys: CHR_016_INITIAL_ACTION_KEYS,
+        formId: CHR_016_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectInitialChr016(
+          characterDraftId,
+          wizardCheckpointId,
+          draftRevision,
+          raceChoice,
+        ),
+        routeBindings,
+        routeTemplate: CHR_016_ROUTE,
+      };
+    }
+    case CHR_036_FORM_ID:
+      return {
+        availableActionKeys: CHR_036_INITIAL_ACTION_KEYS,
+        formId: CHR_036_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectInitialChr036(
+          characterDraftId,
+          wizardCheckpointId,
+          draftRevision,
+        ),
+        routeBindings,
+        routeTemplate: CHR_036_ROUTE,
+      };
+    case CHR_002_FORM_ID:
+      return {
+        availableActionKeys: CHR_002_INITIAL_ACTION_KEYS,
+        formId: CHR_002_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectInitialChr002(
+          characterDraftId,
+          wizardCheckpointId,
+          draftRevision,
+        ),
+        routeBindings,
+        routeTemplate: CHR_002_ROUTE,
+      };
+    case 'CHR-003':
+      throw new Error('CHR-003 destination is outside the implemented SET-DECIDE vertical');
+  }
 }
 
 function handleIdentityDraftReplace(
@@ -875,12 +1013,12 @@ function commandRefusal(
   };
 }
 
-function commandResult(checkpoint: DurableIdentityCheckpoint): CommandResultMessage {
+function commandResult(receipt: CommandReceipt): CommandResultMessage {
   return {
     lifecycleState: 'COMMITTED',
     messageType: 'command.result',
     protocolVersion: WIRE_PROTOCOL_VERSION,
-    receipt: checkpoint.receipt,
+    receipt,
   };
 }
 
@@ -924,6 +1062,25 @@ function commandRequestsMatch(saved: CommandRequest, incoming: CommandRequest): 
       throw error;
     }
   }
+  if (
+    saved.commandKind === 'workflow-command' &&
+    saved.workflowCommandId === CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID
+  ) {
+    try {
+      return isDeepStrictEqual(
+        normalizeCreationSetDecideRequest(saved),
+        normalizeCreationSetDecideRequest(incoming),
+      );
+    } catch (error: unknown) {
+      if (error instanceof CreationSetDecideApplicationError) {
+        return isDeepStrictEqual(
+          normalizeJsonNegativeZero(saved),
+          normalizeJsonNegativeZero(incoming),
+        );
+      }
+      throw error;
+    }
+  }
   return isDeepStrictEqual(saved, incoming);
 }
 
@@ -934,12 +1091,12 @@ function knownCommandById(
 ): CommandJournalEntry | undefined {
   const inMemory = commandJournal.get(commandId);
   if (inMemory !== undefined) return inMemory;
-  const durableCheckpoint = loadIdentityCheckpointByCommandId(dependencies.database, commandId);
-  if (durableCheckpoint === null) return undefined;
+  const durableCommand = loadCreationWizardCommandByCommandId(dependencies.database, commandId);
+  if (durableCommand === null) return undefined;
   const entry = {
-    durableCheckpoint,
-    request: durableCheckpoint.request,
-    terminal: commandResult(durableCheckpoint),
+    durableCharacterId: durableCommand.durableCheckpoint.localCharacter.localCharacterId,
+    request: durableCommand.request,
+    terminal: commandResult(durableCommand.receipt),
   };
   commandJournal.set(commandId, entry);
   return entry;
@@ -999,6 +1156,50 @@ function sendCheckpointDestination(
   );
 }
 
+function creationWizardContext(
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+  checkpoint: DurableCreationWizardCheckpoint,
+): ConfirmedNavigationContext {
+  const formId = checkpoint.nextStageEnvelope.formId;
+  if (formId === 'CHR-003') {
+    throw new Error('CHR-003 context is outside the implemented SET-DECIDE vertical');
+  }
+  const deviceId = loadDeviceId(dependencies.database);
+  const contextId =
+    connection.current?.contextId ??
+    dependencies.identitySessions.get(deviceId)?.contextId ??
+    allocatedId(dependencies.allocateContextId, 'player context', UUID_V4_PATTERN);
+  return {
+    contextId,
+    deviceId,
+    entityLocalCharacterId: checkpoint.localCharacter.localCharacterId,
+    entityRevisions: { ...checkpoint.receipt.revisions },
+    formId,
+    identityDraftScope: null,
+  };
+}
+
+function sendCreationWizardDestination(
+  socket: WebSocket,
+  checkpoint: DurableCreationWizardCheckpoint,
+  dependencies: NavigationDependencies,
+  correlationId: string,
+  reason: 'COMMAND_DESTINATION' | 'RECONNECT',
+): void {
+  sendCheckedV2(
+    socket,
+    projectionSnapshot(
+      correlationId,
+      creationWizardBase(checkpoint),
+      'player',
+      checkpoint.receipt.revisions,
+      reason,
+    ),
+    dependencies.vocabulary,
+  );
+}
+
 function handleCommandRequest(
   socket: WebSocket,
   message: CommandRequest,
@@ -1028,20 +1229,24 @@ function handleCommandRequest(
       sendChecked(socket, known.terminal, dependencies.vocabulary);
       return;
     }
-    if (known.durableCheckpoint === undefined) {
-      throw new Error('committed identity command journal entry has no durable checkpoint');
+    if (known.durableCharacterId === undefined) {
+      throw new Error('committed character command journal entry has no durable character');
     }
+    const latestCheckpoint = loadCreationWizardCheckpoint(
+      dependencies.database,
+      known.durableCharacterId,
+    );
     // The durable boundary destroys the CHR-001 authority before any transport
     // delivery. A failed terminal send must not leave a parallel old scope mutable.
     adoptNavigationContext(
       connection,
       dependencies,
-      checkpointContext(connection, dependencies, known.durableCheckpoint),
+      creationWizardContext(connection, dependencies, latestCheckpoint),
     );
     sendChecked(socket, commandReplay(known.terminal.receipt), dependencies.vocabulary);
-    sendCheckpointDestination(
+    sendCreationWizardDestination(
       socket,
-      known.durableCheckpoint,
+      latestCheckpoint,
       dependencies,
       message.commandId,
       'COMMAND_DESTINATION',
@@ -1065,6 +1270,94 @@ function handleCommandRequest(
       path: '$.transition',
       value: { ...message.transition },
     });
+    return;
+  }
+  if (message.workflowCommandId === CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID) {
+    let request: CreationSetDecideCommandRequest;
+    try {
+      request = normalizeCreationSetDecideRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSetDecideApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.identityDraftScope !== null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== request.payload.sourceFormId ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    if (!isDeepStrictEqual(request.expectedRevisions, revisions)) {
+      finishRefusal(request, {
+        actual: revisions,
+        code: 'STALE_REVISION',
+        expected: request.expectedRevisions,
+      });
+      return;
+    }
+    let durableCheckpoint = loadCreationWizardCheckpoint(
+      dependencies.database,
+      current.entityLocalCharacterId,
+    );
+    if (!creationRequestMatchesCheckpoint(request, durableCheckpoint)) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    try {
+      preflightCreationDecision(durableCheckpoint);
+    } catch (error: unknown) {
+      if (!(error instanceof RangeError)) throw error;
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+
+    const finalRevisions = currentNavigationRevisions(connection, dependencies);
+    durableCheckpoint = loadCreationWizardCheckpoint(
+      dependencies.database,
+      current.entityLocalCharacterId,
+    );
+    if (
+      !isDeepStrictEqual(finalRevisions, revisions) ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID) ||
+      !creationRequestMatchesCheckpoint(request, durableCheckpoint)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    try {
+      durableCheckpoint = commitCreationSetDecide(dependencies.database, request, receiptId);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSetDecideApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durableCheckpoint.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durableCheckpoint.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durableCheckpoint),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durableCheckpoint,
+      dependencies,
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
     return;
   }
   let request: IdentityCheckpointCommandRequest;
@@ -1132,8 +1425,12 @@ function handleCommandRequest(
   }
 
   const durableCheckpoint = commitIdentityCheckpoint(dependencies.database, request, receiptId);
-  const terminal = commandResult(durableCheckpoint);
-  commandJournal.set(request.commandId, { durableCheckpoint, request, terminal });
+  const terminal = commandResult(durableCheckpoint.receipt);
+  commandJournal.set(request.commandId, {
+    durableCharacterId: durableCheckpoint.localCharacter.localCharacterId,
+    request,
+    terminal,
+  });
   // Durability ends the pre-commit scope even if a later runtime-axis update or
   // transport write fails. Recovery is then driven by the stored receipt.
   adoptNavigationContext(
@@ -1160,14 +1457,18 @@ function replayUnacknowledgedCommands(
   vocabulary: ProtocolVocabulary,
   commandJournal: CommandJournal,
   dependencies: NavigationDependencies,
-): readonly DurableIdentityCheckpoint[] {
-  const destinations: DurableIdentityCheckpoint[] = [];
+): readonly DurableCreationWizardCheckpoint[] {
+  const destinations: DurableCreationWizardCheckpoint[] = [];
   for (const [index, commandId] of commandIds.entries()) {
     const known = knownCommandById(commandId, commandJournal, dependencies);
     if (known !== undefined) {
       if (known.terminal.messageType === 'command.result') {
         sendChecked(socket, commandReplay(known.terminal.receipt), vocabulary);
-        if (known.durableCheckpoint !== undefined) destinations.push(known.durableCheckpoint);
+        if (known.durableCharacterId !== undefined) {
+          destinations.push(
+            loadCreationWizardCheckpoint(dependencies.database, known.durableCharacterId),
+          );
+        }
       } else {
         sendChecked(socket, known.terminal, vocabulary);
       }
@@ -1267,36 +1568,45 @@ function handleReconnectV2(
   ];
   const executableSet = new Set(executableWorkflowCommandIds);
   const restored = dependencies.identitySessions.get(deviceId);
-  let replayDestination: DurableIdentityCheckpoint | undefined;
+  let replayDestination: DurableCreationWizardCheckpoint | undefined;
   for (const destination of replayDestinations) {
     if (
       replayDestination !== undefined &&
       replayDestination.localCharacter.localCharacterId !==
         destination.localCharacter.localCharacterId
     ) {
-      throw new Error('reconnect contains multiple durable identity checkpoint destinations');
+      throw new Error('reconnect contains multiple durable character wizard destinations');
     }
-    replayDestination = destination;
+    if (
+      replayDestination === undefined ||
+      destination.checkpoint.checkpointRevision > replayDestination.checkpoint.checkpointRevision
+    ) {
+      replayDestination = destination;
+    }
   }
   let base: PresentedBaseForm;
   let nextContext: ConfirmedNavigationContext;
   let projectionRole: 'player' | null;
   let revisions: RevisionVector;
   if (replayDestination !== undefined) {
-    base = identityCheckpointBase(replayDestination);
-    nextContext = checkpointContext(connection, dependencies, replayDestination);
+    base = creationWizardBase(replayDestination);
+    nextContext = creationWizardContext(connection, dependencies, replayDestination);
     projectionRole = 'player';
     revisions = replayDestination.receipt.revisions;
-  } else if (restored?.formId === CHR_010_FORM_ID && restored.entityLocalCharacterId !== null) {
-    const checkpoint = loadIdentityCheckpoint(
+  } else if (
+    restored?.entityLocalCharacterId !== null &&
+    restored?.entityLocalCharacterId !== undefined &&
+    (restored.formId === CHR_010_FORM_ID ||
+      restored.formId === CHR_016_FORM_ID ||
+      restored.formId === CHR_036_FORM_ID ||
+      restored.formId === CHR_002_FORM_ID)
+  ) {
+    const checkpoint = loadCreationWizardCheckpoint(
       dependencies.database,
       restored.entityLocalCharacterId,
     );
-    base = identityCheckpointBase(checkpoint);
-    nextContext = {
-      ...restored,
-      entityRevisions: { ...checkpoint.receipt.revisions },
-    };
+    base = creationWizardBase(checkpoint);
+    nextContext = creationWizardContext(connection, dependencies, checkpoint);
     projectionRole = 'player';
     revisions = checkpoint.receipt.revisions;
   } else if (restored !== undefined && restored.identityDraftScope !== null) {

@@ -36,6 +36,9 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'APP-011',
   'CHR-001',
   'CHR-010',
+  'CHR-016',
+  'CHR-036',
+  'CHR-002',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -149,7 +152,7 @@ function fixtureSources({
 }
 
 describe('atlas implemented-form renderer', () => {
-  it('registers and renders all APP forms plus CHR-001 and CHR-010 with their atlas type', () => {
+  it('registers and renders APP plus the implemented CHR wizard slice with atlas types', () => {
     expect(IMPLEMENTED_FORM_IDS).toEqual(TEST_IMPLEMENTED_FORM_IDS);
 
     let screens = 0;
@@ -165,8 +168,8 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // Issue #33 fixes APP at nine screens/two dialogs; CHR-001 and CHR-010 add two screens.
-    expect(screens).toBe(11);
+    // Issue #33 fixes APP at nine screens/two dialogs; the CHR slice adds five screens.
+    expect(screens).toBe(14);
     expect(dialogs).toBe(2);
   });
 
@@ -273,6 +276,16 @@ describe('atlas implemented-form renderer', () => {
     ]);
   });
 
+  it.each([
+    ['CHR-016', ['CHR-016::CTA::003', 'CHR-016::CTA::004']],
+    ['CHR-036', ['CHR-036::CTA::004', 'CHR-036::CTA::005']],
+    ['CHR-002', ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005']],
+  ] as const)('renders the source-ordered initial %s selectors', (formId, actionKeys) => {
+    const { container } = renderAtlas(formId, actionKeys);
+
+    expect(buttons(container).map((button) => button.dataset.atlasActionKey)).toEqual(actionKeys);
+  });
+
   it('keeps dialog routes and required-field notation as inert atlas text', () => {
     for (const id of ['APP-007', 'APP-008'] as const) {
       const { container } = renderAtlas(id);
@@ -323,8 +336,8 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
-    expect(() => getAtlasFormModel('CHR-002')).toThrow(
-      `form "CHR-002" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
+    expect(() => getAtlasFormModel('CHR-003')).toThrow(
+      `form "CHR-003" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 
