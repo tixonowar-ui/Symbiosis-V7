@@ -30,6 +30,36 @@ export type CreationStatSetEntryIndex = (typeof CREATION_STAT_SET_ENTRY_INDICES)
 export type CreationStatReturnDecisionFormId =
   (typeof CREATION_STAT_RETURN_DECISION_FORM_IDS)[number];
 export type CreationStatAttemptIndex = 1 | 2 | 3 | 4 | 5;
+export type CreationStatSetDecision =
+  'ACCEPT_SET' | 'GO_ATTEMPT_2' | 'GO_NEXT_ATTEMPT' | 'USE_POINT_BUY_85' | 'USE_POINT_BUY_90';
+export type CreationStatAbandonmentTransitionKind =
+  'ADVENTUROUS_TO_85' | 'ADVENTUROUS_TO_SECOND' | 'ALL_OR_NOTHING_NEXT' | 'CLASSIC_TO_90';
+
+export interface CreationStatAbandonmentConsequences {
+  readonly creationCriticalConsequencesDiscarded: true;
+  readonly exactPointBuyTotalOrNull: 85 | 90 | null;
+  readonly nextAttemptIndexOrNull: 2 | 3 | 4 | 5 | null;
+  readonly setValuesDiscarded: true;
+}
+
+export interface CreationStatSetDecisionRule {
+  readonly alternateDecision: Exclude<CreationStatSetDecision, 'ACCEPT_SET'>;
+  readonly attemptIndex: CreationStatAttemptIndex;
+  readonly decisionFormId: CreationStatReturnDecisionFormId;
+  readonly fifthAttemptMandatoryAccept: boolean;
+  readonly maximumAttempts: 1 | 2 | 5;
+  readonly setReceiptField: 'acceptedSetReceiptId' | 'setReceiptId';
+  readonly statMethod: CreationStatMethod;
+  readonly transitionKind: CreationStatAbandonmentTransitionKind;
+}
+
+export interface CreationStatAbandonment {
+  readonly alternateDecision: Exclude<CreationStatSetDecision, 'ACCEPT_SET'>;
+  readonly consequences: CreationStatAbandonmentConsequences;
+  readonly nextFormId: 'CHR-003' | 'CHR-009';
+  readonly statAssignmentModeOrNull: 'POINT_BUY_85' | 'POINT_BUY_90' | null;
+  readonly transitionKind: CreationStatAbandonmentTransitionKind;
+}
 
 export interface CreationStatCriticalQueueItem {
   readonly originFace: CreationCriticalFace;
@@ -105,6 +135,55 @@ const RETURN_DECISION_FORM_BY_METHOD_AND_ATTEMPT = Object.freeze({
   CreationStatMethod,
   Partial<Record<CreationStatAttemptIndex, CreationStatReturnDecisionFormId>>
 >);
+
+/**
+ * ADR 0043 closes the decision discriminators. CORE-160 fixes CLASSIC at one
+ * attempt/90; CORE-161 fixes ADVENTUROUS at two/85; CORE-162 fixes AON at five.
+ */
+export const CREATION_STAT_SET_DECISION_RULES = Object.freeze([
+  Object.freeze({
+    alternateDecision: 'USE_POINT_BUY_90',
+    attemptIndex: 1,
+    decisionFormId: 'CHR-005',
+    fifthAttemptMandatoryAccept: false,
+    maximumAttempts: 1,
+    setReceiptField: 'acceptedSetReceiptId',
+    statMethod: 'CLASSIC',
+    transitionKind: 'CLASSIC_TO_90',
+  }),
+  Object.freeze({
+    alternateDecision: 'GO_ATTEMPT_2',
+    attemptIndex: 1,
+    decisionFormId: 'CHR-006',
+    fifthAttemptMandatoryAccept: false,
+    maximumAttempts: 2,
+    setReceiptField: 'setReceiptId',
+    statMethod: 'ADVENTUROUS',
+    transitionKind: 'ADVENTUROUS_TO_SECOND',
+  }),
+  Object.freeze({
+    alternateDecision: 'USE_POINT_BUY_85',
+    attemptIndex: 2,
+    decisionFormId: 'CHR-007',
+    fifthAttemptMandatoryAccept: false,
+    maximumAttempts: 2,
+    setReceiptField: 'setReceiptId',
+    statMethod: 'ADVENTUROUS',
+    transitionKind: 'ADVENTUROUS_TO_85',
+  }),
+  ...([1, 2, 3, 4, 5] as const).map((attemptIndex) =>
+    Object.freeze({
+      alternateDecision: 'GO_NEXT_ATTEMPT' as const,
+      attemptIndex,
+      decisionFormId: 'CHR-008' as const,
+      fifthAttemptMandatoryAccept: attemptIndex === 5,
+      maximumAttempts: 5 as const,
+      setReceiptField: 'setReceiptId' as const,
+      statMethod: 'ALL_OR_NOTHING' as const,
+      transitionKind: 'ALL_OR_NOTHING_NEXT' as const,
+    }),
+  ),
+] as const satisfies readonly CreationStatSetDecisionRule[]);
 
 function fail(detail: string): never {
   throw new CreationStatRollRuleError(`CHR-003/CHR-004: ${detail}`);
@@ -391,6 +470,93 @@ export function deriveCreationReturnDecisionFormId(
     );
   }
   return destination;
+}
+
+/** Returns the complete ADR 0043 row instead of deriving fields independently. */
+export function deriveCreationStatSetDecisionRule(
+  statMethod: unknown,
+  attemptIndex: unknown,
+): CreationStatSetDecisionRule {
+  const decisionFormId = deriveCreationReturnDecisionFormId(statMethod, attemptIndex);
+  const rule = CREATION_STAT_SET_DECISION_RULES.find(
+    (candidate) => candidate.statMethod === statMethod && candidate.attemptIndex === attemptIndex,
+  );
+  if (rule === undefined || rule.decisionFormId !== decisionFormId) {
+    fail(
+      `decision rule is missing for statMethod ${show(statMethod)}, attemptIndex ${show(attemptIndex)}`,
+    );
+  }
+  return rule;
+}
+
+/**
+ * CORE-160/161 fix rejected-set totals 90/85; CORE-162 fixes five attempts.
+ * The fifth has no abandonment result because Atlas makes acceptance mandatory.
+ */
+export function deriveCreationStatAbandonment(
+  statMethod: unknown,
+  attemptIndex: unknown,
+): CreationStatAbandonment {
+  const rule = deriveCreationStatSetDecisionRule(statMethod, attemptIndex);
+  if (rule.fifthAttemptMandatoryAccept) {
+    fail(`attemptIndex 5 is mandatory acceptance for ALL_OR_NOTHING`);
+  }
+  const common = {
+    alternateDecision: rule.alternateDecision,
+    transitionKind: rule.transitionKind,
+  };
+  switch (rule.transitionKind) {
+    case 'CLASSIC_TO_90':
+      return Object.freeze({
+        ...common,
+        consequences: Object.freeze({
+          creationCriticalConsequencesDiscarded: true,
+          exactPointBuyTotalOrNull: 90,
+          nextAttemptIndexOrNull: null,
+          setValuesDiscarded: true,
+        }),
+        nextFormId: 'CHR-009',
+        statAssignmentModeOrNull: 'POINT_BUY_90',
+      });
+    case 'ADVENTUROUS_TO_85':
+      return Object.freeze({
+        ...common,
+        consequences: Object.freeze({
+          creationCriticalConsequencesDiscarded: true,
+          exactPointBuyTotalOrNull: 85,
+          nextAttemptIndexOrNull: null,
+          setValuesDiscarded: true,
+        }),
+        nextFormId: 'CHR-009',
+        statAssignmentModeOrNull: 'POINT_BUY_85',
+      });
+    case 'ADVENTUROUS_TO_SECOND':
+      return Object.freeze({
+        ...common,
+        consequences: Object.freeze({
+          creationCriticalConsequencesDiscarded: true,
+          exactPointBuyTotalOrNull: null,
+          nextAttemptIndexOrNull: 2,
+          setValuesDiscarded: true,
+        }),
+        nextFormId: 'CHR-003',
+        statAssignmentModeOrNull: null,
+      });
+    case 'ALL_OR_NOTHING_NEXT': {
+      const nextAttemptIndex = (rule.attemptIndex + 1) as 2 | 3 | 4 | 5;
+      return Object.freeze({
+        ...common,
+        consequences: Object.freeze({
+          creationCriticalConsequencesDiscarded: true,
+          exactPointBuyTotalOrNull: null,
+          nextAttemptIndexOrNull: nextAttemptIndex,
+          setValuesDiscarded: true,
+        }),
+        nextFormId: 'CHR-003',
+        statAssignmentModeOrNull: null,
+      });
+    }
+  }
 }
 
 /** Starts one queued natural face without manufacturing a confirmation result. */

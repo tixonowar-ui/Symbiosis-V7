@@ -2,6 +2,16 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import type { IdentityDraftValues } from '@shared/wire-v3-protocol.js';
 
+import {
+  CREATION_STAT_RETURN_DECISION_FORM_IDS,
+  CREATION_STAT_SET_DECISION_RULES,
+  deriveCreationStatAbandonment,
+  type CreationStatAbandonmentConsequences,
+  type CreationStatAbandonmentTransitionKind,
+  type CreationStatReturnDecisionFormId,
+  type CreationStatSetDecision,
+} from '../../domain/index.js';
+
 export const CHOICE_LOCK_STATUSES = ['UNLOCKED', 'LOCKED_AFTER_RESULT', 'NOT_APPLICABLE'] as const;
 export type ChoiceLockStatus = (typeof CHOICE_LOCK_STATUSES)[number];
 
@@ -174,17 +184,324 @@ export const CHR_004_PENDING_ACTION_KEYS = [
 ] as const satisfies readonly ActionKey[];
 export const CHR_004_COMPLETE_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
 
+export const CREATION_SET_DECISION_FORM_IDS = CREATION_STAT_RETURN_DECISION_FORM_IDS;
+export type CreationSetDecisionFormId = CreationStatReturnDecisionFormId;
+export type CreationSetTransitionKind = CreationStatAbandonmentTransitionKind;
+export type CreationSetAlternateDecision = Exclude<CreationStatSetDecision, 'ACCEPT_SET'>;
+
+export const CHR_005_FORM_ID = 'CHR-005' as const;
+export const CHR_005_ROUTE = '/player/characters/:localCharacterId/create/chr-005' as const;
+/** Source: forms-by-id.json["CHR-005"].requiredFields. */
+export const CHR_005_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'statMethod=CLASSIC',
+  'acceptedSetReceiptId',
+  'decision=PENDING|ACCEPT_SET|USE_POINT_BUY_90',
+  'decisionReceiptIdOrNull',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+
+export const CHR_006_FORM_ID = 'CHR-006' as const;
+export const CHR_006_ROUTE = '/player/characters/:localCharacterId/create/chr-006' as const;
+/** Source: forms-by-id.json["CHR-006"].requiredFields. */
+export const CHR_006_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'statMethod=ADVENTUROUS',
+  'attemptIndex=1',
+  'setReceiptId',
+  'decision=PENDING|ACCEPT_SET|GO_ATTEMPT_2',
+  'decisionReceiptIdOrNull',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+
+export const CHR_007_FORM_ID = 'CHR-007' as const;
+export const CHR_007_ROUTE = '/player/characters/:localCharacterId/create/chr-007' as const;
+/** Source: forms-by-id.json["CHR-007"].requiredFields. */
+export const CHR_007_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'statMethod=ADVENTUROUS',
+  'attemptIndex=2',
+  'setReceiptId',
+  'decision=PENDING|ACCEPT_SET|USE_POINT_BUY_85',
+  'decisionReceiptIdOrNull',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+
+export const CHR_008_FORM_ID = 'CHR-008' as const;
+export const CHR_008_ROUTE = '/player/characters/:localCharacterId/create/chr-008' as const;
+/** Source: forms-by-id.json["CHR-008"].requiredFields. */
+export const CHR_008_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'statMethod=ALL_OR_NOTHING',
+  'attemptIndex=1..5',
+  'setReceiptId',
+  'decision=PENDING|ACCEPT_SET|GO_NEXT_ATTEMPT',
+  'decisionReceiptIdOrNull',
+  'fifthAttemptMandatoryAccept',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+
+export const CHR_028_FORM_ID = 'CHR-028' as const;
+export const CHR_028_ROUTE = '@dialog/chr-028' as const;
+/** Source: forms-by-id.json["CHR-028"].requiredFields. */
+export const CHR_028_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'originDecisionFormId(server-signed)=CHR-005|CHR-006|CHR-007|CHR-008',
+  'transitionKind=CLASSIC_TO_90|ADVENTUROUS_TO_SECOND|ADVENTUROUS_TO_85|ALL_OR_NOTHING_NEXT',
+  'abandonedSetReceiptIds[]',
+  'irreversibleConsequences',
+  'decision=CONFIRM|CANCEL',
+  'decisionReceiptIdOrNull',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+
+export const CHR_028_CONFIRM_ACTION_KEY = 'CHR-028::CTA::001' as const satisfies ActionKey;
+export const CHR_028_CANCEL_ACTION_KEY = 'CHR-028::CTA::002' as const satisfies ActionKey;
+export const CHR_028_WARNING_ACTION_KEYS = [
+  CHR_028_CONFIRM_ACTION_KEY,
+  CHR_028_CANCEL_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const CHR_028_COMMITTED_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+
+interface CreationSetDecisionFormContract {
+  readonly acceptActionKey: ActionKey;
+  readonly formId: CreationSetDecisionFormId;
+  readonly requiredFields: readonly string[];
+  readonly route: string;
+  readonly warningActionKey: ActionKey;
+  readonly warningGuard: string;
+}
+
+export const CREATION_SET_DECISION_FORMS = [
+  {
+    acceptActionKey: 'CHR-005::CTA::001',
+    formId: CHR_005_FORM_ID,
+    requiredFields: CHR_005_REQUIRED_FIELDS,
+    route: CHR_005_ROUTE,
+    warningActionKey: 'CHR-005::CTA::002',
+    warningGuard: 'decision pending; transitionKind=CLASSIC_TO_90; no abandonment yet',
+  },
+  {
+    acceptActionKey: 'CHR-006::CTA::001',
+    formId: CHR_006_FORM_ID,
+    requiredFields: CHR_006_REQUIRED_FIELDS,
+    route: CHR_006_ROUTE,
+    warningActionKey: 'CHR-006::CTA::002',
+    warningGuard: 'transitionKind=ADVENTUROUS_TO_SECOND; first set not yet abandoned',
+  },
+  {
+    acceptActionKey: 'CHR-007::CTA::001',
+    formId: CHR_007_FORM_ID,
+    requiredFields: CHR_007_REQUIRED_FIELDS,
+    route: CHR_007_ROUTE,
+    warningActionKey: 'CHR-007::CTA::002',
+    warningGuard: 'transitionKind=ADVENTUROUS_TO_85; second set not yet abandoned',
+  },
+  {
+    acceptActionKey: 'CHR-008::CTA::001',
+    formId: CHR_008_FORM_ID,
+    requiredFields: CHR_008_REQUIRED_FIELDS,
+    route: CHR_008_ROUTE,
+    warningActionKey: 'CHR-008::CTA::002',
+    warningGuard:
+      'attemptIndex<5; transitionKind=ALL_OR_NOTHING_NEXT; current set not yet abandoned',
+  },
+] as const satisfies readonly CreationSetDecisionFormContract[];
+
+const CREATION_SET_DECISION_FORM_BY_ID = new Map(
+  CREATION_SET_DECISION_FORMS.map((contract) => [contract.formId, contract]),
+);
+
+export function creationSetDecisionFormContract(
+  formId: CreationSetDecisionFormId,
+): (typeof CREATION_SET_DECISION_FORMS)[number] {
+  const contract = CREATION_SET_DECISION_FORM_BY_ID.get(formId);
+  if (contract === undefined) throw new Error(`unsupported creation set decision form ${formId}`);
+  return contract;
+}
+
+export interface CreationSetDecisionProjectionValues {
+  readonly attemptIndex: number;
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly decision: CreationStatSetDecision | 'PENDING';
+  readonly decisionReceiptIdOrNull: string | null;
+  readonly draftRevision: number;
+  readonly formId: CreationSetDecisionFormId;
+  readonly setReceiptId: string;
+  readonly wizardCheckpointId: string;
+}
+
+export interface IrreversibleSetConsequences
+  extends CreationStatAbandonmentConsequences, JsonObject {}
+
+export interface Chr028ProjectionValues {
+  readonly abandonedSetReceiptIds: readonly [string];
+  readonly attemptIndex: number;
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly decision: 'CONFIRM' | null;
+  readonly decisionReceiptIdOrNull: string | null;
+  readonly draftRevision: number;
+  readonly irreversibleConsequences: IrreversibleSetConsequences;
+  readonly originDecisionFormId: CreationSetDecisionFormId;
+  readonly transitionKind: CreationSetTransitionKind;
+  readonly wizardCheckpointId: string;
+}
+
+function nonEmpty(value: string, label: string): void {
+  if (value.length === 0) throw new Error(`${label} must be non-empty`);
+}
+
+export function projectCreationSetDecision(
+  values: CreationSetDecisionProjectionValues,
+): JsonObject {
+  creationSetDecisionFormContract(values.formId);
+  const rule = CREATION_STAT_SET_DECISION_RULES.find(
+    (candidate) =>
+      candidate.decisionFormId === values.formId && candidate.attemptIndex === values.attemptIndex,
+  );
+  if (rule === undefined) {
+    throw new Error(
+      `${values.formId} attemptIndex ${JSON.stringify(values.attemptIndex)} violates its decision contract`,
+    );
+  }
+  if (
+    values.decision !== 'PENDING' &&
+    values.decision !== 'ACCEPT_SET' &&
+    values.decision !== rule.alternateDecision
+  ) {
+    throw new Error(`${values.formId} decision ${JSON.stringify(values.decision)} is not allowed`);
+  }
+  if (
+    (values.decision === 'PENDING' &&
+      (values.commandId !== null || values.decisionReceiptIdOrNull !== null)) ||
+    (values.decision !== 'PENDING' &&
+      (values.commandId === null || values.decisionReceiptIdOrNull === null))
+  ) {
+    throw new Error(`${values.formId} decision and command receipt state disagree`);
+  }
+  nonEmpty(values.characterDraftId, `${values.formId} characterDraftId`);
+  nonEmpty(values.setReceiptId, `${values.formId} set receipt`);
+  nonEmpty(values.wizardCheckpointId, `${values.formId} wizardCheckpointId`);
+  if (values.commandId !== null) nonEmpty(values.commandId, `${values.formId} commandId`);
+  if (values.decisionReceiptIdOrNull !== null) {
+    nonEmpty(values.decisionReceiptIdOrNull, `${values.formId} decision receipt`);
+  }
+  if (!Number.isSafeInteger(values.draftRevision) || values.draftRevision < 0) {
+    throw new Error(`${values.formId} draftRevision must be a non-negative safe integer`);
+  }
+  return {
+    ...(values.formId === CHR_005_FORM_ID ? {} : { attemptIndex: values.attemptIndex }),
+    characterDraftId: values.characterDraftId,
+    commandId: values.commandId,
+    decision: values.decision,
+    decisionReceiptIdOrNull: values.decisionReceiptIdOrNull,
+    draftRevision: values.draftRevision,
+    [rule.setReceiptField]: values.setReceiptId,
+    statMethod: rule.statMethod,
+    ...(values.formId === CHR_008_FORM_ID
+      ? { fifthAttemptMandatoryAccept: rule.fifthAttemptMandatoryAccept }
+      : {}),
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+export function projectChr028(values: Chr028ProjectionValues): JsonObject {
+  creationSetDecisionFormContract(values.originDecisionFormId);
+  const rule = CREATION_STAT_SET_DECISION_RULES.find(
+    (candidate) =>
+      candidate.decisionFormId === values.originDecisionFormId &&
+      candidate.attemptIndex === values.attemptIndex,
+  );
+  if (rule === undefined || values.transitionKind !== rule.transitionKind) {
+    throw new Error('CHR-028 originDecisionFormId and transitionKind disagree');
+  }
+  if (values.abandonedSetReceiptIds.length !== 1) {
+    throw new Error('CHR-028 abandonedSetReceiptIds must contain exactly the current set receipt');
+  }
+  if (
+    (values.decision === null &&
+      (values.commandId !== null || values.decisionReceiptIdOrNull !== null)) ||
+    (values.decision === 'CONFIRM' &&
+      (values.commandId === null || values.decisionReceiptIdOrNull === null))
+  ) {
+    throw new Error('CHR-028 decision and command receipt state disagree');
+  }
+  const expectedAbandonment = deriveCreationStatAbandonment(rule.statMethod, rule.attemptIndex);
+  if (
+    Object.keys(values.irreversibleConsequences).length !== 4 ||
+    Object.entries(expectedAbandonment.consequences).some(
+      ([key, value]) => values.irreversibleConsequences[key] !== value,
+    )
+  ) {
+    throw new Error('CHR-028 irreversibleConsequences do not match the signed transition');
+  }
+  nonEmpty(values.characterDraftId, 'CHR-028 characterDraftId');
+  nonEmpty(values.abandonedSetReceiptIds[0], 'CHR-028 abandoned set receipt');
+  nonEmpty(values.wizardCheckpointId, 'CHR-028 wizardCheckpointId');
+  if (values.commandId !== null) nonEmpty(values.commandId, 'CHR-028 commandId');
+  if (values.decisionReceiptIdOrNull !== null) {
+    nonEmpty(values.decisionReceiptIdOrNull, 'CHR-028 decision receipt');
+  }
+  if (!Number.isSafeInteger(values.draftRevision) || values.draftRevision < 0) {
+    throw new Error('CHR-028 draftRevision must be a non-negative safe integer');
+  }
+  return {
+    abandonedSetReceiptIds: [...values.abandonedSetReceiptIds],
+    characterDraftId: values.characterDraftId,
+    commandId: values.commandId,
+    decision: values.decision,
+    decisionReceiptIdOrNull: values.decisionReceiptIdOrNull,
+    draftRevision: values.draftRevision,
+    irreversibleConsequences: { ...values.irreversibleConsequences },
+    originDecisionFormId: values.originDecisionFormId,
+    transitionKind: values.transitionKind,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+export function creationSetDecisionPendingActionKeys(
+  formId: CreationSetDecisionFormId,
+  attemptIndex: number,
+): readonly ActionKey[] {
+  const contract = creationSetDecisionFormContract(formId);
+  return formId === CHR_008_FORM_ID && attemptIndex === 5
+    ? [contract.acceptActionKey]
+    : [contract.acceptActionKey, contract.warningActionKey];
+}
+
 export const SET_DECIDE_ACTION_KEYS_BY_FORM = {
   [CHR_002_FORM_ID]: CHR_002_SET_DECIDE_ACTION_KEYS,
+  [CHR_005_FORM_ID]: [creationSetDecisionFormContract(CHR_005_FORM_ID).acceptActionKey],
+  [CHR_006_FORM_ID]: [creationSetDecisionFormContract(CHR_006_FORM_ID).acceptActionKey],
+  [CHR_007_FORM_ID]: [creationSetDecisionFormContract(CHR_007_FORM_ID).acceptActionKey],
+  [CHR_008_FORM_ID]: [creationSetDecisionFormContract(CHR_008_FORM_ID).acceptActionKey],
   [CHR_010_FORM_ID]: CHR_010_SET_DECIDE_ACTION_KEYS,
   [CHR_016_FORM_ID]: CHR_016_SET_DECIDE_ACTION_KEYS,
+  [CHR_028_FORM_ID]: CHR_028_WARNING_ACTION_KEYS,
   [CHR_036_FORM_ID]: CHR_036_SET_DECIDE_ACTION_KEYS,
 } as const;
 
 export const SET_DECIDE_CAPABLE_FORM_IDS = [
   CHR_002_FORM_ID,
+  CHR_005_FORM_ID,
+  CHR_006_FORM_ID,
+  CHR_007_FORM_ID,
+  CHR_008_FORM_ID,
   CHR_010_FORM_ID,
   CHR_016_FORM_ID,
+  CHR_028_FORM_ID,
   CHR_036_FORM_ID,
 ] as const;
 

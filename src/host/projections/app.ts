@@ -19,15 +19,32 @@ import {
   CHR_004_FORM_ID,
   CHR_004_REQUIRED_FIELDS,
   CHR_004_ROUTE,
+  CHR_005_FORM_ID,
+  CHR_005_REQUIRED_FIELDS,
+  CHR_005_ROUTE,
+  CHR_006_FORM_ID,
+  CHR_006_REQUIRED_FIELDS,
+  CHR_006_ROUTE,
+  CHR_007_FORM_ID,
+  CHR_007_REQUIRED_FIELDS,
+  CHR_007_ROUTE,
+  CHR_008_FORM_ID,
+  CHR_008_REQUIRED_FIELDS,
+  CHR_008_ROUTE,
   CHR_010_FORM_ID,
   CHR_010_REQUIRED_FIELDS,
   CHR_010_ROUTE,
   CHR_016_FORM_ID,
   CHR_016_REQUIRED_FIELDS,
   CHR_016_ROUTE,
+  CHR_028_FORM_ID,
+  CHR_028_REQUIRED_FIELDS,
+  CHR_028_ROUTE,
   CHR_036_FORM_ID,
   CHR_036_REQUIRED_FIELDS,
   CHR_036_ROUTE,
+  CREATION_SET_DECISION_FORMS,
+  type CreationSetDecisionFormId,
 } from './chr.js';
 
 export const APP_FORM_IDS = [
@@ -186,7 +203,7 @@ export interface AppFormContract {
 }
 
 export interface AppNavigationAction {
-  readonly from: AppFormId | typeof CHR_001_FORM_ID;
+  readonly from: AppFormId | CreationSetDecisionFormId | typeof CHR_001_FORM_ID;
   readonly guard: string;
   readonly kind: string;
   readonly to: string;
@@ -202,7 +219,7 @@ export interface AppProjectionCatalog {
 function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNavigationAction> {
   const forms = record(source, 'forms-by-id.json');
   const result = new Map<ActionKey, AppNavigationAction>();
-  for (const [sourceFormId, actionKey, expectedGuard] of [
+  const expectedActions = [
     [
       'APP-001',
       APP_001_PLAYER_ACTION_KEY,
@@ -229,7 +246,11 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       APP_004_RETURN_TO_PLAYER_MENU_ACTION_KEY,
       'activeRole=PLAYER; launchContext=PLAYER_MENU; handoffType!=HOST_LOCAL_CANDIDATE; no uncommitted irreversible wizard or import commit; draft checkpoints preserved',
     ],
-  ] as const) {
+    ...CREATION_SET_DECISION_FORMS.map(
+      (contract) => [contract.formId, contract.warningActionKey, contract.warningGuard] as const,
+    ),
+  ] as const;
+  for (const [sourceFormId, actionKey, expectedGuard] of expectedActions) {
     const label = `${sourceFormId}.actions.ctaAvailabilityByAction`;
     const matches = array(
       record(record(forms[sourceFormId], label)['actions'], label)['ctaAvailabilityByAction'],
@@ -300,18 +321,19 @@ export function assertScreenContract(
   formId: string,
   requiredFields: readonly string[],
   route: string,
+  formType: 'dialog' | 'screen' = 'screen',
 ): void {
   const form = record(forms[formId], `forms-by-id.json[${JSON.stringify(formId)}]`);
   const actualFields = strings(form['requiredFields'], `${formId}.requiredFields`);
   const actualRoles = strings(form['roles'], `${formId}.roles`);
   if (
     string(form['id'], `${formId}.id`) !== formId ||
-    string(form['type'], `${formId}.type`) !== 'screen' ||
+    string(form['type'], `${formId}.type`) !== formType ||
     string(form['route'], `${formId}.route`) !== route ||
     !sameStrings(actualRoles, ['player']) ||
     !sameStrings(actualFields, requiredFields)
   ) {
-    throw new Error(`${formId} does not match its source-owned player screen contract`);
+    throw new Error(`${formId} does not match its source-owned player ${formType} contract`);
   }
 }
 
@@ -370,8 +392,13 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertScreenContract(forms, CHR_002_FORM_ID, CHR_002_REQUIRED_FIELDS, CHR_002_ROUTE);
   assertScreenContract(forms, CHR_003_FORM_ID, CHR_003_REQUIRED_FIELDS, CHR_003_ROUTE);
   assertScreenContract(forms, CHR_004_FORM_ID, CHR_004_REQUIRED_FIELDS, CHR_004_ROUTE);
+  assertScreenContract(forms, CHR_005_FORM_ID, CHR_005_REQUIRED_FIELDS, CHR_005_ROUTE);
+  assertScreenContract(forms, CHR_006_FORM_ID, CHR_006_REQUIRED_FIELDS, CHR_006_ROUTE);
+  assertScreenContract(forms, CHR_007_FORM_ID, CHR_007_REQUIRED_FIELDS, CHR_007_ROUTE);
+  assertScreenContract(forms, CHR_008_FORM_ID, CHR_008_REQUIRED_FIELDS, CHR_008_ROUTE);
   assertScreenContract(forms, CHR_010_FORM_ID, CHR_010_REQUIRED_FIELDS, CHR_010_ROUTE);
   assertScreenContract(forms, CHR_016_FORM_ID, CHR_016_REQUIRED_FIELDS, CHR_016_ROUTE);
+  assertScreenContract(forms, CHR_028_FORM_ID, CHR_028_REQUIRED_FIELDS, CHR_028_ROUTE, 'dialog');
   assertScreenContract(forms, CHR_036_FORM_ID, CHR_036_REQUIRED_FIELDS, CHR_036_ROUTE);
   return result;
 }

@@ -12,6 +12,9 @@ import {
   CREATION_STAT_ROLL_RULE_IDS,
   CREATION_STAT_SET_ENTRY_INDICES,
   CreationStatRollRuleError,
+  CREATION_STAT_SET_DECISION_RULES,
+  deriveCreationStatAbandonment,
+  deriveCreationStatSetDecisionRule,
   deriveCreationReturnDecisionFormId,
   resolveAutoRoll,
   resolveCreationStatSet,
@@ -288,6 +291,66 @@ describe('CHR-004 return decision derivation', () => {
   it.each(['classic', 'RANDOM', null])('rejects unknown stat method %s fail-closed', (method) => {
     expect(() => deriveCreationReturnDecisionFormId(method, 1)).toThrow(
       'statMethod must be one of CLASSIC, ADVENTUROUS, ALL_OR_NOTHING',
+    );
+  });
+});
+
+describe('CHR-005..008 decision and abandonment table', () => {
+  it('owns every method/attempt row including receipt-key and mandatory-fifth differences', () => {
+    expect(CREATION_STAT_SET_DECISION_RULES).toHaveLength(8);
+    expect(deriveCreationStatSetDecisionRule('CLASSIC', 1)).toEqual({
+      alternateDecision: 'USE_POINT_BUY_90',
+      attemptIndex: 1,
+      decisionFormId: 'CHR-005',
+      fifthAttemptMandatoryAccept: false,
+      maximumAttempts: 1,
+      setReceiptField: 'acceptedSetReceiptId',
+      statMethod: 'CLASSIC',
+      transitionKind: 'CLASSIC_TO_90',
+    });
+    expect(deriveCreationStatSetDecisionRule('ADVENTUROUS', 1)).toMatchObject({
+      alternateDecision: 'GO_ATTEMPT_2',
+      decisionFormId: 'CHR-006',
+      maximumAttempts: 2,
+      setReceiptField: 'setReceiptId',
+    });
+    expect(deriveCreationStatSetDecisionRule('ADVENTUROUS', 2)).toMatchObject({
+      alternateDecision: 'USE_POINT_BUY_85',
+      decisionFormId: 'CHR-007',
+    });
+    expect(deriveCreationStatSetDecisionRule('ALL_OR_NOTHING', 5)).toMatchObject({
+      alternateDecision: 'GO_NEXT_ATTEMPT',
+      decisionFormId: 'CHR-008',
+      fifthAttemptMandatoryAccept: true,
+      maximumAttempts: 5,
+    });
+  });
+
+  it('derives only the four closed consequence pairings and rejects attempt six/fifth abandonment', () => {
+    expect(deriveCreationStatAbandonment('CLASSIC', 1)).toMatchObject({
+      consequences: { exactPointBuyTotalOrNull: 90, nextAttemptIndexOrNull: null },
+      nextFormId: 'CHR-009',
+      statAssignmentModeOrNull: 'POINT_BUY_90',
+    });
+    expect(deriveCreationStatAbandonment('ADVENTUROUS', 1)).toMatchObject({
+      consequences: { exactPointBuyTotalOrNull: null, nextAttemptIndexOrNull: 2 },
+      nextFormId: 'CHR-003',
+      statAssignmentModeOrNull: null,
+    });
+    expect(deriveCreationStatAbandonment('ADVENTUROUS', 2)).toMatchObject({
+      consequences: { exactPointBuyTotalOrNull: 85, nextAttemptIndexOrNull: null },
+      nextFormId: 'CHR-009',
+      statAssignmentModeOrNull: 'POINT_BUY_85',
+    });
+    expect(deriveCreationStatAbandonment('ALL_OR_NOTHING', 4)).toMatchObject({
+      consequences: { exactPointBuyTotalOrNull: null, nextAttemptIndexOrNull: 5 },
+      nextFormId: 'CHR-003',
+    });
+    expect(() => deriveCreationStatAbandonment('ALL_OR_NOTHING', 5)).toThrow(
+      'attemptIndex 5 is mandatory acceptance',
+    );
+    expect(() => deriveCreationStatSetDecisionRule('ALL_OR_NOTHING', 6)).toThrow(
+      'expected: 1, 2, 3, 4, 5',
     );
   });
 });

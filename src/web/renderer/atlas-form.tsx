@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import type { ActionKey } from '@generated/types/atlas.js';
 
@@ -17,12 +17,14 @@ export interface AtlasFormProps {
   readonly availableActionKeys: readonly ActionKey[];
   readonly formId: string;
   readonly onAction: (selection: AtlasActionSelection) => void;
+  readonly projectionContent?: ReactNode;
 }
 
 interface AtlasFormContentProps {
   readonly availableActionKeys: AtlasFormProps['availableActionKeys'];
   readonly model: AtlasFormModel;
   readonly onAction: AtlasFormProps['onAction'];
+  readonly projectionContent?: ReactNode;
 }
 
 function StringList({ values, attribute }: { values: readonly string[]; attribute: string }) {
@@ -80,6 +82,7 @@ function AtlasFormContent({
   availableActionKeys,
   model,
   onAction,
+  projectionContent,
 }: AtlasFormContentProps): ReactElement {
   return (
     <>
@@ -130,6 +133,8 @@ function AtlasFormContent({
         <StringList values={model.slots} attribute="declared-slot" />
       </section>
 
+      {projectionContent}
+
       <section aria-labelledby={`${model.id}-actions`}>
         <h2 id={`${model.id}-actions`}>Доступные действия</h2>
         <Actions availableActionKeys={availableActionKeys} model={model} onAction={onAction} />
@@ -138,10 +143,20 @@ function AtlasFormContent({
   );
 }
 
-export function AtlasForm({ availableActionKeys, formId, onAction }: AtlasFormProps): ReactElement {
+export function AtlasForm({
+  availableActionKeys,
+  formId,
+  onAction,
+  projectionContent,
+}: AtlasFormProps): ReactElement {
   const model = getAtlasFormModel(formId);
   const content = (
-    <AtlasFormContent availableActionKeys={availableActionKeys} model={model} onAction={onAction} />
+    <AtlasFormContent
+      availableActionKeys={availableActionKeys}
+      model={model}
+      onAction={onAction}
+      projectionContent={projectionContent}
+    />
   );
 
   if (model.type === 'screen') {

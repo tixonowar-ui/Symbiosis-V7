@@ -35,11 +35,15 @@ describe('host protocol vocabulary implemented presentation support', () => {
     expect(vocabulary.isFormActionKey('APP-004', 'APP-004::CTA::009')).toBe(false);
   });
 
-  it('accepts the six exact inherited character routes and source action vocabularies', () => {
+  it('accepts the ten exact inherited character routes and source action vocabularies', () => {
     const forms = [
       { actionCount: 5, formId: 'CHR-002', routeSuffix: 'chr-002' },
       { actionCount: 2, formId: 'CHR-003', routeSuffix: 'chr-003' },
       { actionCount: 1, formId: 'CHR-004', routeSuffix: 'chr-004' },
+      { actionCount: 2, formId: 'CHR-005', routeSuffix: 'chr-005' },
+      { actionCount: 2, formId: 'CHR-006', routeSuffix: 'chr-006' },
+      { actionCount: 2, formId: 'CHR-007', routeSuffix: 'chr-007' },
+      { actionCount: 2, formId: 'CHR-008', routeSuffix: 'chr-008' },
       { actionCount: 6, formId: 'CHR-010', routeSuffix: 'chr-010' },
       { actionCount: 4, formId: 'CHR-016', routeSuffix: 'chr-016' },
       { actionCount: 5, formId: 'CHR-036', routeSuffix: 'chr-036' },
@@ -58,6 +62,19 @@ describe('host protocol vocabulary implemented presentation support', () => {
       }
       expect(vocabulary.isFormActionKey(formId, `${formId}::CTA::999`), formId).toBe(false);
     }
+  });
+
+  it('accepts CHR-028 only as the zero-binding dialog layer', () => {
+    expect(vocabulary.isPresentedForm('CHR-028', 'dialog', '@dialog/chr-028', [])).toBe(true);
+    expect(vocabulary.isPresentedForm('CHR-028', 'screen', '@dialog/chr-028', [])).toBe(false);
+    expect(
+      vocabulary.isPresentedForm('CHR-028', 'dialog', '@dialog/chr-028', [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft-id' },
+      ]),
+    ).toBe(false);
+    expect(vocabulary.isPresentedForm('CHR-028', 'dialog', '/chr-028', [])).toBe(false);
+    expect(vocabulary.isFormActionKey('CHR-028', 'CHR-028::CTA::001')).toBe(true);
+    expect(vocabulary.isFormActionKey('CHR-028', 'CHR-028::CTA::002')).toBe(true);
   });
 
   it('keeps malformed character-decision presentation variants fail-closed', () => {

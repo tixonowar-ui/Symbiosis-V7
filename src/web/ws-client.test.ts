@@ -99,3 +99,47 @@ describe('SET-DECIDE web protocol vocabulary', () => {
     },
   );
 });
+
+describe('STAT_ROLLS set-decision web protocol vocabulary', () => {
+  const binding = [
+    {
+      parameterIndex: 0,
+      source: 'inherited' as const,
+      value: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    },
+  ];
+
+  it.each(['CHR-005', 'CHR-006', 'CHR-007', 'CHR-008'] as const)(
+    'accepts only the inherited %s screen route',
+    (formId) => {
+      expect(
+        WEB_PROTOCOL_VOCABULARY.isPresentedForm(
+          formId,
+          'screen',
+          `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`,
+          binding,
+        ),
+      ).toBe(true);
+      expect(
+        WEB_PROTOCOL_VOCABULARY.isPresentedForm(
+          formId,
+          'screen',
+          `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`,
+          [],
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it('accepts CHR-028 only as an unbound dialog', () => {
+    expect(
+      WEB_PROTOCOL_VOCABULARY.isPresentedForm('CHR-028', 'dialog', '@dialog/chr-028', []),
+    ).toBe(true);
+    expect(
+      WEB_PROTOCOL_VOCABULARY.isPresentedForm('CHR-028', 'screen', '@dialog/chr-028', []),
+    ).toBe(false);
+    expect(
+      WEB_PROTOCOL_VOCABULARY.isPresentedForm('CHR-028', 'dialog', '@dialog/chr-028', binding),
+    ).toBe(false);
+  });
+});

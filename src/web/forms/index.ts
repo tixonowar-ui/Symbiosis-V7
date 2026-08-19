@@ -16,6 +16,11 @@ export type SupportedPresentationFormId =
   | 'CHR-002'
   | 'CHR-003'
   | 'CHR-004'
+  | 'CHR-005'
+  | 'CHR-006'
+  | 'CHR-007'
+  | 'CHR-008'
+  | 'CHR-028'
   | 'CHR-010'
   | 'CHR-016'
   | 'CHR-036';
@@ -29,6 +34,11 @@ const SUPPORTED = new Set<FormId>([
   'CHR-002',
   'CHR-003',
   'CHR-004',
+  'CHR-005',
+  'CHR-006',
+  'CHR-007',
+  'CHR-008',
+  'CHR-028',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -46,6 +56,7 @@ export interface ImplementedFormAction {
 interface PresentedFormDefinition {
   readonly actions: readonly ImplementedFormAction[];
   readonly route: string;
+  readonly type: 'dialog' | 'screen';
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -94,7 +105,11 @@ for (const formId of IMPLEMENTED_FORM_IDS) {
     seen.add(actionKey);
     return { actionKey: actionKey as ActionKey, label: text(row['label'], `${rowPath}.label`) };
   });
-  definitions.set(formId, { actions, route: text(form['route'], `${path}.route`) });
+  const type = text(form['type'], `${path}.type`);
+  if (type !== 'screen' && type !== 'dialog') {
+    fail(`${path}.type`, `expected screen or dialog, received ${JSON.stringify(type)}`);
+  }
+  definitions.set(formId, { actions, route: text(form['route'], `${path}.route`), type });
 }
 
 export function presentedFormDefinition(formId: FormId): PresentedFormDefinition | null {

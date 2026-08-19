@@ -26,12 +26,27 @@ import {
   CHR_004_FORM_ID,
   CHR_004_REQUIRED_FIELDS,
   CHR_004_ROUTE,
+  CHR_005_FORM_ID,
+  CHR_005_REQUIRED_FIELDS,
+  CHR_005_ROUTE,
+  CHR_006_FORM_ID,
+  CHR_006_REQUIRED_FIELDS,
+  CHR_006_ROUTE,
+  CHR_007_FORM_ID,
+  CHR_007_REQUIRED_FIELDS,
+  CHR_007_ROUTE,
+  CHR_008_FORM_ID,
+  CHR_008_REQUIRED_FIELDS,
+  CHR_008_ROUTE,
   CHR_010_FORM_ID,
   CHR_010_REQUIRED_FIELDS,
   CHR_010_ROUTE,
   CHR_016_FORM_ID,
   CHR_016_REQUIRED_FIELDS,
   CHR_016_ROUTE,
+  CHR_028_FORM_ID,
+  CHR_028_REQUIRED_FIELDS,
+  CHR_028_ROUTE,
   CHR_036_FORM_ID,
   CHR_036_REQUIRED_FIELDS,
   CHR_036_ROUTE,
@@ -92,10 +107,10 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the six slice actions with their exact source-owned guards', () => {
+  it('loads the ten slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(6);
+    expect(catalog.actions.size).toBe(10);
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:
@@ -143,24 +158,59 @@ describe('APP host projection', () => {
       to: 'APP-002',
       trigger: 'Вернуться в главное меню игрока',
     });
+    expect(catalog.actions.get('CHR-005::CTA::002')).toEqual({
+      from: 'CHR-005',
+      guard: 'decision pending; transitionKind=CLASSIC_TO_90; no abandonment yet',
+      kind: 'normative',
+      to: 'CHR-028',
+      trigger: 'Рассмотреть отказ и распределение 90',
+    });
+    expect(catalog.actions.get('CHR-006::CTA::002')).toEqual({
+      from: 'CHR-006',
+      guard: 'transitionKind=ADVENTUROUS_TO_SECOND; first set not yet abandoned',
+      kind: 'normative',
+      to: 'CHR-028',
+      trigger: 'Рассмотреть необратимый переход ко второй попытке',
+    });
+    expect(catalog.actions.get('CHR-007::CTA::002')).toEqual({
+      from: 'CHR-007',
+      guard: 'transitionKind=ADVENTUROUS_TO_85; second set not yet abandoned',
+      kind: 'normative',
+      to: 'CHR-028',
+      trigger: 'Рассмотреть отказ и распределение 85',
+    });
+    expect(catalog.actions.get('CHR-008::CTA::002')).toEqual({
+      from: 'CHR-008',
+      guard: 'attemptIndex<5; transitionKind=ALL_OR_NOTHING_NEXT; current set not yet abandoned',
+      kind: 'normative',
+      to: 'CHR-028',
+      trigger: 'Рассмотреть необратимый переход к следующей попытке',
+    });
   });
 
   it.each([
-    [CHR_002_FORM_ID, CHR_002_ROUTE, CHR_002_REQUIRED_FIELDS],
-    [CHR_003_FORM_ID, CHR_003_ROUTE, CHR_003_REQUIRED_FIELDS],
-    [CHR_004_FORM_ID, CHR_004_ROUTE, CHR_004_REQUIRED_FIELDS],
-    [CHR_010_FORM_ID, CHR_010_ROUTE, CHR_010_REQUIRED_FIELDS],
-    [CHR_016_FORM_ID, CHR_016_ROUTE, CHR_016_REQUIRED_FIELDS],
-    [CHR_036_FORM_ID, CHR_036_ROUTE, CHR_036_REQUIRED_FIELDS],
+    [CHR_002_FORM_ID, CHR_002_ROUTE, CHR_002_REQUIRED_FIELDS, 'screen'],
+    [CHR_003_FORM_ID, CHR_003_ROUTE, CHR_003_REQUIRED_FIELDS, 'screen'],
+    [CHR_004_FORM_ID, CHR_004_ROUTE, CHR_004_REQUIRED_FIELDS, 'screen'],
+    [CHR_005_FORM_ID, CHR_005_ROUTE, CHR_005_REQUIRED_FIELDS, 'screen'],
+    [CHR_006_FORM_ID, CHR_006_ROUTE, CHR_006_REQUIRED_FIELDS, 'screen'],
+    [CHR_007_FORM_ID, CHR_007_ROUTE, CHR_007_REQUIRED_FIELDS, 'screen'],
+    [CHR_008_FORM_ID, CHR_008_ROUTE, CHR_008_REQUIRED_FIELDS, 'screen'],
+    [CHR_010_FORM_ID, CHR_010_ROUTE, CHR_010_REQUIRED_FIELDS, 'screen'],
+    [CHR_016_FORM_ID, CHR_016_ROUTE, CHR_016_REQUIRED_FIELDS, 'screen'],
+    [CHR_028_FORM_ID, CHR_028_ROUTE, CHR_028_REQUIRED_FIELDS, 'dialog'],
+    [CHR_036_FORM_ID, CHR_036_ROUTE, CHR_036_REQUIRED_FIELDS, 'screen'],
   ] as const)(
     'rejects a one-literal requiredFields drift for %s',
-    (formId, route, requiredFields) => {
-      expect(() => assertScreenContract(forms, formId, requiredFields, route)).not.toThrow();
+    (formId, route, requiredFields, formType) => {
+      expect(() =>
+        assertScreenContract(forms, formId, requiredFields, route, formType),
+      ).not.toThrow();
 
       const driftedFields: string[] = [...requiredFields];
       driftedFields[0] = `${requiredFields[0]}-drift`;
-      expect(() => assertScreenContract(forms, formId, driftedFields, route)).toThrow(
-        `${formId} does not match its source-owned player screen contract`,
+      expect(() => assertScreenContract(forms, formId, driftedFields, route, formType)).toThrow(
+        `${formId} does not match its source-owned player ${formType} contract`,
       );
     },
   );

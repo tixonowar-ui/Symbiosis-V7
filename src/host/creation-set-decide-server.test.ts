@@ -72,6 +72,7 @@ interface JourneyHarness {
   readonly deviceId: string;
   readonly identityCommand: WorkflowRequest;
   readonly receiptAllocations: () => number;
+  readonly rollRequestAllocations: () => number;
   readonly runtime: RevisionRuntime;
   readonly sampleCalls: () => number;
   readonly socket: WebSocket;
@@ -84,6 +85,7 @@ interface Chr003Journey {
   readonly methodRequest: WorkflowRequest;
   readonly methodResult: CommandResultMessage;
   readonly setRollRequestId: string;
+  readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
 }
 
 interface CommittedNonCriticalSet extends Chr003Journey {
@@ -326,6 +328,8 @@ async function createJourneyHarness(
       database: ReturnType<typeof openPersistenceDatabase>,
       count: number,
     ) => void;
+    readonly receiptIdForCount?: (count: number) => string;
+    readonly rollRequestIdForCount?: (count: number) => string;
   } = {},
 ): Promise<JourneyHarness> {
   const database = openPersistenceDatabase(':memory:');
@@ -333,19 +337,29 @@ async function createJourneyHarness(
   const runtime = revisionRuntime();
   let idSequence = 0;
   let receiptAllocations = 0;
+  let rollRequestAllocations = 0;
   let sampleCalls = 0;
   const app = await createHost({
     advanceRevisions: runtime.advance,
     allocateCreationBranchUuid: () =>
       `30000000-0000-4000-8000-${String(++idSequence).padStart(12, '0')}`,
-    allocateCreationRollRequestId: () => `roll-request-${suffix}-${String(++idSequence)}`,
+    allocateCreationRollRequestId: () => {
+      rollRequestAllocations += 1;
+      return (
+        options.rollRequestIdForCount?.(rollRequestAllocations) ??
+        `roll-request-${suffix}-${String(++idSequence)}`
+      );
+    },
     allocateContextId: () => `10000000-0000-4000-8000-${String(++idSequence).padStart(12, '0')}`,
     allocateLocalCharacterId: () =>
       `20000000-0000-4000-8000-${String(++idSequence).padStart(12, '0')}`,
     allocateReceiptId: () => {
       receiptAllocations += 1;
       options.onReceiptAllocation?.(database, receiptAllocations);
-      return `receipt-${suffix}-${String(receiptAllocations)}`;
+      return (
+        options.receiptIdForCount?.(receiptAllocations) ??
+        `receipt-${suffix}-${String(receiptAllocations)}`
+      );
     },
     allocateWizardCheckpointId: () => `wizard-${suffix}-${String(++idSequence)}`,
     database,
@@ -465,6 +479,7 @@ async function createJourneyHarness(
     deviceId,
     identityCommand,
     receiptAllocations: () => receiptAllocations,
+    rollRequestAllocations: () => rollRequestAllocations,
     runtime,
     sampleCalls: () => sampleCalls,
     socket,
@@ -476,6 +491,7 @@ async function advanceToChr003(
   harness: JourneyHarness,
   vocabulary: ProtocolVocabulary & WireV2Vocabulary,
   prefix: string,
+  statMethod: Chr003Journey['statMethod'] = 'CLASSIC',
 ): Promise<Chr003Journey> {
   const raceRequest = setDecideRequest(
     `${prefix}-race`,
@@ -517,7 +533,7 @@ async function advanceToChr003(
     harness.wizardCheckpointId,
     resultRevision(diceResult, 'draftRevision'),
     diceResult.receipt.revisions,
-    { statMethod: 'CLASSIC' },
+    { statMethod },
   );
   const [methodTerminal, destination] = await sendCommand(
     harness.socket,
@@ -543,7 +559,7 @@ async function advanceToChr003(
     },
     revisions: methodResult.receipt.revisions,
   });
-  return { branchUuid, destination, methodRequest, methodResult, setRollRequestId };
+  return { branchUuid, destination, methodRequest, methodResult, setRollRequestId, statMethod };
 }
 
 function statSetRollRequest(
@@ -614,18 +630,21 @@ async function commitNonCriticalSet(
   harness: JourneyHarness,
   vocabulary: ProtocolVocabulary & WireV2Vocabulary,
   prefix: string,
+  statMethod: Chr003Journey['statMethod'] = 'CLASSIC',
 ): Promise<CommittedNonCriticalSet> {
-  const journey = await advanceToChr003(harness, vocabulary, prefix);
+  const journey = await advanceToChr003(harness, vocabulary, prefix, statMethod);
   const setRequest = statSetRollRequest(`${prefix}-set`, harness, journey);
   const [setTerminal, setDestination] = await sendCommand(harness.socket, setRequest, vocabulary);
   const setResult = committedResult(setTerminal);
+  const decisionFormId =
+    statMethod === 'CLASSIC' ? 'CHR-005' : statMethod === 'ADVENTUROUS' ? 'CHR-006' : 'CHR-008';
   expect(setResult).toMatchObject({
     receipt: {
       result: {
         confirmationRollRequestIdOrNull: null,
         faces: [10, 10, 10, 10, 10, 10, 10],
         naturalCriticalQueue: [],
-        nextFormId: 'CHR-003',
+        nextFormId: decisionFormId,
         setRollReceiptId: setResult.receipt.receiptId,
         shownResultLocked: true,
         sourceFormId: 'CHR-003',
@@ -635,13 +654,14 @@ async function commitNonCriticalSet(
   expect(setDestination).toMatchObject({
     presentation: {
       base: {
-        availableActionKeys: [],
-        formId: 'CHR-003',
+        availableActionKeys: [`${decisionFormId}::CTA::001`, `${decisionFormId}::CTA::002`],
+        formId: decisionFormId,
         roleFilteredPayload: {
-          facesOrManualInputs: [10, 10, 10, 10, 10, 10, 10],
-          naturalCriticalQueue: [],
-          setRollReceiptId: setResult.receipt.receiptId,
-          shownResultLocked: true,
+          [statMethod === 'CLASSIC' ? 'acceptedSetReceiptId' : 'setReceiptId']:
+            setResult.receipt.receiptId,
+          decision: 'PENDING',
+          decisionReceiptIdOrNull: null,
+          statMethod,
         },
       },
     },
@@ -649,6 +669,83 @@ async function commitNonCriticalSet(
   });
   expect(harness.sampleCalls()).toBe(7);
   return { ...journey, setDestination, setRequest, setResult };
+}
+
+type DecisionFormId = 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+
+function statDecisionRequest(
+  commandId: string,
+  harness: JourneyHarness,
+  sourceFormId: DecisionFormId | 'CHR-028',
+  decision: 'ACCEPT_SET' | 'CANCEL' | 'CONFIRM',
+  draftRevision: number,
+  expectedRevisions: RevisionVector,
+): WorkflowRequest {
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions,
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: harness.characterDraftId,
+      decision,
+      draftRevision,
+      sourceFormId,
+      stage: 'STAT_ROLLS',
+      wizardCheckpointId: harness.wizardCheckpointId,
+    },
+    protocolVersion: WIRE_PROTOCOL_VERSION,
+    role: 'player',
+    workflowCommandId: CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
+  };
+}
+
+async function openWarning(
+  harness: JourneyHarness,
+  vocabulary: ProtocolVocabulary & WireV2Vocabulary,
+  committed: CommittedNonCriticalSet,
+  requestId: string,
+): Promise<Extract<HostToClientV2Message, { readonly messageType: 'projection.snapshot' }>> {
+  const sourceFormId = committed.setResult.receipt.result['nextFormId'];
+  if (
+    sourceFormId !== 'CHR-005' &&
+    sourceFormId !== 'CHR-006' &&
+    sourceFormId !== 'CHR-007' &&
+    sourceFormId !== 'CHR-008'
+  ) {
+    throw new Error('set result did not reach a decision form');
+  }
+  const expectedProjectionRevision =
+    committed.setDestination.messageType === 'projection.snapshot'
+      ? committed.setDestination.revisions.projectionRevision
+      : committed.setResult.receipt.revisions.projectionRevision;
+  const opened = await sendV2(
+    harness.socket,
+    formAction(
+      requestId,
+      sourceFormId,
+      `${sourceFormId}::CTA::002` as FormActionIntentV2Message['actionKey'],
+      expectedProjectionRevision,
+    ),
+    vocabulary,
+  );
+  if (opened.messageType !== 'projection.snapshot') throw new Error('CHR-028 did not open');
+  return opened;
+}
+
+function nextAttemptJourney(
+  previous: CommittedNonCriticalSet,
+  result: CommandResultMessage,
+  destination: HostToClientV2Message,
+): Chr003Journey {
+  return {
+    branchUuid: previous.branchUuid,
+    destination,
+    methodRequest: previous.methodRequest,
+    methodResult: result,
+    setRollRequestId: resultString(result, 'nextSetRollRequestIdOrNull'),
+    statMethod: previous.statMethod,
+  };
 }
 
 describe('durable character creation decisions', () => {
@@ -1000,12 +1097,11 @@ describe('durable character creation decisions', () => {
             reason: 'RECONNECT',
           },
           base: {
-            availableActionKeys: [],
-            formId: 'CHR-003',
+            availableActionKeys: ['CHR-005::CTA::001', 'CHR-005::CTA::002'],
+            formId: 'CHR-005',
             roleFilteredPayload: {
-              facesOrManualInputs: [10, 10, 10, 10, 10, 10, 10],
-              setRollReceiptId: committed.setResult.receipt.receiptId,
-              shownResultLocked: true,
+              acceptedSetReceiptId: committed.setResult.receipt.receiptId,
+              decision: 'PENDING',
             },
           },
         },
@@ -1025,7 +1121,7 @@ describe('durable character creation decisions', () => {
     }
   });
 
-  it('recovers the first displayed set by durable reconnect replay after host restart', async () => {
+  it('forgets transient CANCEL after restart but recovers the durable current set', async () => {
     const harness = await createJourneyHarness(staticRoot, vocabulary, 'no-reroll-reconnect');
     let originalClosed = false;
     let restartedApp: FastifyInstance | undefined;
@@ -1033,7 +1129,19 @@ describe('durable character creation decisions', () => {
     let secondReconnectSocket: WebSocket | undefined;
     try {
       const committed = await commitNonCriticalSet(harness, vocabulary, 'no-reroll-reconnect');
+      const opened = await openWarning(harness, vocabulary, committed, 'restart-cancel-open');
+      const cancel = statDecisionRequest(
+        'restart-transient-cancel',
+        harness,
+        'CHR-028',
+        'CANCEL',
+        resultRevision(committed.setResult, 'draftRevision'),
+        opened.revisions,
+      );
+      const [cancelTerminal, closed] = await sendCommand(harness.socket, cancel, vocabulary);
+      const cancelResult = committedResult(cancelTerminal);
       const checkpoint = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      expect(checkpoint.statRollStage?.attempts[0]?.decisionRecordOrNull).toBeNull();
       harness.socket.terminate();
       await harness.app.close();
       originalClosed = true;
@@ -1063,35 +1171,44 @@ describe('durable character creation decisions', () => {
       });
       await startHost(restartedApp, { interface: '127.0.0.1', port: 0 });
       restartedSocket = await restartedApp.injectWS('/state');
-      let frames = receiveFrames(restartedSocket, 3);
+      let frames = receiveFrames(restartedSocket, 4);
       restartedSocket.send(
         clientTextV2(
           reconnect(harness.deviceId, 'no-reroll-restart-reconnect', [
+            cancel.commandId,
             committed.setRequest.commandId,
           ]),
           vocabulary,
         ),
       );
       const recovered = await frames;
-      expect(hostMessage(recovered[0] ?? '', vocabulary)).toEqual({
+      expect(hostMessage(recovered[0] ?? '', vocabulary)).toMatchObject({
+        commandId: cancel.commandId,
+        messageType: 'command.refusal',
+        refusal: {
+          code: 'UNRECOGNIZED',
+          path: '$.unacknowledgedCommandIds[0]',
+          value: cancel.commandId,
+        },
+      });
+      expect(hostMessage(recovered[1] ?? '', vocabulary)).toEqual({
         lifecycleState: 'IDEMPOTENT_REPLAY',
         messageType: 'command.replay',
         protocolVersion: WIRE_PROTOCOL_VERSION,
         receipt: committed.setResult.receipt,
       });
-      expect(hostMessageV2(recovered[2] ?? '', vocabulary)).toMatchObject({
+      expect(hostMessageV2(recovered[3] ?? '', vocabulary)).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
-            formId: 'CHR-003',
+            availableActionKeys: ['CHR-005::CTA::001', 'CHR-005::CTA::002'],
+            formId: 'CHR-005',
             roleFilteredPayload: {
-              facesOrManualInputs: [10, 10, 10, 10, 10, 10, 10],
-              setRollReceiptId: committed.setResult.receipt.receiptId,
-              shownResultLocked: true,
+              acceptedSetReceiptId: committed.setResult.receipt.receiptId,
+              decision: 'PENDING',
             },
           },
         },
-        revisions: committed.setResult.receipt.revisions,
+        revisions: closed.revisions,
       });
       expect(restartSamples).toBe(0);
       expect(restartReceipts).toBe(0);
@@ -1110,14 +1227,14 @@ describe('durable character creation decisions', () => {
             reason: 'RECONNECT',
           },
           base: {
-            formId: 'CHR-003',
+            formId: 'CHR-005',
             roleFilteredPayload: {
-              facesOrManualInputs: [10, 10, 10, 10, 10, 10, 10],
-              setRollReceiptId: committed.setResult.receipt.receiptId,
+              acceptedSetReceiptId: committed.setResult.receipt.receiptId,
+              decision: 'PENDING',
             },
           },
         },
-        revisions: committed.setResult.receipt.revisions,
+        revisions: closed.revisions,
       });
       expect(restartSamples).toBe(0);
       expect(restartReceipts).toBe(0);
@@ -1125,6 +1242,7 @@ describe('durable character creation decisions', () => {
       expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
         checkpoint,
       );
+      expect(cancelResult.receipt.result['decision']).toBe('CANCEL');
     } finally {
       secondReconnectSocket?.terminate();
       restartedSocket?.terminate();
@@ -1159,11 +1277,11 @@ describe('durable character creation decisions', () => {
             reason: 'COMMAND_DESTINATION',
           },
           base: {
-            availableActionKeys: [],
-            formId: 'CHR-003',
+            availableActionKeys: ['CHR-005::CTA::001', 'CHR-005::CTA::002'],
+            formId: 'CHR-005',
             roleFilteredPayload: {
-              facesOrManualInputs: [10, 10, 10, 10, 10, 10, 10],
-              setRollReceiptId: committed.setResult.receipt.receiptId,
+              acceptedSetReceiptId: committed.setResult.receipt.receiptId,
+              decision: 'PENDING',
             },
           },
         },
@@ -1288,6 +1406,659 @@ describe('durable character creation decisions', () => {
         checkpoint,
       );
     } finally {
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('opens CHR-028 and closes CANCEL with zero durable decision plus process-local replay', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'cancel-dialog');
+    try {
+      const committed = await commitNonCriticalSet(harness, vocabulary, 'cancel-dialog');
+      const beforeOpen = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      const opened = await openWarning(harness, vocabulary, committed, 'cancel-dialog-open');
+      expect(opened).toMatchObject({
+        presentation: {
+          base: { formId: 'CHR-005' },
+          layers: [
+            {
+              availableActionKeys: ['CHR-028::CTA::001', 'CHR-028::CTA::002'],
+              formId: 'CHR-028',
+              formType: 'dialog',
+              roleFilteredPayload: {
+                abandonedSetReceiptIds: [committed.setResult.receipt.receiptId],
+                decision: null,
+                decisionReceiptIdOrNull: null,
+                irreversibleConsequences: {
+                  creationCriticalConsequencesDiscarded: true,
+                  exactPointBuyTotalOrNull: 90,
+                  nextAttemptIndexOrNull: null,
+                  setValuesDiscarded: true,
+                },
+                originDecisionFormId: 'CHR-005',
+                transitionKind: 'CLASSIC_TO_90',
+              },
+              routeBindings: [],
+              routeTemplate: '@dialog/chr-028',
+            },
+          ],
+        },
+        revisions: {
+          ...committed.setResult.receipt.revisions,
+          projectionRevision: committed.setResult.receipt.revisions.projectionRevision + 1,
+        },
+      });
+      const afterOpen = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      expect(afterOpen.checkpoint.checkpointRevision).toBe(
+        beforeOpen.checkpoint.checkpointRevision,
+      );
+      expect(afterOpen.receipt).toEqual(beforeOpen.receipt);
+
+      const cancel = statDecisionRequest(
+        'cancel-dialog-command',
+        harness,
+        'CHR-028',
+        'CANCEL',
+        resultRevision(committed.setResult, 'draftRevision'),
+        opened.revisions,
+      );
+      const [terminal, closed] = await sendCommand(harness.socket, cancel, vocabulary);
+      const cancelResult = committedResult(terminal);
+      expect(cancelResult.receipt).toMatchObject({
+        result: {
+          decision: 'CANCEL',
+          decisionReceiptIdOrNull: null,
+          nextFormId: 'CHR-005',
+          originDecisionFormId: 'CHR-005',
+          sourceFormId: 'CHR-028',
+        },
+        revisions: opened.revisions,
+      });
+      expect(closed).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-005::CTA::001', 'CHR-005::CTA::002'],
+            formId: 'CHR-005',
+            roleFilteredPayload: { decision: 'PENDING', decisionReceiptIdOrNull: null },
+          },
+          layers: [],
+        },
+        revisions: {
+          ...opened.revisions,
+          projectionRevision: opened.revisions.projectionRevision + 1,
+        },
+      });
+      const afterCancel = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      expect(afterCancel.checkpoint.checkpointRevision).toBe(
+        beforeOpen.checkpoint.checkpointRevision,
+      );
+      expect(afterCancel.statRollStage?.attempts[0]?.decisionRecordOrNull).toBeNull();
+
+      const allocations = harness.receiptAllocations();
+      const replayFrames = receiveFrames(harness.socket, 2);
+      harness.socket.send(clientText(cancel, vocabulary));
+      const replay = await replayFrames;
+      expect(hostMessage(replay[0] ?? '', vocabulary)).toEqual({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        messageType: 'command.replay',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt: cancelResult.receipt,
+      });
+      expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { formId: 'CHR-005' }, layers: [] },
+        revisions: closed.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocations);
+
+      const changed = statDecisionRequest(
+        cancel.commandId,
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(committed.setResult, 'draftRevision'),
+        opened.revisions,
+      );
+      const conflictFrames = receiveFrames(harness.socket, 1);
+      harness.socket.send(clientText(changed, vocabulary));
+      expect(hostMessage((await conflictFrames)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'command.refusal',
+        refusal: { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' },
+      });
+      expect(harness.receiptAllocations()).toBe(allocations);
+
+      const collisionOpened = await openWarning(
+        harness,
+        vocabulary,
+        { ...committed, setDestination: closed },
+        'cancel-dialog-collision-open',
+      );
+      const collisionCheckpoint = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+      );
+      for (const decision of ['CONFIRM', 'CANCEL'] as const) {
+        const receiptAsCommand = statDecisionRequest(
+          cancelResult.receipt.receiptId,
+          harness,
+          'CHR-028',
+          decision,
+          resultRevision(committed.setResult, 'draftRevision'),
+          collisionOpened.revisions,
+        );
+        const collisionFrames = receiveFrames(harness.socket, 1);
+        harness.socket.send(clientText(receiptAsCommand, vocabulary));
+        expect(hostMessage((await collisionFrames)[0] ?? '', vocabulary)).toMatchObject({
+          commandId: cancelResult.receipt.receiptId,
+          messageType: 'command.refusal',
+          refusal: { code: 'GUARD_REJECTED' },
+        });
+      }
+      expect(harness.receiptAllocations()).toBe(allocations);
+      expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
+        collisionCheckpoint,
+      );
+    } finally {
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('accepts the current set into an actionless rolled-bijection boundary', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'accept-set');
+    try {
+      const committed = await commitNonCriticalSet(harness, vocabulary, 'accept-set');
+      const request = statDecisionRequest(
+        'accept-set-command',
+        harness,
+        'CHR-005',
+        'ACCEPT_SET',
+        resultRevision(committed.setResult, 'draftRevision'),
+        committed.setResult.receipt.revisions,
+      );
+      const [terminal, destination] = await sendCommand(harness.socket, request, vocabulary);
+      const result = committedResult(terminal);
+      expect(result.receipt).toMatchObject({
+        result: {
+          acceptedSetReceiptId: committed.setResult.receipt.receiptId,
+          assignmentMode: 'ROLLED_BIJECTION',
+          decision: 'ACCEPT_SET',
+          nextFormId: 'CHR-009',
+          sourceFormId: 'CHR-005',
+        },
+      });
+      expect(destination).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-005',
+            roleFilteredPayload: {
+              decision: 'ACCEPT_SET',
+              decisionReceiptIdOrNull: result.receipt.receiptId,
+            },
+          },
+          layers: [],
+        },
+        revisions: result.receipt.revisions,
+      });
+      const durable = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      expect(durable.nextStageEnvelope.formId).toBe('CHR-009');
+      expect(durable.statRollStage?.attempts[0]?.decisionRecordOrNull).toMatchObject({
+        derived: { assignmentMode: 'ROLLED_BIJECTION', decision: 'ACCEPT_SET' },
+      });
+    } finally {
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it.each(['direct repeated commandId', 'reconnect', 'refresh', 'replay'] as const)(
+    'does not resurrect WARNING after CONFIRM through %s',
+    async (recoveryPath) => {
+      const suffix = `confirm-${recoveryPath.replaceAll(' ', '-')}`;
+      const harness = await createJourneyHarness(staticRoot, vocabulary, suffix);
+      let recoverySocket: WebSocket | undefined;
+      try {
+        const committed = await commitNonCriticalSet(harness, vocabulary, suffix);
+        const opened = await openWarning(harness, vocabulary, committed, `${suffix}-open`);
+        const request = statDecisionRequest(
+          `${suffix}-command`,
+          harness,
+          'CHR-028',
+          'CONFIRM',
+          resultRevision(committed.setResult, 'draftRevision'),
+          opened.revisions,
+        );
+        const [terminal, committedPresentation] = await sendCommand(
+          harness.socket,
+          request,
+          vocabulary,
+        );
+        const result = committedResult(terminal);
+        expect(result.receipt).toMatchObject({
+          result: {
+            alternateDecision: 'USE_POINT_BUY_90',
+            assignmentModeOrNull: 'POINT_BUY_90',
+            decision: 'CONFIRM',
+            nextFormId: 'CHR-009',
+            nextSetRollRequestIdOrNull: null,
+            originDecisionFormId: 'CHR-005',
+          },
+        });
+        expect(committedPresentation).toMatchObject({
+          presentation: {
+            base: { availableActionKeys: [], formId: 'CHR-005' },
+            layers: [{ availableActionKeys: [], formId: 'CHR-028' }],
+          },
+          revisions: result.receipt.revisions,
+        });
+        const checkpoint = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+        const allocations = harness.receiptAllocations();
+        let recovered: HostToClientV2Message;
+        if (recoveryPath === 'direct repeated commandId') {
+          const frames = receiveFrames(harness.socket, 2);
+          harness.socket.send(clientText(request, vocabulary));
+          const values = await frames;
+          expect(hostMessage(values[0] ?? '', vocabulary)).toMatchObject({
+            lifecycleState: 'IDEMPOTENT_REPLAY',
+            receipt: result.receipt,
+          });
+          recovered = hostMessageV2(values[1] ?? '', vocabulary);
+        } else {
+          recoverySocket =
+            recoveryPath === 'reconnect' ? harness.socket : await harness.app.injectWS('/state');
+          const replayIds = recoveryPath === 'replay' ? [request.commandId] : [];
+          const frames = receiveFrames(recoverySocket, replayIds.length === 0 ? 2 : 3);
+          recoverySocket.send(
+            clientTextV2(reconnect(harness.deviceId, `${suffix}-recover`, replayIds), vocabulary),
+          );
+          const values = await frames;
+          if (replayIds.length !== 0) {
+            expect(hostMessage(values[0] ?? '', vocabulary)).toMatchObject({
+              lifecycleState: 'IDEMPOTENT_REPLAY',
+              receipt: result.receipt,
+            });
+          }
+          recovered = hostMessageV2(values.at(-1) ?? '', vocabulary);
+        }
+        expect(recovered).toMatchObject({
+          presentation: {
+            base: {
+              availableActionKeys: [],
+              formId: 'CHR-005',
+              roleFilteredPayload: {
+                decision: 'USE_POINT_BUY_90',
+                decisionReceiptIdOrNull: result.receipt.receiptId,
+              },
+            },
+            layers: [
+              {
+                availableActionKeys: [],
+                formId: 'CHR-028',
+                roleFilteredPayload: {
+                  decision: 'CONFIRM',
+                  decisionReceiptIdOrNull: result.receipt.receiptId,
+                },
+              },
+            ],
+          },
+          revisions: result.receipt.revisions,
+        });
+        expect(harness.receiptAllocations()).toBe(allocations);
+        expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
+          checkpoint,
+        );
+      } finally {
+        if (recoverySocket !== harness.socket) recoverySocket?.terminate();
+        harness.socket.terminate();
+        await harness.app.close();
+        harness.database.close();
+      }
+    },
+  );
+
+  it('confirms ADVENTUROUS abandonment into one ordered second attempt', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'adventurous-second');
+    try {
+      const first = await commitNonCriticalSet(
+        harness,
+        vocabulary,
+        'adventurous-second',
+        'ADVENTUROUS',
+      );
+      expect(first.setDestination).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-006',
+            roleFilteredPayload: { attemptIndex: 1, decision: 'PENDING' },
+          },
+        },
+      });
+      const opened = await openWarning(harness, vocabulary, first, 'adventurous-second-open');
+      const confirm = statDecisionRequest(
+        'adventurous-second-confirm',
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(first.setResult, 'draftRevision'),
+        opened.revisions,
+      );
+      const [terminal, destination] = await sendCommand(harness.socket, confirm, vocabulary);
+      const result = committedResult(terminal);
+      const nextSetRollRequestId = resultString(result, 'nextSetRollRequestIdOrNull');
+      expect(result.receipt).toMatchObject({
+        result: {
+          alternateDecision: 'GO_ATTEMPT_2',
+          nextAttemptIndexOrNull: 2,
+          nextFormId: 'CHR-003',
+          nextSetRollRequestIdOrNull: nextSetRollRequestId,
+          transitionKind: 'ADVENTUROUS_TO_SECOND',
+        },
+      });
+      expect(destination).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-003',
+            roleFilteredPayload: {
+              attemptIndex: 2,
+              branchUuid: first.branchUuid,
+              setRollRequestId: nextSetRollRequestId,
+            },
+          },
+          layers: [],
+        },
+      });
+      const secondJourney = nextAttemptJourney(first, result, destination);
+      const secondRequest = statSetRollRequest(
+        'adventurous-second-second-set',
+        harness,
+        secondJourney,
+      );
+      const [secondTerminal, secondDecision] = await sendCommand(
+        harness.socket,
+        secondRequest,
+        vocabulary,
+      );
+      const secondResult = committedResult(secondTerminal);
+      expect(secondDecision).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-007',
+            roleFilteredPayload: {
+              attemptIndex: 2,
+              decision: 'PENDING',
+              setReceiptId: secondResult.receipt.receiptId,
+            },
+          },
+        },
+      });
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId).statRollStage,
+      ).toMatchObject({
+        attempts: [
+          { attemptIndex: 1, decisionRecordOrNull: { request: { commandId: confirm.commandId } } },
+          { attemptIndex: 2, decisionRecordOrNull: null, state: 'DECISION_READY' },
+        ],
+        branchUuid: first.branchUuid,
+        currentAttemptIndexOrNull: 2,
+      });
+    } finally {
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('reaches mandatory ALL_OR_NOTHING attempt five and rejects every sixth-attempt path', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'aon-fifth');
+    try {
+      let journey = await advanceToChr003(harness, vocabulary, 'aon-fifth', 'ALL_OR_NOTHING');
+      let fifth: CommittedNonCriticalSet | undefined;
+      for (let attemptIndex = 1; attemptIndex <= 5; attemptIndex += 1) {
+        const setRequest = statSetRollRequest(
+          `aon-fifth-set-${String(attemptIndex)}`,
+          harness,
+          journey,
+        );
+        const [setTerminal, setDestination] = await sendCommand(
+          harness.socket,
+          setRequest,
+          vocabulary,
+        );
+        const setResult = committedResult(setTerminal);
+        const committed = { ...journey, setDestination, setRequest, setResult };
+        expect(setDestination).toMatchObject({
+          presentation: {
+            base: {
+              availableActionKeys:
+                attemptIndex === 5
+                  ? ['CHR-008::CTA::001']
+                  : ['CHR-008::CTA::001', 'CHR-008::CTA::002'],
+              formId: 'CHR-008',
+              roleFilteredPayload: {
+                attemptIndex,
+                fifthAttemptMandatoryAccept: attemptIndex === 5,
+              },
+            },
+          },
+        });
+        if (attemptIndex === 5) {
+          fifth = committed;
+          break;
+        }
+        const opened = await openWarning(
+          harness,
+          vocabulary,
+          committed,
+          `aon-fifth-open-${String(attemptIndex)}`,
+        );
+        const confirm = statDecisionRequest(
+          `aon-fifth-confirm-${String(attemptIndex)}`,
+          harness,
+          'CHR-028',
+          'CONFIRM',
+          resultRevision(setResult, 'draftRevision'),
+          opened.revisions,
+        );
+        const [confirmTerminal, nextDestination] = await sendCommand(
+          harness.socket,
+          confirm,
+          vocabulary,
+        );
+        journey = nextAttemptJourney(committed, committedResult(confirmTerminal), nextDestination);
+      }
+      if (fifth === undefined) throw new Error('ALL_OR_NOTHING did not reach attempt five');
+      const checkpoint = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      const allocations = harness.receiptAllocations();
+      const forgedOpen = await sendV2(
+        harness.socket,
+        formAction(
+          'aon-fifth-forged-open',
+          'CHR-008',
+          'CHR-008::CTA::002',
+          fifth.setResult.receipt.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(forgedOpen).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+      });
+      const forgedConfirm = statDecisionRequest(
+        'aon-fifth-forged-confirm',
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(fifth.setResult, 'draftRevision'),
+        fifth.setResult.receipt.revisions,
+      );
+      const frames = receiveFrames(harness.socket, 1);
+      harness.socket.send(clientText(forgedConfirm, vocabulary));
+      expect(hostMessage((await frames)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'command.refusal',
+        refusal: { code: 'GUARD_REJECTED' },
+      });
+      expect(harness.receiptAllocations()).toBe(allocations);
+      expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
+        checkpoint,
+      );
+      expect(checkpoint.statRollStage?.attempts).toHaveLength(5);
+    } finally {
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('hides and rejects decision actions without the SET-DECIDE capability', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'decision-capability');
+    let limitedSocket: WebSocket | undefined;
+    try {
+      const committed = await commitNonCriticalSet(harness, vocabulary, 'decision-capability');
+      const checkpoint = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      const allocations = harness.receiptAllocations();
+      limitedSocket = await harness.app.injectWS('/state');
+      const frames = receiveFrames(limitedSocket, 2);
+      limitedSocket.send(
+        clientTextV2(
+          reconnect(
+            harness.deviceId,
+            'decision-capability-reconnect',
+            [],
+            [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID, CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID],
+          ),
+          vocabulary,
+        ),
+      );
+      const recovered = await frames;
+      expect(hostMessageV2(recovered[1] ?? '', vocabulary)).toMatchObject({
+        presentation: {
+          base: { availableActionKeys: [], formId: 'CHR-005' },
+          layers: [],
+        },
+      });
+      const refusal = await sendV2(
+        limitedSocket,
+        formAction(
+          'decision-capability-forged-open',
+          'CHR-005',
+          'CHR-005::CTA::002',
+          committed.setResult.receipt.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(refusal).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+      });
+      expect(harness.receiptAllocations()).toBe(allocations);
+      expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
+        checkpoint,
+      );
+    } finally {
+      limitedSocket?.terminate();
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('rejects a next-attempt ID reused from transient CANCEL before the durable CONFIRM write', async () => {
+    const frameErrors: unknown[] = [];
+    const suffix = 'cancel-receipt-collision';
+    const harness = await createJourneyHarness(staticRoot, vocabulary, suffix, [], {
+      onFrameError: (error) => frameErrors.push(error),
+      rollRequestIdForCount: (count) =>
+        count === 2 ? `receipt-${suffix}-7` : `roll-request-${suffix}-override-${String(count)}`,
+    });
+    let retrySocket: WebSocket | undefined;
+    try {
+      const first = await commitNonCriticalSet(harness, vocabulary, suffix, 'ADVENTUROUS');
+      let opened = await openWarning(harness, vocabulary, first, `${suffix}-cancel-open`);
+      const cancel = statDecisionRequest(
+        `${suffix}-cancel`,
+        harness,
+        'CHR-028',
+        'CANCEL',
+        resultRevision(first.setResult, 'draftRevision'),
+        opened.revisions,
+      );
+      const [cancelTerminal, closed] = await sendCommand(harness.socket, cancel, vocabulary);
+      const cancelResult = committedResult(cancelTerminal);
+      expect(cancelResult.receipt.receiptId).toBe(`receipt-${suffix}-7`);
+      opened = await openWarning(
+        harness,
+        vocabulary,
+        { ...first, setDestination: closed },
+        `${suffix}-confirm-open`,
+      );
+      const confirm = statDecisionRequest(
+        `${suffix}-confirm`,
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(first.setResult, 'draftRevision'),
+        opened.revisions,
+      );
+      const before = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
+      expect(harness.rollRequestAllocations()).toBe(1);
+      const closedByFatal = new Promise<void>((resolve) =>
+        harness.socket.once('close', () => resolve()),
+      );
+      harness.socket.send(clientText(confirm, vocabulary));
+      await closedByFatal;
+      expect(frameErrors).toHaveLength(1);
+      expect(frameErrors[0]).toEqual(
+        expect.objectContaining({
+          message: `creation roll-request allocator reused process-local command/receipt ID "receipt-${suffix}-7"`,
+        }),
+      );
+      expect(harness.rollRequestAllocations()).toBe(2);
+      expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
+        before,
+      );
+
+      retrySocket = await harness.app.injectWS('/state');
+      let frames = receiveFrames(retrySocket, 2);
+      retrySocket.send(clientTextV2(reconnect(harness.deviceId, `${suffix}-retry`), vocabulary));
+      const reconnected = await frames;
+      const base = hostMessageV2(reconnected[1] ?? '', vocabulary);
+      if (base.messageType !== 'projection.snapshot') throw new Error('missing retry base');
+      const retryOpened = await sendV2(
+        retrySocket,
+        formAction(
+          `${suffix}-retry-open`,
+          'CHR-006',
+          'CHR-006::CTA::002',
+          base.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      if (retryOpened.messageType !== 'projection.snapshot')
+        throw new Error('missing retry dialog');
+      const retriedConfirm = statDecisionRequest(
+        confirm.commandId,
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(first.setResult, 'draftRevision'),
+        retryOpened.revisions,
+      );
+      frames = receiveFrames(retrySocket, 2);
+      retrySocket.send(clientText(retriedConfirm, vocabulary));
+      const retried = await frames;
+      expect(hostMessage(retried[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'COMMITTED',
+        receipt: { commandId: confirm.commandId },
+      });
+      expect(hostMessageV2(retried[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { formId: 'CHR-003' } },
+      });
+      expect(harness.rollRequestAllocations()).toBe(3);
+    } finally {
+      retrySocket?.terminate();
       harness.socket.terminate();
       await harness.app.close();
       harness.database.close();
@@ -1487,7 +2258,7 @@ describe('durable character creation decisions', () => {
             confirmationFace: 6,
             criticalQueueIndex: 1,
             nextConfirmationRollRequestIdOrNull: null,
-            nextFormId: 'CHR-004',
+            nextFormId: 'CHR-005',
             originFace: 1,
             outcomeOrNull: {
               creationCriticalPenaltyOrNull: null,
@@ -1503,32 +2274,33 @@ describe('durable character creation decisions', () => {
       expect(complete).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
-            formId: 'CHR-004',
+            availableActionKeys: ['CHR-005::CTA::001', 'CHR-005::CTA::002'],
+            formId: 'CHR-005',
             roleFilteredPayload: {
-              confirmationFace: 6,
-              confirmationReceiptId: secondResult.receipt.receiptId,
-              confirmationRollRequestId: secondConfirmationRequestId,
-              criticalQueueIndex: 1,
-              originFace: 1,
-              returnDecisionFormId: 'CHR-005',
-              setRollReceiptId,
+              acceptedSetReceiptId: setRollReceiptId,
+              decision: 'PENDING',
+              decisionReceiptIdOrNull: null,
             },
           },
         },
         revisions: secondResult.receipt.revisions,
       });
       const durable = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
-      expect(durable.nextStageEnvelope.formId).toBe('CHR-004');
+      expect(durable.nextStageEnvelope.formId).toBe('CHR-005');
       expect(durable.statRollStage).toMatchObject({
-        confirmationRollRequestIdOrNull: null,
-        criticalQueueIndexOrNull: 1,
-        outcomes: [
-          { criticalGrade: 0, setEntryIndex: 0, value: 20 },
-          { criticalGrade: 0, setEntryIndex: 1, value: 1 },
+        attempts: [
+          {
+            confirmationRollRequestIdOrNull: null,
+            criticalQueueIndexOrNull: 1,
+            outcomes: [
+              { criticalGrade: 0, setEntryIndex: 0, value: 20 },
+              { criticalGrade: 0, setEntryIndex: 1, value: 1 },
+            ],
+            returnDecisionFormId: 'CHR-005',
+            state: 'CHAIN_COMPLETE',
+          },
         ],
-        returnDecisionFormId: 'CHR-005',
-        state: 'CHAIN_COMPLETE',
+        currentAttemptIndexOrNull: 1,
       });
       expect(durable.raceAndMethodStage).toMatchObject({
         diceInput: { choiceLockStatus: 'LOCKED_AFTER_RESULT' },

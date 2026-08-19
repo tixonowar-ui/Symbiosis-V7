@@ -3,8 +3,8 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-08-19`
-- Тестов: 858, все зелёные
+- Снимок: `2026-08-20`
+- Тестов: 913, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -60,22 +60,26 @@ append-only решения и проводит normal path через `CHR-016`,
 initial `CHR-002`; `PURE` host-authoritatively минует `CHR-016`. Селекторы
 метода на `CHR-002` local-only до подтверждения: оно атомарно создаёт первый
 addressed set request и открывает `CHR-003`. Первый показ семи D20 и очередь
-подтверждений натуральных `1/20` durable и необратимы; текущий срез завершается
-actionless на `CHR-003` либо `CHR-004`, не публикуя формы решения `CHR-005`–`CHR-009`.
+подтверждений натуральных `1/20` durable и необратимы. `CHR-005`–`CHR-008`
+принимают набор либо открывают `CHR-028` поверх исходного screen: `CANCEL`
+закрывает dialog presentation-only, а `CONFIRM` сохраняет abandonment и
+следующую попытку либо point-buy. Ordered attempts сохраняют provenance;
+пятая попытка `ALL_OR_NOTHING` допускает только принятие. Срез подписывает
+переход в `CHR-009`, но саму форму ещё не публикует.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                            | Веха |
 | ---------------------------- | ------------ | ------------------------------------------------------------------ | ---- |
 | `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft        | M4   |
-| `src/domain/rules`           | **частично** | набор характеристик, очередь критов, skill-stage; решения позже    | M3   |
+| `src/domain/rules`           | **частично** | набор, очередь критов и решения CLASSIC/ADVENTUROUS/AON            | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет      | M3   |
 | `src/persistence`            | **частично** | CRUD, append-only wizard/roll checkpoint, library, device identity | M2   |
 | `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity | M2   |
-| `src/host`                   | **частично** | identity, SET-DECIDE и durable rolls до CHR-003/004                | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001/002/003/004/010/016/036            | M4   |
-| `src/web`                    | **частично** | recovery, выборы и броски до CHR-003/004, выбор арта               | M5   |
-| `src/web/renderer`           | **частично** | 18 форм: 11 APP и 7 CHR; остальные fail-closed                     | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и семи CHR                  | M6   |
+| `src/host`                   | **частично** | identity и creation journey до подписанной границы CHR-009         | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001–008/010/016/028/036 slice          | M4   |
+| `src/web`                    | **частично** | recovery, creation rolls, decisions и CHR-028 dialog               | M5   |
+| `src/web/renderer`           | **частично** | 23 формы: 11 APP и 12 CHR; остальные fail-closed                   | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двенадцати CHR            | M6   |
 
 ## generated/ — вывод конвейера
 

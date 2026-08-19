@@ -182,6 +182,20 @@ const refusalFrom = (run: () => unknown): CommandRefusal => {
   throw new Error('expected CreationSetDecideApplicationError');
 };
 
+const durableCommit = (
+  database: Database.Database,
+  request: DecodedCommandRequest,
+  receiptId: string,
+  allocators?: {
+    readonly allocateBranchUuid: () => string;
+    readonly allocateRollRequestId: () => string;
+  },
+): DurableCreationWizardCheckpoint => {
+  const result = commitCreationSetDecide(database, request, receiptId, allocators);
+  if (result.kind !== 'DURABLE') throw new Error('test expected a durable SET-DECIDE result');
+  return result.durableCheckpoint;
+};
+
 const committedUnitedPath = (
   database: Database.Database,
 ): {
@@ -190,13 +204,13 @@ const committedUnitedPath = (
   readonly race: DurableCreationWizardCheckpoint;
 } => {
   commitIdentityCheckpoint(database, identityRequest(), 'receipt-identity');
-  const race = commitCreationSetDecide(database, raceRequest('UNITED'), 'receipt-race');
-  const acquisition = commitCreationSetDecide(
+  const race = durableCommit(database, raceRequest('UNITED'), 'receipt-race');
+  const acquisition = durableCommit(
     database,
     acquisitionRequest('RANDOM', race),
     'receipt-acquisition',
   );
-  const dice = commitCreationSetDecide(database, diceRequest('AUTO', acquisition), 'receipt-dice');
+  const dice = durableCommit(database, diceRequest('AUTO', acquisition), 'receipt-dice');
   return { acquisition, dice, race };
 };
 
@@ -363,7 +377,7 @@ describe('RACE_AND_METHOD SET-DECIDE durable command', () => {
   it('routes PURE directly to CHR-036 and guards CHR-016 with a zero-write refusal', () => {
     const database = memoryDatabase();
     commitIdentityCheckpoint(database, identityRequest(), 'receipt-identity');
-    const pure = commitCreationSetDecide(database, raceRequest('PURE'), 'receipt-pure');
+    const pure = durableCommit(database, raceRequest('PURE'), 'receipt-pure');
     expect(pure.nextStageEnvelope.formId).toBe('CHR-036');
     expect(pure.raceAndMethodStage).toMatchObject({
       decisionRecords: [{ request: { commandId: 'race-PURE' } }],
@@ -391,7 +405,7 @@ describe('RACE_AND_METHOD SET-DECIDE durable command', () => {
       before,
     );
 
-    const dice = commitCreationSetDecide(
+    const dice = durableCommit(
       database,
       diceRequest('MANUAL', pure, 'pure-dice'),
       'receipt-pure-dice',
@@ -405,7 +419,7 @@ describe('RACE_AND_METHOD SET-DECIDE durable command', () => {
     const { dice } = committedUnitedPath(database);
     const request = methodRequest(dice);
     expect(normalizeCreationSetDecideRequest(request)).toEqual(request);
-    const method = commitCreationSetDecide(database, request, 'receipt-method', {
+    const method = durableCommit(database, request, 'receipt-method', {
       allocateBranchUuid: () => 'stats-branch',
       allocateRollRequestId: () => 'set-roll-request',
     });
@@ -418,19 +432,25 @@ describe('RACE_AND_METHOD SET-DECIDE durable command', () => {
       statMethod: 'CLASSIC',
     });
     expect(method.statRollStage).toEqual({
-      attemptIndex: 1,
+      attempts: [
+        {
+          attemptIndex: 1,
+          confirmationRecords: [],
+          confirmationRollRequestIdOrNull: null,
+          criticalQueueIndexOrNull: null,
+          decisionRecordOrNull: null,
+          naturalCriticalQueue: [],
+          outcomes: [],
+          returnDecisionFormId: 'CHR-005',
+          setRecord: null,
+          setRollRequestId: 'set-roll-request',
+          state: 'REQUEST_READY',
+        },
+      ],
       branchUuid: 'stats-branch',
-      confirmationRecords: [],
-      confirmationRollRequestIdOrNull: null,
-      criticalQueueIndexOrNull: null,
+      currentAttemptIndexOrNull: 1,
       diceInputModeSnapshot: 'AUTO',
-      naturalCriticalQueue: [],
-      outcomes: [],
-      returnDecisionFormId: 'CHR-005',
-      setRecord: null,
-      setRollRequestId: 'set-roll-request',
       statMethod: 'CLASSIC',
-      state: 'REQUEST_READY',
     });
     expect(method.raceAndMethodStage?.statMethod).toEqual({
       choiceLockStatus: 'UNLOCKED',
@@ -477,7 +497,7 @@ describe('RACE_AND_METHOD SET-DECIDE durable command', () => {
       initial,
     );
 
-    const race = commitCreationSetDecide(database, raceRequest('FREE'), 'receipt-race');
+    const race = durableCommit(database, raceRequest('FREE'), 'receipt-race');
     expect(
       refusalFrom(() =>
         commitCreationSetDecide(database, raceRequest('FREE'), 'receipt-duplicate-command'),

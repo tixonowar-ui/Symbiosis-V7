@@ -5,9 +5,13 @@ import type Database from 'better-sqlite3';
 import {
   commitCreationCriticalConfirmation,
   createCreationCriticalChain,
+  deriveCreationStatAbandonment,
   deriveCreationReturnDecisionFormId,
+  deriveCreationStatSetDecisionRule,
   resolveCreationStatSet,
+  type CreationStatAbandonmentTransitionKind,
   type CreationStatCriticalChainState,
+  type CreationStatSetDecisionRule,
 } from '../domain/index.js';
 
 import { decodeClientMessage } from '@shared/wire-codec.js';
@@ -63,13 +67,32 @@ export const STAT_METHODS = ['CLASSIC', 'ADVENTUROUS', 'ALL_OR_NOTHING'] as cons
 export type StatMethod = (typeof STAT_METHODS)[number];
 export type ChoiceLockStatus = 'LOCKED_AFTER_RESULT' | 'NOT_APPLICABLE' | 'UNLOCKED';
 
-export type CreationDecisionSourceFormId = 'CHR-002' | 'CHR-010' | 'CHR-016' | 'CHR-036';
+export type CreationRaceMethodDecisionSourceFormId = 'CHR-002' | 'CHR-010' | 'CHR-016' | 'CHR-036';
+export type CreationStatRollDecisionFormId = 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+export interface CreationSetAbandonmentConsequences extends JsonObject {
+  readonly creationCriticalConsequencesDiscarded: true;
+  readonly exactPointBuyTotalOrNull: 85 | 90 | null;
+  readonly nextAttemptIndexOrNull: 2 | 3 | 4 | 5 | null;
+  readonly setValuesDiscarded: true;
+}
+export type CreationDecisionSourceFormId =
+  CreationRaceMethodDecisionSourceFormId | CreationStatRollDecisionFormId | 'CHR-028';
 export type CreationNextFormId =
-  'CHR-002' | 'CHR-003' | 'CHR-004' | 'CHR-010' | 'CHR-016' | 'CHR-036';
+  | 'CHR-002'
+  | 'CHR-003'
+  | 'CHR-004'
+  | 'CHR-005'
+  | 'CHR-006'
+  | 'CHR-007'
+  | 'CHR-008'
+  | 'CHR-009'
+  | 'CHR-010'
+  | 'CHR-016'
+  | 'CHR-036';
 
 interface CreationSetDecidePayloadCommon extends JsonObject {
   readonly stage: 'RACE_AND_METHOD';
-  readonly sourceFormId: CreationDecisionSourceFormId;
+  readonly sourceFormId: CreationRaceMethodDecisionSourceFormId;
   readonly characterDraftId: string;
   readonly wizardCheckpointId: string;
   readonly draftRevision: number;
@@ -95,7 +118,32 @@ export interface StatMethodDecisionPayload extends CreationSetDecidePayloadCommo
   readonly statMethod: StatMethod;
 }
 
+interface CreationStatRollDecisionPayloadCommon extends JsonObject {
+  readonly stage: 'STAT_ROLLS';
+  readonly characterDraftId: string;
+  readonly wizardCheckpointId: string;
+  readonly draftRevision: number;
+}
+
+export interface StatRollAcceptSetPayload extends CreationStatRollDecisionPayloadCommon {
+  readonly sourceFormId: CreationStatRollDecisionFormId;
+  readonly decision: 'ACCEPT_SET';
+}
+
+export interface StatRollDialogDecisionPayload extends CreationStatRollDecisionPayloadCommon {
+  readonly sourceFormId: 'CHR-028';
+  readonly decision: 'CANCEL' | 'CONFIRM';
+}
+
 export type CreationSetDecidePayload =
+  | DiceInputDecisionPayload
+  | RaceDecisionPayload
+  | StatRollAcceptSetPayload
+  | StatRollDialogDecisionPayload
+  | StatMethodDecisionPayload
+  | SymbiontAcquisitionDecisionPayload;
+
+export type CreationRaceMethodSetDecidePayload =
   | DiceInputDecisionPayload
   | RaceDecisionPayload
   | StatMethodDecisionPayload
@@ -105,10 +153,22 @@ export type CreationSetDecideCommandRequest = WorkflowCommandRequestMessage<
   typeof CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
   CreationSetDecidePayload
 >;
+export type CreationRaceMethodSetDecideCommandRequest = CreationSetDecideCommandRequest & {
+  readonly payload: CreationRaceMethodSetDecidePayload;
+};
+export type DurableCreationSetDecideCommandRequest = CreationSetDecideCommandRequest & {
+  readonly payload:
+    | CreationRaceMethodSetDecidePayload
+    | StatRollAcceptSetPayload
+    | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' });
+};
+export type CreationSetCancelCommandRequest = CreationSetDecideCommandRequest & {
+  readonly payload: StatRollDialogDecisionPayload & { readonly decision: 'CANCEL' };
+};
 
 interface CreationSetDecideReceiptResultCommon extends JsonObject {
   readonly stage: 'RACE_AND_METHOD';
-  readonly sourceFormId: CreationDecisionSourceFormId;
+  readonly sourceFormId: CreationRaceMethodDecisionSourceFormId;
   readonly characterDraftId: string;
   readonly checkpointOwnerId: string;
   readonly checkpointId: string;
@@ -144,12 +204,71 @@ export interface StatMethodDecisionReceiptResult extends CreationSetDecideReceip
   readonly nextFormId: 'CHR-003';
 }
 
+interface CreationStatRollDecisionReceiptResultCommon extends JsonObject {
+  readonly stage: 'STAT_ROLLS';
+  readonly characterDraftId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly branchCacheHash: typeof EMPTY_IDENTITY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+}
+
+export interface CreationSetAcceptanceReceiptResult extends CreationStatRollDecisionReceiptResultCommon {
+  readonly sourceFormId: CreationStatRollDecisionFormId;
+  readonly decision: 'ACCEPT_SET';
+  readonly acceptedSetReceiptId: string;
+  readonly assignmentMode: 'ROLLED_BIJECTION';
+  readonly nextFormId: 'CHR-009';
+}
+
+export interface CreationSetAbandonmentReceiptResult extends CreationStatRollDecisionReceiptResultCommon {
+  readonly sourceFormId: 'CHR-028';
+  readonly decision: 'CONFIRM';
+  readonly originDecisionFormId: CreationStatRollDecisionFormId;
+  readonly alternateDecision:
+    'GO_ATTEMPT_2' | 'GO_NEXT_ATTEMPT' | 'USE_POINT_BUY_85' | 'USE_POINT_BUY_90';
+  readonly transitionKind: CreationStatAbandonmentTransitionKind;
+  readonly abandonedSetReceiptIds: readonly [string];
+  readonly irreversibleConsequences: CreationSetAbandonmentConsequences;
+  readonly assignmentModeOrNull: 'POINT_BUY_85' | 'POINT_BUY_90' | null;
+  readonly sourceSetReceiptIdOrNull: null;
+  readonly nextAttemptIndexOrNull: 2 | 3 | 4 | 5 | null;
+  readonly nextSetRollRequestIdOrNull: string | null;
+  readonly nextFormId: 'CHR-003' | 'CHR-009';
+}
+
+export interface CreationSetCancelReceiptResult extends CreationStatRollDecisionReceiptResultCommon {
+  readonly sourceFormId: 'CHR-028';
+  readonly decision: 'CANCEL';
+  readonly originDecisionFormId: CreationStatRollDecisionFormId;
+  readonly decisionReceiptIdOrNull: null;
+  readonly nextFormId: CreationStatRollDecisionFormId;
+}
+
 export type CreationSetDecideReceiptResult =
+  | CreationSetAbandonmentReceiptResult
+  | CreationSetAcceptanceReceiptResult
+  | CreationSetCancelReceiptResult
   | DiceInputDecisionReceiptResult
   | RaceDecisionReceiptResult
   | StatMethodDecisionReceiptResult
   | SymbiontAcquisitionDecisionReceiptResult;
 export type CreationSetDecideReceipt = CommandReceipt<CreationSetDecideReceiptResult>;
+export type CreationSetCancelReceipt = CommandReceipt<CreationSetCancelReceiptResult>;
+export type DurableCreationSetDecideReceiptResult = Exclude<
+  CreationSetDecideReceiptResult,
+  CreationSetCancelReceiptResult
+>;
+export type DurableCreationSetDecideReceipt = CommandReceipt<DurableCreationSetDecideReceiptResult>;
+export type CreationRaceMethodSetDecideReceiptResult =
+  | DiceInputDecisionReceiptResult
+  | RaceDecisionReceiptResult
+  | StatMethodDecisionReceiptResult
+  | SymbiontAcquisitionDecisionReceiptResult;
+export type CreationRaceMethodSetDecideReceipt =
+  CommandReceipt<CreationRaceMethodSetDecideReceiptResult>;
 
 export interface CreationNextStageEnvelope<
   TFormId extends CreationNextFormId = CreationNextFormId,
@@ -193,12 +312,48 @@ export type CreationSetDecideDerived =
   | StatMethodDecisionDerived
   | SymbiontAcquisitionDecisionDerived;
 
+export interface CreationSetAcceptanceDerived {
+  readonly decision: 'ACCEPT_SET';
+  readonly acceptedSetReceiptId: string;
+  readonly assignmentMode: 'ROLLED_BIJECTION';
+}
+
+export interface CreationSetAbandonmentDerived {
+  readonly decision: 'GO_ATTEMPT_2' | 'GO_NEXT_ATTEMPT' | 'USE_POINT_BUY_85' | 'USE_POINT_BUY_90';
+  readonly originDecisionFormId: CreationStatRollDecisionFormId;
+  readonly transitionKind: CreationStatAbandonmentTransitionKind;
+  readonly abandonedSetReceiptIds: readonly [string];
+  readonly irreversibleConsequences: CreationSetAbandonmentConsequences;
+  readonly destinationFormId: 'CHR-003' | 'CHR-009';
+}
+
 export interface CreationSetDecideDecisionRecord {
-  readonly request: CreationSetDecideCommandRequest;
+  readonly request: CreationRaceMethodSetDecideCommandRequest;
   readonly derived: CreationSetDecideDerived;
-  readonly receipt: CreationSetDecideReceipt;
+  readonly receipt: CreationRaceMethodSetDecideReceipt;
   readonly nextStageEnvelope: CreationNextStageEnvelope;
 }
+
+export interface CreationSetAcceptanceDecisionRecord {
+  readonly request: CreationSetDecideCommandRequest & {
+    readonly payload: StatRollAcceptSetPayload;
+  };
+  readonly derived: CreationSetAcceptanceDerived;
+  readonly receipt: CommandReceipt<CreationSetAcceptanceReceiptResult>;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-009'>;
+}
+
+export interface CreationSetAbandonmentDecisionRecord {
+  readonly request: CreationSetDecideCommandRequest & {
+    readonly payload: StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' };
+  };
+  readonly derived: CreationSetAbandonmentDerived;
+  readonly receipt: CommandReceipt<CreationSetAbandonmentReceiptResult>;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-003' | 'CHR-009'>;
+}
+
+export type CreationStatRollDecisionRecord =
+  CreationSetAbandonmentDecisionRecord | CreationSetAcceptanceDecisionRecord;
 
 export interface RaceAndMethodStage {
   readonly race: {
@@ -224,7 +379,12 @@ export interface RaceAndMethodStage {
 }
 
 export type StatRollStageState =
-  'CHAIN_COMPLETE' | 'CRITICALS_PENDING' | 'DECISION_READY' | 'REQUEST_READY';
+  | 'CHAIN_COMPLETE'
+  | 'CRITICALS_PENDING'
+  | 'DECISION_READY'
+  | 'REQUEST_READY'
+  | 'SET_ABANDONED'
+  | 'SET_ACCEPTED';
 
 export interface NaturalCriticalQueueItem extends JsonObject {
   readonly setEntryIndex: number;
@@ -289,7 +449,7 @@ export interface StatSetRollReceiptResult extends CreationRollReceiptResultCommo
   readonly naturalCriticalQueue: readonly NaturalCriticalQueueItem[];
   readonly shownResultLocked: true;
   readonly confirmationRollRequestIdOrNull: string | null;
-  readonly nextFormId: 'CHR-003' | 'CHR-004';
+  readonly nextFormId: 'CHR-004' | CreationStatRollDecisionFormId;
 }
 
 export interface CriticalConfirmationRollReceiptResult extends CreationRollReceiptResultCommon {
@@ -303,7 +463,7 @@ export interface CriticalConfirmationRollReceiptResult extends CreationRollRecei
   readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
   readonly outcomeOrNull: CreationCriticalOutcome | null;
   readonly nextConfirmationRollRequestIdOrNull: string | null;
-  readonly nextFormId: 'CHR-004';
+  readonly nextFormId: 'CHR-004' | CreationStatRollDecisionFormId;
 }
 
 export type CreationRollCommitReceiptResult =
@@ -315,7 +475,7 @@ export interface StatSetRollRecord {
     readonly payload: StatSetRollCommitPayload;
   };
   readonly receipt: CommandReceipt<StatSetRollReceiptResult>;
-  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-003' | 'CHR-004'>;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-004' | CreationStatRollDecisionFormId>;
 }
 
 export interface CriticalConfirmationRollRecord {
@@ -323,14 +483,11 @@ export interface CriticalConfirmationRollRecord {
     readonly payload: CriticalConfirmationRollCommitPayload;
   };
   readonly receipt: CommandReceipt<CriticalConfirmationRollReceiptResult>;
-  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-004'>;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-004' | CreationStatRollDecisionFormId>;
 }
 
-export interface StatRollStage {
-  readonly branchUuid: string;
-  readonly statMethod: StatMethod;
+export interface StatRollAttempt {
   readonly attemptIndex: number;
-  readonly diceInputModeSnapshot: DiceInputMode;
   readonly setRollRequestId: string;
   readonly setRecord: StatSetRollRecord | null;
   readonly naturalCriticalQueue: readonly NaturalCriticalQueueItem[];
@@ -339,7 +496,29 @@ export interface StatRollStage {
   readonly confirmationRecords: readonly CriticalConfirmationRollRecord[];
   readonly outcomes: readonly CreationCriticalOutcome[];
   readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+  readonly decisionRecordOrNull: CreationStatRollDecisionRecord | null;
   readonly state: StatRollStageState;
+}
+
+export interface StatRollStage {
+  readonly branchUuid: string;
+  readonly statMethod: StatMethod;
+  readonly diceInputModeSnapshot: DiceInputMode;
+  readonly attempts: readonly StatRollAttempt[];
+  readonly currentAttemptIndexOrNull: number | null;
+}
+
+export function currentStatRollAttempt(stage: StatRollStage): StatRollAttempt | null {
+  if (stage.currentAttemptIndexOrNull === null) return null;
+  const current = stage.attempts.find(
+    ({ attemptIndex }) => attemptIndex === stage.currentAttemptIndexOrNull,
+  );
+  if (current === undefined) {
+    throw new Error(
+      `statRollStage currentAttemptIndexOrNull ${String(stage.currentAttemptIndexOrNull)} does not address an attempt`,
+    );
+  }
+  return current;
 }
 
 export interface CreationStatRollAllocation {
@@ -367,7 +546,7 @@ export interface CreationWizardPreRollPayload {
   readonly randomReceiptIds: readonly [];
   readonly branchCacheHash: typeof EMPTY_IDENTITY_BRANCH_CACHE_HASH;
   readonly nextStageEnvelope: CreationNextStageEnvelope;
-  readonly receipt: CreationSetDecideReceipt;
+  readonly receipt: CreationRaceMethodSetDecideReceipt;
 }
 
 export interface CreationWizardStatRollPayload {
@@ -378,8 +557,10 @@ export interface CreationWizardStatRollPayload {
   readonly selectedBranchUuidOrNull: null;
   readonly randomReceiptIds: readonly string[];
   readonly branchCacheHash: typeof EMPTY_IDENTITY_BRANCH_CACHE_HASH;
-  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-003' | 'CHR-004'>;
-  readonly receipt: CreationRollCommitReceipt | CreationSetDecideReceipt;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<
+    'CHR-003' | 'CHR-004' | 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008' | 'CHR-009'
+  >;
+  readonly receipt: CreationRollCommitReceipt | DurableCreationSetDecideReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -401,10 +582,10 @@ export interface DurableCreationWizardCheckpoint {
   readonly raceAndMethodStage: RaceAndMethodStage | null;
   readonly statRollStage: StatRollStage | null;
   readonly receipt:
-    CreationRollCommitReceipt | CreationSetDecideReceipt | IdentityCheckpointReceipt;
+    CreationRollCommitReceipt | DurableCreationSetDecideReceipt | IdentityCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
-    | CreationSetDecideCommandRequest
+    | DurableCreationSetDecideCommandRequest
     | IdentityCheckpointCommandRequest;
 }
 
@@ -412,12 +593,33 @@ export interface DurableCreationWizardCommand {
   readonly durableCheckpoint: DurableCreationWizardCheckpoint;
   readonly nextStageEnvelope: CreationNextStageEnvelope;
   readonly receipt:
-    CreationRollCommitReceipt | CreationSetDecideReceipt | IdentityCheckpointReceipt;
+    CreationRollCommitReceipt | DurableCreationSetDecideReceipt | IdentityCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
-    | CreationSetDecideCommandRequest
+    | DurableCreationSetDecideCommandRequest
     | IdentityCheckpointCommandRequest;
 }
+
+export interface CreationSetAbandonmentDialogContext {
+  readonly characterDraftId: string;
+  readonly wizardCheckpointId: string;
+  readonly draftRevision: number;
+  readonly originDecisionFormId: CreationStatRollDecisionFormId;
+  readonly transitionKind: CreationStatAbandonmentTransitionKind;
+  readonly abandonedSetReceiptIds: readonly [string];
+  readonly irreversibleConsequences: CreationSetAbandonmentConsequences;
+}
+
+export type CreationSetDecideExecutionResult =
+  | {
+      readonly kind: 'DURABLE';
+      readonly durableCheckpoint: DurableCreationWizardCheckpoint;
+    }
+  | {
+      readonly kind: 'TRANSIENT_CANCEL';
+      readonly request: CreationSetCancelCommandRequest;
+      readonly receipt: CreationSetCancelReceipt;
+    };
 
 export class CreationSetDecideApplicationError extends Error {
   constructor(readonly refusal: CommandRefusal) {
@@ -585,25 +787,42 @@ export function normalizeCreationSetDecideRequest(
   if (request.role !== 'player') return unrecognized('$.role', request.role);
 
   const unshapedPayload = objectAt(request.payload, '$.payload');
-  literal(unshapedPayload['stage'], 'RACE_AND_METHOD', '$.payload.stage');
-  const sourceFormId = enumAt(unshapedPayload['sourceFormId'], '$.payload.sourceFormId', [
-    'CHR-010',
-    'CHR-016',
-    'CHR-036',
-    'CHR-002',
+  const stage = enumAt(unshapedPayload['stage'], '$.payload.stage', [
+    'RACE_AND_METHOD',
+    'STAT_ROLLS',
   ] as const);
-  const decisionKey = {
-    'CHR-002': 'statMethod',
-    'CHR-010': 'raceChoice',
-    'CHR-016': 'symbiontAcquisitionMode',
-    'CHR-036': 'diceInputMode',
-  }[sourceFormId];
-  const payload = exactObject(request.payload, '$.payload', [...COMMON_PAYLOAD_KEYS, decisionKey]);
+  const sourceFormId =
+    stage === 'RACE_AND_METHOD'
+      ? enumAt(unshapedPayload['sourceFormId'], '$.payload.sourceFormId', [
+          'CHR-010',
+          'CHR-016',
+          'CHR-036',
+          'CHR-002',
+        ] as const)
+      : enumAt(unshapedPayload['sourceFormId'], '$.payload.sourceFormId', [
+          'CHR-005',
+          'CHR-006',
+          'CHR-007',
+          'CHR-008',
+          'CHR-028',
+        ] as const);
+  const variantKey =
+    stage === 'STAT_ROLLS'
+      ? 'decision'
+      : {
+          'CHR-002': 'statMethod',
+          'CHR-010': 'raceChoice',
+          'CHR-016': 'symbiontAcquisitionMode',
+          'CHR-036': 'diceInputMode',
+        }[sourceFormId as CreationRaceMethodDecisionSourceFormId];
+  const payload = exactObject(request.payload, '$.payload', [...COMMON_PAYLOAD_KEYS, variantKey]);
   const common = {
-    characterDraftId: stringAt(payload['characterDraftId'], '$.payload.characterDraftId'),
+    characterDraftId: nonEmptyStringAt(payload['characterDraftId'], '$.payload.characterDraftId'),
     draftRevision: revisionAt(payload['draftRevision'], '$.payload.draftRevision'),
-    stage: 'RACE_AND_METHOD' as const,
-    wizardCheckpointId: stringAt(payload['wizardCheckpointId'], '$.payload.wizardCheckpointId'),
+    wizardCheckpointId: nonEmptyStringAt(
+      payload['wizardCheckpointId'],
+      '$.payload.wizardCheckpointId',
+    ),
   };
   let normalizedPayload: CreationSetDecidePayload;
   switch (sourceFormId) {
@@ -611,12 +830,14 @@ export function normalizeCreationSetDecideRequest(
       normalizedPayload = {
         ...common,
         raceChoice: enumAt(payload['raceChoice'], '$.payload.raceChoice', RACE_CHOICES),
+        stage: 'RACE_AND_METHOD',
         sourceFormId,
       };
       break;
     case 'CHR-016':
       normalizedPayload = {
         ...common,
+        stage: 'RACE_AND_METHOD',
         sourceFormId,
         symbiontAcquisitionMode: enumAt(
           payload['symbiontAcquisitionMode'],
@@ -633,14 +854,35 @@ export function normalizeCreationSetDecideRequest(
           '$.payload.diceInputMode',
           DICE_INPUT_MODES,
         ),
+        stage: 'RACE_AND_METHOD',
         sourceFormId,
       };
       break;
     case 'CHR-002':
       normalizedPayload = {
         ...common,
+        stage: 'RACE_AND_METHOD',
         sourceFormId,
         statMethod: enumAt(payload['statMethod'], '$.payload.statMethod', STAT_METHODS),
+      };
+      break;
+    case 'CHR-005':
+    case 'CHR-006':
+    case 'CHR-007':
+    case 'CHR-008':
+      normalizedPayload = {
+        ...common,
+        decision: literal(payload['decision'], 'ACCEPT_SET', '$.payload.decision'),
+        sourceFormId,
+        stage: 'STAT_ROLLS',
+      };
+      break;
+    case 'CHR-028':
+      normalizedPayload = {
+        ...common,
+        decision: enumAt(payload['decision'], '$.payload.decision', ['CONFIRM', 'CANCEL'] as const),
+        sourceFormId,
+        stage: 'STAT_ROLLS',
       };
       break;
   }
@@ -677,7 +919,9 @@ const methodDerived = (method: StatMethod): StatMethodDecisionDerived => ({
   methodConsequences: METHOD_CONSEQUENCES[method],
 });
 
-const derivedForRequest = (request: CreationSetDecideCommandRequest): CreationSetDecideDerived => {
+const derivedForRequest = (
+  request: CreationRaceMethodSetDecideCommandRequest,
+): CreationSetDecideDerived => {
   switch (request.payload.sourceFormId) {
     case 'CHR-010':
       return raceDerived(request.payload.raceChoice);
@@ -690,7 +934,7 @@ const derivedForRequest = (request: CreationSetDecideCommandRequest): CreationSe
   }
 };
 
-const nextFormForPayload = (payload: CreationSetDecidePayload): CreationNextFormId => {
+const nextFormForPayload = (payload: CreationRaceMethodSetDecidePayload): CreationNextFormId => {
   switch (payload.sourceFormId) {
     case 'CHR-010':
       return payload.raceChoice === 'PURE' ? 'CHR-036' : 'CHR-016';
@@ -726,6 +970,11 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-002',
     'CHR-003',
     'CHR-004',
+    'CHR-005',
+    'CHR-006',
+    'CHR-007',
+    'CHR-008',
+    'CHR-009',
   ] as const);
   const bindings = object['routeBindings'];
   if (!Array.isArray(bindings)) return invalidShape(`${path}.routeBindings`, 'array', bindings);
@@ -751,7 +1000,7 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
   };
 };
 
-const creationReceiptAt = (value: unknown, path: string): CreationSetDecideReceipt => {
+const raceMethodReceiptAt = (value: unknown, path: string): CreationRaceMethodSetDecideReceipt => {
   const object = exactObject(value, path, ['commandId', 'receiptId', 'result', 'revisions']);
   const resultPath = `${path}.result`;
   const unshapedResult = objectAt(object['result'], resultPath);
@@ -789,7 +1038,7 @@ const creationReceiptAt = (value: unknown, path: string): CreationSetDecideRecei
     draftRevision: revisionAt(result['draftRevision'], `${resultPath}.draftRevision`),
     stage: 'RACE_AND_METHOD' as const,
   };
-  let parsedResult: CreationSetDecideReceiptResult;
+  let parsedResult: CreationRaceMethodSetDecideReceiptResult;
   switch (sourceFormId) {
     case 'CHR-010':
       parsedResult = {
@@ -842,6 +1091,223 @@ const creationReceiptAt = (value: unknown, path: string): CreationSetDecideRecei
   }
   return {
     commandId: stringAt(object['commandId'], `${path}.commandId`),
+    receiptId: nonEmptyStringAt(object['receiptId'], `${path}.receiptId`),
+    result: parsedResult,
+    revisions: revisionsAt(object['revisions'], `${path}.revisions`),
+  };
+};
+
+const abandonmentConsequencesAt = (
+  value: unknown,
+  path: string,
+): CreationSetAbandonmentConsequences => {
+  const object = exactObject(value, path, [
+    'setValuesDiscarded',
+    'creationCriticalConsequencesDiscarded',
+    'nextAttemptIndexOrNull',
+    'exactPointBuyTotalOrNull',
+  ]);
+  const nextAttempt = object['nextAttemptIndexOrNull'];
+  const pointTotal = object['exactPointBuyTotalOrNull'];
+  return {
+    creationCriticalConsequencesDiscarded: literal(
+      object['creationCriticalConsequencesDiscarded'],
+      true,
+      `${path}.creationCriticalConsequencesDiscarded`,
+    ),
+    exactPointBuyTotalOrNull:
+      pointTotal === null
+        ? null
+        : (() => {
+            const total = safeIntegerAt(pointTotal, `${path}.exactPointBuyTotalOrNull`, 85, 90);
+            if (total !== 85 && total !== 90) {
+              return unrecognized(`${path}.exactPointBuyTotalOrNull`, total);
+            }
+            return total;
+          })(),
+    nextAttemptIndexOrNull:
+      nextAttempt === null
+        ? null
+        : (safeIntegerAt(nextAttempt, `${path}.nextAttemptIndexOrNull`, 2, 5) as 2 | 3 | 4 | 5),
+    setValuesDiscarded: literal(object['setValuesDiscarded'], true, `${path}.setValuesDiscarded`),
+  };
+};
+
+const statDecisionReceiptAt = (value: unknown, path: string): CreationSetDecideReceipt => {
+  const object = exactObject(value, path, ['commandId', 'receiptId', 'result', 'revisions']);
+  const resultPath = `${path}.result`;
+  const unshaped = objectAt(object['result'], resultPath);
+  literal(unshaped['stage'], 'STAT_ROLLS', `${resultPath}.stage`);
+  const sourceFormId = enumAt(unshaped['sourceFormId'], `${resultPath}.sourceFormId`, [
+    'CHR-005',
+    'CHR-006',
+    'CHR-007',
+    'CHR-008',
+    'CHR-028',
+  ] as const);
+  const decision = enumAt(unshaped['decision'], `${resultPath}.decision`, [
+    'ACCEPT_SET',
+    'CONFIRM',
+    'CANCEL',
+  ] as const);
+  const commonKeys = [
+    'stage',
+    'sourceFormId',
+    'characterDraftId',
+    'checkpointOwnerId',
+    'checkpointId',
+    'checkpointRevision',
+    'draftRevision',
+    'branchCacheHash',
+    'branchUuid',
+    'decision',
+    'nextFormId',
+  ] as const;
+  const variantKeys =
+    decision === 'ACCEPT_SET'
+      ? ['acceptedSetReceiptId', 'assignmentMode']
+      : decision === 'CANCEL'
+        ? ['originDecisionFormId', 'decisionReceiptIdOrNull']
+        : [
+            'originDecisionFormId',
+            'alternateDecision',
+            'transitionKind',
+            'abandonedSetReceiptIds',
+            'irreversibleConsequences',
+            'assignmentModeOrNull',
+            'sourceSetReceiptIdOrNull',
+            'nextAttemptIndexOrNull',
+            'nextSetRollRequestIdOrNull',
+          ];
+  const result = exactObject(object['result'], resultPath, [...commonKeys, ...variantKeys]);
+  const common = {
+    branchCacheHash: literal(
+      result['branchCacheHash'],
+      EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+      `${resultPath}.branchCacheHash`,
+    ),
+    branchUuid: nonEmptyStringAt(result['branchUuid'], `${resultPath}.branchUuid`),
+    characterDraftId: nonEmptyStringAt(
+      result['characterDraftId'],
+      `${resultPath}.characterDraftId`,
+    ),
+    checkpointId: nonEmptyStringAt(result['checkpointId'], `${resultPath}.checkpointId`),
+    checkpointOwnerId: nonEmptyStringAt(
+      result['checkpointOwnerId'],
+      `${resultPath}.checkpointOwnerId`,
+    ),
+    checkpointRevision: revisionAt(
+      result['checkpointRevision'],
+      `${resultPath}.checkpointRevision`,
+    ),
+    draftRevision: revisionAt(result['draftRevision'], `${resultPath}.draftRevision`),
+    stage: 'STAT_ROLLS' as const,
+  };
+  let parsedResult: CreationSetDecideReceiptResult;
+  if (decision === 'ACCEPT_SET') {
+    if (sourceFormId === 'CHR-028') return unrecognized(`${resultPath}.sourceFormId`, sourceFormId);
+    parsedResult = {
+      ...common,
+      acceptedSetReceiptId: nonEmptyStringAt(
+        result['acceptedSetReceiptId'],
+        `${resultPath}.acceptedSetReceiptId`,
+      ),
+      assignmentMode: literal(
+        result['assignmentMode'],
+        'ROLLED_BIJECTION',
+        `${resultPath}.assignmentMode`,
+      ),
+      decision,
+      nextFormId: literal(result['nextFormId'], 'CHR-009', `${resultPath}.nextFormId`),
+      sourceFormId,
+    };
+  } else if (decision === 'CANCEL') {
+    if (sourceFormId !== 'CHR-028') return unrecognized(`${resultPath}.sourceFormId`, sourceFormId);
+    const originDecisionFormId = enumAt(
+      result['originDecisionFormId'],
+      `${resultPath}.originDecisionFormId`,
+      ['CHR-005', 'CHR-006', 'CHR-007', 'CHR-008'] as const,
+    );
+    parsedResult = {
+      ...common,
+      decision,
+      decisionReceiptIdOrNull: literal(
+        result['decisionReceiptIdOrNull'],
+        null,
+        `${resultPath}.decisionReceiptIdOrNull`,
+      ),
+      nextFormId: literal(result['nextFormId'], originDecisionFormId, `${resultPath}.nextFormId`),
+      originDecisionFormId,
+      sourceFormId,
+    };
+  } else {
+    if (sourceFormId !== 'CHR-028') return unrecognized(`${resultPath}.sourceFormId`, sourceFormId);
+    const abandoned = stringArrayAt(
+      result['abandonedSetReceiptIds'],
+      `${resultPath}.abandonedSetReceiptIds`,
+    );
+    if (abandoned.length !== 1) {
+      return invalidShape(`${resultPath}.abandonedSetReceiptIds`, 'singleton array', abandoned);
+    }
+    parsedResult = {
+      ...common,
+      abandonedSetReceiptIds: [abandoned[0]!],
+      alternateDecision: enumAt(result['alternateDecision'], `${resultPath}.alternateDecision`, [
+        'GO_ATTEMPT_2',
+        'GO_NEXT_ATTEMPT',
+        'USE_POINT_BUY_85',
+        'USE_POINT_BUY_90',
+      ] as const),
+      assignmentModeOrNull:
+        result['assignmentModeOrNull'] === null
+          ? null
+          : enumAt(result['assignmentModeOrNull'], `${resultPath}.assignmentModeOrNull`, [
+              'POINT_BUY_85',
+              'POINT_BUY_90',
+            ] as const),
+      decision,
+      irreversibleConsequences: abandonmentConsequencesAt(
+        result['irreversibleConsequences'],
+        `${resultPath}.irreversibleConsequences`,
+      ),
+      nextAttemptIndexOrNull:
+        result['nextAttemptIndexOrNull'] === null
+          ? null
+          : (safeIntegerAt(
+              result['nextAttemptIndexOrNull'],
+              `${resultPath}.nextAttemptIndexOrNull`,
+              2,
+              5,
+            ) as 2 | 3 | 4 | 5),
+      nextFormId: enumAt(result['nextFormId'], `${resultPath}.nextFormId`, [
+        'CHR-003',
+        'CHR-009',
+      ] as const),
+      originDecisionFormId: enumAt(
+        result['originDecisionFormId'],
+        `${resultPath}.originDecisionFormId`,
+        ['CHR-005', 'CHR-006', 'CHR-007', 'CHR-008'] as const,
+      ),
+      nextSetRollRequestIdOrNull: nullableNonEmptyStringAt(
+        result['nextSetRollRequestIdOrNull'],
+        `${resultPath}.nextSetRollRequestIdOrNull`,
+      ),
+      sourceFormId,
+      sourceSetReceiptIdOrNull: literal(
+        result['sourceSetReceiptIdOrNull'],
+        null,
+        `${resultPath}.sourceSetReceiptIdOrNull`,
+      ),
+      transitionKind: enumAt(result['transitionKind'], `${resultPath}.transitionKind`, [
+        'CLASSIC_TO_90',
+        'ADVENTUROUS_TO_SECOND',
+        'ADVENTUROUS_TO_85',
+        'ALL_OR_NOTHING_NEXT',
+      ] as const),
+    };
+  }
+  return {
+    commandId: nonEmptyStringAt(object['commandId'], `${path}.commandId`),
     receiptId: nonEmptyStringAt(object['receiptId'], `${path}.receiptId`),
     result: parsedResult,
     revisions: revisionsAt(object['revisions'], `${path}.revisions`),
@@ -915,7 +1381,11 @@ const decisionRecordAt = (
   if (request.workflowCommandId !== CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID) {
     throw new Error(`${label} ${path}.request is not a SET-DECIDE command`);
   }
-  const expectedDerived = derivedForRequest(request);
+  if (request.payload.stage !== 'RACE_AND_METHOD') {
+    throw new Error(`${label} ${path}.request is not a RACE_AND_METHOD decision`);
+  }
+  const raceMethodRequest = request as CreationRaceMethodSetDecideCommandRequest;
+  const expectedDerived = derivedForRequest(raceMethodRequest);
   const derived = exactObject(object['derived'], `${path}.derived`, Object.keys(expectedDerived));
   for (const [key, expected] of Object.entries(expectedDerived)) {
     literal(derived[key], expected, `${path}.derived.${key}`);
@@ -926,8 +1396,8 @@ const decisionRecordAt = (
       object['nextStageEnvelope'],
       `${path}.nextStageEnvelope`,
     ),
-    receipt: creationReceiptAt(object['receipt'], `${path}.receipt`),
-    request,
+    receipt: raceMethodReceiptAt(object['receipt'], `${path}.receipt`),
+    request: raceMethodRequest,
   };
 };
 
@@ -1083,8 +1553,11 @@ const creationRollReceiptAt = (value: unknown, path: string): CreationRollCommit
       ),
       naturalCriticalQueue,
       nextFormId: enumAt(result['nextFormId'], `${resultPath}.nextFormId`, [
-        'CHR-003',
         'CHR-004',
+        'CHR-005',
+        'CHR-006',
+        'CHR-007',
+        'CHR-008',
       ] as const),
       setRollReceiptId: nonEmptyStringAt(
         result['setRollReceiptId'],
@@ -1126,7 +1599,13 @@ const creationRollReceiptAt = (value: unknown, path: string): CreationRollCommit
         result['nextConfirmationRollRequestIdOrNull'],
         `${resultPath}.nextConfirmationRollRequestIdOrNull`,
       ),
-      nextFormId: literal(result['nextFormId'], 'CHR-004', `${resultPath}.nextFormId`),
+      nextFormId: enumAt(result['nextFormId'], `${resultPath}.nextFormId`, [
+        'CHR-004',
+        'CHR-005',
+        'CHR-006',
+        'CHR-007',
+        'CHR-008',
+      ] as const),
       originFace: criticalFaceAt(result['originFace'], `${resultPath}.originFace`),
       outcomeOrNull:
         result['outcomeOrNull'] === null
@@ -1169,7 +1648,7 @@ const statSetRecordAt = (value: unknown, path: string, label: string): StatSetRo
     nextStageEnvelope: nextStageEnvelopeAt(
       object['nextStageEnvelope'],
       `${path}.nextStageEnvelope`,
-    ) as CreationNextStageEnvelope<'CHR-003' | 'CHR-004'>,
+    ) as CreationNextStageEnvelope<'CHR-004' | CreationStatRollDecisionFormId>,
     receipt: receipt as CommandReceipt<StatSetRollReceiptResult>,
     request: request as StatSetRollRecord['request'],
   };
@@ -1196,19 +1675,114 @@ const confirmationRecordAt = (
     nextStageEnvelope: nextStageEnvelopeAt(
       object['nextStageEnvelope'],
       `${path}.nextStageEnvelope`,
-    ) as CreationNextStageEnvelope<'CHR-004'>,
+    ) as CreationNextStageEnvelope<'CHR-004' | CreationStatRollDecisionFormId>,
     receipt: receipt as CommandReceipt<CriticalConfirmationRollReceiptResult>,
     request: request as CriticalConfirmationRollRecord['request'],
   };
 };
 
-const statRollStageAt = (value: unknown, label: string): StatRollStage => {
-  const path = '$.statRollStage';
+const statRollDecisionRecordAt = (
+  value: unknown,
+  path: string,
+  label: string,
+): CreationStatRollDecisionRecord => {
+  const object = exactObject(value, path, ['request', 'derived', 'receipt', 'nextStageEnvelope']);
+  const request = storedRequestAt(object['request'], `${label} ${path}`);
+  if (
+    request.workflowCommandId !== CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID ||
+    request.payload.stage !== 'STAT_ROLLS' ||
+    request.payload.decision === 'CANCEL'
+  ) {
+    throw new Error(`${label} ${path}.request is not a durable STAT_ROLLS SET-DECIDE command`);
+  }
+  const receipt = statDecisionReceiptAt(object['receipt'], `${path}.receipt`);
+  if (receipt.result.decision === 'CANCEL') {
+    throw new Error(`${label} ${path}.receipt persists a transient CANCEL`);
+  }
+  const derivedPath = `${path}.derived`;
+  if (request.payload.decision === 'ACCEPT_SET') {
+    const derived = exactObject(object['derived'], derivedPath, [
+      'decision',
+      'acceptedSetReceiptId',
+      'assignmentMode',
+    ]);
+    return {
+      derived: {
+        acceptedSetReceiptId: nonEmptyStringAt(
+          derived['acceptedSetReceiptId'],
+          `${derivedPath}.acceptedSetReceiptId`,
+        ),
+        assignmentMode: literal(
+          derived['assignmentMode'],
+          'ROLLED_BIJECTION',
+          `${derivedPath}.assignmentMode`,
+        ),
+        decision: literal(derived['decision'], 'ACCEPT_SET', `${derivedPath}.decision`),
+      },
+      nextStageEnvelope: nextStageEnvelopeAt(
+        object['nextStageEnvelope'],
+        `${path}.nextStageEnvelope`,
+      ) as CreationNextStageEnvelope<'CHR-009'>,
+      receipt: receipt as CommandReceipt<CreationSetAcceptanceReceiptResult>,
+      request: request as CreationSetAcceptanceDecisionRecord['request'],
+    };
+  }
+  const derived = exactObject(object['derived'], derivedPath, [
+    'decision',
+    'originDecisionFormId',
+    'transitionKind',
+    'abandonedSetReceiptIds',
+    'irreversibleConsequences',
+    'destinationFormId',
+  ]);
+  const abandoned = stringArrayAt(
+    derived['abandonedSetReceiptIds'],
+    `${derivedPath}.abandonedSetReceiptIds`,
+  );
+  if (abandoned.length !== 1) {
+    return invalidShape(`${derivedPath}.abandonedSetReceiptIds`, 'singleton array', abandoned);
+  }
+  return {
+    derived: {
+      abandonedSetReceiptIds: [abandoned[0]!],
+      decision: enumAt(derived['decision'], `${derivedPath}.decision`, [
+        'GO_ATTEMPT_2',
+        'GO_NEXT_ATTEMPT',
+        'USE_POINT_BUY_85',
+        'USE_POINT_BUY_90',
+      ] as const),
+      destinationFormId: enumAt(derived['destinationFormId'], `${derivedPath}.destinationFormId`, [
+        'CHR-003',
+        'CHR-009',
+      ] as const),
+      irreversibleConsequences: abandonmentConsequencesAt(
+        derived['irreversibleConsequences'],
+        `${derivedPath}.irreversibleConsequences`,
+      ),
+      originDecisionFormId: enumAt(
+        derived['originDecisionFormId'],
+        `${derivedPath}.originDecisionFormId`,
+        ['CHR-005', 'CHR-006', 'CHR-007', 'CHR-008'] as const,
+      ),
+      transitionKind: enumAt(derived['transitionKind'], `${derivedPath}.transitionKind`, [
+        'CLASSIC_TO_90',
+        'ADVENTUROUS_TO_SECOND',
+        'ADVENTUROUS_TO_85',
+        'ALL_OR_NOTHING_NEXT',
+      ] as const),
+    },
+    nextStageEnvelope: nextStageEnvelopeAt(
+      object['nextStageEnvelope'],
+      `${path}.nextStageEnvelope`,
+    ) as CreationNextStageEnvelope<'CHR-003' | 'CHR-009'>,
+    receipt: receipt as CommandReceipt<CreationSetAbandonmentReceiptResult>,
+    request: request as CreationSetAbandonmentDecisionRecord['request'],
+  };
+};
+
+const statRollAttemptAt = (value: unknown, path: string, label: string): StatRollAttempt => {
   const object = exactObject(value, path, [
-    'branchUuid',
-    'statMethod',
     'attemptIndex',
-    'diceInputModeSnapshot',
     'setRollRequestId',
     'setRecord',
     'naturalCriticalQueue',
@@ -1217,6 +1791,7 @@ const statRollStageAt = (value: unknown, label: string): StatRollStage => {
     'confirmationRecords',
     'outcomes',
     'returnDecisionFormId',
+    'decisionRecordOrNull',
     'state',
   ]);
   const rawConfirmationRecords = object['confirmationRecords'];
@@ -1227,7 +1802,6 @@ const statRollStageAt = (value: unknown, label: string): StatRollStage => {
   if (!Array.isArray(rawOutcomes)) return invalidShape(`${path}.outcomes`, 'array', rawOutcomes);
   return {
     attemptIndex: safeIntegerAt(object['attemptIndex'], `${path}.attemptIndex`, 1, 5),
-    branchUuid: nonEmptyStringAt(object['branchUuid'], `${path}.branchUuid`),
     confirmationRecords: rawConfirmationRecords.map((record, index) =>
       confirmationRecordAt(record, `${path}.confirmationRecords[${String(index)}]`, label),
     ),
@@ -1239,11 +1813,14 @@ const statRollStageAt = (value: unknown, label: string): StatRollStage => {
       object['criticalQueueIndexOrNull'] === null
         ? null
         : revisionAt(object['criticalQueueIndexOrNull'], `${path}.criticalQueueIndexOrNull`),
-    diceInputModeSnapshot: enumAt(
-      object['diceInputModeSnapshot'],
-      `${path}.diceInputModeSnapshot`,
-      DICE_INPUT_MODES,
-    ),
+    decisionRecordOrNull:
+      object['decisionRecordOrNull'] === null
+        ? null
+        : statRollDecisionRecordAt(
+            object['decisionRecordOrNull'],
+            `${path}.decisionRecordOrNull`,
+            label,
+          ),
     naturalCriticalQueue: naturalCriticalQueueAt(
       object['naturalCriticalQueue'],
       `${path}.naturalCriticalQueue`,
@@ -1262,13 +1839,50 @@ const statRollStageAt = (value: unknown, label: string): StatRollStage => {
         ? null
         : statSetRecordAt(object['setRecord'], `${path}.setRecord`, label),
     setRollRequestId: nonEmptyStringAt(object['setRollRequestId'], `${path}.setRollRequestId`),
-    statMethod: enumAt(object['statMethod'], `${path}.statMethod`, STAT_METHODS),
     state: enumAt(object['state'], `${path}.state`, [
       'REQUEST_READY',
       'CRITICALS_PENDING',
       'DECISION_READY',
       'CHAIN_COMPLETE',
+      'SET_ABANDONED',
+      'SET_ACCEPTED',
     ] as const),
+  };
+};
+
+const statRollStageAt = (value: unknown, label: string): StatRollStage => {
+  const path = '$.statRollStage';
+  const object = exactObject(value, path, [
+    'branchUuid',
+    'statMethod',
+    'diceInputModeSnapshot',
+    'attempts',
+    'currentAttemptIndexOrNull',
+  ]);
+  const rawAttempts = object['attempts'];
+  if (!Array.isArray(rawAttempts) || rawAttempts.length === 0) {
+    return invalidShape(`${path}.attempts`, 'non-empty array', rawAttempts);
+  }
+  return {
+    attempts: rawAttempts.map((attempt, index) =>
+      statRollAttemptAt(attempt, `${path}.attempts[${String(index)}]`, label),
+    ),
+    branchUuid: nonEmptyStringAt(object['branchUuid'], `${path}.branchUuid`),
+    currentAttemptIndexOrNull:
+      object['currentAttemptIndexOrNull'] === null
+        ? null
+        : safeIntegerAt(
+            object['currentAttemptIndexOrNull'],
+            `${path}.currentAttemptIndexOrNull`,
+            1,
+            5,
+          ),
+    diceInputModeSnapshot: enumAt(
+      object['diceInputModeSnapshot'],
+      `${path}.diceInputModeSnapshot`,
+      DICE_INPUT_MODES,
+    ),
+    statMethod: enumAt(object['statMethod'], `${path}.statMethod`, STAT_METHODS),
   };
 };
 
@@ -1452,11 +2066,11 @@ const incrementedRevisions = (revisions: RevisionVector): RevisionVector => {
 };
 
 const receiptResultForRequest = (
-  request: CreationSetDecideCommandRequest,
+  request: CreationRaceMethodSetDecideCommandRequest,
   checkpointRevision: number,
   draftRevision: number,
   methodAllocation?: CreationStatRollAllocation,
-): CreationSetDecideReceiptResult => {
+): CreationRaceMethodSetDecideReceiptResult => {
   const { payload } = request;
   const common = {
     branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
@@ -1554,9 +2168,11 @@ const postIdentityPayloadAt = (
       '$.receipt.result',
     );
     const receipt =
-      receiptResult['stage'] === 'STAT_ROLLS'
-        ? creationRollReceiptAt(object['receipt'], '$.receipt')
-        : creationReceiptAt(object['receipt'], '$.receipt');
+      receiptResult['stage'] !== 'STAT_ROLLS'
+        ? raceMethodReceiptAt(object['receipt'], '$.receipt')
+        : receiptResult['sourceFormId'] === 'CHR-003' || receiptResult['sourceFormId'] === 'CHR-004'
+          ? creationRollReceiptAt(object['receipt'], '$.receipt')
+          : statDecisionReceiptAt(object['receipt'], '$.receipt');
     const common = {
       branchCacheEntries,
       branchCacheHash,
@@ -1573,11 +2189,15 @@ const postIdentityPayloadAt = (
       }
       return common as CreationWizardPreRollPayload;
     }
+    if ('decision' in receipt.result && receipt.result.decision === 'CANCEL') {
+      throw new Error(`${label} durable payload cannot carry a transient CANCEL receipt`);
+    }
     return {
       ...common,
       nextStageEnvelope: common.nextStageEnvelope as CreationNextStageEnvelope<
-        'CHR-003' | 'CHR-004'
+        'CHR-003' | 'CHR-004' | 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008' | 'CHR-009'
       >,
+      receipt: receipt as CreationRollCommitReceipt | DurableCreationSetDecideReceipt,
       statRollStage: statRollStageAt(object['statRollStage'], label),
     };
   } catch (cause) {
@@ -1598,8 +2218,8 @@ interface RollValidationCursor {
   readonly checkpointRevision: number;
   readonly draftRevision: number;
   readonly latestEnvelope: CreationNextStageEnvelope;
-  readonly latestReceipt: CreationRollCommitReceipt | CreationSetDecideReceipt;
-  readonly latestRequest: CreationRollCommitCommandRequest | CreationSetDecideCommandRequest;
+  readonly latestReceipt: CreationRollCommitReceipt | DurableCreationSetDecideReceipt;
+  readonly latestRequest: CreationRollCommitCommandRequest | DurableCreationSetDecideCommandRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -1607,6 +2227,28 @@ const d20Mechanical = (face: number): { readonly dieSides: 20; readonly rawFace:
   dieSides: 20,
   rawFace: face,
 });
+
+const durablePostRevisions = (
+  previous: RevisionVector,
+  request: { readonly expectedRevisions: RevisionVector },
+  label: string,
+  mismatches: string[],
+): RevisionVector => {
+  const expected = request.expectedRevisions;
+  if (
+    expected.actorVisibilityRevision !== previous.actorVisibilityRevision ||
+    expected.stateRevision !== previous.stateRevision ||
+    expected.projectionRevision < previous.projectionRevision
+  ) {
+    mismatches.push(`${label} pre-commit revisions`);
+  }
+  try {
+    return incrementedRevisions(expected);
+  } catch {
+    mismatches.push(`${label} entity revision overflow`);
+    return previous;
+  }
+};
 
 const validateStatRollHistory = (
   durablePayload: CreationWizardStatRollPayload,
@@ -1628,25 +2270,14 @@ const validateStatRollHistory = (
     mismatches.push('statRollStage without CHR-002 method record');
     return start;
   }
-  const expectedReturnDecisionFormId = deriveCreationReturnDecisionFormId(
-    methodRequest.payload.statMethod,
-    1,
-  );
   if (stage.branchUuid !== methodReceipt.result.branchUuid) {
     mismatches.push('statRollStage branchUuid/method receipt');
-  }
-  if (stage.setRollRequestId !== methodReceipt.result.setRollRequestId) {
-    mismatches.push('statRollStage setRollRequestId/method receipt');
   }
   if (stage.statMethod !== methodRequest.payload.statMethod) {
     mismatches.push('statRollStage statMethod/method request');
   }
-  if (stage.attemptIndex !== 1) mismatches.push('statRollStage attemptIndex');
   if (stage.diceInputModeSnapshot !== durablePayload.raceAndMethodStage.diceInput?.value) {
     mismatches.push('statRollStage diceInputModeSnapshot/decision');
-  }
-  if (stage.returnDecisionFormId !== expectedReturnDecisionFormId) {
-    mismatches.push('statRollStage returnDecisionFormId');
   }
   const allocatedIds = new Set<string>([
     localCharacter.localCharacterId,
@@ -1654,291 +2285,506 @@ const validateStatRollHistory = (
     ...commandIds,
     ...receiptIds,
   ]);
-  for (const [name, id] of [
-    ['branchUuid', stage.branchUuid],
-    ['setRollRequestId', stage.setRollRequestId],
-  ] as const) {
-    if (allocatedIds.has(id)) mismatches.push(`statRollStage ${name} ID collision`);
-    allocatedIds.add(id);
+  if (allocatedIds.has(stage.branchUuid)) mismatches.push('statRollStage branchUuid ID collision');
+  allocatedIds.add(stage.branchUuid);
+  if (allocatedIds.has(methodReceipt.result.setRollRequestId)) {
+    mismatches.push('statRollStage first setRollRequestId ID collision');
   }
+  allocatedIds.add(methodReceipt.result.setRollRequestId);
 
   let cursor = start;
+  let expectedSetRollRequestId = methodReceipt.result.setRollRequestId;
+  let terminalReached = false;
+  const expectedAttempts: StatRollAttempt[] = [];
   const expectedRandomReceiptIds: string[] = [];
-  const setRecord = stage.setRecord;
-  if (setRecord === null) {
-    const expectedStage: StatRollStage = {
-      attemptIndex: 1,
-      branchUuid: methodReceipt.result.branchUuid,
-      confirmationRecords: [],
-      confirmationRollRequestIdOrNull: null,
-      criticalQueueIndexOrNull: null,
-      diceInputModeSnapshot: durablePayload.raceAndMethodStage.diceInput!.value,
-      naturalCriticalQueue: [],
-      outcomes: [],
-      returnDecisionFormId: expectedReturnDecisionFormId,
-      setRecord: null,
-      setRollRequestId: methodReceipt.result.setRollRequestId,
-      statMethod: methodRequest.payload.statMethod,
-      state: 'REQUEST_READY',
-    };
-    if (!isDeepStrictEqual(stage, expectedStage)) {
-      mismatches.push('statRollStage initial aggregate');
+  const seenSetRollRequestIds = new Set<string>();
+
+  for (const [attemptOffset, attempt] of stage.attempts.entries()) {
+    const attemptIndex = attemptOffset + 1;
+    const attemptLabel = `attempts[${String(attemptOffset)}]`;
+    if (terminalReached) mismatches.push(`${attemptLabel} tail after terminal assignment choice`);
+    if (attempt.attemptIndex !== attemptIndex) mismatches.push(`${attemptLabel} ordered index`);
+    if (attempt.setRollRequestId !== expectedSetRollRequestId) {
+      mismatches.push(`${attemptLabel} setRollRequestId/previous destination`);
     }
-    if (!isDeepStrictEqual(durablePayload.randomReceiptIds, expectedRandomReceiptIds)) {
-      mismatches.push('randomReceiptIds before first result');
+    if (seenSetRollRequestIds.has(attempt.setRollRequestId)) {
+      mismatches.push(`${attemptLabel} duplicate setRollRequestId`);
     }
-    return cursor;
-  }
-
-  const setRequest = setRecord.request;
-  const setReceipt = setRecord.receipt;
-  const setResult = setReceipt.result;
-  if (commandIds.has(setRequest.commandId)) mismatches.push('setRecord duplicate commandId');
-  commandIds.add(setRequest.commandId);
-  if (receiptIds.has(setReceipt.receiptId)) mismatches.push('setRecord duplicate receiptId');
-  receiptIds.add(setReceipt.receiptId);
-  if (allocatedIds.has(setReceipt.receiptId)) mismatches.push('setRecord receipt ID collision');
-  allocatedIds.add(setReceipt.receiptId);
-  if (setRequest.payload.characterDraftId !== localCharacter.localCharacterId) {
-    mismatches.push('setRecord characterDraftId');
-  }
-  if (setRequest.payload.wizardCheckpointId !== checkpoint.checkpointId) {
-    mismatches.push('setRecord wizardCheckpointId');
-  }
-  if (
-    setRequest.payload.branchUuid !== stage.branchUuid ||
-    setRequest.payload.setRollRequestId !== stage.setRollRequestId
-  ) {
-    mismatches.push('setRecord addressed request');
-  }
-  if (
-    setRequest.payload.draftRevision !== cursor.draftRevision ||
-    !isDeepStrictEqual(setRequest.expectedRevisions, cursor.revisions)
-  ) {
-    mismatches.push('setRecord pre-commit revisions');
-  }
-  const manualFaces = setRequest.payload.manualFacesOrNull;
-  if (
-    stage.diceInputModeSnapshot === 'AUTO'
-      ? manualFaces !== null
-      : manualFaces === null || !isDeepStrictEqual(manualFaces, setResult.faces)
-  ) {
-    mismatches.push('setRecord immutable input mode/manual faces');
-  }
-  const resolvedSet = resolveCreationStatSet(setResult.faces.map(d20Mechanical));
-  const expectedQueue = resolvedSet.naturalCriticalQueue.map(({ originFace, setEntryIndex }) => ({
-    originFace,
-    setEntryIndex,
-  }));
-  const nextConfirmationRollRequestId = setResult.confirmationRollRequestIdOrNull;
-  if ((expectedQueue.length === 0) !== (nextConfirmationRollRequestId === null)) {
-    mismatches.push('setRecord initial confirmation request presence');
-  }
-  if (nextConfirmationRollRequestId !== null && allocatedIds.has(nextConfirmationRollRequestId)) {
-    mismatches.push('setRecord confirmation request ID collision');
-  }
-  if (nextConfirmationRollRequestId !== null) allocatedIds.add(nextConfirmationRollRequestId);
-  let postSetRevisions = cursor.revisions;
-  try {
-    postSetRevisions = incrementedRevisions(cursor.revisions);
-  } catch {
-    mismatches.push('setRecord entity revision overflow');
-  }
-  const expectedSetResult: StatSetRollReceiptResult = {
-    branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
-    branchUuid: stage.branchUuid,
-    characterDraftId: localCharacter.localCharacterId,
-    checkpointId: checkpoint.checkpointId,
-    checkpointOwnerId: localCharacter.localCharacterId,
-    checkpointRevision: cursor.checkpointRevision + 1,
-    confirmationRollRequestIdOrNull: nextConfirmationRollRequestId,
-    diceInputModeSnapshot: stage.diceInputModeSnapshot,
-    draftRevision: cursor.draftRevision + 1,
-    faces: setResult.faces,
-    naturalCriticalQueue: expectedQueue,
-    nextFormId: expectedQueue.length === 0 ? 'CHR-003' : 'CHR-004',
-    setRollReceiptId: setReceipt.receiptId,
-    setRollRequestId: stage.setRollRequestId,
-    shownResultLocked: true,
-    sourceFormId: 'CHR-003',
-    stage: 'STAT_ROLLS',
-  };
-  if (setReceipt.commandId !== setRequest.commandId) {
-    mismatches.push('setRecord request/receipt commandId');
-  }
-  if (!isDeepStrictEqual(setResult, expectedSetResult)) {
-    mismatches.push('setRecord receipt result');
-  }
-  if (!isDeepStrictEqual(setReceipt.revisions, postSetRevisions)) {
-    mismatches.push('setRecord receipt revisions');
-  }
-  const expectedSetEnvelope = nextStageEnvelope(
-    expectedSetResult.nextFormId,
-    localCharacter.localCharacterId,
-  );
-  if (!isDeepStrictEqual(setRecord.nextStageEnvelope, expectedSetEnvelope)) {
-    mismatches.push('setRecord signed destination');
-  }
-  if (stage.diceInputModeSnapshot === 'AUTO') expectedRandomReceiptIds.push(setReceipt.receiptId);
-  cursor = {
-    checkpointRevision: cursor.checkpointRevision + 1,
-    draftRevision: cursor.draftRevision + 1,
-    latestEnvelope: setRecord.nextStageEnvelope,
-    latestReceipt: setReceipt,
-    latestRequest: setRequest,
-    revisions: postSetRevisions,
-  };
-
-  let queueIndex = expectedQueue.length === 0 ? null : 0;
-  let pendingRequestId = nextConfirmationRollRequestId;
-  let chain: CreationStatCriticalChainState | null =
-    queueIndex === null ? null : createCreationCriticalChain(expectedQueue[queueIndex]!);
-  const outcomes: CreationCriticalOutcome[] = [];
-
-  for (const [recordIndex, record] of stage.confirmationRecords.entries()) {
-    const recordLabel = `confirmationRecords[${String(recordIndex)}]`;
-    const request = record.request;
-    const receipt = record.receipt;
-    const result = receipt.result;
-    if (queueIndex === null || chain === null || pendingRequestId === null) {
-      mismatches.push(`${recordLabel} confirmation tail after completed queue`);
+    seenSetRollRequestIds.add(attempt.setRollRequestId);
+    let decisionRule: CreationStatSetDecisionRule;
+    try {
+      decisionRule = deriveCreationStatSetDecisionRule(stage.statMethod, attemptIndex);
+    } catch {
+      mismatches.push(`${attemptLabel} exceeds method attempt domain`);
       break;
     }
-    const queueItem = expectedQueue[queueIndex]!;
-    if (commandIds.has(request.commandId)) mismatches.push(`${recordLabel} duplicate commandId`);
-    commandIds.add(request.commandId);
-    if (receiptIds.has(receipt.receiptId)) mismatches.push(`${recordLabel} duplicate receiptId`);
-    receiptIds.add(receipt.receiptId);
-    if (allocatedIds.has(receipt.receiptId)) mismatches.push(`${recordLabel} receipt ID collision`);
-    allocatedIds.add(receipt.receiptId);
-    if (
-      request.payload.characterDraftId !== localCharacter.localCharacterId ||
-      request.payload.wizardCheckpointId !== checkpoint.checkpointId ||
-      request.payload.branchUuid !== stage.branchUuid ||
-      request.payload.setRollReceiptId !== setReceipt.receiptId ||
-      request.payload.criticalQueueIndex !== queueIndex ||
-      request.payload.confirmationRollRequestId !== pendingRequestId
-    ) {
-      mismatches.push(`${recordLabel} addressed request`);
+    if (attempt.returnDecisionFormId !== decisionRule.decisionFormId) {
+      mismatches.push(`${attemptLabel} returnDecisionFormId`);
     }
-    if (
-      request.payload.draftRevision !== cursor.draftRevision ||
-      !isDeepStrictEqual(request.expectedRevisions, cursor.revisions)
-    ) {
-      mismatches.push(`${recordLabel} pre-commit revisions`);
+
+    const setRecord = attempt.setRecord;
+    if (setRecord === null) {
+      const expectedAttempt: StatRollAttempt = {
+        attemptIndex,
+        confirmationRecords: [],
+        confirmationRollRequestIdOrNull: null,
+        criticalQueueIndexOrNull: null,
+        decisionRecordOrNull: null,
+        naturalCriticalQueue: [],
+        outcomes: [],
+        returnDecisionFormId: decisionRule.decisionFormId,
+        setRecord: null,
+        setRollRequestId: expectedSetRollRequestId,
+        state: 'REQUEST_READY',
+      };
+      expectedAttempts.push(expectedAttempt);
+      if (!isDeepStrictEqual(attempt, expectedAttempt)) {
+        mismatches.push(`${attemptLabel} request-ready aggregate`);
+      }
+      if (attemptOffset !== stage.attempts.length - 1) {
+        mismatches.push(`${attemptLabel} request-ready attempt has a tail`);
+      }
+      continue;
     }
+
+    const setRequest = setRecord.request;
+    const setReceipt = setRecord.receipt;
+    const setResult = setReceipt.result;
+    if (commandIds.has(setRequest.commandId)) {
+      mismatches.push(`${attemptLabel} setRecord duplicate commandId`);
+    }
+    commandIds.add(setRequest.commandId);
+    if (allocatedIds.has(setRequest.commandId)) {
+      mismatches.push(`${attemptLabel} setRecord command ID collision`);
+    }
+    allocatedIds.add(setRequest.commandId);
+    if (receiptIds.has(setReceipt.receiptId)) {
+      mismatches.push(`${attemptLabel} setRecord duplicate receiptId`);
+    }
+    receiptIds.add(setReceipt.receiptId);
+    if (allocatedIds.has(setReceipt.receiptId)) {
+      mismatches.push(`${attemptLabel} setRecord receipt ID collision`);
+    }
+    allocatedIds.add(setReceipt.receiptId);
+    if (
+      setRequest.payload.characterDraftId !== localCharacter.localCharacterId ||
+      setRequest.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+      setRequest.payload.branchUuid !== stage.branchUuid ||
+      setRequest.payload.setRollRequestId !== expectedSetRollRequestId
+    ) {
+      mismatches.push(`${attemptLabel} setRecord addressed request`);
+    }
+    if (setRequest.payload.draftRevision !== cursor.draftRevision) {
+      mismatches.push(`${attemptLabel} setRecord pre-commit draftRevision`);
+    }
+    const postSetRevisions = durablePostRevisions(
+      cursor.revisions,
+      setRequest,
+      `${attemptLabel} setRecord`,
+      mismatches,
+    );
+    const manualFaces = setRequest.payload.manualFacesOrNull;
     if (
       stage.diceInputModeSnapshot === 'AUTO'
-        ? request.payload.manualFaceOrNull !== null
-        : request.payload.manualFaceOrNull !== result.confirmationFace
+        ? manualFaces !== null
+        : manualFaces === null || !isDeepStrictEqual(manualFaces, setResult.faces)
     ) {
-      mismatches.push(`${recordLabel} immutable input mode/manual face`);
+      mismatches.push(`${attemptLabel} setRecord immutable input mode/manual faces`);
     }
-    const nextChain = commitCreationCriticalConfirmation(
-      chain,
-      d20Mechanical(result.confirmationFace),
-    );
-    const outcome: CreationCriticalOutcome | null =
-      nextChain.status === 'TERMINAL'
-        ? {
-            creationCriticalPenaltyOrNull: nextChain.outcome.creationCriticalPenaltyOrNull,
-            criticalGrade: nextChain.outcome.criticalGrade,
-            criticalPolarity: nextChain.outcome.criticalPolarity,
-            setEntryIndex: nextChain.outcome.setEntryIndex,
-            value: nextChain.outcome.value,
-          }
-        : null;
-    if (outcome !== null) outcomes.push(outcome);
-    const nextQueueIndex =
-      outcome === null ? queueIndex : queueIndex + 1 < expectedQueue.length ? queueIndex + 1 : null;
-    const nextRequestId = result.nextConfirmationRollRequestIdOrNull;
-    if ((nextQueueIndex === null) !== (nextRequestId === null)) {
-      mismatches.push(`${recordLabel} next confirmation request presence`);
+    const resolvedSet = resolveCreationStatSet(setResult.faces.map(d20Mechanical));
+    const expectedQueue = resolvedSet.naturalCriticalQueue.map(({ originFace, setEntryIndex }) => ({
+      originFace,
+      setEntryIndex,
+    }));
+    const initialConfirmationRequest = setResult.confirmationRollRequestIdOrNull;
+    if ((expectedQueue.length === 0) !== (initialConfirmationRequest === null)) {
+      mismatches.push(`${attemptLabel} setRecord initial confirmation request presence`);
     }
-    if (nextRequestId !== null && allocatedIds.has(nextRequestId)) {
-      mismatches.push(`${recordLabel} next request ID collision`);
+    if (initialConfirmationRequest !== null && allocatedIds.has(initialConfirmationRequest)) {
+      mismatches.push(`${attemptLabel} setRecord confirmation request ID collision`);
     }
-    if (nextRequestId !== null) allocatedIds.add(nextRequestId);
-    let postRevisions = cursor.revisions;
-    try {
-      postRevisions = incrementedRevisions(cursor.revisions);
-    } catch {
-      mismatches.push(`${recordLabel} entity revision overflow`);
-    }
-    const expectedResult: CriticalConfirmationRollReceiptResult = {
+    if (initialConfirmationRequest !== null) allocatedIds.add(initialConfirmationRequest);
+    const setDestination = expectedQueue.length === 0 ? decisionRule.decisionFormId : 'CHR-004';
+    const expectedSetResult: StatSetRollReceiptResult = {
       branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
       branchUuid: stage.branchUuid,
       characterDraftId: localCharacter.localCharacterId,
       checkpointId: checkpoint.checkpointId,
       checkpointOwnerId: localCharacter.localCharacterId,
       checkpointRevision: cursor.checkpointRevision + 1,
-      confirmationFace: result.confirmationFace,
-      confirmationReceiptId: receipt.receiptId,
-      confirmationRollRequestId: pendingRequestId,
-      criticalQueueIndex: queueIndex,
+      confirmationRollRequestIdOrNull: initialConfirmationRequest,
+      diceInputModeSnapshot: stage.diceInputModeSnapshot,
       draftRevision: cursor.draftRevision + 1,
-      nextConfirmationRollRequestIdOrNull: nextRequestId,
-      nextFormId: 'CHR-004',
-      originFace: queueItem.originFace,
-      outcomeOrNull: outcome,
-      returnDecisionFormId: expectedReturnDecisionFormId,
+      faces: setResult.faces,
+      naturalCriticalQueue: expectedQueue,
+      nextFormId: setDestination,
       setRollReceiptId: setReceipt.receiptId,
-      sourceFormId: 'CHR-004',
+      setRollRequestId: expectedSetRollRequestId,
+      shownResultLocked: true,
+      sourceFormId: 'CHR-003',
       stage: 'STAT_ROLLS',
     };
-    if (receipt.commandId !== request.commandId) {
-      mismatches.push(`${recordLabel} request/receipt commandId`);
+    if (setReceipt.commandId !== setRequest.commandId) {
+      mismatches.push(`${attemptLabel} setRecord request/receipt commandId`);
     }
-    if (!isDeepStrictEqual(result, expectedResult)) {
-      mismatches.push(`${recordLabel} receipt result`);
+    if (!isDeepStrictEqual(setResult, expectedSetResult)) {
+      mismatches.push(`${attemptLabel} setRecord receipt result`);
     }
-    if (!isDeepStrictEqual(receipt.revisions, postRevisions)) {
-      mismatches.push(`${recordLabel} receipt revisions`);
+    if (!isDeepStrictEqual(setReceipt.revisions, postSetRevisions)) {
+      mismatches.push(`${attemptLabel} setRecord receipt revisions`);
     }
-    const expectedEnvelope = nextStageEnvelope('CHR-004', localCharacter.localCharacterId);
-    if (!isDeepStrictEqual(record.nextStageEnvelope, expectedEnvelope)) {
-      mismatches.push(`${recordLabel} signed destination`);
+    const expectedSetEnvelope = nextStageEnvelope(setDestination, localCharacter.localCharacterId);
+    if (!isDeepStrictEqual(setRecord.nextStageEnvelope, expectedSetEnvelope)) {
+      mismatches.push(`${attemptLabel} setRecord signed destination`);
     }
-    if (stage.diceInputModeSnapshot === 'AUTO') expectedRandomReceiptIds.push(receipt.receiptId);
+    if (stage.diceInputModeSnapshot === 'AUTO') expectedRandomReceiptIds.push(setReceipt.receiptId);
     cursor = {
       checkpointRevision: cursor.checkpointRevision + 1,
       draftRevision: cursor.draftRevision + 1,
-      latestEnvelope: record.nextStageEnvelope,
-      latestReceipt: receipt,
-      latestRequest: request,
-      revisions: postRevisions,
+      latestEnvelope: setRecord.nextStageEnvelope,
+      latestReceipt: setReceipt,
+      latestRequest: setRequest,
+      revisions: postSetRevisions,
     };
-    queueIndex = nextQueueIndex;
-    pendingRequestId = nextRequestId;
-    chain =
-      nextQueueIndex === null
-        ? null
-        : outcome === null
-          ? nextChain
-          : createCreationCriticalChain(expectedQueue[nextQueueIndex]!);
+
+    let queueIndex = expectedQueue.length === 0 ? null : 0;
+    let pendingRequestId = initialConfirmationRequest;
+    let chain: CreationStatCriticalChainState | null =
+      queueIndex === null ? null : createCreationCriticalChain(expectedQueue[queueIndex]!);
+    const outcomes: CreationCriticalOutcome[] = [];
+
+    for (const [recordIndex, record] of attempt.confirmationRecords.entries()) {
+      const recordLabel = `${attemptLabel}.confirmationRecords[${String(recordIndex)}]`;
+      const request = record.request;
+      const receipt = record.receipt;
+      const result = receipt.result;
+      if (queueIndex === null || chain === null || pendingRequestId === null) {
+        mismatches.push(`${recordLabel} confirmation tail after completed queue`);
+        break;
+      }
+      const queueItem = expectedQueue[queueIndex]!;
+      if (commandIds.has(request.commandId)) mismatches.push(`${recordLabel} duplicate commandId`);
+      commandIds.add(request.commandId);
+      if (allocatedIds.has(request.commandId))
+        mismatches.push(`${recordLabel} command ID collision`);
+      allocatedIds.add(request.commandId);
+      if (receiptIds.has(receipt.receiptId)) mismatches.push(`${recordLabel} duplicate receiptId`);
+      receiptIds.add(receipt.receiptId);
+      if (allocatedIds.has(receipt.receiptId))
+        mismatches.push(`${recordLabel} receipt ID collision`);
+      allocatedIds.add(receipt.receiptId);
+      if (
+        request.payload.characterDraftId !== localCharacter.localCharacterId ||
+        request.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+        request.payload.branchUuid !== stage.branchUuid ||
+        request.payload.setRollReceiptId !== setReceipt.receiptId ||
+        request.payload.criticalQueueIndex !== queueIndex ||
+        request.payload.confirmationRollRequestId !== pendingRequestId
+      ) {
+        mismatches.push(`${recordLabel} addressed request`);
+      }
+      if (request.payload.draftRevision !== cursor.draftRevision) {
+        mismatches.push(`${recordLabel} pre-commit draftRevision`);
+      }
+      const postRevisions = durablePostRevisions(
+        cursor.revisions,
+        request,
+        recordLabel,
+        mismatches,
+      );
+      if (
+        stage.diceInputModeSnapshot === 'AUTO'
+          ? request.payload.manualFaceOrNull !== null
+          : request.payload.manualFaceOrNull !== result.confirmationFace
+      ) {
+        mismatches.push(`${recordLabel} immutable input mode/manual face`);
+      }
+      const nextChain = commitCreationCriticalConfirmation(
+        chain,
+        d20Mechanical(result.confirmationFace),
+      );
+      const outcome: CreationCriticalOutcome | null =
+        nextChain.status === 'TERMINAL'
+          ? {
+              creationCriticalPenaltyOrNull: nextChain.outcome.creationCriticalPenaltyOrNull,
+              criticalGrade: nextChain.outcome.criticalGrade,
+              criticalPolarity: nextChain.outcome.criticalPolarity,
+              setEntryIndex: nextChain.outcome.setEntryIndex,
+              value: nextChain.outcome.value,
+            }
+          : null;
+      if (outcome !== null) outcomes.push(outcome);
+      const nextQueueIndex =
+        outcome === null
+          ? queueIndex
+          : queueIndex + 1 < expectedQueue.length
+            ? queueIndex + 1
+            : null;
+      const nextRequestId = result.nextConfirmationRollRequestIdOrNull;
+      if ((nextQueueIndex === null) !== (nextRequestId === null)) {
+        mismatches.push(`${recordLabel} next confirmation request presence`);
+      }
+      if (nextRequestId !== null && allocatedIds.has(nextRequestId)) {
+        mismatches.push(`${recordLabel} next request ID collision`);
+      }
+      if (nextRequestId !== null) allocatedIds.add(nextRequestId);
+      const destination = nextQueueIndex === null ? decisionRule.decisionFormId : 'CHR-004';
+      const expectedResult: CriticalConfirmationRollReceiptResult = {
+        branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+        branchUuid: stage.branchUuid,
+        characterDraftId: localCharacter.localCharacterId,
+        checkpointId: checkpoint.checkpointId,
+        checkpointOwnerId: localCharacter.localCharacterId,
+        checkpointRevision: cursor.checkpointRevision + 1,
+        confirmationFace: result.confirmationFace,
+        confirmationReceiptId: receipt.receiptId,
+        confirmationRollRequestId: pendingRequestId,
+        criticalQueueIndex: queueIndex,
+        draftRevision: cursor.draftRevision + 1,
+        nextConfirmationRollRequestIdOrNull: nextRequestId,
+        nextFormId: destination,
+        originFace: queueItem.originFace,
+        outcomeOrNull: outcome,
+        returnDecisionFormId: decisionRule.decisionFormId,
+        setRollReceiptId: setReceipt.receiptId,
+        sourceFormId: 'CHR-004',
+        stage: 'STAT_ROLLS',
+      };
+      if (receipt.commandId !== request.commandId) {
+        mismatches.push(`${recordLabel} request/receipt commandId`);
+      }
+      if (!isDeepStrictEqual(result, expectedResult))
+        mismatches.push(`${recordLabel} receipt result`);
+      if (!isDeepStrictEqual(receipt.revisions, postRevisions)) {
+        mismatches.push(`${recordLabel} receipt revisions`);
+      }
+      const expectedEnvelope = nextStageEnvelope(destination, localCharacter.localCharacterId);
+      if (!isDeepStrictEqual(record.nextStageEnvelope, expectedEnvelope)) {
+        mismatches.push(`${recordLabel} signed destination`);
+      }
+      if (stage.diceInputModeSnapshot === 'AUTO') expectedRandomReceiptIds.push(receipt.receiptId);
+      cursor = {
+        checkpointRevision: cursor.checkpointRevision + 1,
+        draftRevision: cursor.draftRevision + 1,
+        latestEnvelope: record.nextStageEnvelope,
+        latestReceipt: receipt,
+        latestRequest: request,
+        revisions: postRevisions,
+      };
+      queueIndex = nextQueueIndex;
+      pendingRequestId = nextRequestId;
+      chain =
+        nextQueueIndex === null
+          ? null
+          : outcome === null
+            ? nextChain
+            : createCreationCriticalChain(expectedQueue[nextQueueIndex]!);
+    }
+
+    const rolledState: StatRollStageState =
+      expectedQueue.length === 0
+        ? 'DECISION_READY'
+        : queueIndex === null
+          ? 'CHAIN_COMPLETE'
+          : 'CRITICALS_PENDING';
+    let expectedState: StatRollStageState = rolledState;
+    let expectedDecision: CreationStatRollDecisionRecord | null = null;
+    const decisionRecord = attempt.decisionRecordOrNull;
+    if (decisionRecord !== null) {
+      const request = decisionRecord.request;
+      const receipt = decisionRecord.receipt;
+      const result = receipt.result;
+      const recordLabel = `${attemptLabel}.decisionRecordOrNull`;
+      if (rolledState !== 'DECISION_READY' && rolledState !== 'CHAIN_COMPLETE') {
+        mismatches.push(`${recordLabel} decision before terminal roll`);
+      }
+      if (commandIds.has(request.commandId)) mismatches.push(`${recordLabel} duplicate commandId`);
+      commandIds.add(request.commandId);
+      if (allocatedIds.has(request.commandId))
+        mismatches.push(`${recordLabel} command ID collision`);
+      allocatedIds.add(request.commandId);
+      if (receiptIds.has(receipt.receiptId)) mismatches.push(`${recordLabel} duplicate receiptId`);
+      receiptIds.add(receipt.receiptId);
+      if (allocatedIds.has(receipt.receiptId))
+        mismatches.push(`${recordLabel} receipt ID collision`);
+      allocatedIds.add(receipt.receiptId);
+      if (
+        request.payload.characterDraftId !== localCharacter.localCharacterId ||
+        request.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+        request.payload.draftRevision !== cursor.draftRevision
+      ) {
+        mismatches.push(`${recordLabel} addressed request`);
+      }
+      const postRevisions = durablePostRevisions(
+        cursor.revisions,
+        request,
+        recordLabel,
+        mismatches,
+      );
+      if (receipt.commandId !== request.commandId) {
+        mismatches.push(`${recordLabel} request/receipt commandId`);
+      }
+      if (request.payload.decision === 'ACCEPT_SET') {
+        const derived: CreationSetAcceptanceDerived = {
+          acceptedSetReceiptId: setReceipt.receiptId,
+          assignmentMode: 'ROLLED_BIJECTION',
+          decision: 'ACCEPT_SET',
+        };
+        const expectedResult: CreationSetAcceptanceReceiptResult = {
+          branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+          branchUuid: stage.branchUuid,
+          characterDraftId: localCharacter.localCharacterId,
+          checkpointId: checkpoint.checkpointId,
+          checkpointOwnerId: localCharacter.localCharacterId,
+          checkpointRevision: cursor.checkpointRevision + 1,
+          draftRevision: cursor.draftRevision + 1,
+          acceptedSetReceiptId: setReceipt.receiptId,
+          assignmentMode: 'ROLLED_BIJECTION',
+          decision: 'ACCEPT_SET',
+          nextFormId: 'CHR-009',
+          sourceFormId: decisionRule.decisionFormId,
+          stage: 'STAT_ROLLS',
+        };
+        const envelope = nextStageEnvelope('CHR-009', localCharacter.localCharacterId);
+        expectedDecision = {
+          derived,
+          nextStageEnvelope: envelope,
+          receipt: receipt as CommandReceipt<CreationSetAcceptanceReceiptResult>,
+          request: request as CreationSetAcceptanceDecisionRecord['request'],
+        };
+        if (request.payload.sourceFormId !== decisionRule.decisionFormId) {
+          mismatches.push(`${recordLabel} acceptance source form`);
+        }
+        if (!isDeepStrictEqual(result, expectedResult))
+          mismatches.push(`${recordLabel} receipt result`);
+        if (!isDeepStrictEqual(decisionRecord.derived, derived)) {
+          mismatches.push(`${recordLabel} derived values`);
+        }
+        if (!isDeepStrictEqual(decisionRecord.nextStageEnvelope, envelope)) {
+          mismatches.push(`${recordLabel} signed destination`);
+        }
+        expectedState = 'SET_ACCEPTED';
+        terminalReached = true;
+      } else {
+        const abandonment = deriveCreationStatAbandonment(stage.statMethod, attemptIndex);
+        const abandonmentResult = result as CreationSetAbandonmentReceiptResult;
+        const nextSetRollRequestId = abandonmentResult.nextSetRollRequestIdOrNull;
+        if ((abandonment.nextFormId === 'CHR-003') !== (nextSetRollRequestId !== null)) {
+          mismatches.push(`${recordLabel} next set request presence`);
+        }
+        if (nextSetRollRequestId !== null) {
+          if (allocatedIds.has(nextSetRollRequestId)) {
+            mismatches.push(`${recordLabel} next set request ID collision`);
+          }
+          allocatedIds.add(nextSetRollRequestId);
+          expectedSetRollRequestId = nextSetRollRequestId;
+        }
+        const consequences: CreationSetAbandonmentConsequences = {
+          ...abandonment.consequences,
+        };
+        const derived: CreationSetAbandonmentDerived = {
+          abandonedSetReceiptIds: [setReceipt.receiptId],
+          decision: abandonment.alternateDecision,
+          destinationFormId: abandonment.nextFormId,
+          irreversibleConsequences: consequences,
+          originDecisionFormId: decisionRule.decisionFormId,
+          transitionKind: abandonment.transitionKind,
+        };
+        const expectedResult: CreationSetAbandonmentReceiptResult = {
+          abandonedSetReceiptIds: [setReceipt.receiptId],
+          alternateDecision: abandonment.alternateDecision,
+          assignmentModeOrNull: abandonment.statAssignmentModeOrNull,
+          branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+          branchUuid: stage.branchUuid,
+          characterDraftId: localCharacter.localCharacterId,
+          checkpointId: checkpoint.checkpointId,
+          checkpointOwnerId: localCharacter.localCharacterId,
+          checkpointRevision: cursor.checkpointRevision + 1,
+          decision: 'CONFIRM',
+          draftRevision: cursor.draftRevision + 1,
+          irreversibleConsequences: consequences,
+          nextAttemptIndexOrNull: abandonment.consequences.nextAttemptIndexOrNull,
+          nextFormId: abandonment.nextFormId,
+          nextSetRollRequestIdOrNull: nextSetRollRequestId,
+          originDecisionFormId: decisionRule.decisionFormId,
+          sourceFormId: 'CHR-028',
+          sourceSetReceiptIdOrNull: null,
+          stage: 'STAT_ROLLS',
+          transitionKind: abandonment.transitionKind,
+        };
+        const envelope = nextStageEnvelope(abandonment.nextFormId, localCharacter.localCharacterId);
+        expectedDecision = {
+          derived,
+          nextStageEnvelope: envelope,
+          receipt: receipt as CommandReceipt<CreationSetAbandonmentReceiptResult>,
+          request: request as CreationSetAbandonmentDecisionRecord['request'],
+        };
+        if (request.payload.sourceFormId !== 'CHR-028' || request.payload.decision !== 'CONFIRM') {
+          mismatches.push(`${recordLabel} abandonment request`);
+        }
+        if (!isDeepStrictEqual(result, expectedResult))
+          mismatches.push(`${recordLabel} receipt result`);
+        if (!isDeepStrictEqual(decisionRecord.derived, derived)) {
+          mismatches.push(`${recordLabel} derived values`);
+        }
+        if (!isDeepStrictEqual(decisionRecord.nextStageEnvelope, envelope)) {
+          mismatches.push(`${recordLabel} signed destination`);
+        }
+        expectedState = 'SET_ABANDONED';
+        terminalReached = abandonment.nextFormId === 'CHR-009';
+      }
+      if (!isDeepStrictEqual(receipt.revisions, postRevisions)) {
+        mismatches.push(`${recordLabel} receipt revisions`);
+      }
+      cursor = {
+        checkpointRevision: cursor.checkpointRevision + 1,
+        draftRevision: cursor.draftRevision + 1,
+        latestEnvelope: decisionRecord.nextStageEnvelope,
+        latestReceipt: receipt,
+        latestRequest: request,
+        revisions: postRevisions,
+      };
+    }
+
+    const expectedAttempt: StatRollAttempt = {
+      attemptIndex,
+      confirmationRecords: attempt.confirmationRecords,
+      confirmationRollRequestIdOrNull: pendingRequestId,
+      criticalQueueIndexOrNull:
+        rolledState === 'CHAIN_COMPLETE' ? expectedQueue.length - 1 : queueIndex,
+      decisionRecordOrNull: expectedDecision,
+      naturalCriticalQueue: expectedQueue,
+      outcomes,
+      returnDecisionFormId: decisionRule.decisionFormId,
+      setRecord,
+      setRollRequestId: attempt.setRollRequestId,
+      state: expectedState,
+    };
+    expectedAttempts.push(expectedAttempt);
+    if (!isDeepStrictEqual(attempt, expectedAttempt)) {
+      mismatches.push(`${attemptLabel} aggregate`);
+    }
+    if (attemptOffset < stage.attempts.length - 1 && expectedState !== 'SET_ABANDONED') {
+      mismatches.push(`${attemptLabel} non-last attempt lacks committed abandonment`);
+    }
   }
 
-  const expectedState: StatRollStageState =
-    expectedQueue.length === 0
-      ? 'DECISION_READY'
-      : queueIndex === null
-        ? 'CHAIN_COMPLETE'
-        : 'CRITICALS_PENDING';
+  const lastAttempt = expectedAttempts.at(-1);
+  if (lastAttempt?.state === 'SET_ABANDONED' && !terminalReached) {
+    mismatches.push(
+      'statRollStage confirmed next-attempt abandonment lacks atomic appended attempt',
+    );
+  }
+  const expectedCurrentAttemptIndexOrNull =
+    lastAttempt?.state === 'SET_ABANDONED' && terminalReached
+      ? null
+      : (lastAttempt?.attemptIndex ?? null);
   const expectedStage: StatRollStage = {
-    attemptIndex: 1,
+    attempts: expectedAttempts,
     branchUuid: methodReceipt.result.branchUuid,
-    confirmationRecords: stage.confirmationRecords,
-    confirmationRollRequestIdOrNull: pendingRequestId,
-    criticalQueueIndexOrNull:
-      expectedState === 'CHAIN_COMPLETE' ? expectedQueue.length - 1 : queueIndex,
+    currentAttemptIndexOrNull: expectedCurrentAttemptIndexOrNull,
     diceInputModeSnapshot: durablePayload.raceAndMethodStage.diceInput!.value,
-    naturalCriticalQueue: expectedQueue,
-    outcomes,
-    returnDecisionFormId: expectedReturnDecisionFormId,
-    setRecord,
-    setRollRequestId: methodReceipt.result.setRollRequestId,
     statMethod: methodRequest.payload.statMethod,
-    state: expectedState,
   };
   if (!isDeepStrictEqual(stage, expectedStage)) mismatches.push('statRollStage aggregate');
   if (!isDeepStrictEqual(durablePayload.randomReceiptIds, expectedRandomReceiptIds)) {
@@ -2005,9 +2851,6 @@ const validatePostIdentityPayload = (
     if (payload.draftRevision !== previousDraftRevision) {
       mismatches.push(`${recordLabel} pre-commit draftRevision`);
     }
-    if (!isDeepStrictEqual(request.expectedRevisions, previousRevisions)) {
-      mismatches.push(`${recordLabel} pre-commit revisions`);
-    }
     if (receipt.commandId !== request.commandId) {
       mismatches.push(`${recordLabel} request/receipt commandId`);
     }
@@ -2018,13 +2861,12 @@ const validatePostIdentityPayload = (
       mismatches.push(`${recordLabel} revision overflow`);
       continue;
     }
-    let expectedPostRevisions: RevisionVector;
-    try {
-      expectedPostRevisions = incrementedRevisions(previousRevisions);
-    } catch {
-      mismatches.push(`${recordLabel} entity revision overflow`);
-      continue;
-    }
+    const expectedPostRevisions = durablePostRevisions(
+      previousRevisions,
+      request,
+      recordLabel,
+      mismatches,
+    );
     const expectedResult = receiptResultForRequest(
       request,
       previousCheckpointRevision + 1,
@@ -2100,7 +2942,7 @@ const validatePostIdentityPayload = (
   if (statRollStage === null && methodRecord !== null) {
     mismatches.push('CHR-002 method record requires statRollStage');
   }
-  if (statRollStage?.setRecord !== null && statRollStage !== null) {
+  if (statRollStage?.attempts.some(({ setRecord }) => setRecord !== null) === true) {
     if (expectedDice !== null)
       expectedDice = { ...expectedDice, choiceLockStatus: 'LOCKED_AFTER_RESULT' };
     if (expectedMethod !== null) {
@@ -2174,10 +3016,14 @@ const validatePostIdentityPayload = (
     projectionRevision: checkpoint.projectionRevision,
     stateRevision: checkpoint.stateRevision,
   };
-  if (!isDeepStrictEqual(currentRevisions, previousRevisions)) {
+  if (
+    currentRevisions.actorVisibilityRevision !== previousRevisions.actorVisibilityRevision ||
+    currentRevisions.stateRevision !== previousRevisions.stateRevision ||
+    currentRevisions.projectionRevision < previousRevisions.projectionRevision
+  ) {
     mismatches.push('localCharacter/latest receipt revisions');
   }
-  if (!isDeepStrictEqual(checkpointRevisions, previousRevisions)) {
+  if (!isDeepStrictEqual(checkpointRevisions, currentRevisions)) {
     mismatches.push('checkpoint/latest receipt revisions');
   }
   if (mismatches.length > 0) mismatchError(label, mismatches);
@@ -2250,6 +3096,78 @@ export function loadCreationWizardCheckpoint(
   );
 }
 
+export function currentCreationWizardRevisions(
+  checkpoint: DurableCreationWizardCheckpoint,
+): RevisionVector {
+  return {
+    actorVisibilityRevision: checkpoint.localCharacter.actorVisibilityRevision,
+    projectionRevision: checkpoint.localCharacter.projectionRevision,
+    stateRevision: checkpoint.localCharacter.stateRevision,
+  };
+}
+
+export function deriveCreationSetAbandonmentDialogContext(
+  checkpoint: DurableCreationWizardCheckpoint,
+): CreationSetAbandonmentDialogContext {
+  const stage = checkpoint.statRollStage;
+  const attempt = stage === null ? null : currentStatRollAttempt(stage);
+  if (
+    stage === null ||
+    attempt === null ||
+    attempt.setRecord === null ||
+    attempt.decisionRecordOrNull !== null ||
+    (attempt.state !== 'DECISION_READY' && attempt.state !== 'CHAIN_COMPLETE') ||
+    checkpoint.nextStageEnvelope.formId !== attempt.returnDecisionFormId
+  ) {
+    throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
+  }
+  const rule = deriveCreationStatSetDecisionRule(stage.statMethod, attempt.attemptIndex);
+  if (rule.fifthAttemptMandatoryAccept) return guardRejected();
+  const abandonment = deriveCreationStatAbandonment(stage.statMethod, attempt.attemptIndex);
+  return {
+    abandonedSetReceiptIds: [attempt.setRecord.receipt.receiptId],
+    characterDraftId: checkpoint.localCharacter.localCharacterId,
+    draftRevision: checkpoint.receipt.result.draftRevision,
+    irreversibleConsequences: { ...abandonment.consequences },
+    originDecisionFormId: rule.decisionFormId,
+    transitionKind: abandonment.transitionKind,
+    wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+  };
+}
+
+export function advanceCreationWizardProjection(
+  database: Database.Database,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+): DurableCreationWizardCheckpoint {
+  const preflight = loadCreationWizardCheckpoint(database, characterDraftId);
+  if (
+    preflight.checkpoint.checkpointId !== wizardCheckpointId ||
+    preflight.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
+  ) {
+    throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
+  }
+  const committed = commitLocalCharacterCheckpoint(
+    database,
+    characterDraftId,
+    wizardCheckpointId,
+    (update) => {
+      const current = loadCreationWizardCheckpoint(database, characterDraftId);
+      if (
+        current.checkpoint.checkpointId !== wizardCheckpointId ||
+        current.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
+      ) {
+        throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
+      }
+      return update(
+        { payloadJson: current.localCharacter.payloadJson },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      );
+    },
+  );
+  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint);
+}
+
 const rawCommandIds = (payloadJson: string): readonly string[] => {
   const value = JSON.parse(payloadJson) as unknown;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return [];
@@ -2298,15 +3216,27 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
     !Array.isArray(statRollStage)
   ) {
     const roll = statRollStage as Record<string, unknown>;
-    const setRecord = roll['setRecord'];
-    if (setRecord !== null && typeof setRecord === 'object' && !Array.isArray(setRecord)) {
-      addRequestId((setRecord as Record<string, unknown>)['request']);
-    }
-    const confirmationRecords = roll['confirmationRecords'];
-    if (Array.isArray(confirmationRecords)) {
-      for (const record of confirmationRecords) {
-        if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
-          addRequestId((record as Record<string, unknown>)['request']);
+    const attempts = roll['attempts'];
+    if (Array.isArray(attempts)) {
+      for (const attempt of attempts) {
+        if (attempt !== null && typeof attempt === 'object' && !Array.isArray(attempt)) {
+          const attemptObject = attempt as Record<string, unknown>;
+          for (const record of [
+            attemptObject['setRecord'],
+            attemptObject['decisionRecordOrNull'],
+          ]) {
+            if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+              addRequestId((record as Record<string, unknown>)['request']);
+            }
+          }
+          const confirmationRecords = attemptObject['confirmationRecords'];
+          if (Array.isArray(confirmationRecords)) {
+            for (const record of confirmationRecords) {
+              if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+                addRequestId((record as Record<string, unknown>)['request']);
+              }
+            }
+          }
         }
       }
     }
@@ -2347,13 +3277,12 @@ export function loadCreationWizardCommandByCommandId(
       request: decisionRecord.request,
     };
   }
-  const rollRecords = [
-    ...(durableCheckpoint.statRollStage?.setRecord === null ||
-    durableCheckpoint.statRollStage?.setRecord === undefined
-      ? []
-      : [durableCheckpoint.statRollStage.setRecord]),
-    ...(durableCheckpoint.statRollStage?.confirmationRecords ?? []),
-  ];
+  const rollRecords =
+    durableCheckpoint.statRollStage?.attempts.flatMap((attempt) => [
+      ...(attempt.setRecord === null ? [] : [attempt.setRecord]),
+      ...attempt.confirmationRecords,
+      ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
+    ]) ?? [];
   const rollRecord = rollRecords.find(({ request }) => request.commandId === commandId);
   if (rollRecord === undefined) {
     throw new Error(
@@ -2368,16 +3297,22 @@ export function loadCreationWizardCommandByCommandId(
   };
 }
 
-const currentRevisions = (checkpoint: DurableCreationWizardCheckpoint): RevisionVector => ({
-  actorVisibilityRevision: checkpoint.localCharacter.actorVisibilityRevision,
-  projectionRevision: checkpoint.localCharacter.projectionRevision,
-  stateRevision: checkpoint.localCharacter.stateRevision,
-});
+const currentRevisions = currentCreationWizardRevisions;
 
 const storedDecisionRecords = (
   checkpoint: DurableCreationWizardCheckpoint,
 ): readonly CreationSetDecideDecisionRecord[] =>
   checkpoint.raceAndMethodStage?.decisionRecords ?? [];
+
+const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
+  { request: checkpoint.identityStage.request, receipt: checkpoint.identityStage.receipt },
+  ...storedDecisionRecords(checkpoint),
+  ...(checkpoint.statRollStage?.attempts.flatMap((attempt) => [
+    ...(attempt.setRecord === null ? [] : [attempt.setRecord]),
+    ...attempt.confirmationRecords,
+    ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
+  ]) ?? []),
+];
 
 const guardRejected = (): never => {
   throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
@@ -2386,7 +3321,8 @@ const guardRejected = (): never => {
 const assertCommitAllowed = (
   checkpoint: DurableCreationWizardCheckpoint,
   request: CreationSetDecideCommandRequest,
-  receiptId: string,
+  receiptId?: string,
+  dialogContext?: CreationSetAbandonmentDialogContext,
 ): void => {
   const actual = currentRevisions(checkpoint);
   if (!isDeepStrictEqual(request.expectedRevisions, actual)) {
@@ -2399,16 +3335,12 @@ const assertCommitAllowed = (
   if (
     request.payload.characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     request.payload.wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
-    request.payload.draftRevision !== checkpoint.receipt.result.draftRevision ||
-    request.payload.sourceFormId !== checkpoint.nextStageEnvelope.formId
+    request.payload.draftRevision !== checkpoint.receipt.result.draftRevision
   ) {
     guardRejected();
   }
-  const records = storedDecisionRecords(checkpoint);
-  const previousRequests = [
-    checkpoint.identityStage.request,
-    ...records.map(({ request }) => request),
-  ];
+  const previousRecords = storedWizardRecords(checkpoint);
+  const previousRequests = previousRecords.map(({ request: stored }) => stored);
   const duplicateRequest = previousRequests.find(
     ({ commandId }) => commandId === request.commandId,
   );
@@ -2422,58 +3354,110 @@ const assertCommitAllowed = (
     }
     guardRejected();
   }
-  const previousReceiptIds = [
-    checkpoint.identityStage.receipt.receiptId,
-    ...records.map(({ receipt }) => receipt.receiptId),
-  ];
-  if (previousReceiptIds.includes(receiptId)) guardRejected();
-  if (checkpoint.statRollStage !== null) guardRejected();
+  if (durableWizardIds(checkpoint).has(request.commandId)) guardRejected();
+  const previousReceiptIds = previousRecords.map(({ receipt }) => receipt.receiptId);
+  if (
+    receiptId !== undefined &&
+    (previousReceiptIds.includes(receiptId) ||
+      durableWizardIds(checkpoint).has(receiptId) ||
+      receiptId === request.commandId)
+  ) {
+    guardRejected();
+  }
 
-  const stage = checkpoint.raceAndMethodStage;
+  const raceStage = checkpoint.raceAndMethodStage;
+  const statStage = checkpoint.statRollStage;
   switch (request.payload.sourceFormId) {
     case 'CHR-010':
-      if (stage !== null) guardRejected();
+      if (
+        checkpoint.nextStageEnvelope.formId !== 'CHR-010' ||
+        raceStage !== null ||
+        statStage !== null
+      ) {
+        guardRejected();
+      }
       break;
     case 'CHR-016':
       if (
-        stage === null ||
-        stage.race === null ||
-        stage.race.value === 'PURE' ||
-        stage.symbiontAcquisition.value !== null ||
-        stage.symbiontAcquisition.choiceLockStatus !== 'UNLOCKED'
+        checkpoint.nextStageEnvelope.formId !== 'CHR-016' ||
+        raceStage === null ||
+        statStage !== null ||
+        raceStage.race === null ||
+        raceStage.race.value === 'PURE' ||
+        raceStage.symbiontAcquisition.value !== null ||
+        raceStage.symbiontAcquisition.choiceLockStatus !== 'UNLOCKED'
       ) {
         guardRejected();
       }
       break;
     case 'CHR-036':
-      if (stage === null || stage.race === null || stage.diceInput !== null) guardRejected();
       if (
-        stage!.race!.value === 'PURE'
-          ? stage!.symbiontAcquisition.choiceLockStatus !== 'NOT_APPLICABLE'
-          : stage!.symbiontAcquisition.value === null
+        checkpoint.nextStageEnvelope.formId !== 'CHR-036' ||
+        raceStage === null ||
+        statStage !== null ||
+        raceStage.race === null ||
+        raceStage.diceInput !== null
+      ) {
+        guardRejected();
+      }
+      if (
+        raceStage!.race!.value === 'PURE'
+          ? raceStage!.symbiontAcquisition.choiceLockStatus !== 'NOT_APPLICABLE'
+          : raceStage!.symbiontAcquisition.value === null
       ) {
         guardRejected();
       }
       break;
     case 'CHR-002':
       if (
-        stage === null ||
-        stage.race === null ||
-        stage.diceInput === null ||
-        stage.statMethod !== null ||
-        (stage.race.value === 'PURE'
-          ? stage.symbiontAcquisition.choiceLockStatus !== 'NOT_APPLICABLE'
-          : stage.symbiontAcquisition.value === null)
+        checkpoint.nextStageEnvelope.formId !== 'CHR-002' ||
+        raceStage === null ||
+        statStage !== null ||
+        raceStage.race === null ||
+        raceStage.diceInput === null ||
+        raceStage.statMethod !== null ||
+        (raceStage.race.value === 'PURE'
+          ? raceStage.symbiontAcquisition.choiceLockStatus !== 'NOT_APPLICABLE'
+          : raceStage.symbiontAcquisition.value === null)
+      ) {
+        guardRejected();
+      }
+      break;
+    case 'CHR-005':
+    case 'CHR-006':
+    case 'CHR-007':
+    case 'CHR-008': {
+      const attempt = statStage === null ? null : currentStatRollAttempt(statStage);
+      if (
+        attempt === null ||
+        checkpoint.nextStageEnvelope.formId !== request.payload.sourceFormId ||
+        attempt.returnDecisionFormId !== request.payload.sourceFormId ||
+        attempt.setRecord === null ||
+        attempt.decisionRecordOrNull !== null ||
+        (attempt.state !== 'DECISION_READY' && attempt.state !== 'CHAIN_COMPLETE')
+      ) {
+        guardRejected();
+      }
+      break;
+    }
+    case 'CHR-028':
+      if (
+        dialogContext === undefined ||
+        !isDeepStrictEqual(dialogContext, deriveCreationSetAbandonmentDialogContext(checkpoint))
       ) {
         guardRejected();
       }
       break;
   }
+  const isCancel =
+    request.payload.sourceFormId === 'CHR-028' && request.payload.decision === 'CANCEL';
   if (
-    checkpoint.receipt.result.draftRevision === Number.MAX_SAFE_INTEGER ||
-    checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||
-    actual.stateRevision === Number.MAX_SAFE_INTEGER ||
-    actual.projectionRevision === Number.MAX_SAFE_INTEGER
+    (isCancel && actual.projectionRevision === Number.MAX_SAFE_INTEGER) ||
+    (!isCancel &&
+      (checkpoint.receipt.result.draftRevision === Number.MAX_SAFE_INTEGER ||
+        checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||
+        actual.stateRevision === Number.MAX_SAFE_INTEGER ||
+        actual.projectionRevision === Number.MAX_SAFE_INTEGER))
   ) {
     guardRejected();
   }
@@ -2481,14 +3465,14 @@ const assertCommitAllowed = (
 
 const payloadAfterDecision = (
   checkpoint: DurableCreationWizardCheckpoint,
-  request: CreationSetDecideCommandRequest,
+  request: CreationRaceMethodSetDecideCommandRequest,
   receiptId: string,
   methodAllocation?: CreationStatRollAllocation,
 ): CreationWizardPostIdentityPayload => {
   const revisions = incrementedRevisions(currentRevisions(checkpoint));
   const checkpointRevision = checkpoint.checkpoint.checkpointRevision + 1;
   const draftRevision = checkpoint.receipt.result.draftRevision + 1;
-  const receipt: CreationSetDecideReceipt = {
+  const receipt: CreationRaceMethodSetDecideReceipt = {
     commandId: request.commandId,
     receiptId,
     result: receiptResultForRequest(request, checkpointRevision, draftRevision, methodAllocation),
@@ -2570,21 +3554,169 @@ const payloadAfterDecision = (
     ...common,
     nextStageEnvelope: destination as CreationNextStageEnvelope<'CHR-003'>,
     statRollStage: {
-      attemptIndex: 1,
+      attempts: [
+        {
+          attemptIndex: 1,
+          confirmationRecords: [],
+          confirmationRollRequestIdOrNull: null,
+          criticalQueueIndexOrNull: null,
+          decisionRecordOrNull: null,
+          naturalCriticalQueue: [],
+          outcomes: [],
+          returnDecisionFormId: deriveCreationReturnDecisionFormId(request.payload.statMethod, 1),
+          setRecord: null,
+          setRollRequestId: methodAllocation.setRollRequestId,
+          state: 'REQUEST_READY',
+        },
+      ],
       branchUuid: methodAllocation.branchUuid,
-      confirmationRecords: [],
-      confirmationRollRequestIdOrNull: null,
-      criticalQueueIndexOrNull: null,
+      currentAttemptIndexOrNull: 1,
       diceInputModeSnapshot: dice.value,
-      naturalCriticalQueue: [],
-      outcomes: [],
-      returnDecisionFormId: deriveCreationReturnDecisionFormId(request.payload.statMethod, 1),
-      setRecord: null,
-      setRollRequestId: methodAllocation.setRollRequestId,
       statMethod: request.payload.statMethod,
-      state: 'REQUEST_READY',
     },
   };
+};
+
+const payloadAfterStatDecision = (
+  checkpoint: DurableCreationWizardCheckpoint,
+  request: DurableCreationSetDecideCommandRequest & {
+    readonly payload:
+      StatRollAcceptSetPayload | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' });
+  },
+  receiptId: string,
+  nextSetRollRequestIdOrNull: string | null,
+): CreationWizardStatRollPayload => {
+  const stage = checkpoint.statRollStage;
+  const attempt = stage === null ? null : currentStatRollAttempt(stage);
+  if (stage === null || attempt === null || attempt.setRecord === null) return guardRejected();
+  const rule = deriveCreationStatSetDecisionRule(stage.statMethod, attempt.attemptIndex);
+  const revisions = incrementedRevisions(currentRevisions(checkpoint));
+  const checkpointRevision = checkpoint.checkpoint.checkpointRevision + 1;
+  const draftRevision = checkpoint.receipt.result.draftRevision + 1;
+  let destination: CreationNextStageEnvelope<'CHR-003' | 'CHR-009'>;
+  let record: CreationStatRollDecisionRecord;
+  let currentAttemptIndexOrNull: number | null = attempt.attemptIndex;
+  let appendedAttempt: StatRollAttempt | null = null;
+  if (request.payload.decision === 'ACCEPT_SET') {
+    destination = nextStageEnvelope('CHR-009', request.payload.characterDraftId);
+    const derived: CreationSetAcceptanceDerived = {
+      acceptedSetReceiptId: attempt.setRecord.receipt.receiptId,
+      assignmentMode: 'ROLLED_BIJECTION',
+      decision: 'ACCEPT_SET',
+    };
+    const receipt: CommandReceipt<CreationSetAcceptanceReceiptResult> = {
+      commandId: request.commandId,
+      receiptId,
+      result: {
+        branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+        branchUuid: stage.branchUuid,
+        characterDraftId: request.payload.characterDraftId,
+        checkpointId: request.payload.wizardCheckpointId,
+        checkpointOwnerId: request.payload.characterDraftId,
+        checkpointRevision,
+        draftRevision,
+        ...derived,
+        nextFormId: 'CHR-009',
+        sourceFormId: rule.decisionFormId,
+        stage: 'STAT_ROLLS',
+      },
+      revisions,
+    };
+    record = {
+      derived,
+      nextStageEnvelope: destination as CreationNextStageEnvelope<'CHR-009'>,
+      receipt,
+      request: request as CreationSetAcceptanceDecisionRecord['request'],
+    };
+  } else {
+    const abandonment = deriveCreationStatAbandonment(stage.statMethod, attempt.attemptIndex);
+    if ((abandonment.nextFormId === 'CHR-003') !== (nextSetRollRequestIdOrNull !== null)) {
+      return guardRejected();
+    }
+    destination = nextStageEnvelope(abandonment.nextFormId, request.payload.characterDraftId);
+    const irreversibleConsequences: CreationSetAbandonmentConsequences = {
+      ...abandonment.consequences,
+    };
+    const derived: CreationSetAbandonmentDerived = {
+      abandonedSetReceiptIds: [attempt.setRecord.receipt.receiptId],
+      decision: abandonment.alternateDecision,
+      destinationFormId: abandonment.nextFormId,
+      irreversibleConsequences,
+      originDecisionFormId: rule.decisionFormId,
+      transitionKind: abandonment.transitionKind,
+    };
+    const receipt: CommandReceipt<CreationSetAbandonmentReceiptResult> = {
+      commandId: request.commandId,
+      receiptId,
+      result: {
+        abandonedSetReceiptIds: derived.abandonedSetReceiptIds,
+        alternateDecision: derived.decision,
+        assignmentModeOrNull: abandonment.statAssignmentModeOrNull,
+        branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+        branchUuid: stage.branchUuid,
+        characterDraftId: request.payload.characterDraftId,
+        checkpointId: request.payload.wizardCheckpointId,
+        checkpointOwnerId: request.payload.characterDraftId,
+        checkpointRevision,
+        decision: 'CONFIRM',
+        draftRevision,
+        irreversibleConsequences,
+        nextAttemptIndexOrNull: abandonment.consequences.nextAttemptIndexOrNull,
+        nextFormId: abandonment.nextFormId,
+        nextSetRollRequestIdOrNull,
+        originDecisionFormId: rule.decisionFormId,
+        sourceFormId: 'CHR-028',
+        sourceSetReceiptIdOrNull: null,
+        stage: 'STAT_ROLLS',
+        transitionKind: abandonment.transitionKind,
+      },
+      revisions,
+    };
+    record = {
+      derived,
+      nextStageEnvelope: destination,
+      receipt,
+      request: request as CreationSetAbandonmentDecisionRecord['request'],
+    };
+    if (nextSetRollRequestIdOrNull === null) {
+      currentAttemptIndexOrNull = null;
+    } else {
+      const nextAttemptIndex = abandonment.consequences.nextAttemptIndexOrNull!;
+      currentAttemptIndexOrNull = nextAttemptIndex;
+      appendedAttempt = {
+        attemptIndex: nextAttemptIndex,
+        confirmationRecords: [],
+        confirmationRollRequestIdOrNull: null,
+        criticalQueueIndexOrNull: null,
+        decisionRecordOrNull: null,
+        naturalCriticalQueue: [],
+        outcomes: [],
+        returnDecisionFormId: deriveCreationReturnDecisionFormId(
+          stage.statMethod,
+          nextAttemptIndex,
+        ),
+        setRecord: null,
+        setRollRequestId: nextSetRollRequestIdOrNull,
+        state: 'REQUEST_READY',
+      };
+    }
+  }
+  const attempts = stage.attempts.map((stored) =>
+    stored.attemptIndex === attempt.attemptIndex
+      ? {
+          ...stored,
+          decisionRecordOrNull: record,
+          state: request.payload.decision === 'ACCEPT_SET' ? 'SET_ACCEPTED' : 'SET_ABANDONED',
+        }
+      : stored,
+  );
+  if (appendedAttempt !== null) attempts.push(appendedAttempt);
+  return {
+    ...checkpoint.durablePayload,
+    nextStageEnvelope: destination,
+    receipt: record.receipt,
+    statRollStage: { ...stage, attempts, currentAttemptIndexOrNull },
+  } as CreationWizardStatRollPayload;
 };
 
 const allocatedCreationStatRollId = (value: unknown, label: string): string => {
@@ -2593,6 +3725,28 @@ const allocatedCreationStatRollId = (value: unknown, label: string): string => {
   }
   return value;
 };
+
+const durableWizardIds = (checkpoint: DurableCreationWizardCheckpoint): Set<string> =>
+  new Set(
+    [
+      checkpoint.localCharacter.localCharacterId,
+      checkpoint.checkpoint.checkpointId,
+      checkpoint.statRollStage?.branchUuid,
+      ...storedWizardRecords(checkpoint).flatMap(({ request, receipt }) => [
+        request.commandId,
+        receipt.receiptId,
+      ]),
+      ...(checkpoint.statRollStage?.attempts.flatMap((attempt) => [
+        attempt.setRollRequestId,
+        attempt.confirmationRollRequestIdOrNull,
+        attempt.setRecord?.receipt.result.confirmationRollRequestIdOrNull,
+        ...attempt.confirmationRecords.flatMap(({ receipt }) => [
+          receipt.result.confirmationRollRequestId,
+          receipt.result.nextConfirmationRollRequestIdOrNull,
+        ]),
+      ]) ?? []),
+    ].filter((value): value is string => typeof value === 'string'),
+  );
 
 const allocateCreationStatRoll = (
   checkpoint: DurableCreationWizardCheckpoint,
@@ -2612,18 +3766,8 @@ const allocateCreationStatRoll = (
     allocators.allocateRollRequestId(),
     'creation stat roll request allocator',
   );
-  const occupied = new Set([
-    checkpoint.localCharacter.localCharacterId,
-    checkpoint.checkpoint.checkpointId,
-    checkpoint.identityStage.request.commandId,
-    checkpoint.identityStage.receipt.receiptId,
-    receiptId,
-    request.commandId,
-    ...storedDecisionRecords(checkpoint).flatMap(({ request: stored, receipt }) => [
-      stored.commandId,
-      receipt.receiptId,
-    ]),
-  ]);
+  const occupied = durableWizardIds(checkpoint);
+  occupied.add(receiptId).add(request.commandId);
   if (
     branchUuid === setRollRequestId ||
     occupied.has(branchUuid) ||
@@ -2634,12 +3778,51 @@ const allocateCreationStatRoll = (
   return { branchUuid, setRollRequestId };
 };
 
+const allocateNextSetRollRequest = (
+  checkpoint: DurableCreationWizardCheckpoint,
+  request: CreationSetDecideCommandRequest,
+  receiptId: string,
+  allocators: CreationStatRollAllocators | undefined,
+): string | null => {
+  if (request.payload.sourceFormId !== 'CHR-028' || request.payload.decision !== 'CONFIRM') {
+    return null;
+  }
+  const stage = checkpoint.statRollStage;
+  const attempt = stage === null ? null : currentStatRollAttempt(stage);
+  if (stage === null || attempt === null) return guardRejected();
+  const abandonment = deriveCreationStatAbandonment(stage.statMethod, attempt.attemptIndex);
+  if (abandonment.nextFormId !== 'CHR-003') return null;
+  if (allocators === undefined) {
+    throw new TypeError('next-attempt confirmation requires a roll-request allocator');
+  }
+  const id = allocatedCreationStatRollId(
+    allocators.allocateRollRequestId(),
+    'next creation stat roll request allocator',
+  );
+  const occupied = durableWizardIds(checkpoint);
+  occupied.add(request.commandId).add(receiptId);
+  if (occupied.has(id)) return guardRejected();
+  return id;
+};
+
+export function preflightCreationSetDecide(
+  database: Database.Database,
+  request: DecodedCommandRequest,
+  dialogContext?: CreationSetAbandonmentDialogContext,
+): DurableCreationWizardCheckpoint {
+  const normalized = normalizeCreationSetDecideRequest(request);
+  const checkpoint = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
+  assertCommitAllowed(checkpoint, normalized, undefined, dialogContext);
+  return checkpoint;
+}
+
 export function commitCreationSetDecide(
   database: Database.Database,
   request: DecodedCommandRequest,
   receiptId: string,
   statRollAllocators?: CreationStatRollAllocators,
-): DurableCreationWizardCheckpoint {
+  dialogContext?: CreationSetAbandonmentDialogContext,
+): CreationSetDecideExecutionResult {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
     throw new TypeError(
       `creation set decision receiptId must be a non-empty string, got ${JSON.stringify(receiptId)}`,
@@ -2647,8 +3830,44 @@ export function commitCreationSetDecide(
   }
   const normalized = normalizeCreationSetDecideRequest(request);
   const preflight = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
-  assertCommitAllowed(preflight, normalized, receiptId);
+  assertCommitAllowed(preflight, normalized, receiptId, dialogContext);
+  if (normalized.payload.sourceFormId === 'CHR-028' && normalized.payload.decision === 'CANCEL') {
+    const stage = preflight.statRollStage!;
+    const context = dialogContext!;
+    const cancelRequest = normalized as CreationSetCancelCommandRequest;
+    const receipt: CreationSetCancelReceipt = {
+      commandId: normalized.commandId,
+      receiptId,
+      result: {
+        branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+        branchUuid: stage.branchUuid,
+        characterDraftId: normalized.payload.characterDraftId,
+        checkpointId: normalized.payload.wizardCheckpointId,
+        checkpointOwnerId: normalized.payload.characterDraftId,
+        checkpointRevision: preflight.checkpoint.checkpointRevision,
+        decision: 'CANCEL',
+        decisionReceiptIdOrNull: null,
+        draftRevision: preflight.receipt.result.draftRevision,
+        nextFormId: context.originDecisionFormId,
+        originDecisionFormId: context.originDecisionFormId,
+        sourceFormId: 'CHR-028',
+        stage: 'STAT_ROLLS',
+      },
+      revisions: currentRevisions(preflight),
+    };
+    return {
+      kind: 'TRANSIENT_CANCEL',
+      receipt,
+      request: cancelRequest,
+    };
+  }
   const methodAllocation = allocateCreationStatRoll(
+    preflight,
+    normalized,
+    receiptId,
+    statRollAllocators,
+  );
+  const nextSetRollRequestIdOrNull = allocateNextSetRollRequest(
     preflight,
     normalized,
     receiptId,
@@ -2663,8 +3882,25 @@ export function commitCreationSetDecide(
       // BEGIN IMMEDIATE owns the final guard. The earlier pass is deliberately
       // retained so every numeric limit is checked before transaction entry.
       const current = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
-      assertCommitAllowed(current, normalized, receiptId);
-      const durablePayload = payloadAfterDecision(current, normalized, receiptId, methodAllocation);
+      assertCommitAllowed(current, normalized, receiptId, dialogContext);
+      const durablePayload =
+        normalized.payload.stage === 'RACE_AND_METHOD'
+          ? payloadAfterDecision(
+              current,
+              normalized as CreationRaceMethodSetDecideCommandRequest,
+              receiptId,
+              methodAllocation,
+            )
+          : payloadAfterStatDecision(
+              current,
+              normalized as DurableCreationSetDecideCommandRequest & {
+                readonly payload:
+                  | StatRollAcceptSetPayload
+                  | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' });
+              },
+              receiptId,
+              nextSetRollRequestIdOrNull,
+            );
       return update(
         { payloadJson: JSON.stringify(durablePayload) },
         {
@@ -2675,5 +3911,11 @@ export function commitCreationSetDecide(
       );
     },
   );
-  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint);
+  return {
+    durableCheckpoint: validateDurableCreationWizardCheckpoint(
+      committed.result,
+      committed.checkpoint,
+    ),
+    kind: 'DURABLE',
+  };
 }
