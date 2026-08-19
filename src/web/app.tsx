@@ -9,6 +9,9 @@ import { connectProjection } from './ws-client.js';
 import type {
   App001Projection,
   CharacterCreationChoiceDraft,
+  CharacterCreationRollDraft,
+  Chr003Projection,
+  Chr004Projection,
   ConfirmedProjectionSnapshot,
   FormActionRequestResult,
   IdentityDraftClientState,
@@ -421,17 +424,111 @@ function IdentityFields({
   );
 }
 
+function CharacterCreationRollFields({
+  draft,
+  onConfirmationFaceChange,
+  onSetFaceChange,
+  snapshot,
+}: {
+  readonly draft: CharacterCreationRollDraft | null;
+  readonly onConfirmationFaceChange: (value: number | null) => void;
+  readonly onSetFaceChange: (index: number, value: number | null) => void;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  const number = (raw: string): number | null => (raw === '' ? null : Number(raw));
+  if (snapshot.formId === 'CHR-003') {
+    const projection = snapshot.projection as Chr003Projection;
+    if (projection.setRollReceiptId !== null) {
+      return (
+        <section data-stat-roll-committed data-shown-result-locked={projection.shownResultLocked}>
+          <h2>Зафиксированный набор характеристик</h2>
+          <ol>
+            {projection.facesOrManualInputs.map((face, index) => (
+              <li key={index} data-stat-roll-face={index}>
+                {face}
+              </li>
+            ))}
+          </ol>
+          <pre data-natural-critical-queue>
+            {JSON.stringify(projection.naturalCriticalQueue, null, 2)}
+          </pre>
+        </section>
+      );
+    }
+    if (projection.diceInputModeSnapshot === 'AUTO') {
+      return <p data-roll-input-mode="AUTO">Семь граней создаст хост при фиксации.</p>;
+    }
+    const faces = draft?.formId === 'CHR-003' ? draft.faces : [];
+    return (
+      <fieldset data-roll-input-mode="MANUAL">
+        <legend>Семь граней D20</legend>
+        {Array.from({ length: 7 }, (_, index) => (
+          <label key={index}>
+            Грань {index + 1}{' '}
+            <input
+              data-stat-roll-input={index}
+              max={20}
+              min={1}
+              step={1}
+              type="number"
+              value={faces[index] ?? ''}
+              onChange={(event) => onSetFaceChange(index, number(event.target.value))}
+            />
+          </label>
+        ))}
+      </fieldset>
+    );
+  }
+  if (snapshot.formId !== 'CHR-004') return null;
+  const projection = snapshot.projection as Chr004Projection;
+  const complete = projection.confirmationReceiptId !== null;
+  return (
+    <section data-critical-chain-status={complete ? 'CHAIN_COMPLETE' : 'CRITICALS_PENDING'}>
+      <h2>Подтверждение натуральной грани</h2>
+      <p>
+        Очередь {projection.criticalQueueIndex}, исходная грань {projection.originFace}
+      </p>
+      {complete ? (
+        <p data-confirmation-face>{projection.confirmationFace}</p>
+      ) : projection.diceInputModeSnapshot === 'AUTO' ? (
+        <p data-roll-input-mode="AUTO">Подтверждающую грань создаст хост при фиксации.</p>
+      ) : (
+        <label>
+          Подтверждающая грань{' '}
+          <input
+            data-confirmation-roll-input
+            max={20}
+            min={1}
+            step={1}
+            type="number"
+            value={draft?.formId === 'CHR-004' ? (draft.face ?? '') : ''}
+            onChange={(event) => onConfirmationFaceChange(number(event.target.value))}
+          />
+        </label>
+      )}
+    </section>
+  );
+}
+
 export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
   const [creationChoiceDraft, setCreationChoiceDraft] =
     useState<CharacterCreationChoiceDraft | null>(null);
+  const [creationRollDraft, setCreationRollDraft] = useState<CharacterCreationRollDraft | null>(
+    null,
+  );
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
   useEffect(() => {
-    const connection = connectProjection(setState, setIdentityDraft, setCreationChoiceDraft);
+    const connection = connectProjection(
+      setState,
+      setIdentityDraft,
+      setCreationChoiceDraft,
+      setCreationRollDraft,
+    );
     connectionRef.current = connection;
     return () => {
       connectionRef.current = null;
@@ -515,6 +612,22 @@ export function App(): ReactElement {
                 )}
               </section>
             ) : null}
+            <CharacterCreationRollFields
+              draft={creationRollDraft}
+              snapshot={snapshot}
+              onConfirmationFaceChange={(value) => {
+                const result = connectionRef.current?.replaceConfirmationManualFace(value);
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+              onSetFaceChange={(index, value) => {
+                const result = connectionRef.current?.replaceSetManualFace(index, value);
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+            />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}

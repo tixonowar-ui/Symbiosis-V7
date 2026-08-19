@@ -48,6 +48,8 @@ const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
 const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-002',
+  'CHR-003',
+  'CHR-004',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -80,7 +82,9 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
-    value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID || value === SET_DECIDE_WORKFLOW_COMMAND_ID,
+    value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID ||
+    value === SET_DECIDE_WORKFLOW_COMMAND_ID ||
+    value === ROLL_COMMIT_WORKFLOW_COMMAND_ID,
 };
 
 const NO_KNOWN_REVISIONS = {
@@ -94,6 +98,7 @@ const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-WIZARD-CHECKPOINT' as const;
 const SET_DECIDE_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-CREATION-SET-DECIDE' as const;
+const ROLL_COMMIT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-CREATION-ROLL-COMMIT' as const;
 const IDENTITY_CHECKPOINT_ACTION_KEY = 'CHR-001::CTA::001' as const;
 const CHR_010_INITIAL_ACTION_KEYS = [
   'CHR-010::CTA::004',
@@ -113,6 +118,15 @@ const CHR_002_INITIAL_ACTION_KEYS = [
   'CHR-002::CTA::004',
   'CHR-002::CTA::005',
 ] as const satisfies readonly ActionKey[];
+const CHR_003_ROLL_COMMIT_ACTION_KEY = 'CHR-003::CTA::002' as const;
+const CHR_004_ROLL_COMMIT_ACTION_KEY = 'CHR-004::CTA::001' as const;
+const CHR_003_PENDING_ACTION_KEYS = [
+  CHR_003_ROLL_COMMIT_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+const CHR_004_PENDING_ACTION_KEYS = [
+  CHR_004_ROLL_COMMIT_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+const NO_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
 const EMPTY_BRANCH_CACHE_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 
 /**
@@ -221,6 +235,47 @@ export interface Chr002Projection extends JsonObject {
   readonly wizardCheckpointId: string;
 }
 
+export interface NaturalCriticalQueueItem extends JsonObject {
+  readonly originFace: 1 | 20;
+  readonly setEntryIndex: number;
+}
+
+export interface Chr003Projection extends JsonObject {
+  readonly attemptIndex: number;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly commandId: null;
+  readonly diceInputModeSnapshot: 'AUTO' | 'MANUAL';
+  readonly draftRevision: number;
+  readonly facesOrManualInputs: readonly (number | null)[];
+  readonly naturalCriticalQueue: readonly NaturalCriticalQueueItem[];
+  readonly setRollReceiptId: string | null;
+  readonly setRollRequestId: string;
+  readonly shownResultLocked: boolean;
+  readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr004Projection extends JsonObject {
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly commandId: null;
+  readonly confirmationFace: number | null;
+  readonly confirmationReceiptId: string | null;
+  readonly confirmationRollRequestId: string;
+  readonly criticalQueueIndex: number;
+  readonly diceInputModeSnapshot: 'AUTO' | 'MANUAL';
+  readonly draftRevision: number;
+  readonly originFace: 1 | 20;
+  readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+  readonly setRollReceiptId: string;
+  readonly wizardCheckpointId: string;
+}
+
+export type CharacterCreationRollDraft =
+  | { readonly faces: readonly (number | null)[]; readonly formId: 'CHR-003' }
+  | { readonly face: number | null; readonly formId: 'CHR-004' };
+
 export type CharacterCreationChoiceDraft =
   | {
       readonly confirmationActionKey: 'CHR-010::CTA::001' | 'CHR-010::CTA::002';
@@ -242,7 +297,7 @@ export type CharacterCreationChoiceDraft =
       readonly value: 'AUTO' | 'MANUAL';
     }
   | {
-      readonly confirmationActionKey: null;
+      readonly confirmationActionKey: 'CHR-002::CTA::001';
       readonly consequence:
         'Выбрать авантюристский метод' | 'Выбрать классический метод' | 'Выбрать «Всё или ничего»';
       readonly formId: 'CHR-002';
@@ -317,7 +372,7 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
     [
       'CHR-002::CTA::003',
       {
-        confirmationActionKey: null,
+        confirmationActionKey: 'CHR-002::CTA::001',
         consequence: 'Выбрать классический метод',
         formId: 'CHR-002',
         value: 'CLASSIC',
@@ -326,7 +381,7 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
     [
       'CHR-002::CTA::004',
       {
-        confirmationActionKey: null,
+        confirmationActionKey: 'CHR-002::CTA::001',
         consequence: 'Выбрать авантюристский метод',
         formId: 'CHR-002',
         value: 'ADVENTUROUS',
@@ -335,7 +390,7 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
     [
       'CHR-002::CTA::005',
       {
-        confirmationActionKey: null,
+        confirmationActionKey: 'CHR-002::CTA::001',
         consequence: 'Выбрать «Всё или ничего»',
         formId: 'CHR-002',
         value: 'ALL_OR_NOTHING',
@@ -423,7 +478,7 @@ interface SetDecisionResultCommon extends JsonObject {
   readonly checkpointOwnerId: string;
   readonly checkpointRevision: number;
   readonly draftRevision: number;
-  readonly sourceFormId: 'CHR-010' | 'CHR-016' | 'CHR-036';
+  readonly sourceFormId: 'CHR-002' | 'CHR-010' | 'CHR-016' | 'CHR-036';
   readonly stage: 'RACE_AND_METHOD';
 }
 
@@ -445,13 +500,99 @@ interface DiceInputDecisionResult extends SetDecisionResultCommon {
   readonly sourceFormId: 'CHR-036';
 }
 
+interface StatMethodDecisionResult extends SetDecisionResultCommon {
+  readonly branchUuid: string;
+  readonly nextFormId: 'CHR-003';
+  readonly setRollRequestId: string;
+  readonly sourceFormId: 'CHR-002';
+  readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
+}
+
 type SetDecisionResult =
-  DiceInputDecisionResult | RaceDecisionResult | SymbiontAcquisitionDecisionResult;
+  | DiceInputDecisionResult
+  | RaceDecisionResult
+  | StatMethodDecisionResult
+  | SymbiontAcquisitionDecisionResult;
 
 interface PendingSetDecision {
-  readonly choice: Exclude<CharacterCreationChoiceDraft, { readonly formId: 'CHR-002' }>;
+  readonly choice: CharacterCreationChoiceDraft;
   readonly request: SetDecisionRequest;
   readonly receipt: CommandReceipt<SetDecisionResult> | null;
+}
+
+interface RollCommitCommonPayload extends JsonObject {
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly sourceFormId: 'CHR-003' | 'CHR-004';
+  readonly stage: 'STAT_ROLLS';
+  readonly wizardCheckpointId: string;
+}
+
+interface SetRollCommitPayload extends RollCommitCommonPayload {
+  readonly manualFacesOrNull: readonly number[] | null;
+  readonly setRollRequestId: string;
+  readonly sourceFormId: 'CHR-003';
+}
+
+interface ConfirmationRollCommitPayload extends RollCommitCommonPayload {
+  readonly confirmationRollRequestId: string;
+  readonly criticalQueueIndex: number;
+  readonly manualFaceOrNull: number | null;
+  readonly setRollReceiptId: string;
+  readonly sourceFormId: 'CHR-004';
+}
+
+type RollCommitPayload = ConfirmationRollCommitPayload | SetRollCommitPayload;
+type RollCommitRequest = WorkflowCommandRequestMessage<
+  typeof ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+  RollCommitPayload
+>;
+
+interface RollCommitResultCommon extends JsonObject {
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly sourceFormId: 'CHR-003' | 'CHR-004';
+  readonly stage: 'STAT_ROLLS';
+}
+
+interface SetRollCommitResult extends RollCommitResultCommon {
+  readonly confirmationRollRequestIdOrNull: string | null;
+  readonly diceInputModeSnapshot: 'AUTO' | 'MANUAL';
+  readonly faces: readonly number[];
+  readonly naturalCriticalQueue: readonly NaturalCriticalQueueItem[];
+  readonly nextFormId: 'CHR-003' | 'CHR-004';
+  readonly setRollReceiptId: string;
+  readonly setRollRequestId: string;
+  readonly shownResultLocked: true;
+  readonly sourceFormId: 'CHR-003';
+}
+
+interface ConfirmationRollCommitResult extends RollCommitResultCommon {
+  readonly confirmationFace: number;
+  readonly confirmationReceiptId: string;
+  readonly confirmationRollRequestId: string;
+  readonly criticalQueueIndex: number;
+  readonly nextConfirmationRollRequestIdOrNull: string | null;
+  readonly nextFormId: 'CHR-004';
+  readonly originFace: 1 | 20;
+  readonly outcomeOrNull: JsonObject | null;
+  readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+  readonly setRollReceiptId: string;
+  readonly sourceFormId: 'CHR-004';
+}
+
+type RollCommitResult = ConfirmationRollCommitResult | SetRollCommitResult;
+
+interface PendingRollCommit {
+  readonly receipt: CommandReceipt<RollCommitResult> | null;
+  readonly request: RollCommitRequest;
+  readonly sourceProjection: Chr003Projection | Chr004Projection;
 }
 
 export interface ConfirmedProjectionSnapshot {
@@ -502,6 +643,8 @@ export type FormActionRequestResult =
 export interface ProjectionConnection {
   disconnect(): void;
   reconnect(): FormActionRequestResult;
+  replaceConfirmationManualFace(value: number | null): FormActionRequestResult;
+  replaceSetManualFace(index: number, value: number | null): FormActionRequestResult;
   replaceIdentityDraft(values: IdentityDraftValues): FormActionRequestResult;
   requestFormAction(actionKey: ActionKey): FormActionRequestResult;
 }
@@ -941,6 +1084,168 @@ function decodeChr002Projection(
   });
 }
 
+function isSafeIntegerAtLeast(value: JsonValue, minimum: number): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum;
+}
+
+function isFace(value: JsonValue): value is number {
+  return isSafeIntegerAtLeast(value, 1) && value <= 20;
+}
+
+function isNonEmptyString(value: JsonValue): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function decodeFaceSlots(
+  value: JsonValue,
+  path: string,
+  nullable: boolean,
+): DecodeResult<readonly (number | null)[]> {
+  if (!Array.isArray(value) || value.length !== 7) {
+    return unrecognized(path, value);
+  }
+  const entries = value as readonly JsonValue[];
+  for (const [index, face] of entries.entries()) {
+    if (isFace(face) || (nullable && face === null)) continue;
+    return unrecognized(`${path}[${String(index)}]`, face);
+  }
+  return { ok: true, value: value as readonly (number | null)[] };
+}
+
+function decodeNaturalCriticalQueue(
+  value: JsonValue,
+  path: string,
+  faces: readonly (number | null)[],
+): DecodeResult<readonly NaturalCriticalQueueItem[]> {
+  if (!Array.isArray(value)) return unrecognized(path, value);
+  const expected = faces.flatMap((face, setEntryIndex) =>
+    face === 1 || face === 20 ? [{ originFace: face, setEntryIndex }] : [],
+  );
+  if (value.length !== expected.length) return unrecognized(path, value);
+  const entries = value as readonly JsonValue[];
+  for (const [index, item] of entries.entries()) {
+    if (!isJsonObject(item)) return unrecognized(`${path}[${String(index)}]`, item);
+    const keys = exactObjectKeys(
+      item,
+      new Set(['originFace', 'setEntryIndex']),
+      `${path}[${String(index)}]`,
+    );
+    if (!keys.ok) return keys;
+    const expectedItem = expected[index]!;
+    if (
+      item['setEntryIndex'] !== expectedItem.setEntryIndex ||
+      item['originFace'] !== expectedItem.originFace
+    ) {
+      return unrecognized(`${path}[${String(index)}]`, item);
+    }
+  }
+  return { ok: true, value: value as unknown as readonly NaturalCriticalQueueItem[] };
+}
+
+function decodeChr003Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const nullableSlots = value['setRollReceiptId'] === null;
+  const faces = decodeFaceSlots(
+    value['facesOrManualInputs']!,
+    `${path}.facesOrManualInputs`,
+    nullableSlots,
+  );
+  if (!faces.ok) return faces;
+  const queue = decodeNaturalCriticalQueue(
+    value['naturalCriticalQueue']!,
+    `${path}.naturalCriticalQueue`,
+    faces.value,
+  );
+  if (!queue.ok) return queue;
+  const characterDraftId = value['characterDraftId'];
+  const wizardCheckpointId = value['wizardCheckpointId'];
+  const branchUuid = value['branchUuid'];
+  const setRollRequestId = value['setRollRequestId'];
+  const result = decodeProjection(value, path, {
+    attemptIndex: (field) => isSafeIntegerAtLeast(field, 1),
+    branchUuid: isNonEmptyString,
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === null,
+    diceInputModeSnapshot: (field) => field === 'AUTO' || field === 'MANUAL',
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    facesOrManualInputs: (field) => field === value['facesOrManualInputs'],
+    naturalCriticalQueue: (field) => field === value['naturalCriticalQueue'],
+    setRollReceiptId: (field) => field === null || isNonEmptyString(field),
+    setRollRequestId: isNonEmptyString,
+    shownResultLocked: (field) => typeof field === 'boolean',
+    statMethod: (field) =>
+      field === 'CLASSIC' || field === 'ADVENTUROUS' || field === 'ALL_OR_NOTHING',
+    wizardCheckpointId: isNonEmptyString,
+  });
+  if (!result.ok) return result;
+  if (
+    [characterDraftId, wizardCheckpointId, branchUuid, setRollRequestId].some(
+      (entry, index, entries) => entries.indexOf(entry) !== index,
+    )
+  ) {
+    return unrecognized(`${path}.setRollRequestId`, setRollRequestId!);
+  }
+  const pending = value['setRollReceiptId'] === null;
+  if (
+    (pending &&
+      (value['shownResultLocked'] !== false ||
+        faces.value.some((face) => face !== null) ||
+        queue.value.length !== 0)) ||
+    (!pending && (value['shownResultLocked'] !== true || faces.value.some((face) => face === null)))
+  ) {
+    return unrecognized(`${path}.shownResultLocked`, value['shownResultLocked']!);
+  }
+  return result;
+}
+
+function decodeChr004Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const characterDraftId = value['characterDraftId'];
+  const wizardCheckpointId = value['wizardCheckpointId'];
+  const branchUuid = value['branchUuid'];
+  const setRollReceiptId = value['setRollReceiptId'];
+  const confirmationRollRequestId = value['confirmationRollRequestId'];
+  const result = decodeProjection(value, path, {
+    branchUuid: isNonEmptyString,
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === null,
+    confirmationFace: (field) => field === null || isFace(field),
+    confirmationReceiptId: (field) => field === null || isNonEmptyString(field),
+    confirmationRollRequestId: isNonEmptyString,
+    criticalQueueIndex: (field) => isSafeIntegerAtLeast(field, 0),
+    diceInputModeSnapshot: (field) => field === 'AUTO' || field === 'MANUAL',
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    originFace: (field) => field === 1 || field === 20,
+    returnDecisionFormId: (field) =>
+      field === 'CHR-005' || field === 'CHR-006' || field === 'CHR-007' || field === 'CHR-008',
+    setRollReceiptId: isNonEmptyString,
+    wizardCheckpointId: isNonEmptyString,
+  });
+  if (!result.ok) return result;
+  const ids = [
+    characterDraftId,
+    wizardCheckpointId,
+    branchUuid,
+    setRollReceiptId,
+    confirmationRollRequestId,
+  ];
+  if (ids.some((entry, index) => ids.indexOf(entry) !== index)) {
+    return unrecognized(`${path}.confirmationRollRequestId`, confirmationRollRequestId!);
+  }
+  if ((value['confirmationFace'] === null) !== (value['confirmationReceiptId'] === null)) {
+    return unrecognized(`${path}.confirmationReceiptId`, value['confirmationReceiptId']!);
+  }
+  return result;
+}
+
 function exactActionKeys(
   actual: readonly ActionKey[],
   expected: readonly ActionKey[],
@@ -1052,6 +1357,42 @@ function decodeConfirmedSnapshot(
         if (!actions.ok) return actions;
       }
       break;
+    case 'CHR-003':
+      projection = decodeChr003Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          projection.value['setRollReceiptId'] === null &&
+            executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+            ? CHR_003_PENDING_ACTION_KEYS
+            : NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    case 'CHR-004':
+      projection = decodeChr004Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          projection.value['confirmationReceiptId'] === null &&
+            executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+            ? CHR_004_PENDING_ACTION_KEYS
+            : NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
     default:
       return unrecognized('$.presentation.base.formId', base.formId);
   }
@@ -1124,11 +1465,42 @@ function identitySnapshot(
   };
 }
 
+function creationRollDraftFromSnapshot(
+  snapshot: ConfirmedProjectionSnapshot,
+): CharacterCreationRollDraft | null {
+  if (
+    snapshot.formId === 'CHR-003' &&
+    snapshot.projection['diceInputModeSnapshot'] === 'MANUAL' &&
+    snapshot.projection['setRollReceiptId'] === null
+  ) {
+    return {
+      faces: [...(snapshot.projection['facesOrManualInputs'] as readonly (number | null)[])],
+      formId: 'CHR-003',
+    };
+  }
+  if (
+    snapshot.formId === 'CHR-004' &&
+    snapshot.projection['diceInputModeSnapshot'] === 'MANUAL' &&
+    snapshot.projection['confirmationReceiptId'] === null
+  ) {
+    return { face: snapshot.projection['confirmationFace'] as number | null, formId: 'CHR-004' };
+  }
+  return null;
+}
+
+function completeManualRollDraft(draft: CharacterCreationRollDraft | null): boolean {
+  if (draft === null) return false;
+  return draft.formId === 'CHR-003'
+    ? draft.faces.length === 7 && draft.faces.every((face) => face !== null && isFace(face))
+    : draft.face !== null && isFace(draft.face);
+}
+
 function visibleSnapshot(
   snapshot: ConfirmedProjectionSnapshot,
   identity: IdentityDraftClient | null,
   commandPending = false,
   creationChoice: CharacterCreationChoiceDraft | null = null,
+  creationRollDraft: CharacterCreationRollDraft | null = null,
 ): ConfirmedProjectionSnapshot {
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
@@ -1138,18 +1510,45 @@ function visibleSnapshot(
       ),
     };
   }
+  let availableActionKeys = [...snapshot.availableActionKeys];
+  if (snapshot.formId === 'CHR-003') {
+    const executable =
+      !commandPending &&
+      snapshot.executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID) &&
+      (snapshot.projection['diceInputModeSnapshot'] === 'AUTO' ||
+        (creationRollDraft?.formId === 'CHR-003' && completeManualRollDraft(creationRollDraft)));
+    if (!executable) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_003_ROLL_COMMIT_ACTION_KEY,
+      );
+    }
+  } else if (snapshot.formId === 'CHR-004') {
+    const executable =
+      !commandPending &&
+      snapshot.executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID) &&
+      (snapshot.projection['diceInputModeSnapshot'] === 'AUTO' ||
+        (creationRollDraft?.formId === 'CHR-004' && completeManualRollDraft(creationRollDraft)));
+    if (!executable) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_004_ROLL_COMMIT_ACTION_KEY,
+      );
+    }
+  }
+  const visible =
+    availableActionKeys.length === snapshot.availableActionKeys.length
+      ? snapshot
+      : { ...snapshot, availableActionKeys };
   if (
     commandPending ||
     creationChoice === null ||
     creationChoice.formId !== snapshot.formId ||
-    creationChoice.confirmationActionKey === null ||
     !snapshot.executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID)
   ) {
-    return snapshot;
+    return visible;
   }
   return {
-    ...snapshot,
-    availableActionKeys: [creationChoice.confirmationActionKey, ...snapshot.availableActionKeys],
+    ...visible,
+    availableActionKeys: [creationChoice.confirmationActionKey, ...availableActionKeys],
   };
 }
 
@@ -1260,9 +1659,11 @@ function sameCheckpointReceipt(
 }
 
 function expectedSetDecisionNextForm(
-  payload: Exclude<SetDecisionPayload, StatMethodDecisionPayload>,
-): 'CHR-002' | 'CHR-016' | 'CHR-036' {
+  payload: SetDecisionPayload,
+): 'CHR-002' | 'CHR-003' | 'CHR-016' | 'CHR-036' {
   switch (payload.sourceFormId) {
+    case 'CHR-002':
+      return 'CHR-003';
     case 'CHR-010':
       return payload.raceChoice === 'PURE' ? 'CHR-036' : 'CHR-016';
     case 'CHR-016':
@@ -1287,9 +1688,6 @@ function decodeSetDecisionTerminal(
     return unrecognized('$.receipt.receiptId', receipt.receiptId);
   }
   const payload = pending.request.payload;
-  if (payload.sourceFormId === 'CHR-002') {
-    return unrecognized('$.receipt.result.sourceFormId', payload.sourceFormId);
-  }
   const expectedNextForm = expectedSetDecisionNextForm(payload);
   const common = {
     branchCacheHash: (field: JsonValue) => field === EMPTY_BRANCH_CACHE_HASH,
@@ -1323,6 +1721,29 @@ function decodeSetDecisionTerminal(
         diceInputMode: (field) => field === payload.diceInputMode,
       });
       break;
+    case 'CHR-002':
+      result = decodeProjection(receipt.result, '$.receipt.result', {
+        ...common,
+        branchUuid: isNonEmptyString,
+        setRollRequestId: isNonEmptyString,
+        statMethod: (field) => field === payload.statMethod,
+      });
+      if (result.ok) {
+        const branchUuid = receipt.result['branchUuid'];
+        const setRollRequestId = receipt.result['setRollRequestId'];
+        const ids = [
+          payload.characterDraftId,
+          payload.wizardCheckpointId,
+          pending.request.commandId,
+          receipt.receiptId,
+          branchUuid,
+          setRollRequestId,
+        ];
+        if (ids.some((entry, index) => ids.indexOf(entry) !== index)) {
+          return unrecognized('$.receipt.result.setRollRequestId', setRollRequestId!);
+        }
+      }
+      break;
   }
   if (!result.ok) return result;
   const expectedRevisions = pending.request.expectedRevisions;
@@ -1353,6 +1774,177 @@ function sameSetDecisionReceipt(
       (axis) => left.revisions[axis] === right.revisions[axis],
     )
   );
+}
+
+function decodeCreationCriticalOutcome(
+  value: JsonValue,
+  path: string,
+  originFace: 1 | 20,
+): DecodeResult<JsonObject> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const result = decodeProjection(value, path, {
+    creationCriticalPenaltyOrNull: (field) =>
+      field === null || (typeof field === 'number' && Number.isSafeInteger(field)),
+    criticalGrade: (field) => isSafeIntegerAtLeast(field, 0) && field <= 5,
+    criticalPolarity: (field) => field === 'FAILURE' || field === 'NONE' || field === 'SUCCESS',
+    setEntryIndex: (field) => isSafeIntegerAtLeast(field, 0) && field <= 6,
+    value: (field) => typeof field === 'number' && Number.isSafeInteger(field),
+  });
+  if (!result.ok) return result;
+  const grade = value['criticalGrade'] as number;
+  const polarity = value['criticalPolarity'];
+  const penalty = value['creationCriticalPenaltyOrNull'];
+  const resolvedValue = value['value'];
+  const valid =
+    (polarity === 'NONE' && grade === 0 && penalty === null && resolvedValue === originFace) ||
+    (polarity === 'SUCCESS' &&
+      originFace === 20 &&
+      grade >= 1 &&
+      penalty === null &&
+      resolvedValue === 20 + grade) ||
+    (polarity === 'FAILURE' &&
+      originFace === 1 &&
+      grade >= 1 &&
+      penalty === -grade &&
+      resolvedValue === 1);
+  return valid ? { ok: true, value } : unrecognized(`${path}.criticalPolarity`, polarity!);
+}
+
+function decodeRollCommitTerminal(
+  message: Extract<
+    HostToClientMessage,
+    { readonly messageType: 'command.replay' | 'command.result' }
+  >,
+  pending: PendingRollCommit,
+): DecodeResult<CommandReceipt<RollCommitResult>> {
+  const receipt = message.receipt;
+  if (receipt.commandId !== pending.request.commandId) {
+    return unrecognized('$.receipt.commandId', receipt.commandId);
+  }
+  if (receipt.receiptId.trim().length === 0) {
+    return unrecognized('$.receipt.receiptId', receipt.receiptId);
+  }
+  const payload = pending.request.payload;
+  const common = {
+    branchCacheHash: (field: JsonValue) => field === EMPTY_BRANCH_CACHE_HASH,
+    branchUuid: (field: JsonValue) => field === payload.branchUuid,
+    characterDraftId: (field: JsonValue) => field === payload.characterDraftId,
+    checkpointId: (field: JsonValue) => field === payload.wizardCheckpointId,
+    checkpointOwnerId: (field: JsonValue) => field === payload.characterDraftId,
+    checkpointRevision: (field: JsonValue) => isSafeIntegerAtLeast(field, 1),
+    draftRevision: (field: JsonValue) => field === payload.draftRevision + 1,
+    sourceFormId: (field: JsonValue) => field === payload.sourceFormId,
+    stage: (field: JsonValue) => field === 'STAT_ROLLS',
+  };
+  let result: DecodeResult<JsonObject>;
+  if (payload.sourceFormId === 'CHR-003') {
+    const faces = decodeFaceSlots(receipt.result['faces']!, '$.receipt.result.faces', false);
+    if (!faces.ok) return faces;
+    const queue = decodeNaturalCriticalQueue(
+      receipt.result['naturalCriticalQueue']!,
+      '$.receipt.result.naturalCriticalQueue',
+      faces.value,
+    );
+    if (!queue.ok) return queue;
+    result = decodeProjection(receipt.result, '$.receipt.result', {
+      ...common,
+      confirmationRollRequestIdOrNull: (field) => field === null || isNonEmptyString(field),
+      diceInputModeSnapshot: (field) =>
+        field === (payload.manualFacesOrNull === null ? 'AUTO' : 'MANUAL'),
+      faces: (field) => field === receipt.result['faces'],
+      naturalCriticalQueue: (field) => field === receipt.result['naturalCriticalQueue'],
+      nextFormId: (field) => field === (queue.value.length === 0 ? 'CHR-003' : 'CHR-004'),
+      setRollReceiptId: (field) => field === receipt.receiptId,
+      setRollRequestId: (field) => field === payload.setRollRequestId,
+      shownResultLocked: (field) => field === true,
+    });
+    if (!result.ok) return result;
+    if (
+      payload.manualFacesOrNull !== null &&
+      !sameJson(payload.manualFacesOrNull, receipt.result['faces']!)
+    ) {
+      return unrecognized('$.receipt.result.faces', receipt.result['faces']!);
+    }
+    const confirmationId = receipt.result['confirmationRollRequestIdOrNull'];
+    if ((queue.value.length === 0) !== (confirmationId === null)) {
+      return unrecognized('$.receipt.result.confirmationRollRequestIdOrNull', confirmationId!);
+    }
+  } else {
+    const source = pending.sourceProjection;
+    if (source['commandId'] !== null || !('originFace' in source)) {
+      return unrecognized('$.receipt.result.sourceFormId', payload.sourceFormId);
+    }
+    const confirmationSource = source as Chr004Projection;
+    const outcomeValue = receipt.result['outcomeOrNull'];
+    if (outcomeValue !== null && outcomeValue !== undefined) {
+      const outcome = decodeCreationCriticalOutcome(
+        outcomeValue,
+        '$.receipt.result.outcomeOrNull',
+        confirmationSource.originFace,
+      );
+      if (!outcome.ok) return outcome;
+    }
+    result = decodeProjection(receipt.result, '$.receipt.result', {
+      ...common,
+      confirmationFace: (field) =>
+        isFace(field) && (payload.manualFaceOrNull === null || field === payload.manualFaceOrNull),
+      confirmationReceiptId: (field) => field === receipt.receiptId,
+      confirmationRollRequestId: (field) => field === payload.confirmationRollRequestId,
+      criticalQueueIndex: (field) => field === payload.criticalQueueIndex,
+      nextConfirmationRollRequestIdOrNull: (field) => field === null || isNonEmptyString(field),
+      nextFormId: (field) => field === 'CHR-004',
+      originFace: (field) => field === confirmationSource.originFace,
+      outcomeOrNull: (field) => field === null || isJsonObject(field),
+      returnDecisionFormId: (field) => field === confirmationSource.returnDecisionFormId,
+      setRollReceiptId: (field) => field === payload.setRollReceiptId,
+    });
+    if (!result.ok) return result;
+    if (
+      receipt.result['outcomeOrNull'] === null &&
+      receipt.result['nextConfirmationRollRequestIdOrNull'] === null
+    ) {
+      return unrecognized(
+        '$.receipt.result.nextConfirmationRollRequestIdOrNull',
+        receipt.result['nextConfirmationRollRequestIdOrNull']!,
+      );
+    }
+  }
+  const expectedRevisions = pending.request.expectedRevisions;
+  if (
+    receipt.revisions.stateRevision !== expectedRevisions.stateRevision + 1 ||
+    receipt.revisions.projectionRevision !== expectedRevisions.projectionRevision + 1 ||
+    receipt.revisions.actorVisibilityRevision !== expectedRevisions.actorVisibilityRevision
+  ) {
+    return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+  }
+  return { ok: true, value: receipt as CommandReceipt<RollCommitResult> };
+}
+
+function sameJson(left: JsonValue, right: JsonValue): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    const leftEntries = left as readonly JsonValue[];
+    const rightEntries = right as readonly JsonValue[];
+    return (
+      leftEntries.length === rightEntries.length &&
+      leftEntries.every((entry, index) => sameJson(entry, rightEntries[index]!))
+    );
+  }
+  if (!isJsonObject(left) || !isJsonObject(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key, index) => key === rightKeys[index] && sameJson(left[key]!, right[key]!))
+  );
+}
+
+function sameRollCommitReceipt(
+  left: CommandReceipt<RollCommitResult>,
+  right: CommandReceipt<RollCommitResult>,
+): boolean {
+  return sameJson(left as unknown as JsonValue, right as unknown as JsonValue);
 }
 
 function checkpointSnapshotMatchesReceipt(
@@ -1401,6 +1993,18 @@ function setDecisionSnapshotMatchesReceipt(
     case 'CHR-036':
       advance = snapshot.formId === 'CHR-002' ? 0 : null;
       break;
+    case 'CHR-002': {
+      if (snapshot.formId !== 'CHR-003' && snapshot.formId !== 'CHR-004') break;
+      const currentDraftRevision = snapshot.projection['draftRevision'];
+      if (
+        typeof currentDraftRevision === 'number' &&
+        Number.isSafeInteger(currentDraftRevision) &&
+        currentDraftRevision >= receipt.result.draftRevision
+      ) {
+        advance = currentDraftRevision - receipt.result.draftRevision;
+      }
+      break;
+    }
   }
   if (advance === null) {
     return unrecognized('$.presentation.base.formId', snapshot.formId);
@@ -1431,6 +2035,126 @@ function setDecisionSnapshotMatchesReceipt(
       '$.presentation.base.roleFilteredPayload.raceChoice',
       projection['raceChoice']!,
     );
+  }
+  if (receipt.result.sourceFormId === 'CHR-002') {
+    const expectedFields = [
+      ['branchUuid', receipt.result.branchUuid],
+      ...(snapshot.formId === 'CHR-003'
+        ? ([
+            ['setRollRequestId', receipt.result.setRollRequestId],
+            ['statMethod', receipt.result.statMethod],
+            ['attemptIndex', 1],
+          ] as const)
+        : []),
+    ] as const;
+    for (const [key, expected] of expectedFields) {
+      if (projection[key] !== expected) {
+        return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]!);
+      }
+    }
+  }
+  return { ok: true, value: snapshot };
+}
+
+function rollCommitSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt<RollCommitResult>,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const result = receipt.result;
+  if (snapshot.formId !== 'CHR-003' && snapshot.formId !== 'CHR-004') {
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  }
+  if (result.sourceFormId === 'CHR-003') {
+    if (result.nextFormId === 'CHR-003' && snapshot.formId !== 'CHR-003') {
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+  } else if (snapshot.formId !== 'CHR-004') {
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  }
+  const projection = snapshot.projection;
+  const currentDraftRevision = projection['draftRevision'];
+  if (
+    typeof currentDraftRevision !== 'number' ||
+    !Number.isSafeInteger(currentDraftRevision) ||
+    currentDraftRevision < result.draftRevision
+  ) {
+    return unrecognized(
+      '$.presentation.base.roleFilteredPayload.draftRevision',
+      currentDraftRevision!,
+    );
+  }
+  const advance = currentDraftRevision - result.draftRevision;
+  for (const [key, expected] of [
+    ['characterDraftId', result.characterDraftId],
+    ['wizardCheckpointId', result.checkpointId],
+    ['branchUuid', result.branchUuid],
+  ] as const) {
+    if (projection[key] !== expected) {
+      return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]!);
+    }
+  }
+  if (
+    snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+    snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision + advance ||
+    snapshot.revisions.stateRevision !== receipt.revisions.stateRevision + advance
+  ) {
+    return unrecognized('$.revisions', { ...snapshot.revisions });
+  }
+  if (result.sourceFormId === 'CHR-003') {
+    if (projection['setRollReceiptId'] !== result.setRollReceiptId) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.setRollReceiptId',
+        projection['setRollReceiptId']!,
+      );
+    }
+    if (
+      snapshot.formId === 'CHR-003' &&
+      (projection['setRollRequestId'] !== result.setRollRequestId ||
+        !sameJson(projection['facesOrManualInputs']!, result.faces) ||
+        !sameJson(projection['naturalCriticalQueue']!, result.naturalCriticalQueue) ||
+        projection['shownResultLocked'] !== true)
+    ) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.setRollRequestId',
+        projection['setRollRequestId']!,
+      );
+    }
+    if (
+      advance === 0 &&
+      snapshot.formId === 'CHR-004' &&
+      projection['confirmationRollRequestId'] !== result.confirmationRollRequestIdOrNull
+    ) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.confirmationRollRequestId',
+        projection['confirmationRollRequestId']!,
+      );
+    }
+  } else {
+    if (projection['setRollReceiptId'] !== result.setRollReceiptId) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.setRollReceiptId',
+        projection['setRollReceiptId']!,
+      );
+    }
+    if (advance === 0) {
+      const nextRequestId = result.nextConfirmationRollRequestIdOrNull;
+      const terminal = nextRequestId === null;
+      if (
+        projection['confirmationRollRequestId'] !==
+          (terminal ? result.confirmationRollRequestId : nextRequestId) ||
+        projection['confirmationFace'] !== (terminal ? result.confirmationFace : null) ||
+        projection['confirmationReceiptId'] !== (terminal ? result.confirmationReceiptId : null) ||
+        projection['returnDecisionFormId'] !== result.returnDecisionFormId ||
+        (terminal &&
+          (projection['criticalQueueIndex'] !== result.criticalQueueIndex ||
+            projection['originFace'] !== result.originFace))
+      ) {
+        return unrecognized(
+          '$.presentation.base.roleFilteredPayload.confirmationRollRequestId',
+          projection['confirmationRollRequestId']!,
+        );
+      }
+    }
   }
   return { ok: true, value: snapshot };
 }
@@ -1480,6 +2204,26 @@ function decodeSetDecisionDestinationSnapshot(
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   return decoded.ok ? setDecisionSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
+}
+
+function decodeRollCommitDestinationSnapshot(
+  message: ProjectionSnapshotV2Message,
+  pending: PendingRollCommit & {
+    readonly receipt: CommandReceipt<RollCommitResult>;
+  },
+  previous: ConfirmedProjectionSnapshot,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (message.presentation.assignment.correlationId !== pending.request.commandId) {
+    return unrecognized(
+      '$.presentation.assignment.correlationId',
+      message.presentation.assignment.correlationId,
+    );
+  }
+  if (message.presentation.assignment.reason !== 'COMMAND_DESTINATION') {
+    return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
+  }
+  const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+  return decoded.ok ? rollCommitSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
 }
 
 function decodeDeviceIdentity(value: unknown): DecodeResult<string> {
@@ -1583,8 +2327,8 @@ function identityCheckpointPayload(
 
 function setDecisionPayload(
   snapshot: ConfirmedProjectionSnapshot,
-  choice: Exclude<CharacterCreationChoiceDraft, { readonly formId: 'CHR-002' }>,
-): Exclude<SetDecisionPayload, StatMethodDecisionPayload> {
+  choice: CharacterCreationChoiceDraft,
+): SetDecisionPayload {
   if (choice.formId !== snapshot.formId) {
     throw new Error(`character creation choice ${choice.formId} does not match ${snapshot.formId}`);
   }
@@ -1605,13 +2349,66 @@ function setDecisionPayload(
       };
     case 'CHR-036':
       return { ...common, diceInputMode: choice.value, sourceFormId: choice.formId };
+    case 'CHR-002':
+      return { ...common, sourceFormId: choice.formId, statMethod: choice.value };
   }
+}
+
+function rollCommitPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+  draft: CharacterCreationRollDraft | null,
+): RollCommitPayload {
+  const common = {
+    branchUuid: snapshot.projection['branchUuid'] as string,
+    characterDraftId: snapshot.projection['characterDraftId'] as string,
+    draftRevision: snapshot.projection['draftRevision'] as number,
+    stage: 'STAT_ROLLS',
+    wizardCheckpointId: snapshot.projection['wizardCheckpointId'] as string,
+  } as const;
+  if (snapshot.formId === 'CHR-003') {
+    const manualFacesOrNull =
+      snapshot.projection['diceInputModeSnapshot'] === 'AUTO'
+        ? null
+        : draft?.formId === 'CHR-003' && completeManualRollDraft(draft)
+          ? (draft.faces as readonly number[])
+          : null;
+    if (snapshot.projection['diceInputModeSnapshot'] === 'MANUAL' && manualFacesOrNull === null) {
+      throw new Error('CHR-003 requires seven complete MANUAL faces');
+    }
+    return {
+      ...common,
+      manualFacesOrNull,
+      setRollRequestId: snapshot.projection['setRollRequestId'] as string,
+      sourceFormId: 'CHR-003',
+    };
+  }
+  if (snapshot.formId === 'CHR-004') {
+    const manualFaceOrNull =
+      snapshot.projection['diceInputModeSnapshot'] === 'AUTO'
+        ? null
+        : draft?.formId === 'CHR-004' && completeManualRollDraft(draft)
+          ? draft.face
+          : null;
+    if (snapshot.projection['diceInputModeSnapshot'] === 'MANUAL' && manualFaceOrNull === null) {
+      throw new Error('CHR-004 requires one complete MANUAL face');
+    }
+    return {
+      ...common,
+      confirmationRollRequestId: snapshot.projection['confirmationRollRequestId'] as string,
+      criticalQueueIndex: snapshot.projection['criticalQueueIndex'] as number,
+      manualFaceOrNull,
+      setRollReceiptId: snapshot.projection['setRollReceiptId'] as string,
+      sourceFormId: 'CHR-004',
+    };
+  }
+  throw new Error(`ROLL-COMMIT is unavailable on ${snapshot.formId}`);
 }
 
 export function connectProjection(
   onState: (state: WebClientState) => void,
   onIdentityDraft: (state: IdentityDraftClientState | null) => void = () => {},
   onCreationChoiceDraft: (value: CharacterCreationChoiceDraft | null) => void = () => {},
+  onCreationRollDraft: (value: CharacterCreationRollDraft | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -1620,16 +2417,25 @@ export function connectProjection(
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
   let pendingCheckpoint: PendingIdentityCheckpoint | null = null;
   let pendingSetDecision: PendingSetDecision | null = null;
+  let pendingRollCommit: PendingRollCommit | null = null;
   let pendingFormAction: FormActionIntentV2Message | null = null;
   let playerContextId: string | null = null;
   let creationChoiceDraft: CharacterCreationChoiceDraft | null = null;
+  let creationRollDraft: CharacterCreationRollDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
-  const commandPending = () => pendingCheckpoint !== null || pendingSetDecision !== null;
+  const commandPending = () =>
+    pendingCheckpoint !== null || pendingSetDecision !== null || pendingRollCommit !== null;
   const visibleLast = () =>
     lastSnapshot === null
       ? null
-      : visibleSnapshot(lastSnapshot, identity, commandPending(), creationChoiceDraft);
+      : visibleSnapshot(
+          lastSnapshot,
+          identity,
+          commandPending(),
+          creationChoiceDraft,
+          creationRollDraft,
+        );
 
   const closeAfterTerminalState = () => {
     if (
@@ -1645,6 +2451,7 @@ export function connectProjection(
     terminal = true;
     pendingCheckpoint = null;
     pendingSetDecision = null;
+    pendingRollCommit = null;
     pendingFormAction = null;
     stagedCapabilities = null;
     const response = {
@@ -1689,11 +2496,12 @@ export function connectProjection(
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
     lastSnapshot = next;
     if (next.formId === 'CHR-010') pendingCheckpoint = null;
-    if (pendingSetDecision?.receipt?.result.nextFormId === next.formId) {
-      pendingSetDecision = null;
-    }
+    if (pendingSetDecision !== null) pendingSetDecision = null;
+    if (pendingRollCommit !== null) pendingRollCommit = null;
     creationChoiceDraft = null;
     onCreationChoiceDraft(creationChoiceDraft);
+    creationRollDraft = creationRollDraftFromSnapshot(next);
+    onCreationRollDraft(creationRollDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -1705,7 +2513,13 @@ export function connectProjection(
     onIdentityDraft(identity?.state ?? null);
     onState({
       kind: 'ready',
-      snapshot: visibleSnapshot(next, identity, commandPending(), creationChoiceDraft),
+      snapshot: visibleSnapshot(
+        next,
+        identity,
+        commandPending(),
+        creationChoiceDraft,
+        creationRollDraft,
+      ),
     });
     sendIdentity(replay);
   };
@@ -1819,6 +2633,32 @@ export function connectProjection(
               return;
             }
             pendingSetDecision = { ...pendingSetDecision, receipt: receipt.value };
+          } else if (pendingRollCommit !== null) {
+            if (pendingRollCommit.receipt !== null && message.messageType !== 'command.replay') {
+              failUnexpected(
+                '$.messageType',
+                message.messageType,
+                'Host sent a second non-replay ROLL-COMMIT terminal.',
+              );
+              return;
+            }
+            const receipt = decodeRollCommitTerminal(message, pendingRollCommit);
+            if (!receipt.ok) {
+              failProtocol(receipt.refusal, 'Host sent an invalid ROLL-COMMIT receipt.');
+              return;
+            }
+            if (
+              pendingRollCommit.receipt !== null &&
+              !sameRollCommitReceipt(pendingRollCommit.receipt, receipt.value)
+            ) {
+              failUnexpected(
+                '$.receipt.receiptId',
+                receipt.value.receiptId,
+                'Host replay changed the confirmed ROLL-COMMIT receipt.',
+              );
+              return;
+            }
+            pendingRollCommit = { ...pendingRollCommit, receipt: receipt.value };
           } else {
             failUnexpected(
               '$.messageType',
@@ -1830,7 +2670,13 @@ export function connectProjection(
           if (lastSnapshot !== null && !expectingCapabilities) {
             onState({
               kind: 'ready',
-              snapshot: visibleSnapshot(lastSnapshot, identity, true, creationChoiceDraft),
+              snapshot: visibleSnapshot(
+                lastSnapshot,
+                identity,
+                true,
+                creationChoiceDraft,
+                creationRollDraft,
+              ),
             });
           }
           return;
@@ -1844,7 +2690,14 @@ export function connectProjection(
             pendingSetDecision !== null &&
             pendingSetDecision.receipt === null &&
             message.commandId === pendingSetDecision.request.commandId;
-          if ((!matchesCheckpoint && !matchesSetDecision) || lastSnapshot === null) {
+          const matchesRollCommit =
+            pendingRollCommit !== null &&
+            pendingRollCommit.receipt === null &&
+            message.commandId === pendingRollCommit.request.commandId;
+          if (
+            (!matchesCheckpoint && !matchesSetDecision && !matchesRollCommit) ||
+            lastSnapshot === null
+          ) {
             failUnexpected(
               '$.commandId',
               message.commandId,
@@ -1854,6 +2707,7 @@ export function connectProjection(
           }
           if (matchesCheckpoint) pendingCheckpoint = null;
           if (matchesSetDecision) pendingSetDecision = null;
+          if (matchesRollCommit) pendingRollCommit = null;
           if (!expectingCapabilities) {
             onState({
               kind: 'command-refusal',
@@ -1863,6 +2717,7 @@ export function connectProjection(
                 identity,
                 commandPending(),
                 creationChoiceDraft,
+                creationRollDraft,
               ),
             });
           }
@@ -1943,6 +2798,7 @@ export function connectProjection(
               identity,
               commandPending(),
               creationChoiceDraft,
+              creationRollDraft,
             ),
           });
           sendIdentity(next);
@@ -1953,7 +2809,13 @@ export function connectProjection(
         onIdentityDraft(identity.state);
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(lastSnapshot, identity, commandPending(), creationChoiceDraft),
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            commandPending(),
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
         });
         sendIdentity(next);
         return;
@@ -2022,6 +2884,15 @@ export function connectProjection(
                 pendingSetDecision.receipt,
               );
             }
+          } else if (snapshot.ok && pendingRollCommit !== null) {
+            if (pendingRollCommit.receipt === null) {
+              snapshot = unrecognized('$.messageType', message.messageType);
+            } else {
+              snapshot = rollCommitSnapshotMatchesReceipt(
+                snapshot.value,
+                pendingRollCommit.receipt,
+              );
+            }
           }
         } else if (
           pendingCheckpoint !== null &&
@@ -2044,6 +2915,18 @@ export function connectProjection(
             message,
             pendingSetDecision as PendingSetDecision & {
               readonly receipt: CommandReceipt<SetDecisionResult>;
+            },
+            lastSnapshot,
+          );
+        } else if (
+          pendingRollCommit !== null &&
+          pendingRollCommit.receipt !== null &&
+          lastSnapshot !== null
+        ) {
+          snapshot = decodeRollCommitDestinationSnapshot(
+            message,
+            pendingRollCommit as PendingRollCommit & {
+              readonly receipt: CommandReceipt<RollCommitResult>;
             },
             lastSnapshot,
           );
@@ -2083,7 +2966,13 @@ export function connectProjection(
         onState({
           kind: 'navigation-refusal',
           refusal: message.refusal,
-          snapshot: visibleSnapshot(lastSnapshot, identity, commandPending(), creationChoiceDraft),
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            commandPending(),
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
         });
         return;
       }
@@ -2133,13 +3022,16 @@ export function connectProjection(
       supportedWorkflowCommandIds: [
         IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
         SET_DECIDE_WORKFLOW_COMMAND_ID,
+        ROLL_COMMIT_WORKFLOW_COMMAND_ID,
       ],
       unacknowledgedCommandIds:
         pendingCheckpoint !== null
           ? [pendingCheckpoint.request.commandId]
           : pendingSetDecision !== null
             ? [pendingSetDecision.request.commandId]
-            : [],
+            : pendingRollCommit !== null
+              ? [pendingRollCommit.request.commandId]
+              : [],
     } as const satisfies SessionReconnectV2Message;
     const encoded = encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok)
@@ -2208,6 +3100,71 @@ export function connectProjection(
         return { ok: false, detail: diagnostic(error) };
       }
     },
+    replaceConfirmationManualFace: (value) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-004' ||
+        creationRollDraft?.formId !== 'CHR-004' ||
+        lastSnapshot.projection['diceInputModeSnapshot'] !== 'MANUAL' ||
+        lastSnapshot.projection['confirmationReceiptId'] !== null
+      ) {
+        return { ok: false, detail: 'no active CHR-004 MANUAL input scope' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'confirmation input is frozen while delivery is pending' };
+      }
+      if (value !== null && !Number.isFinite(value)) {
+        return { ok: false, detail: 'confirmation face must be finite' };
+      }
+      creationRollDraft = { face: value, formId: 'CHR-004' };
+      onCreationRollDraft(creationRollDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshot(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+        ),
+      });
+      return { ok: true };
+    },
+    replaceSetManualFace: (index, value) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-003' ||
+        creationRollDraft?.formId !== 'CHR-003' ||
+        lastSnapshot.projection['diceInputModeSnapshot'] !== 'MANUAL' ||
+        lastSnapshot.projection['setRollReceiptId'] !== null
+      ) {
+        return { ok: false, detail: 'no active CHR-003 MANUAL input scope' };
+      }
+      if (!Number.isSafeInteger(index) || index < 0 || index >= 7) {
+        return { ok: false, detail: 'CHR-003 input index must be in 0..6' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'set inputs are frozen while delivery is pending' };
+      }
+      if (value !== null && !Number.isFinite(value)) {
+        return { ok: false, detail: 'set face must be finite' };
+      }
+      const faces = [...creationRollDraft.faces];
+      faces[index] = value;
+      creationRollDraft = { faces, formId: 'CHR-003' };
+      onCreationRollDraft(creationRollDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshot(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+        ),
+      });
+      return { ok: true };
+    },
     replaceIdentityDraft: (values) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
@@ -2223,7 +3180,13 @@ export function connectProjection(
       if (lastSnapshot !== null)
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(lastSnapshot, identity, commandPending(), creationChoiceDraft),
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            commandPending(),
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
         });
       try {
         return request === null || sendIdentity(request)
@@ -2249,6 +3212,7 @@ export function connectProjection(
           identity,
           commandPending(),
           creationChoiceDraft,
+          creationRollDraft,
         ).availableActionKeys.includes(actionKey)
       ) {
         return {
@@ -2265,7 +3229,13 @@ export function connectProjection(
         onCreationChoiceDraft(creationChoiceDraft);
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(lastSnapshot, identity, false, creationChoiceDraft),
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            false,
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
         });
         return { ok: true };
       }
@@ -2299,13 +3269,18 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(lastSnapshot, identity, true, creationChoiceDraft),
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
         });
         return { ok: true };
       }
       if (
         creationChoiceDraft !== null &&
-        creationChoiceDraft.formId !== 'CHR-002' &&
         creationChoiceDraft.formId === lastSnapshot.formId &&
         creationChoiceDraft.confirmationActionKey === actionKey
       ) {
@@ -2338,7 +3313,63 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(lastSnapshot, identity, true, creationChoiceDraft),
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (
+        (lastSnapshot.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
+        (lastSnapshot.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY)
+      ) {
+        let request: RollCommitRequest;
+        try {
+          request = {
+            commandId: createRequestId('command'),
+            commandKind: 'workflow-command',
+            expectedRevisions: { ...lastSnapshot.revisions },
+            messageType: 'command.request',
+            payload: rollCommitPayload(lastSnapshot, creationRollDraft),
+            protocolVersion: WIRE_PROTOCOL_VERSION,
+            role: 'player',
+            workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+          };
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `ROLL-COMMIT failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingRollCommit = {
+          receipt: null,
+          request,
+          sourceProjection: lastSnapshot.projection as unknown as
+            Chr003Projection | Chr004Projection,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingRollCommit = null;
+          return { ok: false, detail: `ROLL-COMMIT could not be sent: ${diagnostic(error)}` };
+        }
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+          ),
         });
         return { ok: true };
       }

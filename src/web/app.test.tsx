@@ -41,6 +41,7 @@ const MENU_NAVIGATION_REQUEST_ID = 'navigation-000000190000001a0000001b0000001c'
 const IDENTITY_CHECKPOINT_COMMAND_ID = 'command-0000000d0000000e0000000f00000010';
 const IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-WIZARD-CHECKPOINT';
 const SET_DECIDE_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-CREATION-SET-DECIDE';
+const ROLL_COMMIT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-CREATION-ROLL-COMMIT';
 const EMPTY_BRANCH_CACHE_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 const APP_001_ACTION_KEYS = [
   'APP-001::CTA::001',
@@ -138,6 +139,29 @@ const CHR_002_PROJECTION = {
   methodConsequences: null,
   statMethod: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const BRANCH_UUID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const SET_ROLL_REQUEST_ID = 'set-roll-request-1';
+const SET_ROLL_RECEIPT_ID = 'set-roll-receipt-1';
+const CONFIRMATION_ROLL_REQUEST_ID = 'confirmation-roll-request-1';
+const CHR_003_MANUAL_PROJECTION = {
+  attemptIndex: 1,
+  branchUuid: BRANCH_UUID,
+  characterDraftId: CHARACTER_DRAFT_ID,
+  commandId: null,
+  diceInputModeSnapshot: 'MANUAL',
+  draftRevision: 4,
+  facesOrManualInputs: [null, null, null, null, null, null, null],
+  naturalCriticalQueue: [],
+  setRollReceiptId: null,
+  setRollRequestId: SET_ROLL_REQUEST_ID,
+  shownResultLocked: false,
+  statMethod: 'CLASSIC',
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const CHR_003_AUTO_PROJECTION = {
+  ...CHR_003_MANUAL_PROJECTION,
+  diceInputModeSnapshot: 'AUTO',
 } as const;
 const ENTITY_REVISIONS = {
   actorVisibilityRevision: 0,
@@ -338,6 +362,7 @@ function capabilities(
     executableWorkflowCommandIds: [
       IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
       SET_DECIDE_WORKFLOW_COMMAND_ID,
+      ROLL_COMMIT_WORKFLOW_COMMAND_ID,
     ],
     messageType: 'session.reconnect.capabilities',
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
@@ -443,7 +468,36 @@ const chr002Base = (
   routeTemplate: '/player/characters/:localCharacterId/create/chr-002',
 });
 
+const chr003Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] = CHR_003_MANUAL_PROJECTION,
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: projection['setRollReceiptId'] === null ? ['CHR-003::CTA::002'] : [],
+  formId: 'CHR-003',
+  formType: 'screen',
+  roleFilteredPayload: projection,
+  routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-003',
+});
+
+const chr004Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'],
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: projection['confirmationReceiptId'] === null ? ['CHR-004::CTA::001'] : [],
+  formId: 'CHR-004',
+  formType: 'screen',
+  roleFilteredPayload: projection,
+  routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-004',
+});
+
 type SetDecisionFixture =
+  | {
+      readonly branchUuid: string;
+      readonly nextFormId: 'CHR-003';
+      readonly setRollRequestId: string;
+      readonly sourceFormId: 'CHR-002';
+      readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
+    }
   | {
       readonly diceInputMode: 'AUTO' | 'MANUAL';
       readonly nextFormId: 'CHR-002';
@@ -487,17 +541,47 @@ function setDecisionTerminal(
     stage: 'RACE_AND_METHOD',
   } as const;
   const result =
-    decision.sourceFormId === 'CHR-010'
-      ? { ...common, raceChoice: decision.raceChoice }
-      : decision.sourceFormId === 'CHR-016'
-        ? { ...common, symbiontAcquisitionMode: decision.symbiontAcquisitionMode }
-        : { ...common, diceInputMode: decision.diceInputMode };
+    decision.sourceFormId === 'CHR-002'
+      ? {
+          ...common,
+          branchUuid: decision.branchUuid,
+          setRollRequestId: decision.setRollRequestId,
+          statMethod: decision.statMethod,
+        }
+      : decision.sourceFormId === 'CHR-010'
+        ? { ...common, raceChoice: decision.raceChoice }
+        : decision.sourceFormId === 'CHR-016'
+          ? { ...common, symbiontAcquisitionMode: decision.symbiontAcquisitionMode }
+          : { ...common, diceInputMode: decision.diceInputMode };
   const receipt = {
     commandId,
     receiptId: `set-decision-receipt-${String(checkpointRevision)}`,
     result,
     revisions: entityRevisions(checkpointRevision),
   };
+  return replay
+    ? {
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        messageType: 'command.replay',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      }
+    : {
+        lifecycleState: 'COMMITTED',
+        messageType: 'command.result',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      };
+}
+
+function rollCommitTerminal(
+  commandId: string,
+  receiptId: string,
+  result: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'],
+  revision: number,
+  replay = false,
+): Extract<HostToClientMessage, { readonly messageType: 'command.replay' | 'command.result' }> {
+  const receipt = { commandId, receiptId, result, revisions: entityRevisions(revision) };
   return replay
     ? {
         lifecycleState: 'IDEMPOTENT_REPLAY',
@@ -626,6 +710,20 @@ function deliverPair(
   deliver(socket, checkedHostTextV2(snapshotMessage));
 }
 
+async function connectToWizardBase(
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  revision: number,
+): Promise<ConnectedClient> {
+  const connection = await connectClient();
+  open(connection.socket);
+  deliverPair(
+    connection.socket,
+    capabilities({ revisions: entityRevisions(revision) }),
+    reconnectWizardSnapshot(REQUEST_ID, base, revision),
+  );
+  return connection;
+}
+
 async function connectToValidChr001(
   capabilityMessage: SessionReconnectCapabilitiesV2Message = capabilities(),
 ): Promise<ConnectedClient> {
@@ -710,6 +808,15 @@ function select(selectElement: HTMLSelectElement, value: string): void {
   });
 }
 
+function inputNumber(input: HTMLInputElement, value: number): void {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (descriptor?.set === undefined) throw new Error('test setup: input value setter not found');
+  act(() => {
+    descriptor.set!.call(input, String(value));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 async function chooseFile(input: HTMLInputElement, file: File): Promise<void> {
   Object.defineProperty(input, 'files', {
     configurable: true,
@@ -788,6 +895,7 @@ describe('APP-001 web entry', () => {
       supportedWorkflowCommandIds: [
         IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
         SET_DECIDE_WORKFLOW_COMMAND_ID,
+        ROLL_COMMIT_WORKFLOW_COMMAND_ID,
       ],
       unacknowledgedCommandIds: [],
     });
@@ -1565,7 +1673,7 @@ describe('APP-001 web entry', () => {
     }
   });
 
-  it('walks CHR-010 through CHR-016 and CHR-036 to local-only CHR-002', async () => {
+  it('walks CHR-010 through CHR-016 and CHR-036 to CHR-002 method selection', async () => {
     const { container, socket } = await connectToChr010();
 
     const sentBeforeRace = socket.sent.length;
@@ -1760,9 +1868,324 @@ describe('APP-001 web entry', () => {
       expect(container.querySelector('[data-character-creation-choice]')?.textContent).toContain(
         value,
       );
-      expect(container.querySelector('[data-atlas-action-key="CHR-002::CTA::001"]')).toBeNull();
+      expect(container.querySelector('[data-atlas-action-key="CHR-002::CTA::001"]')).not.toBeNull();
       expect(socket.sent).toHaveLength(sentAtMethodBoundary);
     }
+  });
+
+  it('bridges CHR-002 confirmation and keeps seven MANUAL faces local until submit', async () => {
+    const { container, socket } = await connectToWizardBase(chr002Base(), 3);
+    const sentBeforeMethod = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Выбрать классический метод"]',
+        ),
+        'CHR-002 CLASSIC selector',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(sentBeforeMethod);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить метод характеристик"]',
+        ),
+        'CHR-002 confirmation',
+      ).click();
+    });
+    const methodRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(methodRequest).toMatchObject({
+      expectedRevisions: entityRevisions(3),
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: CHARACTER_DRAFT_ID,
+        draftRevision: 3,
+        sourceFormId: 'CHR-002',
+        stage: 'RACE_AND_METHOD',
+        statMethod: 'CLASSIC',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+    });
+    if (methodRequest.messageType !== 'command.request') throw new Error('missing method command');
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          methodRequest.commandId,
+          {
+            branchUuid: BRANCH_UUID,
+            nextFormId: 'CHR-003',
+            setRollRequestId: SET_ROLL_REQUEST_ID,
+            sourceFormId: 'CHR-002',
+            statMethod: 'CLASSIC',
+          },
+          4,
+          4,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(setDecisionDestinationSnapshot(methodRequest.commandId, chr003Base(), 4)),
+    );
+
+    const inputs = [...container.querySelectorAll<HTMLInputElement>('[data-stat-roll-input]')];
+    expect(inputs).toHaveLength(7);
+    expect(container.querySelector('[data-atlas-action-key="CHR-003::CTA::002"]')).toBeNull();
+    const sentBeforeFaces = socket.sent.length;
+    const faces = [2, 3, 4, 5, 6, 7, 8];
+    inputs.forEach((input, index) => {
+      inputNumber(input, faces[index]!);
+      expect(socket.sent).toHaveLength(sentBeforeFaces);
+      const commit = container.querySelector('[data-atlas-action-key="CHR-003::CTA::002"]');
+      if (index === 6) expect(commit).not.toBeNull();
+      else expect(commit).toBeNull();
+    });
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Зафиксировать текущий набор характеристик"]',
+        ),
+        'CHR-003 commit',
+      ).click();
+    });
+    const rollRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(rollRequest).toMatchObject({
+      expectedRevisions: entityRevisions(4),
+      messageType: 'command.request',
+      payload: {
+        branchUuid: BRANCH_UUID,
+        characterDraftId: CHARACTER_DRAFT_ID,
+        draftRevision: 4,
+        manualFacesOrNull: faces,
+        setRollRequestId: SET_ROLL_REQUEST_ID,
+        sourceFormId: 'CHR-003',
+        stage: 'STAT_ROLLS',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+    });
+  });
+
+  it('submits AUTO as null and restores the same committed CHR-003 set after replay', async () => {
+    const { container, socket } = await connectToWizardBase(chr003Base(CHR_003_AUTO_PROJECTION), 4);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Зафиксировать текущий набор характеристик"]',
+        ),
+        'CHR-003 AUTO commit',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(request).toMatchObject({
+      messageType: 'command.request',
+      payload: {
+        branchUuid: BRANCH_UUID,
+        characterDraftId: CHARACTER_DRAFT_ID,
+        draftRevision: 4,
+        manualFacesOrNull: null,
+        setRollRequestId: SET_ROLL_REQUEST_ID,
+        sourceFormId: 'CHR-003',
+        stage: 'STAT_ROLLS',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+    });
+    if (request.messageType !== 'command.request') throw new Error('missing AUTO roll command');
+    const faces = [2, 3, 4, 5, 6, 7, 8];
+    const result = {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 5,
+      confirmationRollRequestIdOrNull: null,
+      diceInputModeSnapshot: 'AUTO',
+      draftRevision: 5,
+      faces,
+      naturalCriticalQueue: [],
+      nextFormId: 'CHR-003',
+      setRollReceiptId: SET_ROLL_RECEIPT_ID,
+      setRollRequestId: SET_ROLL_REQUEST_ID,
+      shownResultLocked: true,
+      sourceFormId: 'CHR-003',
+      stage: 'STAT_ROLLS',
+    } as const;
+    act(() => socket.serverClose(1006, 'transport lost'));
+    act(() => {
+      requiredElement(
+        [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+          (button) => button.textContent === 'Переподключиться',
+        ) ?? null,
+        'reconnect button',
+      ).click();
+    });
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect');
+    expect(reconnect.unacknowledgedCommandIds).toEqual([request.commandId]);
+    deliver(
+      resumedSocket,
+      checkedHostTextV1(
+        rollCommitTerminal(request.commandId, SET_ROLL_RECEIPT_ID, result, 5, true),
+      ),
+    );
+    const committedProjection = {
+      ...CHR_003_AUTO_PROJECTION,
+      draftRevision: 5,
+      facesOrManualInputs: faces,
+      setRollReceiptId: SET_ROLL_RECEIPT_ID,
+      shownResultLocked: true,
+    } as const;
+    deliverPair(
+      resumedSocket,
+      capabilities({
+        reconnectRequestId: reconnect.reconnectRequestId,
+        revisions: entityRevisions(5),
+      }),
+      reconnectWizardSnapshot(reconnect.reconnectRequestId, chr003Base(committedProjection), 5),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(
+      [...container.querySelectorAll('[data-stat-roll-face]')].map((item) => item.textContent),
+    ).toEqual(faces.map(String));
+    expect(container.querySelector('[data-stat-roll-committed]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-003::CTA::002"]')).toBeNull();
+  });
+
+  it('keeps the AUTO roll CTA absent without the ROLL-COMMIT capability', async () => {
+    const { container, socket } = await connectClient();
+    open(socket);
+    deliverPair(
+      socket,
+      capabilities({
+        executableWorkflowCommandIds: [
+          IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+          SET_DECIDE_WORKFLOW_COMMAND_ID,
+        ],
+        revisions: entityRevisions(4),
+      }),
+      reconnectWizardSnapshot(
+        REQUEST_ID,
+        { ...chr003Base(CHR_003_AUTO_PROJECTION), availableActionKeys: [] },
+        4,
+      ),
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-003::CTA::002"]')).toBeNull();
+    expect(socket.sent).toHaveLength(1);
+  });
+
+  it('keeps CHR-004 MANUAL confirmation local and renders actionless CHAIN_COMPLETE', async () => {
+    const pendingProjection = {
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      commandId: null,
+      confirmationFace: null,
+      confirmationReceiptId: null,
+      confirmationRollRequestId: CONFIRMATION_ROLL_REQUEST_ID,
+      criticalQueueIndex: 0,
+      diceInputModeSnapshot: 'MANUAL',
+      draftRevision: 5,
+      originFace: 20,
+      returnDecisionFormId: 'CHR-005',
+      setRollReceiptId: SET_ROLL_RECEIPT_ID,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    } as const;
+    const { container, socket } = await connectToWizardBase(chr004Base(pendingProjection), 5);
+    expect(container.querySelector('[data-atlas-action-key="CHR-004::CTA::001"]')).toBeNull();
+    const sentBeforeInput = socket.sent.length;
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-confirmation-roll-input]'),
+        'CHR-004 MANUAL face',
+      ),
+      14,
+    );
+    expect(socket.sent).toHaveLength(sentBeforeInput);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Зафиксировать текущий подтверждающий бросок"]',
+        ),
+        'CHR-004 confirmation commit',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(request).toMatchObject({
+      expectedRevisions: entityRevisions(5),
+      messageType: 'command.request',
+      payload: {
+        branchUuid: BRANCH_UUID,
+        characterDraftId: CHARACTER_DRAFT_ID,
+        confirmationRollRequestId: CONFIRMATION_ROLL_REQUEST_ID,
+        criticalQueueIndex: 0,
+        draftRevision: 5,
+        manualFaceOrNull: 14,
+        setRollReceiptId: SET_ROLL_RECEIPT_ID,
+        sourceFormId: 'CHR-004',
+        stage: 'STAT_ROLLS',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+    });
+    if (request.messageType !== 'command.request') throw new Error('missing confirmation command');
+    const confirmationReceiptId = 'confirmation-receipt-1';
+    const result = {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 6,
+      confirmationFace: 14,
+      confirmationReceiptId,
+      confirmationRollRequestId: CONFIRMATION_ROLL_REQUEST_ID,
+      criticalQueueIndex: 0,
+      draftRevision: 6,
+      nextConfirmationRollRequestIdOrNull: null,
+      nextFormId: 'CHR-004',
+      originFace: 20,
+      outcomeOrNull: {
+        creationCriticalPenaltyOrNull: null,
+        criticalGrade: 0,
+        criticalPolarity: 'NONE',
+        setEntryIndex: 0,
+        value: 20,
+      },
+      returnDecisionFormId: 'CHR-005',
+      setRollReceiptId: SET_ROLL_RECEIPT_ID,
+      sourceFormId: 'CHR-004',
+      stage: 'STAT_ROLLS',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(rollCommitTerminal(request.commandId, confirmationReceiptId, result, 6)),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(
+          request.commandId,
+          chr004Base({
+            ...pendingProjection,
+            confirmationFace: 14,
+            confirmationReceiptId,
+            draftRevision: 6,
+          }),
+          6,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-critical-chain-status="CHAIN_COMPLETE"]')).not.toBeNull();
+    expect(container.querySelector('[data-confirmation-face]')?.textContent).toBe('14');
+    expect(container.querySelector('[data-atlas-action-key="CHR-004::CTA::001"]')).toBeNull();
   });
 
   it('routes PURE directly from CHR-010 to CHR-036 without a synthetic CHR-016 step', async () => {

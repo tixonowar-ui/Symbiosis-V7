@@ -24,12 +24,16 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'APP-004',
   'CHR-001',
   'CHR-002',
+  'CHR-003',
+  'CHR-004',
   'CHR-010',
   'CHR-016',
   'CHR-036',
 ]);
 const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-002',
+  'CHR-003',
+  'CHR-004',
   'CHR-010',
   'CHR-016',
   'CHR-036',

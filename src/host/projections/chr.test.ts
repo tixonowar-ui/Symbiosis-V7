@@ -6,6 +6,10 @@ import {
   CHR_001_INITIAL_ACTION_KEYS,
   CHR_002_INITIAL_ACTION_KEYS,
   CHR_002_SET_DECIDE_ACTION_KEYS,
+  CHR_003_COMMITTED_ACTION_KEYS,
+  CHR_003_REQUEST_ACTION_KEYS,
+  CHR_004_COMPLETE_ACTION_KEYS,
+  CHR_004_PENDING_ACTION_KEYS,
   CHR_010_INITIAL_ACTION_KEYS,
   CHR_010_SET_DECIDE_ACTION_KEYS,
   CHR_016_INITIAL_ACTION_KEYS,
@@ -22,6 +26,8 @@ import {
   projectInitialChr010,
   projectInitialChr016,
   projectInitialChr036,
+  projectChr003,
+  projectChr004,
 } from './chr.js';
 
 describe('CHR host projection vocabulary', () => {
@@ -54,10 +60,10 @@ describe('CHR host projection vocabulary', () => {
       'CHR-002::CTA::004',
       'CHR-002::CTA::005',
     ]);
-    expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual([]);
-    expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual(['CHR-010', 'CHR-016', 'CHR-036']);
+    expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-002::CTA::001']);
+    expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual(['CHR-002', 'CHR-010', 'CHR-016', 'CHR-036']);
     expect(SET_DECIDE_ACTION_KEYS_BY_FORM).toEqual({
-      'CHR-002': [],
+      'CHR-002': ['CHR-002::CTA::001'],
       'CHR-010': ['CHR-010::CTA::001', 'CHR-010::CTA::002'],
       'CHR-016': ['CHR-016::CTA::001'],
       'CHR-036': ['CHR-036::CTA::001'],
@@ -111,7 +117,7 @@ describe('CHR host projection vocabulary', () => {
     });
   });
 
-  it('projects the exact initial CHR-002 destination without a confirmation capability', () => {
+  it('projects the exact initial CHR-002 destination with its atomic method capability', () => {
     expect(projectInitialChr002('character-draft', 'wizard-checkpoint', 10)).toEqual({
       characterDraftId: 'character-draft',
       choiceLockStatus: 'UNLOCKED',
@@ -121,6 +127,87 @@ describe('CHR host projection vocabulary', () => {
       statMethod: null,
       wizardCheckpointId: 'wizard-checkpoint',
     });
-    expect(CHR_002_SET_DECIDE_ACTION_KEYS).toHaveLength(0);
+    expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-002::CTA::001']);
+  });
+
+  it('projects exact pending and committed CHR-003 states', () => {
+    const common = {
+      attemptIndex: 1,
+      branchUuid: 'branch-1',
+      characterDraftId: 'character-draft',
+      diceInputModeSnapshot: 'MANUAL' as const,
+      draftRevision: 11,
+      naturalCriticalQueue: [],
+      setRollReceiptId: null,
+      setRollRequestId: 'set-request',
+      shownResultLocked: false,
+      statMethod: 'CLASSIC' as const,
+      wizardCheckpointId: 'wizard-checkpoint',
+    };
+    expect(projectChr003({ ...common, facesOrManualInputs: Array(7).fill(null) })).toEqual({
+      ...common,
+      commandId: null,
+      facesOrManualInputs: [null, null, null, null, null, null, null],
+    });
+    expect(
+      projectChr003({
+        ...common,
+        facesOrManualInputs: [20, 7, 1, 4, 9, 12, 18],
+        naturalCriticalQueue: [
+          { originFace: 20, setEntryIndex: 0 },
+          { originFace: 1, setEntryIndex: 2 },
+        ],
+        setRollReceiptId: 'set-receipt',
+        shownResultLocked: true,
+      }),
+    ).toMatchObject({
+      facesOrManualInputs: [20, 7, 1, 4, 9, 12, 18],
+      naturalCriticalQueue: [
+        { originFace: 20, setEntryIndex: 0 },
+        { originFace: 1, setEntryIndex: 2 },
+      ],
+      setRollReceiptId: 'set-receipt',
+      shownResultLocked: true,
+    });
+    expect(CHR_003_REQUEST_ACTION_KEYS).toEqual(['CHR-003::CTA::002']);
+    expect(CHR_003_COMMITTED_ACTION_KEYS).toEqual([]);
+    expect(() => projectChr003({ ...common, facesOrManualInputs: [1, 2] })).toThrow(
+      'exactly seven',
+    );
+  });
+
+  it('projects exact pending CHR-004 without client-owned destination', () => {
+    expect(
+      projectChr004({
+        branchUuid: 'branch-1',
+        characterDraftId: 'character-draft',
+        confirmationFace: null,
+        confirmationReceiptId: null,
+        confirmationRollRequestId: 'confirmation-request',
+        criticalQueueIndex: 0,
+        diceInputModeSnapshot: 'AUTO',
+        draftRevision: 12,
+        originFace: 20,
+        returnDecisionFormId: 'CHR-005',
+        setRollReceiptId: 'set-receipt',
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toEqual({
+      branchUuid: 'branch-1',
+      characterDraftId: 'character-draft',
+      commandId: null,
+      confirmationFace: null,
+      confirmationReceiptId: null,
+      confirmationRollRequestId: 'confirmation-request',
+      criticalQueueIndex: 0,
+      diceInputModeSnapshot: 'AUTO',
+      draftRevision: 12,
+      originFace: 20,
+      returnDecisionFormId: 'CHR-005',
+      setRollReceiptId: 'set-receipt',
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(CHR_004_PENDING_ACTION_KEYS).toEqual(['CHR-004::CTA::001']);
+    expect(CHR_004_COMPLETE_ACTION_KEYS).toEqual([]);
   });
 });

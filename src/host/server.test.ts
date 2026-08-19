@@ -250,6 +250,9 @@ describe('configured Fastify and ws host shell', () => {
         };
         return currentRevisions;
       },
+      allocateCreationBranchUuid: () =>
+        `20000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`,
+      allocateCreationRollRequestId: () => `creation-roll-${String(++receiptSequence)}`,
       allocateContextId: () =>
         contextIdOverride ?? `00000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`,
       allocateLocalCharacterId: () =>
@@ -265,6 +268,7 @@ describe('configured Fastify and ws host shell', () => {
         revisionReads += 1;
         return currentRevisions;
       },
+      sampleCreationD20: () => 10,
       staticRoot,
     });
     await startHost(app, { interface: '127.0.0.1', port: 0 });
@@ -321,6 +325,8 @@ describe('configured Fastify and ws host shell', () => {
     const endpointErrors: unknown[] = [];
     const uninitializedHost = await createHost({
       advanceRevisions: () => CLIENT_REVISIONS,
+      allocateCreationBranchUuid: () => '20000000-0000-4000-8000-000000000001',
+      allocateCreationRollRequestId: () => 'creation-roll-uninitialized',
       allocateContextId: () => '00000000-0000-4000-8000-000000000001',
       allocateLocalCharacterId: () => '10000000-0000-4000-8000-000000000001',
       allocateReceiptId: () => 'opaque-receipt-uninitialized',
@@ -329,6 +335,7 @@ describe('configured Fastify and ws host shell', () => {
       onFrameError: (error) => endpointErrors.push(error),
       projectRoot: PROJECT_ROOT,
       readRevisions: () => CLIENT_REVISIONS,
+      sampleCreationD20: () => 10,
       staticRoot,
     });
     try {

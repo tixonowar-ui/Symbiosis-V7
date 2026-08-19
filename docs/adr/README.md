@@ -73,6 +73,7 @@
 | [0039](0039-atlas-markdown-companion-v1-3.md)             | Markdown-компаньон Atlas v1.3        | принято                                     |
 | [0040](0040-character-portrait-default-at-final-save.md)  | Заглушка арта при final save         | принято                                     |
 | [0041](0041-character-wizard-set-decide.md)               | Фиксация первых развилок персонажа   | принято                                     |
+| [0042](0042-character-creation-stats-and-rolls.md)        | Наборы характеристик и броски        | принято                                     |
 
 ## Перенос решений аудита
 

@@ -9,7 +9,16 @@ import type { ChrFormId } from './chr/index.js';
 export const IMPLEMENTED_FORM_IDS = [...APP_FORM_IDS, ...CHR_FORM_IDS] as const;
 export type ImplementedFormId = AppFormId | ChrFormId;
 export type SupportedPresentationFormId =
-  'APP-001' | 'APP-002' | 'APP-004' | 'CHR-001' | 'CHR-002' | 'CHR-010' | 'CHR-016' | 'CHR-036';
+  | 'APP-001'
+  | 'APP-002'
+  | 'APP-004'
+  | 'CHR-001'
+  | 'CHR-002'
+  | 'CHR-003'
+  | 'CHR-004'
+  | 'CHR-010'
+  | 'CHR-016'
+  | 'CHR-036';
 
 const IMPLEMENTED = new Set<string>(IMPLEMENTED_FORM_IDS);
 const SUPPORTED = new Set<FormId>([
@@ -18,6 +27,8 @@ const SUPPORTED = new Set<FormId>([
   'APP-004',
   'CHR-001',
   'CHR-002',
+  'CHR-003',
+  'CHR-004',
   'CHR-010',
   'CHR-016',
   'CHR-036',
