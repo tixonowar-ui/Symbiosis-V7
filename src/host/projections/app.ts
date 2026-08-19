@@ -6,7 +6,23 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { InteractiveRole, JsonObject } from '@shared/wire-protocol.js';
 
 import { array, readJsonFile, record, string } from '../json-source.js';
-import { CHR_001_CANCEL_ACTION_KEY, CHR_001_FORM_ID, CHR_001_ROUTE } from './chr.js';
+import {
+  CHR_001_CANCEL_ACTION_KEY,
+  CHR_001_FORM_ID,
+  CHR_001_ROUTE,
+  CHR_002_FORM_ID,
+  CHR_002_REQUIRED_FIELDS,
+  CHR_002_ROUTE,
+  CHR_010_FORM_ID,
+  CHR_010_REQUIRED_FIELDS,
+  CHR_010_ROUTE,
+  CHR_016_FORM_ID,
+  CHR_016_REQUIRED_FIELDS,
+  CHR_016_ROUTE,
+  CHR_036_FORM_ID,
+  CHR_036_REQUIRED_FIELDS,
+  CHR_036_ROUTE,
+} from './chr.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -273,8 +289,8 @@ function interactiveRole(value: unknown, label: string): InteractiveRole {
   return candidate;
 }
 
-function assertScreenContract(
-  forms: Record<string, unknown>,
+export function assertScreenContract(
+  forms: Readonly<Record<string, unknown>>,
   formId: string,
   requiredFields: readonly string[],
   route: string,
@@ -345,6 +361,10 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertScreenContract(forms, 'APP-002', APP_002_REQUIRED_FIELDS, APP_002_ROUTE);
   assertScreenContract(forms, 'APP-004', APP_004_REQUIRED_FIELDS, APP_004_ROUTE);
   assertScreenContract(forms, CHR_001_FORM_ID, CHR_001_REQUIRED_FIELDS, CHR_001_ROUTE);
+  assertScreenContract(forms, CHR_002_FORM_ID, CHR_002_REQUIRED_FIELDS, CHR_002_ROUTE);
+  assertScreenContract(forms, CHR_010_FORM_ID, CHR_010_REQUIRED_FIELDS, CHR_010_ROUTE);
+  assertScreenContract(forms, CHR_016_FORM_ID, CHR_016_REQUIRED_FIELDS, CHR_016_ROUTE);
+  assertScreenContract(forms, CHR_036_FORM_ID, CHR_036_REQUIRED_FIELDS, CHR_036_ROUTE);
   return result;
 }
 
