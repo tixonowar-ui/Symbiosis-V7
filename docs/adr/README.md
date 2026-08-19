@@ -72,6 +72,7 @@
 | [0038](0038-remove-redundant-atlas-forms-array.md)        | Удаление избыточного массива форм    | принято                                     |
 | [0039](0039-atlas-markdown-companion-v1-3.md)             | Markdown-компаньон Atlas v1.3        | принято                                     |
 | [0040](0040-character-portrait-default-at-final-save.md)  | Заглушка арта при final save         | принято                                     |
+| [0041](0041-character-wizard-set-decide.md)               | Фиксация первых развилок персонажа   | принято                                     |
 
 ## Перенос решений аудита
 
