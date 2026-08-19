@@ -13,10 +13,13 @@ import {
 } from '@shared/index.js';
 import type {
   AddressableRouteTemplate,
+  CommandReceipt,
+  CommandRefusalMessage,
   DecodeRefusal,
   DecodeResult,
   FormActionIntentV2Message,
   FormActionRefusalV2Message,
+  HostToClientMessage,
   IdentityDraftValues,
   JsonObject,
   JsonValue,
@@ -27,10 +30,12 @@ import type {
   SessionReconnectCapabilitiesV2Message,
   SessionReconnectV2Message,
   WireV3Vocabulary,
+  WorkflowCommandRequestMessage,
   WorkflowCommandId,
 } from '@shared/index.js';
 
 import { isImplementedFormActionKey, presentedFormDefinition } from './forms/index.js';
+import type { SupportedPresentationFormId } from './forms/index.js';
 import {
   IdentityDraftClient,
   type IdentityDraftClientState,
@@ -42,7 +47,7 @@ export type { IdentityDraftClientState, IdentityDraftValues };
 const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
 /**
- * The four presentation shapes are the exact implemented slice. Addressable
+ * The five presentation shapes are the exact implemented slice. Addressable
  * routes remain out of scope and therefore fail closed.
  */
 export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
@@ -55,17 +60,18 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     const definition = presentedFormDefinition(formId);
     if (definition === null || formType !== 'screen' || routeTemplate !== definition.route)
       return false;
-    if (formId !== 'CHR-001') return bindings.length === 0;
+    if (formId !== 'CHR-001' && formId !== 'CHR-010') return bindings.length === 0;
     const binding = bindings[0];
     return (
       bindings.length === 1 &&
       binding !== undefined &&
       binding.parameterIndex === 0 &&
-      binding.source === 'executor-allocated' &&
+      binding.source === (formId === 'CHR-001' ? 'executor-allocated' : 'inherited') &&
       UUID_PATTERN.test(binding.value)
     );
   },
-  isWorkflowCommandId: (_value): _value is WorkflowCommandId => false,
+  isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
 };
 
 const NO_KNOWN_REVISIONS = {
@@ -77,6 +83,19 @@ const DEVICE_ID_KEYS = new Set(['deviceId']);
 const DEVICE_ID_ERROR_KEYS = new Set(['error']);
 const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+const IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-WIZARD-CHECKPOINT' as const;
+const IDENTITY_CHECKPOINT_ACTION_KEY = 'CHR-001::CTA::001' as const;
+const CHR_010_SELECTOR_VALUES = new Map<ActionKey, 'FREE' | 'PURE' | 'UNITED'>([
+  ['CHR-010::CTA::004', 'UNITED'],
+  ['CHR-010::CTA::005', 'FREE'],
+  ['CHR-010::CTA::006', 'PURE'],
+]);
+const CHR_010_INITIAL_ACTION_KEYS = [
+  'CHR-010::CTA::004',
+  'CHR-010::CTA::005',
+  'CHR-010::CTA::006',
+] as const satisfies readonly ActionKey[];
+const EMPTY_BRANCH_CACHE_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 
 /**
  * Sources: generated/spec/atlas/forms-by-id.json["APP-001"].requiredFields
@@ -142,10 +161,57 @@ export interface App004Projection extends JsonObject {
   readonly stateRevision: number;
 }
 
+export interface Chr010Projection extends JsonObject {
+  readonly ancientOptionSerialized: false;
+  readonly characterDraftId: string;
+  readonly choiceLockStatus: null;
+  readonly commandId: null;
+  readonly draftRevision: number;
+  readonly raceChoice: 'FREE' | 'PURE' | 'UNITED' | null;
+  readonly raceConsequencesPreview: null;
+  readonly wizardCheckpointId: string;
+}
+
+export type RaceChoiceDraft = Chr010Projection['raceChoice'];
+
+interface IdentityCheckpointPayload extends JsonObject {
+  readonly age: number;
+  readonly artAssetKeyOrLocalFile: IdentityDraftValues['artAssetKeyOrLocalFile'];
+  readonly characterDraftId: string;
+  readonly description: string | null;
+  readonly draftRevision: number;
+  readonly massKg: number;
+  readonly name: string;
+  readonly sex: Exclude<IdentityDraftValues['sex'], null>;
+  readonly stage: 'IDENTITY';
+  readonly wizardCheckpointId: string;
+}
+
+type IdentityCheckpointRequest = WorkflowCommandRequestMessage<
+  typeof IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+  IdentityCheckpointPayload
+>;
+
+interface IdentityCheckpointResult extends JsonObject {
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: 0;
+  readonly draftRevision: number;
+  readonly nextFormId: 'CHR-010';
+  readonly stage: 'IDENTITY';
+}
+
+interface PendingIdentityCheckpoint {
+  readonly request: IdentityCheckpointRequest;
+  readonly receipt: CommandReceipt<IdentityCheckpointResult> | null;
+}
+
 export interface ConfirmedProjectionSnapshot {
   readonly availableActionKeys: readonly ActionKey[];
   readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
-  readonly formId: 'APP-001' | 'APP-002' | 'APP-004' | 'CHR-001';
+  readonly formId: SupportedPresentationFormId;
   readonly path: string;
   readonly projection: JsonObject;
   readonly revisions: RevisionVector;
@@ -160,6 +226,11 @@ export type WebClientState =
       readonly detail: string;
       readonly kind: 'disconnected';
       readonly snapshot: ConfirmedProjectionSnapshot | null;
+    }
+  | {
+      readonly kind: 'command-refusal';
+      readonly refusal: CommandRefusalMessage['refusal'];
+      readonly snapshot: ConfirmedProjectionSnapshot;
     }
   | {
       readonly kind: 'host-refusal';
@@ -526,6 +597,44 @@ function decodeChr001Projection(
   });
 }
 
+function decodeChr010Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const characterDraftId = value['characterDraftId'];
+  return decodeProjection(value, path, {
+    ancientOptionSerialized: (field) => field === false,
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    choiceLockStatus: (field) => field === null,
+    commandId: (field) => field === null,
+    draftRevision: (field) =>
+      typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
+    raceChoice: (field) => field === null,
+    raceConsequencesPreview: (field) => field === null,
+    wizardCheckpointId: (field) =>
+      typeof field === 'string' &&
+      field.trim().length > 0 &&
+      field !== 'NONE' &&
+      field !== ZERO_UUID &&
+      field !== characterDraftId,
+  });
+}
+
+function exactActionKeys(
+  actual: readonly ActionKey[],
+  expected: readonly ActionKey[],
+  path: string,
+): DecodeResult<null> {
+  if (
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  )
+    return { ok: true, value: null };
+  return unrecognized(path, [...actual]);
+}
+
 function decodeConfirmedSnapshot(
   message: ProjectionSnapshotV2Message,
   executableWorkflowCommandIds: readonly WorkflowCommandId[],
@@ -564,10 +673,46 @@ function decodeConfirmedSnapshot(
         base.routeBindings[0]?.value,
       );
       break;
+    case 'CHR-010':
+      projection = decodeChr010Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          CHR_010_INITIAL_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
     default:
       return unrecognized('$.presentation.base.formId', base.formId);
   }
   if (!projection.ok) return projection;
+  if (
+    base.formId === 'CHR-001' &&
+    base.availableActionKeys.includes(IDENTITY_CHECKPOINT_ACTION_KEY) &&
+    !executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
+  ) {
+    return unrecognized('$.presentation.base.availableActionKeys', [...base.availableActionKeys]);
+  }
+  if (
+    base.formId === 'CHR-001' &&
+    base.availableActionKeys.includes(IDENTITY_CHECKPOINT_ACTION_KEY)
+  ) {
+    const value = projection.value;
+    if (
+      typeof value['name'] !== 'string' ||
+      typeof value['age'] !== 'number' ||
+      (value['sex'] !== 'MALE' && value['sex'] !== 'FEMALE') ||
+      typeof value['massKg'] !== 'number'
+    ) {
+      return unrecognized('$.presentation.base.availableActionKeys', [...base.availableActionKeys]);
+    }
+  }
   const common = {
     availableActionKeys: [...base.availableActionKeys],
     executableWorkflowCommandIds: [...executableWorkflowCommandIds],
@@ -618,12 +763,13 @@ function identitySnapshot(
 function visibleSnapshot(
   snapshot: ConfirmedProjectionSnapshot,
   identity: IdentityDraftClient | null,
+  checkpointPending = false,
 ): ConfirmedProjectionSnapshot {
-  return snapshot.formId === 'CHR-001' && identity?.state.dirty
+  return snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || checkpointPending)
     ? {
         ...snapshot,
         availableActionKeys: snapshot.availableActionKeys.filter(
-          (key) => key !== 'CHR-001::CTA::001',
+          (key) => key !== IDENTITY_CHECKPOINT_ACTION_KEY,
         ),
       }
     : snapshot;
@@ -678,6 +824,108 @@ function decodeFormActionSnapshot(
     return unrecognized('$.revisions', { ...message.revisions });
   }
   return decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+}
+
+function decodeCheckpointTerminal(
+  message: Extract<
+    HostToClientMessage,
+    { readonly messageType: 'command.replay' | 'command.result' }
+  >,
+  pending: PendingIdentityCheckpoint,
+): DecodeResult<CommandReceipt<IdentityCheckpointResult>> {
+  const receipt = message.receipt;
+  if (receipt.commandId !== pending.request.commandId) {
+    return unrecognized('$.receipt.commandId', receipt.commandId);
+  }
+  if (receipt.receiptId.trim().length === 0) {
+    return unrecognized('$.receipt.receiptId', receipt.receiptId);
+  }
+  const payload = pending.request.payload;
+  const result = decodeProjection(receipt.result, '$.receipt.result', {
+    branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+    characterDraftId: (field) => field === payload.characterDraftId,
+    checkpointId: (field) => field === payload.wizardCheckpointId,
+    checkpointOwnerId: (field) => field === payload.characterDraftId,
+    checkpointRevision: (field) => field === 0,
+    draftRevision: (field) => field === payload.draftRevision,
+    nextFormId: (field) => field === 'CHR-010',
+    stage: (field) => field === 'IDENTITY',
+  });
+  if (!result.ok) return result;
+  if (
+    receipt.revisions.stateRevision !== 0 ||
+    receipt.revisions.projectionRevision !== 0 ||
+    receipt.revisions.actorVisibilityRevision !== 0
+  ) {
+    return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+  }
+  return {
+    ok: true,
+    value: receipt as CommandReceipt<IdentityCheckpointResult>,
+  };
+}
+
+function sameCheckpointReceipt(
+  left: CommandReceipt<IdentityCheckpointResult>,
+  right: CommandReceipt<IdentityCheckpointResult>,
+): boolean {
+  return (
+    left.commandId === right.commandId &&
+    left.receiptId === right.receiptId &&
+    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
+      (axis) => left.revisions[axis] === right.revisions[axis],
+    ) &&
+    (Object.keys(left.result) as (keyof IdentityCheckpointResult)[]).every(
+      (key) => left.result[key] === right.result[key],
+    )
+  );
+}
+
+function checkpointSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt<IdentityCheckpointResult>,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (snapshot.formId !== 'CHR-010') {
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  }
+  const projection = snapshot.projection;
+  for (const [key, expected] of [
+    ['characterDraftId', receipt.result.characterDraftId],
+    ['wizardCheckpointId', receipt.result.checkpointId],
+    ['draftRevision', receipt.result.draftRevision],
+  ] as const) {
+    if (projection[key] !== expected) {
+      return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]!);
+    }
+  }
+  return { ok: true, value: snapshot };
+}
+
+function decodeCommandDestinationSnapshot(
+  message: ProjectionSnapshotV2Message,
+  pending: PendingIdentityCheckpoint & {
+    readonly receipt: CommandReceipt<IdentityCheckpointResult>;
+  },
+  previous: ConfirmedProjectionSnapshot,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (message.presentation.assignment.correlationId !== pending.request.commandId) {
+    return unrecognized(
+      '$.presentation.assignment.correlationId',
+      message.presentation.assignment.correlationId,
+    );
+  }
+  if (message.presentation.assignment.reason !== 'COMMAND_DESTINATION') {
+    return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
+  }
+  if (
+    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).some(
+      (axis) => message.revisions[axis] !== pending.receipt.revisions[axis],
+    )
+  ) {
+    return unrecognized('$.revisions', { ...message.revisions });
+  }
+  const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+  return decoded.ok ? checkpointSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
 }
 
 function decodeDeviceIdentity(value: unknown): DecodeResult<string> {
@@ -745,7 +993,7 @@ function diagnostic(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createRequestId(prefix: 'identity' | 'navigation' | 'reconnect'): string {
+function createRequestId(prefix: 'command' | 'identity' | 'navigation' | 'reconnect'): string {
   const entropy = crypto.getRandomValues(new Uint32Array(4));
   return `${prefix}-${[...entropy].map((value) => value.toString(16).padStart(8, '0')).join('')}`;
 }
@@ -759,21 +1007,46 @@ function envelopeProtocolVersion(source: string): unknown {
   }
 }
 
+function identityCheckpointPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+): IdentityCheckpointPayload {
+  const value = snapshot.projection;
+  return {
+    stage: 'IDENTITY',
+    characterDraftId: value['characterDraftId'] as string,
+    wizardCheckpointId: value['wizardCheckpointId'] as string,
+    draftRevision: value['draftRevision'] as number,
+    name: value['name'] as string,
+    description: value['description'] as string | null,
+    artAssetKeyOrLocalFile: value[
+      'artAssetKeyOrLocalFile'
+    ] as IdentityDraftValues['artAssetKeyOrLocalFile'],
+    age: value['age'] as number,
+    sex: value['sex'] as Exclude<IdentityDraftValues['sex'], null>,
+    massKg: value['massKg'] as number,
+  };
+}
+
 export function connectProjection(
   onState: (state: WebClientState) => void,
   onIdentityDraft: (state: IdentityDraftClientState | null) => void = () => {},
+  onRaceChoiceDraft: (value: RaceChoiceDraft) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
   let identity: IdentityDraftClient | null = null;
   let terminal = false;
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
+  let pendingCheckpoint: PendingIdentityCheckpoint | null = null;
   let pendingFormAction: FormActionIntentV2Message | null = null;
   let playerContextId: string | null = null;
+  let raceChoiceDraft: RaceChoiceDraft = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const visibleLast = () =>
-    lastSnapshot === null ? null : visibleSnapshot(lastSnapshot, identity);
+    lastSnapshot === null
+      ? null
+      : visibleSnapshot(lastSnapshot, identity, pendingCheckpoint !== null);
 
   const closeAfterTerminalState = () => {
     if (
@@ -787,6 +1060,7 @@ export function connectProjection(
   const failProtocol = (refusal: DecodeRefusal, detail: string) => {
     if (disposed || terminal) return;
     terminal = true;
+    pendingCheckpoint = null;
     pendingFormAction = null;
     stagedCapabilities = null;
     const response = {
@@ -830,6 +1104,9 @@ export function connectProjection(
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
     lastSnapshot = next;
+    if (next.formId === 'CHR-010') pendingCheckpoint = null;
+    raceChoiceDraft = null;
+    onRaceChoiceDraft(raceChoiceDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -839,7 +1116,10 @@ export function connectProjection(
       identity = new IdentityDraftClient(draft, () => createRequestId('identity'));
     else replay = identity.resumeAfterSnapshot(draft);
     onIdentityDraft(identity?.state ?? null);
-    onState({ kind: 'ready', snapshot: visibleSnapshot(next, identity) });
+    onState({
+      kind: 'ready',
+      snapshot: visibleSnapshot(next, identity, pendingCheckpoint !== null),
+    });
     sendIdentity(replay);
   };
 
@@ -898,11 +1178,73 @@ export function connectProjection(
           );
           return;
         }
-        if (decoded.value.messageType === 'protocol.refusal') {
+        const message = decoded.value;
+        if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
+          if (
+            pendingCheckpoint === null ||
+            (pendingCheckpoint.receipt !== null && message.messageType !== 'command.replay')
+          ) {
+            failUnexpected(
+              '$.messageType',
+              message.messageType,
+              'Host sent a checkpoint terminal without exactly one pending checkpoint.',
+            );
+            return;
+          }
+          const receipt = decodeCheckpointTerminal(message, pendingCheckpoint);
+          if (!receipt.ok) {
+            failProtocol(receipt.refusal, 'Host sent an invalid identity checkpoint receipt.');
+            return;
+          }
+          if (
+            pendingCheckpoint.receipt !== null &&
+            !sameCheckpointReceipt(pendingCheckpoint.receipt, receipt.value)
+          ) {
+            failUnexpected(
+              '$.receipt.receiptId',
+              receipt.value.receiptId,
+              'Host replay changed the confirmed identity checkpoint receipt.',
+            );
+            return;
+          }
+          pendingCheckpoint = { request: pendingCheckpoint.request, receipt: receipt.value };
+          if (lastSnapshot !== null && !expectingCapabilities) {
+            onState({
+              kind: 'ready',
+              snapshot: visibleSnapshot(lastSnapshot, identity, true),
+            });
+          }
+          return;
+        }
+        if (message.messageType === 'command.refusal') {
+          if (
+            pendingCheckpoint === null ||
+            pendingCheckpoint.receipt !== null ||
+            message.commandId !== pendingCheckpoint.request.commandId ||
+            lastSnapshot === null
+          ) {
+            failUnexpected(
+              '$.commandId',
+              message.commandId,
+              'Host checkpoint refusal does not match the pending checkpoint.',
+            );
+            return;
+          }
+          pendingCheckpoint = null;
+          if (!expectingCapabilities) {
+            onState({
+              kind: 'command-refusal',
+              refusal: message.refusal,
+              snapshot: visibleSnapshot(lastSnapshot, identity),
+            });
+          }
+          return;
+        }
+        if (message.messageType === 'protocol.refusal') {
           terminal = true;
           onState({
             kind: 'host-refusal',
-            refusal: decoded.value.refusal,
+            refusal: message.refusal,
             snapshot: visibleLast(),
           });
           closeAfterTerminalState();
@@ -910,7 +1252,7 @@ export function connectProjection(
         }
         failUnexpected(
           '$.messageType',
-          decoded.value.messageType,
+          message.messageType,
           'Host sent a wire v1 message that this reconnect did not request.',
         );
         return;
@@ -966,14 +1308,20 @@ export function connectProjection(
           const next = identity.receiveResult(message, draft.values);
           if (applicable) lastSnapshot = candidate.value;
           onIdentityDraft(identity.state);
-          onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+          onState({
+            kind: 'ready',
+            snapshot: visibleSnapshot(lastSnapshot, identity, pendingCheckpoint !== null),
+          });
           sendIdentity(next);
           return;
         }
         if (identity === null || lastSnapshot === null) return;
         const next = identity.receiveRefusal(message);
         onIdentityDraft(identity.state);
-        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(lastSnapshot, identity, pendingCheckpoint !== null),
+        });
         sendIdentity(next);
         return;
       }
@@ -1023,6 +1371,28 @@ export function connectProjection(
           const capabilities = stagedCapabilities!;
           stagedCapabilities = null;
           snapshot = decodeReconnectSnapshot(message, capabilities, requestId);
+          if (snapshot.ok && pendingCheckpoint !== null) {
+            if (pendingCheckpoint.receipt === null) {
+              snapshot = unrecognized('$.messageType', message.messageType);
+            } else {
+              snapshot = checkpointSnapshotMatchesReceipt(
+                snapshot.value,
+                pendingCheckpoint.receipt,
+              );
+            }
+          }
+        } else if (
+          pendingCheckpoint !== null &&
+          pendingCheckpoint.receipt !== null &&
+          lastSnapshot !== null
+        ) {
+          snapshot = decodeCommandDestinationSnapshot(
+            message,
+            pendingCheckpoint as PendingIdentityCheckpoint & {
+              readonly receipt: CommandReceipt<IdentityCheckpointResult>;
+            },
+            lastSnapshot,
+          );
         } else {
           if (stagedCapabilities !== null || pendingFormAction === null) {
             failUnexpected(
@@ -1059,7 +1429,7 @@ export function connectProjection(
         onState({
           kind: 'navigation-refusal',
           refusal: message.refusal,
-          snapshot: visibleSnapshot(lastSnapshot, identity),
+          snapshot: visibleSnapshot(lastSnapshot, identity, pendingCheckpoint !== null),
         });
         return;
       }
@@ -1106,8 +1476,9 @@ export function connectProjection(
       messageType: 'session.reconnect',
       protocolVersion: WIRE_PROTOCOL_V2_VERSION,
       reconnectRequestId: requestId,
-      supportedWorkflowCommandIds: [],
-      unacknowledgedCommandIds: [],
+      supportedWorkflowCommandIds: [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID],
+      unacknowledgedCommandIds:
+        pendingCheckpoint === null ? [] : [pendingCheckpoint.request.commandId],
     } as const satisfies SessionReconnectV2Message;
     const encoded = encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok)
@@ -1178,12 +1549,17 @@ export function connectProjection(
     },
     replaceIdentityDraft: (values) => {
       if (identity === null) return { ok: false, detail: 'no active CHR-001 draft scope' };
+      if (pendingCheckpoint !== null)
+        return { ok: false, detail: 'identity is frozen while checkpoint delivery is pending' };
       if ([values.age, values.massKg].some((value) => value !== null && !Number.isFinite(value)))
         return { ok: false, detail: 'identity draft numbers must be finite' };
       const request = identity.edit(values);
       onIdentityDraft(identity.state);
       if (lastSnapshot !== null)
-        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(lastSnapshot, identity, pendingCheckpoint !== null),
+        });
       try {
         return request === null || sendIdentity(request)
           ? { ok: true }
@@ -1199,7 +1575,16 @@ export function connectProjection(
       if (pendingFormAction !== null) {
         return { ok: false, detail: 'a form action is already awaiting host confirmation' };
       }
-      if (!visibleSnapshot(lastSnapshot, identity).availableActionKeys.includes(actionKey)) {
+      if (pendingCheckpoint !== null) {
+        return { ok: false, detail: 'the identity checkpoint is awaiting host delivery' };
+      }
+      if (
+        !visibleSnapshot(
+          lastSnapshot,
+          identity,
+          pendingCheckpoint !== null,
+        ).availableActionKeys.includes(actionKey)
+      ) {
         return {
           ok: false,
           detail: `action ${JSON.stringify(actionKey)} is absent from the confirmed availableActionKeys`,
@@ -1207,6 +1592,46 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      const selectedRace = CHR_010_SELECTOR_VALUES.get(actionKey);
+      if (lastSnapshot.formId === 'CHR-010' && selectedRace !== undefined) {
+        raceChoiceDraft = selectedRace;
+        onRaceChoiceDraft(raceChoiceDraft);
+        return { ok: true };
+      }
+      if (lastSnapshot.formId === 'CHR-001' && actionKey === IDENTITY_CHECKPOINT_ACTION_KEY) {
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload: identityCheckpointPayload(lastSnapshot),
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        } as const satisfies IdentityCheckpointRequest;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `identity checkpoint failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingCheckpoint = { receipt: null, request };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return {
+            ok: false,
+            detail: `identity checkpoint could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(lastSnapshot, identity, true),
+        });
+        return { ok: true };
       }
       const request = {
         actionKey,

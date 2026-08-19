@@ -143,6 +143,7 @@ export async function startHostApplication(
       advanceRevisions: revisions.advance,
       allocateContextId: dependencies.allocateId,
       allocateLocalCharacterId: dependencies.allocateId,
+      allocateReceiptId: dependencies.allocateId,
       allocateWizardCheckpointId: dependencies.allocateId,
       database,
       onFrameError: dependencies.onFrameError,

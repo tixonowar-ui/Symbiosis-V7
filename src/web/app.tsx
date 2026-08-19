@@ -9,6 +9,7 @@ import type {
   IdentityDraftClientState,
   IdentityDraftValues,
   ProjectionConnection,
+  RaceChoiceDraft,
   WebClientState,
 } from './ws-client.js';
 
@@ -39,6 +40,13 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
       return (
         <section role="alert" data-client-state={state.kind}>
           <h1>Переход отклонён хостом</h1>
+          <pre>{JSON.stringify(state.refusal, null, 2)}</pre>
+        </section>
+      );
+    case 'command-refusal':
+      return (
+        <section role="alert" data-client-state={state.kind}>
+          <h1>Checkpoint отклонён хостом</h1>
           <pre>{JSON.stringify(state.refusal, null, 2)}</pre>
         </section>
       );
@@ -83,6 +91,7 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
 function confirmedSnapshot(state: WebClientState): ConfirmedProjectionSnapshot | null {
   switch (state.kind) {
     case 'ready':
+    case 'command-refusal':
     case 'navigation-refusal':
     case 'disconnected':
     case 'host-refusal':
@@ -217,10 +226,11 @@ export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
+  const [raceChoiceDraft, setRaceChoiceDraft] = useState<RaceChoiceDraft>(null);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
   useEffect(() => {
-    const connection = connectProjection(setState, setIdentityDraft);
+    const connection = connectProjection(setState, setIdentityDraft, setRaceChoiceDraft);
     connectionRef.current = connection;
     return () => {
       connectionRef.current = null;
@@ -229,7 +239,10 @@ export function App(): ReactElement {
   }, []);
 
   const snapshot = confirmedSnapshot(state);
-  const interactive = state.kind === 'ready' || state.kind === 'navigation-refusal';
+  const interactive =
+    state.kind === 'ready' ||
+    state.kind === 'command-refusal' ||
+    state.kind === 'navigation-refusal';
   useEffect(() => {
     if (state.kind !== 'ready') return;
     window.history.replaceState(null, '', state.snapshot.path);
@@ -255,6 +268,15 @@ export function App(): ReactElement {
                 draft={identityDraft}
                 onChange={(values) => connectionRef.current?.replaceIdentityDraft(values)}
               />
+            ) : null}
+            {snapshot.formId === 'CHR-010' ? (
+              <section
+                aria-label="Локальный выбор расы"
+                data-race-choice-draft={raceChoiceDraft ?? 'null'}
+              >
+                <h2>Локальный выбор расы</h2>
+                <output>{raceChoiceDraft ?? 'null'}</output>
+              </section>
             ) : null}
             <AtlasForm
               availableActionKeys={snapshot.availableActionKeys}

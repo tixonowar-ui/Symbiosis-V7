@@ -215,6 +215,7 @@ describe('configured Fastify and ws host shell', () => {
   let localCharacterIdOverride: string | null = null;
   const revisionWrites: RevisionImpact[] = [];
   let revisionReads = 0;
+  let receiptSequence = 0;
   let staticRoot: string;
   let uuidSequence = 0;
   let vocabulary: ProtocolVocabulary & WireV3Vocabulary;
@@ -254,6 +255,7 @@ describe('configured Fastify and ws host shell', () => {
       allocateLocalCharacterId: () =>
         localCharacterIdOverride ??
         `10000000-0000-4000-8000-${String(++uuidSequence).padStart(12, '0')}`,
+      allocateReceiptId: () => `opaque-receipt-${String(++receiptSequence)}`,
       allocateWizardCheckpointId: () =>
         wizardCheckpointIdOverride ?? `opaque-wizard-${String(++wizardSequence)}`,
       database,
@@ -321,6 +323,7 @@ describe('configured Fastify and ws host shell', () => {
       advanceRevisions: () => CLIENT_REVISIONS,
       allocateContextId: () => '00000000-0000-4000-8000-000000000001',
       allocateLocalCharacterId: () => '10000000-0000-4000-8000-000000000001',
+      allocateReceiptId: () => 'opaque-receipt-uninitialized',
       allocateWizardCheckpointId: () => 'opaque-wizard-uninitialized',
       database: uninitializedDatabase,
       onFrameError: (error) => endpointErrors.push(error),

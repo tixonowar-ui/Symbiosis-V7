@@ -60,6 +60,14 @@
 
 ### Добавлено
 
+- Первый durable checkpoint идентичности атомарно сохраняет exact десятиполевый
+  `command.request`, закрытый envelope и receipt, после чего host отправляет
+  terminal wire v1 перед `COMMAND_DESTINATION` snapshot `CHR-010` в wire v2;
+  replay восстанавливает то же назначение после reconnect и restart. `APP-004`
+  читает локальную библиотеку при проекции и видит новый черновик без перезапуска
+  host с отдельной runtime-ревизией библиотеки. Web замораживает подтверждённую
+  идентичность, exact-декодирует initial `CHR-010`, а три выбора расы держит в
+  client-local draft без wire-трафика.
 - Поставка Atlas v1.3 добавляет обязательный `CHR-001.sex` с закрытым доменом
   `MALE|FEMALE`, переносит identity-draft на `protocolVersion=3` и задаёт
   границы массы создания `CHR-025` по расе и полу. Import/validate fail-closed

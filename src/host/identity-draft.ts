@@ -15,8 +15,9 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
 type IdentityDraftRefusal = IdentityDraftRefusalV3Message['refusal'];
 type FieldError = Extract<IdentityDraftRefusal, { readonly code: 'INVALID_FIELD' }>['error'];
-type Checked<T> =
+export type IdentityDraftValuesCheck<T = IdentityDraftValues> =
   { readonly ok: true; readonly value: T } | { readonly error: FieldError; readonly ok: false };
+type Checked<T> = IdentityDraftValuesCheck<T>;
 export interface IdentityDraftApplicationContext {
   readonly advanceProjectionRevision: () => RevisionVector;
   readonly capabilityAvailable: boolean;
@@ -141,10 +142,10 @@ function canonicalArt(
     ? { ok: true, value: { ...value } }
     : invalid({ field: 'artAssetKeyOrLocalFile', reason: 'MEDIA_SIGNATURE_MISMATCH' });
 }
-function canonicalValues(
+export function canonicalizeIdentityDraftValues(
   values: IdentityDraftValues,
   catalogKeys: ReadonlySet<string>,
-): Checked<IdentityDraftValues> {
+): IdentityDraftValuesCheck {
   const name = canonicalName(values.name);
   if (!name.ok) return name;
   const description = canonicalDescription(values.description);
@@ -234,7 +235,7 @@ export function createIdentityDraftRuntime(catalogKeys: ReadonlySet<string>) {
         expected: copy(request.expectedRevisions),
       });
     }
-    const canonical = canonicalValues(request.values, catalogKeys);
+    const canonical = canonicalizeIdentityDraftValues(request.values, catalogKeys);
     if (!canonical.ok) return refuse({ code: 'INVALID_FIELD', error: canonical.error });
     const changed = !isDeepStrictEqual(state.values, canonical.value);
     const overflowAxis = changed

@@ -35,6 +35,7 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'APP-010',
   'APP-011',
   'CHR-001',
+  'CHR-010',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -148,7 +149,7 @@ function fixtureSources({
 }
 
 describe('atlas implemented-form renderer', () => {
-  it('registers and renders all APP forms plus CHR-001 with their atlas type', () => {
+  it('registers and renders all APP forms plus CHR-001 and CHR-010 with their atlas type', () => {
     expect(IMPLEMENTED_FORM_IDS).toEqual(TEST_IMPLEMENTED_FORM_IDS);
 
     let screens = 0;
@@ -164,8 +165,8 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // Issue #33 fixes the APP inventory at nine screens and two dialogs.
-    expect(screens).toBe(10);
+    // Issue #33 fixes APP at nine screens/two dialogs; CHR-001 and CHR-010 add two screens.
+    expect(screens).toBe(11);
     expect(dialogs).toBe(2);
   });
 
@@ -255,6 +256,21 @@ describe('atlas implemented-form renderer', () => {
     expect(container.querySelector('[data-atlas-action-key="CHR-001::CTA::001"]')).toBeNull();
     expect(container.querySelector('[data-atlas-action-key="CHR-001::CTA::002"]')).toBeNull();
     expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('renders only the three source-ordered CHR-010 selectors supplied by the host', () => {
+    const { container } = renderAtlas('CHR-010', [
+      'CHR-010::CTA::004',
+      'CHR-010::CTA::005',
+      'CHR-010::CTA::006',
+    ]);
+
+    expect(values(container, 'required-field')).toHaveLength(8);
+    expect(buttons(container).map((button) => button.textContent)).toEqual([
+      'Выбрать Единого',
+      'Выбрать Вольного',
+      'Выбрать Чистого',
+    ]);
   });
 
   it('keeps dialog routes and required-field notation as inert atlas text', () => {

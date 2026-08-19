@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-19`
-- Тестов: 703, все зелёные
+- Тестов: 732, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -46,25 +46,28 @@ Shared wire v1, exact v2 navigation/reconnect и exact v3 identity-draft гот�
 `npm start` замыкает подтверждённый presentation-путь
 `APP-001 → APP-002 → CHR-001 → APP-004 → APP-002`. Первый срез identity-draft
 подтверждает на host full replacement с nullable `MALE|FEMALE` sex и
-восстанавливает outstanding update после reconnect того же mounted instance;
-новый instance принимает CHR-001 read-only.
-Continue, durable checkpoint и `CHR-010` остаются следующим срезом
-issue #97. Host сохраняет wire v1 для command/read и выдаёт role-neutral
-bootstrap; остальные прикладные слои остаются частичными, заглушками или не
-начаты.
+восстанавливает outstanding update после reconnect того же mounted instance.
+Подтверждённый Continue атомарно сохраняет exact десятиполевый первый checkpoint:
+host отправляет terminal result/replay wire v1 перед exact `CHR-010` snapshot
+wire v2, а reconnect и restart восстанавливают то же durable назначение. Локальная
+библиотека читается при каждой проекции и получает отдельную runtime-ревизию,
+поэтому сохранённый черновик виден в `APP-004` без перезапуска host. Web после
+checkpoint замораживает идентичность, а `CHR-010::CTA::004..006` меняют только
+client-local выбор расы без wire-трафика. Остальные прикладные слои остаются
+частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                     | Веха |
-| ---------------------------- | ------------ | --------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                 | M4   |
-| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже                     | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет               | M3   |
-| `src/persistence`            | **частично** | CRUD + checkpoint, список local characters, durable device identity         | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity          | M2   |
-| `src/host`                   | **частично** | `npm start`; shell revisions; v3 identity runtime с sex; checkpoint позже   | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001 initial/confirmed с sex, role filtering            | M4   |
-| `src/web`                    | **частично** | atomic reconnect, v3 identity dirty-buffer с sex, APP-001/002/004 ↔ CHR-001 | M5   |
-| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001; остальные формы и типы fail-closed                | M5   |
-| `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001                         | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                       | Веха |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                   | M4   |
+| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже                       | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                 | M3   |
+| `src/persistence`            | **частично** | CRUD, exact first identity checkpoint, local library, durable device identity | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity            | M2   |
+| `src/host`                   | **частично** | `npm start`; shell/library revisions; v3 identity; checkpoint → CHR-010       | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001/010, role filtering                           | M4   |
+| `src/web`                    | **частично** | checkpoint recovery, exact CHR-010, client-local race draft                   | M5   |
+| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001/010; остальные формы и типы fail-closed              | M5   |
+| `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001/010                       | M6   |
 
 ## generated/ — вывод конвейера
 
