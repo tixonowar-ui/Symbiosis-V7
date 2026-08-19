@@ -237,7 +237,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the atlas digests, so a swapped artifact is visible in the diff', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.3', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',

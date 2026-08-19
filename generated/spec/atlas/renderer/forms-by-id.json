@@ -1389,7 +1389,7 @@
     },
     "components": [
       "Immutable draft UUID",
-      "Name/age",
+      "Name/age/sex",
       "Positive 0.1kg mass",
       "Optional description/art picker",
       "Pending GM mass notice",
@@ -1410,6 +1410,7 @@
       "description(optional)",
       "artAssetKeyOrLocalFile(optional)",
       "age(required)",
+      "sex(required; MALE|FEMALE; mutable until IDENTITY checkpoint, immutable after)",
       "massKg(number>0; step=0.1; no invented upper bound)",
       "massApprovalStatus=PENDING_GM",
       "anatomyProfile=STANDARD_HUMANOID",
@@ -1423,7 +1424,7 @@
     "route": "/player/characters/:localCharacterId/create/chr-001",
     "states": {
       "CHECKPOINTED": "Immutable draft UUID and identity revision are durable.",
-      "IDENTITY_INCOMPLETE": "Continue is absent until name/age/positive 0.1kg mass validate.",
+      "IDENTITY_INCOMPLETE": "Continue is absent until name/age/sex/positive 0.1kg mass validate.",
       "READY_TO_CHECKPOINT": "Identity plus optional description/art can be saved.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
@@ -3077,7 +3078,7 @@
     ],
     "requiredFields": [
       "characterDraftId",
-      "identityAndMassStatus",
+      "identityAndMassStatus(sex=MALE|FEMALE frozen after IDENTITY checkpoint; inclusive creation massKg bounds by race/sex: PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg; massApprovalStatus=PENDING_GM after range validation)",
       "sevenStatsMinOne",
       "skillsAndSlotsStatus",
       "symbiontCompositionStatus",

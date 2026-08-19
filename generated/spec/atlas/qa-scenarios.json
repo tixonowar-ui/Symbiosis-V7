@@ -878,7 +878,7 @@
   {
     "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна.",
     "qaId": "QA-FORM-CHR-001",
-    "scenario": "Проверить буквальное назначение CHR-001: Создать новый атомарный characterDraft с неизменяемым UUID и сохранить имя, возраст, положительную массу с шагом 0,1 кг, необязательные описание и локальный арт; масса остаётся pending master approval до допуска. Поля: characterDraftId=characterUuid(immutable), name(required), description(optional), artAssetKeyOrLocalFile(optional), age(required), massKg(number>0; step=0.1; no invented upper bound), massApprovalStatus=PENDING_GM, anatomyProfile=STANDARD_HUMANOID, wizardCheckpointId, draftRevision, commandId. CTA: Сохранить идентичность и продолжить, Отменить новый черновик.",
+    "scenario": "Проверить буквальное назначение CHR-001: Создать новый атомарный characterDraft с неизменяемым UUID и сохранить имя, возраст, обязательный пол, положительную массу с шагом 0,1 кг, необязательные описание и локальный арт; масса остаётся pending master approval до допуска. Поля: characterDraftId=characterUuid(immutable), name(required), description(optional), artAssetKeyOrLocalFile(optional), age(required), sex(required; MALE|FEMALE; mutable until IDENTITY checkpoint, immutable after), massKg(number>0; step=0.1; no invented upper bound), massApprovalStatus=PENDING_GM, anatomyProfile=STANDARD_HUMANOID, wizardCheckpointId, draftRevision, commandId. CTA: Сохранить идентичность и продолжить, Отменить новый черновик.",
     "scope": "CHR-001"
   },
   {
@@ -1238,7 +1238,7 @@
   {
     "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна.",
     "qaId": "QA-FORM-CHR-025",
-    "scenario": "Проверить буквальное назначение CHR-025: Проверить stats≥1, навыки, состав, массу, ровно восемь имущественных операций и чистое стартовое runtime-состояние. Поля: characterDraftId, identityAndMassStatus, sevenStatsMinOne, skillsAndSlotsStatus, symbiontCompositionStatus, startingPropertyEightReceiptsStatus, cleanRuntimeState, branchCacheIntegrity, validationBlockers[], finalSaveStatus=NOT_COMMITTED|COMMITTED, wizardCheckpointId, draftRevision, commandId. CTA: Сохранить финального персонажа, Сохранить валидный черновик, Исправить идентичность или массу, Изменить расу до финального сохранения, Исправить характеристики, Исправить навыки, Исправить состав симбионтов, Исправить имущество, Проверить неизменяемый кэш веток.",
+    "scenario": "Проверить буквальное назначение CHR-025: Проверить stats≥1, навыки, состав, массу, ровно восемь имущественных операций и чистое стартовое runtime-состояние. Поля: characterDraftId, identityAndMassStatus(sex=MALE|FEMALE frozen after IDENTITY checkpoint; inclusive creation massKg bounds by race/sex: PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg; massApprovalStatus=PENDING_GM after range validation), sevenStatsMinOne, skillsAndSlotsStatus, symbiontCompositionStatus, startingPropertyEightReceiptsStatus, cleanRuntimeState, branchCacheIntegrity, validationBlockers[], finalSaveStatus=NOT_COMMITTED|COMMITTED, wizardCheckpointId, draftRevision, commandId. CTA: Сохранить финального персонажа, Сохранить валидный черновик, Исправить идентичность или массу, Изменить расу до финального сохранения, Исправить характеристики, Исправить навыки, Исправить состав симбионтов, Исправить имущество, Проверить неизменяемый кэш веток.",
     "scope": "CHR-025"
   },
   {
@@ -12194,7 +12194,7 @@
   {
     "expected": "Поздний ответ не накладывается повторно поверх senior registry; UI/handler соответствует уже собранному правилу.",
     "qaId": "QA-QNA-Q-CHAR-010-ROW-306",
-    "scenario": "Подтвердить материализацию строки Q&A в CHR-018, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?",
+    "scenario": "Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?",
     "scope": "Q-CHAR-010#row-306"
   },
   {

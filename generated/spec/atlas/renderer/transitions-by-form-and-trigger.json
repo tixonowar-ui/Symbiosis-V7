@@ -263,7 +263,7 @@
     },
     "Сохранить идентичность и продолжить": {
       "from": "CHR-001",
-      "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age present; massKg>0 at step 0.1; immutable draft UUID committed",
+      "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age/sex present; massKg>0 at step 0.1; immutable draft UUID committed",
       "kind": "workflow-command",
       "to": "CHR-010",
       "trigger": "Сохранить идентичность и продолжить"

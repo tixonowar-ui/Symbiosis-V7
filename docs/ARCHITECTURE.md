@@ -77,7 +77,7 @@ Offline-first LAN-приложение. Один процесс — **хост**
 ```
 artifacts/            read-only, в git
   registries/  10 xlsx
-  atlas/       Web UI Screen Atlas v1.2 (json + md)
+  atlas/       Atlas UI: JSON v1.3 (legacy filename v1.2) + historical md v1.2
   packs/       Runtime Pack v1.2 (zip)
   CHECKSUMS.sha256
         │
@@ -94,7 +94,9 @@ generated/            только вывод, руками не править
 
 ## Атлас как контракт UI
 
-Web UI Screen Atlas v1.2, `graphDigest` `693910e4…`:
+Web UI Screen Atlas содержит JSON-поправку v1.3 поверх baseline v1.2.
+Исторический author-supplied `graphDigest` `693910e4…` намеренно не меняется
+по [ADR 0037](adr/0037-atlas-v1-3-character-sex-and-mass-bounds.md):
 
 | Величина            | Значение |
 | ------------------- | -------: |
@@ -142,5 +144,8 @@ workflow-команд**, 167 автоматизированных способн
 
 ## Открытые вопросы
 
-Формат wire-протокола принят [ADR 0020](adr/0020-wire-protocol-and-shared-contracts.md),
-схема БД — ADR 0018. Открыта стратегия упаковки portable-сборки.
+Wire v1 для команд, wire v2 для навигации/reconnect и wire v3 для
+identity-draft сосуществуют как отдельные envelope по
+[ADR 0020](adr/0020-wire-protocol-and-shared-contracts.md) и
+[ADR 0037](adr/0037-atlas-v1-3-character-sex-and-mass-bounds.md). Схема БД
+задана ADR 0018. Открыта стратегия упаковки portable-сборки.

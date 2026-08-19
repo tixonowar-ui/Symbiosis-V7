@@ -100,7 +100,7 @@ npm run verify
 ```
 artifacts/          READ-ONLY. Поставленные артефакты. Менять запрещено
   registries/       10 xlsx — реестры, манифест, отчёт аудита
-  atlas/            Web UI Screen Atlas v1.2 (json + md) — контракт UI
+  atlas/            Atlas UI: JSON amendment v1.3 в legacy filename v1.2 + исторический md v1.2
   packs/            Runtime Pack v1.2 (zip) — заморожен побайтово
   CHECKSUMS.sha256  единственный файл, который туда пишет инструмент
 
@@ -130,7 +130,7 @@ tests/
   fixtures/         ПУСТО
 
 docs/
-  adr/              22 решения + README. Высший источник правды
+  adr/              37 решений + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

@@ -19,7 +19,7 @@ Offline-first LAN-приложение с единственным автори�
 ## 1. Источники правды и их приоритет
 
 Документы проекта стоят выше исходных артефактов разработки. Внутри артефактов
-действует порядок, объявленный самим атласом v1.2 (см.
+действует порядок базового атласа v1.2, сохранённый его JSON-поправкой v1.3 (см.
 [docs/adr/0003-source-of-truth-order.md](docs/adr/0003-source-of-truth-order.md)).
 
 | #   | Источник                                            | Что решает                                                                                                        |
@@ -28,7 +28,7 @@ Offline-first LAN-приложение с единственным автори�
 | 2   | `docs/`                                             | прочая проектная документация                                                                                     |
 | 3   | `artifacts/registries/…Delivery_Manifest_v1.2.xlsx` | состав поставки, совместимость, границы замороженных артефактов                                                   |
 | 4   | Старшие предметные реестры                          | Executable Rules, Character/Skills/Symbionts, Items, Effects/Diseases, Canonical Bestiary, Default Sentient Enemy |
-| 5   | Спецификации реализации                             | Soundtrack Registry (звук), `artifacts/atlas/` Web UI Screen Atlas v1.2 (UI)                                      |
+| 5   | Спецификации реализации                             | Soundtrack Registry (звук), `artifacts/atlas/` Web UI Screen Atlas JSON v1.3 (UI; legacy filename v1.2)           |
 | 6   | All Questions and Answers Registry                  | только если решение ещё не материализовано в старшем реестре                                                      |
 | 7   | `artifacts/packs/` Runtime Pack                     | только точные системные шаблоны и арт — **никогда** не источник новых правил                                      |
 | 8   | Cross-Registry Audit Report                         | свидетельство консистентности, **не** самостоятельный источник механик                                            |

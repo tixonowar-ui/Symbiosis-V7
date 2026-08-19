@@ -1,12 +1,13 @@
 import type {
   IdentityDraftRefusal,
-  IdentityDraftRefusalV2Message,
-  IdentityDraftReplaceV2Message,
-  IdentityDraftResultV2Message,
+  IdentityDraftRefusalV3Message,
+  IdentityDraftReplaceV3Message,
+  IdentityDraftResultV3Message,
   IdentityDraftScope,
   IdentityDraftValues,
   RevisionVector,
 } from '@shared/index.js';
+import { WIRE_PROTOCOL_V3_VERSION } from '@shared/index.js';
 export interface IdentityDraftSnapshot {
   readonly draftRevision: number;
   readonly revisions: RevisionVector;
@@ -16,7 +17,7 @@ export interface IdentityDraftSnapshot {
 export interface IdentityDraftClientState {
   readonly dirty: boolean;
   readonly lastRefusal: IdentityDraftRefusal | null;
-  readonly outstanding: IdentityDraftReplaceV2Message | null;
+  readonly outstanding: IdentityDraftReplaceV3Message | null;
   readonly widgetValues: IdentityDraftValues;
 }
 const copy = <T>(value: T): T => structuredClone(value);
@@ -42,13 +43,14 @@ const sameValues = (left: IdentityDraftValues, right: IdentityDraftValues): bool
   left.description === right.description &&
   sameArt(left.artAssetKeyOrLocalFile, right.artAssetKeyOrLocalFile) &&
   left.age === right.age &&
-  left.massKg === right.massKg;
+  left.massKg === right.massKg &&
+  left.sex === right.sex;
 export class IdentityDraftClient {
   readonly #allocateUpdateId: () => string;
   #confirmed: IdentityDraftSnapshot;
   #dirty = false;
   #lastRefusal: IdentityDraftRefusal | null = null;
-  #outstanding: IdentityDraftReplaceV2Message | null = null;
+  #outstanding: IdentityDraftReplaceV3Message | null = null;
   #widgetValues: IdentityDraftValues;
   constructor(snapshot: IdentityDraftSnapshot, allocateUpdateId: () => string) {
     this.#confirmed = copy(snapshot);
@@ -63,7 +65,7 @@ export class IdentityDraftClient {
       widgetValues: this.#widgetValues,
     });
   }
-  edit(values: IdentityDraftValues): IdentityDraftReplaceV2Message | null {
+  edit(values: IdentityDraftValues): IdentityDraftReplaceV3Message | null {
     this.#widgetValues = copy(values);
     this.#lastRefusal = null;
     const coalesced = this.#outstanding !== null;
@@ -71,9 +73,9 @@ export class IdentityDraftClient {
     return !coalesced && this.#dirty ? this.#issue() : null;
   }
   receiveResult(
-    message: IdentityDraftResultV2Message,
+    message: IdentityDraftResultV3Message,
     canonicalValues: IdentityDraftValues,
-  ): IdentityDraftReplaceV2Message | null {
+  ): IdentityDraftReplaceV3Message | null {
     const outstanding = this.#outstanding;
     if (outstanding === null || message.draftUpdateId !== outstanding.draftUpdateId) return null;
     this.#outstanding = null;
@@ -95,7 +97,7 @@ export class IdentityDraftClient {
     this.#dirty = false;
     return null;
   }
-  receiveRefusal(message: IdentityDraftRefusalV2Message): IdentityDraftReplaceV2Message | null {
+  receiveRefusal(message: IdentityDraftRefusalV3Message): IdentityDraftReplaceV3Message | null {
     const outstanding = this.#outstanding;
     if (outstanding === null || message.draftUpdateId !== outstanding.draftUpdateId) return null;
     this.#outstanding = null;
@@ -110,7 +112,7 @@ export class IdentityDraftClient {
       ? this.#issue()
       : null;
   }
-  resumeAfterSnapshot(snapshot: IdentityDraftSnapshot): IdentityDraftReplaceV2Message | null {
+  resumeAfterSnapshot(snapshot: IdentityDraftSnapshot): IdentityDraftReplaceV3Message | null {
     if (this.#outstanding !== null && sameScope(snapshot.scope, this.#confirmed.scope, false)) {
       this.#confirmed = copy(snapshot);
       return copy(this.#outstanding);
@@ -122,11 +124,11 @@ export class IdentityDraftClient {
     this.#dirty = false;
     return null;
   }
-  #issue(): IdentityDraftReplaceV2Message {
+  #issue(): IdentityDraftReplaceV3Message {
     const draftUpdateId = this.#allocateUpdateId();
     if (draftUpdateId.length === 0) throw new Error('draft update ID must be non-empty');
-    const request: IdentityDraftReplaceV2Message = {
-      protocolVersion: 2,
+    const request: IdentityDraftReplaceV3Message = {
+      protocolVersion: WIRE_PROTOCOL_V3_VERSION,
       messageType: 'character.identity-draft.replace',
       draftUpdateId,
       scope: copy(this.#confirmed.scope),

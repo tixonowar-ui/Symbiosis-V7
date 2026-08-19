@@ -188,6 +188,24 @@ function IdentityFields({
           </label>
         );
       })}
+      <label>
+        Пол{' '}
+        <select
+          data-identity-field="sex"
+          value={values.sex ?? ''}
+          onChange={(event) => {
+            const raw = event.target.value;
+            if (raw !== '' && raw !== 'MALE' && raw !== 'FEMALE') {
+              throw new Error(`unrecognized CHR-001 sex value ${JSON.stringify(raw)}`);
+            }
+            replace({ sex: raw === '' ? null : raw });
+          }}
+        >
+          <option value="">—</option>
+          <option value="MALE">MALE</option>
+          <option value="FEMALE">FEMALE</option>
+        </select>
+      </label>
       {draft.lastRefusal === null ? null : (
         <pre role="alert">{JSON.stringify(draft.lastRefusal, null, 2)}</pre>
       )}

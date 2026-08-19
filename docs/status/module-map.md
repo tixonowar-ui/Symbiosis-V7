@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-19`
-- Тестов: 678, все зелёные
+- Тестов: 703, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -20,49 +20,51 @@
 
 ## tools/ — инструменты
 
-| Модуль                   | Состояние    | Тесты    | Примечание                                                                                    |
-| ------------------------ | ------------ | -------- | --------------------------------------------------------------------------------------------- |
-| `tools/checksums`        | **готов**    | косвенно | SHA-256 манифест, гейт перед импортом. Проверен на срабатывание                               |
-| `tools/import/lib`       | **готов**    | 18       | чтение xlsx и zip, fail-closed JSON, детерминированная запись, медиа по якорям OOXML          |
-| `tools/import/atlas`     | **готов**    | 46       | 1 242 пары actionKey/label; 24/8/10 guards, 8 contracts, 106 UI-CMD, 3 renderer-индекса       |
-| `tools/import/rules`     | **готов**    | 11       | 739 карточек, 699 активных, 40 tombstone                                                      |
-| `tools/import/character` | **готов**    | 12       | 1144 payload-сущности, 9 секций XP-контракта                                                  |
-| `tools/import/items`     | **готов**    | 11       | 64 типа предметов, 64 иконки в `generated/media`                                              |
-| `tools/import/effects`   | **готов**    | 15       | 67 типов эффектов, 66 моделируемых                                                            |
-| `tools/import/bestiary`  | **готов**    | 12       | 16 видов, 17 статблоков, 16 артов                                                             |
-| `tools/import/sentient`  | **готов**    | 16       | 44 замороженных шаблона, 44 арта, Runtime Pack                                                |
-| `tools/import/portraits` | **готов**    | 9        | exact пакет из 6 портретов локального персонажа по ADR 0036                                   |
-| `tools/import/qna`       | **готов**    | 11       | 444 вопроса, 411 адресуемых кодов, алиас `Q-MON-089` по ADR 0017                              |
-| `tools/import/seed`      | **готов**    | 5        | 115 таблиц, 20 655 строк, 9 паспортов; детерминизм на SQLite 3.53.4                           |
-| `tools/validate`         | **готов**    | 29       | кросс-реестровая валидация, renderer-каталог форм, ссылки на вопросы и страж №367 ↔ `AQ2-001` |
-| `tools/traceability`     | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм                |
-| `tools/package`          | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                      |
+| Модуль                   | Состояние    | Тесты    | Примечание                                                                                |
+| ------------------------ | ------------ | -------- | ----------------------------------------------------------------------------------------- |
+| `tools/checksums`        | **готов**    | косвенно | SHA-256 манифест, гейт перед импортом. Проверен на срабатывание                           |
+| `tools/import/lib`       | **готов**    | 18       | чтение xlsx и zip, fail-closed JSON, детерминированная запись, медиа по якорям OOXML      |
+| `tools/import/atlas`     | **готов**    | 46       | Atlas v1.3; 1 242 actionKey/label; четыре зеркала формы, 106 UI-CMD, 3 renderer-индекса   |
+| `tools/import/rules`     | **готов**    | 11       | 739 карточек, 699 активных, 40 tombstone                                                  |
+| `tools/import/character` | **готов**    | 12       | 1144 payload-сущности, 9 секций XP-контракта                                              |
+| `tools/import/items`     | **готов**    | 11       | 64 типа предметов, 64 иконки в `generated/media`                                          |
+| `tools/import/effects`   | **готов**    | 15       | 67 типов эффектов, 66 моделируемых                                                        |
+| `tools/import/bestiary`  | **готов**    | 12       | 16 видов, 17 статблоков, 16 артов                                                         |
+| `tools/import/sentient`  | **готов**    | 16       | 44 замороженных шаблона, 44 арта, Runtime Pack                                            |
+| `tools/import/portraits` | **готов**    | 9        | exact пакет из 6 портретов локального персонажа по ADR 0036                               |
+| `tools/import/qna`       | **готов**    | 11       | 444 вопроса, 411 адресуемых кодов, алиас `Q-MON-089` по ADR 0017                          |
+| `tools/import/seed`      | **готов**    | 5        | 115 таблиц, 20 655 строк, 9 паспортов; детерминизм на SQLite 3.53.4                       |
+| `tools/validate`         | **готов**    | 29       | form/QA repeat-инвариант, exact guard-зеркала, renderer-каталог и кросс-реестровые ссылки |
+| `tools/traceability`     | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм            |
+| `tools/package`          | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                  |
 
 ## src/ — приложение
 
-Shared wire v1/v2, минимальный roll contract и каркас handler-реестров готовы,
-persistence реализует первый V1-срез, web собирается в self-contained статику,
-а штатный `npm start` замыкает подтверждённый presentation-путь
+Shared wire v1, exact v2 navigation/reconnect и exact v3 identity-draft готовы;
+минимальный roll contract и каркас handler-реестров также готовы. Persistence
+реализует первый V1-срез, web собирается в self-contained статику, а штатный
+`npm start` замыкает подтверждённый presentation-путь
 `APP-001 → APP-002 → CHR-001 → APP-004 → APP-002`. Первый срез identity-draft
-подтверждает full replacement на host и восстанавливает outstanding update после
-reconnect того же mounted instance; новый instance принимает CHR-001 read-only.
+подтверждает на host full replacement с nullable `MALE|FEMALE` sex и
+восстанавливает outstanding update после reconnect того же mounted instance;
+новый instance принимает CHR-001 read-only.
 Continue, durable checkpoint и `CHR-010` остаются следующим срезом
 issue #97. Host сохраняет wire v1 для command/read и выдаёт role-neutral
 bootstrap; остальные прикладные слои остаются частичными, заглушками или не
 начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                             | Веха |
-| ---------------------------- | ------------ | ------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect/identity-draft              | M4   |
-| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже             | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет       | M3   |
-| `src/persistence`            | **частично** | CRUD + checkpoint, список local characters, durable device identity | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity  | M2   |
-| `src/host`                   | **частично** | `npm start`; shell revisions; identity runtime; checkpoint позже    | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001 initial/confirmed, role filtering          | M4   |
-| `src/web`                    | **частично** | atomic reconnect, identity dirty-buffer и APP-001/002/004 ↔ CHR-001 | M5   |
-| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001; остальные формы и типы fail-closed        | M5   |
-| `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001                 | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                     | Веха |
+| ---------------------------- | ------------ | --------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                 | M4   |
+| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже                     | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет               | M3   |
+| `src/persistence`            | **частично** | CRUD + checkpoint, список local characters, durable device identity         | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity          | M2   |
+| `src/host`                   | **частично** | `npm start`; shell revisions; v3 identity runtime с sex; checkpoint позже   | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001 initial/confirmed с sex, role filtering            | M4   |
+| `src/web`                    | **частично** | atomic reconnect, v3 identity dirty-buffer с sex, APP-001/002/004 ↔ CHR-001 | M5   |
+| `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001; остальные формы и типы fail-closed                | M5   |
+| `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001                         | M6   |
 
 ## generated/ — вывод конвейера
 

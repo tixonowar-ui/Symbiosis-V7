@@ -1,6 +1,6 @@
 import type { ActionKey } from '@generated/types/atlas.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
-import type { IdentityDraftValues } from '@shared/wire-v2-protocol.js';
+import type { IdentityDraftValues } from '@shared/wire-v3-protocol.js';
 
 export const CHR_001_FORM_ID = 'CHR-001' as const;
 export const CHR_001_ROUTE = '/player/characters/:localCharacterId/create/chr-001' as const;
@@ -37,5 +37,6 @@ export function projectInitialChr001(
     description: null,
     massKg: null,
     name: null,
+    sex: null,
   });
 }

@@ -10,10 +10,13 @@ import type { RawData, WebSocket } from 'ws';
 import {
   decodeHostMessage,
   decodeHostMessageV2,
+  decodeHostMessageV3,
   encodeClientMessage,
   encodeClientMessageV2,
+  encodeClientMessageV3,
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_V2_VERSION,
+  WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
 import type {
   ClientToHostMessage,
@@ -21,12 +24,14 @@ import type {
   FormActionIntentV2Message,
   HostToClientMessage,
   HostToClientV2Message,
-  IdentityDraftReplaceV2Message,
+  HostToClientV3Message,
+  IdentityDraftReplaceV3Message,
   ProjectionReconnectMessage,
   ProtocolVocabulary,
   RevisionVector,
   SessionReconnectV2Message,
   WireV2Vocabulary,
+  WireV3Vocabulary,
 } from '@shared/index.js';
 
 import { openPersistenceDatabase } from '../persistence/database.js';
@@ -112,6 +117,15 @@ function clientTextV2(message: ClientToHostV2Message, vocabulary: WireV2Vocabula
   return encoded.text;
 }
 
+function clientTextV3(
+  message: IdentityDraftReplaceV3Message,
+  vocabulary: WireV3Vocabulary,
+): string {
+  const encoded = encodeClientMessageV3(message, vocabulary);
+  if (!encoded.ok) throw new Error(JSON.stringify(encoded.refusal));
+  return encoded.text;
+}
+
 function receiveFrames(socket: WebSocket, count: number): Promise<readonly string[]> {
   return new Promise((resolve, reject) => {
     const result: string[] = [];
@@ -183,6 +197,12 @@ function hostMessageV2(text: string, vocabulary: WireV2Vocabulary): HostToClient
   return decoded.value;
 }
 
+function hostMessageV3(text: string, vocabulary: WireV3Vocabulary): HostToClientV3Message {
+  const decoded = decodeHostMessageV3(text, vocabulary);
+  if (!decoded.ok) throw new Error(JSON.stringify(decoded.refusal));
+  return decoded.value;
+}
+
 describe('configured Fastify and ws host shell', () => {
   let app: FastifyInstance;
   let app001Bootstrap: App001Projection;
@@ -197,7 +217,7 @@ describe('configured Fastify and ws host shell', () => {
   let revisionReads = 0;
   let staticRoot: string;
   let uuidSequence = 0;
-  let vocabulary: ProtocolVocabulary & WireV2Vocabulary;
+  let vocabulary: ProtocolVocabulary & WireV3Vocabulary;
   let wizardCheckpointIdOverride: string | null = null;
   let wizardSequence = 0;
 
@@ -517,6 +537,7 @@ describe('configured Fastify and ws host shell', () => {
         'massApprovalStatus',
         'massKg',
         'name',
+        'sex',
         'wizardCheckpointId',
       ]);
       expect(payload).toMatchObject({
@@ -529,6 +550,7 @@ describe('configured Fastify and ws host shell', () => {
         massApprovalStatus: 'PENDING_GM',
         massKg: null,
         name: null,
+        sex: null,
       });
       expect(chr001.presentation.base.routeBindings).toEqual([
         { parameterIndex: 0, source: 'executor-allocated', value: payload['characterDraftId'] },
@@ -568,7 +590,7 @@ describe('configured Fastify and ws host shell', () => {
         expectedDraftRevision: 0,
         expectedRevisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
         messageType: 'character.identity-draft.replace',
-        protocolVersion: 2,
+        protocolVersion: WIRE_PROTOCOL_V3_VERSION,
         scope,
         values: {
           age: 24,
@@ -579,11 +601,49 @@ describe('configured Fastify and ws host shell', () => {
           description: null,
           massKg: 70.1,
           name: '  Alice  ',
+          // Manual portrait selection stays independent from sex until the deferred V2/V4 mapping.
+          sex: 'MALE',
         },
-      } as const satisfies IdentityDraftReplaceV2Message;
+      } as const satisfies IdentityDraftReplaceV3Message;
       response = receiveFrames(socket, 1);
       socket.send(
-        clientTextV2(
+        JSON.stringify({
+          ...identityRequest,
+          protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+          values: {
+            age: identityRequest.values.age,
+            artAssetKeyOrLocalFile: identityRequest.values.artAssetKeyOrLocalFile,
+            description: identityRequest.values.description,
+            massKg: identityRequest.values.massKg,
+            name: identityRequest.values.name,
+          },
+        }),
+      );
+      expect(hostMessage((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'protocol.refusal',
+        refusal: {
+          code: 'UNRECOGNIZED',
+          path: '$.messageType',
+          value: 'character.identity-draft.replace',
+        },
+      });
+      expect(revisionWrites).toHaveLength(2);
+      response = receiveFrames(socket, 1);
+      socket.send(
+        JSON.stringify({
+          ...identityRequest,
+          draftUpdateId: 'identity-unknown-sex',
+          values: { ...identityRequest.values, sex: 'OTHER' },
+        }),
+      );
+      expect(hostMessage((await response)[0] ?? '', vocabulary)).toMatchObject({
+        messageType: 'protocol.refusal',
+        refusal: { code: 'UNRECOGNIZED', path: '$.values.sex', value: 'OTHER' },
+      });
+      expect(revisionWrites).toHaveLength(2);
+      response = receiveFrames(socket, 1);
+      socket.send(
+        clientTextV3(
           {
             ...identityRequest,
             draftUpdateId: 'identity-invalid',
@@ -592,22 +652,28 @@ describe('configured Fastify and ws host shell', () => {
           vocabulary,
         ),
       );
-      expect(hostMessageV2((await response)[0] ?? '', vocabulary)).toMatchObject({
+      expect(hostMessageV3((await response)[0] ?? '', vocabulary)).toMatchObject({
         messageType: 'character.identity-draft.refusal',
         refusal: { code: 'INVALID_FIELD', error: { field: 'name', reason: 'NO_VISIBLE_GRAPHEME' } },
         revisions: { ...CLIENT_REVISIONS, projectionRevision: 2 },
       });
       response = receiveFrames(socket, 1);
-      socket.send(clientTextV2(identityRequest, vocabulary));
+      socket.send(clientTextV3(identityRequest, vocabulary));
       const identityText = (await response)[0] ?? '';
-      const identityResult = hostMessageV2(identityText, vocabulary);
+      const identityResult = hostMessageV3(identityText, vocabulary);
       expect(identityResult).toMatchObject({
         draftRevision: 1,
         messageType: 'character.identity-draft.result',
         presentation: {
           base: {
             availableActionKeys: ['CHR-001::CTA::002'],
-            roleFilteredPayload: { age: 24, draftRevision: 1, massKg: 70.1, name: 'Alice' },
+            roleFilteredPayload: {
+              age: 24,
+              draftRevision: 1,
+              massKg: 70.1,
+              name: 'Alice',
+              sex: 'MALE',
+            },
           },
         },
         revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
@@ -627,12 +693,15 @@ describe('configured Fastify and ws host shell', () => {
       expect(hostMessageV2(reconnectFrames[1] ?? '', vocabulary)).toMatchObject({
         messageType: 'projection.snapshot',
         presentation: {
-          base: { formId: 'CHR-001', roleFilteredPayload: { draftRevision: 1, name: 'Alice' } },
+          base: {
+            formId: 'CHR-001',
+            roleFilteredPayload: { draftRevision: 1, name: 'Alice', sex: 'MALE' },
+          },
         },
         revisions: { ...CLIENT_REVISIONS, projectionRevision: 3 },
       });
       response = receiveFrames(socket, 1);
-      socket.send(clientTextV2(identityRequest, vocabulary));
+      socket.send(clientTextV3(identityRequest, vocabulary));
       expect((await response)[0]).toBe(identityText);
       expect(revisionWrites).toHaveLength(3);
 

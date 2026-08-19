@@ -15,7 +15,7 @@
   },
   {
     "from": "APP-004",
-    "guard": "Новый immutable UUID; обязательны имя, возраст и положительная massKg 0,1; описание/арт необязательны.",
+    "guard": "Новый immutable UUID; обязательны имя, возраст, пол и положительная massKg 0,1; описание/арт необязательны.",
     "kind": "subflow",
     "to": "CHR-001",
     "trigger": "J-CHAR-CREATE::DRAFT_IDENTITY::open"
@@ -8828,7 +8828,7 @@
   },
   {
     "from": "CHR-001",
-    "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age present; massKg>0 at step 0.1; immutable draft UUID committed",
+    "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age/sex present; massKg>0 at step 0.1; immutable draft UUID committed",
     "kind": "workflow-command",
     "to": "CHR-010",
     "trigger": "Сохранить идентичность и продолжить"

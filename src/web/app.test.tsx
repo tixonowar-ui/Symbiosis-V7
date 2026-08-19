@@ -6,14 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   decodeClientMessage,
   decodeClientMessageV2,
+  decodeClientMessageV3,
   encodeHostMessage,
   encodeHostMessageV2,
+  encodeHostMessageV3,
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_V2_VERSION,
+  WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
 import type {
   HostToClientMessage,
   HostToClientV2Message,
+  HostToClientV3Message,
   ProjectionSnapshotV2Message,
   SessionReconnectCapabilitiesV2Message,
 } from '@shared/index.js';
@@ -81,6 +85,7 @@ const CHR_001_PROJECTION = {
   massApprovalStatus: 'PENDING_GM',
   massKg: null,
   name: null,
+  sex: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
 } as const;
 const APP_004_PROJECTION = {
@@ -234,6 +239,14 @@ function checkedHostTextV2(message: HostToClientV2Message): string {
   return encoded.text;
 }
 
+function checkedHostTextV3(message: HostToClientV3Message): string {
+  const encoded = encodeHostMessageV3(message, WEB_PROTOCOL_VOCABULARY);
+  if (!encoded.ok) {
+    throw new Error(`test setup: invalid host fixture ${JSON.stringify(encoded.refusal)}`);
+  }
+  return encoded.text;
+}
+
 function capabilities(
   overrides: Partial<SessionReconnectCapabilitiesV2Message> = {},
 ): SessionReconnectCapabilitiesV2Message {
@@ -327,12 +340,12 @@ function requiredElement<T extends Element>(value: T | null, label: string): T {
   return value;
 }
 
-function enter(input: HTMLInputElement, value: string): void {
-  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
-  if (descriptor?.set === undefined) throw new Error('test setup: input value setter not found');
+function select(selectElement: HTMLSelectElement, value: string): void {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  if (descriptor?.set === undefined) throw new Error('test setup: select value setter not found');
   act(() => {
-    descriptor.set!.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    descriptor.set!.call(selectElement, value);
+    selectElement.dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
 
@@ -340,6 +353,16 @@ function decodedClientMessageV2(socket: FakeWebSocket, index: number) {
   const text = socket.sent[index];
   if (text === undefined) throw new Error(`test setup: client frame ${String(index)} not sent`);
   const decoded = decodeClientMessageV2(text, WEB_PROTOCOL_VOCABULARY);
+  if (!decoded.ok) {
+    throw new Error(`test setup: invalid client frame ${JSON.stringify(decoded.refusal)}`);
+  }
+  return decoded.value;
+}
+
+function decodedClientMessageV3(socket: FakeWebSocket, index: number) {
+  const text = socket.sent[index];
+  if (text === undefined) throw new Error(`test setup: client frame ${String(index)} not sent`);
+  const decoded = decodeClientMessageV3(text, WEB_PROTOCOL_VOCABULARY);
   if (!decoded.ok) {
     throw new Error(`test setup: invalid client frame ${JSON.stringify(decoded.refusal)}`);
   }
@@ -504,7 +527,7 @@ describe('APP-001 web entry', () => {
     expect(window.location.pathname).toBe(
       `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-001`,
     );
-    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(11);
+    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(12);
     expect(container.querySelector('[data-host-field="massKg"]')?.textContent).toContain('null');
     expect(
       container.querySelector('[data-host-field="wizardCheckpointId"]')?.textContent,
@@ -514,14 +537,14 @@ describe('APP-001 web entry', () => {
       container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
     ).toBeNull();
 
-    enter(
+    select(
       requiredElement(
-        container.querySelector<HTMLInputElement>('[data-identity-field="name"]'),
-        'CHR-001 name input',
+        container.querySelector<HTMLSelectElement>('[data-identity-field="sex"]'),
+        'CHR-001 sex selector',
       ),
-      ' Alice ',
+      'FEMALE',
     );
-    const identity = decodedClientMessageV2(socket, 3);
+    const identity = decodedClientMessageV3(socket, 3);
     expect(identity).toMatchObject({
       expectedDraftRevision: 0,
       expectedRevisions: { ...REVISIONS, projectionRevision: 10 },
@@ -537,7 +560,8 @@ describe('APP-001 web entry', () => {
         artAssetKeyOrLocalFile: null,
         description: null,
         massKg: null,
-        name: ' Alice ',
+        name: null,
+        sex: 'FEMALE',
       },
     });
     if (identity.messageType !== 'character.identity-draft.replace') {
@@ -561,22 +585,22 @@ describe('APP-001 web entry', () => {
     expect(socket.sent[1]).toBe(identityText);
     deliver(
       socket,
-      checkedHostTextV2({
+      checkedHostTextV3({
         draftRevision: 1,
         draftUpdateId: identity.draftUpdateId,
         messageType: 'character.identity-draft.result',
         presentation: {
-          base: chr001Base({ ...CHR_001_PROJECTION, draftRevision: 1, name: 'Alice' }),
+          base: chr001Base({ ...CHR_001_PROJECTION, draftRevision: 1, sex: 'FEMALE' }),
           layers: [],
         },
         projectionRole: 'player',
-        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        protocolVersion: WIRE_PROTOCOL_V3_VERSION,
         revisions: { ...REVISIONS, projectionRevision: 11 },
         scope: identity.scope,
       }),
     );
-    expect(container.querySelector<HTMLInputElement>('[data-identity-field="name"]')?.value).toBe(
-      'Alice',
+    expect(container.querySelector<HTMLSelectElement>('[data-identity-field="sex"]')?.value).toBe(
+      'FEMALE',
     );
     expect(container.querySelector('[data-identity-dirty="false"]')).not.toBeNull();
 
@@ -933,6 +957,29 @@ describe('APP-001 web entry', () => {
       },
     },
     {
+      expectedPath: '$.messageType',
+      label: 'v3 identity frame before capabilities',
+      send: (socket: FakeWebSocket) => {
+        deliver(
+          socket,
+          checkedHostTextV3({
+            draftUpdateId: 'intervening-identity',
+            messageType: 'character.identity-draft.refusal',
+            presentationUnchanged: true,
+            protocolVersion: WIRE_PROTOCOL_V3_VERSION,
+            refusal: { code: 'DRAFT_UNAVAILABLE' },
+            revisions: REVISIONS,
+            scope: {
+              characterDraftId: CHARACTER_DRAFT_ID,
+              contextId: CONTEXT_ID,
+              sourceFormId: 'CHR-001',
+              wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+            },
+          }),
+        );
+      },
+    },
+    {
       expectedPath: '$.presentation.assignment.correlationId',
       label: 'correlation mismatch',
       send: (socket: FakeWebSocket) => {
@@ -997,6 +1044,37 @@ describe('APP-001 web entry', () => {
       },
     },
     {
+      expectedCode: 'INVALID_SHAPE' as const,
+      expectedPath: '$.presentation.base.roleFilteredPayload.sex',
+      label: 'CHR-001 projection without sex',
+      send: (socket: FakeWebSocket) => {
+        const value = snapshot();
+        const projection = Object.fromEntries(
+          Object.entries(CHR_001_PROJECTION).filter(([key]) => key !== 'sex'),
+        );
+        deliverPair(socket, capabilities(), {
+          ...value,
+          presentation: { ...value.presentation, base: chr001Base(projection) },
+          projectionRole: 'player',
+        });
+      },
+    },
+    {
+      expectedPath: '$.presentation.base.roleFilteredPayload.sex',
+      label: 'CHR-001 projection with unknown sex',
+      send: (socket: FakeWebSocket) => {
+        const value = snapshot();
+        deliverPair(socket, capabilities(), {
+          ...value,
+          presentation: {
+            ...value.presentation,
+            base: chr001Base({ ...CHR_001_PROJECTION, sex: 'OTHER' }),
+          },
+          projectionRole: 'player',
+        });
+      },
+    },
+    {
       expectedPath: null,
       label: 'partial action set',
       send: (socket: FakeWebSocket) => {
@@ -1010,26 +1088,29 @@ describe('APP-001 web entry', () => {
         });
       },
     },
-  ])('handles $label fail closed or as negative space', async ({ expectedPath, label, send }) => {
-    const { container, socket } = await connectClient();
-    open(socket);
+  ])(
+    'handles $label fail closed or as negative space',
+    async ({ expectedCode, expectedPath, label, send }) => {
+      const { container, socket } = await connectClient();
+      open(socket);
 
-    send(socket);
+      send(socket);
 
-    if (expectedPath === null) {
-      expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
-      expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(
-        label.startsWith('read-only') ? 1 : 3,
-      );
-      return;
-    }
-    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
-    expect(container.querySelector('[data-atlas-form-id="APP-001"]')).toBeNull();
-    expect(decodedClientMessageV1(socket, 1)).toMatchObject({
-      messageType: 'protocol.refusal',
-      refusal: { code: 'UNRECOGNIZED', path: expectedPath },
-    });
-  });
+      if (expectedPath === null) {
+        expect(container.querySelector('[data-client-state="ready"]')).not.toBeNull();
+        expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(
+          label.startsWith('read-only') ? 1 : 3,
+        );
+        return;
+      }
+      expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+      expect(container.querySelector('[data-atlas-form-id="APP-001"]')).toBeNull();
+      expect(decodedClientMessageV1(socket, 1)).toMatchObject({
+        messageType: 'protocol.refusal',
+        refusal: { code: expectedCode ?? 'UNRECOGNIZED', path: expectedPath },
+      });
+    },
+  );
 
   it.each([
     ['missing deviceId', Promise.resolve(identityResponse({}))],

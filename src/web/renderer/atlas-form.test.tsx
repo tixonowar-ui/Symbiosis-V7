@@ -250,7 +250,7 @@ describe('atlas implemented-form renderer', () => {
     const { container, onAction } = renderAtlas('CHR-001', []);
 
     expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
-    expect(values(container, 'required-field')).toHaveLength(11);
+    expect(values(container, 'required-field')).toHaveLength(12);
     expect(container.querySelector('[data-atlas-state="IDENTITY_INCOMPLETE"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-action-key="CHR-001::CTA::001"]')).toBeNull();
     expect(container.querySelector('[data-atlas-action-key="CHR-001::CTA::002"]')).toBeNull();

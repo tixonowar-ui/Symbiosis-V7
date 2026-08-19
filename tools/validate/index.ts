@@ -16,6 +16,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SPEC_DIR } from '../import/lib/paths.js';
 import {
+  validateAtlasFormQaMirrors,
+  validateChr001IdentityTextMirrors,
   validateDetailedFormIndexKeys,
   validateRendererFormCatalogue,
   validateRendererFormGraph,
@@ -183,6 +185,12 @@ if (rendererFormsById !== null && detailedFormsById !== null) {
   );
 }
 
+const formRows = rows('atlas/forms.json');
+const qaScenarioRows = rows('atlas/qa-scenarios.json');
+validateAtlasFormQaMirrors(formRows, qaScenarioRows).forEach((problem) =>
+  report(problem.file, problem.id, problem.message),
+);
+
 const effectRows = rows('effects/effect-types.json');
 const effects = checkIds('effects/effect-types.json', effectRows, 'EffectTypeID', ID.effect);
 
@@ -310,6 +318,9 @@ if (rendererFormsById !== null) {
     report(problem.file, problem.id, problem.message),
   );
 }
+validateChr001IdentityTextMirrors(formRows, rows('atlas/journeys.json'), transitionRows).forEach(
+  (problem) => report(problem.file, problem.id, problem.message),
+);
 
 const speciesReferenced = new Set(templateRows.map((row) => str(row, 'Species ID')));
 for (const id of species) {
