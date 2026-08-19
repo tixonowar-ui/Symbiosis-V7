@@ -471,7 +471,7 @@ describe('first durable identity checkpoint server path', () => {
             roleFilteredPayload: {
               ancientOptionSerialized: false,
               characterDraftId,
-              choiceLockStatus: null,
+              choiceLockStatus: 'UNLOCKED',
               commandId: null,
               draftRevision: 1,
               raceChoice: null,

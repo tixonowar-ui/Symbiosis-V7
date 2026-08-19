@@ -40,6 +40,7 @@ const LIBRARY_NAVIGATION_REQUEST_ID = 'navigation-000000150000001600000017000000
 const MENU_NAVIGATION_REQUEST_ID = 'navigation-000000190000001a0000001b0000001c';
 const IDENTITY_CHECKPOINT_COMMAND_ID = 'command-0000000d0000000e0000000f00000010';
 const IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-WIZARD-CHECKPOINT';
+const SET_DECIDE_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-CREATION-SET-DECIDE';
 const EMPTY_BRANCH_CACHE_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 const APP_001_ACTION_KEYS = [
   'APP-001::CTA::001',
@@ -103,11 +104,39 @@ const VALID_CHR_001_PROJECTION = {
 const CHR_010_PROJECTION = {
   ancientOptionSerialized: false,
   characterDraftId: CHARACTER_DRAFT_ID,
-  choiceLockStatus: null,
+  choiceLockStatus: 'UNLOCKED',
   commandId: null,
   draftRevision: 0,
   raceChoice: null,
   raceConsequencesPreview: null,
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const CHR_016_PROJECTION = {
+  characterDraftId: CHARACTER_DRAFT_ID,
+  choiceLockStatus: 'UNLOCKED',
+  commandId: null,
+  draftRevision: 1,
+  modeConsequences: null,
+  raceChoice: 'UNITED',
+  symbiontAcquisitionMode: null,
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const CHR_036_PROJECTION = {
+  appliesToAllCreationRolls: true,
+  characterDraftId: CHARACTER_DRAFT_ID,
+  choiceLockStatus: 'UNLOCKED',
+  commandId: null,
+  diceInputMode: null,
+  draftRevision: 2,
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const CHR_002_PROJECTION = {
+  characterDraftId: CHARACTER_DRAFT_ID,
+  choiceLockStatus: 'UNLOCKED',
+  commandId: null,
+  draftRevision: 3,
+  methodConsequences: null,
+  statMethod: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
 } as const;
 const ENTITY_REVISIONS = {
@@ -306,7 +335,10 @@ function capabilities(
   overrides: Partial<SessionReconnectCapabilitiesV2Message> = {},
 ): SessionReconnectCapabilitiesV2Message {
   return {
-    executableWorkflowCommandIds: [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID],
+    executableWorkflowCommandIds: [
+      IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+      SET_DECIDE_WORKFLOW_COMMAND_ID,
+    ],
     messageType: 'session.reconnect.capabilities',
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
     reconnectRequestId: REQUEST_ID,
@@ -377,6 +409,142 @@ const chr010Base = (): ProjectionSnapshotV2Message['presentation']['base'] => ({
   routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
   routeTemplate: '/player/characters/:localCharacterId/create/chr-010',
 });
+
+const chr016Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] = CHR_016_PROJECTION,
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: ['CHR-016::CTA::003', 'CHR-016::CTA::004'],
+  formId: 'CHR-016',
+  formType: 'screen',
+  roleFilteredPayload: projection,
+  routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-016',
+});
+
+const chr036Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] = CHR_036_PROJECTION,
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: ['CHR-036::CTA::004', 'CHR-036::CTA::005'],
+  formId: 'CHR-036',
+  formType: 'screen',
+  roleFilteredPayload: projection,
+  routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-036',
+});
+
+const chr002Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] = CHR_002_PROJECTION,
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'],
+  formId: 'CHR-002',
+  formType: 'screen',
+  roleFilteredPayload: projection,
+  routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-002',
+});
+
+type SetDecisionFixture =
+  | {
+      readonly diceInputMode: 'AUTO' | 'MANUAL';
+      readonly nextFormId: 'CHR-002';
+      readonly sourceFormId: 'CHR-036';
+    }
+  | {
+      readonly nextFormId: 'CHR-016' | 'CHR-036';
+      readonly raceChoice: 'FREE' | 'PURE' | 'UNITED';
+      readonly sourceFormId: 'CHR-010';
+    }
+  | {
+      readonly nextFormId: 'CHR-036';
+      readonly sourceFormId: 'CHR-016';
+      readonly symbiontAcquisitionMode: 'MANUAL' | 'RANDOM';
+    };
+
+function entityRevisions(revision: number) {
+  return {
+    actorVisibilityRevision: 0,
+    projectionRevision: revision,
+    stateRevision: revision,
+  } as const;
+}
+
+function setDecisionTerminal(
+  commandId: string,
+  decision: SetDecisionFixture,
+  checkpointRevision: number,
+  draftRevision: number,
+  replay = false,
+): Extract<HostToClientMessage, { readonly messageType: 'command.replay' | 'command.result' }> {
+  const common = {
+    branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    checkpointId: WIZARD_CHECKPOINT_ID,
+    checkpointOwnerId: CHARACTER_DRAFT_ID,
+    checkpointRevision,
+    draftRevision,
+    nextFormId: decision.nextFormId,
+    sourceFormId: decision.sourceFormId,
+    stage: 'RACE_AND_METHOD',
+  } as const;
+  const result =
+    decision.sourceFormId === 'CHR-010'
+      ? { ...common, raceChoice: decision.raceChoice }
+      : decision.sourceFormId === 'CHR-016'
+        ? { ...common, symbiontAcquisitionMode: decision.symbiontAcquisitionMode }
+        : { ...common, diceInputMode: decision.diceInputMode };
+  const receipt = {
+    commandId,
+    receiptId: `set-decision-receipt-${String(checkpointRevision)}`,
+    result,
+    revisions: entityRevisions(checkpointRevision),
+  };
+  return replay
+    ? {
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        messageType: 'command.replay',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      }
+    : {
+        lifecycleState: 'COMMITTED',
+        messageType: 'command.result',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      };
+}
+
+function setDecisionDestinationSnapshot(
+  commandId: string,
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  revision: number,
+): ProjectionSnapshotV2Message {
+  return {
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment: { correlationId: commandId, reason: 'COMMAND_DESTINATION' },
+      base,
+      layers: [],
+    },
+    projectionRole: 'player',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions: entityRevisions(revision),
+  };
+}
+
+function reconnectWizardSnapshot(
+  reconnectRequestId: string,
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  revision: number,
+): ProjectionSnapshotV2Message {
+  return {
+    ...setDecisionDestinationSnapshot(reconnectRequestId, base, revision),
+    presentation: {
+      assignment: { correlationId: reconnectRequestId, reason: 'RECONNECT' },
+      base,
+      layers: [],
+    },
+  };
+}
 
 function checkpointTerminal(
   commandId: string,
@@ -458,11 +626,13 @@ function deliverPair(
   deliver(socket, checkedHostTextV2(snapshotMessage));
 }
 
-async function connectToValidChr001(): Promise<ConnectedClient> {
+async function connectToValidChr001(
+  capabilityMessage: SessionReconnectCapabilitiesV2Message = capabilities(),
+): Promise<ConnectedClient> {
   const connection = await connectClient();
   const { container, socket } = connection;
   open(socket);
-  deliverPair(socket);
+  deliverPair(socket, capabilityMessage);
   act(() => {
     requiredElement(
       container.querySelector<HTMLButtonElement>('[data-atlas-action="Игрок"]'),
@@ -505,6 +675,24 @@ async function connectToValidChr001(): Promise<ConnectedClient> {
       ),
     ),
   );
+  return connection;
+}
+
+async function connectToChr010(
+  capabilityMessage: SessionReconnectCapabilitiesV2Message = capabilities(),
+): Promise<ConnectedClient> {
+  const connection = await connectToValidChr001(capabilityMessage);
+  const { container, socket } = connection;
+  act(() => {
+    requiredElement(
+      container.querySelector<HTMLButtonElement>(
+        '[data-atlas-action="Сохранить идентичность и продолжить"]',
+      ),
+      'CHR-001 Continue action',
+    ).click();
+  });
+  deliver(socket, checkedHostTextV1(checkpointTerminal(IDENTITY_CHECKPOINT_COMMAND_ID)));
+  deliver(socket, checkedHostTextV2(commandDestinationSnapshot(IDENTITY_CHECKPOINT_COMMAND_ID)));
   return connection;
 }
 
@@ -597,7 +785,10 @@ describe('APP-001 web entry', () => {
       messageType: 'session.reconnect',
       protocolVersion: WIRE_PROTOCOL_V2_VERSION,
       reconnectRequestId: REQUEST_ID,
-      supportedWorkflowCommandIds: [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID],
+      supportedWorkflowCommandIds: [
+        IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        SET_DECIDE_WORKFLOW_COMMAND_ID,
+      ],
       unacknowledgedCommandIds: [],
     });
     expect(decodeClientMessage(socket.sent[0] ?? '', WEB_PROTOCOL_VOCABULARY)).toMatchObject({
@@ -1340,7 +1531,7 @@ describe('APP-001 web entry', () => {
       container.querySelector('[data-host-field="raceConsequencesPreview"]')?.textContent,
     ).toContain('null');
     expect(container.querySelector('[data-host-field="choiceLockStatus"]')?.textContent).toContain(
-      'null',
+      'UNLOCKED',
     );
 
     const sentBeforeRaceChoices = socket.sent.length;
@@ -1359,8 +1550,455 @@ describe('APP-001 web entry', () => {
       expect(container.querySelector('[data-host-field="raceChoice"]')?.textContent).toContain(
         'null',
       );
+      const expectedConfirmation = choice === 'PURE' ? 'CHR-010::CTA::002' : 'CHR-010::CTA::001';
+      expect(
+        container.querySelector(`[data-atlas-action-key="${expectedConfirmation}"]`),
+      ).not.toBeNull();
+      expect(
+        container.querySelector(
+          `[data-atlas-action-key="${
+            expectedConfirmation === 'CHR-010::CTA::001' ? 'CHR-010::CTA::002' : 'CHR-010::CTA::001'
+          }"]`,
+        ),
+      ).toBeNull();
       expect(socket.sent).toHaveLength(sentBeforeRaceChoices);
     }
+  });
+
+  it('walks CHR-010 through CHR-016 and CHR-036 to local-only CHR-002', async () => {
+    const { container, socket } = await connectToChr010();
+
+    const sentBeforeRace = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Выбрать Единого"]'),
+        'CHR-010 UNITED selector',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(sentBeforeRace);
+    expect(container.querySelector('[data-character-creation-choice]')?.textContent).toContain(
+      'UNITED',
+    );
+    expect(container.querySelector('[data-character-creation-consequence]')?.textContent).toBe(
+      'Выбрать Единого',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить Единого или Вольного"]',
+        ),
+        'CHR-010 confirmation',
+      ).click();
+    });
+    const raceRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(raceRequest).toEqual({
+      commandId: raceRequest.messageType === 'command.request' ? raceRequest.commandId : '',
+      commandKind: 'workflow-command',
+      expectedRevisions: ENTITY_REVISIONS,
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: CHARACTER_DRAFT_ID,
+        draftRevision: 0,
+        raceChoice: 'UNITED',
+        sourceFormId: 'CHR-010',
+        stage: 'RACE_AND_METHOD',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      protocolVersion: WIRE_PROTOCOL_VERSION,
+      role: 'player',
+      workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+    });
+    if (raceRequest.messageType !== 'command.request') throw new Error('missing race command');
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          raceRequest.commandId,
+          { nextFormId: 'CHR-016', raceChoice: 'UNITED', sourceFormId: 'CHR-010' },
+          1,
+          1,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(setDecisionDestinationSnapshot(raceRequest.commandId, chr016Base(), 1)),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-016"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-016`,
+    );
+    const sentBeforeAcquisition = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Выбрать ручное получение симбионтов"]',
+        ),
+        'CHR-016 MANUAL selector',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(sentBeforeAcquisition);
+    expect(container.querySelector('[data-character-creation-consequence]')?.textContent).toBe(
+      'Выбрать ручное получение симбионтов',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить способ получения симбионтов"]',
+        ),
+        'CHR-016 confirmation',
+      ).click();
+    });
+    const acquisitionRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(acquisitionRequest).toMatchObject({
+      commandKind: 'workflow-command',
+      expectedRevisions: entityRevisions(1),
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: CHARACTER_DRAFT_ID,
+        draftRevision: 1,
+        sourceFormId: 'CHR-016',
+        stage: 'RACE_AND_METHOD',
+        symbiontAcquisitionMode: 'MANUAL',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+    });
+    if (acquisitionRequest.messageType !== 'command.request') {
+      throw new Error('missing acquisition command');
+    }
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          acquisitionRequest.commandId,
+          {
+            nextFormId: 'CHR-036',
+            sourceFormId: 'CHR-016',
+            symbiontAcquisitionMode: 'MANUAL',
+          },
+          2,
+          2,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(acquisitionRequest.commandId, chr036Base(), 2),
+      ),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-036"]')).not.toBeNull();
+    const sentBeforeDice = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Выбрать автоматические броски"]',
+        ),
+        'CHR-036 AUTO selector',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(sentBeforeDice);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить режим дайсов создания"]',
+        ),
+        'CHR-036 confirmation',
+      ).click();
+    });
+    const diceRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(diceRequest).toMatchObject({
+      expectedRevisions: entityRevisions(2),
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: CHARACTER_DRAFT_ID,
+        diceInputMode: 'AUTO',
+        draftRevision: 2,
+        sourceFormId: 'CHR-036',
+        stage: 'RACE_AND_METHOD',
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      },
+      workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+    });
+    if (diceRequest.messageType !== 'command.request') throw new Error('missing dice command');
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          diceRequest.commandId,
+          { diceInputMode: 'AUTO', nextFormId: 'CHR-002', sourceFormId: 'CHR-036' },
+          3,
+          3,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(setDecisionDestinationSnapshot(diceRequest.commandId, chr002Base(), 3)),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-002"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-002`,
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-002::CTA::001"]')).toBeNull();
+    const sentAtMethodBoundary = socket.sent.length;
+    for (const [label, value] of [
+      ['Выбрать классический метод', 'CLASSIC'],
+      ['Выбрать авантюристский метод', 'ADVENTUROUS'],
+      ['Выбрать «Всё или ничего»', 'ALL_OR_NOTHING'],
+    ] as const) {
+      act(() => {
+        requiredElement(
+          container.querySelector<HTMLButtonElement>(`[data-atlas-action="${label}"]`),
+          `CHR-002 ${value} selector`,
+        ).click();
+      });
+      expect(container.querySelector('[data-character-creation-choice]')?.textContent).toContain(
+        value,
+      );
+      expect(container.querySelector('[data-atlas-action-key="CHR-002::CTA::001"]')).toBeNull();
+      expect(socket.sent).toHaveLength(sentAtMethodBoundary);
+    }
+  });
+
+  it('routes PURE directly from CHR-010 to CHR-036 without a synthetic CHR-016 step', async () => {
+    const { container, socket } = await connectToChr010();
+    const sentBeforePure = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Выбрать Чистого"]'),
+        'CHR-010 PURE selector',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(sentBeforePure);
+    expect(container.querySelector('[data-atlas-action-key="CHR-010::CTA::001"]')).toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Подтвердить Чистого"]'),
+        'CHR-010 PURE confirmation',
+      ).click();
+    });
+    const raceRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (raceRequest.messageType !== 'command.request') throw new Error('missing PURE command');
+    expect(raceRequest.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 0,
+      raceChoice: 'PURE',
+      sourceFormId: 'CHR-010',
+      stage: 'RACE_AND_METHOD',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          raceRequest.commandId,
+          { nextFormId: 'CHR-036', raceChoice: 'PURE', sourceFormId: 'CHR-010' },
+          1,
+          1,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(
+          raceRequest.commandId,
+          chr036Base({ ...CHR_036_PROJECTION, draftRevision: 1 }),
+          1,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-016"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-036"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-036`,
+    );
+    expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(2);
+  });
+
+  it('replays SET-DECIDE after its receipt arrived but the signed destination was lost', async () => {
+    const { container, socket } = await connectToChr010();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Выбрать Единого"]'),
+        'CHR-010 UNITED selector',
+      ).click();
+    });
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить Единого или Вольного"]',
+        ),
+        'CHR-010 confirmation',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing race command');
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          request.commandId,
+          { nextFormId: 'CHR-016', raceChoice: 'UNITED', sourceFormId: 'CHR-010' },
+          1,
+          1,
+        ),
+      ),
+    );
+    act(() => socket.serverClose(1006, 'SET-DECIDE destination lost'));
+    act(() => requiredElement(container.querySelector('button'), 'reconnect action').click());
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect request');
+    expect(reconnect.unacknowledgedCommandIds).toEqual([request.commandId]);
+
+    deliver(
+      resumedSocket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          request.commandId,
+          { nextFormId: 'CHR-016', raceChoice: 'UNITED', sourceFormId: 'CHR-010' },
+          1,
+          1,
+          true,
+        ),
+      ),
+    );
+    deliverPair(
+      resumedSocket,
+      capabilities({
+        reconnectRequestId: reconnect.reconnectRequestId,
+        revisions: entityRevisions(1),
+      }),
+      reconnectWizardSnapshot(reconnect.reconnectRequestId, chr016Base(), 1),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-016"]')).not.toBeNull();
+  });
+
+  it('keeps a historic SET-DECIDE receipt while accepting the latest forward destination', async () => {
+    const { container, socket } = await connectToChr010();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Выбрать Единого"]'),
+        'CHR-010 UNITED selector',
+      ).click();
+    });
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить Единого или Вольного"]',
+        ),
+        'CHR-010 confirmation',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing race command');
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          request.commandId,
+          { nextFormId: 'CHR-016', raceChoice: 'UNITED', sourceFormId: 'CHR-010' },
+          1,
+          1,
+          true,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(
+          request.commandId,
+          chr002Base({ ...CHR_002_PROJECTION, draftRevision: 3 }),
+          3,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-002"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-002`,
+    );
+  });
+
+  it('refuses a historic SET-DECIDE replay that claims an impossible forward delta', async () => {
+    const { container, socket } = await connectToChr010();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Выбрать Единого"]'),
+        'CHR-010 UNITED selector',
+      ).click();
+    });
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Подтвердить Единого или Вольного"]',
+        ),
+        'CHR-010 confirmation',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing race command');
+    deliver(
+      socket,
+      checkedHostTextV1(
+        setDecisionTerminal(
+          request.commandId,
+          { nextFormId: 'CHR-016', raceChoice: 'UNITED', sourceFormId: 'CHR-010' },
+          1,
+          1,
+          true,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(
+          request.commandId,
+          chr002Base({ ...CHR_002_PROJECTION, draftRevision: 2 }),
+          2,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-002"]')).toBeNull();
+    expect(decodedClientMessageV1(socket, socket.sent.length - 1)).toMatchObject({
+      messageType: 'protocol.refusal',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.draftRevision' },
+    });
+  });
+
+  it('keeps confirmation absent when SET-DECIDE capability was not advertised', async () => {
+    const { container, socket } = await connectToChr010(
+      capabilities({ executableWorkflowCommandIds: [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID] }),
+    );
+    const sentBeforeChoice = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action="Выбрать Единого"]'),
+        'CHR-010 UNITED selector',
+      ).click();
+    });
+
+    expect(container.querySelector('[data-character-creation-choice]')?.textContent).toContain(
+      'UNITED',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-010::CTA::001"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-010::CTA::002"]')).toBeNull();
+    expect(socket.sent).toHaveLength(sentBeforeChoice);
   });
 
   it.each([

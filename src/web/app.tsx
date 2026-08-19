@@ -8,12 +8,12 @@ import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
   App001Projection,
+  CharacterCreationChoiceDraft,
   ConfirmedProjectionSnapshot,
   FormActionRequestResult,
   IdentityDraftClientState,
   IdentityDraftValues,
   ProjectionConnection,
-  RaceChoiceDraft,
   WebClientState,
 } from './ws-client.js';
 
@@ -63,7 +63,7 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
     case 'command-refusal':
       return (
         <section role="alert" data-client-state={state.kind}>
-          <h1>Checkpoint отклонён хостом</h1>
+          <h1>Шаг создания отклонён хостом</h1>
           <pre>{JSON.stringify(state.refusal, null, 2)}</pre>
         </section>
       );
@@ -425,12 +425,13 @@ export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
-  const [raceChoiceDraft, setRaceChoiceDraft] = useState<RaceChoiceDraft>(null);
+  const [creationChoiceDraft, setCreationChoiceDraft] =
+    useState<CharacterCreationChoiceDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
   useEffect(() => {
-    const connection = connectProjection(setState, setIdentityDraft, setRaceChoiceDraft);
+    const connection = connectProjection(setState, setIdentityDraft, setCreationChoiceDraft);
     connectionRef.current = connection;
     return () => {
       connectionRef.current = null;
@@ -453,6 +454,8 @@ export function App(): ReactElement {
           (actionKey) => actionKey !== CHR_001_CHECKPOINT_ACTION_KEY,
         )
       : snapshot?.availableActionKeys;
+  const activeCreationChoice =
+    creationChoiceDraft?.formId === snapshot?.formId ? creationChoiceDraft : null;
   return (
     <>
       <ConnectionBanner state={state} />
@@ -482,13 +485,34 @@ export function App(): ReactElement {
                 onFileReadPendingChange={setCharacterArtReadPending}
               />
             ) : null}
-            {snapshot.formId === 'CHR-010' ? (
+            {snapshot.formId === 'CHR-010' ||
+            snapshot.formId === 'CHR-016' ||
+            snapshot.formId === 'CHR-036' ||
+            snapshot.formId === 'CHR-002' ? (
               <section
-                aria-label="Локальный выбор расы"
-                data-race-choice-draft={raceChoiceDraft ?? 'null'}
+                aria-label={
+                  snapshot.formId === 'CHR-010'
+                    ? 'Локальный выбор расы'
+                    : 'Локальный выбор этапа создания'
+                }
+                data-character-creation-choice={activeCreationChoice?.value ?? 'null'}
+                data-character-creation-choice-form={snapshot.formId}
+                data-race-choice-draft={
+                  snapshot.formId === 'CHR-010'
+                    ? (activeCreationChoice?.value ?? 'null')
+                    : undefined
+                }
               >
-                <h2>Локальный выбор расы</h2>
-                <output>{raceChoiceDraft ?? 'null'}</output>
+                <h2>
+                  {snapshot.formId === 'CHR-010'
+                    ? 'Локальный выбор расы'
+                    : 'Локальный выбор этапа создания'}
+                </h2>
+                <output>{activeCreationChoice?.value ?? 'null'}</output>
+                {activeCreationChoice?.consequence === null ||
+                activeCreationChoice?.consequence === undefined ? null : (
+                  <p data-character-creation-consequence>{activeCreationChoice.consequence}</p>
+                )}
               </section>
             ) : null}
             <AtlasForm

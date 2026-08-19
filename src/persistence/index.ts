@@ -4,6 +4,7 @@ export { openPersistenceDatabase } from './database.js';
 export { applyMigrations } from './migrations/index.js';
 export {
   advanceRevisions,
+  commitLocalCharacterCheckpoint,
   commitNewLocalCharacterCheckpoint,
   listLocalCharacters,
   loadLocalCharacterCheckpoint,

@@ -46,3 +46,26 @@ describe('CHR-010 web form registry', () => {
     ]);
   });
 });
+
+describe('SET-DECIDE web form registry', () => {
+  it.each([
+    [
+      'CHR-016',
+      '/player/characters/:localCharacterId/create/chr-016',
+      ['CHR-016::CTA::003', 'CHR-016::CTA::004'],
+    ],
+    [
+      'CHR-036',
+      '/player/characters/:localCharacterId/create/chr-036',
+      ['CHR-036::CTA::004', 'CHR-036::CTA::005'],
+    ],
+    [
+      'CHR-002',
+      '/player/characters/:localCharacterId/create/chr-002',
+      ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'],
+    ],
+  ] as const)('publishes the exact %s route and initial selectors', (formId, route, keys) => {
+    expect(presentedFormDefinition(formId)?.route).toBe(route);
+    expect(availableFormActions(formId, keys).map(({ actionKey }) => actionKey)).toEqual(keys);
+  });
+});

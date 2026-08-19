@@ -51,12 +51,51 @@ describe('CHR-010 web protocol vocabulary', () => {
     ).toBe(false);
   });
 
-  it('recognizes six source actions but only the checkpoint workflow command', () => {
+  it('recognizes six source actions and only the two implemented workflow commands', () => {
     for (let index = 1; index <= 6; index += 1) {
       const actionKey = `CHR-010::CTA::${String(index).padStart(3, '0')}`;
       expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey('CHR-010', actionKey), actionKey).toBe(true);
     }
     expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CHAR-WIZARD-CHECKPOINT')).toBe(true);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CHAR-CREATION-SET-DECIDE')).toBe(
+      true,
+    );
     expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-CREATE')).toBe(false);
   });
+});
+
+describe('SET-DECIDE web protocol vocabulary', () => {
+  const binding = [
+    {
+      parameterIndex: 0,
+      source: 'inherited' as const,
+      value: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    },
+  ];
+
+  it.each([
+    ['CHR-016', '/player/characters/:localCharacterId/create/chr-016', 4],
+    ['CHR-036', '/player/characters/:localCharacterId/create/chr-036', 5],
+    ['CHR-002', '/player/characters/:localCharacterId/create/chr-002', 5],
+  ] as const)(
+    'accepts only the exact inherited %s route and source actions',
+    (formId, route, count) => {
+      expect(WEB_PROTOCOL_VOCABULARY.isPresentedForm(formId, 'screen', route, binding)).toBe(true);
+      expect(
+        WEB_PROTOCOL_VOCABULARY.isPresentedForm(formId, 'screen', route, [
+          { ...binding[0]!, source: 'executor-allocated' },
+        ]),
+      ).toBe(false);
+      for (let index = 1; index <= count; index += 1) {
+        const actionKey = `${formId}::CTA::${String(index).padStart(3, '0')}`;
+        expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey(formId, actionKey), actionKey).toBe(true);
+      }
+      expect(
+        WEB_PROTOCOL_VOCABULARY.isFormActionKey(
+          formId,
+          `${formId}::CTA::${String(count + 1).padStart(3, '0')}`,
+        ),
+      ).toBe(false);
+    },
+  );
 });

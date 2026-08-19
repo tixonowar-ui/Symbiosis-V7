@@ -70,6 +70,14 @@
 
 ### Добавлено
 
+- `UI-CMD-CHAR-CREATION-SET-DECIDE` атомарно фиксирует выбор расы, способ
+  получения симбионтов и режим ввода кубов в append-only checkpoint envelope,
+  повышает только entity/checkpoint revisions и подписывает точную следующую
+  форму. Web сохраняет selectors client-local и показывает только подходящий
+  capability-gated confirm. Обычная ветвь проходит
+  `CHR-010 → CHR-016 → CHR-036 → CHR-002`, а `PURE` доказуемо пропускает
+  `CHR-016` без synthetic receipt. Метод характеристик на `CHR-002` остаётся
+  local-only до атомарного среза `CHR-003` с первым addressed set request.
 - `CHR-001` заменяет ручной ввод ключа арта точным списком шести заглушек и
   файловым выбором PNG/JPEG: тип выводится из сигнатуры, bytes уходят как
   canonical padded base64, повторный выбор заменяет арт, а снятие возвращает
