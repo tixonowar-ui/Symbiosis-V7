@@ -68,8 +68,9 @@
 | [0034](0034-chr-010-initial-projection.md)                | Начальная проекция `CHR-010`         | принято                                     |
 | [0035](0035-identity-draft-name-refusals.md)              | Отказы имени identity draft          | принято; envelope version заменена 0037     |
 | [0036](0036-local-character-portrait-catalog.md)          | Каталог портретов `CHR-001`          | принято; sex-premise заменена 0037          |
-| [0037](0037-atlas-v1-3-character-sex-and-mass-bounds.md)  | Пол персонажа и границы массы        | принято; источник зеркал уточнён 0038       |
+| [0037](0037-atlas-v1-3-character-sex-and-mass-bounds.md)  | Пол персонажа и границы массы        | принято; зеркала 0038; md companion 0039    |
 | [0038](0038-remove-redundant-atlas-forms-array.md)        | Удаление избыточного массива форм    | принято                                     |
+| [0039](0039-atlas-markdown-companion-v1-3.md)             | Markdown-компаньон Atlas v1.3        | принято                                     |
 
 ## Перенос решений аудита
 

@@ -1,5 +1,5 @@
 /**
- * Cross-registry validation over generated/spec.
+ * Cross-registry validation over generated/spec plus explicit artifact guards.
  *
  *   npm run validate
  *
@@ -14,8 +14,10 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { SPEC_DIR } from '../import/lib/paths.js';
+import { ARTIFACT, SPEC_DIR } from '../import/lib/paths.js';
 import {
+  ATLAS_MARKDOWN_FILE,
+  validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
   validateDetailedFormIndexKeys,
@@ -321,6 +323,18 @@ if (rendererFormsById !== null) {
 validateChr001IdentityTextMirrors(formRows, rows('atlas/journeys.json'), transitionRows).forEach(
   (problem) => report(problem.file, problem.id, problem.message),
 );
+
+try {
+  validateAtlasMarkdownIdentityTextMirrors(readFileSync(ARTIFACT.atlasMd, 'utf8')).forEach(
+    (problem) => report(problem.file, problem.id, problem.message),
+  );
+} catch (cause) {
+  report(
+    ATLAS_MARKDOWN_FILE,
+    '-',
+    `cannot read Atlas Markdown companion: ${cause instanceof Error ? cause.message : ''}`,
+  );
+}
 
 const speciesReferenced = new Set(templateRows.map((row) => str(row, 'Species ID')));
 for (const id of species) {

@@ -100,7 +100,7 @@ npm run verify
 ```
 artifacts/          READ-ONLY. Поставленные артефакты. Менять запрещено
   registries/       10 xlsx — реестры, манифест, отчёт аудита
-  atlas/            Atlas UI: JSON amendment v1.3 в legacy filename v1.2 + исторический md v1.2
+  atlas/            Atlas UI: JSON и Markdown amendment v1.3 в legacy-файлах v1.2
   packs/            Runtime Pack v1.2 (zip) — заморожен побайтово
   CHECKSUMS.sha256  единственный файл, который туда пишет инструмент
 
@@ -120,7 +120,7 @@ src/                приложение. Сквозной срез APP-001 ес
 tools/
   import/           artifacts → generated. РАБОТАЕТ, 10 модулей
   checksums/        SHA-256 манифест артефактов. РАБОТАЕТ
-  validate/         кросс-реестровая валидация generated/spec. РАБОТАЕТ
+  validate/         кросс-реестровая валидация generated/spec + literal guard md. РАБОТАЕТ
   traceability/     генератор матрицы покрытия. РАБОТАЕТ, гейт в verify
   package/          portable-сборка. ПУСТО
 
@@ -130,7 +130,7 @@ tests/
   fixtures/         ПУСТО
 
 docs/
-  adr/              38 решений + README. Высший источник правды
+  adr/              39 решений + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия
