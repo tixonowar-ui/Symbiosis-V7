@@ -72,11 +72,46 @@ permissions:
 # exercising the one that does. Worse, the pressure was paid in agent effort:
 # work was split at boundaries the task did not have, purely to fit.
 #
-# The ceilings below keep the shape and raise the additive room: 4000 code and
-# 3000 test additions, against observed maxima of 1488 and 1195. Deletions
-# double to 800 and 400, still well under a module rewrite but no longer
-# punishing an authorised generalisation like #100's navigation switch (-99) or
-# #92's (-203). Code files go to 40 against an observed 20.
+# That round set 4000 code and 3000 test additions, against observed maxima of
+# 1488 and 1195, and doubled deletions to 800 and 400 so an authorised
+# generalisation like #100's navigation switch (-99) or #92's (-203) stopped
+# being punished. Code files went to 40 against an observed 20. Those numbers
+# were superseded on 2026-08-20; the reasoning is kept because the fourth round
+# rests on it.
+#
+# Fourth round, issue #123, measured the 14 most recent first-parent merges plus
+# the pending #121:
+#
+#   PR    code added/deleted    tests added/deleted
+#   #119           3866/105              2447/59
+#   #121           3679/614              2383/110
+#   #116           2884/135              2181/40
+#   #97            1771/131              1906/15
+#   #102           1454/116              1195/44
+#   #106           1240/466               691/87
+#
+# Code additions ran at 92-97% of their ceiling twice in a row while review
+# found nothing the ceiling would have caught. Two things changed since the
+# third round. First, deletions finally exercised their budget: 614 of 800, and
+# they came from generalisation the task specification asked for in writing,
+# not from rewriting — the guard started pressing on the change the project
+# wants. Second, and decisive: the author of #121 reported weighing whether
+# review findings would still fit. A size guard must not be in the room when
+# someone decides whether a correctness fix ships.
+#
+# The ceilings below therefore go to 5500 code additions against an observed
+# 3866, and 1500 code deletions against an observed 614. The multiplier is
+# smaller than the third round's 2.7x on purpose: the binding constraint is no
+# longer how much can be written but how much can be read closely in one
+# review, and ~6000 hand-written lines is the measured edge of that.
+#
+# MAX_TEST_ADDED is removed rather than raised. Tests earned a separate budget
+# so they would stop crowding out code, and the separation alone achieves that.
+# A remaining ceiling only makes an author weigh whether the test for a fix
+# fits, which is the exact cost the split was meant to remove; "too many tests"
+# has never been a reason to fail a PR here. Test deletions keep their limit,
+# because deleting a test is how a red build turns green — that is the one
+# signal this bucket exists to catch.
 #
 # generated/ is excluded entirely: a re-imported artifact legitimately rewrites
 # megabytes, and that is pipeline output, not hand-written work.
@@ -100,10 +135,9 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          MAX_CODE_ADDED: 4000
-          MAX_CODE_DELETED: 800
+          MAX_CODE_ADDED: 5500
+          MAX_CODE_DELETED: 1500
           MAX_CODE_FILES: 40
-          MAX_TEST_ADDED: 3000
           MAX_TEST_DELETED: 400
           MAX_DOC_LINES: 3000
           MAX_ARTIFACT_LINES: 2000
@@ -158,7 +192,7 @@ jobs:
           doc_lines=$7; artifact_lines=$8; total_files=$9
 
           echo "code:  $code_files files (limit $MAX_CODE_FILES), +$code_added (limit $MAX_CODE_ADDED), -$code_deleted (limit $MAX_CODE_DELETED)"
-          echo "tests: $test_files files, +$test_added (limit $MAX_TEST_ADDED), -$test_deleted (limit $MAX_TEST_DELETED)"
+          echo "tests: $test_files files, +$test_added (no limit), -$test_deleted (limit $MAX_TEST_DELETED)"
           echo "docs:  $doc_lines lines (limit $MAX_DOC_LINES)"
           echo "artifacts: $artifact_lines lines (limit $MAX_ARTIFACT_LINES)"
           echo "total: $total_files files (limit $MAX_TOTAL_FILES)"
@@ -169,7 +203,6 @@ jobs:
           [ "$code_files" -gt "$MAX_CODE_FILES" ] && over="$over code-files"
           [ "$code_added" -gt "$MAX_CODE_ADDED" ] && over="$over code-added"
           [ "$code_deleted" -gt "$MAX_CODE_DELETED" ] && over="$over code-deleted"
-          [ "$test_added" -gt "$MAX_TEST_ADDED" ] && over="$over test-added"
           [ "$test_deleted" -gt "$MAX_TEST_DELETED" ] && over="$over test-deleted"
           [ "$doc_lines" -gt "$MAX_DOC_LINES" ] && over="$over doc-lines"
           [ "$artifact_lines" -gt "$MAX_ARTIFACT_LINES" ] && over="$over artifact-lines"
