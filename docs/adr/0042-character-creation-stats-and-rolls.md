@@ -250,9 +250,10 @@ receipt после miss/cap, пропуск index, duplicate request/receipt и�
 append-only. Post-method payload добавляет один exact `statRollStage` с
 immutable branch/method/mode/attempt/request, optional set record, ordered
 queue, confirmation records и derived outcomes. Top-level latest
-`request/receipt/nextStageEnvelope` совпадают с последней actual mutation.
-Lookup command ID сканирует IDENTITY, decision records, set record и все
-confirmation records; duplicate в разных местах — corruption.
+`receipt/nextStageEnvelope` совпадают с последней actual mutation; latest
+request остаётся внутри соответствующего immutable record, откуда его выводит
+validated view. Lookup command ID сканирует IDENTITY, decision records, set
+record и все confirmation records; duplicate в разных местах — corruption.
 
 `branchCacheEntries`, `selectedBranchUuidOrNull` и `branchCacheHash` остаются
 exact empty contract ADR 0033/0041: этот slice не определяет non-empty cache

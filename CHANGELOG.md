@@ -73,6 +73,13 @@
 
 ### Добавлено
 
+- `UI-CMD-CHAR-CREATION-ROLL-COMMIT` атомарно фиксирует первый показ набора из
+  семи D20 и по одному подтверждению натуральной критической цепочки. Метод на
+  `CHR-002` создаёт адресованные branch/set request и ведёт на `CHR-003`;
+  `AUTO` использует host RNG, `MANUAL` принимает только exact D20, а restart,
+  reconnect, replay, refresh, Back и смена ветви не создают новый результат.
+  Срез завершается actionless на `CHR-003` без критов либо на `CHR-004` после
+  всей очереди; формы решения `CHR-005`–`CHR-009` остаются fail-closed.
 - `UI-CMD-CHAR-CREATION-SET-DECIDE` атомарно фиксирует выбор расы, способ
   получения симбионтов и режим ввода кубов в append-only checkpoint envelope,
   повышает только entity/checkpoint revisions и подписывает точную следующую

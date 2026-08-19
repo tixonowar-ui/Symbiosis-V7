@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-19`
-- Тестов: 779, все зелёные
+- Тестов: 858, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -58,21 +58,24 @@ placeholder либо локальный PNG/JPEG по сигнатуре, доп
 показывает host-отказ как ошибку поля. `SET-DECIDE` затем сохраняет три
 append-only решения и проводит normal path через `CHR-016`, `CHR-036` до
 initial `CHR-002`; `PURE` host-authoritatively минует `CHR-016`. Селекторы
-метода на `CHR-002` local-only до отдельного atomic `CHR-003` slice. Остальные
-прикладные слои остаются частичными, заглушками или не начаты.
+метода на `CHR-002` local-only до подтверждения: оно атомарно создаёт первый
+addressed set request и открывает `CHR-003`. Первый показ семи D20 и очередь
+подтверждений натуральных `1/20` durable и необратимы; текущий срез завершается
+actionless на `CHR-003` либо `CHR-004`, не публикуя формы решения `CHR-005`–`CHR-009`.
+Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                    | Веха |
-| ---------------------------- | ------------ | -------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                | M4   |
-| `src/domain/rules`           | **частично** | typed-реестры, skill-stage, CHR-004/009; handlers позже                    | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет              | M3   |
-| `src/persistence`            | **частично** | CRUD, identity + append-only decision checkpoint, library, device identity | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity         | M2   |
-| `src/host`                   | **частично** | shell/library revisions; identity; SET-DECIDE до initial CHR-002           | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001/002/010/016/036, role filtering            | M4   |
-| `src/web`                    | **частично** | checkpoint recovery, local choices до CHR-002, CHR-001 art picker          | M5   |
-| `src/web/renderer`           | **частично** | 16 форм: 11 APP и CHR-001/002/010/016/036; остальные fail-closed           | M5   |
-| `src/web/forms`              | **частично** | APP domain; presentations APP-001/002/004 и CHR-001/002/010/016/036        | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                            | Веха |
+| ---------------------------- | ------------ | ------------------------------------------------------------------ | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft        | M4   |
+| `src/domain/rules`           | **частично** | набор характеристик, очередь критов, skill-stage; решения позже    | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет      | M3   |
+| `src/persistence`            | **частично** | CRUD, append-only wizard/roll checkpoint, library, device identity | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity | M2   |
+| `src/host`                   | **частично** | identity, SET-DECIDE и durable rolls до CHR-003/004                | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001/002/003/004/010/016/036            | M4   |
+| `src/web`                    | **частично** | recovery, выборы и броски до CHR-003/004, выбор арта               | M5   |
+| `src/web/renderer`           | **частично** | 18 форм: 11 APP и 7 CHR; остальные fail-closed                     | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и семи CHR                  | M6   |
 
 ## generated/ — вывод конвейера
 

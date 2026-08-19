@@ -226,6 +226,9 @@ describe('first durable identity checkpoint server path', () => {
     const start = async (): Promise<FastifyInstance> => {
       const app = await createHost({
         advanceRevisions: runtime.advance,
+        allocateCreationBranchUuid: () =>
+          `20000000-0000-4000-8000-${String(++allocatorSequence).padStart(12, '0')}`,
+        allocateCreationRollRequestId: () => `creation-roll-${String(++allocatorSequence)}`,
         allocateContextId: () =>
           `00000000-0000-4000-8000-${String(++allocatorSequence).padStart(12, '0')}`,
         allocateLocalCharacterId: () =>
@@ -236,6 +239,7 @@ describe('first durable identity checkpoint server path', () => {
         onFrameError: (error) => frameErrors.push(error),
         projectRoot: PROJECT_ROOT,
         readRevisions: runtime.read,
+        sampleCreationD20: () => 10,
         staticRoot,
       });
       await startHost(app, { interface: '127.0.0.1', port: 0 });
@@ -725,6 +729,9 @@ describe('first durable identity checkpoint server path', () => {
         }
         return runtime.advance(impact);
       },
+      allocateCreationBranchUuid: () =>
+        `40000000-0000-4000-8000-${String(++allocatorSequence).padStart(12, '0')}`,
+      allocateCreationRollRequestId: () => `creation-roll-failure-${String(++allocatorSequence)}`,
       allocateContextId: () =>
         `20000000-0000-4000-8000-${String(++allocatorSequence).padStart(12, '0')}`,
       allocateLocalCharacterId: () =>
@@ -738,6 +745,7 @@ describe('first durable identity checkpoint server path', () => {
       },
       projectRoot: PROJECT_ROOT,
       readRevisions: runtime.read,
+      sampleCreationD20: () => 10,
       staticRoot,
     });
     await startHost(app, { interface: '127.0.0.1', port: 0 });
@@ -890,6 +898,8 @@ describe('first durable identity checkpoint server path', () => {
     const errors: unknown[] = [];
     const app = await createHost({
       advanceRevisions: runtime.advance,
+      allocateCreationBranchUuid: () => '20000000-0000-4000-8000-000000000001',
+      allocateCreationRollRequestId: () => 'creation-roll-refusal',
       allocateContextId: () => '00000000-0000-4000-8000-000000000001',
       allocateLocalCharacterId: () => '10000000-0000-4000-8000-000000000001',
       allocateReceiptId: () => 'receipt-refusal',
@@ -898,6 +908,7 @@ describe('first durable identity checkpoint server path', () => {
       onFrameError: (error) => errors.push(error),
       projectRoot: PROJECT_ROOT,
       readRevisions: runtime.read,
+      sampleCreationD20: () => 10,
       staticRoot,
     });
     await startHost(app, { interface: '127.0.0.1', port: 0 });

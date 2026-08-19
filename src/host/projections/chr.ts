@@ -118,8 +118,61 @@ export const CHR_002_INITIAL_ACTION_KEYS = [
   'CHR-002::CTA::004',
   'CHR-002::CTA::005',
 ] as const satisfies readonly ActionKey[];
-/** CHR-002 confirmation also creates CHR-003's first addressed set, outside this vertical. */
-export const CHR_002_SET_DECIDE_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+export const CHR_002_CONFIRM_ACTION_KEY = 'CHR-002::CTA::001' as const satisfies ActionKey;
+/** ADR 0042 creates CHR-003's first addressed set in the same method transaction. */
+export const CHR_002_SET_DECIDE_ACTION_KEYS = [
+  CHR_002_CONFIRM_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+
+export const CHR_003_FORM_ID = 'CHR-003' as const;
+export const CHR_003_ROUTE = '/player/characters/:localCharacterId/create/chr-003' as const;
+/** Source: forms-by-id.json["CHR-003"].requiredFields. */
+export const CHR_003_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'statMethod',
+  'attemptIndex',
+  'diceInputModeSnapshot=AUTO|MANUAL',
+  'setRollRequestId',
+  'faces[7]OrManualInputs[7]',
+  'setRollReceiptIdOrNull',
+  'naturalCriticalQueue[]',
+  'shownResultLocked',
+  'branchUuid',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+export const CHR_003_SAFE_RETURN_ACTION_KEY = 'CHR-003::CTA::001' as const satisfies ActionKey;
+export const CHR_003_ROLL_COMMIT_ACTION_KEY = 'CHR-003::CTA::002' as const satisfies ActionKey;
+/** Safe return stays capability-excluded until its reverse durable contract exists. */
+export const CHR_003_REQUEST_ACTION_KEYS = [
+  CHR_003_ROLL_COMMIT_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const CHR_003_COMMITTED_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+
+export const CHR_004_FORM_ID = 'CHR-004' as const;
+export const CHR_004_ROUTE = '/player/characters/:localCharacterId/create/chr-004' as const;
+/** Source: forms-by-id.json["CHR-004"].requiredFields. */
+export const CHR_004_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'setRollReceiptId',
+  'criticalQueueIndex',
+  'originFace=1|20',
+  'confirmationRollRequestId',
+  'diceInputModeSnapshot=AUTO|MANUAL',
+  'confirmationFaceOrNull',
+  'confirmationReceiptIdOrNull',
+  'returnDecisionFormId(server-signed)=CHR-005|CHR-006|CHR-007|CHR-008',
+  'branchUuid',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+export const CHR_004_ROLL_COMMIT_ACTION_KEY = 'CHR-004::CTA::001' as const satisfies ActionKey;
+export const CHR_004_PENDING_ACTION_KEYS = [
+  CHR_004_ROLL_COMMIT_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const CHR_004_COMPLETE_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
 
 export const SET_DECIDE_ACTION_KEYS_BY_FORM = {
   [CHR_002_FORM_ID]: CHR_002_SET_DECIDE_ACTION_KEYS,
@@ -129,10 +182,94 @@ export const SET_DECIDE_ACTION_KEYS_BY_FORM = {
 } as const;
 
 export const SET_DECIDE_CAPABLE_FORM_IDS = [
+  CHR_002_FORM_ID,
   CHR_010_FORM_ID,
   CHR_016_FORM_ID,
   CHR_036_FORM_ID,
 ] as const;
+
+export interface NaturalCriticalQueueItem extends JsonObject {
+  readonly originFace: 1 | 20;
+  readonly setEntryIndex: number;
+}
+
+export interface Chr003ProjectionValues {
+  readonly attemptIndex: number;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly diceInputModeSnapshot: DiceInputMode;
+  readonly draftRevision: number;
+  readonly facesOrManualInputs: readonly (number | null)[];
+  readonly naturalCriticalQueue: readonly NaturalCriticalQueueItem[];
+  readonly setRollReceiptId: string | null;
+  readonly setRollRequestId: string;
+  readonly shownResultLocked: boolean;
+  readonly statMethod: StatMethod;
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr004ProjectionValues {
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly confirmationFace: number | null;
+  readonly confirmationReceiptId: string | null;
+  readonly confirmationRollRequestId: string;
+  readonly criticalQueueIndex: number;
+  readonly diceInputModeSnapshot: DiceInputMode;
+  readonly draftRevision: number;
+  readonly originFace: 1 | 20;
+  readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
+  readonly setRollReceiptId: string;
+  readonly wizardCheckpointId: string;
+}
+
+function assertSevenFaceSlots(values: readonly (number | null)[]): void {
+  if (
+    values.length !== 7 ||
+    values.some(
+      (value) => value !== null && (!Number.isSafeInteger(value) || value < 1 || value > 20),
+    )
+  ) {
+    throw new Error('CHR-003 facesOrManualInputs must contain exactly seven null or 1..20 slots');
+  }
+}
+
+export function projectChr003(values: Chr003ProjectionValues): JsonObject {
+  assertSevenFaceSlots(values.facesOrManualInputs);
+  return {
+    attemptIndex: values.attemptIndex,
+    branchUuid: values.branchUuid,
+    characterDraftId: values.characterDraftId,
+    commandId: null,
+    diceInputModeSnapshot: values.diceInputModeSnapshot,
+    draftRevision: values.draftRevision,
+    facesOrManualInputs: [...values.facesOrManualInputs],
+    naturalCriticalQueue: values.naturalCriticalQueue.map((item) => ({ ...item })),
+    setRollReceiptId: values.setRollReceiptId,
+    setRollRequestId: values.setRollRequestId,
+    shownResultLocked: values.shownResultLocked,
+    statMethod: values.statMethod,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+export function projectChr004(values: Chr004ProjectionValues): JsonObject {
+  return {
+    branchUuid: values.branchUuid,
+    characterDraftId: values.characterDraftId,
+    commandId: null,
+    confirmationFace: values.confirmationFace,
+    confirmationReceiptId: values.confirmationReceiptId,
+    confirmationRollRequestId: values.confirmationRollRequestId,
+    criticalQueueIndex: values.criticalQueueIndex,
+    diceInputModeSnapshot: values.diceInputModeSnapshot,
+    draftRevision: values.draftRevision,
+    originFace: values.originFace,
+    returnDecisionFormId: values.returnDecisionFormId,
+    setRollReceiptId: values.setRollReceiptId,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
 
 export function projectChr001(
   characterDraftId: string,

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { mkdir, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
@@ -141,6 +141,8 @@ export async function startHostApplication(
     const revisions = createShellRevisionTracker();
     app = await dependencies.createHost({
       advanceRevisions: revisions.advance,
+      allocateCreationBranchUuid: dependencies.allocateId,
+      allocateCreationRollRequestId: dependencies.allocateId,
       allocateContextId: dependencies.allocateId,
       allocateLocalCharacterId: dependencies.allocateId,
       allocateReceiptId: dependencies.allocateId,
@@ -149,6 +151,7 @@ export async function startHostApplication(
       onFrameError: dependencies.onFrameError,
       projectRoot: config.projectRoot,
       readRevisions: revisions.read,
+      sampleCreationD20: () => randomInt(1, 21),
       staticRoot: config.staticRoot,
     });
     const address = await dependencies.startHost(app, {

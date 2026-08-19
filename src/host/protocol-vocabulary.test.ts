@@ -35,9 +35,11 @@ describe('host protocol vocabulary implemented presentation support', () => {
     expect(vocabulary.isFormActionKey('APP-004', 'APP-004::CTA::009')).toBe(false);
   });
 
-  it('accepts the four exact inherited character-decision routes and source action vocabularies', () => {
+  it('accepts the six exact inherited character routes and source action vocabularies', () => {
     const forms = [
       { actionCount: 5, formId: 'CHR-002', routeSuffix: 'chr-002' },
+      { actionCount: 2, formId: 'CHR-003', routeSuffix: 'chr-003' },
+      { actionCount: 1, formId: 'CHR-004', routeSuffix: 'chr-004' },
       { actionCount: 6, formId: 'CHR-010', routeSuffix: 'chr-010' },
       { actionCount: 4, formId: 'CHR-016', routeSuffix: 'chr-016' },
       { actionCount: 5, formId: 'CHR-036', routeSuffix: 'chr-036' },
@@ -84,9 +86,10 @@ describe('host protocol vocabulary implemented presentation support', () => {
     ).toBe(false);
   });
 
-  it('recognizes SET-DECIDE for command decoding without making CHR-002 confirmation executable', () => {
+  it('recognizes both creation workflow commands and exposes CHR-002 confirmation', () => {
     expect(vocabulary.isWorkflowCommandId('UI-CMD-CHAR-CREATION-SET-DECIDE')).toBe(true);
+    expect(vocabulary.isWorkflowCommandId('UI-CMD-CHAR-CREATION-ROLL-COMMIT')).toBe(true);
     expect(vocabulary.isFormActionKey('CHR-002', 'CHR-002::CTA::001')).toBe(true);
-    expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual([]);
+    expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-002::CTA::001']);
   });
 });

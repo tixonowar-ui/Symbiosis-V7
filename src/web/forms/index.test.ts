@@ -69,3 +69,17 @@ describe('SET-DECIDE web form registry', () => {
     expect(availableFormActions(formId, keys).map(({ actionKey }) => actionKey)).toEqual(keys);
   });
 });
+
+describe('ROLL-COMMIT web form registry', () => {
+  it.each([
+    [
+      'CHR-003',
+      '/player/characters/:localCharacterId/create/chr-003',
+      ['CHR-003::CTA::001', 'CHR-003::CTA::002'],
+    ],
+    ['CHR-004', '/player/characters/:localCharacterId/create/chr-004', ['CHR-004::CTA::001']],
+  ] as const)('publishes the exact %s route and Atlas actions', (formId, route, keys) => {
+    expect(presentedFormDefinition(formId)?.route).toBe(route);
+    expect(availableFormActions(formId, keys).map(({ actionKey }) => actionKey)).toEqual(keys);
+  });
+});

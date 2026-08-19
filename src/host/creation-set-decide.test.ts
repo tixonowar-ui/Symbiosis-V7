@@ -400,18 +400,46 @@ describe('RACE_AND_METHOD SET-DECIDE durable command', () => {
     expect(dice.raceAndMethodStage?.decisionRecords).toHaveLength(2);
   });
 
-  it('recognizes CHR-002 structurally but guard-closes it without a durable write', () => {
+  it('commits CHR-002 atomically with its branch and first set request', () => {
     const database = memoryDatabase();
     const { dice } = committedUnitedPath(database);
     const request = methodRequest(dice);
     expect(normalizeCreationSetDecideRequest(request)).toEqual(request);
-    expect(refusalFrom(() => commitCreationSetDecide(database, request, 'receipt-method'))).toEqual(
-      {
-        code: 'GUARD_REJECTED',
-      },
+    const method = commitCreationSetDecide(database, request, 'receipt-method', {
+      allocateBranchUuid: () => 'stats-branch',
+      allocateRollRequestId: () => 'set-roll-request',
+    });
+    expect(method.receipt.result).toMatchObject({
+      branchUuid: 'stats-branch',
+      checkpointRevision: 4,
+      draftRevision: 4,
+      nextFormId: 'CHR-003',
+      setRollRequestId: 'set-roll-request',
+      statMethod: 'CLASSIC',
+    });
+    expect(method.statRollStage).toEqual({
+      attemptIndex: 1,
+      branchUuid: 'stats-branch',
+      confirmationRecords: [],
+      confirmationRollRequestIdOrNull: null,
+      criticalQueueIndexOrNull: null,
+      diceInputModeSnapshot: 'AUTO',
+      naturalCriticalQueue: [],
+      outcomes: [],
+      returnDecisionFormId: 'CHR-005',
+      setRecord: null,
+      setRollRequestId: 'set-roll-request',
+      statMethod: 'CLASSIC',
+      state: 'REQUEST_READY',
+    });
+    expect(method.raceAndMethodStage?.statMethod).toEqual({
+      choiceLockStatus: 'UNLOCKED',
+      consequences: 'Выбрать классический метод',
+      value: 'CLASSIC',
+    });
+    expect(loadCreationWizardCommandByCommandId(database, request.commandId)?.receipt).toEqual(
+      method.receipt,
     );
-    expect(loadCreationWizardCheckpoint(database, IDENTITY_PAYLOAD.characterDraftId)).toEqual(dice);
-    expect(loadCreationWizardCommandByCommandId(database, request.commandId)).toBeNull();
   });
 
   it('refuses stale, wrong-owner, wrong-order, duplicate-command, and duplicate-receipt writes', () => {

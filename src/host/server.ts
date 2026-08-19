@@ -49,6 +49,14 @@ import type { RevisionImpact } from '../persistence/index.js';
 import { createIdentityDraftRuntime } from './identity-draft.js';
 import type { IdentityDraftRuntime } from './identity-draft.js';
 import {
+  commitCreationRoll,
+  CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+  CreationRollCommitApplicationError,
+  normalizeCreationRollCommitRequest,
+  preflightCreationRoll,
+} from './creation-roll-commit.js';
+import type { CreationRollCommitCommandRequest } from './creation-set-decide.js';
+import {
   commitCreationSetDecide,
   CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
   CreationSetDecideApplicationError,
@@ -99,6 +107,14 @@ import {
   CHR_002_FORM_ID,
   CHR_002_INITIAL_ACTION_KEYS,
   CHR_002_ROUTE,
+  CHR_003_FORM_ID,
+  CHR_003_COMMITTED_ACTION_KEYS,
+  CHR_003_REQUEST_ACTION_KEYS,
+  CHR_003_ROUTE,
+  CHR_004_FORM_ID,
+  CHR_004_COMPLETE_ACTION_KEYS,
+  CHR_004_PENDING_ACTION_KEYS,
+  CHR_004_ROUTE,
   CHR_010_FORM_ID,
   CHR_010_INITIAL_ACTION_KEYS,
   CHR_010_ROUTE,
@@ -109,6 +125,8 @@ import {
   CHR_036_INITIAL_ACTION_KEYS,
   CHR_036_ROUTE,
   projectChr001,
+  projectChr003,
+  projectChr004,
   projectInitialChr001,
   projectInitialChr002,
   projectInitialChr010,
@@ -118,6 +136,8 @@ import {
 
 export interface HostServerConfig {
   readonly advanceRevisions: (impact: RevisionImpact) => RevisionVector;
+  readonly allocateCreationBranchUuid: () => string;
+  readonly allocateCreationRollRequestId: () => string;
   readonly allocateContextId: () => string;
   readonly allocateLocalCharacterId: () => string;
   readonly allocateReceiptId: () => string;
@@ -126,6 +146,7 @@ export interface HostServerConfig {
   readonly onFrameError: (error: unknown) => void;
   readonly projectRoot: string;
   readonly readRevisions: () => RevisionVector;
+  readonly sampleCreationD20: () => number;
   readonly staticRoot: string;
 }
 
@@ -154,6 +175,8 @@ interface ConfirmedNavigationContext {
     | 'APP-002'
     | 'APP-004'
     | typeof CHR_002_FORM_ID
+    | typeof CHR_003_FORM_ID
+    | typeof CHR_004_FORM_ID
     | typeof CHR_001_FORM_ID
     | typeof CHR_010_FORM_ID
     | typeof CHR_016_FORM_ID
@@ -181,6 +204,8 @@ interface LibraryRevisionRuntime {
 }
 interface NavigationDependencies {
   readonly advanceRevisions: HostServerConfig['advanceRevisions'];
+  readonly allocateCreationBranchUuid: HostServerConfig['allocateCreationBranchUuid'];
+  readonly allocateCreationRollRequestId: HostServerConfig['allocateCreationRollRequestId'];
   readonly allocateContextId: HostServerConfig['allocateContextId'];
   readonly allocateLocalCharacterId: HostServerConfig['allocateLocalCharacterId'];
   readonly allocateReceiptId: HostServerConfig['allocateReceiptId'];
@@ -193,6 +218,7 @@ interface NavigationDependencies {
   readonly libraryRevision: LibraryRevisionRuntime;
   readonly onFrameError: HostServerConfig['onFrameError'];
   readonly readRevisions: HostServerConfig['readRevisions'];
+  readonly sampleCreationD20: HostServerConfig['sampleCreationD20'];
   readonly vocabulary: HostVocabulary;
 }
 interface NavigationSuccess {
@@ -264,7 +290,10 @@ function allocatedWizardCheckpointId(allocator: () => string, characterDraftId: 
 
 function allocatedReceiptId(
   allocator: () => string,
-  request: CreationSetDecideCommandRequest | IdentityCheckpointCommandRequest,
+  request:
+    | CreationRollCommitCommandRequest
+    | CreationSetDecideCommandRequest
+    | IdentityCheckpointCommandRequest,
 ): string {
   const value: unknown = allocator();
   if (
@@ -293,7 +322,6 @@ function creationRequestMatchesCheckpoint(
 ): boolean {
   const identity = checkpoint.identityStage.request.payload;
   return (
-    request.payload.sourceFormId !== CHR_002_FORM_ID &&
     checkpoint.nextStageEnvelope.formId === request.payload.sourceFormId &&
     request.payload.characterDraftId === identity.characterDraftId &&
     request.payload.wizardCheckpointId === identity.wizardCheckpointId &&
@@ -603,7 +631,9 @@ function adoptNavigationContext(
     next.formId === CHR_010_FORM_ID ||
     next.formId === CHR_016_FORM_ID ||
     next.formId === CHR_036_FORM_ID ||
-    next.formId === CHR_002_FORM_ID
+    next.formId === CHR_002_FORM_ID ||
+    next.formId === CHR_003_FORM_ID ||
+    next.formId === CHR_004_FORM_ID
   ) {
     dependencies.identitySessions.set(next.deviceId, next);
   }
@@ -656,7 +686,131 @@ function identityCheckpointBase(checkpoint: DurableIdentityCheckpoint): Presente
   };
 }
 
-function creationWizardBase(checkpoint: DurableCreationWizardCheckpoint): PresentedBaseForm {
+function creationStatRollStage(checkpoint: DurableCreationWizardCheckpoint) {
+  const stage = checkpoint.statRollStage;
+  if (stage === null) {
+    throw new Error(
+      `durable ${checkpoint.nextStageEnvelope.formId} destination has no statRollStage`,
+    );
+  }
+  return stage;
+}
+
+function creationChr003Base(
+  checkpoint: DurableCreationWizardCheckpoint,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  draftRevision: number,
+  routeBindings: DurableCreationWizardCheckpoint['nextStageEnvelope']['routeBindings'],
+  capabilityAvailable: boolean,
+): PresentedBaseForm {
+  const stage = creationStatRollStage(checkpoint);
+  if (stage.state !== 'REQUEST_READY' && stage.state !== 'DECISION_READY') {
+    throw new Error(`durable CHR-003 destination has stat roll state ${stage.state}`);
+  }
+  const setResult = stage.setRecord?.receipt.result ?? null;
+  return {
+    availableActionKeys:
+      stage.state === 'REQUEST_READY' && capabilityAvailable
+        ? CHR_003_REQUEST_ACTION_KEYS
+        : CHR_003_COMMITTED_ACTION_KEYS,
+    formId: CHR_003_FORM_ID,
+    formType: 'screen',
+    roleFilteredPayload: projectChr003({
+      attemptIndex: stage.attemptIndex,
+      branchUuid: stage.branchUuid,
+      characterDraftId,
+      diceInputModeSnapshot: stage.diceInputModeSnapshot,
+      draftRevision,
+      facesOrManualInputs: setResult?.faces ?? [null, null, null, null, null, null, null],
+      naturalCriticalQueue: stage.naturalCriticalQueue.map(({ originFace, setEntryIndex }) => ({
+        originFace,
+        setEntryIndex,
+      })),
+      setRollReceiptId: setResult?.setRollReceiptId ?? null,
+      setRollRequestId: stage.setRollRequestId,
+      shownResultLocked: setResult?.shownResultLocked ?? false,
+      statMethod: stage.statMethod,
+      wizardCheckpointId,
+    }),
+    routeBindings,
+    routeTemplate: CHR_003_ROUTE,
+  };
+}
+
+function creationChr004Base(
+  checkpoint: DurableCreationWizardCheckpoint,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  draftRevision: number,
+  routeBindings: DurableCreationWizardCheckpoint['nextStageEnvelope']['routeBindings'],
+  capabilityAvailable: boolean,
+): PresentedBaseForm {
+  const stage = creationStatRollStage(checkpoint);
+  const setRollReceiptId = stage.setRecord?.receipt.result.setRollReceiptId;
+  if (setRollReceiptId === undefined) {
+    throw new Error('durable CHR-004 destination has no committed set receipt');
+  }
+  let criticalQueueIndex: number;
+  let originFace: 1 | 20;
+  let confirmationRollRequestId: string;
+  let confirmationFace: number | null;
+  let confirmationReceiptId: string | null;
+  if (stage.state === 'CRITICALS_PENDING') {
+    const index = stage.criticalQueueIndexOrNull;
+    const requestId = stage.confirmationRollRequestIdOrNull;
+    const queueItem = index === null ? undefined : stage.naturalCriticalQueue[index];
+    if (index === null || requestId === null || queueItem === undefined) {
+      throw new Error('durable CHR-004 pending state has no current critical request');
+    }
+    criticalQueueIndex = index;
+    originFace = queueItem.originFace;
+    confirmationRollRequestId = requestId;
+    confirmationFace = null;
+    confirmationReceiptId = null;
+  } else if (stage.state === 'CHAIN_COMPLETE') {
+    const last = stage.confirmationRecords.at(-1)?.receipt.result;
+    if (last === undefined) {
+      throw new Error('durable CHR-004 complete state has no confirmation receipt');
+    }
+    criticalQueueIndex = last.criticalQueueIndex;
+    originFace = last.originFace;
+    confirmationRollRequestId = last.confirmationRollRequestId;
+    confirmationFace = last.confirmationFace;
+    confirmationReceiptId = last.confirmationReceiptId;
+  } else {
+    throw new Error(`durable CHR-004 destination has stat roll state ${stage.state}`);
+  }
+  return {
+    availableActionKeys:
+      stage.state === 'CRITICALS_PENDING' && capabilityAvailable
+        ? CHR_004_PENDING_ACTION_KEYS
+        : CHR_004_COMPLETE_ACTION_KEYS,
+    formId: CHR_004_FORM_ID,
+    formType: 'screen',
+    roleFilteredPayload: projectChr004({
+      branchUuid: stage.branchUuid,
+      characterDraftId,
+      confirmationFace,
+      confirmationReceiptId,
+      confirmationRollRequestId,
+      criticalQueueIndex,
+      diceInputModeSnapshot: stage.diceInputModeSnapshot,
+      draftRevision,
+      originFace,
+      returnDecisionFormId: stage.returnDecisionFormId,
+      setRollReceiptId,
+      wizardCheckpointId,
+    }),
+    routeBindings,
+    routeTemplate: CHR_004_ROUTE,
+  };
+}
+
+function creationWizardBase(
+  checkpoint: DurableCreationWizardCheckpoint,
+  rollCapabilityAvailable: boolean,
+): PresentedBaseForm {
   const { characterDraftId, wizardCheckpointId } = checkpoint.identityStage.request.payload;
   const draftRevision = checkpoint.receipt.result.draftRevision;
   const routeBindings = checkpoint.nextStageEnvelope.routeBindings;
@@ -719,8 +873,24 @@ function creationWizardBase(checkpoint: DurableCreationWizardCheckpoint): Presen
         routeBindings,
         routeTemplate: CHR_002_ROUTE,
       };
-    case 'CHR-003':
-      throw new Error('CHR-003 destination is outside the implemented SET-DECIDE vertical');
+    case CHR_003_FORM_ID:
+      return creationChr003Base(
+        checkpoint,
+        characterDraftId,
+        wizardCheckpointId,
+        draftRevision,
+        routeBindings,
+        rollCapabilityAvailable,
+      );
+    case CHR_004_FORM_ID:
+      return creationChr004Base(
+        checkpoint,
+        characterDraftId,
+        wizardCheckpointId,
+        draftRevision,
+        routeBindings,
+        rollCapabilityAvailable,
+      );
   }
 }
 
@@ -1081,6 +1251,25 @@ function commandRequestsMatch(saved: CommandRequest, incoming: CommandRequest): 
       throw error;
     }
   }
+  if (
+    saved.commandKind === 'workflow-command' &&
+    saved.workflowCommandId === CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID
+  ) {
+    try {
+      return isDeepStrictEqual(
+        normalizeCreationRollCommitRequest(saved),
+        normalizeCreationRollCommitRequest(incoming),
+      );
+    } catch (error: unknown) {
+      if (error instanceof CreationRollCommitApplicationError) {
+        return isDeepStrictEqual(
+          normalizeJsonNegativeZero(saved),
+          normalizeJsonNegativeZero(incoming),
+        );
+      }
+      throw error;
+    }
+  }
   return isDeepStrictEqual(saved, incoming);
 }
 
@@ -1162,9 +1351,6 @@ function creationWizardContext(
   checkpoint: DurableCreationWizardCheckpoint,
 ): ConfirmedNavigationContext {
   const formId = checkpoint.nextStageEnvelope.formId;
-  if (formId === 'CHR-003') {
-    throw new Error('CHR-003 context is outside the implemented SET-DECIDE vertical');
-  }
   const deviceId = loadDeviceId(dependencies.database);
   const contextId =
     connection.current?.contextId ??
@@ -1184,6 +1370,7 @@ function sendCreationWizardDestination(
   socket: WebSocket,
   checkpoint: DurableCreationWizardCheckpoint,
   dependencies: NavigationDependencies,
+  rollCapabilityAvailable: boolean,
   correlationId: string,
   reason: 'COMMAND_DESTINATION' | 'RECONNECT',
 ): void {
@@ -1191,7 +1378,7 @@ function sendCreationWizardDestination(
     socket,
     projectionSnapshot(
       correlationId,
-      creationWizardBase(checkpoint),
+      creationWizardBase(checkpoint, rollCapabilityAvailable),
       'player',
       checkpoint.receipt.revisions,
       reason,
@@ -1248,6 +1435,7 @@ function handleCommandRequest(
       socket,
       latestCheckpoint,
       dependencies,
+      connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID),
       message.commandId,
       'COMMAND_DESTINATION',
     );
@@ -1270,6 +1458,94 @@ function handleCommandRequest(
       path: '$.transition',
       value: { ...message.transition },
     });
+    return;
+  }
+  if (message.workflowCommandId === CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID) {
+    let request: CreationRollCommitCommandRequest;
+    try {
+      request = normalizeCreationRollCommitRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationRollCommitApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.identityDraftScope !== null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== request.payload.sourceFormId ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    if (!isDeepStrictEqual(request.expectedRevisions, revisions)) {
+      finishRefusal(request, {
+        actual: revisions,
+        code: 'STALE_REVISION',
+        expected: request.expectedRevisions,
+      });
+      return;
+    }
+    try {
+      preflightCreationRoll(dependencies.database, request);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationRollCommitApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+    const finalRevisions = currentNavigationRevisions(connection, dependencies);
+    if (
+      !isDeepStrictEqual(finalRevisions, revisions) ||
+      !connection.sessionEstablished ||
+      connection.current !== current ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    try {
+      preflightCreationRoll(dependencies.database, request);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationRollCommitApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    let durableCheckpoint: DurableCreationWizardCheckpoint;
+    try {
+      durableCheckpoint = commitCreationRoll(dependencies.database, request, receiptId, {
+        allocateRollRequestId: dependencies.allocateCreationRollRequestId,
+        sampleD20: dependencies.sampleCreationD20,
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof CreationRollCommitApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durableCheckpoint.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durableCheckpoint.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durableCheckpoint),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durableCheckpoint,
+      dependencies,
+      connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
     return;
   }
   if (message.workflowCommandId === CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID) {
@@ -1333,7 +1609,10 @@ function handleCommandRequest(
       return;
     }
     try {
-      durableCheckpoint = commitCreationSetDecide(dependencies.database, request, receiptId);
+      durableCheckpoint = commitCreationSetDecide(dependencies.database, request, receiptId, {
+        allocateBranchUuid: dependencies.allocateCreationBranchUuid,
+        allocateRollRequestId: dependencies.allocateCreationRollRequestId,
+      });
     } catch (error: unknown) {
       if (!(error instanceof CreationSetDecideApplicationError)) throw error;
       finishRefusal(request, error.refusal);
@@ -1355,6 +1634,7 @@ function handleCommandRequest(
       socket,
       durableCheckpoint,
       dependencies,
+      connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID),
       request.commandId,
       'COMMAND_DESTINATION',
     );
@@ -1589,7 +1869,10 @@ function handleReconnectV2(
   let projectionRole: 'player' | null;
   let revisions: RevisionVector;
   if (replayDestination !== undefined) {
-    base = creationWizardBase(replayDestination);
+    base = creationWizardBase(
+      replayDestination,
+      executableSet.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+    );
     nextContext = creationWizardContext(connection, dependencies, replayDestination);
     projectionRole = 'player';
     revisions = replayDestination.receipt.revisions;
@@ -1599,13 +1882,18 @@ function handleReconnectV2(
     (restored.formId === CHR_010_FORM_ID ||
       restored.formId === CHR_016_FORM_ID ||
       restored.formId === CHR_036_FORM_ID ||
-      restored.formId === CHR_002_FORM_ID)
+      restored.formId === CHR_002_FORM_ID ||
+      restored.formId === CHR_003_FORM_ID ||
+      restored.formId === CHR_004_FORM_ID)
   ) {
     const checkpoint = loadCreationWizardCheckpoint(
       dependencies.database,
       restored.entityLocalCharacterId,
     );
-    base = creationWizardBase(checkpoint);
+    base = creationWizardBase(
+      checkpoint,
+      executableSet.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+    );
     nextContext = creationWizardContext(connection, dependencies, checkpoint);
     projectionRole = 'player';
     revisions = checkpoint.receipt.revisions;
@@ -1861,11 +2149,14 @@ async function sendStaticFile(
 export async function createHost(config: HostServerConfig): Promise<FastifyInstance> {
   for (const [name, value] of Object.entries({
     advanceRevisions: config.advanceRevisions,
+    allocateCreationBranchUuid: config.allocateCreationBranchUuid,
+    allocateCreationRollRequestId: config.allocateCreationRollRequestId,
     allocateContextId: config.allocateContextId,
     allocateLocalCharacterId: config.allocateLocalCharacterId,
     allocateReceiptId: config.allocateReceiptId,
     allocateWizardCheckpointId: config.allocateWizardCheckpointId,
     readRevisions: config.readRevisions,
+    sampleCreationD20: config.sampleCreationD20,
   })) {
     if (typeof value !== 'function')
       throw new TypeError(`host ${name} configuration must be a function`);
@@ -1883,6 +2174,8 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   const commandJournal: CommandJournal = new Map();
   const dependencies: NavigationDependencies = {
     advanceRevisions: config.advanceRevisions,
+    allocateCreationBranchUuid: config.allocateCreationBranchUuid,
+    allocateCreationRollRequestId: config.allocateCreationRollRequestId,
     allocateContextId: config.allocateContextId,
     allocateLocalCharacterId: config.allocateLocalCharacterId,
     allocateReceiptId: config.allocateReceiptId,
@@ -1895,6 +2188,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     libraryRevision: createLibraryRevisionRuntime(),
     onFrameError: config.onFrameError,
     readRevisions: config.readRevisions,
+    sampleCreationD20: config.sampleCreationD20,
     vocabulary,
   };
   await app.register(websocket);
