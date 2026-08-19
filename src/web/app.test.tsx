@@ -1139,6 +1139,7 @@ describe('APP-001 web entry', () => {
   });
 
   it('does not guess an unsupported file type or leave Continue active while reading', async () => {
+    vi.stubGlobal('FileReader', DeferredFileReader);
     const { container, socket } = await connectToValidChr001();
     const continueAction = requiredElement(
       container.querySelector<HTMLButtonElement>(
@@ -1169,6 +1170,9 @@ describe('APP-001 web entry', () => {
     act(() => continueAction.click());
     expect(socket.sent).toHaveLength(sentWhileReading);
 
+    act(() => {
+      DeferredFileReader.instances[0]?.complete(new Uint8Array([0x47, 0x49, 0x46]));
+    });
     await flushAsyncWork();
     expect(socket.sent).toHaveLength(3);
     expect(container.querySelector('[data-character-art-local-error]')?.textContent).toContain(
