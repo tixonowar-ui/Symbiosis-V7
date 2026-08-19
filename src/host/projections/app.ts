@@ -85,6 +85,7 @@ const CHR_001_REQUIRED_FIELDS = [
   'description(optional)',
   'artAssetKeyOrLocalFile(optional)',
   'age(required)',
+  'sex(required; MALE|FEMALE; mutable until IDENTITY checkpoint, immutable after)',
   'massKg(number>0; step=0.1; no invented upper bound)',
   'massApprovalStatus=PENDING_GM',
   'anatomyProfile=STANDARD_HUMANOID',
@@ -199,7 +200,7 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
     [
       'APP-004',
       APP_004_CREATE_CHARACTER_ACTION_KEY,
-      'Новый immutable UUID; обязательны имя, возраст и положительная massKg 0,1; описание/арт необязательны.',
+      'Новый immutable UUID; обязательны имя, возраст, пол и положительная massKg 0,1; описание/арт необязательны.',
     ],
     [
       'APP-004',

@@ -2,18 +2,18 @@ import { Buffer } from 'node:buffer';
 import { isDeepStrictEqual } from 'node:util';
 import type { RevisionVector } from '@shared/wire-protocol.js';
 import type {
-  IdentityDraftRefusalV2Message,
-  IdentityDraftReplaceV2Message,
+  IdentityDraftRefusalV3Message,
+  IdentityDraftReplaceV3Message,
   IdentityDraftScope,
   IdentityDraftValues,
-} from '@shared/wire-v2-protocol.js';
+} from '@shared/wire-v3-protocol.js';
 const MAX_LOCAL_FILE_BYTES = 12 * 1024 * 1024;
 const NAME_SEGMENTER = new Intl.Segmenter('und', { granularity: 'grapheme' });
 const INVISIBLE_CODE_POINT = /^(?:\p{White_Space}|\p{Default_Ignorable_Code_Point})$/u;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/u;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
-type IdentityDraftRefusal = IdentityDraftRefusalV2Message['refusal'];
+type IdentityDraftRefusal = IdentityDraftRefusalV3Message['refusal'];
 type FieldError = Extract<IdentityDraftRefusal, { readonly code: 'INVALID_FIELD' }>['error'];
 type Checked<T> =
   { readonly ok: true; readonly value: T } | { readonly error: FieldError; readonly ok: false };
@@ -46,7 +46,7 @@ export type IdentityDraftApplicationOutcome = IdentityDraftAccepted | IdentityDr
 type DraftState = { draftRevision: number; values: IdentityDraftValues };
 interface JournalEntry {
   readonly outcome: IdentityDraftApplicationOutcome;
-  readonly request: IdentityDraftReplaceV2Message;
+  readonly request: IdentityDraftReplaceV3Message;
 }
 const initialValues = (): IdentityDraftValues => ({
   age: null,
@@ -54,6 +54,7 @@ const initialValues = (): IdentityDraftValues => ({
   description: null,
   massKg: null,
   name: null,
+  sex: null,
 });
 const copy = <T>(value: T): T => structuredClone(value);
 const scopeKey = (scope: IdentityDraftScope): string =>
@@ -65,7 +66,7 @@ const scopeKey = (scope: IdentityDraftScope): string =>
   ]);
 const normalizedNumber = (value: number | null): number | null =>
   Object.is(value, -0) ? 0 : value;
-const copyRequest = (request: IdentityDraftReplaceV2Message): IdentityDraftReplaceV2Message => ({
+const copyRequest = (request: IdentityDraftReplaceV3Message): IdentityDraftReplaceV3Message => ({
   ...request,
   expectedDraftRevision: normalizedNumber(request.expectedDraftRevision)!,
   expectedRevisions: {
@@ -170,6 +171,7 @@ function canonicalValues(
       description: description.value,
       massKg: normalizedNumber(values.massKg),
       name: name.value,
+      sex: values.sex,
     },
   };
 }
@@ -181,7 +183,7 @@ export function createIdentityDraftRuntime(catalogKeys: ReadonlySet<string>) {
   const drafts = new Map<string, DraftState>();
   const journal = new Map<string, JournalEntry>();
   const apply = (
-    request: IdentityDraftReplaceV2Message,
+    request: IdentityDraftReplaceV3Message,
     context: IdentityDraftApplicationContext,
   ): IdentityDraftApplicationOutcome => {
     let checkedRevisions: RevisionVector | null = null;
@@ -260,6 +262,7 @@ export function createIdentityDraftRuntime(catalogKeys: ReadonlySet<string>) {
         context.capabilityAvailable &&
         canonical.value.name !== null &&
         canonical.value.age !== null &&
+        canonical.value.sex !== null &&
         canonical.value.massKg !== null,
       draftRevision: state.draftRevision,
       draftUpdateId: request.draftUpdateId,

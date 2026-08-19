@@ -11,10 +11,13 @@ import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-char
 import {
   decodeClientMessage,
   decodeClientMessageV2,
+  decodeClientMessageV3,
   encodeHostMessage,
   encodeHostMessageV2,
+  encodeHostMessageV3,
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_V2_VERSION,
+  WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
 import type {
   ClientToHostMessage,
@@ -24,15 +27,17 @@ import type {
   FormActionRefusalV2Message,
   HostToClientMessage,
   HostToClientV2Message,
-  IdentityDraftRefusalV2Message,
-  IdentityDraftReplaceV2Message,
-  IdentityDraftResultV2Message,
+  HostToClientV3Message,
+  IdentityDraftRefusalV3Message,
+  IdentityDraftReplaceV3Message,
+  IdentityDraftResultV3Message,
   IdentityDraftScope,
   ProjectionSnapshotV2Message,
   ProtocolVocabulary,
   PresentedBaseForm,
   RevisionVector,
   WireV2Vocabulary,
+  WireV3Vocabulary,
   WorkflowCommandId,
 } from '@shared/index.js';
 
@@ -86,7 +91,7 @@ export interface HostNetworkConfig {
 }
 
 type CommandRequest = Extract<ClientToHostMessage, { readonly messageType: 'command.request' }>;
-type HostVocabulary = ProtocolVocabulary & WireV2Vocabulary;
+type HostVocabulary = ProtocolVocabulary & WireV3Vocabulary;
 type FormActionTerminal = FormActionRefusalV2Message | ProjectionSnapshotV2Message;
 type CommandJournal = Map<
   string,
@@ -385,6 +390,18 @@ function sendCheckedV2(
   socket.send(encoded.text);
 }
 
+function sendCheckedV3(
+  socket: WebSocket,
+  message: HostToClientV3Message,
+  vocabulary: WireV3Vocabulary,
+): void {
+  const encoded = encodeHostMessageV3(message, vocabulary);
+  if (!encoded.ok) {
+    throw new Error(`host produced an invalid wire v3 message: ${JSON.stringify(encoded.refusal)}`);
+  }
+  socket.send(encoded.text);
+}
+
 function adoptNavigationContext(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
@@ -433,7 +450,7 @@ function identityDraftBase(
 
 function handleIdentityDraftReplace(
   socket: WebSocket,
-  message: IdentityDraftReplaceV2Message,
+  message: IdentityDraftReplaceV3Message,
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
 ): void {
@@ -454,13 +471,13 @@ function handleIdentityDraftReplace(
         : null;
     },
   });
-  let terminal: IdentityDraftRefusalV2Message | IdentityDraftResultV2Message;
+  let terminal: IdentityDraftRefusalV3Message | IdentityDraftResultV3Message;
   if (outcome.kind === 'refused') {
     terminal = {
       draftUpdateId: outcome.draftUpdateId,
       messageType: 'character.identity-draft.refusal',
       presentationUnchanged: true,
-      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      protocolVersion: WIRE_PROTOCOL_V3_VERSION,
       refusal: outcome.refusal,
       revisions: outcome.revisions,
       scope: outcome.scope,
@@ -475,12 +492,12 @@ function handleIdentityDraftReplace(
         layers: [],
       },
       projectionRole: 'player',
-      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      protocolVersion: WIRE_PROTOCOL_V3_VERSION,
       revisions: outcome.revisions,
       scope: outcome.scope,
     };
   }
-  sendCheckedV2(socket, terminal, dependencies.vocabulary);
+  sendCheckedV3(socket, terminal, dependencies.vocabulary);
 }
 
 function handleFormAction(
@@ -943,9 +960,6 @@ function handleClientMessageV2(
   connection: ConnectionNavigation,
 ): void {
   switch (message.messageType) {
-    case 'character.identity-draft.replace':
-      handleIdentityDraftReplace(socket, message, connection, dependencies);
-      return;
     case 'session.reconnect':
       handleReconnectV2(socket, message, dependencies, commandJournal, connection);
       return;
@@ -957,6 +971,15 @@ function handleClientMessageV2(
         `wire v2 ${message.messageType} is unavailable in the implemented navigation slice`,
       );
   }
+}
+
+function handleClientMessageV3(
+  socket: WebSocket,
+  message: IdentityDraftReplaceV3Message,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+): void {
+  handleIdentityDraftReplace(socket, message, connection, dependencies);
 }
 
 function messageProtocolVersion(source: string): unknown {
@@ -989,6 +1012,15 @@ function handleFrame(
     return;
   }
   const source = rawDataText(data);
+  if (messageProtocolVersion(source) === WIRE_PROTOCOL_V3_VERSION) {
+    const decoded = decodeClientMessageV3(source, dependencies.vocabulary);
+    if (!decoded.ok) {
+      sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
+      return;
+    }
+    handleClientMessageV3(socket, decoded.value, dependencies, connection);
+    return;
+  }
   if (messageProtocolVersion(source) === WIRE_PROTOCOL_V2_VERSION) {
     const decoded = decodeClientMessageV2(source, dependencies.vocabulary);
     if (!decoded.ok) {

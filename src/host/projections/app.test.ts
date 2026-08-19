@@ -109,7 +109,7 @@ describe('APP host projection', () => {
     expect(catalog.actions.get('APP-004::CTA::001')).toEqual({
       from: 'APP-004',
       guard:
-        'Новый immutable UUID; обязательны имя, возраст и положительная massKg 0,1; описание/арт необязательны.',
+        'Новый immutable UUID; обязательны имя, возраст, пол и положительная massKg 0,1; описание/арт необязательны.',
       kind: 'subflow',
       to: 'CHR-001',
       trigger: createCharacterTrigger,

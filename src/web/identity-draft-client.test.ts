@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  IdentityDraftRefusalV2Message,
-  IdentityDraftResultV2Message,
+  IdentityDraftRefusalV3Message,
+  IdentityDraftResultV3Message,
   IdentityDraftScope,
   IdentityDraftValues,
   RevisionVector,
@@ -18,12 +18,16 @@ const scope = (characterDraftId = 'character-1', contextId = 'context-1'): Ident
   characterDraftId,
   wizardCheckpointId: `checkpoint-${characterDraftId}`,
 });
-const values = (name: string | null = null): IdentityDraftValues => ({
+const values = (
+  name: string | null = null,
+  sex: IdentityDraftValues['sex'] = null,
+): IdentityDraftValues => ({
   name,
   description: null,
   artAssetKeyOrLocalFile: null,
   age: null,
   massKg: null,
+  sex,
 });
 const snapshot = (overrides: Partial<IdentityDraftSnapshot> = {}): IdentityDraftSnapshot => ({
   scope: scope(),
@@ -46,8 +50,8 @@ const result = (
   draftUpdateId: string,
   draftRevision = 1,
   resultRevisions = revisions(3),
-): IdentityDraftResultV2Message => ({
-  protocolVersion: 2,
+): IdentityDraftResultV3Message => ({
+  protocolVersion: 3,
   messageType: 'character.identity-draft.result',
   draftUpdateId,
   scope: scope(),
@@ -69,8 +73,8 @@ const result = (
 const refusal = (
   draftUpdateId: string,
   refusalRevisions = revisions(),
-): IdentityDraftRefusalV2Message => ({
-  protocolVersion: 2,
+): IdentityDraftRefusalV3Message => ({
+  protocolVersion: 3,
   messageType: 'character.identity-draft.refusal',
   draftUpdateId,
   scope: scope(),
@@ -106,6 +110,15 @@ describe('IdentityDraftClient', () => {
       outstanding: null,
       widgetValues: values('Alice'),
     });
+  });
+  it('treats a sex-only edit as a full dirty replacement and coalesces the next choice', () => {
+    const client = new IdentityDraftClient(snapshot(), allocator());
+    const first = client.edit(values(null, 'MALE'));
+    expect(first?.values).toEqual(values(null, 'MALE'));
+    expect(client.edit(values(null, 'FEMALE'))).toBeNull();
+    expect(client.receiveResult(result('update-1'), values(null, 'MALE'))?.values).toEqual(
+      values(null, 'FEMALE'),
+    );
   });
   it('retries changed widgets after INVALID_FIELD and retains a current error otherwise', () => {
     const client = new IdentityDraftClient(snapshot(), allocator());

@@ -2,10 +2,10 @@ import { Buffer } from 'node:buffer';
 import { expect, it, vi } from 'vitest';
 import type { RevisionVector } from '@shared/wire-protocol.js';
 import type {
-  IdentityDraftReplaceV2Message,
+  IdentityDraftReplaceV3Message,
   IdentityDraftScope,
   IdentityDraftValues,
-} from '@shared/wire-v2-protocol.js';
+} from '@shared/wire-v3-protocol.js';
 import {
   createIdentityDraftRuntime,
   identityDraftOverflowAxis,
@@ -30,6 +30,7 @@ const EMPTY_VALUES = {
   description: null,
   massKg: null,
   name: null,
+  sex: null,
 } as const satisfies IdentityDraftValues;
 const CATALOG_KEY = 'symbiosis_placeholder_free_female';
 const request = (
@@ -37,12 +38,12 @@ const request = (
   values: IdentityDraftValues = EMPTY_VALUES,
   expectedDraftRevision = 0,
   expectedRevisions: RevisionVector = REVISIONS,
-): IdentityDraftReplaceV2Message => ({
+): IdentityDraftReplaceV3Message => ({
   draftUpdateId,
   expectedDraftRevision,
   expectedRevisions,
   messageType: 'character.identity-draft.replace',
-  protocolVersion: 2,
+  protocolVersion: 3,
   scope: SCOPE,
   values,
 });
@@ -77,6 +78,7 @@ it('canonicalizes a changed replacement, replays it before stale checks, and rec
     description: ' unchanged ',
     massKg: 70.1,
     name: ' Bob ',
+    sex: 'MALE',
   } as const satisfies IdentityDraftValues;
   const firstRequest = request('update-1', values);
   const first = runtime.apply(
@@ -121,6 +123,34 @@ it('canonicalizes a changed replacement, replays it before stale checks, and rec
   );
   expect(noOp).toMatchObject({ draftRevision: 1, kind: 'accepted', projectionChanged: false });
   expect(noAdvance).not.toHaveBeenCalled();
+});
+it('treats sex as a replaceable draft value required for checkpoint eligibility', () => {
+  const runtime = registeredRuntime();
+  const withoutSex = runtime.apply(
+    request('without-sex', { ...EMPTY_VALUES, age: -7.25, massKg: 70.1, name: 'Alice' }),
+    context(),
+  );
+  expect(withoutSex).toMatchObject({ checkpointEligible: false, kind: 'accepted' });
+  const afterSex = { ...ADVANCED, projectionRevision: ADVANCED.projectionRevision + 1 };
+  const withSex = runtime.apply(
+    request(
+      'with-sex',
+      { ...EMPTY_VALUES, age: -7.25, massKg: 70.1, name: 'Alice', sex: 'FEMALE' },
+      1,
+      ADVANCED,
+    ),
+    context({
+      advanceProjectionRevision: () => afterSex,
+      capabilityAvailable: true,
+      currentRevisions: () => ADVANCED,
+    }),
+  );
+  expect(withSex).toMatchObject({
+    checkpointEligible: true,
+    draftRevision: 2,
+    kind: 'accepted',
+    values: { sex: 'FEMALE' },
+  });
 });
 it('does not mutate or journal when the projection writer throws or returns the wrong vector', () => {
   for (const advanceProjectionRevision of [() => fail('writer failed'), () => REVISIONS]) {

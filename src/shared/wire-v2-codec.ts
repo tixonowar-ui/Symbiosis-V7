@@ -7,15 +7,6 @@ import type {
   ClientToHostV2Message,
   FormActionIntentV2Message,
   HostToClientV2Message,
-  IdentityDraftArtValue,
-  IdentityDraftFieldError,
-  IdentityDraftPresentation,
-  IdentityDraftRefusal,
-  IdentityDraftRefusalV2Message,
-  IdentityDraftReplaceV2Message,
-  IdentityDraftResultV2Message,
-  IdentityDraftScope,
-  IdentityDraftValues,
   PresentedBaseForm,
   PresentedLayerForm,
   ProjectionSnapshotV2Message,
@@ -23,12 +14,7 @@ import type {
   SessionReconnectV2Message,
   WireV2Vocabulary,
 } from './wire-v2-protocol.js';
-import type {
-  DecodeResult,
-  EncodeResult,
-  RevisionVector,
-  WorkflowCommandId,
-} from './wire-protocol.js';
+import type { DecodeResult, EncodeResult, WorkflowCommandId } from './wire-protocol.js';
 
 const LAYER_TYPES = new Set(['banner', 'component', 'dialog', 'overlay', 'specification']);
 const BINDING_SOURCES = new Set(['client-selected', 'executor-allocated', 'inherited']);
@@ -39,27 +25,6 @@ const ASSIGNMENT_REASONS = new Set([
   'HOST_SYSTEM_EVENT',
   'RECONNECT',
 ]);
-const IDENTITY_DRAFT_MEDIA_TYPES = new Set(['image/jpeg', 'image/png']);
-const FIELD_REASONS: Readonly<Partial<Record<string, ReadonlySet<string>>>> = {
-  artAssetKeyOrLocalFile: new Set([
-    'ASSET_NOT_FOUND',
-    'EMPTY_ASSET_KEY',
-    'FILE_TOO_LARGE',
-    'MEDIA_SIGNATURE_MISMATCH',
-    'NON_CANONICAL_BASE64',
-  ]),
-  description: new Set(['EMPTY_NOT_NULL', 'TOO_LONG']),
-  massKg: new Set(['NOT_POSITIVE', 'STEP_MISMATCH']),
-  name: new Set([
-    'BLANK_AFTER_TRIM',
-    'CONTROL_CHARACTER',
-    'NO_VISIBLE_GRAPHEME',
-    'TOO_LONG',
-    'UNPAIRED_SURROGATE',
-  ]),
-};
-const IDENTITY_DRAFT_OVERFLOW_AXES = new Set(['draftRevision', 'projectionRevision']);
-const REVISION_AXES = ['actorVisibilityRevision', 'projectionRevision', 'stateRevision'] as const;
 
 /**
  * The wire boundary validates the representation locally so a lower-layer
@@ -90,32 +55,6 @@ const {
 const array = (value: unknown, path: string): readonly unknown[] => {
   if (!Array.isArray(value)) return invalid(path, 'array', value);
   return value;
-};
-
-const stringValue = (value: unknown, path: string): string => {
-  if (typeof value !== 'string') return invalid(path, 'string', value);
-  return value;
-};
-
-const finiteNumber = (value: unknown, path: string): number => {
-  if (typeof value !== 'number' || !Number.isFinite(value))
-    return invalid(path, 'finite number', value);
-  return Object.is(value, -0) ? 0 : value;
-};
-
-const normalizedRevision = (value: unknown, path: string): number => {
-  const valueAsInteger = integer(value, path);
-  return Object.is(valueAsInteger, -0) ? 0 : valueAsInteger;
-};
-
-const normalizedRevisions = (value: unknown, path: string): RevisionVector => {
-  const object = exact(value, 'actorVisibilityRevision projectionRevision stateRevision', path);
-  const read = (axis: keyof RevisionVector) => normalizedRevision(object[axis], `${path}.${axis}`);
-  return {
-    actorVisibilityRevision: read('actorVisibilityRevision'),
-    projectionRevision: read('projectionRevision'),
-    stateRevision: read('stateRevision'),
-  };
 };
 
 const bindingList = <T extends { readonly parameterIndex: number }>(
@@ -288,76 +227,6 @@ const sessionReconnect = (value: unknown): SessionReconnectV2Message => {
   return validated(value);
 };
 
-const identityDraftScope = (value: unknown, path: string): IdentityDraftScope => {
-  const object = exact(value, 'characterDraftId contextId sourceFormId wizardCheckpointId', path);
-  literal(object['sourceFormId'], 'CHR-001', `${path}.sourceFormId`);
-  text(object['contextId'], `${path}.contextId`);
-  text(object['characterDraftId'], `${path}.characterDraftId`);
-  text(object['wizardCheckpointId'], `${path}.wizardCheckpointId`);
-  return validated(value);
-};
-
-const identityDraftArtValue = (value: unknown, path: string): IdentityDraftArtValue => {
-  if (value === null) return null;
-  const shape = record(value, path);
-  const kind = text(shape['kind'], `${path}.kind`);
-  if (kind === 'asset-key') {
-    const object = exact(value, 'assetKey kind', path);
-    return {
-      kind: literal(object['kind'], 'asset-key', `${path}.kind`),
-      assetKey: stringValue(object['assetKey'], `${path}.assetKey`),
-    };
-  }
-  if (kind === 'local-file') {
-    const object = exact(value, 'bytesBase64 kind mediaType', path);
-    literal(object['kind'], 'local-file', `${path}.kind`);
-    oneOf(object['mediaType'], IDENTITY_DRAFT_MEDIA_TYPES, `${path}.mediaType`);
-    stringValue(object['bytesBase64'], `${path}.bytesBase64`);
-    return validated(value);
-  }
-  return unrecognized(`${path}.kind`, kind);
-};
-
-const nullableStringValue = (value: unknown, path: string): string | null =>
-  value === null ? null : stringValue(value, path);
-
-const nullableFiniteNumber = (value: unknown, path: string): number | null =>
-  value === null ? null : finiteNumber(value, path);
-
-const identityDraftValues = (value: unknown, path: string): IdentityDraftValues => {
-  const object = exact(value, 'age artAssetKeyOrLocalFile description massKg name', path);
-  return {
-    name: nullableStringValue(object['name'], `${path}.name`),
-    description: nullableStringValue(object['description'], `${path}.description`),
-    artAssetKeyOrLocalFile: identityDraftArtValue(
-      object['artAssetKeyOrLocalFile'],
-      `${path}.artAssetKeyOrLocalFile`,
-    ),
-    age: nullableFiniteNumber(object['age'], `${path}.age`),
-    massKg: nullableFiniteNumber(object['massKg'], `${path}.massKg`),
-  };
-};
-
-const identityDraftReplace = (value: unknown): IdentityDraftReplaceV2Message => {
-  const object = exact(
-    value,
-    'draftUpdateId expectedDraftRevision expectedRevisions messageType protocolVersion scope values',
-  );
-  literal(object['messageType'], 'character.identity-draft.replace', '$.messageType');
-  return {
-    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
-    messageType: 'character.identity-draft.replace',
-    draftUpdateId: text(object['draftUpdateId'], '$.draftUpdateId'),
-    scope: identityDraftScope(object['scope'], '$.scope'),
-    expectedDraftRevision: normalizedRevision(
-      object['expectedDraftRevision'],
-      '$.expectedDraftRevision',
-    ),
-    expectedRevisions: normalizedRevisions(object['expectedRevisions'], '$.expectedRevisions'),
-    values: identityDraftValues(object['values'], '$.values'),
-  };
-};
-
 const refusalPayload = (value: unknown, path: string, route: boolean): void => {
   const object = record(value, path);
   const code = text(object['code'], `${path}.code`);
@@ -389,140 +258,6 @@ const refusalMessage = (value: unknown, route: boolean): HostToClientV2Message =
   literal(object['presentationUnchanged'], true, '$.presentationUnchanged');
   refusalPayload(object['refusal'], '$.refusal', route);
   revisions(object['revisions'], '$.revisions');
-  return validated(value);
-};
-
-const identityDraftFieldError = (value: unknown, path: string): IdentityDraftFieldError => {
-  const object = exact(value, 'field reason', path);
-  const field = text(object['field'], `${path}.field`);
-  const reasons = Object.hasOwn(FIELD_REASONS, field) ? FIELD_REASONS[field] : undefined;
-  if (reasons === undefined) return unrecognized(`${path}.field`, field);
-  oneOf(object['reason'], reasons, `${path}.reason`);
-  return validated(value);
-};
-
-const identityDraftRefusal = (value: unknown, path: string): IdentityDraftRefusal => {
-  const shape = record(value, path);
-  const code = text(shape['code'], `${path}.code`);
-  if (code === 'INVALID_FIELD') {
-    const object = exact(value, 'code error', path);
-    return { code, error: identityDraftFieldError(object['error'], `${path}.error`) };
-  }
-  if (code === 'STALE_DRAFT') {
-    const object = exact(value, 'actual code expected', path);
-    integer(object['expected'], `${path}.expected`);
-    integer(object['actual'], `${path}.actual`);
-    return validated(value);
-  }
-  if (code === 'STALE_REVISION') {
-    const object = exact(value, 'actual code expected', path);
-    revisions(object['expected'], `${path}.expected`);
-    revisions(object['actual'], `${path}.actual`);
-    return validated(value);
-  }
-  if (code === 'IDEMPOTENCY_CONFLICT') {
-    const object = exact(value, 'code detail', path);
-    literal(object['detail'], 'PAYLOAD_MISMATCH', `${path}.detail`);
-    return validated(value);
-  }
-  if (code === 'DRAFT_UNAVAILABLE') {
-    exact(value, 'code', path);
-    return validated(value);
-  }
-  if (code === 'REVISION_OVERFLOW') {
-    const object = exact(value, 'axis code', path);
-    oneOf(object['axis'], IDENTITY_DRAFT_OVERFLOW_AXES, `${path}.axis`);
-    return validated(value);
-  }
-  return unrecognized(`${path}.code`, code);
-};
-
-const identityDraftPresentation = (
-  value: unknown,
-  path: string,
-  vocabulary: WireV2Vocabulary,
-  scope: IdentityDraftScope,
-  draftRevision: number,
-): IdentityDraftPresentation => {
-  const object = exact(value, 'base layers', path);
-  const identityBase = presentedForm(object['base'], `${path}.base`, false, vocabulary);
-  const identityLayers = array(object['layers'], `${path}.layers`).map((item, index) =>
-    presentedForm(item, `${path}.layers[${String(index)}]`, true, vocabulary),
-  );
-  literal(identityBase.formId, 'CHR-001', `${path}.base.formId`);
-  const bindingIndex = identityBase.routeBindings.findIndex(
-    (binding) => binding.parameterIndex === 0,
-  );
-  if (bindingIndex === -1) {
-    return invalid(
-      `${path}.base.routeBindings`,
-      'characterDraftId binding at parameterIndex 0',
-      identityBase.routeBindings,
-    );
-  }
-  const binding = identityBase.routeBindings[bindingIndex];
-  if (binding === undefined) return invalid(`${path}.base.routeBindings`, 'binding', undefined);
-  const bindingPath = `${path}.base.routeBindings[${bindingIndex}]`;
-  literal(binding.source, 'executor-allocated', `${bindingPath}.source`);
-  literal(binding.value, scope.characterDraftId, `${bindingPath}.value`);
-  const payload = identityBase.roleFilteredPayload;
-  const payloadPath = `${path}.base.roleFilteredPayload`;
-  const characterPath = `${payloadPath}.characterDraftId`;
-  literal(payload['characterDraftId'], scope.characterDraftId, characterPath);
-  const checkpointPath = `${payloadPath}.wizardCheckpointId`;
-  literal(payload['wizardCheckpointId'], scope.wizardCheckpointId, checkpointPath);
-  const draftPath = `${payloadPath}.draftRevision`;
-  const payloadDraftRevision = integer(payload['draftRevision'], draftPath);
-  if (payloadDraftRevision !== draftRevision) {
-    unrecognized(draftPath, payloadDraftRevision);
-  }
-  return {
-    base: identityBase as PresentedBaseForm,
-    layers: identityLayers as readonly PresentedLayerForm[],
-  };
-};
-
-const identityDraftResult = (
-  value: unknown,
-  vocabulary: WireV2Vocabulary,
-): IdentityDraftResultV2Message => {
-  const object = exact(
-    value,
-    'draftRevision draftUpdateId messageType presentation projectionRole protocolVersion revisions scope',
-  );
-  literal(object['messageType'], 'character.identity-draft.result', '$.messageType');
-  text(object['draftUpdateId'], '$.draftUpdateId');
-  const scope = identityDraftScope(object['scope'], '$.scope');
-  const draftRevision = integer(object['draftRevision'], '$.draftRevision');
-  revisions(object['revisions'], '$.revisions');
-  literal(object['projectionRole'], 'player', '$.projectionRole');
-  identityDraftPresentation(
-    object['presentation'],
-    '$.presentation',
-    vocabulary,
-    scope,
-    draftRevision,
-  );
-  return validated(value);
-};
-
-const identityDraftRefusalMessage = (value: unknown): IdentityDraftRefusalV2Message => {
-  const object = exact(
-    value,
-    'draftUpdateId messageType presentationUnchanged protocolVersion refusal revisions scope',
-  );
-  literal(object['messageType'], 'character.identity-draft.refusal', '$.messageType');
-  text(object['draftUpdateId'], '$.draftUpdateId');
-  identityDraftScope(object['scope'], '$.scope');
-  const currentRevisions = revisions(object['revisions'], '$.revisions');
-  literal(object['presentationUnchanged'], true, '$.presentationUnchanged');
-  const refusal = identityDraftRefusal(object['refusal'], '$.refusal');
-  if (refusal.code === 'STALE_REVISION') {
-    for (const axis of REVISION_AXES) {
-      if (refusal.actual[axis] !== currentRevisions[axis])
-        unrecognized(`$.refusal.actual.${axis}`, refusal.actual[axis]);
-    }
-  }
   return validated(value);
 };
 
@@ -560,9 +295,6 @@ const clientValue = (value: unknown, vocabulary: WireV2Vocabulary): ClientToHost
   if (object['messageType'] === 'navigation.addressable-route') {
     return routeIntent(value, vocabulary);
   }
-  if (object['messageType'] === 'character.identity-draft.replace') {
-    return identityDraftReplace(value);
-  }
   if (object['messageType'] === 'session.reconnect') return sessionReconnect(value);
   return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));
 };
@@ -577,12 +309,6 @@ const hostValue = (value: unknown, vocabulary: WireV2Vocabulary): HostToClientV2
   }
   if (object['messageType'] === 'session.reconnect.capabilities') {
     return sessionReconnectCapabilities(value, vocabulary);
-  }
-  if (object['messageType'] === 'character.identity-draft.result') {
-    return identityDraftResult(value, vocabulary);
-  }
-  if (object['messageType'] === 'character.identity-draft.refusal') {
-    return identityDraftRefusalMessage(value);
   }
   if (object['messageType'] === 'projection.snapshot') return snapshot(value, vocabulary);
   return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));

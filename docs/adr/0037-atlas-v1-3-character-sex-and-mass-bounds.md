@@ -16,13 +16,14 @@
 
 ## Контекст
 
-Поставленный Atlas v1.2 не содержит пола персонажа. `CHR-001` перечисляет
-ровно одиннадцать required fields, а её purpose, acceptance criterion и
-`QA-FORM-CHR-001` повторяют тот же контракт:
+Базовый Atlas v1.2 не содержал пола персонажа: `CHR-001` перечисляла
+ровно одиннадцать required fields. Принятая этим ADR поправка v1.3
+добавляет двенадцатое поле и синхронно обновляет purpose, acceptance
+criterion и `QA-FORM-CHR-001`; текущее amended evidence:
 
-- [`$.forms[59].purpose/requiredFields[0..10]`, строки 54457–54485](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54457-L54485);
-- [`$.forms[59].acceptanceCriteria[4]`, строка 54877](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54877);
-- [`$.qaScenarios[146]`, `QA-FORM-CHR-001`, строки 228030–228033](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L228030-L228033).
+- [`$.forms[59].purpose/requiredFields[0..11]`, строки 54457–54486](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54457-L54486);
+- [`$.forms[59].acceptanceCriteria[4]`, строка 54878](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54878);
+- [`$.qaScenarios[146]`, `QA-FORM-CHR-001`, строки 228031–228034](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L228031-L228034).
 
 Owner поставил более позднее решение: пол обязателен при локальном создании,
 имеет два значения, изменяется пока открыт identity draft и замораживается
@@ -31,10 +32,10 @@ Owner поставил более позднее решение: пол обяз
 честно проверить на более ранней `CHR-001`.
 
 Старый Q&A утверждает, что приложение не вводит придуманных minimum/maximum:
-[`$.registryCoverage.qna[305]`, `Q-CHAR-010`, строки 264253–264270](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L264253-L264270).
+[`$.registryCoverage.qna[305]`, `Q-CHAR-010`, строки 264254–264272](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L264254-L264272).
 Он ниже Atlas и ADR по ADR 0003; переписывать исходный answer нельзя, потому
 что у Q&A есть отдельный `laterAuthorOverride`. Прецедент непустого override —
-[`$.registryCoverage.qna[267]`, `Q-SYM-092`, строки 263492–263507](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L263492-L263507).
+[`$.registryCoverage.qna[267]`, `Q-SYM-092`, строки 263493–263508](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L263493-L263508).
 
 ### Печатные зеркала guard-прозы
 
@@ -56,9 +57,9 @@ Checkpoint formula имеет четыре зеркала:
 
 Raw anchors: [`journeys[1]`, строка 1983](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L1983),
 [`APP-004`, строки 29687–29693 и 30226–30232](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L29687-L30232),
-[`CHR-001/CHR-010`, строки 54560–55464](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54560-L55464),
-[`transitions[2]`, строка 215465](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L215465) и
-[`transitions[1261]`, строка 224278](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L224278).
+[`CHR-001/CHR-010`, строки 54561–55465](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54561-L55465),
+[`transitions[2]`, строка 215466](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L215466) и
+[`transitions[1261]`, строка 224279](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L224279).
 `CHR-001.states.IDENTITY_INCOMPLETE` — десятое enumerative зеркало.
 
 ## Что следует из источников и что является проектным выбором
@@ -67,8 +68,8 @@ Raw anchors: [`journeys[1]`, строка 1983](../../artifacts/atlas/Symbiosis_
 двенадцать endpoints массы. Из текущего Atlas следует, что `CHR-001` принимает
 положительную массу с шагом 0,1 и оставляет approval мастеру, а `CHR-025`
 владеет final `identityAndMassStatus`:
-[`$.forms[59].requiredFields[5..7]`, строки 54479–54481](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54479-L54481),
-[`$.forms[89].requiredFields[0..2]`, строки 69402–69405](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L69402-L69405).
+[`$.forms[59].requiredFields[6..8]`, строки 54480–54482](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54480-L54482),
+[`$.forms[89].requiredFields[0..2]`, строки 69403–69406](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L69403-L69406).
 
 Источники не задают английское имя JSON field, enum codes, transport
 versioning перехода, способ проверки свободной guard-прозы или алгоритмы

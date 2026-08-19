@@ -25,10 +25,10 @@ import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.2';
-/** `counts.byOrigin` names the forms introduced by this pinned Atlas version. */
+const ATLAS_VERSION = '1.3';
+/** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.2 `forms[*].actions.ctaAvailabilityByAction`: 1,242 rows and distinct keys. */
+/** Atlas v1.3 preserves 1,242 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
 const EXPECTED_ACTION_KEY_COUNT = 1_242;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };

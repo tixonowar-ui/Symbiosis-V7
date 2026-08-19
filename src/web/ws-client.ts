@@ -3,10 +3,13 @@ import type { ActionKey, FormId } from '@generated/types/atlas.js';
 import {
   decodeHostMessage,
   decodeHostMessageV2,
+  decodeHostMessageV3,
   encodeClientMessage,
   encodeClientMessageV2,
+  encodeClientMessageV3,
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_V2_VERSION,
+  WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
 import type {
   AddressableRouteTemplate,
@@ -23,7 +26,7 @@ import type {
   RevisionVector,
   SessionReconnectCapabilitiesV2Message,
   SessionReconnectV2Message,
-  WireV2Vocabulary,
+  WireV3Vocabulary,
   WorkflowCommandId,
 } from '@shared/index.js';
 
@@ -42,7 +45,7 @@ const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
  * The four presentation shapes are the exact implemented slice. Addressable
  * routes remain out of scope and therefore fail closed.
  */
-export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV2Vocabulary = {
+export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
   isAddressableRouteTemplate: (_value): _value is AddressableRouteTemplate => false,
   isClientRouteBindings: () => false,
   isFormActionKey: isImplementedFormActionKey,
@@ -513,6 +516,7 @@ function decodeChr001Projection(
         field > 0 &&
         (Number.isInteger(field) || Number.isInteger(field * 10))),
     name: (field) => field === null || typeof field === 'string',
+    sex: (field) => field === null || field === 'MALE' || field === 'FEMALE',
     wizardCheckpointId: (field) =>
       typeof field === 'string' &&
       field.trim().length > 0 &&
@@ -606,6 +610,7 @@ function identitySnapshot(
       description: value['description'] as string | null,
       massKg: value['massKg'] as number | null,
       name: value['name'] as string | null,
+      sex: value['sex'] as IdentityDraftValues['sex'],
     },
   };
 }
@@ -816,7 +821,7 @@ export function connectProjection(
 
   const sendIdentity = (request: ReturnType<IdentityDraftClient['edit']>): boolean => {
     if (request === null || socket === null || socket.readyState !== WebSocket.OPEN) return false;
-    const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+    const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok)
       throw new Error(`identity draft encoding failed: ${JSON.stringify(encoded.refusal)}`);
     socket.send(encoded.text);
@@ -911,6 +916,68 @@ export function connectProjection(
         return;
       }
 
+      if (envelopeProtocolVersion(frame) === WIRE_PROTOCOL_V3_VERSION) {
+        const decoded = decodeHostMessageV3(frame, WEB_PROTOCOL_VOCABULARY);
+        if (!decoded.ok) {
+          failProtocol(decoded.refusal, 'Host frame did not decode as wire v3.');
+          return;
+        }
+        const message = decoded.value;
+        if (expectingCapabilities || stagedCapabilities !== null) {
+          failUnexpected(
+            '$.messageType',
+            message.messageType,
+            'A wire v3 frame interrupted the staged reconnect pair.',
+          );
+          return;
+        }
+        if (message.messageType === 'character.identity-draft.result') {
+          if (identity === null || lastSnapshot === null) return;
+          const candidate = decodeConfirmedSnapshot(
+            {
+              messageType: 'projection.snapshot',
+              presentation: {
+                assignment: { correlationId: message.draftUpdateId, reason: 'FORM_ACTION' },
+                ...message.presentation,
+              },
+              projectionRole: message.projectionRole,
+              protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+              revisions: message.revisions,
+            },
+            lastSnapshot.executableWorkflowCommandIds,
+          );
+          if (!candidate.ok) {
+            failProtocol(candidate.refusal, 'Host sent an invalid identity draft result.');
+            return;
+          }
+          const draft = identitySnapshot(candidate.value, playerContextId);
+          if (draft === null) return;
+          const outstanding = identity.state.outstanding;
+          const applicable =
+            outstanding?.draftUpdateId === message.draftUpdateId &&
+            message.scope.contextId === playerContextId &&
+            outstanding.scope.contextId === message.scope.contextId &&
+            outstanding.scope.characterDraftId === message.scope.characterDraftId &&
+            outstanding.scope.wizardCheckpointId === message.scope.wizardCheckpointId &&
+            message.draftRevision >= (lastSnapshot.projection['draftRevision'] as number) &&
+            (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
+              (axis) => message.revisions[axis] >= lastSnapshot!.revisions[axis],
+            );
+          const next = identity.receiveResult(message, draft.values);
+          if (applicable) lastSnapshot = candidate.value;
+          onIdentityDraft(identity.state);
+          onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+          sendIdentity(next);
+          return;
+        }
+        if (identity === null || lastSnapshot === null) return;
+        const next = identity.receiveRefusal(message);
+        onIdentityDraft(identity.state);
+        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
+        sendIdentity(next);
+        return;
+      }
+
       const decoded = decodeHostMessageV2(frame, WEB_PROTOCOL_VOCABULARY);
       if (!decoded.ok) {
         failProtocol(decoded.refusal, 'Host frame did not decode as wire v2.');
@@ -973,53 +1040,6 @@ export function connectProjection(
           return;
         }
         adoptSnapshot(snapshot.value, reconnecting);
-        return;
-      }
-      if (message.messageType === 'character.identity-draft.result') {
-        if (identity === null || lastSnapshot === null) return;
-        const candidate = decodeConfirmedSnapshot(
-          {
-            messageType: 'projection.snapshot',
-            presentation: {
-              assignment: { correlationId: message.draftUpdateId, reason: 'FORM_ACTION' },
-              ...message.presentation,
-            },
-            projectionRole: message.projectionRole,
-            protocolVersion: WIRE_PROTOCOL_V2_VERSION,
-            revisions: message.revisions,
-          },
-          lastSnapshot.executableWorkflowCommandIds,
-        );
-        if (!candidate.ok) {
-          failProtocol(candidate.refusal, 'Host sent an invalid identity draft result.');
-          return;
-        }
-        const draft = identitySnapshot(candidate.value, playerContextId);
-        if (draft === null) return;
-        const outstanding = identity.state.outstanding;
-        const applicable =
-          outstanding?.draftUpdateId === message.draftUpdateId &&
-          message.scope.contextId === playerContextId &&
-          outstanding.scope.contextId === message.scope.contextId &&
-          outstanding.scope.characterDraftId === message.scope.characterDraftId &&
-          outstanding.scope.wizardCheckpointId === message.scope.wizardCheckpointId &&
-          message.draftRevision >= (lastSnapshot.projection['draftRevision'] as number) &&
-          (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
-            (axis) => message.revisions[axis] >= lastSnapshot!.revisions[axis],
-          );
-        const next = identity.receiveResult(message, draft.values);
-        if (applicable) lastSnapshot = candidate.value;
-        onIdentityDraft(identity.state);
-        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
-        sendIdentity(next);
-        return;
-      }
-      if (message.messageType === 'character.identity-draft.refusal') {
-        if (identity === null || lastSnapshot === null) return;
-        const next = identity.receiveRefusal(message);
-        onIdentityDraft(identity.state);
-        onState({ kind: 'ready', snapshot: visibleSnapshot(lastSnapshot, identity) });
-        sendIdentity(next);
         return;
       }
       if (message.messageType === 'navigation.form-action.refusal') {

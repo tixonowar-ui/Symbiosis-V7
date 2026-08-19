@@ -60,6 +60,12 @@
 
 ### Добавлено
 
+- Поставка Atlas v1.3 добавляет обязательный `CHR-001.sex` с закрытым доменом
+  `MALE|FEMALE`, переносит identity-draft на `protocolVersion=3` и задаёт
+  границы массы создания `CHR-025` по расе и полу. Import/validate fail-closed
+  сверяют четыре записи формы и все названные guard-зеркала; исторические
+  `graphDigest`/`contentDigest` остаются author-supplied, а целостность поставки
+  закреплена `CHECKSUMS.sha256`.
 - Первый законченный срез ввода идентичности `CHR-001`: три additive wire v2
   сообщения передают exact full replacement, host канонизирует и журналирует
   runtime-черновик, а web сохраняет dirty-buffer и повторяет outstanding update
