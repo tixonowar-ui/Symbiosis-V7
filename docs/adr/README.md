@@ -47,7 +47,7 @@
 | [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято                                     |
 | [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято                                     |
 | [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято                                     |
-| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято; строка про seed заменена 0019      |
+| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято; seed 0019; atlas array 0038        |
 | [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято                                     |
 | [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято; список owners дополнен 0031        |
 | [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                     |
@@ -68,7 +68,8 @@
 | [0034](0034-chr-010-initial-projection.md)                | Начальная проекция `CHR-010`         | принято                                     |
 | [0035](0035-identity-draft-name-refusals.md)              | Отказы имени identity draft          | принято; envelope version заменена 0037     |
 | [0036](0036-local-character-portrait-catalog.md)          | Каталог портретов `CHR-001`          | принято; sex-premise заменена 0037          |
-| [0037](0037-atlas-v1-3-character-sex-and-mass-bounds.md)  | Пол персонажа и границы массы        | принято                                     |
+| [0037](0037-atlas-v1-3-character-sex-and-mass-bounds.md)  | Пол персонажа и границы массы        | принято; источник зеркал уточнён 0038       |
+| [0038](0038-remove-redundant-atlas-forms-array.md)        | Удаление избыточного массива форм    | принято                                     |
 
 ## Перенос решений аудита
 
