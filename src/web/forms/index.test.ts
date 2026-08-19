@@ -28,3 +28,21 @@ describe('APP-004 web form registry', () => {
     );
   });
 });
+
+describe('CHR-010 web form registry', () => {
+  it('publishes the exact route and source-ordered client-local selectors', () => {
+    const definition = presentedFormDefinition('CHR-010');
+    expect(definition?.route).toBe('/player/characters/:localCharacterId/create/chr-010');
+    expect(
+      availableFormActions('CHR-010', [
+        'CHR-010::CTA::004',
+        'CHR-010::CTA::005',
+        'CHR-010::CTA::006',
+      ]),
+    ).toEqual([
+      { actionKey: 'CHR-010::CTA::004', label: 'Выбрать Единого' },
+      { actionKey: 'CHR-010::CTA::005', label: 'Выбрать Вольного' },
+      { actionKey: 'CHR-010::CTA::006', label: 'Выбрать Чистого' },
+    ]);
+  });
+});

@@ -37,6 +37,9 @@ const PLAYER_NAVIGATION_REQUEST_ID = 'navigation-0000000500000006000000070000000
 const CHARACTER_NAVIGATION_REQUEST_ID = 'navigation-000000090000000a0000000b0000000c';
 const LIBRARY_NAVIGATION_REQUEST_ID = 'navigation-00000015000000160000001700000018';
 const MENU_NAVIGATION_REQUEST_ID = 'navigation-000000190000001a0000001b0000001c';
+const IDENTITY_CHECKPOINT_COMMAND_ID = 'command-0000000d0000000e0000000f00000010';
+const IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-WIZARD-CHECKPOINT';
+const EMPTY_BRANCH_CACHE_HASH = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
 const APP_001_ACTION_KEYS = [
   'APP-001::CTA::001',
   'APP-001::CTA::002',
@@ -87,6 +90,29 @@ const CHR_001_PROJECTION = {
   name: null,
   sex: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const VALID_CHR_001_PROJECTION = {
+  ...CHR_001_PROJECTION,
+  age: 1,
+  description: 'Подтверждённая идентичность',
+  massKg: 0.1,
+  name: 'Алиса',
+  sex: 'FEMALE',
+} as const;
+const CHR_010_PROJECTION = {
+  ancientOptionSerialized: false,
+  characterDraftId: CHARACTER_DRAFT_ID,
+  choiceLockStatus: null,
+  commandId: null,
+  draftRevision: 0,
+  raceChoice: null,
+  raceConsequencesPreview: null,
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+const ENTITY_REVISIONS = {
+  actorVisibilityRevision: 0,
+  projectionRevision: 0,
+  stateRevision: 0,
 } as const;
 const APP_004_PROJECTION = {
   campaignAuthority: false,
@@ -251,7 +277,7 @@ function capabilities(
   overrides: Partial<SessionReconnectCapabilitiesV2Message> = {},
 ): SessionReconnectCapabilitiesV2Message {
   return {
-    executableWorkflowCommandIds: [],
+    executableWorkflowCommandIds: [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID],
     messageType: 'session.reconnect.capabilities',
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
     reconnectRequestId: REQUEST_ID,
@@ -314,6 +340,74 @@ const chr001Base = (
   routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
 });
 
+const chr010Base = (): ProjectionSnapshotV2Message['presentation']['base'] => ({
+  availableActionKeys: ['CHR-010::CTA::004', 'CHR-010::CTA::005', 'CHR-010::CTA::006'],
+  formId: 'CHR-010',
+  formType: 'screen',
+  roleFilteredPayload: CHR_010_PROJECTION,
+  routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+  routeTemplate: '/player/characters/:localCharacterId/create/chr-010',
+});
+
+function checkpointTerminal(
+  commandId: string,
+  replay = false,
+): Extract<HostToClientMessage, { readonly messageType: 'command.replay' | 'command.result' }> {
+  const receipt = {
+    commandId,
+    receiptId: 'identity-checkpoint-receipt',
+    result: {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 0,
+      draftRevision: 0,
+      nextFormId: 'CHR-010',
+      stage: 'IDENTITY',
+    },
+    revisions: ENTITY_REVISIONS,
+  } as const;
+  return replay
+    ? {
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        messageType: 'command.replay',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      }
+    : {
+        lifecycleState: 'COMMITTED',
+        messageType: 'command.result',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      };
+}
+
+function commandDestinationSnapshot(commandId: string): ProjectionSnapshotV2Message {
+  return {
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment: { correlationId: commandId, reason: 'COMMAND_DESTINATION' },
+      base: chr010Base(),
+      layers: [],
+    },
+    projectionRole: 'player',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions: ENTITY_REVISIONS,
+  };
+}
+
+function reconnectChr010Snapshot(reconnectRequestId: string): ProjectionSnapshotV2Message {
+  return {
+    ...commandDestinationSnapshot(reconnectRequestId),
+    presentation: {
+      assignment: { correlationId: reconnectRequestId, reason: 'RECONNECT' },
+      base: chr010Base(),
+      layers: [],
+    },
+  };
+}
+
 function open(socket: FakeWebSocket): void {
   act(() => {
     socket.open();
@@ -333,6 +427,56 @@ function deliverPair(
 ): void {
   deliver(socket, checkedHostTextV2(capabilityMessage));
   deliver(socket, checkedHostTextV2(snapshotMessage));
+}
+
+async function connectToValidChr001(): Promise<ConnectedClient> {
+  const connection = await connectClient();
+  const { container, socket } = connection;
+  open(socket);
+  deliverPair(socket);
+  act(() => {
+    requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action="Игрок"]'),
+      'APP-001 player action',
+    ).click();
+  });
+  deliver(
+    socket,
+    checkedHostTextV2(
+      navigationSnapshot(
+        {
+          availableActionKeys: ['APP-002::CTA::007'],
+          formId: 'APP-002',
+          formType: 'screen',
+          roleFilteredPayload: APP_002_PROJECTION,
+          routeBindings: [],
+          routeTemplate: '/player',
+        },
+        9,
+        PLAYER_NAVIGATION_REQUEST_ID,
+      ),
+    ),
+  );
+  act(() => {
+    requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action="Создать персонажа"]'),
+      'APP-002 create-character action',
+    ).click();
+  });
+  deliver(
+    socket,
+    checkedHostTextV2(
+      navigationSnapshot(
+        {
+          ...chr001Base(VALID_CHR_001_PROJECTION),
+          availableActionKeys: ['CHR-001::CTA::001', 'CHR-001::CTA::002'],
+        },
+        10,
+        CHARACTER_NAVIGATION_REQUEST_ID,
+      ),
+    ),
+  );
+  return connection;
 }
 
 function requiredElement<T extends Element>(value: T | null, label: string): T {
@@ -412,7 +556,7 @@ describe('APP-001 web entry', () => {
       messageType: 'session.reconnect',
       protocolVersion: WIRE_PROTOCOL_V2_VERSION,
       reconnectRequestId: REQUEST_ID,
-      supportedWorkflowCommandIds: [],
+      supportedWorkflowCommandIds: [IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID],
       unacknowledgedCommandIds: [],
     });
     expect(decodeClientMessage(socket.sent[0] ?? '', WEB_PROTOCOL_VOCABULARY)).toMatchObject({
@@ -691,6 +835,263 @@ describe('APP-001 web entry', () => {
 
     expect(container.querySelector('[data-atlas-form-id="APP-002"]')).not.toBeNull();
     expect(window.location.pathname).toBe('/player');
+  });
+
+  it('removes Continue from the executable DOM cache while confirmed CHR-001 values are dirty', async () => {
+    const { container, socket } = await connectToValidChr001();
+    const continueAction = requiredElement(
+      container.querySelector<HTMLButtonElement>(
+        '[data-atlas-action="Сохранить идентичность и продолжить"]',
+      ),
+      'CHR-001 Continue action',
+    );
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-identity-field="sex"]'),
+        'CHR-001 sex selector',
+      ),
+      '',
+    );
+
+    expect(decodedClientMessageV3(socket, 3)).toMatchObject({
+      messageType: 'character.identity-draft.replace',
+      values: {
+        age: 1,
+        artAssetKeyOrLocalFile: null,
+        description: 'Подтверждённая идентичность',
+        massKg: 0.1,
+        name: 'Алиса',
+        sex: null,
+      },
+    });
+    expect(container.querySelector('[data-identity-dirty="true"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
+    ).toBeNull();
+    expect(container.querySelector('[data-host-field="sex"]')?.textContent).toContain('FEMALE');
+    const sentAfterInvalidReplacement = socket.sent.length;
+    act(() => continueAction.click());
+    expect(socket.sent).toHaveLength(sentAfterInvalidReplacement);
+  });
+
+  it('sends the exact checkpoint, accepts CHR-010, freezes sex, and keeps race selectors local', async () => {
+    const { container, socket } = await connectToValidChr001();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Сохранить идентичность и продолжить"]',
+        ),
+        'CHR-001 Continue action',
+      ).click();
+    });
+
+    expect(decodedClientMessageV1(socket, 3)).toEqual({
+      commandId: IDENTITY_CHECKPOINT_COMMAND_ID,
+      commandKind: 'workflow-command',
+      expectedRevisions: { ...REVISIONS, projectionRevision: 10 },
+      messageType: 'command.request',
+      payload: {
+        stage: 'IDENTITY',
+        characterDraftId: CHARACTER_DRAFT_ID,
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+        draftRevision: 0,
+        name: 'Алиса',
+        description: 'Подтверждённая идентичность',
+        artAssetKeyOrLocalFile: null,
+        age: 1,
+        sex: 'FEMALE',
+        massKg: 0.1,
+      },
+      protocolVersion: WIRE_PROTOCOL_VERSION,
+      role: 'player',
+      workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+    });
+    expect(
+      container.querySelector('[data-atlas-action="Сохранить идентичность и продолжить"]'),
+    ).toBeNull();
+
+    deliver(socket, checkedHostTextV1(checkpointTerminal(IDENTITY_CHECKPOINT_COMMAND_ID)));
+    const sentAfterCheckpoint = socket.sent.length;
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-identity-field="sex"]'),
+        'frozen CHR-001 sex selector',
+      ),
+      'MALE',
+    );
+    expect(socket.sent).toHaveLength(sentAfterCheckpoint);
+    expect(container.querySelector<HTMLSelectElement>('[data-identity-field="sex"]')?.value).toBe(
+      'FEMALE',
+    );
+
+    deliver(socket, checkedHostTextV2(commandDestinationSnapshot(IDENTITY_CHECKPOINT_COMMAND_ID)));
+
+    expect(container.querySelector('[data-atlas-form-id="CHR-010"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).toBeNull();
+    expect(container.querySelector('[data-identity-field="sex"]')).toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-010`,
+    );
+    expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(3);
+    for (const actionKey of ['CHR-010::CTA::001', 'CHR-010::CTA::002', 'CHR-010::CTA::003']) {
+      expect(container.querySelector(`[data-atlas-action-key="${actionKey}"]`)).toBeNull();
+    }
+    expect(
+      container.querySelector('[data-host-field="raceConsequencesPreview"]')?.textContent,
+    ).toContain('null');
+    expect(container.querySelector('[data-host-field="choiceLockStatus"]')?.textContent).toContain(
+      'null',
+    );
+
+    const sentBeforeRaceChoices = socket.sent.length;
+    for (const [label, choice] of [
+      ['Выбрать Единого', 'UNITED'],
+      ['Выбрать Вольного', 'FREE'],
+      ['Выбрать Чистого', 'PURE'],
+    ] as const) {
+      act(() => {
+        requiredElement(
+          container.querySelector<HTMLButtonElement>(`[data-atlas-action="${label}"]`),
+          `CHR-010 ${choice} selector`,
+        ).click();
+      });
+      expect(container.querySelector('[data-race-choice-draft]')?.textContent).toContain(choice);
+      expect(container.querySelector('[data-host-field="raceChoice"]')?.textContent).toContain(
+        'null',
+      );
+      expect(socket.sent).toHaveLength(sentBeforeRaceChoices);
+    }
+  });
+
+  it.each([
+    {
+      label: 'missing choiceLockStatus',
+      mutate: (message: ProjectionSnapshotV2Message): ProjectionSnapshotV2Message => {
+        const { choiceLockStatus: _missing, ...projection } = CHR_010_PROJECTION;
+        return {
+          ...message,
+          presentation: {
+            ...message.presentation,
+            base: { ...message.presentation.base, roleFilteredPayload: projection },
+          },
+        };
+      },
+      path: '$.presentation.base.roleFilteredPayload.choiceLockStatus',
+    },
+    {
+      label: 'extra initial action',
+      mutate: (message: ProjectionSnapshotV2Message): ProjectionSnapshotV2Message => ({
+        ...message,
+        presentation: {
+          ...message.presentation,
+          base: {
+            ...message.presentation.base,
+            availableActionKeys: [
+              ...message.presentation.base.availableActionKeys,
+              'CHR-010::CTA::003',
+            ],
+          },
+        },
+      }),
+      path: '$.presentation.base.availableActionKeys',
+    },
+    {
+      label: 'route binding mismatch',
+      mutate: (message: ProjectionSnapshotV2Message): ProjectionSnapshotV2Message => ({
+        ...message,
+        presentation: {
+          ...message.presentation,
+          base: {
+            ...message.presentation.base,
+            routeBindings: [
+              {
+                parameterIndex: 0,
+                source: 'inherited',
+                value: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+              },
+            ],
+          },
+        },
+      }),
+      path: '$.presentation.base.roleFilteredPayload.characterDraftId',
+    },
+    {
+      label: 'checkpoint receipt mismatch',
+      mutate: (message: ProjectionSnapshotV2Message): ProjectionSnapshotV2Message => ({
+        ...message,
+        presentation: {
+          ...message.presentation,
+          base: {
+            ...message.presentation.base,
+            roleFilteredPayload: {
+              ...CHR_010_PROJECTION,
+              wizardCheckpointId: 'another-checkpoint',
+            },
+          },
+        },
+      }),
+      path: '$.presentation.base.roleFilteredPayload.wizardCheckpointId',
+    },
+  ])('refuses a CHR-010 destination with $label', async ({ mutate, path }) => {
+    const { container, socket } = await connectToValidChr001();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Сохранить идентичность и продолжить"]',
+        ),
+        'CHR-001 Continue action',
+      ).click();
+    });
+    deliver(socket, checkedHostTextV1(checkpointTerminal(IDENTITY_CHECKPOINT_COMMAND_ID)));
+    deliver(
+      socket,
+      checkedHostTextV2(mutate(commandDestinationSnapshot(IDENTITY_CHECKPOINT_COMMAND_ID))),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-010"]')).toBeNull();
+    expect(decodedClientMessageV1(socket, 4)).toMatchObject({
+      messageType: 'protocol.refusal',
+      refusal: { path },
+    });
+  });
+
+  it('replays a checkpoint after its receipt arrived but the CHR-010 snapshot was lost', async () => {
+    const { container, socket } = await connectToValidChr001();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>(
+          '[data-atlas-action="Сохранить идентичность и продолжить"]',
+        ),
+        'CHR-001 Continue action',
+      ).click();
+    });
+    deliver(socket, checkedHostTextV1(checkpointTerminal(IDENTITY_CHECKPOINT_COMMAND_ID)));
+    act(() => socket.serverClose(1006, 'destination snapshot lost'));
+    act(() => requiredElement(container.querySelector('button'), 'reconnect action').click());
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect request');
+    expect(reconnect.unacknowledgedCommandIds).toEqual([IDENTITY_CHECKPOINT_COMMAND_ID]);
+
+    deliver(
+      resumedSocket,
+      checkedHostTextV1(checkpointTerminal(IDENTITY_CHECKPOINT_COMMAND_ID, true)),
+    );
+    deliverPair(
+      resumedSocket,
+      capabilities({
+        reconnectRequestId: reconnect.reconnectRequestId,
+        revisions: ENTITY_REVISIONS,
+      }),
+      reconnectChr010Snapshot(reconnect.reconnectRequestId),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-010"]')).not.toBeNull();
+    expect(container.querySelector('[data-identity-field="sex"]')).toBeNull();
   });
 
   it('rejects a whitespace-only wizard checkpoint identity before caching CHR-001', async () => {

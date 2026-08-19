@@ -8,7 +8,7 @@ import type { WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
-describe('host protocol vocabulary APP-004 support', () => {
+describe('host protocol vocabulary implemented presentation support', () => {
   let vocabulary: ProtocolVocabulary & WireV2Vocabulary;
 
   beforeAll(async () => {
@@ -32,5 +32,36 @@ describe('host protocol vocabulary APP-004 support', () => {
     ).toBe(false);
     expect(vocabulary.isPresentedForm('APP-003', 'screen', '/player/characters', [])).toBe(false);
     expect(vocabulary.isFormActionKey('APP-004', 'APP-004::CTA::009')).toBe(false);
+  });
+
+  it('accepts only the inherited CHR-010 route binding and its source action vocabulary', () => {
+    expect(
+      vocabulary.isPresentedForm(
+        'CHR-010',
+        'screen',
+        '/player/characters/:localCharacterId/create/chr-010',
+        [{ parameterIndex: 0, source: 'inherited', value: 'character-draft-id' }],
+      ),
+    ).toBe(true);
+    for (let index = 1; index <= 6; index += 1) {
+      const actionKey = `CHR-010::CTA::${String(index).padStart(3, '0')}`;
+      expect(vocabulary.isFormActionKey('CHR-010', actionKey), actionKey).toBe(true);
+    }
+    expect(
+      vocabulary.isPresentedForm(
+        'CHR-010',
+        'screen',
+        '/player/characters/:localCharacterId/create/chr-010',
+        [{ parameterIndex: 0, source: 'executor-allocated', value: 'character-draft-id' }],
+      ),
+    ).toBe(false);
+    expect(
+      vocabulary.isPresentedForm(
+        'CHR-010',
+        'screen',
+        '/player/characters/:localCharacterId/create/chr-010',
+        [],
+      ),
+    ).toBe(false);
   });
 });

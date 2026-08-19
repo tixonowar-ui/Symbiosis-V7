@@ -66,7 +66,8 @@ export async function loadProtocolVocabulary(
       formId === 'APP-001' ||
       formId === 'APP-002' ||
       formId === 'APP-004' ||
-      formId === 'CHR-001'
+      formId === 'CHR-001' ||
+      formId === 'CHR-010'
     ) {
       presentedForms.set(formId, {
         route: string(form['route'], `${label}.route`),
@@ -141,6 +142,14 @@ export async function loadProtocolVocabulary(
           bindings.length === 1 &&
           bindings[0]?.parameterIndex === 0 &&
           bindings[0].source === 'executor-allocated' &&
+          bindings[0].value.length > 0
+        );
+      }
+      if (formId === 'CHR-010') {
+        return (
+          bindings.length === 1 &&
+          bindings[0]?.parameterIndex === 0 &&
+          bindings[0].source === 'inherited' &&
           bindings[0].value.length > 0
         );
       }

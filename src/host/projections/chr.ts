@@ -4,10 +4,23 @@ import type { IdentityDraftValues } from '@shared/wire-v3-protocol.js';
 
 export const CHR_001_FORM_ID = 'CHR-001' as const;
 export const CHR_001_ROUTE = '/player/characters/:localCharacterId/create/chr-001' as const;
+export const CHR_001_CONTINUE_ACTION_KEY = 'CHR-001::CTA::001' as const satisfies ActionKey;
 export const CHR_001_CANCEL_ACTION_KEY = 'CHR-001::CTA::002' as const satisfies ActionKey;
 /** Continue remains guard-hidden until its required identity fields are confirmed. */
 export const CHR_001_INITIAL_ACTION_KEYS = [
   CHR_001_CANCEL_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const CHR_001_CHECKPOINT_ACTION_KEYS = [
+  CHR_001_CONTINUE_ACTION_KEY,
+  CHR_001_CANCEL_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+
+export const CHR_010_FORM_ID = 'CHR-010' as const;
+export const CHR_010_ROUTE = '/player/characters/:localCharacterId/create/chr-010' as const;
+export const CHR_010_INITIAL_ACTION_KEYS = [
+  'CHR-010::CTA::004',
+  'CHR-010::CTA::005',
+  'CHR-010::CTA::006',
 ] as const satisfies readonly ActionKey[];
 
 export function projectChr001(
@@ -39,4 +52,21 @@ export function projectInitialChr001(
     name: null,
     sex: null,
   });
+}
+
+export function projectInitialChr010(
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  draftRevision: number,
+): JsonObject {
+  return {
+    ancientOptionSerialized: false,
+    characterDraftId,
+    choiceLockStatus: null,
+    commandId: null,
+    draftRevision,
+    raceChoice: null,
+    raceConsequencesPreview: null,
+    wizardCheckpointId,
+  };
 }

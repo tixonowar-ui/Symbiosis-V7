@@ -1,7 +1,7 @@
 import type { FormId } from '@generated/types/atlas.js';
 
-/** Issue #62 implements only the first CHR wizard form. */
-export const CHR_FORM_IDS = ['CHR-001'] as const satisfies readonly FormId[];
+/** Issues #62 and #97 implement the first two published CHR wizard forms. */
+export const CHR_FORM_IDS = ['CHR-001', 'CHR-010'] as const satisfies readonly FormId[];
 
 export type ChrFormId = (typeof CHR_FORM_IDS)[number];
 

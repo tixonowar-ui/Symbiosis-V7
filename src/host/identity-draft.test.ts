@@ -124,21 +124,31 @@ it('canonicalizes a changed replacement, replays it before stale checks, and rec
   expect(noOp).toMatchObject({ draftRevision: 1, kind: 'accepted', projectionChanged: false });
   expect(noAdvance).not.toHaveBeenCalled();
 });
-it('treats sex as a replaceable draft value required for checkpoint eligibility', () => {
+it('requires every identity guard field for checkpoint eligibility', () => {
+  const complete = {
+    ...EMPTY_VALUES,
+    age: -7.25,
+    massKg: 70.1,
+    name: 'Alice',
+    sex: 'FEMALE',
+  } as const satisfies IdentityDraftValues;
+  for (const field of ['name', 'age', 'sex', 'massKg'] as const) {
+    const runtime = registeredRuntime();
+    const missing = runtime.apply(
+      request(`without-${field}`, { ...complete, [field]: null }),
+      context({ capabilityAvailable: true }),
+    );
+    expect(missing, field).toMatchObject({ checkpointEligible: false, kind: 'accepted' });
+  }
   const runtime = registeredRuntime();
   const withoutSex = runtime.apply(
-    request('without-sex', { ...EMPTY_VALUES, age: -7.25, massKg: 70.1, name: 'Alice' }),
-    context(),
+    request('without-sex', { ...complete, sex: null }),
+    context({ capabilityAvailable: true }),
   );
   expect(withoutSex).toMatchObject({ checkpointEligible: false, kind: 'accepted' });
   const afterSex = { ...ADVANCED, projectionRevision: ADVANCED.projectionRevision + 1 };
   const withSex = runtime.apply(
-    request(
-      'with-sex',
-      { ...EMPTY_VALUES, age: -7.25, massKg: 70.1, name: 'Alice', sex: 'FEMALE' },
-      1,
-      ADVANCED,
-    ),
+    request('with-sex', complete, 1, ADVANCED),
     context({
       advanceProjectionRevision: () => afterSex,
       capabilityAvailable: true,
