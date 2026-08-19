@@ -64,8 +64,8 @@ scope или lifetime:
 
 Generated-представление семантически совпадает с raw Atlas для:
 
-- [`forms.json[0].requiredFields[0..3]`, строки 372–377](../../generated/spec/atlas/forms.json#L372-L377),
-  [`forms.json[1].requiredFields[0..3]`, строки 1077–1082](../../generated/spec/atlas/forms.json#L1077-L1082);
+- [`forms-by-id.json["APP-001"].requiredFields[0..3]`, строки 4143–4148](../../generated/spec/atlas/forms-by-id.json#L4143-L4148),
+  [`forms-by-id.json["APP-002"].requiredFields[0..3]`, строки 4848–4853](../../generated/spec/atlas/forms-by-id.json#L4848-L4853);
 - [`transitions.json[0..1].from/to/guard`, строки 2–15](../../generated/spec/atlas/transitions.json#L2-L15);
 - [`global-contracts.json[4].contractId/value`, строки 69–75](../../generated/spec/atlas/global-contracts.json#L69-L75);
 - [`lifecycles.json[0..18].entity`, строки 1–313](../../generated/spec/atlas/lifecycles.json#L1-L313).

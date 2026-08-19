@@ -6,7 +6,7 @@
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { banner, tsUnion, writeJson, writeText } from './lib/emit.js';
 import { expectCount, fail } from './lib/fail.js';
@@ -62,7 +62,7 @@ const ATLAS_SECTION_VERDICTS = {
     'generated/spec/atlas/requirements.json, renderer/primary-actions-by-form-id.json, and generated/types/atlas.ts',
   ),
   forms: output(
-    'generated/spec/atlas/forms.json, forms-by-id.json, renderer/forms-by-id.json, and generated/types/atlas.ts',
+    'generated/spec/atlas/forms-by-id.json, renderer/forms-by-id.json, and generated/types/atlas.ts',
   ),
   transitions: output(
     'generated/spec/atlas/transitions.json, renderer/transitions-by-form-and-trigger.json, and generated/types/atlas.ts',
@@ -1031,7 +1031,6 @@ export async function importAtlas(): Promise<AtlasImport> {
     roles,
     guardStates,
   });
-  await emit('forms.json', forms);
   await emit('forms-by-id.json', formsById);
   await emit('renderer/forms-by-id.json', rendererFormsById);
   await emit('renderer/primary-actions-by-form-id.json', rendererIndexes.primaryActionsByForm);
@@ -1064,6 +1063,10 @@ export async function importAtlas(): Promise<AtlasImport> {
     }),
   );
   files.push('generated/types/atlas.ts');
+
+  // Slice 3 retires this exact legacy output. Remove it only after every
+  // retained Atlas output succeeded, so a failed emit leaves the old catalogue intact.
+  rmSync(join(atlasSpecDir, 'forms.json'), { force: true });
 
   return { formIds, bytesWritten: bytes, files };
 }

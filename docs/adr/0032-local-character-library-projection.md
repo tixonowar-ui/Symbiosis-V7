@@ -35,7 +35,7 @@ APP-004 — `$.forms[3]`. Её purpose, input owner и guards задают дв�
 Точная shape перечислена в
 [`$.forms[3].requiredFields[0..10]`, строки 29602–29613](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L29602-L29613).
 Generated-представление повторяет её в
-[`forms.json[3].requiredFields[0..10]`, строки 2446–2457](../../generated/spec/atlas/forms.json#L2446-L2457).
+[`forms-by-id.json["APP-004"].requiredFields[0..10]`, строки 6217–6229](../../generated/spec/atlas/forms-by-id.json#L6217-L6229).
 
 Lifecycle `localCharacter` содержит только названия шести состояний и journeys,
 но не библиотечные buckets:

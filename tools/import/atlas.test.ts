@@ -3,7 +3,7 @@
  * pipeline is that it agrees with the delivered atlas, and a fixture would only
  * prove the importer agrees with itself.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ActionKey } from '@generated/types/atlas.js';
 import { describe, expect, it } from 'vitest';
@@ -30,6 +30,12 @@ const clonedAtlas = (): ImportJsonObject => structuredClone(atlasArtifact);
 
 const clonedForms = (): ImportJsonObject[] =>
   structuredClone(atlasArtifact['forms']) as ImportJsonObject[];
+
+const sourceFormId = (form: ImportJsonObject): string => {
+  const id = form['id'];
+  if (typeof id !== 'string') throw new Error('source form id is not text');
+  return id;
+};
 
 const firstFormActionRows = (forms: ImportJsonObject[]): ImportJsonObject[] => {
   const firstForm = forms[0];
@@ -106,14 +112,22 @@ const extractSyntheticWorkflowCommands = (
 
 describe('generated atlas spec', () => {
   it('carries every form the atlas declares', () => {
-    expect(spec('forms.json')).toHaveLength(376);
+    const sourceForms = clonedForms();
+    const formsById = spec('forms-by-id.json') as Record<string, unknown>;
+
+    expect(sourceForms).toHaveLength(376);
+    expect(Object.keys(formsById)).toHaveLength(sourceForms.length);
   });
 
   it('indexes every form by id without changing its contents', () => {
-    const forms = spec('forms.json') as { id: string }[];
+    const forms = clonedForms();
     const formsById = spec('forms-by-id.json') as Record<string, unknown>;
     expect(Object.keys(formsById)).toHaveLength(376);
-    expect(formsById).toEqual(Object.fromEntries(forms.map((form) => [form.id, form])));
+    expect(formsById).toEqual(Object.fromEntries(forms.map((form) => [sourceFormId(form), form])));
+  });
+
+  it('does not retain the retired forms array', () => {
+    expect(existsSync(join(SPEC_DIR, 'atlas', 'forms.json'))).toBe(false);
   });
 
   it('projects every renderer query without losing any field it reads', () => {
@@ -248,7 +262,9 @@ describe('generated atlas spec', () => {
   });
 
   it('closes the transition graph over the form catalogue', () => {
-    const ids = new Set((spec('forms.json') as { id: string }[]).map((f) => f.id));
+    const sourceIds = new Set(clonedForms().map(sourceFormId));
+    const ids = new Set(Object.keys(spec('forms-by-id.json') as Record<string, unknown>));
+    expect(ids).toEqual(sourceIds);
     const dangling = (spec('transitions.json') as { from: string; to: string }[]).filter(
       (t) => !ids.has(t.from) || !ids.has(t.to),
     );
@@ -256,10 +272,19 @@ describe('generated atlas spec', () => {
   });
 
   it('distributes forms across the 16 domains exactly as the atlas counts them', () => {
+    const sourceByDomain = new Map<string, number>();
+    for (const form of clonedForms()) {
+      const domain = form['domain'];
+      if (typeof domain !== 'string') throw new Error('source form domain is not text');
+      sourceByDomain.set(domain, (sourceByDomain.get(domain) ?? 0) + 1);
+    }
     const byDomain = new Map<string, number>();
-    for (const form of spec('forms.json') as { domain: string }[]) {
+    for (const form of Object.values(
+      spec('forms-by-id.json') as Record<string, { domain: string }>,
+    )) {
       byDomain.set(form.domain, (byDomain.get(form.domain) ?? 0) + 1);
     }
+    expect(byDomain).toEqual(sourceByDomain);
     expect(byDomain.size).toBe(16);
     expect(byDomain.get('Боевая ситуация')).toBe(73);
     expect(byDomain.get('Создание локального персонажа')).toBe(44);

@@ -47,7 +47,7 @@ interface MirrorTarget {
 }
 
 interface IdentityMirrorFixture {
-  readonly forms: MutableRecord[];
+  readonly forms: Readonly<Record<string, MutableRecord>>;
   readonly journeys: MutableRecord[];
   readonly transitions: MutableRecord[];
   readonly mirrors: Readonly<Record<string, MirrorTarget>>;
@@ -109,7 +109,11 @@ const identityMirrorFixture = (): IdentityMirrorFixture => {
   ): MirrorTarget => ({ row, field, file, id, group });
 
   return {
-    forms: [app004, chr001, chr010],
+    forms: {
+      'APP-004': app004,
+      'CHR-001': chr001,
+      'CHR-010': chr010,
+    },
     journeys: [{ id: 'J-CHAR-CREATE', steps: [identityStep] }],
     transitions: [entryTransition, continueTransition],
     mirrors: {
@@ -123,12 +127,24 @@ const identityMirrorFixture = (): IdentityMirrorFixture => {
       'APP-004 action': target(
         entryAction,
         'guard',
-        'atlas/forms.json',
+        'atlas/forms-by-id.json',
         'APP-004::CTA::001',
         'entry',
       ),
-      'APP-004 outgoing': target(entryOut, 'guard', 'atlas/forms.json', 'APP-004→CHR-001', 'entry'),
-      'CHR-001 incoming': target(entryIn, 'guard', 'atlas/forms.json', 'APP-004→CHR-001', 'entry'),
+      'APP-004 outgoing': target(
+        entryOut,
+        'guard',
+        'atlas/forms-by-id.json',
+        'APP-004→CHR-001',
+        'entry',
+      ),
+      'CHR-001 incoming': target(
+        entryIn,
+        'guard',
+        'atlas/forms-by-id.json',
+        'APP-004→CHR-001',
+        'entry',
+      ),
       'entry transition': target(
         entryTransition,
         'guard',
@@ -139,21 +155,21 @@ const identityMirrorFixture = (): IdentityMirrorFixture => {
       'CHR-001 action': target(
         continueAction,
         'guard',
-        'atlas/forms.json',
+        'atlas/forms-by-id.json',
         'CHR-001::CTA::001',
         'continue',
       ),
       'CHR-001 outgoing': target(
         continueOut,
         'guard',
-        'atlas/forms.json',
+        'atlas/forms-by-id.json',
         'CHR-001→CHR-010',
         'continue',
       ),
       'CHR-010 incoming': target(
         continueIn,
         'guard',
-        'atlas/forms.json',
+        'atlas/forms-by-id.json',
         'CHR-001→CHR-010',
         'continue',
       ),
@@ -167,7 +183,7 @@ const identityMirrorFixture = (): IdentityMirrorFixture => {
       IDENTITY_INCOMPLETE: target(
         states,
         'IDENTITY_INCOMPLETE',
-        'atlas/forms.json',
+        'atlas/forms-by-id.json',
         'CHR-001.IDENTITY_INCOMPLETE',
         'state',
       ),
@@ -242,7 +258,8 @@ describe('Atlas form and QA literal mirrors', () => {
     expect(validateAtlasFormQaMirrors([fixture.form], [fixture.qa])).toContainEqual({
       file: 'atlas/qa-scenarios.json',
       id: 'QA-FORM-APP-001',
-      message: 'scenario does not contain requiredFields joined with ", " from atlas/forms.json',
+      message:
+        'scenario does not contain requiredFields joined with ", " from atlas/forms-by-id.json',
     });
   });
 
@@ -252,14 +269,14 @@ describe('Atlas form and QA literal mirrors', () => {
     const problems = validateAtlasFormQaMirrors([fixture.form], [fixture.qa]);
 
     expect(problems).toContainEqual({
-      file: 'atlas/forms.json',
+      file: 'atlas/forms-by-id.json',
       id: 'APP-001',
       message: 'acceptanceCriteria contains the literal purpose criterion 0 times, expected 1',
     });
     expect(problems).toContainEqual({
       file: 'atlas/qa-scenarios.json',
       id: 'QA-FORM-APP-001',
-      message: 'scenario does not contain literal purpose from atlas/forms.json',
+      message: 'scenario does not contain literal purpose from atlas/forms-by-id.json',
     });
   });
 
@@ -270,7 +287,7 @@ describe('Atlas form and QA literal mirrors', () => {
     const problems = validateAtlasFormQaMirrors([fixture.form], [fixture.qa]);
 
     expect(problems).toContainEqual({
-      file: 'atlas/forms.json',
+      file: 'atlas/forms-by-id.json',
       id: 'APP-001',
       message: 'qaScenarioIds contains "QA-FORM-APP-001" 0 times, expected 1',
     });
@@ -306,7 +323,7 @@ describe('Atlas form and QA literal mirrors', () => {
     fixture.form['requiredFields'] = ['valid', 1];
 
     expect(validateAtlasFormQaMirrors([fixture.form], [fixture.qa])).toContainEqual({
-      file: 'atlas/forms.json',
+      file: 'atlas/forms-by-id.json',
       id: 'APP-001',
       message: 'requiredFields is not an array of text values',
     });
@@ -318,7 +335,11 @@ describe('ADR 0037 CHR-001 identity text mirrors', () => {
     const fixture = identityMirrorFixture();
 
     expect(
-      validateChr001IdentityTextMirrors(fixture.forms, fixture.journeys, fixture.transitions),
+      validateChr001IdentityTextMirrors(
+        Object.values(fixture.forms),
+        fixture.journeys,
+        fixture.transitions,
+      ),
     ).toEqual([]);
   });
 
@@ -330,7 +351,7 @@ describe('ADR 0037 CHR-001 identity text mirrors', () => {
       const target = fixture.mirrors[name]!;
       target.row[target.field] = 'synchronized-looking but non-canonical prose';
       const problems = validateChr001IdentityTextMirrors(
-        fixture.forms,
+        Object.values(fixture.forms),
         fixture.journeys,
         fixture.transitions,
       );
@@ -354,7 +375,7 @@ describe('ADR 0037 CHR-001 identity text mirrors', () => {
     }
 
     const problems = validateChr001IdentityTextMirrors(
-      fixture.forms,
+      Object.values(fixture.forms),
       fixture.journeys,
       fixture.transitions,
     );
@@ -365,15 +386,19 @@ describe('ADR 0037 CHR-001 identity text mirrors', () => {
 
   it('rejects duplicate semantic selectors instead of choosing one', () => {
     const fixture = identityMirrorFixture();
-    const app004 = fixture.forms[0]!;
+    const app004 = fixture.forms['APP-004']!;
     const actions = app004['actions'] as MutableRecord;
     const rows = actions['ctaAvailabilityByAction'] as MutableRecord[];
     rows.push({ ...rows[0] });
 
     expect(
-      validateChr001IdentityTextMirrors(fixture.forms, fixture.journeys, fixture.transitions),
+      validateChr001IdentityTextMirrors(
+        Object.values(fixture.forms),
+        fixture.journeys,
+        fixture.transitions,
+      ),
     ).toContainEqual({
-      file: 'atlas/forms.json',
+      file: 'atlas/forms-by-id.json',
       id: 'APP-004::CTA::001',
       message: 'expected exactly one action with actionKey "APP-004::CTA::001", got 2',
     });

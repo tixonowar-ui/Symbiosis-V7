@@ -99,7 +99,7 @@ wire он не попадает, host видит лишь последующее
 не задаёт invocation/payload shape, а fixed `actionKey` не переносит произвольные
 `name`, `age`, `massKg`:
 [`$.forms[87].actions.ctaAvailabilityByAction[2]`, строки 68380–68439](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L68380-L68439),
-[`forms.json[87].actions.ctaAvailabilityByAction[2]`, строки 40594–40652](../../generated/spec/atlas/forms.json#L40594-L40652).
+[`forms-by-id.json["CHR-037"].actions.ctaAvailabilityByAction[2]`, строки 26724–26783](../../generated/spec/atlas/forms-by-id.json#L26724-L26783).
 Поэтому identity replacement подтверждает form values, но не переопределяет
 `local-draft-command`. Среди остальных 13 checkpoint-форм этот kind есть лишь у
 `CHR-015`, `CHR-018`, `CHR-037`:
@@ -332,7 +332,7 @@ equality поля, которое называет действие, задаё�
 `null`, но source не задаёт initial shape/default для двух required fields —
 `raceConsequencesPreview` и `choiceLockStatus`:
 [`$.forms[60].requiredFields[0..7]`, строки 54916–54924](../../artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json#L54916-L54924),
-[`forms.json[60].requiredFields[0..7]`, строки 27750–27758](../../generated/spec/atlas/forms.json#L27750-L27758).
+[`forms-by-id.json["CHR-010"].requiredFields[0..7]`, строки 14407–14416](../../generated/spec/atlas/forms-by-id.json#L14407-L14416).
 Selector и safe-return tuples определены Atlas и не являются blocker. До узкого
 решения exact initial values этих двух полей successful checkpoint #97
 **blocked**: placeholder нарушил бы required payload, хотя action vocabulary уже
