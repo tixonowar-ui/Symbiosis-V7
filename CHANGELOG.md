@@ -70,6 +70,12 @@
 
 ### Добавлено
 
+- `CHR-001` заменяет ручной ввод ключа арта точным списком шести заглушек и
+  файловым выбором PNG/JPEG: тип выводится из сигнатуры, bytes уходят как
+  canonical padded base64, повторный выбор заменяет арт, а снятие возвращает
+  `null`. Host-отказы показываются как ошибка поля без внутренних Rule ID.
+  ADR 0040 задаёт явную таблицу `race + sex → assetKey` только для будущего
+  atomic final save `CHR-025`; post-save изменение остаётся за `CHR-040`.
 - Первый durable checkpoint идентичности атомарно сохраняет exact десятиполевый
   `command.request`, закрытый envelope и receipt, после чего host отправляет
   terminal wire v1 перед `COMMAND_DESTINATION` snapshot `CHR-010` в wire v2;

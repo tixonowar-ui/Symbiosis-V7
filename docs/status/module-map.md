@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-19`
-- Тестов: 736, все зелёные
+- Тестов: 747, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -53,7 +53,9 @@ wire v2, а reconnect и restart восстанавливают то же durabl
 библиотека читается при каждой проекции и получает отдельную runtime-ревизию,
 поэтому сохранённый черновик виден в `APP-004` без перезапуска host. Web после
 checkpoint замораживает идентичность, а `CHR-010::CTA::004..006` меняют только
-client-local выбор расы без wire-трафика. Остальные прикладные слои остаются
+client-local выбор расы без wire-трафика. `CHR-001` выбирает exact catalog
+placeholder либо локальный PNG/JPEG по сигнатуре, допускает замену и снятие и
+показывает host-отказ как ошибку поля. Остальные прикладные слои остаются
 частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                       | Веха |
@@ -65,7 +67,7 @@ client-local выбор расы без wire-трафика. Остальные 
 | `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity            | M2   |
 | `src/host`                   | **частично** | `npm start`; shell/library revisions; v3 identity; checkpoint → CHR-010       | M4   |
 | `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001/010, role filtering                           | M4   |
-| `src/web`                    | **частично** | checkpoint recovery, exact CHR-010, client-local race draft                   | M5   |
+| `src/web`                    | **частично** | checkpoint recovery, CHR-010 race draft, CHR-001 art picker                   | M5   |
 | `src/web/renderer`           | **частично** | 11 форм `APP-` и CHR-001/010; остальные формы и типы fail-closed              | M5   |
 | `src/web/forms`              | **частично** | домен `app`, presentation APP-001/002/004 и CHR-001/010                       | M6   |
 
