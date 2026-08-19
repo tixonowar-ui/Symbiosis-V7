@@ -15,6 +15,7 @@ const FORMS_FILE = DETAILED_FORM_INDEX_FILE;
 const JOURNEYS_FILE = 'atlas/journeys.json';
 const QA_SCENARIOS_FILE = 'atlas/qa-scenarios.json';
 const TRANSITIONS_FILE = 'atlas/transitions.json';
+export const ATLAS_MARKDOWN_FILE = 'artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md';
 
 const ADR_0037_ENTRY_GUARD =
   'Новый immutable UUID; обязательны имя, возраст, пол и положительная massKg 0,1; описание/арт необязательны.';
@@ -22,6 +23,33 @@ const ADR_0037_CONTINUE_GUARD =
   'UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age/sex present; massKg>0 at step 0.1; immutable draft UUID committed';
 const ADR_0037_IDENTITY_INCOMPLETE =
   'Continue is absent until name/age/sex/positive 0.1kg mass validate.';
+const RETIRED_ENTRY_GUARD =
+  'Новый immutable UUID; обязательны имя, возраст и положительная massKg 0,1; описание/арт необязательны.';
+const RETIRED_CONTINUE_GUARD =
+  'UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age present; massKg>0 at step 0.1; immutable draft UUID committed';
+const RETIRED_IDENTITY_INCOMPLETE =
+  'Continue is absent until name/age/positive 0.1kg mass validate.';
+
+const MARKDOWN_IDENTITY_LITERALS = [
+  {
+    id: 'entry',
+    current: ADR_0037_ENTRY_GUARD,
+    retired: RETIRED_ENTRY_GUARD,
+    expected: 4,
+  },
+  {
+    id: 'continue',
+    current: ADR_0037_CONTINUE_GUARD,
+    retired: RETIRED_CONTINUE_GUARD,
+    expected: 3,
+  },
+  {
+    id: 'identity-incomplete',
+    current: ADR_0037_IDENTITY_INCOMPLETE,
+    retired: RETIRED_IDENTITY_INCOMPLETE,
+    expected: 1,
+  },
+] as const;
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -121,6 +149,49 @@ function expectLiteral(
         `got ${JSON.stringify(actual)}`,
     });
   }
+}
+
+function countLiteral(source: string, literal: string): number {
+  let count = 0;
+  let offset = 0;
+  while (offset <= source.length - literal.length) {
+    const found = source.indexOf(literal, offset);
+    if (found === -1) break;
+    count += 1;
+    offset = found + literal.length;
+  }
+  return count;
+}
+
+/** ADR 0039 fixes the raw companion counts without defining a Markdown parser. */
+export function validateAtlasMarkdownIdentityTextMirrors(
+  markdown: string,
+): readonly AtlasValidationProblem[] {
+  const problems: AtlasValidationProblem[] = [];
+
+  for (const literal of MARKDOWN_IDENTITY_LITERALS) {
+    const retiredCount = countLiteral(markdown, literal.retired);
+    if (retiredCount !== 0) {
+      problems.push({
+        file: ATLAS_MARKDOWN_FILE,
+        id: literal.id,
+        message: `retired ADR 0037 literal count is ${String(retiredCount)}, expected 0`,
+      });
+    }
+
+    const currentCount = countLiteral(markdown, literal.current);
+    if (currentCount !== literal.expected) {
+      problems.push({
+        file: ATLAS_MARKDOWN_FILE,
+        id: literal.id,
+        message:
+          `current ADR 0037 literal count is ${String(currentCount)}, ` +
+          `expected ${String(literal.expected)} by ADR 0039`,
+      });
+    }
+  }
+
+  return problems;
 }
 
 /**

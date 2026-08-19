@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ATLAS_MARKDOWN_FILE,
+  validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
   validateDetailedFormIndexKeys,
@@ -14,6 +16,15 @@ const ENTRY_GUARD =
 const CONTINUE_GUARD =
   'UI-CMD-CHAR-WIZARD-CHECKPOINT stage=IDENTITY; name/age/sex present; massKg>0 at step 0.1; immutable draft UUID committed';
 const IDENTITY_INCOMPLETE = 'Continue is absent until name/age/sex/positive 0.1kg mass validate.';
+const RETIRED_ENTRY_GUARD =
+  'Новый immutable UUID; обязательны имя, возраст и положительная massKg 0,1; описание/арт необязательны.';
+
+const markdownIdentityFixture = (): string =>
+  [
+    ...Array.from({ length: 4 }, () => ENTRY_GUARD),
+    ...Array.from({ length: 3 }, () => CONTINUE_GUARD),
+    IDENTITY_INCOMPLETE,
+  ].join('\n');
 
 type MutableRecord = Record<string, unknown>;
 
@@ -402,6 +413,44 @@ describe('ADR 0037 CHR-001 identity text mirrors', () => {
       id: 'APP-004::CTA::001',
       message: 'expected exactly one action with actionKey "APP-004::CTA::001", got 2',
     });
+  });
+});
+
+describe('ADR 0039 Atlas Markdown identity text mirrors', () => {
+  it('accepts the four entry, three Continue and one incomplete-state renderings', () => {
+    expect(validateAtlasMarkdownIdentityTextMirrors(markdownIdentityFixture())).toEqual([]);
+  });
+
+  it('rejects one retired rendering without hiding the lost current copy', () => {
+    const markdown = markdownIdentityFixture().replace(ENTRY_GUARD, RETIRED_ENTRY_GUARD);
+
+    expect(validateAtlasMarkdownIdentityTextMirrors(markdown)).toEqual([
+      {
+        file: ATLAS_MARKDOWN_FILE,
+        id: 'entry',
+        message: 'retired ADR 0037 literal count is 1, expected 0',
+      },
+      {
+        file: ATLAS_MARKDOWN_FILE,
+        id: 'entry',
+        message: 'current ADR 0037 literal count is 3, expected 4 by ADR 0039',
+      },
+    ]);
+  });
+
+  it('rejects synchronized replacement of every copy with non-canonical prose', () => {
+    const markdown = markdownIdentityFixture().replaceAll(
+      CONTINUE_GUARD,
+      'same wrong Continue prose',
+    );
+
+    expect(validateAtlasMarkdownIdentityTextMirrors(markdown)).toEqual([
+      {
+        file: ATLAS_MARKDOWN_FILE,
+        id: 'continue',
+        message: 'current ADR 0037 literal count is 0, expected 3 by ADR 0039',
+      },
+    ]);
   });
 });
 
