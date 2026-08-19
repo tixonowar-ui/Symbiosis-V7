@@ -30,44 +30,45 @@
 
 ## Реестр
 
-| №                                                         | Решение                              | Статус                                 |
-| --------------------------------------------------------- | ------------------------------------ | -------------------------------------- |
-| [0001](0001-target-platforms.md)                          | Целевые платформы                    | принято                                |
-| [0002](0002-stack.md)                                     | Технологический стек                 | принято                                |
-| [0003](0003-source-of-truth-order.md)                     | Порядок источников правды            | принято                                |
-| [0004](0004-gm-xp-award-is-irreversible.md)               | Начисление опыта мастером необратимо | принято                                |
-| [0005](0005-balanced-enemy-group-generator.md)            | Генератор сбалансированной группы    | принято                                |
-| [0006](0006-night-starts-at-21.md)                        | Игровая ночь начинается в 21:00      | принято                                |
-| [0007](0007-frozen-runtime-pack-forward-compatibility.md) | Замороженный Runtime Pack            | принято                                |
-| [0008](0008-hidden-actor-visibility.md)                   | Скрытый актор не утекает игроку      | принято                                |
-| [0009](0009-roll-request-queue-per-command.md)            | Очередь бросков привязана к команде  | принято                                |
-| [0010](0010-local-seat-limit.md)                          | Лимит локальных мест                 | принято                                |
-| [0011](0011-not-modeled-stays-tombstone.md)               | NOT_MODELED остаётся tombstone       | принято                                |
-| [0012](0012-release-hash-model.md)                        | Модель хеширования выпуска           | принято                                |
-| [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято                                |
-| [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято                                |
-| [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято                                |
-| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято; строка про seed заменена 0019 |
-| [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято                                |
-| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято; список owners дополнен 0031   |
-| [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                |
-| [0020](0020-wire-protocol-and-shared-contracts.md)        | Wire-протокол и контракты shared     | принято                                |
-| [0021](0021-roll-model.md)                                | Модель броска AUTO и MANUAL          | принято                                |
-| [0022](0022-operation-and-rule-handler-registries.md)     | Раздельные реестры операций и правил | принято                                |
-| [0023](0023-stat-modifier-source-key.md)                  | Источник модификатора характеристики | принято                                |
-| [0024](0024-stat-map-integer-values.md)                   | Целочисленные значения `StatMap`     | принято                                |
-| [0025](0025-character-draft-checkpoint-scope.md)          | Checkpoint черновика персонажа       | принято                                |
-| [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                |
-| [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято; APP-002-часть заменена 0030   |
-| [0028](0028-wire-v2-reconnect.md)                         | Инициация reconnect в wire v2        | принято                                |
-| [0029](0029-wizard-draft-initial-payload.md)              | Начальный payload wizard-черновика   | принято                                |
-| [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                |
-| [0031](0031-shell-revision-scope.md)                      | Владелец shell-ревизий               | принято                                |
-| [0032](0032-local-character-library-projection.md)        | Ревизия локальной библиотеки         | принято                                |
-| [0033](0033-chr-001-identity-input-contract.md)           | Ввод идентичности `CHR-001`          | принято; name — 0035; asset — 0036     |
-| [0034](0034-chr-010-initial-projection.md)                | Начальная проекция `CHR-010`         | принято                                |
-| [0035](0035-identity-draft-name-refusals.md)              | Отказы имени identity draft          | принято                                |
-| [0036](0036-local-character-portrait-catalog.md)          | Каталог портретов `CHR-001`          | принято                                |
+| №                                                         | Решение                              | Статус                                      |
+| --------------------------------------------------------- | ------------------------------------ | ------------------------------------------- |
+| [0001](0001-target-platforms.md)                          | Целевые платформы                    | принято                                     |
+| [0002](0002-stack.md)                                     | Технологический стек                 | принято                                     |
+| [0003](0003-source-of-truth-order.md)                     | Порядок источников правды            | принято; Atlas/digests уточнены 0037        |
+| [0004](0004-gm-xp-award-is-irreversible.md)               | Начисление опыта мастером необратимо | принято                                     |
+| [0005](0005-balanced-enemy-group-generator.md)            | Генератор сбалансированной группы    | принято                                     |
+| [0006](0006-night-starts-at-21.md)                        | Игровая ночь начинается в 21:00      | принято                                     |
+| [0007](0007-frozen-runtime-pack-forward-compatibility.md) | Замороженный Runtime Pack            | принято                                     |
+| [0008](0008-hidden-actor-visibility.md)                   | Скрытый актор не утекает игроку      | принято                                     |
+| [0009](0009-roll-request-queue-per-command.md)            | Очередь бросков привязана к команде  | принято                                     |
+| [0010](0010-local-seat-limit.md)                          | Лимит локальных мест                 | принято                                     |
+| [0011](0011-not-modeled-stays-tombstone.md)               | NOT_MODELED остаётся tombstone       | принято                                     |
+| [0012](0012-release-hash-model.md)                        | Модель хеширования выпуска           | принято                                     |
+| [0013](0013-missing-music-silent-fallback.md)             | Отсутствующая музыка: тихий fallback | принято                                     |
+| [0014](0014-artifact-reading.md)                          | Чтение артефактов в конвейере        | принято                                     |
+| [0015](0015-import-pipeline-guarantees.md)                | Гарантии конвейера импорта           | принято                                     |
+| [0016](0016-what-generated-is-committed.md)               | Что из `generated/` хранится в git   | принято; строка про seed заменена 0019      |
+| [0017](0017-qna-question-code-alias.md)                   | Код `Q-MON-089` восстановлен алиасом | принято                                     |
+| [0018](0018-current-state-storage-and-checkpoints.md)     | Модель хранения и checkpoint         | принято; список owners дополнен 0031        |
+| [0019](0019-seed-is-rebuilt-not-committed.md)             | Seed пересобирается, а не хранится   | принято                                     |
+| [0020](0020-wire-protocol-and-shared-contracts.md)        | Wire-протокол и контракты shared     | принято; identity v3 применён 0037          |
+| [0021](0021-roll-model.md)                                | Модель броска AUTO и MANUAL          | принято                                     |
+| [0022](0022-operation-and-rule-handler-registries.md)     | Раздельные реестры операций и правил | принято                                     |
+| [0023](0023-stat-modifier-source-key.md)                  | Источник модификатора характеристики | принято                                     |
+| [0024](0024-stat-map-integer-values.md)                   | Целочисленные значения `StatMap`     | принято                                     |
+| [0025](0025-character-draft-checkpoint-scope.md)          | Checkpoint черновика персонажа       | принято                                     |
+| [0026](0026-form-authority-and-navigation-wire.md)        | Назначение формы и навигация         | принято                                     |
+| [0027](0027-local-shell-context.md)                       | Контекст локальной оболочки          | принято; APP-002-часть заменена 0030        |
+| [0028](0028-wire-v2-reconnect.md)                         | Инициация reconnect в wire v2        | принято; identity-v2 cases сняты 0037       |
+| [0029](0029-wizard-draft-initial-payload.md)              | Начальный payload wizard-черновика   | принято; CHR-001 дополнен 0037              |
+| [0030](0030-atlas-supersedes-app-002-prerequisites.md)    | `APP-002` без seat/connection        | принято                                     |
+| [0031](0031-shell-revision-scope.md)                      | Владелец shell-ревизий               | принято                                     |
+| [0032](0032-local-character-library-projection.md)        | Ревизия локальной библиотеки         | принято                                     |
+| [0033](0033-chr-001-identity-input-contract.md)           | Ввод идентичности `CHR-001`          | принято; name 0035; asset 0036; sex/v3 0037 |
+| [0034](0034-chr-010-initial-projection.md)                | Начальная проекция `CHR-010`         | принято                                     |
+| [0035](0035-identity-draft-name-refusals.md)              | Отказы имени identity draft          | принято; envelope version заменена 0037     |
+| [0036](0036-local-character-portrait-catalog.md)          | Каталог портретов `CHR-001`          | принято; sex-premise заменена 0037          |
+| [0037](0037-atlas-v1-3-character-sex-and-mass-bounds.md)  | Пол персонажа и границы массы        | принято                                     |
 
 ## Перенос решений аудита
 
