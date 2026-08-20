@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-08-20`
-- Тестов: 913, все зелёные
+- Тестов: 955, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -64,22 +64,26 @@ addressed set request и открывает `CHR-003`. Первый показ �
 принимают набор либо открывают `CHR-028` поверх исходного screen: `CANCEL`
 закрывает dialog presentation-only, а `CONFIRM` сохраняет abandonment и
 следующую попытку либо point-buy. Ordered attempts сохраняют provenance;
-пятая попытка `ALL_OR_NOTHING` допускает только принятие. Срез подписывает
-переход в `CHR-009`, но саму форму ещё не публикует.
+пятая попытка `ALL_OR_NOTHING` допускает только принятие. `CHR-009` назначает
+набор по индексам либо проверяет point-buy 90/85, сохраняя provenance каждого
+критического штрафа. `UNITED` и `FREE` переходят прямо на read-only `CHR-012`,
+а `PURE` сначала выбирает класс на `CHR-011`; host выводит обязательный навык и
+пересчитывает base + race + class существующим domain-каталогом. Поправки
+симбионтов остаются за следующим срезом.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                            | Веха |
 | ---------------------------- | ------------ | ------------------------------------------------------------------ | ---- |
 | `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft        | M4   |
-| `src/domain/rules`           | **частично** | набор, очередь критов и решения CLASSIC/ADVENTUROUS/AON            | M3   |
+| `src/domain/rules`           | **частично** | броски, assignment и skill-stage base + race + class               | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет      | M3   |
-| `src/persistence`            | **частично** | CRUD, append-only wizard/roll checkpoint, library, device identity | M2   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/assignment/class checkpoint, library, identity   | M2   |
 | `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity | M2   |
-| `src/host`                   | **частично** | identity и creation journey до подписанной границы CHR-009         | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004 и exact CHR-001–008/010/016/028/036 slice          | M4   |
-| `src/web`                    | **частично** | recovery, creation rolls, decisions и CHR-028 dialog               | M5   |
-| `src/web/renderer`           | **частично** | 23 формы: 11 APP и 12 CHR; остальные fail-closed                   | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двенадцати CHR            | M6   |
+| `src/host`                   | **частично** | identity и creation journey до read-only CHR-012                   | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–012 и CHR-016/028/036 exact slice         | M4   |
+| `src/web`                    | **частично** | recovery, rolls, stat assignment, PURE class и CHR-012             | M5   |
+| `src/web/renderer`           | **частично** | 26 форм: 11 APP и 15 CHR; остальные fail-closed                    | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и пятнадцати CHR            | M6   |
 
 ## generated/ — вывод конвейера
 

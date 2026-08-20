@@ -548,6 +548,10 @@ export const validateDurableIdentityCheckpoint = (
   if (checkpoint.checkpointId === localCharacter.localCharacterId) {
     mismatches.push('checkpoint/character ID collision');
   }
+  const occupiedIds = new Set<string>([localCharacter.localCharacterId, checkpoint.checkpointId]);
+  if (occupiedIds.has(request.commandId)) mismatches.push('request command ID collision');
+  occupiedIds.add(request.commandId);
+  if (occupiedIds.has(receipt.receiptId)) mismatches.push('receipt ID collision');
   if (request.commandId !== receipt.commandId) mismatches.push('request/receipt commandId');
   if (request.payload.characterDraftId !== localCharacter.localCharacterId) {
     mismatches.push('request characterDraftId');
@@ -615,6 +619,9 @@ export function commitIdentityCheckpoint(
   }
   const normalized = validateIdentityCheckpointRequest(normalizeIdentityCheckpointRequest(request));
   const { characterDraftId, wizardCheckpointId, draftRevision } = normalized.payload;
+  if (new Set([characterDraftId, wizardCheckpointId, normalized.commandId, receiptId]).size !== 4) {
+    throw new IdentityCheckpointApplicationError({ code: 'GUARD_REJECTED' });
+  }
   const receipt: IdentityCheckpointReceipt = {
     commandId: normalized.commandId,
     receiptId,

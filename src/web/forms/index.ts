@@ -21,6 +21,9 @@ export type SupportedPresentationFormId =
   | 'CHR-007'
   | 'CHR-008'
   | 'CHR-028'
+  | 'CHR-009'
+  | 'CHR-011'
+  | 'CHR-012'
   | 'CHR-010'
   | 'CHR-016'
   | 'CHR-036';
@@ -39,6 +42,9 @@ const SUPPORTED = new Set<FormId>([
   'CHR-007',
   'CHR-008',
   'CHR-028',
+  'CHR-009',
+  'CHR-011',
+  'CHR-012',
   'CHR-010',
   'CHR-016',
   'CHR-036',

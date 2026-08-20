@@ -12,6 +12,7 @@ import {
   type CreationStatAbandonmentTransitionKind,
   type CreationStatCriticalChainState,
   type CreationStatSetDecisionRule,
+  type SkillStageCatalog,
 } from '../domain/index.js';
 
 import { decodeClientMessage } from '@shared/wire-codec.js';
@@ -47,6 +48,24 @@ import {
   CreationRollCommitApplicationError,
   normalizeCreationRollCommitRequest,
 } from './creation-roll-commit.js';
+import {
+  CreationStatAssignmentApplicationError,
+  normalizePureClassDecisionRequest,
+  normalizeStatAssignmentCheckpointRequest,
+  parsePureClassStage,
+  parseStatAssignmentReceipt,
+  parseStatAssignmentStage,
+  deriveChr012StatsView,
+  prepareStatAssignment,
+  preparePureClassDecision,
+  type PureClassDecisionCommandRequest,
+  type PureClassDecisionPayload,
+  type PureClassDecisionReceipt,
+  type PureClassStage,
+  type StatAssignmentCheckpointCommandRequest,
+  type StatAssignmentCheckpointReceipt,
+  type StatAssignmentStage,
+} from './creation-stat-assignment.js';
 import type {
   DurableIdentityCheckpoint,
   IdentityCheckpointCommandRequest,
@@ -76,7 +95,7 @@ export interface CreationSetAbandonmentConsequences extends JsonObject {
   readonly setValuesDiscarded: true;
 }
 export type CreationDecisionSourceFormId =
-  CreationRaceMethodDecisionSourceFormId | CreationStatRollDecisionFormId | 'CHR-028';
+  CreationRaceMethodDecisionSourceFormId | CreationStatRollDecisionFormId | 'CHR-011' | 'CHR-028';
 export type CreationNextFormId =
   | 'CHR-002'
   | 'CHR-003'
@@ -87,6 +106,8 @@ export type CreationNextFormId =
   | 'CHR-008'
   | 'CHR-009'
   | 'CHR-010'
+  | 'CHR-011'
+  | 'CHR-012'
   | 'CHR-016'
   | 'CHR-036';
 
@@ -141,7 +162,8 @@ export type CreationSetDecidePayload =
   | StatRollAcceptSetPayload
   | StatRollDialogDecisionPayload
   | StatMethodDecisionPayload
-  | SymbiontAcquisitionDecisionPayload;
+  | SymbiontAcquisitionDecisionPayload
+  | PureClassDecisionPayload;
 
 export type CreationRaceMethodSetDecidePayload =
   | DiceInputDecisionPayload
@@ -160,7 +182,8 @@ export type DurableCreationSetDecideCommandRequest = CreationSetDecideCommandReq
   readonly payload:
     | CreationRaceMethodSetDecidePayload
     | StatRollAcceptSetPayload
-    | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' });
+    | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' })
+    | PureClassDecisionPayload;
 };
 export type CreationSetCancelCommandRequest = CreationSetDecideCommandRequest & {
   readonly payload: StatRollDialogDecisionPayload & { readonly decision: 'CANCEL' };
@@ -254,7 +277,8 @@ export type CreationSetDecideReceiptResult =
   | DiceInputDecisionReceiptResult
   | RaceDecisionReceiptResult
   | StatMethodDecisionReceiptResult
-  | SymbiontAcquisitionDecisionReceiptResult;
+  | SymbiontAcquisitionDecisionReceiptResult
+  | PureClassDecisionReceipt['result'];
 export type CreationSetDecideReceipt = CommandReceipt<CreationSetDecideReceiptResult>;
 export type CreationSetCancelReceipt = CommandReceipt<CreationSetCancelReceiptResult>;
 export type DurableCreationSetDecideReceiptResult = Exclude<
@@ -563,8 +587,20 @@ export interface CreationWizardStatRollPayload {
   readonly receipt: CreationRollCommitReceipt | DurableCreationSetDecideReceipt;
 }
 
+export interface CreationWizardStatAssignmentPayload extends Omit<
+  CreationWizardStatRollPayload,
+  'nextStageEnvelope' | 'receipt'
+> {
+  readonly statAssignmentStage: StatAssignmentStage;
+  readonly pureClassStage: PureClassStage | null;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-011' | 'CHR-012'>;
+  readonly receipt: StatAssignmentCheckpointReceipt | PureClassDecisionReceipt;
+}
+
 export type CreationWizardPostIdentityPayload =
-  CreationWizardPreRollPayload | CreationWizardStatRollPayload;
+  | CreationWizardPreRollPayload
+  | CreationWizardStatRollPayload
+  | CreationWizardStatAssignmentPayload;
 
 export type DurableCreationWizardPayload =
   | (IdentityCheckpointDurablePayload & {
@@ -581,23 +617,35 @@ export interface DurableCreationWizardCheckpoint {
   readonly nextStageEnvelope: CreationNextStageEnvelope;
   readonly raceAndMethodStage: RaceAndMethodStage | null;
   readonly statRollStage: StatRollStage | null;
+  readonly statAssignmentStage: StatAssignmentStage | null;
+  readonly pureClassStage: PureClassStage | null;
   readonly receipt:
-    CreationRollCommitReceipt | DurableCreationSetDecideReceipt | IdentityCheckpointReceipt;
+    | CreationRollCommitReceipt
+    | DurableCreationSetDecideReceipt
+    | IdentityCheckpointReceipt
+    | StatAssignmentCheckpointReceipt
+    | PureClassDecisionReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
-    | IdentityCheckpointCommandRequest;
+    | IdentityCheckpointCommandRequest
+    | StatAssignmentCheckpointCommandRequest;
 }
 
 export interface DurableCreationWizardCommand {
   readonly durableCheckpoint: DurableCreationWizardCheckpoint;
   readonly nextStageEnvelope: CreationNextStageEnvelope;
   readonly receipt:
-    CreationRollCommitReceipt | DurableCreationSetDecideReceipt | IdentityCheckpointReceipt;
+    | CreationRollCommitReceipt
+    | DurableCreationSetDecideReceipt
+    | IdentityCheckpointReceipt
+    | StatAssignmentCheckpointReceipt
+    | PureClassDecisionReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
-    | IdentityCheckpointCommandRequest;
+    | IdentityCheckpointCommandRequest
+    | StatAssignmentCheckpointCommandRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -650,6 +698,11 @@ const POST_IDENTITY_PAYLOAD_KEYS = [
   'receipt',
 ] as const;
 const STAT_ROLL_PAYLOAD_KEYS = [...POST_IDENTITY_PAYLOAD_KEYS, 'statRollStage'] as const;
+const STAT_ASSIGNMENT_PAYLOAD_KEYS = [
+  ...STAT_ROLL_PAYLOAD_KEYS,
+  'statAssignmentStage',
+  'pureClassStage',
+] as const;
 const RECEIPT_RESULT_COMMON_KEYS = [
   'stage',
   'sourceFormId',
@@ -789,8 +842,19 @@ export function normalizeCreationSetDecideRequest(
   const unshapedPayload = objectAt(request.payload, '$.payload');
   const stage = enumAt(unshapedPayload['stage'], '$.payload.stage', [
     'RACE_AND_METHOD',
+    'STAT_ASSIGNMENT',
     'STAT_ROLLS',
   ] as const);
+  if (stage === 'STAT_ASSIGNMENT') {
+    try {
+      return normalizePureClassDecisionRequest(request);
+    } catch (cause) {
+      if (cause instanceof CreationStatAssignmentApplicationError) {
+        throw new CreationSetDecideApplicationError(cause.refusal);
+      }
+      throw cause;
+    }
+  }
   const sourceFormId =
     stage === 'RACE_AND_METHOD'
       ? enumAt(unshapedPayload['sourceFormId'], '$.payload.sourceFormId', [
@@ -975,6 +1039,8 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-007',
     'CHR-008',
     'CHR-009',
+    'CHR-011',
+    'CHR-012',
   ] as const);
   const bindings = object['routeBindings'];
   if (!Array.isArray(bindings)) return invalidShape(`${path}.routeBindings`, 'array', bindings);
@@ -1329,7 +1395,8 @@ const storedRequestAt = (
 ):
   | CreationRollCommitCommandRequest
   | CreationSetDecideCommandRequest
-  | IdentityCheckpointCommandRequest => {
+  | IdentityCheckpointCommandRequest
+  | StatAssignmentCheckpointCommandRequest => {
   let source: string;
   try {
     source = JSON.stringify(value);
@@ -1350,6 +1417,15 @@ const storedRequestAt = (
       decoded.value.commandKind === 'workflow-command' &&
       decoded.value.workflowCommandId === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID
     ) {
+      const payload = decoded.value.payload;
+      if (
+        payload !== null &&
+        typeof payload === 'object' &&
+        !Array.isArray(payload) &&
+        (payload as Record<string, unknown>)['stage'] === 'STAT_ASSIGNMENT'
+      ) {
+        return normalizeStatAssignmentCheckpointRequest(decoded.value);
+      }
       return validateIdentityCheckpointRequest(normalizeIdentityCheckpointRequest(decoded.value));
     }
     if (
@@ -1363,7 +1439,8 @@ const storedRequestAt = (
     if (
       cause instanceof IdentityCheckpointApplicationError ||
       cause instanceof CreationSetDecideApplicationError ||
-      cause instanceof CreationRollCommitApplicationError
+      cause instanceof CreationRollCommitApplicationError ||
+      cause instanceof CreationStatAssignmentApplicationError
     ) {
       throw new Error(`${label} request violates the character wizard contract`, { cause });
     }
@@ -2132,10 +2209,15 @@ const postIdentityPayloadAt = (
   try {
     const unshaped = objectAt(value, '$');
     const hasStatRollStage = Object.hasOwn(unshaped, 'statRollStage');
+    const hasStatAssignmentStage = Object.hasOwn(unshaped, 'statAssignmentStage');
     const object = exactObject(
       value,
       '$',
-      hasStatRollStage ? STAT_ROLL_PAYLOAD_KEYS : POST_IDENTITY_PAYLOAD_KEYS,
+      hasStatAssignmentStage
+        ? STAT_ASSIGNMENT_PAYLOAD_KEYS
+        : hasStatRollStage
+          ? STAT_ROLL_PAYLOAD_KEYS
+          : POST_IDENTITY_PAYLOAD_KEYS,
     );
     const branchCacheEntries = emptyArrayAt(object['branchCacheEntries'], '$.branchCacheEntries');
     const branchCacheHash = literal(
@@ -2168,11 +2250,14 @@ const postIdentityPayloadAt = (
       '$.receipt.result',
     );
     const receipt =
-      receiptResult['stage'] !== 'STAT_ROLLS'
-        ? raceMethodReceiptAt(object['receipt'], '$.receipt')
-        : receiptResult['sourceFormId'] === 'CHR-003' || receiptResult['sourceFormId'] === 'CHR-004'
-          ? creationRollReceiptAt(object['receipt'], '$.receipt')
-          : statDecisionReceiptAt(object['receipt'], '$.receipt');
+      receiptResult['stage'] === 'STAT_ASSIGNMENT'
+        ? parseStatAssignmentReceipt(object['receipt'], label)
+        : receiptResult['stage'] !== 'STAT_ROLLS'
+          ? raceMethodReceiptAt(object['receipt'], '$.receipt')
+          : receiptResult['sourceFormId'] === 'CHR-003' ||
+              receiptResult['sourceFormId'] === 'CHR-004'
+            ? creationRollReceiptAt(object['receipt'], '$.receipt')
+            : statDecisionReceiptAt(object['receipt'], '$.receipt');
     const common = {
       branchCacheEntries,
       branchCacheHash,
@@ -2188,6 +2273,21 @@ const postIdentityPayloadAt = (
         throw new Error(`${label} pre-roll payload cannot carry a STAT_ROLLS receipt`);
       }
       return common as CreationWizardPreRollPayload;
+    }
+    if (hasStatAssignmentStage) {
+      if (receipt.result.stage !== 'STAT_ASSIGNMENT') {
+        throw new Error(`${label} assignment payload must carry a STAT_ASSIGNMENT receipt`);
+      }
+      return {
+        ...common,
+        nextStageEnvelope: common.nextStageEnvelope as CreationNextStageEnvelope<
+          'CHR-011' | 'CHR-012'
+        >,
+        pureClassStage: parsePureClassStage(object['pureClassStage'], label),
+        receipt,
+        statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
+        statRollStage: statRollStageAt(object['statRollStage'], label),
+      } as CreationWizardStatAssignmentPayload;
     }
     if ('decision' in receipt.result && receipt.result.decision === 'CANCEL') {
       throw new Error(`${label} durable payload cannot carry a transient CANCEL receipt`);
@@ -2218,8 +2318,15 @@ interface RollValidationCursor {
   readonly checkpointRevision: number;
   readonly draftRevision: number;
   readonly latestEnvelope: CreationNextStageEnvelope;
-  readonly latestReceipt: CreationRollCommitReceipt | DurableCreationSetDecideReceipt;
-  readonly latestRequest: CreationRollCommitCommandRequest | DurableCreationSetDecideCommandRequest;
+  readonly latestReceipt:
+    | CreationRollCommitReceipt
+    | DurableCreationSetDecideReceipt
+    | StatAssignmentCheckpointReceipt
+    | PureClassDecisionReceipt;
+  readonly latestRequest:
+    | CreationRollCommitCommandRequest
+    | DurableCreationSetDecideCommandRequest
+    | StatAssignmentCheckpointCommandRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -2250,6 +2357,23 @@ const durablePostRevisions = (
   }
 };
 
+const exactDurablePostRevisions = (
+  previous: RevisionVector,
+  request: { readonly expectedRevisions: RevisionVector },
+  label: string,
+  mismatches: string[],
+): RevisionVector => {
+  if (!isDeepStrictEqual(request.expectedRevisions, previous)) {
+    mismatches.push(`${label} pre-commit revisions`);
+  }
+  try {
+    return incrementedRevisions(request.expectedRevisions);
+  } catch {
+    mismatches.push(`${label} entity revision overflow`);
+    return previous;
+  }
+};
+
 const validateStatRollHistory = (
   durablePayload: CreationWizardStatRollPayload,
   methodRecord: CreationSetDecideDecisionRecord,
@@ -2258,6 +2382,7 @@ const validateStatRollHistory = (
   start: RollValidationCursor,
   commandIds: Set<string>,
   receiptIds: Set<string>,
+  allocatedIds: Set<string>,
   mismatches: string[],
 ): RollValidationCursor => {
   const stage = durablePayload.statRollStage;
@@ -2279,12 +2404,6 @@ const validateStatRollHistory = (
   if (stage.diceInputModeSnapshot !== durablePayload.raceAndMethodStage.diceInput?.value) {
     mismatches.push('statRollStage diceInputModeSnapshot/decision');
   }
-  const allocatedIds = new Set<string>([
-    localCharacter.localCharacterId,
-    checkpoint.checkpointId,
-    ...commandIds,
-    ...receiptIds,
-  ]);
   if (allocatedIds.has(stage.branchUuid)) mismatches.push('statRollStage branchUuid ID collision');
   allocatedIds.add(stage.branchUuid);
   if (allocatedIds.has(methodReceipt.result.setRollRequestId)) {
@@ -2793,10 +2912,229 @@ const validateStatRollHistory = (
   return cursor;
 };
 
+const assignmentCheckpointAtCursor = (
+  durablePayload: CreationWizardStatAssignmentPayload,
+  localCharacter: LocalCharacter,
+  checkpoint: LocalCharacterCheckpoint,
+  identityStage: CreationIdentityStage,
+  raceAndMethodStage: RaceAndMethodStage,
+  statRollStage: StatRollStage,
+  cursor: RollValidationCursor,
+  statAssignmentStage: StatAssignmentStage | null,
+  pureClassStage: PureClassStage | null,
+): DurableCreationWizardCheckpoint => ({
+  checkpoint,
+  durablePayload,
+  identityStage,
+  localCharacter,
+  nextStageEnvelope: cursor.latestEnvelope,
+  pureClassStage,
+  raceAndMethodStage,
+  receipt: cursor.latestReceipt,
+  request: cursor.latestRequest,
+  statAssignmentStage,
+  statRollStage,
+});
+
+const validateStatAssignmentHistory = (
+  durablePayload: CreationWizardStatAssignmentPayload,
+  localCharacter: LocalCharacter,
+  checkpoint: LocalCharacterCheckpoint,
+  identityStage: CreationIdentityStage,
+  raceAndMethodStage: RaceAndMethodStage,
+  cursorStart: RollValidationCursor,
+  commandIds: Set<string>,
+  receiptIds: Set<string>,
+  occupied: Set<string>,
+  catalog: SkillStageCatalog,
+  mismatches: string[],
+): RollValidationCursor => {
+  const statRollStage = durablePayload.statRollStage;
+  const assignment = durablePayload.statAssignmentStage;
+  const request = assignment.request;
+  const receipt = assignment.receipt;
+  const label = 'statAssignmentStage';
+  if (
+    request.payload.characterDraftId !== localCharacter.localCharacterId ||
+    request.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+    request.payload.draftRevision !== cursorStart.draftRevision
+  ) {
+    mismatches.push(`${label} addressed request`);
+  }
+  if (occupied.has(request.commandId)) mismatches.push(`${label} command ID collision`);
+  occupied.add(request.commandId);
+  commandIds.add(request.commandId);
+  if (occupied.has(receipt.receiptId)) mismatches.push(`${label} receipt ID collision`);
+  occupied.add(receipt.receiptId);
+  receiptIds.add(receipt.receiptId);
+  const postRevisions = exactDurablePostRevisions(
+    cursorStart.revisions,
+    request,
+    label,
+    mismatches,
+  );
+  const preAssignment = assignmentCheckpointAtCursor(
+    durablePayload,
+    localCharacter,
+    checkpoint,
+    identityStage,
+    raceAndMethodStage,
+    statRollStage,
+    cursorStart,
+    null,
+    null,
+  );
+  let plan;
+  try {
+    plan = prepareStatAssignment(preAssignment, request, catalog);
+  } catch {
+    mismatches.push(`${label} source/domain derivation`);
+    return cursorStart;
+  }
+  const envelope = nextStageEnvelope(plan.nextFormId, localCharacter.localCharacterId);
+  const expectedResult: StatAssignmentCheckpointReceipt['result'] = {
+    ...plan.derived,
+    branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+    branchUuid: statRollStage.branchUuid,
+    characterDraftId: localCharacter.localCharacterId,
+    checkpointId: checkpoint.checkpointId,
+    checkpointOwnerId: localCharacter.localCharacterId,
+    checkpointRevision: cursorStart.checkpointRevision + 1,
+    draftRevision: cursorStart.draftRevision + 1,
+    nextFormId: plan.nextFormId,
+    sourceFormId: 'CHR-009',
+    stage: 'STAT_ASSIGNMENT',
+  };
+  if (receipt.commandId !== request.commandId)
+    mismatches.push(`${label} request/receipt commandId`);
+  if (!isDeepStrictEqual(receipt.result, expectedResult))
+    mismatches.push(`${label} receipt result`);
+  if (!isDeepStrictEqual(receipt.revisions, postRevisions)) {
+    mismatches.push(`${label} receipt revisions`);
+  }
+  if (!isDeepStrictEqual(assignment.derived, plan.derived)) mismatches.push(`${label} derived`);
+  if (!isDeepStrictEqual(assignment.nextStageEnvelope, envelope)) {
+    mismatches.push(`${label} signed destination`);
+  }
+  let cursor: RollValidationCursor = {
+    checkpointRevision: cursorStart.checkpointRevision + 1,
+    draftRevision: cursorStart.draftRevision + 1,
+    latestEnvelope: assignment.nextStageEnvelope,
+    latestReceipt: receipt,
+    latestRequest: request,
+    revisions: postRevisions,
+  };
+  const pureClass = durablePayload.pureClassStage;
+  if (pureClass === null) {
+    if (plan.nextFormId === 'CHR-011' && durablePayload.nextStageEnvelope.formId !== 'CHR-011') {
+      mismatches.push('required pureClassStage is absent past CHR-011');
+    }
+  } else {
+    const classRequest = pureClass.request;
+    const classReceipt = pureClass.receipt;
+    const classLabel = 'pureClassStage';
+    if (
+      plan.nextFormId !== 'CHR-011' ||
+      classRequest.payload.characterDraftId !== localCharacter.localCharacterId ||
+      classRequest.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+      classRequest.payload.draftRevision !== cursor.draftRevision
+    ) {
+      mismatches.push(`${classLabel} addressed request`);
+    }
+    if (occupied.has(classRequest.commandId)) mismatches.push(`${classLabel} command ID collision`);
+    occupied.add(classRequest.commandId);
+    commandIds.add(classRequest.commandId);
+    if (occupied.has(classReceipt.receiptId)) mismatches.push(`${classLabel} receipt ID collision`);
+    occupied.add(classReceipt.receiptId);
+    receiptIds.add(classReceipt.receiptId);
+    const classPostRevisions = exactDurablePostRevisions(
+      cursor.revisions,
+      classRequest,
+      classLabel,
+      mismatches,
+    );
+    const preClass = assignmentCheckpointAtCursor(
+      durablePayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage,
+      cursor,
+      assignment,
+      null,
+    );
+    let derived;
+    try {
+      derived = preparePureClassDecision(preClass, classRequest, catalog);
+    } catch {
+      mismatches.push(`${classLabel} catalog derivation`);
+      return cursor;
+    }
+    const classEnvelope = nextStageEnvelope('CHR-012', localCharacter.localCharacterId);
+    const expectedClassResult: PureClassDecisionReceipt['result'] = {
+      ...derived,
+      branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+      branchUuid: statRollStage.branchUuid,
+      characterDraftId: localCharacter.localCharacterId,
+      checkpointId: checkpoint.checkpointId,
+      checkpointOwnerId: localCharacter.localCharacterId,
+      checkpointRevision: cursor.checkpointRevision + 1,
+      draftRevision: cursor.draftRevision + 1,
+      nextFormId: 'CHR-012',
+      sourceFormId: 'CHR-011',
+      stage: 'STAT_ASSIGNMENT',
+    };
+    if (classReceipt.commandId !== classRequest.commandId) {
+      mismatches.push(`${classLabel} request/receipt commandId`);
+    }
+    if (!isDeepStrictEqual(classReceipt.result, expectedClassResult)) {
+      mismatches.push(`${classLabel} receipt result`);
+    }
+    if (!isDeepStrictEqual(classReceipt.revisions, classPostRevisions)) {
+      mismatches.push(`${classLabel} receipt revisions`);
+    }
+    if (!isDeepStrictEqual(pureClass.derived, derived)) mismatches.push(`${classLabel} derived`);
+    if (!isDeepStrictEqual(pureClass.nextStageEnvelope, classEnvelope)) {
+      mismatches.push(`${classLabel} signed destination`);
+    }
+    cursor = {
+      checkpointRevision: cursor.checkpointRevision + 1,
+      draftRevision: cursor.draftRevision + 1,
+      latestEnvelope: pureClass.nextStageEnvelope,
+      latestReceipt: classReceipt,
+      latestRequest: classRequest,
+      revisions: classPostRevisions,
+    };
+  }
+  if (cursor.latestEnvelope.formId === 'CHR-012') {
+    try {
+      deriveChr012StatsView(
+        assignmentCheckpointAtCursor(
+          durablePayload,
+          localCharacter,
+          checkpoint,
+          identityStage,
+          raceAndMethodStage,
+          statRollStage,
+          cursor,
+          assignment,
+          pureClass,
+        ),
+        catalog,
+      );
+    } catch {
+      mismatches.push('CHR-012 derived projection');
+    }
+  }
+  return cursor;
+};
+
 const validatePostIdentityPayload = (
   localCharacter: LocalCharacter,
   checkpoint: LocalCharacterCheckpoint,
   durablePayload: CreationWizardPostIdentityPayload,
+  catalog?: SkillStageCatalog,
 ): DurableCreationWizardCheckpoint => {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   const mismatches: string[] = [];
@@ -2804,6 +3142,13 @@ const validatePostIdentityPayload = (
   const records = raceAndMethodStage.decisionRecords;
   const commandIds = new Set<string>([identityStage.request.commandId]);
   const receiptIds = new Set<string>([identityStage.receipt.receiptId]);
+  const occupiedIds = new Set<string>([localCharacter.localCharacterId, checkpoint.checkpointId]);
+  const occupyId = (id: string, idLabel: string): void => {
+    if (occupiedIds.has(id)) mismatches.push(`${idLabel} ID collision`);
+    occupiedIds.add(id);
+  };
+  occupyId(identityStage.request.commandId, 'identityStage command');
+  occupyId(identityStage.receipt.receiptId, 'identityStage receipt');
   const sourceForms = new Set<CreationDecisionSourceFormId>();
   let expectedSourceFormId: CreationDecisionSourceFormId = 'CHR-010';
   let previousDraftRevision: number = identityStage.receipt.result.draftRevision;
@@ -2840,8 +3185,10 @@ const validatePostIdentityPayload = (
     }
     if (commandIds.has(request.commandId)) mismatches.push(`${recordLabel} duplicate commandId`);
     commandIds.add(request.commandId);
+    occupyId(request.commandId, `${recordLabel} command`);
     if (receiptIds.has(receipt.receiptId)) mismatches.push(`${recordLabel} duplicate receiptId`);
     receiptIds.add(receipt.receiptId);
+    occupyId(receipt.receiptId, `${recordLabel} receipt`);
     if (payload.characterDraftId !== localCharacter.localCharacterId) {
       mismatches.push(`${recordLabel} characterDraftId`);
     }
@@ -2976,13 +3323,39 @@ const validatePostIdentityPayload = (
   };
   if (statRollStage !== null && methodRecord !== null && 'statRollStage' in durablePayload) {
     cursor = validateStatRollHistory(
-      durablePayload,
+      durablePayload as CreationWizardStatRollPayload,
       methodRecord,
       localCharacter,
       checkpoint,
       cursor,
       commandIds,
       receiptIds,
+      occupiedIds,
+      mismatches,
+    );
+  }
+  const statAssignmentStage =
+    'statAssignmentStage' in durablePayload ? durablePayload.statAssignmentStage : null;
+  const pureClassStage = 'pureClassStage' in durablePayload ? durablePayload.pureClassStage : null;
+  if (statAssignmentStage !== null) {
+    if (
+      catalog === undefined ||
+      statRollStage === null ||
+      !('statAssignmentStage' in durablePayload)
+    ) {
+      throw new Error(`${label} stat-assignment checkpoint requires a validated skill catalog`);
+    }
+    cursor = validateStatAssignmentHistory(
+      durablePayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+      catalog,
       mismatches,
     );
   }
@@ -3016,10 +3389,13 @@ const validatePostIdentityPayload = (
     projectionRevision: checkpoint.projectionRevision,
     stateRevision: checkpoint.stateRevision,
   };
+  const exactFinalProjection = statAssignmentStage !== null;
   if (
     currentRevisions.actorVisibilityRevision !== previousRevisions.actorVisibilityRevision ||
     currentRevisions.stateRevision !== previousRevisions.stateRevision ||
-    currentRevisions.projectionRevision < previousRevisions.projectionRevision
+    (exactFinalProjection
+      ? currentRevisions.projectionRevision !== previousRevisions.projectionRevision
+      : currentRevisions.projectionRevision < previousRevisions.projectionRevision)
   ) {
     mismatches.push('localCharacter/latest receipt revisions');
   }
@@ -3035,7 +3411,9 @@ const validatePostIdentityPayload = (
     localCharacter,
     nextStageEnvelope: durablePayload.nextStageEnvelope,
     raceAndMethodStage,
+    pureClassStage,
     statRollStage,
+    statAssignmentStage,
     receipt: durablePayload.receipt,
     request: cursor.latestRequest,
   };
@@ -3051,7 +3429,9 @@ const identityOnlyCheckpoint = (
     identityStage,
     localCharacter: durable.localCharacter,
     nextStageEnvelope: identityStage.nextStageEnvelope,
+    pureClassStage: null,
     raceAndMethodStage: null,
+    statAssignmentStage: null,
     statRollStage: null,
     receipt: durable.receipt,
     request: durable.request,
@@ -3061,6 +3441,7 @@ const identityOnlyCheckpoint = (
 export function validateDurableCreationWizardCheckpoint(
   localCharacter: LocalCharacter,
   checkpoint: LocalCharacterCheckpoint,
+  catalog?: SkillStageCatalog,
 ): DurableCreationWizardCheckpoint {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   let value: unknown;
@@ -3078,6 +3459,7 @@ export function validateDurableCreationWizardCheckpoint(
       localCharacter,
       checkpoint,
       postIdentityPayloadAt(value, label, localCharacter, checkpoint),
+      catalog,
     );
   }
   if (Object.hasOwn(object, 'lastCompleteStage')) {
@@ -3089,10 +3471,12 @@ export function validateDurableCreationWizardCheckpoint(
 export function loadCreationWizardCheckpoint(
   database: Database.Database,
   localCharacterId: string,
+  catalog?: SkillStageCatalog,
 ): DurableCreationWizardCheckpoint {
   return validateDurableCreationWizardCheckpoint(
     readLocalCharacter(database, localCharacterId),
     loadLocalCharacterCheckpoint(database, localCharacterId),
+    catalog,
   );
 }
 
@@ -3139,33 +3523,36 @@ export function advanceCreationWizardProjection(
   database: Database.Database,
   characterDraftId: string,
   wizardCheckpointId: string,
+  catalog?: SkillStageCatalog,
 ): DurableCreationWizardCheckpoint {
-  const preflight = loadCreationWizardCheckpoint(database, characterDraftId);
+  const preflight = loadCreationWizardCheckpoint(database, characterDraftId, catalog);
   if (
     preflight.checkpoint.checkpointId !== wizardCheckpointId ||
     preflight.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
   ) {
     throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
   }
+  deriveCreationSetAbandonmentDialogContext(preflight);
   const committed = commitLocalCharacterCheckpoint(
     database,
     characterDraftId,
     wizardCheckpointId,
     (update) => {
-      const current = loadCreationWizardCheckpoint(database, characterDraftId);
+      const current = loadCreationWizardCheckpoint(database, characterDraftId, catalog);
       if (
         current.checkpoint.checkpointId !== wizardCheckpointId ||
         current.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
       ) {
         throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
       }
+      deriveCreationSetAbandonmentDialogContext(current);
       return update(
         { payloadJson: current.localCharacter.payloadJson },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
       );
     },
   );
-  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint);
+  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint, catalog);
 }
 
 const rawCommandIds = (payloadJson: string): readonly string[] => {
@@ -3241,12 +3628,19 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
       }
     }
   }
+  for (const stageKey of ['statAssignmentStage', 'pureClassStage'] as const) {
+    const stage = object[stageKey];
+    if (stage !== null && typeof stage === 'object' && !Array.isArray(stage)) {
+      addRequestId((stage as Record<string, unknown>)['request']);
+    }
+  }
   return ids;
 };
 
 export function loadCreationWizardCommandByCommandId(
   database: Database.Database,
   commandId: string,
+  catalog?: SkillStageCatalog,
 ): DurableCreationWizardCommand | null {
   const matches = listLocalCharacters(database).filter((localCharacter) =>
     rawCommandIds(localCharacter.payloadJson).includes(commandId),
@@ -3257,7 +3651,11 @@ export function loadCreationWizardCommandByCommandId(
       `durable character wizard commandId ${JSON.stringify(commandId)} is duplicated by local characters: ${matches.map(({ localCharacterId }) => JSON.stringify(localCharacterId)).join(', ')}`,
     );
   }
-  const durableCheckpoint = loadCreationWizardCheckpoint(database, matches[0]!.localCharacterId);
+  const durableCheckpoint = loadCreationWizardCheckpoint(
+    database,
+    matches[0]!.localCharacterId,
+    catalog,
+  );
   if (durableCheckpoint.identityStage.request.commandId === commandId) {
     return {
       durableCheckpoint,
@@ -3276,6 +3674,16 @@ export function loadCreationWizardCommandByCommandId(
       receipt: decisionRecord.receipt,
       request: decisionRecord.request,
     };
+  }
+  for (const record of [durableCheckpoint.statAssignmentStage, durableCheckpoint.pureClassStage]) {
+    if (record?.request.commandId === commandId) {
+      return {
+        durableCheckpoint,
+        nextStageEnvelope: record.nextStageEnvelope,
+        receipt: record.receipt,
+        request: record.request,
+      };
+    }
   }
   const rollRecords =
     durableCheckpoint.statRollStage?.attempts.flatMap((attempt) => [
@@ -3312,6 +3720,8 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
     ...attempt.confirmationRecords,
     ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
   ]) ?? []),
+  ...(checkpoint.statAssignmentStage === null ? [] : [checkpoint.statAssignmentStage]),
+  ...(checkpoint.pureClassStage === null ? [] : [checkpoint.pureClassStage]),
 ];
 
 const guardRejected = (): never => {
@@ -3323,6 +3733,7 @@ const assertCommitAllowed = (
   request: CreationSetDecideCommandRequest,
   receiptId?: string,
   dialogContext?: CreationSetAbandonmentDialogContext,
+  catalog?: SkillStageCatalog,
 ): void => {
   const actual = currentRevisions(checkpoint);
   if (!isDeepStrictEqual(request.expectedRevisions, actual)) {
@@ -3446,6 +3857,22 @@ const assertCommitAllowed = (
         !isDeepStrictEqual(dialogContext, deriveCreationSetAbandonmentDialogContext(checkpoint))
       ) {
         guardRejected();
+      }
+      break;
+    case 'CHR-011':
+      if (
+        catalog === undefined ||
+        checkpoint.nextStageEnvelope.formId !== 'CHR-011' ||
+        checkpoint.statAssignmentStage === null ||
+        checkpoint.pureClassStage !== null
+      ) {
+        guardRejected();
+      }
+      try {
+        preparePureClassDecision(checkpoint, request as PureClassDecisionCommandRequest, catalog!);
+      } catch (cause) {
+        if (cause instanceof CreationStatAssignmentApplicationError) guardRejected();
+        throw cause;
       }
       break;
   }
@@ -3719,6 +4146,54 @@ const payloadAfterStatDecision = (
   } as CreationWizardStatRollPayload;
 };
 
+const payloadAfterPureClassDecision = (
+  checkpoint: DurableCreationWizardCheckpoint,
+  request: PureClassDecisionCommandRequest,
+  receiptId: string,
+  catalog: SkillStageCatalog,
+): CreationWizardStatAssignmentPayload => {
+  const statRollStage = checkpoint.statRollStage;
+  const statAssignmentStage = checkpoint.statAssignmentStage;
+  if (statRollStage === null || statAssignmentStage === null) return guardRejected();
+  const derived = preparePureClassDecision(checkpoint, request, catalog);
+  const revisions = incrementedRevisions(currentRevisions(checkpoint));
+  const nextStageEnvelope = nextStageEnvelopeForPureClass(request.payload.characterDraftId);
+  const receipt: PureClassDecisionReceipt = {
+    commandId: request.commandId,
+    receiptId,
+    result: {
+      ...derived,
+      branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+      branchUuid: statRollStage.branchUuid,
+      characterDraftId: request.payload.characterDraftId,
+      checkpointId: request.payload.wizardCheckpointId,
+      checkpointOwnerId: request.payload.characterDraftId,
+      checkpointRevision: checkpoint.checkpoint.checkpointRevision + 1,
+      draftRevision: checkpoint.receipt.result.draftRevision + 1,
+      nextFormId: 'CHR-012',
+      sourceFormId: 'CHR-011',
+      stage: 'STAT_ASSIGNMENT',
+    },
+    revisions,
+  };
+  const pureClassStage: PureClassStage = {
+    derived,
+    nextStageEnvelope,
+    receipt,
+    request,
+  };
+  return {
+    ...(checkpoint.durablePayload as CreationWizardStatAssignmentPayload),
+    nextStageEnvelope,
+    pureClassStage,
+    receipt,
+  };
+};
+
+const nextStageEnvelopeForPureClass = (
+  characterDraftId: string,
+): CreationNextStageEnvelope<'CHR-012'> => nextStageEnvelope('CHR-012', characterDraftId);
+
 const allocatedCreationStatRollId = (value: unknown, label: string): string => {
   if (typeof value !== 'string' || value.length === 0) {
     throw new TypeError(`${label} must allocate a non-empty string, got ${JSON.stringify(value)}`);
@@ -3726,7 +4201,9 @@ const allocatedCreationStatRollId = (value: unknown, label: string): string => {
   return value;
 };
 
-const durableWizardIds = (checkpoint: DurableCreationWizardCheckpoint): Set<string> =>
+export const creationWizardDurableIds = (
+  checkpoint: DurableCreationWizardCheckpoint,
+): ReadonlySet<string> =>
   new Set(
     [
       checkpoint.localCharacter.localCharacterId,
@@ -3747,6 +4224,9 @@ const durableWizardIds = (checkpoint: DurableCreationWizardCheckpoint): Set<stri
       ]) ?? []),
     ].filter((value): value is string => typeof value === 'string'),
   );
+
+const durableWizardIds = (checkpoint: DurableCreationWizardCheckpoint): Set<string> =>
+  new Set(creationWizardDurableIds(checkpoint));
 
 const allocateCreationStatRoll = (
   checkpoint: DurableCreationWizardCheckpoint,
@@ -3809,10 +4289,15 @@ export function preflightCreationSetDecide(
   database: Database.Database,
   request: DecodedCommandRequest,
   dialogContext?: CreationSetAbandonmentDialogContext,
+  catalog?: SkillStageCatalog,
 ): DurableCreationWizardCheckpoint {
   const normalized = normalizeCreationSetDecideRequest(request);
-  const checkpoint = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
-  assertCommitAllowed(checkpoint, normalized, undefined, dialogContext);
+  const checkpoint = loadCreationWizardCheckpoint(
+    database,
+    normalized.payload.characterDraftId,
+    catalog,
+  );
+  assertCommitAllowed(checkpoint, normalized, undefined, dialogContext, catalog);
   return checkpoint;
 }
 
@@ -3822,6 +4307,7 @@ export function commitCreationSetDecide(
   receiptId: string,
   statRollAllocators?: CreationStatRollAllocators,
   dialogContext?: CreationSetAbandonmentDialogContext,
+  catalog?: SkillStageCatalog,
 ): CreationSetDecideExecutionResult {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
     throw new TypeError(
@@ -3829,8 +4315,12 @@ export function commitCreationSetDecide(
     );
   }
   const normalized = normalizeCreationSetDecideRequest(request);
-  const preflight = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
-  assertCommitAllowed(preflight, normalized, receiptId, dialogContext);
+  const preflight = loadCreationWizardCheckpoint(
+    database,
+    normalized.payload.characterDraftId,
+    catalog,
+  );
+  assertCommitAllowed(preflight, normalized, receiptId, dialogContext, catalog);
   if (normalized.payload.sourceFormId === 'CHR-028' && normalized.payload.decision === 'CANCEL') {
     const stage = preflight.statRollStage!;
     const context = dialogContext!;
@@ -3881,8 +4371,12 @@ export function commitCreationSetDecide(
     (update) => {
       // BEGIN IMMEDIATE owns the final guard. The earlier pass is deliberately
       // retained so every numeric limit is checked before transaction entry.
-      const current = loadCreationWizardCheckpoint(database, normalized.payload.characterDraftId);
-      assertCommitAllowed(current, normalized, receiptId, dialogContext);
+      const current = loadCreationWizardCheckpoint(
+        database,
+        normalized.payload.characterDraftId,
+        catalog,
+      );
+      assertCommitAllowed(current, normalized, receiptId, dialogContext, catalog);
       const durablePayload =
         normalized.payload.stage === 'RACE_AND_METHOD'
           ? payloadAfterDecision(
@@ -3891,16 +4385,23 @@ export function commitCreationSetDecide(
               receiptId,
               methodAllocation,
             )
-          : payloadAfterStatDecision(
-              current,
-              normalized as DurableCreationSetDecideCommandRequest & {
-                readonly payload:
-                  | StatRollAcceptSetPayload
-                  | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' });
-              },
-              receiptId,
-              nextSetRollRequestIdOrNull,
-            );
+          : normalized.payload.stage === 'STAT_ASSIGNMENT'
+            ? payloadAfterPureClassDecision(
+                current,
+                normalized as PureClassDecisionCommandRequest,
+                receiptId,
+                catalog!,
+              )
+            : payloadAfterStatDecision(
+                current,
+                normalized as DurableCreationSetDecideCommandRequest & {
+                  readonly payload:
+                    | StatRollAcceptSetPayload
+                    | (StatRollDialogDecisionPayload & { readonly decision: 'CONFIRM' });
+                },
+                receiptId,
+                nextSetRollRequestIdOrNull,
+              );
       return update(
         { payloadJson: JSON.stringify(durablePayload) },
         {
@@ -3915,6 +4416,7 @@ export function commitCreationSetDecide(
     durableCheckpoint: validateDurableCreationWizardCheckpoint(
       committed.result,
       committed.checkpoint,
+      catalog,
     ),
     kind: 'DURABLE',
   };

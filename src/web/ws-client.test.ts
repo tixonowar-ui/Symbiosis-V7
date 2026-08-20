@@ -143,3 +143,27 @@ describe('STAT_ROLLS set-decision web protocol vocabulary', () => {
     ).toBe(false);
   });
 });
+
+describe('STAT_ASSIGNMENT web protocol vocabulary', () => {
+  const binding = [
+    {
+      parameterIndex: 0,
+      source: 'inherited' as const,
+      value: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    },
+  ];
+
+  it.each([
+    ['CHR-009', 3],
+    ['CHR-011', 5],
+    ['CHR-012', 3],
+  ] as const)('accepts only the inherited %s route and source actions', (formId, count) => {
+    const route = `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`;
+    expect(WEB_PROTOCOL_VOCABULARY.isPresentedForm(formId, 'screen', route, binding)).toBe(true);
+    expect(WEB_PROTOCOL_VOCABULARY.isPresentedForm(formId, 'screen', route, [])).toBe(false);
+    for (let index = 1; index <= count; index += 1) {
+      const actionKey = `${formId}::CTA::${String(index).padStart(3, '0')}`;
+      expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey(formId, actionKey), actionKey).toBe(true);
+    }
+  });
+});

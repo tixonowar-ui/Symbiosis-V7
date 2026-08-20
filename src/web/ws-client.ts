@@ -54,6 +54,9 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-006',
   'CHR-007',
   'CHR-008',
+  'CHR-009',
+  'CHR-011',
+  'CHR-012',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -139,6 +142,18 @@ const CHR_028_ACTION_KEYS = [
   'CHR-028::CTA::001',
   'CHR-028::CTA::002',
 ] as const satisfies readonly ActionKey[];
+const STAT_CODES = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
+const PURE_CLASSES = ['SEEKER', 'STALKER', 'SOLDIER'] as const satisfies readonly PureClass[];
+const CHR_011_SELECTOR_ACTION_KEYS = [
+  'CHR-011::CTA::003',
+  'CHR-011::CTA::004',
+  'CHR-011::CTA::005',
+] as const satisfies readonly ActionKey[];
+const PURE_CLASS_BY_SELECTOR = new Map<ActionKey, PureClass>([
+  ['CHR-011::CTA::003', 'SEEKER'],
+  ['CHR-011::CTA::004', 'STALKER'],
+  ['CHR-011::CTA::005', 'SOLDIER'],
+]);
 /** ADR 0043 section 2 and Atlas CTA keys; validation only, never host mechanics authority. */
 const CREATION_SET_DECISION_FORMS = {
   'CHR-005': {
@@ -380,6 +395,104 @@ export interface Chr028Projection extends JsonObject {
   readonly wizardCheckpointId: string;
 }
 
+export type StatCode = (typeof STAT_CODES)[number];
+export type StatMap<T extends JsonValue> = Readonly<Record<StatCode, T>>;
+export type StatAssignmentMode = 'POINT_BUY_85' | 'POINT_BUY_90' | 'ROLLED_BIJECTION';
+export type PureClass = 'SEEKER' | 'SOLDIER' | 'STALKER';
+
+export interface StatModifierProjection extends JsonObject {
+  readonly delta: number;
+  readonly statCode: StatCode;
+}
+
+export interface MandatoryClassSkillProjection extends JsonObject {
+  readonly bonus: number;
+  readonly skillKey: string;
+  readonly slotCost: number;
+}
+
+export interface ClassConsequencesProjection extends JsonObject {
+  readonly statModifiers: readonly StatModifierProjection[];
+}
+
+export interface PureClassOptionProjection extends JsonObject {
+  readonly classConsequences: ClassConsequencesProjection;
+  readonly mandatoryClassSkill: MandatoryClassSkillProjection;
+  readonly pureClass: PureClass;
+}
+
+export interface RolledAssignmentSourceEntry extends JsonObject {
+  readonly creationCriticalPenaltyOrNull: -1 | -2 | -3 | -4 | -5 | null;
+  readonly setEntryIndex: number;
+  readonly value: number;
+}
+
+export interface RolledBijectionProof extends JsonObject {
+  readonly assignedSetEntryIndexByStat: null;
+  readonly kind: 'ROLLED_BIJECTION';
+  readonly sourceEntries: readonly RolledAssignmentSourceEntry[];
+}
+
+export interface ExactSumProof extends JsonObject {
+  readonly actualTotal: null;
+  readonly kind: 'EXACT_SUM';
+  readonly requiredTotal: 85 | 90;
+}
+
+export interface Chr009Projection extends JsonObject {
+  readonly C: null;
+  readonly D: null;
+  readonly I: null;
+  readonly M: null;
+  readonly S: null;
+  readonly W: null;
+  readonly Z: null;
+  readonly assignmentMode: StatAssignmentMode;
+  readonly assignmentValidation: null;
+  readonly bijectionProofOrExactSum: ExactSumProof | RolledBijectionProof;
+  readonly characterDraftId: string;
+  readonly commandId: null;
+  readonly draftRevision: number;
+  readonly eachValueRange: { readonly maximum: 20; readonly minimum: 1 } | null;
+  readonly raceChoice: 'FREE' | 'PURE' | 'UNITED';
+  readonly sourceSetReceiptIdOrNull: string | null;
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr011Projection extends JsonObject {
+  readonly characterDraftId: string;
+  readonly classConsequences: null;
+  readonly classOptions: readonly PureClassOptionProjection[];
+  readonly commandId: null;
+  readonly draftRevision: number;
+  readonly mandatoryClassSkill: null;
+  readonly pureClass: null;
+  readonly raceChoice: 'PURE';
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr012Projection extends JsonObject {
+  readonly baseStats: StatMap<number>;
+  readonly characterDraftId: string;
+  readonly classModifiersOrNull: readonly StatModifierProjection[] | null;
+  readonly commandId: null;
+  readonly draftRevision: number;
+  readonly mandatoryClassSkillOrNull: MandatoryClassSkillProjection | null;
+  readonly raceModifiers: readonly StatModifierProjection[];
+  readonly skillStageStats: StatMap<number>;
+  readonly symbiontModifiersExcluded: true;
+  readonly wizardCheckpointId: string;
+}
+
+export type StatAssignmentValidation = 'ASSIGNMENT_INVALID' | 'READY_TO_CHECKPOINT';
+
+export interface CharacterStatAssignmentDraft {
+  readonly assignmentMode: StatAssignmentMode;
+  readonly formId: 'CHR-009';
+  readonly valuesByStat: StatMap<number | null>;
+  readonly validation: StatAssignmentValidation;
+}
+
 export type CharacterCreationRollDraft =
   | { readonly faces: readonly (number | null)[]; readonly formId: 'CHR-003' }
   | { readonly face: number | null; readonly formId: 'CHR-004' };
@@ -410,6 +523,14 @@ export type CharacterCreationChoiceDraft =
         'Выбрать авантюристский метод' | 'Выбрать классический метод' | 'Выбрать «Всё или ничего»';
       readonly formId: 'CHR-002';
       readonly value: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
+    }
+  | {
+      readonly classConsequences: ClassConsequencesProjection;
+      readonly confirmationActionKey: 'CHR-011::CTA::001';
+      readonly consequence: null;
+      readonly formId: 'CHR-011';
+      readonly mandatoryClassSkill: MandatoryClassSkillProjection;
+      readonly value: PureClass;
     };
 
 const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreationChoiceDraft> =
@@ -506,6 +627,28 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
     ],
   ]);
 
+function characterCreationSelectorChoice(
+  snapshot: ConfirmedProjectionSnapshot,
+  actionKey: ActionKey,
+): CharacterCreationChoiceDraft | undefined {
+  const existing = CHARACTER_CREATION_SELECTOR_CHOICES.get(actionKey);
+  if (existing !== undefined || snapshot.formId !== 'CHR-011') return existing;
+  const pureClass = PURE_CLASS_BY_SELECTOR.get(actionKey);
+  if (pureClass === undefined) return undefined;
+  const option = (snapshot.projection as Chr011Projection).classOptions.find(
+    (candidate) => candidate.pureClass === pureClass,
+  );
+  if (option === undefined) return undefined;
+  return {
+    classConsequences: option.classConsequences,
+    confirmationActionKey: 'CHR-011::CTA::001',
+    consequence: null,
+    formId: 'CHR-011',
+    mandatoryClassSkill: option.mandatoryClassSkill,
+    value: pureClass,
+  };
+}
+
 interface IdentityCheckpointPayload extends JsonObject {
   readonly age: number;
   readonly artAssetKeyOrLocalFile: IdentityDraftValues['artAssetKeyOrLocalFile'];
@@ -535,9 +678,59 @@ interface IdentityCheckpointResult extends JsonObject {
   readonly stage: 'IDENTITY';
 }
 
-interface PendingIdentityCheckpoint {
-  readonly request: IdentityCheckpointRequest;
-  readonly receipt: CommandReceipt<IdentityCheckpointResult> | null;
+interface StatAssignmentCheckpointCommonPayload extends JsonObject {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly sourceFormId: 'CHR-009';
+  readonly stage: 'STAT_ASSIGNMENT';
+  readonly wizardCheckpointId: string;
+}
+
+interface RolledStatAssignmentCheckpointPayload extends StatAssignmentCheckpointCommonPayload {
+  readonly setEntryIndexByStat: StatMap<number>;
+}
+
+interface PointBuyStatAssignmentCheckpointPayload extends StatAssignmentCheckpointCommonPayload {
+  readonly pointBuyStats: StatMap<number>;
+}
+
+type StatAssignmentCheckpointPayload =
+  PointBuyStatAssignmentCheckpointPayload | RolledStatAssignmentCheckpointPayload;
+type StatAssignmentCheckpointRequest = WorkflowCommandRequestMessage<
+  typeof IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+  StatAssignmentCheckpointPayload
+>;
+type CheckpointRequest = IdentityCheckpointRequest | StatAssignmentCheckpointRequest;
+
+interface RolledStatAssignmentResultEntry extends RolledAssignmentSourceEntry {
+  readonly statCode: StatCode;
+}
+
+interface StatAssignmentCheckpointResult extends JsonObject {
+  readonly assignmentMode: StatAssignmentMode;
+  readonly baseStats: StatMap<number>;
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly nextFormId: 'CHR-011' | 'CHR-012';
+  readonly raceChoice: 'FREE' | 'PURE' | 'UNITED';
+  readonly rolledAssignmentsOrNull: readonly RolledStatAssignmentResultEntry[] | null;
+  readonly sourceFormId: 'CHR-009';
+  readonly sourceSetReceiptIdOrNull: string | null;
+  readonly stage: 'STAT_ASSIGNMENT';
+}
+
+type CheckpointResult = IdentityCheckpointResult | StatAssignmentCheckpointResult;
+
+interface PendingCheckpoint {
+  readonly assignmentDraft: CharacterStatAssignmentDraft | null;
+  readonly request: CheckpointRequest;
+  readonly receipt: CommandReceipt<CheckpointResult> | null;
+  readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
 interface SetDecisionCommonPayload extends JsonObject {
@@ -568,8 +761,18 @@ interface StatMethodDecisionPayload extends SetDecisionCommonPayload {
   readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
 }
 
+interface PureClassDecisionPayload extends JsonObject {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly pureClass: PureClass;
+  readonly sourceFormId: 'CHR-011';
+  readonly stage: 'STAT_ASSIGNMENT';
+  readonly wizardCheckpointId: string;
+}
+
 type SetDecisionPayload =
   | DiceInputDecisionPayload
+  | PureClassDecisionPayload
   | RaceDecisionPayload
   | StatRollAcceptSetPayload
   | StatRollDialogDecisionPayload
@@ -577,7 +780,7 @@ type SetDecisionPayload =
   | SymbiontAcquisitionDecisionPayload;
 type RaceMethodSetDecisionPayload = Exclude<
   SetDecisionPayload,
-  StatRollAcceptSetPayload | StatRollDialogDecisionPayload
+  PureClassDecisionPayload | StatRollAcceptSetPayload | StatRollDialogDecisionPayload
 >;
 
 interface StatRollDecisionCommonPayload extends JsonObject {
@@ -639,11 +842,28 @@ interface StatMethodDecisionResult extends SetDecisionResultCommon {
   readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
 }
 
+interface PureClassDecisionResult extends JsonObject {
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly classConsequences: ClassConsequencesProjection;
+  readonly draftRevision: number;
+  readonly mandatoryClassSkill: MandatoryClassSkillProjection;
+  readonly nextFormId: 'CHR-012';
+  readonly pureClass: PureClass;
+  readonly sourceFormId: 'CHR-011';
+  readonly stage: 'STAT_ASSIGNMENT';
+}
+
 type SetDecisionResult =
   | CreationSetAbandonmentResult
   | CreationSetAcceptanceResult
   | CreationSetCancelResult
   | DiceInputDecisionResult
+  | PureClassDecisionResult
   | RaceDecisionResult
   | StatMethodDecisionResult
   | SymbiontAcquisitionDecisionResult;
@@ -833,6 +1053,7 @@ export interface ProjectionConnection {
   replaceSetManualFace(index: number, value: number | null): FormActionRequestResult;
   replaceIdentityDraft(values: IdentityDraftValues): FormActionRequestResult;
   requestFormAction(actionKey: ActionKey): FormActionRequestResult;
+  replaceStatAssignmentValue(statCode: StatCode, value: number | null): FormActionRequestResult;
 }
 
 function refused<T>(refusal: DecodeRefusal): DecodeResult<T> {
@@ -1267,6 +1488,273 @@ function decodeChr002Projection(
       field !== 'NONE' &&
       field !== ZERO_UUID &&
       field !== characterDraftId,
+  });
+}
+
+function decodeStatMap<T extends JsonValue>(
+  value: JsonValue,
+  path: string,
+  validValue: (entry: JsonValue) => entry is T,
+): DecodeResult<StatMap<T>> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const keys = exactObjectKeys(value, new Set(STAT_CODES), path);
+  if (!keys.ok) return keys;
+  for (const statCode of STAT_CODES) {
+    const entry = value[statCode];
+    if (entry === undefined || !validValue(entry)) {
+      return unrecognized(`${path}.${statCode}`, entry ?? null);
+    }
+  }
+  return { ok: true, value: value as StatMap<T> };
+}
+
+function decodeStatModifiers(
+  value: JsonValue,
+  path: string,
+): DecodeResult<readonly StatModifierProjection[]> {
+  if (!Array.isArray(value)) return unrecognized(path, value);
+  const entries = value as readonly JsonValue[];
+  const seen = new Set<StatCode>();
+  for (const [index, entry] of entries.entries()) {
+    const itemPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(entry)) return unrecognized(itemPath, entry);
+    const keys = exactObjectKeys(entry, new Set(['delta', 'statCode']), itemPath);
+    if (!keys.ok) return keys;
+    const statCode = entry['statCode'];
+    const delta = entry['delta'];
+    if (
+      typeof statCode !== 'string' ||
+      !STAT_CODES.includes(statCode as StatCode) ||
+      seen.has(statCode as StatCode)
+    ) {
+      return unrecognized(`${itemPath}.statCode`, statCode!);
+    }
+    if (typeof delta !== 'number' || !Number.isSafeInteger(delta) || delta === 0) {
+      return unrecognized(`${itemPath}.delta`, delta!);
+    }
+    seen.add(statCode as StatCode);
+  }
+  return { ok: true, value: value as unknown as readonly StatModifierProjection[] };
+}
+
+function decodeMandatoryClassSkill(
+  value: JsonValue,
+  path: string,
+): DecodeResult<MandatoryClassSkillProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const decoded = decodeProjection(value, path, {
+    bonus: (field) => typeof field === 'number' && Number.isSafeInteger(field),
+    skillKey: isNonEmptyString,
+    slotCost: (field) => isSafeIntegerAtLeast(field, 0),
+  });
+  return decoded.ok ? { ok: true, value: value as MandatoryClassSkillProjection } : decoded;
+}
+
+function decodeChr009Proof(
+  value: JsonValue,
+  path: string,
+  mode: StatAssignmentMode,
+): DecodeResult<ExactSumProof | RolledBijectionProof> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  if (mode !== 'ROLLED_BIJECTION') {
+    const decoded = decodeProjection(value, path, {
+      actualTotal: (field) => field === null,
+      kind: (field) => field === 'EXACT_SUM',
+      requiredTotal: (field) => field === (mode === 'POINT_BUY_90' ? 90 : 85),
+    });
+    return decoded.ok ? { ok: true, value: value as ExactSumProof } : decoded;
+  }
+  const sourceEntries = value['sourceEntries'];
+  if (!Array.isArray(sourceEntries) || sourceEntries.length !== STAT_CODES.length) {
+    return unrecognized(`${path}.sourceEntries`, sourceEntries!);
+  }
+  const entries = sourceEntries as readonly JsonValue[];
+  for (const [index, entry] of entries.entries()) {
+    const itemPath = `${path}.sourceEntries[${String(index)}]`;
+    if (!isJsonObject(entry)) return unrecognized(itemPath, entry);
+    const decoded = decodeProjection(entry, itemPath, {
+      creationCriticalPenaltyOrNull: (field) =>
+        field === null ||
+        (typeof field === 'number' && Number.isSafeInteger(field) && field <= -1 && field >= -5),
+      setEntryIndex: (field) => field === index,
+      value: (field) => typeof field === 'number' && Number.isSafeInteger(field),
+    });
+    if (!decoded.ok) return decoded;
+  }
+  const decoded = decodeProjection(value, path, {
+    assignedSetEntryIndexByStat: (field) => field === null,
+    kind: (field) => field === 'ROLLED_BIJECTION',
+    sourceEntries: (field) => field === sourceEntries,
+  });
+  return decoded.ok ? { ok: true, value: value as unknown as RolledBijectionProof } : decoded;
+}
+
+function decodeChr009Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const mode = value['assignmentMode'];
+  if (mode !== 'ROLLED_BIJECTION' && mode !== 'POINT_BUY_90' && mode !== 'POINT_BUY_85') {
+    return unrecognized(`${path}.assignmentMode`, mode!);
+  }
+  const proof = decodeChr009Proof(
+    value['bijectionProofOrExactSum']!,
+    `${path}.bijectionProofOrExactSum`,
+    mode,
+  );
+  if (!proof.ok) return proof;
+  const characterDraftId = value['characterDraftId'];
+  const result = decodeProjection(value, path, {
+    C: (field) => field === null,
+    D: (field) => field === null,
+    I: (field) => field === null,
+    M: (field) => field === null,
+    S: (field) => field === null,
+    W: (field) => field === null,
+    Z: (field) => field === null,
+    assignmentMode: (field) => field === mode,
+    assignmentValidation: (field) => field === null,
+    bijectionProofOrExactSum: (field) => field === value['bijectionProofOrExactSum'],
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === null,
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    eachValueRange: (field) =>
+      mode === 'ROLLED_BIJECTION'
+        ? field === null
+        : isJsonObject(field) && sameJson(field, { maximum: 20, minimum: 1 }),
+    raceChoice: (field) => field === 'FREE' || field === 'PURE' || field === 'UNITED',
+    sourceSetReceiptIdOrNull: (field) =>
+      mode === 'ROLLED_BIJECTION' ? isNonEmptyString(field) : field === null,
+    wizardCheckpointId: (field) => isNonEmptyString(field) && field !== characterDraftId,
+  });
+  if (!result.ok) return result;
+  const ids = [
+    characterDraftId,
+    value['wizardCheckpointId'],
+    value['sourceSetReceiptIdOrNull'],
+  ].filter((entry): entry is string => typeof entry === 'string');
+  return new Set(ids).size === ids.length
+    ? result
+    : unrecognized(`${path}.sourceSetReceiptIdOrNull`, value['sourceSetReceiptIdOrNull']!);
+}
+
+function decodeChr011Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const options = value['classOptions'];
+  if (!Array.isArray(options) || options.length !== PURE_CLASSES.length) {
+    return unrecognized(`${path}.classOptions`, options!);
+  }
+  const entries = options as readonly JsonValue[];
+  const skillKeys = new Set<string>();
+  for (const [index, option] of entries.entries()) {
+    const optionPath = `${path}.classOptions[${String(index)}]`;
+    if (!isJsonObject(option)) return unrecognized(optionPath, option);
+    const consequences = option['classConsequences'];
+    if (!isJsonObject(consequences)) {
+      return unrecognized(`${optionPath}.classConsequences`, consequences!);
+    }
+    const consequenceShape = decodeProjection(consequences, `${optionPath}.classConsequences`, {
+      statModifiers: (field) => field === consequences['statModifiers'],
+    });
+    if (!consequenceShape.ok) return consequenceShape;
+    const modifiers = decodeStatModifiers(
+      consequences['statModifiers']!,
+      `${optionPath}.classConsequences.statModifiers`,
+    );
+    if (!modifiers.ok) return modifiers;
+    const mandatory = decodeMandatoryClassSkill(
+      option['mandatoryClassSkill']!,
+      `${optionPath}.mandatoryClassSkill`,
+    );
+    if (!mandatory.ok) return mandatory;
+    if (skillKeys.has(mandatory.value.skillKey)) {
+      return unrecognized(`${optionPath}.mandatoryClassSkill.skillKey`, mandatory.value.skillKey);
+    }
+    skillKeys.add(mandatory.value.skillKey);
+    const optionShape = decodeProjection(option, optionPath, {
+      classConsequences: (field) => field === consequences,
+      mandatoryClassSkill: (field) => field === option['mandatoryClassSkill'],
+      pureClass: (field) => field === PURE_CLASSES[index],
+    });
+    if (!optionShape.ok) return optionShape;
+  }
+  const characterDraftId = value['characterDraftId'];
+  return decodeProjection(value, path, {
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    classConsequences: (field) => field === null,
+    classOptions: (field) => field === value['classOptions'],
+    commandId: (field) => field === null,
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    mandatoryClassSkill: (field) => field === null,
+    pureClass: (field) => field === null,
+    raceChoice: (field) => field === 'PURE',
+    wizardCheckpointId: (field) => isNonEmptyString(field) && field !== characterDraftId,
+  });
+}
+
+function decodeChr012Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const integer = (entry: JsonValue): entry is number =>
+    typeof entry === 'number' && Number.isSafeInteger(entry);
+  const base = decodeStatMap(value['baseStats']!, `${path}.baseStats`, integer);
+  if (!base.ok) return base;
+  const skill = decodeStatMap(value['skillStageStats']!, `${path}.skillStageStats`, integer);
+  if (!skill.ok) return skill;
+  const race = decodeStatModifiers(value['raceModifiers']!, `${path}.raceModifiers`);
+  if (!race.ok) return race;
+  const classValue = value['classModifiersOrNull'];
+  let classModifiers: readonly StatModifierProjection[] = [];
+  if (classValue !== null) {
+    const decodedClassModifiers = decodeStatModifiers(classValue!, `${path}.classModifiersOrNull`);
+    if (!decodedClassModifiers.ok) return decodedClassModifiers;
+    classModifiers = decodedClassModifiers.value;
+  }
+  const mandatory = value['mandatoryClassSkillOrNull'];
+  let mandatorySkill: MandatoryClassSkillProjection | null = null;
+  if (mandatory !== null) {
+    const decodedMandatory = decodeMandatoryClassSkill(
+      mandatory!,
+      `${path}.mandatoryClassSkillOrNull`,
+    );
+    if (!decodedMandatory.ok) return decodedMandatory;
+    mandatorySkill = decodedMandatory.value;
+  }
+  if (
+    (classValue === null) !== (mandatorySkill === null) ||
+    (classValue !== null && race.value.length !== 0)
+  ) {
+    return unrecognized(`${path}.classModifiersOrNull`, classValue!);
+  }
+  for (const statCode of STAT_CODES) {
+    const modifierTotal = [...race.value, ...classModifiers]
+      .filter((modifier) => modifier.statCode === statCode)
+      .reduce((total, modifier) => total + modifier.delta, 0);
+    if (skill.value[statCode] !== base.value[statCode] + modifierTotal) {
+      return unrecognized(`${path}.skillStageStats.${statCode}`, skill.value[statCode]);
+    }
+  }
+  const characterDraftId = value['characterDraftId'];
+  return decodeProjection(value, path, {
+    baseStats: (field) => field === value['baseStats'],
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    classModifiersOrNull: (field) => field === classValue,
+    commandId: (field) => field === null,
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    mandatoryClassSkillOrNull: (field) => field === mandatory,
+    raceModifiers: (field) => field === value['raceModifiers'],
+    skillStageStats: (field) => field === value['skillStageStats'],
+    symbiontModifiersExcluded: (field) => field === true,
+    wizardCheckpointId: (field) => isNonEmptyString(field) && field !== characterDraftId,
   });
 }
 
@@ -1836,6 +2324,57 @@ function decodeConfirmedSnapshot(
         if (!actions.ok) return actions;
       }
       break;
+    case 'CHR-009':
+      projection = decodeChr009Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const forwardAction =
+          projection.value['raceChoice'] === 'PURE'
+            ? ('CHR-009::CTA::001' as const)
+            : ('CHR-009::CTA::002' as const);
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
+            ? [forwardAction]
+            : NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    case 'CHR-011':
+      projection = decodeChr011Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          CHR_011_SELECTOR_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    case 'CHR-012':
+      projection = decodeChr012Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
     default:
       return unrecognized('$.presentation.base.formId', base.formId);
   }
@@ -1939,6 +2478,51 @@ function creationRollDraftFromSnapshot(
   return null;
 }
 
+function emptyStatDraftValues(): StatMap<null> {
+  return { S: null, D: null, M: null, Z: null, I: null, W: null, C: null };
+}
+
+function validateStatAssignmentDraft(
+  assignmentMode: StatAssignmentMode,
+  valuesByStat: StatMap<number | null>,
+): StatAssignmentValidation {
+  const values = STAT_CODES.map((statCode) => valuesByStat[statCode]);
+  if (values.some((value) => value === null)) return 'ASSIGNMENT_INVALID';
+  const complete = values as number[];
+  if (
+    complete.some(
+      (value) =>
+        !Number.isSafeInteger(value) ||
+        value < (assignmentMode === 'ROLLED_BIJECTION' ? 0 : 1) ||
+        value > (assignmentMode === 'ROLLED_BIJECTION' ? 6 : 20),
+    )
+  ) {
+    return 'ASSIGNMENT_INVALID';
+  }
+  if (assignmentMode === 'ROLLED_BIJECTION') {
+    return new Set(complete).size === STAT_CODES.length
+      ? 'READY_TO_CHECKPOINT'
+      : 'ASSIGNMENT_INVALID';
+  }
+  const requiredTotal = assignmentMode === 'POINT_BUY_90' ? 90 : 85;
+  return complete.reduce((total, value) => total + value, 0) === requiredTotal
+    ? 'READY_TO_CHECKPOINT'
+    : 'ASSIGNMENT_INVALID';
+}
+
+function creationStatAssignmentDraftFromSnapshot(
+  snapshot: ConfirmedProjectionSnapshot,
+): CharacterStatAssignmentDraft | null {
+  if (snapshot.formId !== 'CHR-009') return null;
+  const assignmentMode = snapshot.projection['assignmentMode'] as StatAssignmentMode;
+  return {
+    assignmentMode,
+    formId: 'CHR-009',
+    validation: 'ASSIGNMENT_INVALID',
+    valuesByStat: emptyStatDraftValues(),
+  };
+}
+
 function completeManualRollDraft(draft: CharacterCreationRollDraft | null): boolean {
   if (draft === null) return false;
   return draft.formId === 'CHR-003'
@@ -1952,6 +2536,7 @@ function visibleSnapshot(
   commandPending = false,
   creationChoice: CharacterCreationChoiceDraft | null = null,
   creationRollDraft: CharacterCreationRollDraft | null = null,
+  statAssignmentDraft: CharacterStatAssignmentDraft | null = null,
 ): ConfirmedProjectionSnapshot {
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
@@ -1990,6 +2575,13 @@ function visibleSnapshot(
       );
     }
   } else if (isCreationSetDecisionFormId(snapshot.formId) && commandPending) {
+    availableActionKeys = [];
+  } else if (snapshot.formId === 'CHR-011' && commandPending) {
+    availableActionKeys = [];
+  } else if (
+    snapshot.formId === 'CHR-009' &&
+    (commandPending || statAssignmentDraft?.validation !== 'READY_TO_CHECKPOINT')
+  ) {
     availableActionKeys = [];
   }
   const visible =
@@ -2104,8 +2696,8 @@ function decodeCheckpointTerminal(
     HostToClientMessage,
     { readonly messageType: 'command.replay' | 'command.result' }
   >,
-  pending: PendingIdentityCheckpoint,
-): DecodeResult<CommandReceipt<IdentityCheckpointResult>> {
+  pending: PendingCheckpoint,
+): DecodeResult<CommandReceipt<CheckpointResult>> {
   const receipt = message.receipt;
   if (receipt.commandId !== pending.request.commandId) {
     return unrecognized('$.receipt.commandId', receipt.commandId);
@@ -2114,44 +2706,119 @@ function decodeCheckpointTerminal(
     return unrecognized('$.receipt.receiptId', receipt.receiptId);
   }
   const payload = pending.request.payload;
+  if (payload.stage === 'IDENTITY') {
+    const result = decodeProjection(receipt.result, '$.receipt.result', {
+      branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+      characterDraftId: (field) => field === payload.characterDraftId,
+      checkpointId: (field) => field === payload.wizardCheckpointId,
+      checkpointOwnerId: (field) => field === payload.characterDraftId,
+      checkpointRevision: (field) => field === 0,
+      draftRevision: (field) => field === payload.draftRevision,
+      nextFormId: (field) => field === 'CHR-010',
+      stage: (field) => field === 'IDENTITY',
+    });
+    if (!result.ok) return result;
+    if (
+      receipt.revisions.stateRevision !== 0 ||
+      receipt.revisions.projectionRevision !== 0 ||
+      receipt.revisions.actorVisibilityRevision !== 0
+    ) {
+      return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+    }
+    return { ok: true, value: receipt as CommandReceipt<IdentityCheckpointResult> };
+  }
+  const source = pending.sourceSnapshot.projection as Chr009Projection;
+  const assignmentMode = source.assignmentMode;
+  const baseStats = decodeStatMap(
+    receipt.result['baseStats']!,
+    '$.receipt.result.baseStats',
+    (entry): entry is number => typeof entry === 'number' && Number.isSafeInteger(entry),
+  );
+  if (!baseStats.ok) return baseStats;
+  const rolledAssignments = receipt.result['rolledAssignmentsOrNull'];
+  if (assignmentMode === 'ROLLED_BIJECTION') {
+    const setEntryIndexByStat = payload['setEntryIndexByStat'];
+    if (
+      !Array.isArray(rolledAssignments) ||
+      rolledAssignments.length !== STAT_CODES.length ||
+      source.bijectionProofOrExactSum.kind !== 'ROLLED_BIJECTION' ||
+      !isJsonObject(setEntryIndexByStat)
+    ) {
+      return unrecognized('$.receipt.result.rolledAssignmentsOrNull', rolledAssignments!);
+    }
+    const indexMap = decodeStatMap(
+      setEntryIndexByStat,
+      '$.request.payload.setEntryIndexByStat',
+      (entry): entry is number => isSafeIntegerAtLeast(entry, 0) && entry <= 6,
+    );
+    if (!indexMap.ok) return indexMap;
+    const entries = rolledAssignments as readonly JsonValue[];
+    for (const [index, statCode] of STAT_CODES.entries()) {
+      const entry = entries[index]!;
+      const selectedIndex = indexMap.value[statCode];
+      const sourceEntry = source.bijectionProofOrExactSum.sourceEntries[selectedIndex];
+      if (
+        !isJsonObject(entry) ||
+        sourceEntry === undefined ||
+        !sameJson(entry, { ...sourceEntry, statCode }) ||
+        baseStats.value[statCode] !== sourceEntry.value
+      ) {
+        return unrecognized(`$.receipt.result.rolledAssignmentsOrNull[${String(index)}]`, entry);
+      }
+    }
+  } else if (
+    rolledAssignments !== null ||
+    payload['pointBuyStats'] === undefined ||
+    !sameJson(baseStats.value, payload['pointBuyStats'])
+  ) {
+    return unrecognized('$.receipt.result.rolledAssignmentsOrNull', rolledAssignments!);
+  }
+  const nextFormId = source.raceChoice === 'PURE' ? 'CHR-011' : 'CHR-012';
   const result = decodeProjection(receipt.result, '$.receipt.result', {
+    assignmentMode: (field) => field === assignmentMode,
+    baseStats: (field) => field === receipt.result['baseStats'],
     branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+    branchUuid: isNonEmptyString,
     characterDraftId: (field) => field === payload.characterDraftId,
     checkpointId: (field) => field === payload.wizardCheckpointId,
     checkpointOwnerId: (field) => field === payload.characterDraftId,
-    checkpointRevision: (field) => field === 0,
-    draftRevision: (field) => field === payload.draftRevision,
-    nextFormId: (field) => field === 'CHR-010',
-    stage: (field) => field === 'IDENTITY',
+    checkpointRevision: (field) => isSafeIntegerAtLeast(field, 1),
+    draftRevision: (field) => field === payload.draftRevision + 1,
+    nextFormId: (field) => field === nextFormId,
+    raceChoice: (field) => field === source.raceChoice,
+    rolledAssignmentsOrNull: (field) => field === rolledAssignments,
+    sourceFormId: (field) => field === 'CHR-009',
+    sourceSetReceiptIdOrNull: (field) => field === source.sourceSetReceiptIdOrNull,
+    stage: (field) => field === 'STAT_ASSIGNMENT',
   });
   if (!result.ok) return result;
+  const ids = [
+    payload.characterDraftId,
+    payload.wizardCheckpointId,
+    pending.request.commandId,
+    receipt.receiptId,
+    receipt.result['branchUuid'],
+    source.sourceSetReceiptIdOrNull,
+  ].filter((entry): entry is string => typeof entry === 'string');
+  if (new Set(ids).size !== ids.length) {
+    return unrecognized('$.receipt.result.branchUuid', receipt.result['branchUuid']!);
+  }
+  const expected = pending.request.expectedRevisions;
   if (
-    receipt.revisions.stateRevision !== 0 ||
-    receipt.revisions.projectionRevision !== 0 ||
-    receipt.revisions.actorVisibilityRevision !== 0
+    receipt.revisions.stateRevision !== expected.stateRevision + 1 ||
+    receipt.revisions.projectionRevision !== expected.projectionRevision + 1 ||
+    receipt.revisions.actorVisibilityRevision !== expected.actorVisibilityRevision
   ) {
     return unrecognized('$.receipt.revisions', { ...receipt.revisions });
   }
-  return {
-    ok: true,
-    value: receipt as CommandReceipt<IdentityCheckpointResult>,
-  };
+  return { ok: true, value: receipt as CommandReceipt<StatAssignmentCheckpointResult> };
 }
 
 function sameCheckpointReceipt(
-  left: CommandReceipt<IdentityCheckpointResult>,
-  right: CommandReceipt<IdentityCheckpointResult>,
+  left: CommandReceipt<CheckpointResult>,
+  right: CommandReceipt<CheckpointResult>,
 ): boolean {
-  return (
-    left.commandId === right.commandId &&
-    left.receiptId === right.receiptId &&
-    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
-      (axis) => left.revisions[axis] === right.revisions[axis],
-    ) &&
-    (Object.keys(left.result) as (keyof IdentityCheckpointResult)[]).every(
-      (key) => left.result[key] === right.result[key],
-    )
-  );
+  return sameJson(left as unknown as JsonValue, right as unknown as JsonValue);
 }
 
 function expectedSetDecisionNextForm(
@@ -2285,6 +2952,49 @@ function decodeSetDecisionTerminal(
   const payload = pending.request.payload;
   if (payload.stage === 'STAT_ROLLS') {
     return decodeStatRollSetDecisionTerminal(receipt, pending, payload);
+  }
+  if (payload.stage === 'STAT_ASSIGNMENT') {
+    const option = (pending.sourceSnapshot.projection as Chr011Projection).classOptions.find(
+      (candidate) => candidate.pureClass === payload.pureClass,
+    );
+    if (pending.sourceSnapshot.formId !== 'CHR-011' || option === undefined) {
+      return unrecognized('$.receipt.result.sourceFormId', payload.sourceFormId);
+    }
+    const result = decodeProjection(receipt.result, '$.receipt.result', {
+      branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: isNonEmptyString,
+      characterDraftId: (field) => field === payload.characterDraftId,
+      checkpointId: (field) => field === payload.wizardCheckpointId,
+      checkpointOwnerId: (field) => field === payload.characterDraftId,
+      checkpointRevision: (field) => isSafeIntegerAtLeast(field, 1),
+      classConsequences: (field) => sameJson(field, option.classConsequences),
+      draftRevision: (field) => field === payload.draftRevision + 1,
+      mandatoryClassSkill: (field) => sameJson(field, option.mandatoryClassSkill),
+      nextFormId: (field) => field === 'CHR-012',
+      pureClass: (field) => field === payload.pureClass,
+      sourceFormId: (field) => field === 'CHR-011',
+      stage: (field) => field === 'STAT_ASSIGNMENT',
+    });
+    if (!result.ok) return result;
+    const ids = [
+      payload.characterDraftId,
+      payload.wizardCheckpointId,
+      pending.request.commandId,
+      receipt.receiptId,
+      receipt.result['branchUuid'] as string,
+    ];
+    if (new Set(ids).size !== ids.length) {
+      return unrecognized('$.receipt.receiptId', receipt.receiptId);
+    }
+    const expected = pending.request.expectedRevisions;
+    if (
+      receipt.revisions.stateRevision !== expected.stateRevision + 1 ||
+      receipt.revisions.projectionRevision !== expected.projectionRevision + 1 ||
+      receipt.revisions.actorVisibilityRevision !== expected.actorVisibilityRevision
+    ) {
+      return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+    }
+    return { ok: true, value: receipt as CommandReceipt<SetDecisionResult> };
   }
   const expectedNextForm = expectedSetDecisionNextForm(payload);
   const common = {
@@ -2535,20 +3245,63 @@ function sameRollCommitReceipt(
 
 function checkpointSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
-  receipt: CommandReceipt<IdentityCheckpointResult>,
+  receipt: CommandReceipt<CheckpointResult>,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
-  if (snapshot.formId !== 'CHR-010') {
+  const result = receipt.result;
+  let advance = 0;
+  if (result.stage === 'IDENTITY') {
+    if (snapshot.formId !== 'CHR-010') {
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+  } else if (result.nextFormId === 'CHR-011') {
+    if (snapshot.formId === 'CHR-012') {
+      advance = 1;
+    } else if (snapshot.formId !== 'CHR-011') {
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+  } else if (snapshot.formId !== 'CHR-012') {
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   }
   const projection = snapshot.projection;
   for (const [key, expected] of [
-    ['characterDraftId', receipt.result.characterDraftId],
-    ['wizardCheckpointId', receipt.result.checkpointId],
-    ['draftRevision', receipt.result.draftRevision],
+    ['characterDraftId', result.characterDraftId],
+    ['wizardCheckpointId', result.checkpointId],
+    ['draftRevision', result.draftRevision + advance],
   ] as const) {
     if (projection[key] !== expected) {
       return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]!);
     }
+  }
+  if (result.stage === 'STAT_ASSIGNMENT') {
+    if (
+      (snapshot.formId === 'CHR-011' && projection['raceChoice'] !== 'PURE') ||
+      (snapshot.formId === 'CHR-012' &&
+        (!sameJson(projection['baseStats']!, result.baseStats) ||
+          (advance === 0 &&
+            (projection['classModifiersOrNull'] !== null ||
+              projection['mandatoryClassSkillOrNull'] !== null)) ||
+          (advance === 1 &&
+            (projection['classModifiersOrNull'] === null ||
+              projection['mandatoryClassSkillOrNull'] === null))))
+    ) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.baseStats',
+        projection['baseStats']!,
+      );
+    }
+    if (
+      snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+      snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision + advance ||
+      snapshot.revisions.stateRevision !== receipt.revisions.stateRevision + advance
+    ) {
+      return unrecognized('$.revisions', { ...snapshot.revisions });
+    }
+  } else if (
+    snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+    snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision ||
+    snapshot.revisions.stateRevision !== receipt.revisions.stateRevision
+  ) {
+    return unrecognized('$.revisions', { ...snapshot.revisions });
   }
   return { ok: true, value: snapshot };
 }
@@ -2591,15 +3344,11 @@ function setDecisionSnapshotMatchesReceipt(
       );
     }
     if (result.decision === 'ACCEPT_SET') {
-      const rule = CREATION_SET_DECISION_FORMS[result.sourceFormId];
       if (
-        snapshot.formId !== result.sourceFormId ||
+        snapshot.formId !== 'CHR-009' ||
         snapshot.layers.length !== 0 ||
-        projection[rule.receiptKey] !== result.acceptedSetReceiptId ||
-        projection['attemptIndex'] !== source.projection['attemptIndex'] ||
-        projection['decision'] !== 'ACCEPT_SET' ||
-        projection['decisionReceiptIdOrNull'] !== receipt.receiptId ||
-        projection['commandId'] !== receipt.commandId
+        projection['assignmentMode'] !== 'ROLLED_BIJECTION' ||
+        projection['sourceSetReceiptIdOrNull'] !== result.acceptedSetReceiptId
       ) {
         return unrecognized('$.presentation.base.formId', snapshot.formId);
       }
@@ -2617,22 +3366,38 @@ function setDecisionSnapshotMatchesReceipt(
       }
       return { ok: true, value: snapshot };
     }
-    const layer = snapshot.layers[0];
-    const rule = CREATION_SET_DECISION_FORMS[result.originDecisionFormId];
     if (
-      snapshot.formId !== result.originDecisionFormId ||
-      snapshot.layers.length !== 1 ||
-      layer === undefined ||
-      layer.projection.decision !== 'CONFIRM' ||
-      layer.projection.decisionReceiptIdOrNull !== receipt.receiptId ||
-      layer.projection.commandId !== receipt.commandId ||
-      projection[rule.receiptKey] !== result.abandonedSetReceiptIds[0] ||
-      projection['attemptIndex'] !== source.projection['attemptIndex'] ||
-      projection['decision'] !== result.alternateDecision ||
-      projection['decisionReceiptIdOrNull'] !== receipt.receiptId ||
-      projection['commandId'] !== receipt.commandId
+      snapshot.formId !== 'CHR-009' ||
+      snapshot.layers.length !== 0 ||
+      projection['assignmentMode'] !== result.assignmentModeOrNull ||
+      projection['sourceSetReceiptIdOrNull'] !== null
     ) {
       return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+    return { ok: true, value: snapshot };
+  }
+  if (receipt.result.stage === 'STAT_ASSIGNMENT') {
+    const projection = snapshot.projection;
+    if (
+      snapshot.formId !== 'CHR-012' ||
+      snapshot.layers.length !== 0 ||
+      projection['characterDraftId'] !== receipt.result.characterDraftId ||
+      projection['wizardCheckpointId'] !== receipt.result.checkpointId ||
+      projection['draftRevision'] !== receipt.result.draftRevision ||
+      !sameJson(
+        projection['classModifiersOrNull']!,
+        receipt.result.classConsequences.statModifiers,
+      ) ||
+      !sameJson(projection['mandatoryClassSkillOrNull']!, receipt.result.mandatoryClassSkill)
+    ) {
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+    if (
+      snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+      snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision ||
+      snapshot.revisions.stateRevision !== receipt.revisions.stateRevision
+    ) {
+      return unrecognized('$.revisions', { ...snapshot.revisions });
     }
     return { ok: true, value: snapshot };
   }
@@ -2854,8 +3619,8 @@ function rollCommitSnapshotMatchesReceipt(
 
 function decodeCommandDestinationSnapshot(
   message: ProjectionSnapshotV2Message,
-  pending: PendingIdentityCheckpoint & {
-    readonly receipt: CommandReceipt<IdentityCheckpointResult>;
+  pending: PendingCheckpoint & {
+    readonly receipt: CommandReceipt<CheckpointResult>;
   },
   previous: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
@@ -2867,13 +3632,6 @@ function decodeCommandDestinationSnapshot(
   }
   if (message.presentation.assignment.reason !== 'COMMAND_DESTINATION') {
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
-  }
-  if (
-    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).some(
-      (axis) => message.revisions[axis] !== pending.receipt.revisions[axis],
-    )
-  ) {
-    return unrecognized('$.revisions', { ...message.revisions });
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   return decoded.ok ? checkpointSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
@@ -3020,12 +3778,47 @@ function identityCheckpointPayload(
   };
 }
 
+function statAssignmentCheckpointPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+  draft: CharacterStatAssignmentDraft | null,
+): StatAssignmentCheckpointPayload {
+  if (
+    snapshot.formId !== 'CHR-009' ||
+    draft === null ||
+    draft.assignmentMode !== snapshot.projection['assignmentMode'] ||
+    draft.validation !== 'READY_TO_CHECKPOINT'
+  ) {
+    throw new Error('CHR-009 requires a complete valid local assignment');
+  }
+  const values = draft.valuesByStat as StatMap<number>;
+  const common = {
+    characterDraftId: snapshot.projection['characterDraftId'] as string,
+    draftRevision: snapshot.projection['draftRevision'] as number,
+    sourceFormId: 'CHR-009',
+    stage: 'STAT_ASSIGNMENT',
+    wizardCheckpointId: snapshot.projection['wizardCheckpointId'] as string,
+  } as const;
+  return draft.assignmentMode === 'ROLLED_BIJECTION'
+    ? { ...common, setEntryIndexByStat: values }
+    : { ...common, pointBuyStats: values };
+}
+
 function setDecisionPayload(
   snapshot: ConfirmedProjectionSnapshot,
   choice: CharacterCreationChoiceDraft,
 ): SetDecisionPayload {
   if (choice.formId !== snapshot.formId) {
     throw new Error(`character creation choice ${choice.formId} does not match ${snapshot.formId}`);
+  }
+  if (choice.formId === 'CHR-011') {
+    return {
+      characterDraftId: snapshot.projection['characterDraftId'] as string,
+      draftRevision: snapshot.projection['draftRevision'] as number,
+      pureClass: choice.value,
+      sourceFormId: 'CHR-011',
+      stage: 'STAT_ASSIGNMENT',
+      wizardCheckpointId: snapshot.projection['wizardCheckpointId'] as string,
+    };
   }
   const common = {
     characterDraftId: snapshot.projection['characterDraftId'] as string,
@@ -3130,19 +3923,21 @@ export function connectProjection(
   onIdentityDraft: (state: IdentityDraftClientState | null) => void = () => {},
   onCreationChoiceDraft: (value: CharacterCreationChoiceDraft | null) => void = () => {},
   onCreationRollDraft: (value: CharacterCreationRollDraft | null) => void = () => {},
+  onStatAssignmentDraft: (value: CharacterStatAssignmentDraft | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
   let identity: IdentityDraftClient | null = null;
   let terminal = false;
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
-  let pendingCheckpoint: PendingIdentityCheckpoint | null = null;
+  let pendingCheckpoint: PendingCheckpoint | null = null;
   let pendingSetDecision: PendingSetDecision | null = null;
   let pendingRollCommit: PendingRollCommit | null = null;
   let pendingFormAction: FormActionIntentV2Message | null = null;
   let playerContextId: string | null = null;
   let creationChoiceDraft: CharacterCreationChoiceDraft | null = null;
   let creationRollDraft: CharacterCreationRollDraft | null = null;
+  let statAssignmentDraft: CharacterStatAssignmentDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
@@ -3156,6 +3951,7 @@ export function connectProjection(
           commandPending(),
           creationChoiceDraft,
           creationRollDraft,
+          statAssignmentDraft,
         );
 
   const closeAfterTerminalState = () => {
@@ -3216,13 +4012,15 @@ export function connectProjection(
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
     lastSnapshot = next;
-    if (next.formId === 'CHR-010') pendingCheckpoint = null;
+    if (pendingCheckpoint !== null) pendingCheckpoint = null;
     if (pendingSetDecision !== null) pendingSetDecision = null;
     if (pendingRollCommit !== null) pendingRollCommit = null;
     creationChoiceDraft = null;
     onCreationChoiceDraft(creationChoiceDraft);
     creationRollDraft = creationRollDraftFromSnapshot(next);
     onCreationRollDraft(creationRollDraft);
+    statAssignmentDraft = creationStatAssignmentDraftFromSnapshot(next);
+    onStatAssignmentDraft(statAssignmentDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -3240,6 +4038,7 @@ export function connectProjection(
         commandPending(),
         creationChoiceDraft,
         creationRollDraft,
+        statAssignmentDraft,
       ),
     });
     sendIdentity(replay);
@@ -3307,13 +4106,13 @@ export function connectProjection(
               failUnexpected(
                 '$.messageType',
                 message.messageType,
-                'Host sent a second non-replay identity checkpoint terminal.',
+                'Host sent a second non-replay wizard checkpoint terminal.',
               );
               return;
             }
             const receipt = decodeCheckpointTerminal(message, pendingCheckpoint);
             if (!receipt.ok) {
-              failProtocol(receipt.refusal, 'Host sent an invalid identity checkpoint receipt.');
+              failProtocol(receipt.refusal, 'Host sent an invalid wizard checkpoint receipt.');
               return;
             }
             if (
@@ -3323,11 +4122,11 @@ export function connectProjection(
               failUnexpected(
                 '$.receipt.receiptId',
                 receipt.value.receiptId,
-                'Host replay changed the confirmed identity checkpoint receipt.',
+                'Host replay changed the confirmed wizard checkpoint receipt.',
               );
               return;
             }
-            pendingCheckpoint = { request: pendingCheckpoint.request, receipt: receipt.value };
+            pendingCheckpoint = { ...pendingCheckpoint, receipt: receipt.value };
           } else if (pendingSetDecision !== null) {
             if (pendingSetDecision.receipt !== null && message.messageType !== 'command.replay') {
               failUnexpected(
@@ -3397,6 +4196,7 @@ export function connectProjection(
                 true,
                 creationChoiceDraft,
                 creationRollDraft,
+                statAssignmentDraft,
               ),
             });
           }
@@ -3439,6 +4239,7 @@ export function connectProjection(
                 commandPending(),
                 creationChoiceDraft,
                 creationRollDraft,
+                statAssignmentDraft,
               ),
             });
           }
@@ -3520,6 +4321,7 @@ export function connectProjection(
               commandPending(),
               creationChoiceDraft,
               creationRollDraft,
+              statAssignmentDraft,
             ),
           });
           sendIdentity(next);
@@ -3536,6 +4338,7 @@ export function connectProjection(
             commandPending(),
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         sendIdentity(next);
@@ -3626,8 +4429,8 @@ export function connectProjection(
         ) {
           snapshot = decodeCommandDestinationSnapshot(
             message,
-            pendingCheckpoint as PendingIdentityCheckpoint & {
-              readonly receipt: CommandReceipt<IdentityCheckpointResult>;
+            pendingCheckpoint as PendingCheckpoint & {
+              readonly receipt: CommandReceipt<CheckpointResult>;
             },
             lastSnapshot,
           );
@@ -3697,6 +4500,7 @@ export function connectProjection(
             commandPending(),
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         return;
@@ -3851,6 +4655,7 @@ export function connectProjection(
           false,
           creationChoiceDraft,
           creationRollDraft,
+          statAssignmentDraft,
         ),
       });
       return { ok: true };
@@ -3886,6 +4691,7 @@ export function connectProjection(
           false,
           creationChoiceDraft,
           creationRollDraft,
+          statAssignmentDraft,
         ),
       });
       return { ok: true };
@@ -3911,6 +4717,7 @@ export function connectProjection(
             commandPending(),
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
       try {
@@ -3920,6 +4727,41 @@ export function connectProjection(
       } catch (error: unknown) {
         return { ok: false, detail: diagnostic(error) };
       }
+    },
+    replaceStatAssignmentValue: (statCode, value) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-009' ||
+        statAssignmentDraft === null ||
+        !STAT_CODES.includes(statCode)
+      ) {
+        return { ok: false, detail: 'no active CHR-009 assignment scope' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'stat assignment is frozen while delivery is pending' };
+      }
+      if (value !== null && !Number.isFinite(value)) {
+        return { ok: false, detail: 'stat assignment value must be finite' };
+      }
+      const valuesByStat = { ...statAssignmentDraft.valuesByStat, [statCode]: value };
+      statAssignmentDraft = {
+        ...statAssignmentDraft,
+        validation: validateStatAssignmentDraft(statAssignmentDraft.assignmentMode, valuesByStat),
+        valuesByStat,
+      };
+      onStatAssignmentDraft(statAssignmentDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshot(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+          statAssignmentDraft,
+        ),
+      });
+      return { ok: true };
     },
     requestFormAction: (actionKey) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
@@ -3937,6 +4779,7 @@ export function connectProjection(
         false,
         creationChoiceDraft,
         creationRollDraft,
+        statAssignmentDraft,
       );
       const activeForm = activePresentedForm(visible);
       if (!activeForm.availableActionKeys.includes(actionKey)) {
@@ -3948,7 +4791,7 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
-      const selectedChoice = CHARACTER_CREATION_SELECTOR_CHOICES.get(actionKey);
+      const selectedChoice = characterCreationSelectorChoice(lastSnapshot, actionKey);
       if (selectedChoice !== undefined && selectedChoice.formId === activeForm.formId) {
         creationChoiceDraft = selectedChoice;
         onCreationChoiceDraft(creationChoiceDraft);
@@ -3960,6 +4803,7 @@ export function connectProjection(
             false,
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         return { ok: true };
@@ -3982,7 +4826,12 @@ export function connectProjection(
             detail: `identity checkpoint failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
           };
         }
-        pendingCheckpoint = { receipt: null, request };
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request,
+          sourceSnapshot: lastSnapshot,
+        };
         try {
           socket.send(encoded.text);
         } catch (error: unknown) {
@@ -4000,6 +4849,59 @@ export function connectProjection(
             true,
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (activeForm.formId === 'CHR-009') {
+        let payload: StatAssignmentCheckpointPayload;
+        try {
+          payload = statAssignmentCheckpointPayload(lastSnapshot, statAssignmentDraft);
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload,
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        } as const satisfies StatAssignmentCheckpointRequest;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `stat assignment checkpoint failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingCheckpoint = {
+          assignmentDraft: statAssignmentDraft,
+          receipt: null,
+          request,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return {
+            ok: false,
+            detail: `stat assignment checkpoint could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         return { ok: true };
@@ -4049,6 +4951,7 @@ export function connectProjection(
             true,
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         return { ok: true };
@@ -4095,6 +4998,7 @@ export function connectProjection(
             true,
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         return { ok: true };
@@ -4145,6 +5049,7 @@ export function connectProjection(
             true,
             creationChoiceDraft,
             creationRollDraft,
+            statAssignmentDraft,
           ),
         });
         return { ok: true };

@@ -1,6 +1,6 @@
 import type { FormId } from '@generated/types/atlas.js';
 
-/** Issues #62, #97, #110, #111 and #120 implement the wizard through set decisions. */
+/** Issues #62, #97, #110, #111, #120 and #122 implement the wizard through stat summary. */
 export const CHR_FORM_IDS = [
   'CHR-001',
   'CHR-010',
@@ -14,6 +14,9 @@ export const CHR_FORM_IDS = [
   'CHR-007',
   'CHR-008',
   'CHR-028',
+  'CHR-009',
+  'CHR-011',
+  'CHR-012',
 ] as const satisfies readonly FormId[];
 
 export type ChrFormId = (typeof CHR_FORM_IDS)[number];
