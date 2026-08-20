@@ -281,6 +281,7 @@ export interface Chr010Projection extends JsonObject {
   readonly choiceLockStatus: 'UNLOCKED';
   readonly commandId: null;
   readonly draftRevision: number;
+  readonly raceConsequenceOptions: readonly RaceConsequenceOptionProjection[];
   readonly raceChoice: null;
   readonly raceConsequencesPreview: null;
   readonly wizardCheckpointId: string;
@@ -292,6 +293,7 @@ export interface Chr016Projection extends JsonObject {
   readonly commandId: null;
   readonly draftRevision: number;
   readonly modeConsequences: null;
+  readonly modeConsequenceOptions: readonly ModeConsequenceOptionProjection[];
   readonly raceChoice: 'FREE' | 'UNITED';
   readonly symbiontAcquisitionMode: null;
   readonly wizardCheckpointId: string;
@@ -313,8 +315,82 @@ export interface Chr002Projection extends JsonObject {
   readonly commandId: null;
   readonly draftRevision: number;
   readonly methodConsequences: null;
+  readonly methodConsequenceOptions: readonly MethodConsequenceOptionProjection[];
   readonly statMethod: null;
   readonly wizardCheckpointId: string;
+}
+
+export interface LabeledStatModifierProjection extends JsonObject {
+  readonly delta: number;
+  readonly statCode: StatCode;
+  readonly statLabel: string;
+}
+
+export type StatModifierEffectProjection =
+  | { readonly kind: 'NO_STAT_MODIFIERS' }
+  | {
+      readonly entries: readonly LabeledStatModifierProjection[];
+      readonly kind: 'ADDITIVE_STAT_MODIFIERS';
+    };
+
+export interface ModeConsequencesProjection extends JsonObject {
+  readonly baseSymbiontSlots: number;
+  readonly raceChoice: 'FREE' | 'UNITED';
+  readonly raceLabel: string;
+  readonly statModifiers: StatModifierEffectProjection;
+}
+
+export interface ModeConsequenceOptionProjection extends JsonObject {
+  readonly modeConsequences: ModeConsequencesProjection;
+  readonly symbiontAcquisitionMode: 'MANUAL' | 'RANDOM';
+}
+
+export type RaceStatModifiersByAcquisitionModeProjection =
+  | { readonly kind: 'NOT_APPLICABLE' }
+  | {
+      readonly alternatives: readonly ModeConsequenceOptionProjection[];
+      readonly kind: 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE';
+    };
+
+export interface RaceConsequencesPreviewProjection extends JsonObject {
+  readonly allocationXpMultiplier: number;
+  readonly baseSymbiontSlots: number;
+  readonly classPolicy: 'NO_CLASS' | 'REQUIRED_PURE_CLASS';
+  readonly directXpMultiplier: number;
+  readonly raceLabel: string;
+  readonly raceStatModifiersByAcquisitionMode: RaceStatModifiersByAcquisitionModeProjection;
+  readonly symbiontXpPolicy: 'STANDARD_XP_AWARD' | 'XP_AWARD_X2';
+  readonly symbioticMonsterAllowed: boolean;
+}
+
+export interface RaceConsequenceOptionProjection extends JsonObject {
+  readonly raceChoice: 'FREE' | 'PURE' | 'UNITED';
+  readonly raceConsequencesPreview: RaceConsequencesPreviewProjection;
+}
+
+export interface RejectedSetConsequencesProjection extends JsonObject {
+  readonly creationCriticalConsequencesDiscarded: true;
+  readonly irreversible: true;
+  readonly setValuesDiscarded: true;
+}
+
+export type MethodTerminalRuleProjection =
+  | {
+      readonly afterAttempt: number;
+      readonly exactTotal: number;
+      readonly kind: 'POINT_BUY_AFTER_REJECTION';
+    }
+  | { readonly attemptIndex: number; readonly kind: 'MANDATORY_ACCEPT' };
+
+export interface MethodConsequencesProjection extends JsonObject {
+  readonly maximumAttempts: number;
+  readonly rejectedSet: RejectedSetConsequencesProjection;
+  readonly terminalRule: MethodTerminalRuleProjection;
+}
+
+export interface MethodConsequenceOptionProjection extends JsonObject {
+  readonly methodConsequences: MethodConsequencesProjection;
+  readonly statMethod: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
 }
 
 export interface NaturalCriticalQueueItem extends JsonObject {
@@ -500,14 +576,13 @@ export type CharacterCreationRollDraft =
 export type CharacterCreationChoiceDraft =
   | {
       readonly confirmationActionKey: 'CHR-010::CTA::001' | 'CHR-010::CTA::002';
-      readonly consequence: 'Выбрать Единого' | 'Выбрать Вольного' | 'Выбрать Чистого';
+      readonly consequence: RaceConsequencesPreviewProjection;
       readonly formId: 'CHR-010';
       readonly value: 'FREE' | 'PURE' | 'UNITED';
     }
   | {
       readonly confirmationActionKey: 'CHR-016::CTA::001';
-      readonly consequence:
-        'Выбрать ручное получение симбионтов' | 'Выбрать случайное получение симбионтов';
+      readonly consequence: ModeConsequencesProjection;
       readonly formId: 'CHR-016';
       readonly value: 'MANUAL' | 'RANDOM';
     }
@@ -519,8 +594,7 @@ export type CharacterCreationChoiceDraft =
     }
   | {
       readonly confirmationActionKey: 'CHR-002::CTA::001';
-      readonly consequence:
-        'Выбрать авантюристский метод' | 'Выбрать классический метод' | 'Выбрать «Всё или ничего»';
+      readonly consequence: MethodConsequencesProjection;
       readonly formId: 'CHR-002';
       readonly value: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC';
     }
@@ -533,13 +607,18 @@ export type CharacterCreationChoiceDraft =
       readonly value: PureClass;
     };
 
-const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreationChoiceDraft> =
+type CharacterCreationSelectorChoice =
+  | Omit<Extract<CharacterCreationChoiceDraft, { readonly formId: 'CHR-010' }>, 'consequence'>
+  | Omit<Extract<CharacterCreationChoiceDraft, { readonly formId: 'CHR-016' }>, 'consequence'>
+  | Extract<CharacterCreationChoiceDraft, { readonly formId: 'CHR-036' }>
+  | Omit<Extract<CharacterCreationChoiceDraft, { readonly formId: 'CHR-002' }>, 'consequence'>;
+
+const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreationSelectorChoice> =
   new Map([
     [
       'CHR-010::CTA::004',
       {
         confirmationActionKey: 'CHR-010::CTA::001',
-        consequence: 'Выбрать Единого',
         formId: 'CHR-010',
         value: 'UNITED',
       },
@@ -548,7 +627,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-010::CTA::005',
       {
         confirmationActionKey: 'CHR-010::CTA::001',
-        consequence: 'Выбрать Вольного',
         formId: 'CHR-010',
         value: 'FREE',
       },
@@ -557,7 +635,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-010::CTA::006',
       {
         confirmationActionKey: 'CHR-010::CTA::002',
-        consequence: 'Выбрать Чистого',
         formId: 'CHR-010',
         value: 'PURE',
       },
@@ -566,7 +643,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-016::CTA::003',
       {
         confirmationActionKey: 'CHR-016::CTA::001',
-        consequence: 'Выбрать ручное получение симбионтов',
         formId: 'CHR-016',
         value: 'MANUAL',
       },
@@ -575,7 +651,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-016::CTA::004',
       {
         confirmationActionKey: 'CHR-016::CTA::001',
-        consequence: 'Выбрать случайное получение симбионтов',
         formId: 'CHR-016',
         value: 'RANDOM',
       },
@@ -602,7 +677,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-002::CTA::003',
       {
         confirmationActionKey: 'CHR-002::CTA::001',
-        consequence: 'Выбрать классический метод',
         formId: 'CHR-002',
         value: 'CLASSIC',
       },
@@ -611,7 +685,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-002::CTA::004',
       {
         confirmationActionKey: 'CHR-002::CTA::001',
-        consequence: 'Выбрать авантюристский метод',
         formId: 'CHR-002',
         value: 'ADVENTUROUS',
       },
@@ -620,7 +693,6 @@ const CHARACTER_CREATION_SELECTOR_CHOICES: ReadonlyMap<ActionKey, CharacterCreat
       'CHR-002::CTA::005',
       {
         confirmationActionKey: 'CHR-002::CTA::001',
-        consequence: 'Выбрать «Всё или ничего»',
         formId: 'CHR-002',
         value: 'ALL_OR_NOTHING',
       },
@@ -631,8 +703,39 @@ function characterCreationSelectorChoice(
   snapshot: ConfirmedProjectionSnapshot,
   actionKey: ActionKey,
 ): CharacterCreationChoiceDraft | undefined {
-  const existing = CHARACTER_CREATION_SELECTOR_CHOICES.get(actionKey);
-  if (existing !== undefined || snapshot.formId !== 'CHR-011') return existing;
+  const selector = CHARACTER_CREATION_SELECTOR_CHOICES.get(actionKey);
+  if (selector !== undefined) {
+    if (selector.formId !== snapshot.formId) return undefined;
+    switch (selector.formId) {
+      case 'CHR-010': {
+        const option = (snapshot.projection as Chr010Projection).raceConsequenceOptions.find(
+          ({ raceChoice }) => raceChoice === selector.value,
+        );
+        return option === undefined
+          ? undefined
+          : { ...selector, consequence: option.raceConsequencesPreview };
+      }
+      case 'CHR-016': {
+        const option = (snapshot.projection as Chr016Projection).modeConsequenceOptions.find(
+          ({ symbiontAcquisitionMode }) => symbiontAcquisitionMode === selector.value,
+        );
+        return option === undefined
+          ? undefined
+          : { ...selector, consequence: option.modeConsequences };
+      }
+      case 'CHR-036':
+        return selector;
+      case 'CHR-002': {
+        const option = (snapshot.projection as Chr002Projection).methodConsequenceOptions.find(
+          ({ statMethod }) => statMethod === selector.value,
+        );
+        return option === undefined
+          ? undefined
+          : { ...selector, consequence: option.methodConsequences };
+      }
+    }
+  }
+  if (snapshot.formId !== 'CHR-011') return undefined;
   const pureClass = PURE_CLASS_BY_SELECTOR.get(actionKey);
   if (pureClass === undefined) return undefined;
   const option = (snapshot.projection as Chr011Projection).classOptions.find(
@@ -1393,11 +1496,347 @@ function decodeChr001Projection(
   });
 }
 
+function isPositiveSafeInteger(value: JsonValue): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function decodeLabeledStatModifiers(
+  value: JsonValue,
+  path: string,
+  statLabels: Map<StatCode, string>,
+): DecodeResult<readonly LabeledStatModifierProjection[]> {
+  if (!Array.isArray(value) || value.length === 0) return unrecognized(path, value);
+  const entries = value as readonly JsonValue[];
+  const seen = new Set<StatCode>();
+  let previousOrder = -1;
+  for (const [index, entry] of entries.entries()) {
+    const itemPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(entry)) return unrecognized(itemPath, entry);
+    const shape = decodeProjection(entry, itemPath, {
+      delta: (field) => typeof field === 'number' && Number.isSafeInteger(field),
+      statCode: (field) => typeof field === 'string' && STAT_CODES.includes(field as StatCode),
+      statLabel: (field) => typeof field === 'string' && field.trim().length > 0,
+    });
+    if (!shape.ok) return shape;
+    const statCode = entry['statCode'] as StatCode;
+    const statLabel = entry['statLabel'] as string;
+    const order = STAT_CODES.indexOf(statCode);
+    if (seen.has(statCode) || order <= previousOrder) {
+      return unrecognized(`${itemPath}.statCode`, statCode);
+    }
+    const previousLabel = statLabels.get(statCode);
+    if (previousLabel !== undefined && previousLabel !== statLabel) {
+      return unrecognized(`${itemPath}.statLabel`, statLabel);
+    }
+    statLabels.set(statCode, statLabel);
+    previousOrder = order;
+    seen.add(statCode);
+  }
+  return {
+    ok: true,
+    value: value as unknown as readonly LabeledStatModifierProjection[],
+  };
+}
+
+function decodeStatModifierEffect(
+  value: JsonValue,
+  path: string,
+  statLabels: Map<StatCode, string>,
+): DecodeResult<StatModifierEffectProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  if (value['kind'] === 'NO_STAT_MODIFIERS') {
+    const shape = decodeProjection(value, path, {
+      kind: (field) => field === 'NO_STAT_MODIFIERS',
+    });
+    return shape.ok ? { ok: true, value: value as StatModifierEffectProjection } : shape;
+  }
+  if (value['kind'] !== 'ADDITIVE_STAT_MODIFIERS') {
+    return unrecognized(`${path}.kind`, value['kind']!);
+  }
+  const entries = decodeLabeledStatModifiers(value['entries']!, `${path}.entries`, statLabels);
+  if (!entries.ok) return entries;
+  const shape = decodeProjection(value, path, {
+    entries: (field) => field === value['entries'],
+    kind: (field) => field === 'ADDITIVE_STAT_MODIFIERS',
+  });
+  return shape.ok ? { ok: true, value: value as StatModifierEffectProjection } : shape;
+}
+
+function decodeModeConsequences(
+  value: JsonValue,
+  path: string,
+  expectedRaceChoice: 'FREE' | 'UNITED',
+  statLabels: Map<StatCode, string>,
+): DecodeResult<ModeConsequencesProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const modifiers = decodeStatModifierEffect(
+    value['statModifiers']!,
+    `${path}.statModifiers`,
+    statLabels,
+  );
+  if (!modifiers.ok) return modifiers;
+  const shape = decodeProjection(value, path, {
+    baseSymbiontSlots: (field) =>
+      typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
+    raceChoice: (field) => field === expectedRaceChoice,
+    raceLabel: (field) => typeof field === 'string' && field.trim().length > 0,
+    statModifiers: (field) => field === value['statModifiers'],
+  });
+  return shape.ok ? { ok: true, value: value as ModeConsequencesProjection } : shape;
+}
+
+function decodeModeConsequenceOptions(
+  value: JsonValue,
+  path: string,
+  expectedRaceChoice: 'FREE' | 'UNITED',
+  statLabels: Map<StatCode, string>,
+): DecodeResult<readonly ModeConsequenceOptionProjection[]> {
+  if (!Array.isArray(value) || value.length !== 2) return unrecognized(path, value);
+  const expectedModes = ['MANUAL', 'RANDOM'] as const;
+  const options = value as readonly JsonValue[];
+  let raceLabel: string | null = null;
+  let baseSymbiontSlots: number | null = null;
+  for (const [index, option] of options.entries()) {
+    const optionPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(option)) return unrecognized(optionPath, option);
+    const mode = expectedModes[index]!;
+    if (option['symbiontAcquisitionMode'] !== mode) {
+      return unrecognized(
+        `${optionPath}.symbiontAcquisitionMode`,
+        option['symbiontAcquisitionMode']!,
+      );
+    }
+    const consequence = decodeModeConsequences(
+      option['modeConsequences']!,
+      `${optionPath}.modeConsequences`,
+      expectedRaceChoice,
+      statLabels,
+    );
+    if (!consequence.ok) return consequence;
+    const shape = decodeProjection(option, optionPath, {
+      modeConsequences: (field) => field === option['modeConsequences'],
+      symbiontAcquisitionMode: (field) => field === mode,
+    });
+    if (!shape.ok) return shape;
+    const expectedModifierKind =
+      expectedRaceChoice === 'FREE' && mode === 'RANDOM'
+        ? 'NO_STAT_MODIFIERS'
+        : 'ADDITIVE_STAT_MODIFIERS';
+    if (consequence.value.statModifiers.kind !== expectedModifierKind) {
+      return unrecognized(
+        `${optionPath}.modeConsequences.statModifiers.kind`,
+        consequence.value.statModifiers.kind,
+      );
+    }
+    if (
+      (raceLabel !== null && consequence.value.raceLabel !== raceLabel) ||
+      (baseSymbiontSlots !== null && consequence.value.baseSymbiontSlots !== baseSymbiontSlots)
+    ) {
+      return unrecognized(`${optionPath}.modeConsequences`, option['modeConsequences']!);
+    }
+    raceLabel = consequence.value.raceLabel;
+    baseSymbiontSlots = consequence.value.baseSymbiontSlots;
+  }
+  return {
+    ok: true,
+    value: value as unknown as readonly ModeConsequenceOptionProjection[],
+  };
+}
+
+function decodeRaceConsequencesPreview(
+  value: JsonValue,
+  path: string,
+  expectedRaceChoice: 'FREE' | 'PURE' | 'UNITED',
+  statLabels: Map<StatCode, string>,
+): DecodeResult<RaceConsequencesPreviewProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const raceModifiersByMode = value['raceStatModifiersByAcquisitionMode'];
+  if (!isJsonObject(raceModifiersByMode)) {
+    return unrecognized(`${path}.raceStatModifiersByAcquisitionMode`, raceModifiersByMode!);
+  }
+  if (expectedRaceChoice === 'PURE') {
+    const notApplicable = decodeProjection(
+      raceModifiersByMode,
+      `${path}.raceStatModifiersByAcquisitionMode`,
+      { kind: (field) => field === 'NOT_APPLICABLE' },
+    );
+    if (!notApplicable.ok) return notApplicable;
+  } else {
+    const alternatives = decodeModeConsequenceOptions(
+      raceModifiersByMode['alternatives']!,
+      `${path}.raceStatModifiersByAcquisitionMode.alternatives`,
+      expectedRaceChoice,
+      statLabels,
+    );
+    if (!alternatives.ok) return alternatives;
+    const depends = decodeProjection(
+      raceModifiersByMode,
+      `${path}.raceStatModifiersByAcquisitionMode`,
+      {
+        alternatives: (field) => field === raceModifiersByMode['alternatives'],
+        kind: (field) => field === 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE',
+      },
+    );
+    if (!depends.ok) return depends;
+    for (const [index, alternative] of alternatives.value.entries()) {
+      if (
+        alternative.modeConsequences.raceLabel !== value['raceLabel'] ||
+        alternative.modeConsequences.baseSymbiontSlots !== value['baseSymbiontSlots']
+      ) {
+        return unrecognized(
+          `${path}.raceStatModifiersByAcquisitionMode.alternatives[${String(index)}].modeConsequences`,
+          alternative.modeConsequences,
+        );
+      }
+    }
+  }
+  const expectedClassPolicy = expectedRaceChoice === 'PURE' ? 'REQUIRED_PURE_CLASS' : 'NO_CLASS';
+  const expectedXpPolicy = expectedRaceChoice === 'FREE' ? 'XP_AWARD_X2' : 'STANDARD_XP_AWARD';
+  const shape = decodeProjection(value, path, {
+    allocationXpMultiplier: isPositiveSafeInteger,
+    baseSymbiontSlots: (field) =>
+      typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
+    classPolicy: (field) => field === expectedClassPolicy,
+    directXpMultiplier: isPositiveSafeInteger,
+    raceLabel: (field) => typeof field === 'string' && field.trim().length > 0,
+    raceStatModifiersByAcquisitionMode: (field) => field === raceModifiersByMode,
+    symbiontXpPolicy: (field) => field === expectedXpPolicy,
+    symbioticMonsterAllowed: (field) => typeof field === 'boolean',
+  });
+  return shape.ok ? { ok: true, value: value as RaceConsequencesPreviewProjection } : shape;
+}
+
+function decodeRaceConsequenceOptions(
+  value: JsonValue,
+  path: string,
+): DecodeResult<readonly RaceConsequenceOptionProjection[]> {
+  if (!Array.isArray(value) || value.length !== 3) return unrecognized(path, value);
+  const expectedRaceChoices = ['UNITED', 'FREE', 'PURE'] as const;
+  const options = value as readonly JsonValue[];
+  const statLabels = new Map<StatCode, string>();
+  for (const [index, option] of options.entries()) {
+    const optionPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(option)) return unrecognized(optionPath, option);
+    const raceChoice = expectedRaceChoices[index]!;
+    if (option['raceChoice'] !== raceChoice) {
+      return unrecognized(`${optionPath}.raceChoice`, option['raceChoice']!);
+    }
+    const consequences = decodeRaceConsequencesPreview(
+      option['raceConsequencesPreview']!,
+      `${optionPath}.raceConsequencesPreview`,
+      raceChoice,
+      statLabels,
+    );
+    if (!consequences.ok) return consequences;
+    const shape = decodeProjection(option, optionPath, {
+      raceChoice: (field) => field === raceChoice,
+      raceConsequencesPreview: (field) => field === option['raceConsequencesPreview'],
+    });
+    if (!shape.ok) return shape;
+  }
+  return {
+    ok: true,
+    value: value as unknown as readonly RaceConsequenceOptionProjection[],
+  };
+}
+
+function decodeMethodTerminalRule(
+  value: JsonValue,
+  path: string,
+  method: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC',
+  maximumAttempts: number,
+): DecodeResult<MethodTerminalRuleProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  if (method === 'ALL_OR_NOTHING') {
+    const shape = decodeProjection(value, path, {
+      attemptIndex: (field) => isPositiveSafeInteger(field) && field === maximumAttempts,
+      kind: (field) => field === 'MANDATORY_ACCEPT',
+    });
+    return shape.ok ? { ok: true, value: value as MethodTerminalRuleProjection } : shape;
+  }
+  const shape = decodeProjection(value, path, {
+    afterAttempt: (field) => isPositiveSafeInteger(field) && field === maximumAttempts,
+    exactTotal: isPositiveSafeInteger,
+    kind: (field) => field === 'POINT_BUY_AFTER_REJECTION',
+  });
+  return shape.ok ? { ok: true, value: value as MethodTerminalRuleProjection } : shape;
+}
+
+function decodeMethodConsequences(
+  value: JsonValue,
+  path: string,
+  method: 'ADVENTUROUS' | 'ALL_OR_NOTHING' | 'CLASSIC',
+): DecodeResult<MethodConsequencesProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const maximumAttempts = value['maximumAttempts'];
+  if (!isPositiveSafeInteger(maximumAttempts!)) {
+    return unrecognized(`${path}.maximumAttempts`, maximumAttempts!);
+  }
+  const rejectedSet = value['rejectedSet'];
+  if (!isJsonObject(rejectedSet)) return unrecognized(`${path}.rejectedSet`, rejectedSet!);
+  const rejectedShape = decodeProjection(rejectedSet, `${path}.rejectedSet`, {
+    creationCriticalConsequencesDiscarded: (field) => field === true,
+    irreversible: (field) => field === true,
+    setValuesDiscarded: (field) => field === true,
+  });
+  if (!rejectedShape.ok) return rejectedShape;
+  const terminal = decodeMethodTerminalRule(
+    value['terminalRule']!,
+    `${path}.terminalRule`,
+    method,
+    maximumAttempts,
+  );
+  if (!terminal.ok) return terminal;
+  const shape = decodeProjection(value, path, {
+    maximumAttempts: (field) => field === maximumAttempts,
+    rejectedSet: (field) => field === rejectedSet,
+    terminalRule: (field) => field === value['terminalRule'],
+  });
+  return shape.ok ? { ok: true, value: value as MethodConsequencesProjection } : shape;
+}
+
+function decodeMethodConsequenceOptions(
+  value: JsonValue,
+  path: string,
+): DecodeResult<readonly MethodConsequenceOptionProjection[]> {
+  if (!Array.isArray(value) || value.length !== 3) return unrecognized(path, value);
+  const expectedMethods = ['CLASSIC', 'ADVENTUROUS', 'ALL_OR_NOTHING'] as const;
+  const options = value as readonly JsonValue[];
+  for (const [index, option] of options.entries()) {
+    const optionPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(option)) return unrecognized(optionPath, option);
+    const method = expectedMethods[index]!;
+    if (option['statMethod'] !== method) {
+      return unrecognized(`${optionPath}.statMethod`, option['statMethod']!);
+    }
+    const consequences = decodeMethodConsequences(
+      option['methodConsequences']!,
+      `${optionPath}.methodConsequences`,
+      method,
+    );
+    if (!consequences.ok) return consequences;
+    const shape = decodeProjection(option, optionPath, {
+      methodConsequences: (field) => field === option['methodConsequences'],
+      statMethod: (field) => field === method,
+    });
+    if (!shape.ok) return shape;
+  }
+  return {
+    ok: true,
+    value: value as unknown as readonly MethodConsequenceOptionProjection[],
+  };
+}
+
 function decodeChr010Projection(
   value: JsonObject,
   path: string,
   routeBinding: JsonValue | undefined,
 ): DecodeResult<JsonObject> {
+  const options = decodeRaceConsequenceOptions(
+    value['raceConsequenceOptions']!,
+    `${path}.raceConsequenceOptions`,
+  );
+  if (!options.ok) return options;
   const characterDraftId = value['characterDraftId'];
   return decodeProjection(value, path, {
     ancientOptionSerialized: (field) => field === false,
@@ -1407,6 +1846,7 @@ function decodeChr010Projection(
     commandId: (field) => field === null,
     draftRevision: (field) =>
       typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
+    raceConsequenceOptions: (field) => field === value['raceConsequenceOptions'],
     raceChoice: (field) => field === null,
     raceConsequencesPreview: (field) => field === null,
     wizardCheckpointId: (field) =>
@@ -1423,6 +1863,17 @@ function decodeChr016Projection(
   path: string,
   routeBinding: JsonValue | undefined,
 ): DecodeResult<JsonObject> {
+  const raceChoice = value['raceChoice'];
+  if (raceChoice !== 'FREE' && raceChoice !== 'UNITED') {
+    return unrecognized(`${path}.raceChoice`, raceChoice!);
+  }
+  const options = decodeModeConsequenceOptions(
+    value['modeConsequenceOptions']!,
+    `${path}.modeConsequenceOptions`,
+    raceChoice,
+    new Map<StatCode, string>(),
+  );
+  if (!options.ok) return options;
   const characterDraftId = value['characterDraftId'];
   return decodeProjection(value, path, {
     characterDraftId: (field) =>
@@ -1432,7 +1883,8 @@ function decodeChr016Projection(
     draftRevision: (field) =>
       typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
     modeConsequences: (field) => field === null,
-    raceChoice: (field) => field === 'FREE' || field === 'UNITED',
+    modeConsequenceOptions: (field) => field === value['modeConsequenceOptions'],
+    raceChoice: (field) => field === raceChoice,
     symbiontAcquisitionMode: (field) => field === null,
     wizardCheckpointId: (field) =>
       typeof field === 'string' &&
@@ -1472,6 +1924,11 @@ function decodeChr002Projection(
   path: string,
   routeBinding: JsonValue | undefined,
 ): DecodeResult<JsonObject> {
+  const options = decodeMethodConsequenceOptions(
+    value['methodConsequenceOptions']!,
+    `${path}.methodConsequenceOptions`,
+  );
+  if (!options.ok) return options;
   const characterDraftId = value['characterDraftId'];
   return decodeProjection(value, path, {
     characterDraftId: (field) =>
@@ -1481,6 +1938,7 @@ function decodeChr002Projection(
     draftRevision: (field) =>
       typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
     methodConsequences: (field) => field === null,
+    methodConsequenceOptions: (field) => field === value['methodConsequenceOptions'],
     statMethod: (field) => field === null,
     wizardCheckpointId: (field) =>
       typeof field === 'string' &&

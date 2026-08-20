@@ -36,12 +36,14 @@ import type {
 import { openPersistenceDatabase } from '../persistence/database.js';
 import { bootstrapDeviceIdentity } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
+import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
 import {
   IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
   loadIdentityCheckpoint,
 } from './identity-checkpoint.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
+import { loadSkillStageCatalog } from './skill-stage-catalog.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const ZERO_REVISIONS = {
@@ -203,12 +205,18 @@ async function sendV2(
 }
 
 describe('first durable identity checkpoint server path', () => {
+  let consequenceCatalog: Awaited<ReturnType<typeof loadCreationDecisionConsequenceCatalog>>;
   let staticRoot: string;
   let vocabulary: ProtocolVocabulary & WireV3Vocabulary;
 
   beforeAll(async () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-checkpoint-host-'));
     await writeFile(join(staticRoot, 'index.html'), '<main>checkpoint</main>', 'utf8');
+    const skillStageCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
+    consequenceCatalog = await loadCreationDecisionConsequenceCatalog(
+      PROJECT_ROOT,
+      skillStageCatalog,
+    );
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
 
@@ -479,6 +487,7 @@ describe('first durable identity checkpoint server path', () => {
               commandId: null,
               draftRevision: 1,
               raceChoice: null,
+              raceConsequenceOptions: consequenceCatalog.raceConsequenceOptions,
               raceConsequencesPreview: null,
               wizardCheckpointId,
             },
@@ -662,7 +671,13 @@ describe('first durable identity checkpoint server path', () => {
       expect(hostMessageV2(recoveredFrames[2] ?? '', vocabulary)).toMatchObject({
         presentation: {
           assignment: { correlationId: 'restart-recovery', reason: 'RECONNECT' },
-          base: { formId: 'CHR-010', roleFilteredPayload: { characterDraftId } },
+          base: {
+            formId: 'CHR-010',
+            roleFilteredPayload: {
+              characterDraftId,
+              raceConsequenceOptions: consequenceCatalog.raceConsequenceOptions,
+            },
+          },
         },
         revisions: ZERO_REVISIONS,
       });
@@ -681,7 +696,13 @@ describe('first durable identity checkpoint server path', () => {
       expect(hostMessageV2(completedFrames[1] ?? '', vocabulary)).toMatchObject({
         presentation: {
           assignment: { correlationId: 'completed-reconnect', reason: 'RECONNECT' },
-          base: { formId: 'CHR-010', roleFilteredPayload: { characterDraftId } },
+          base: {
+            formId: 'CHR-010',
+            roleFilteredPayload: {
+              characterDraftId,
+              raceConsequenceOptions: consequenceCatalog.raceConsequenceOptions,
+            },
+          },
         },
         revisions: ZERO_REVISIONS,
       });

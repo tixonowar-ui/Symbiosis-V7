@@ -37,6 +37,7 @@ import type {
 import { openPersistenceDatabase } from '../persistence/database.js';
 import { bootstrapDeviceIdentity, resetDeviceIdentity } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
+import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
 import {
   CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
   loadCreationWizardCheckpoint,
@@ -838,6 +839,7 @@ function nextAttemptJourney(
 }
 
 describe('durable character creation decisions', () => {
+  let consequenceCatalog: Awaited<ReturnType<typeof loadCreationDecisionConsequenceCatalog>>;
   let skillCatalog: Awaited<ReturnType<typeof loadSkillStageCatalog>>;
   let staticRoot: string;
   let vocabulary: ProtocolVocabulary & WireV3Vocabulary;
@@ -846,6 +848,7 @@ describe('durable character creation decisions', () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-set-decide-host-'));
     await writeFile(join(staticRoot, 'index.html'), '<main>set decide</main>', 'utf8');
     skillCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
+    consequenceCatalog = await loadCreationDecisionConsequenceCatalog(PROJECT_ROOT, skillCatalog);
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
 
@@ -891,6 +894,7 @@ describe('durable character creation decisions', () => {
             roleFilteredPayload: {
               choiceLockStatus: 'UNLOCKED',
               draftRevision: 2,
+              modeConsequenceOptions: consequenceCatalog.modeConsequenceOptionsByRace.UNITED,
               modeConsequences: null,
               raceChoice: 'UNITED',
               symbiontAcquisitionMode: null,
@@ -970,6 +974,7 @@ describe('durable character creation decisions', () => {
             roleFilteredPayload: {
               choiceLockStatus: 'UNLOCKED',
               draftRevision: 4,
+              methodConsequenceOptions: consequenceCatalog.methodConsequenceOptions,
               methodConsequences: null,
               statMethod: null,
             },

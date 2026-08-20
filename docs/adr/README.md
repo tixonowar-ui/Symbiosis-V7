@@ -76,6 +76,7 @@
 | [0042](0042-character-creation-stats-and-rolls.md)        | Наборы характеристик и броски        | принято                                     |
 | [0043](0043-character-set-decision-and-abandonment.md)    | Решение о наборе и необратимый отказ | принято                                     |
 | [0044](0044-character-stat-assignment-and-pure-class.md)  | Распределение и класс Чистого        | принято                                     |
+| [0045](0045-character-decision-consequences.md)           | Последствия первых решений           | принято                                     |
 
 ## Перенос решений аудита
 

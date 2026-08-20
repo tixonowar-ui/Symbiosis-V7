@@ -50,6 +50,7 @@ import { listLocalCharacters, loadDeviceId, readLocalCharacter } from '../persis
 import type { RevisionImpact } from '../persistence/index.js';
 import { createIdentityDraftRuntime } from './identity-draft.js';
 import type { IdentityDraftRuntime } from './identity-draft.js';
+import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
 import {
   deriveChr009AssignmentView,
   deriveChr011ClassView,
@@ -266,6 +267,9 @@ interface NavigationDependencies {
   readonly allocateReceiptId: HostServerConfig['allocateReceiptId'];
   readonly allocateWizardCheckpointId: HostServerConfig['allocateWizardCheckpointId'];
   readonly catalog: AppProjectionCatalog;
+  readonly creationDecisionConsequenceCatalog: Awaited<
+    ReturnType<typeof loadCreationDecisionConsequenceCatalog>
+  >;
   readonly database: HostServerConfig['database'];
   readonly journal: NavigationJournal;
   readonly identityDraft: IdentityDraftRuntime;
@@ -1006,6 +1010,7 @@ function creationWarningNavigation(
     checkpoint,
     creationWizardCapabilities(connection.executableWorkflowCommandIds),
     dependencies.skillStageCatalog,
+    dependencies.creationDecisionConsequenceCatalog,
   );
   const nextContext = creationWizardContext(connection, dependencies, checkpoint);
   return {
@@ -1026,6 +1031,7 @@ function creationWizardBase(
   checkpoint: DurableCreationWizardCheckpoint,
   capabilities: CreationWizardCapabilities,
   skillStageCatalog: NavigationDependencies['skillStageCatalog'],
+  consequenceCatalog: NavigationDependencies['creationDecisionConsequenceCatalog'],
 ): PresentedBaseForm {
   const { characterDraftId, wizardCheckpointId } = checkpoint.identityStage.request.payload;
   const draftRevision = checkpoint.receipt.result.draftRevision;
@@ -1040,6 +1046,7 @@ function creationWizardBase(
           characterDraftId,
           wizardCheckpointId,
           draftRevision,
+          consequenceCatalog,
         ),
         routeBindings,
         routeTemplate: CHR_010_ROUTE,
@@ -1058,6 +1065,7 @@ function creationWizardBase(
           wizardCheckpointId,
           draftRevision,
           raceChoice,
+          consequenceCatalog,
         ),
         routeBindings,
         routeTemplate: CHR_016_ROUTE,
@@ -1085,6 +1093,7 @@ function creationWizardBase(
           characterDraftId,
           wizardCheckpointId,
           draftRevision,
+          consequenceCatalog,
         ),
         routeBindings,
         routeTemplate: CHR_002_ROUTE,
@@ -1665,6 +1674,7 @@ function sendCreationWizardDestination(
         checkpoint,
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
       ),
       'player',
       currentCreationWizardRevisions(checkpoint),
@@ -2387,6 +2397,7 @@ function handleReconnectV2(
       replayDestination,
       creationCapabilities,
       dependencies.skillStageCatalog,
+      dependencies.creationDecisionConsequenceCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, replayDestination);
     projectionRole = 'player';
@@ -2413,7 +2424,12 @@ function handleReconnectV2(
       restored.entityLocalCharacterId,
       dependencies.skillStageCatalog,
     );
-    base = creationWizardBase(checkpoint, creationCapabilities, dependencies.skillStageCatalog);
+    base = creationWizardBase(
+      checkpoint,
+      creationCapabilities,
+      dependencies.skillStageCatalog,
+      dependencies.creationDecisionConsequenceCatalog,
+    );
     nextContext = creationWizardContext(connection, dependencies, checkpoint);
     projectionRole = 'player';
     revisions = currentCreationWizardRevisions(checkpoint);
@@ -2691,6 +2707,10 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     loadSkillStageCatalog(projectRoot),
     loadProtocolVocabulary(projectRoot),
   ]);
+  const creationDecisionConsequenceCatalog = await loadCreationDecisionConsequenceCatalog(
+    projectRoot,
+    skillStageCatalog,
+  );
 
   const app = Fastify({ logger: false });
   const commandJournal: CommandJournal = new Map();
@@ -2703,6 +2723,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     allocateReceiptId: config.allocateReceiptId,
     allocateWizardCheckpointId: config.allocateWizardCheckpointId,
     catalog,
+    creationDecisionConsequenceCatalog,
     database: config.database,
     identityDraft: createIdentityDraftRuntime(new Set(LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS)),
     identitySessions: new Map(),

@@ -12,18 +12,25 @@ import type {
   CharacterCreationRollDraft,
   CharacterStatAssignmentDraft,
   CharacterSetDecisionProjection,
+  Chr002Projection,
   Chr003Projection,
   Chr004Projection,
   Chr009Projection,
+  Chr010Projection,
   Chr011Projection,
   Chr012Projection,
+  Chr016Projection,
   ConfirmedPresentationLayer,
   ConfirmedProjectionSnapshot,
   FormActionRequestResult,
   IdentityDraftClientState,
   IdentityDraftValues,
+  MethodConsequencesProjection,
+  ModeConsequencesProjection,
+  RaceConsequencesPreviewProjection,
   ProjectionConnection,
   StatCode,
+  StatModifierEffectProjection,
   WebClientState,
 } from './ws-client.js';
 
@@ -519,6 +526,212 @@ function CharacterCreationRollFields({
   );
 }
 
+function signedInteger(value: number): string {
+  return value < 0 ? `−${String(Math.abs(value))}` : `+${String(value)}`;
+}
+
+function StatModifierEffectFields({
+  effect,
+}: {
+  readonly effect: StatModifierEffectProjection;
+}): ReactElement {
+  if (effect.kind === 'NO_STAT_MODIFIERS') {
+    return (
+      <p data-stat-modifier-kind={effect.kind}>
+        Поправки характеристик: <strong>Нет</strong>
+      </p>
+    );
+  }
+  return (
+    <table data-stat-modifier-kind={effect.kind}>
+      <thead>
+        <tr>
+          <th>Характеристика</th>
+          <th>Код</th>
+          <th>Изменение</th>
+        </tr>
+      </thead>
+      <tbody>
+        {effect.entries.map((entry) => (
+          <tr key={entry.statCode} data-stat-modifier={entry.statCode}>
+            <th>{entry.statLabel}</th>
+            <td>{entry.statCode}</td>
+            <td>{signedInteger(entry.delta)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ModeConsequencesFields({
+  consequences,
+}: {
+  readonly consequences: ModeConsequencesProjection;
+}): ReactElement {
+  return (
+    <section data-mode-consequences={consequences.raceChoice}>
+      <dl>
+        <dt>Раса</dt>
+        <dd>{consequences.raceLabel}</dd>
+        <dt>Слоты симбионтов</dt>
+        <dd>{consequences.baseSymbiontSlots}</dd>
+      </dl>
+      <StatModifierEffectFields effect={consequences.statModifiers} />
+    </section>
+  );
+}
+
+function RaceConsequencesFields({
+  consequences,
+}: {
+  readonly consequences: RaceConsequencesPreviewProjection;
+}): ReactElement {
+  return (
+    <section data-race-consequences={consequences.raceLabel}>
+      <dl>
+        <dt>Раса</dt>
+        <dd>{consequences.raceLabel}</dd>
+        <dt>Слоты симбионтов</dt>
+        <dd>{consequences.baseSymbiontSlots}</dd>
+        <dt>Политика класса</dt>
+        <dd>{consequences.classPolicy}</dd>
+        <dt>Множитель распределения опыта</dt>
+        <dd>×{consequences.allocationXpMultiplier}</dd>
+        <dt>Множитель прямого опыта</dt>
+        <dd>×{consequences.directXpMultiplier}</dd>
+        <dt>Политика опыта симбионтов</dt>
+        <dd>{consequences.symbiontXpPolicy}</dd>
+        <dt>Симбионтный монстр</dt>
+        <dd>{consequences.symbioticMonsterAllowed ? 'Да' : 'Нет'}</dd>
+      </dl>
+      {consequences.raceStatModifiersByAcquisitionMode.kind === 'NOT_APPLICABLE' ? (
+        <p data-race-stat-modifiers-by-acquisition-mode="NOT_APPLICABLE">
+          Расовые поправки по способу получения симбионтов: не применяются
+        </p>
+      ) : (
+        <section data-race-stat-modifiers-by-acquisition-mode="DEPENDS_ON_SYMBIONT_ACQUISITION_MODE">
+          <h3>Зависит от способа получения симбионтов</h3>
+          {consequences.raceStatModifiersByAcquisitionMode.alternatives.map((option) => (
+            <article
+              key={option.symbiontAcquisitionMode}
+              data-mode-alternative={option.symbiontAcquisitionMode}
+            >
+              <h4>{option.symbiontAcquisitionMode}</h4>
+              <ModeConsequencesFields consequences={option.modeConsequences} />
+            </article>
+          ))}
+        </section>
+      )}
+    </section>
+  );
+}
+
+function MethodConsequencesFields({
+  consequences,
+}: {
+  readonly consequences: MethodConsequencesProjection;
+}): ReactElement {
+  return (
+    <section data-method-consequences>
+      <dl>
+        <dt>Максимум попыток</dt>
+        <dd>{consequences.maximumAttempts}</dd>
+        <dt>Отказ необратим</dt>
+        <dd>{consequences.rejectedSet.irreversible ? 'Да' : 'Нет'}</dd>
+        <dt>Значения набора отбрасываются</dt>
+        <dd>{consequences.rejectedSet.setValuesDiscarded ? 'Да' : 'Нет'}</dd>
+        <dt>Критические последствия отбрасываются</dt>
+        <dd>{consequences.rejectedSet.creationCriticalConsequencesDiscarded ? 'Да' : 'Нет'}</dd>
+      </dl>
+      {consequences.terminalRule.kind === 'POINT_BUY_AFTER_REJECTION' ? (
+        <dl data-terminal-rule={consequences.terminalRule.kind}>
+          <dt>После попытки</dt>
+          <dd>{consequences.terminalRule.afterAttempt}</dd>
+          <dt>Точная сумма</dt>
+          <dd>{consequences.terminalRule.exactTotal}</dd>
+        </dl>
+      ) : (
+        <dl data-terminal-rule={consequences.terminalRule.kind}>
+          <dt>Обязательное принятие попытки</dt>
+          <dd>{consequences.terminalRule.attemptIndex}</dd>
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function DecisionConsequenceOptions({
+  snapshot,
+}: {
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId === 'CHR-010') {
+    const projection = snapshot.projection as Chr010Projection;
+    return (
+      <section data-character-consequence-options={snapshot.formId}>
+        <h2>Последствия выбора расы</h2>
+        {projection.raceConsequenceOptions.map((option) => (
+          <article key={option.raceChoice} data-race-consequence-option={option.raceChoice}>
+            <h3>{option.raceConsequencesPreview.raceLabel}</h3>
+            <RaceConsequencesFields consequences={option.raceConsequencesPreview} />
+          </article>
+        ))}
+      </section>
+    );
+  }
+  if (snapshot.formId === 'CHR-016') {
+    const projection = snapshot.projection as Chr016Projection;
+    return (
+      <section data-character-consequence-options={snapshot.formId}>
+        <h2>Последствия способа получения симбионтов</h2>
+        {projection.modeConsequenceOptions.map((option) => (
+          <article
+            key={option.symbiontAcquisitionMode}
+            data-mode-consequence-option={option.symbiontAcquisitionMode}
+          >
+            <h3>{option.symbiontAcquisitionMode}</h3>
+            <ModeConsequencesFields consequences={option.modeConsequences} />
+          </article>
+        ))}
+      </section>
+    );
+  }
+  if (snapshot.formId === 'CHR-002') {
+    const projection = snapshot.projection as Chr002Projection;
+    return (
+      <section data-character-consequence-options={snapshot.formId}>
+        <h2>Последствия метода характеристик</h2>
+        {projection.methodConsequenceOptions.map((option) => (
+          <article key={option.statMethod} data-method-consequence-option={option.statMethod}>
+            <h3>{option.statMethod}</h3>
+            <MethodConsequencesFields consequences={option.methodConsequences} />
+          </article>
+        ))}
+      </section>
+    );
+  }
+  return null;
+}
+
+function SelectedDecisionConsequences({
+  choice,
+}: {
+  readonly choice: CharacterCreationChoiceDraft;
+}): ReactElement | null {
+  switch (choice.formId) {
+    case 'CHR-010':
+      return <RaceConsequencesFields consequences={choice.consequence} />;
+    case 'CHR-016':
+      return <ModeConsequencesFields consequences={choice.consequence} />;
+    case 'CHR-002':
+      return <MethodConsequencesFields consequences={choice.consequence} />;
+    case 'CHR-036':
+    case 'CHR-011':
+      return null;
+  }
+}
+
 function CharacterSetDecisionFields({
   snapshot,
 }: {
@@ -816,6 +1029,7 @@ export function App(): ReactElement {
                 onFileReadPendingChange={setCharacterArtReadPending}
               />
             ) : null}
+            <DecisionConsequenceOptions snapshot={snapshot} />
             {snapshot.formId === 'CHR-010' ||
             snapshot.formId === 'CHR-016' ||
             snapshot.formId === 'CHR-036' ||
@@ -843,7 +1057,9 @@ export function App(): ReactElement {
                 <output>{activeCreationChoice?.value ?? 'null'}</output>
                 {activeCreationChoice?.consequence === null ||
                 activeCreationChoice?.consequence === undefined ? null : (
-                  <p data-character-creation-consequence>{activeCreationChoice.consequence}</p>
+                  <div data-character-creation-consequence>
+                    <SelectedDecisionConsequences choice={activeCreationChoice} />
+                  </div>
                 )}
               </section>
             ) : null}

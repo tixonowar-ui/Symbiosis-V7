@@ -85,6 +85,14 @@
 
 ### Добавлено
 
+- `CHR-010`, `CHR-016` и `CHR-002` теперь до необратимого подтверждения
+  показывают host-signed структурные последствия всех вариантов. Race и mode
+  facts выводятся из startup-каталога поставленных races/stats/modifiers, а
+  число попыток и terminal rule метода — из существующей domain-таблицы;
+  `UNITED|FREE` сравнивают две явно условные ветви `MANUAL|RANDOM`, включая
+  явное отсутствие поправок у `FREE + RANDOM`. Web только рендерит переданные
+  данные и сохраняет выбранную структуру в local draft без wire и ревизий;
+  Rule/Modifier/Source/question IDs в player payload не попадают.
 - `CHR-009` теперь принимает rolled bijection по индексам исходного набора либо
   point-buy 90/85 и сохраняет canonical assignment вместе с provenance
   критического штрафа. Обобщённый `UI-CMD-CHAR-WIZARD-CHECKPOINT` ведёт
