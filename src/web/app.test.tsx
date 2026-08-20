@@ -122,6 +122,11 @@ const additiveModifiers = (
   kind: 'ADDITIVE_STAT_MODIFIERS' as const,
 });
 const noStatModifiers = { kind: 'NO_STAT_MODIFIERS' } as const;
+const noGrantedSkills = { kind: 'NO_GRANTED_SKILLS' } as const;
+const unitedGrantedSkills = {
+  entries: [{ skillId: 'FOLLOWING_PAIN', skillLabel: 'Идущий вслед за болью' }],
+  kind: 'GRANTED_SKILLS',
+} as const;
 const UNITED_MODE_OPTIONS = [
   {
     modeConsequences: {
@@ -182,6 +187,7 @@ const RACE_CONSEQUENCE_OPTIONS = [
       baseSymbiontSlots: 4,
       classPolicy: 'NO_CLASS',
       directXpMultiplier: 1,
+      grantedSkills: unitedGrantedSkills,
       raceLabel: 'Единый',
       raceStatModifiersByAcquisitionMode: {
         alternatives: UNITED_MODE_OPTIONS,
@@ -198,6 +204,7 @@ const RACE_CONSEQUENCE_OPTIONS = [
       baseSymbiontSlots: 1,
       classPolicy: 'NO_CLASS',
       directXpMultiplier: 2,
+      grantedSkills: noGrantedSkills,
       raceLabel: 'Вольный',
       raceStatModifiersByAcquisitionMode: {
         alternatives: FREE_MODE_OPTIONS,
@@ -214,6 +221,7 @@ const RACE_CONSEQUENCE_OPTIONS = [
       baseSymbiontSlots: 0,
       classPolicy: 'REQUIRED_PURE_CLASS',
       directXpMultiplier: 1,
+      grantedSkills: noGrantedSkills,
       raceLabel: 'Чистый',
       raceStatModifiersByAcquisitionMode: { kind: 'NOT_APPLICABLE' },
       symbiontXpPolicy: 'STANDARD_XP_AWARD',
@@ -820,6 +828,10 @@ const SKILL_CARD_SUMMARIES = Array.from({ length: 41 }, (_, index) => {
   const ordinal = String(index + 1).padStart(2, '0');
   const ineligible = index === 1;
   return {
+    bonusDomainScope:
+      index === 0
+        ? 'Source-owned English scope stays unchanged.'
+        : `Область действия бонуса ${ordinal}`,
     eligibility: ineligible ? ('REQUIREMENTS_NOT_MET' as const) : ('ELIGIBLE' as const),
     levelOptions:
       index === 40
@@ -828,6 +840,10 @@ const SKILL_CARD_SUMMARIES = Array.from({ length: 41 }, (_, index) => {
             { slotCost: 1, targetBonus: 1 },
             { slotCost: 2, targetBonus: 2 },
           ],
+    missingSkillPenalty:
+      index < 15
+        ? ({ kind: 'MISSING_SKILL_PENALTY', value: -5 } as const)
+        : ({ kind: 'NO_MISSING_SKILL_PENALTY' } as const),
     requirements: [
       {
         currentValue: SKILL_STAGE_STATS.W,
@@ -846,7 +862,13 @@ const ELIGIBLE_SKILL_IDS = SKILL_CARD_SUMMARIES.filter(
 ).map(({ skillId }) => skillId);
 const SKILL_OPTIONS = SKILL_CARD_SUMMARIES.filter(
   ({ eligibility }) => eligibility === 'ELIGIBLE',
-).map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+).map(({ bonusDomainScope, levelOptions, missingSkillPenalty, skillId, skillLabel }) => ({
+  bonusDomainScope,
+  levelOptions,
+  missingSkillPenalty,
+  skillId,
+  skillLabel,
+}));
 
 function chr013Base(): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
@@ -2606,6 +2628,28 @@ describe('APP-001 web entry', () => {
       'Расовые поправки по способу получения симбионтов: не применяются',
     );
     expect(conditional.textContent).not.toContain('этапа навыков');
+  });
+
+  it('renders the race-owned granted skill and positive no-grant variants', async () => {
+    const { container } = await connectToWizardBase(chr010Base(), 0);
+    const united = requiredElement(
+      container.querySelector('[data-race-consequence-option="UNITED"]'),
+      'UNITED consequence option',
+    );
+    expect(united.querySelector('[data-granted-skills="GRANTED_SKILLS"]')?.textContent).toContain(
+      'Идущий вслед за болью',
+    );
+    expect(united.querySelector('[data-granted-skill="FOLLOWING_PAIN"]')).not.toBeNull();
+
+    for (const raceChoice of ['FREE', 'PURE'] as const) {
+      const option = requiredElement(
+        container.querySelector(`[data-race-consequence-option="${raceChoice}"]`),
+        `${raceChoice} consequence option`,
+      );
+      expect(
+        option.querySelector('[data-granted-skills="NO_GRANTED_SKILLS"]')?.textContent,
+      ).toContain('Нет');
+    }
   });
 
   it('walks CHR-010 through CHR-016 and CHR-036 to CHR-002 method selection', async () => {
@@ -4899,6 +4943,20 @@ describe('APP-001 web entry', () => {
       container.querySelector('[data-skill-card="SKILL_02"] [data-skill-requirement="W"]')
         ?.textContent,
     ).toContain('20');
+    expect(
+      container.querySelector('[data-skill-card="SKILL_01"] [data-skill-bonus-domain-scope]')
+        ?.textContent,
+    ).toBe('Source-owned English scope stays unchanged.');
+    expect(
+      container.querySelector(
+        '[data-skill-card="SKILL_01"] [data-missing-skill-penalty="MISSING_SKILL_PENALTY"]',
+      )?.textContent,
+    ).toBe('−5');
+    expect(
+      container.querySelector(
+        '[data-skill-card="SKILL_16"] [data-missing-skill-penalty="NO_MISSING_SKILL_PENALTY"]',
+      )?.textContent,
+    ).toBe('Нет');
     expect(container.textContent).not.toContain('SKL-');
     act(() => {
       requiredElement(
@@ -4935,6 +4993,22 @@ describe('APP-001 web entry', () => {
       'CHR-015 eligible skill selector',
     );
     expect([...candidate.options].map(({ value }) => value)).not.toContain('SKILL_02');
+    select(candidate, 'SKILL_01');
+    expect(
+      container.querySelector('[data-skill-selection] [data-skill-bonus-domain-scope]')
+        ?.textContent,
+    ).toBe('Source-owned English scope stays unchanged.');
+    expect(
+      container.querySelector(
+        '[data-skill-selection] [data-missing-skill-penalty="MISSING_SKILL_PENALTY"]',
+      )?.textContent,
+    ).toBe('−5');
+    select(candidate, 'SKILL_16');
+    expect(
+      container.querySelector(
+        '[data-skill-selection] [data-missing-skill-penalty="NO_MISSING_SKILL_PENALTY"]',
+      )?.textContent,
+    ).toBe('Нет');
   });
 
   it('refuses an internal registry id or an extra authority field in the CHR-013 projection', async () => {
@@ -5085,7 +5159,9 @@ describe('APP-001 web entry', () => {
       stage: 'SKILLS',
       wizardCheckpointId: WIZARD_CHECKPOINT_ID,
     });
-    expect(JSON.stringify(request.payload)).not.toMatch(/slotCost|eligibility|skillLabel|SKL-/u);
+    expect(JSON.stringify(request.payload)).not.toMatch(
+      /bonusDomainScope|missingSkillPenalty|slotCost|eligibility|skillLabel|SKL-/u,
+    );
 
     deliver(
       socket,

@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { loadCreationDecisionConsequenceCatalog } from '../creation-decision-consequence-catalog.js';
-import { loadCreationSkillCatalog } from '../creation-skill-catalog.js';
+import {
+  createCreationSkillCatalog,
+  loadCreationSkillCatalog,
+  type CreationSkillCatalogSources,
+} from '../creation-skill-catalog.js';
 import { loadSkillStageCatalog } from '../skill-stage-catalog.js';
 
 import {
@@ -76,10 +81,12 @@ function skillProjectionValues(catalog: SkillPresentationCatalog): {
       return { ...requirement, currentValue, satisfied: currentValue >= requirement.minValue };
     });
     return {
+      bonusDomainScope: skill.bonusDomainScope,
       eligibility: requirements.every(({ satisfied }) => satisfied)
         ? ('ELIGIBLE' as const)
         : ('REQUIREMENTS_NOT_MET' as const),
       levelOptions: [{ slotCost: 1, targetBonus: 1 }],
+      missingSkillPenalty: skill.missingSkillPenalty,
       requirements,
       skillId: skill.skillId,
       skillLabel: skill.skillLabel,
@@ -90,7 +97,13 @@ function skillProjectionValues(catalog: SkillPresentationCatalog): {
     .map(({ skillId }) => skillId);
   const skillOptions = skillCardSummaries
     .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
-    .map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+    .map(({ bonusDomainScope, levelOptions, missingSkillPenalty, skillId, skillLabel }) => ({
+      bonusDomainScope,
+      levelOptions,
+      missingSkillPenalty,
+      skillId,
+      skillLabel,
+    }));
   const mandatoryLabel = catalog.skillLabels.find(({ skillId }) => skillId === 'PURE_SEEKER');
   if (mandatoryLabel === undefined) throw new Error('test catalog lacks PURE_SEEKER');
   const mandatoryClassSkillOrNull = {
@@ -172,15 +185,17 @@ function skillProjectionValues(catalog: SkillPresentationCatalog): {
 describe('CHR host projection vocabulary', () => {
   let consequenceCatalog: Awaited<ReturnType<typeof loadCreationDecisionConsequenceCatalog>>;
   let skillCatalog: Awaited<ReturnType<typeof loadCreationSkillCatalog>>;
+  let skillStageCatalog: Awaited<ReturnType<typeof loadSkillStageCatalog>>;
 
   beforeAll(async () => {
     const projectRoot = resolve(import.meta.dirname, '..', '..', '..');
-    const skillStageCatalog = await loadSkillStageCatalog(projectRoot);
+    skillStageCatalog = await loadSkillStageCatalog(projectRoot);
+    skillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
     consequenceCatalog = await loadCreationDecisionConsequenceCatalog(
       projectRoot,
       skillStageCatalog,
+      skillCatalog,
     );
-    skillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
   });
 
   it('publishes Continue only in the eligible CHR-001 action set', () => {
@@ -893,10 +908,25 @@ describe('CHR host projection vocabulary', () => {
       expect.arrayContaining([
         expect.objectContaining({ eligibility: 'ELIGIBLE' }),
         expect.objectContaining({ eligibility: 'REQUIREMENTS_NOT_MET' }),
+        expect.objectContaining({
+          bonusDomainScope: 'Удары руками/ногами, блок без щита',
+          missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: -5 },
+          skillId: 'UNARMED',
+        }),
+        expect.objectContaining({
+          missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
+          skillId: 'ACROBATICS',
+        }),
       ]),
     );
+    expect(
+      chr013.skillCardSummaries.filter(
+        ({ missingSkillPenalty }) => missingSkillPenalty.kind === 'MISSING_SKILL_PENALTY',
+      ),
+    ).toHaveLength(15);
 
-    expect(projectChr015(values.initialChr015)).toMatchObject({
+    const initialChr015 = projectChr015(values.initialChr015);
+    expect(initialChr015).toMatchObject({
       commandId: null,
       paidSlotUsage: { usedSlotCount: 1 },
       selectedSkillIds: [],
@@ -908,10 +938,64 @@ describe('CHR host projection vocabulary', () => {
         usedSlotCount: 1,
       },
     });
+    expect(initialChr015.skillOptions).toEqual(
+      values.chr013.skillCardSummaries
+        .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+        .map(({ bonusDomainScope, levelOptions, missingSkillPenalty, skillId, skillLabel }) => ({
+          bonusDomainScope,
+          levelOptions,
+          missingSkillPenalty,
+          skillId,
+          skillLabel,
+        })),
+    );
     expect(projectChr015(values.checkpointedChr015)).toMatchObject({
       commandId: 'skill-selection-command',
       paidSlotUsage: { usedSlotCount: 3 },
       selectionValidation: { kind: 'EXACT', requiredSlotCount: 3, usedSlotCount: 3 },
+    });
+  });
+
+  it('carries source-substituted skill content through both player projections', () => {
+    const characterRoot = resolve(
+      import.meta.dirname,
+      '..',
+      '..',
+      '..',
+      'generated',
+      'spec',
+      'character',
+    );
+    const source = (file: string): unknown =>
+      JSON.parse(readFileSync(resolve(characterRoot, file), 'utf8')) as unknown;
+    const changed: CreationSkillCatalogSources = {
+      requirements: source('skill-requirements.json'),
+      skills: source('skills.json'),
+      stats: source('stats.json'),
+    };
+    const changedSkills = changed.skills as Record<string, unknown>[];
+    const unarmed = changedSkills.find((row) => row['SkillKey'] === 'UNARMED');
+    if (unarmed === undefined) throw new Error('source fixture lacks UNARMED');
+    unarmed['BonusDomain / Scope'] = 'Source-owned English projection scope.';
+    unarmed['MissingSkillPenalty'] = 0;
+    const changedValidatedCatalog = {
+      ...skillStageCatalog,
+      skills: skillStageCatalog.skills.map((skill) =>
+        skill.skillKey === 'UNARMED' ? { ...skill, missingSkillPenalty: 0 } : skill,
+      ),
+    };
+    const changedCatalog = createCreationSkillCatalog(changed, changedValidatedCatalog);
+    const values = skillProjectionValues(changedCatalog);
+
+    const chr013 = projectChr013(values.chr013);
+    expect(chr013.skillCardSummaries.find(({ skillId }) => skillId === 'UNARMED')).toMatchObject({
+      bonusDomainScope: 'Source-owned English projection scope.',
+      missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: 0 },
+    });
+    const chr015 = projectChr015(values.initialChr015);
+    expect(chr015.skillOptions.find(({ skillId }) => skillId === 'UNARMED')).toMatchObject({
+      bonusDomainScope: 'Source-owned English projection scope.',
+      missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: 0 },
     });
   });
 
@@ -929,12 +1013,24 @@ describe('CHR host projection vocabulary', () => {
       'RequirementID',
       'RequirementSetID',
       'Rule ID',
+      'Rule IDs',
       'CORE-',
       'REQ-',
       'Q-',
       'BeforeSymbiontBonuses',
       'EvaluationStage',
       'availabilityTrace',
+      'Source Question ID',
+      'Source Question IDs',
+      'Категория',
+      'OwnerScopeAllowed',
+      'CheckTags',
+      'ID unique',
+      'MaxBonus',
+      'SlotCostMode',
+      'Status',
+      'BonusDomain / Scope',
+      'MissingSkillPenalty',
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
@@ -991,8 +1087,10 @@ describe('CHR host projection vocabulary', () => {
         selectionValidation: { kind: 'EXACT', requiredSlotCount: 1, usedSlotCount: 1 },
         skillOptions: chr013.skillCardSummaries
           .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
-          .map(({ levelOptions, skillId, skillLabel }) => ({
+          .map(({ bonusDomainScope, levelOptions, missingSkillPenalty, skillId, skillLabel }) => ({
+            bonusDomainScope,
             levelOptions,
+            missingSkillPenalty,
             skillId,
             skillLabel,
           })),
@@ -1029,6 +1127,56 @@ describe('CHR host projection vocabulary', () => {
     };
     expect(() => projectChr013(leakedInternalId)).toThrow(
       'must be a public SkillKey, not an internal registry ID',
+    );
+
+    const forgedPenalty: Chr013ProjectionValues = {
+      ...values.chr013,
+      skillCardSummaries: values.chr013.skillCardSummaries.map((card, index) =>
+        index === 0
+          ? { ...card, missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: 1.5 } }
+          : card,
+      ),
+    };
+    expect(() => projectChr013(forgedPenalty)).toThrow(
+      'missingSkillPenalty.value must be a signed safe integer',
+    );
+
+    const nullChr013Penalty: Chr013ProjectionValues = {
+      ...values.chr013,
+      skillCardSummaries: values.chr013.skillCardSummaries.map((card, index) =>
+        index === 0 ? { ...card, missingSkillPenalty: null as never } : card,
+      ),
+    };
+    expect(() => projectChr013(nullChr013Penalty)).toThrow(
+      'CHR-013 skillCardSummaries[0].missingSkillPenalty must be an object',
+    );
+
+    const nullChr015Penalty: Chr015ProjectionValues = {
+      ...values.initialChr015,
+      skillOptions: values.initialChr015.skillOptions.map((option, index) =>
+        index === 0 ? { ...option, missingSkillPenalty: null as never } : option,
+      ),
+    };
+    expect(() => projectChr015(nullChr015Penalty)).toThrow(
+      'CHR-015 skillOptions[0].missingSkillPenalty must be an object',
+    );
+
+    const extraNoPenaltyField: Chr013ProjectionValues = {
+      ...values.chr013,
+      skillCardSummaries: values.chr013.skillCardSummaries.map((card) =>
+        card.skillId === 'ACROBATICS'
+          ? {
+              ...card,
+              missingSkillPenalty: {
+                kind: 'NO_MISSING_SKILL_PENALTY',
+                value: -5,
+              } as never,
+            }
+          : card,
+      ),
+    };
+    expect(() => projectChr013(extraNoPenaltyField)).toThrow(
+      'missingSkillPenalty must contain exact fields kind',
     );
 
     const forgedLevel: Chr015ProjectionValues = {

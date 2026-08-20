@@ -29,6 +29,7 @@ import type {
   IdentityDraftClientState,
   IdentityDraftValues,
   MethodConsequencesProjection,
+  MissingSkillPenaltyProjection,
   ModeConsequencesProjection,
   RaceConsequencesPreviewProjection,
   ProjectionConnection,
@@ -608,6 +609,22 @@ function RaceConsequencesFields({
         <dt>Симбионтный монстр</dt>
         <dd>{consequences.symbioticMonsterAllowed ? 'Да' : 'Нет'}</dd>
       </dl>
+      {consequences.grantedSkills.kind === 'NO_GRANTED_SKILLS' ? (
+        <p data-granted-skills="NO_GRANTED_SKILLS">
+          Бесплатные расовые навыки: <strong>Нет</strong>
+        </p>
+      ) : (
+        <section data-granted-skills="GRANTED_SKILLS">
+          <h3>Бесплатные расовые навыки</h3>
+          <ul>
+            {consequences.grantedSkills.entries.map((skill) => (
+              <li key={skill.skillId} data-granted-skill={skill.skillId}>
+                {skill.skillLabel}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {consequences.raceStatModifiersByAcquisitionMode.kind === 'NOT_APPLICABLE' ? (
         <p data-race-stat-modifiers-by-acquisition-mode="NOT_APPLICABLE">
           Расовые поправки по способу получения симбионтов: не применяются
@@ -957,6 +974,10 @@ function SkillCatalogFields({
           >
             <h3>{card.skillLabel}</h3>
             <p>{card.eligibility}</p>
+            <SkillContentFields
+              bonusDomainScope={card.bonusDomainScope}
+              missingSkillPenalty={card.missingSkillPenalty}
+            />
             {card.requirements.length === 0 ? (
               <p>Требования отсутствуют.</p>
             ) : (
@@ -996,6 +1017,27 @@ function SkillCatalogFields({
         ))}
       </div>
     </section>
+  );
+}
+
+function SkillContentFields({
+  bonusDomainScope,
+  missingSkillPenalty,
+}: {
+  readonly bonusDomainScope: string;
+  readonly missingSkillPenalty: MissingSkillPenaltyProjection;
+}): ReactElement {
+  return (
+    <dl data-skill-content>
+      <dt>Область действия бонуса</dt>
+      <dd data-skill-bonus-domain-scope>{bonusDomainScope}</dd>
+      <dt>Штраф без навыка</dt>
+      <dd data-missing-skill-penalty={missingSkillPenalty.kind}>
+        {missingSkillPenalty.kind === 'NO_MISSING_SKILL_PENALTY'
+          ? 'Нет'
+          : signedInteger(missingSkillPenalty.value)}
+      </dd>
+    </dl>
   );
 }
 
@@ -1109,6 +1151,12 @@ function SkillSelectionFields({
               ))}
             </select>
           </label>
+          {candidateOption === undefined ? null : (
+            <SkillContentFields
+              bonusDomainScope={candidateOption.bonusDomainScope}
+              missingSkillPenalty={candidateOption.missingSkillPenalty}
+            />
+          )}
         </fieldset>
       ) : (
         <p data-skill-selection-checkpointed>Выбор зафиксирован.</p>

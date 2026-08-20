@@ -358,11 +358,24 @@ export type RaceStatModifiersByAcquisitionModeProjection =
       readonly kind: 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE';
     };
 
+export type GrantedSkillsProjection =
+  | { readonly kind: 'NO_GRANTED_SKILLS' }
+  | {
+      readonly entries: readonly [
+        {
+          readonly skillId: string;
+          readonly skillLabel: string;
+        },
+      ];
+      readonly kind: 'GRANTED_SKILLS';
+    };
+
 export interface RaceConsequencesPreviewProjection extends JsonObject {
   readonly allocationXpMultiplier: number;
   readonly baseSymbiontSlots: number;
   readonly classPolicy: 'NO_CLASS' | 'REQUIRED_PURE_CLASS';
   readonly directXpMultiplier: number;
+  readonly grantedSkills: GrantedSkillsProjection;
   readonly raceLabel: string;
   readonly raceStatModifiersByAcquisitionMode: RaceStatModifiersByAcquisitionModeProjection;
   readonly symbiontXpPolicy: 'STANDARD_XP_AWARD' | 'XP_AWARD_X2';
@@ -579,9 +592,15 @@ export interface SkillRequirementProjection extends JsonObject {
   readonly statLabel: string;
 }
 
+export type MissingSkillPenaltyProjection =
+  | { readonly kind: 'NO_MISSING_SKILL_PENALTY' }
+  | { readonly kind: 'MISSING_SKILL_PENALTY'; readonly value: number };
+
 export interface SkillCardSummaryProjection extends JsonObject {
+  readonly bonusDomainScope: string;
   readonly eligibility: 'ELIGIBLE' | 'REQUIREMENTS_NOT_MET';
   readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly missingSkillPenalty: MissingSkillPenaltyProjection;
   readonly requirements: readonly SkillRequirementProjection[];
   readonly skillId: string;
   readonly skillLabel: string;
@@ -619,7 +638,9 @@ export interface SelectedSkillProjection extends JsonObject {
 }
 
 export interface SkillOptionProjection extends JsonObject {
+  readonly bonusDomainScope: string;
   readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly missingSkillPenalty: MissingSkillPenaltyProjection;
   readonly skillId: string;
   readonly skillLabel: string;
 }
@@ -1828,6 +1849,31 @@ function decodeRaceConsequencesPreview(
   statLabels: Map<StatCode, string>,
 ): DecodeResult<RaceConsequencesPreviewProjection> {
   if (!isJsonObject(value)) return unrecognized(path, value);
+  const grantedSkills = value['grantedSkills'];
+  if (!isJsonObject(grantedSkills)) return unrecognized(`${path}.grantedSkills`, grantedSkills!);
+  if (expectedRaceChoice === 'UNITED') {
+    const entries = grantedSkills['entries'];
+    if (!Array.isArray(entries) || entries.length !== 1) {
+      return unrecognized(`${path}.grantedSkills.entries`, entries!);
+    }
+    const entry = (entries as readonly JsonValue[])[0]!;
+    if (!isJsonObject(entry)) return unrecognized(`${path}.grantedSkills.entries[0]`, entry);
+    const decodedEntry = decodeProjection(entry, `${path}.grantedSkills.entries[0]`, {
+      skillId: isPublicSkillId,
+      skillLabel: isNonEmptyString,
+    });
+    if (!decodedEntry.ok) return decodedEntry;
+    const decodedGranted = decodeProjection(grantedSkills, `${path}.grantedSkills`, {
+      entries: (field) => field === entries,
+      kind: (field) => field === 'GRANTED_SKILLS',
+    });
+    if (!decodedGranted.ok) return decodedGranted;
+  } else {
+    const decodedNone = decodeProjection(grantedSkills, `${path}.grantedSkills`, {
+      kind: (field) => field === 'NO_GRANTED_SKILLS',
+    });
+    if (!decodedNone.ok) return decodedNone;
+  }
   const raceModifiersByMode = value['raceStatModifiersByAcquisitionMode'];
   if (!isJsonObject(raceModifiersByMode)) {
     return unrecognized(`${path}.raceStatModifiersByAcquisitionMode`, raceModifiersByMode!);
@@ -1876,6 +1922,7 @@ function decodeRaceConsequencesPreview(
       typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
     classPolicy: (field) => field === expectedClassPolicy,
     directXpMultiplier: isPositiveSafeInteger,
+    grantedSkills: (field) => field === grantedSkills,
     raceLabel: (field) => typeof field === 'string' && field.trim().length > 0,
     raceStatModifiersByAcquisitionMode: (field) => field === raceModifiersByMode,
     symbiontXpPolicy: (field) => field === expectedXpPolicy,
@@ -2448,6 +2495,27 @@ function decodeRacialFreeSkills(
   return { ok: true, value: value as unknown as readonly FixedSkillProjection[] };
 }
 
+function decodeMissingSkillPenalty(
+  value: JsonValue,
+  path: string,
+): DecodeResult<MissingSkillPenaltyProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  if (value['kind'] === 'NO_MISSING_SKILL_PENALTY') {
+    const decoded = decodeProjection(value, path, {
+      kind: (field) => field === 'NO_MISSING_SKILL_PENALTY',
+    });
+    return decoded.ok ? { ok: true, value: value as MissingSkillPenaltyProjection } : decoded;
+  }
+  if (value['kind'] === 'MISSING_SKILL_PENALTY') {
+    const decoded = decodeProjection(value, path, {
+      kind: (field) => field === 'MISSING_SKILL_PENALTY',
+      value: (field) => typeof field === 'number' && Number.isSafeInteger(field),
+    });
+    return decoded.ok ? { ok: true, value: value as MissingSkillPenaltyProjection } : decoded;
+  }
+  return unrecognized(`${path}.kind`, value['kind']!);
+}
+
 function decodeSkillCardSummaries(
   value: JsonValue,
   path: string,
@@ -2456,6 +2524,7 @@ function decodeSkillCardSummaries(
   if (!Array.isArray(value) || value.length !== 41) return unrecognized(path, value);
   const ids = new Set<string>();
   const statLabels = new Map<StatCode, string>();
+  let missingSkillPenaltyCount = 0;
   for (const [index, card] of (value as readonly JsonValue[]).entries()) {
     const cardPath = `${path}[${String(index)}]`;
     if (!isJsonObject(card)) return unrecognized(cardPath, card);
@@ -2466,6 +2535,14 @@ function decodeSkillCardSummaries(
     ids.add(skillId);
     const levels = decodeSkillLevelOptions(card['levelOptions']!, `${cardPath}.levelOptions`);
     if (!levels.ok) return levels;
+    const missingSkillPenalty = decodeMissingSkillPenalty(
+      card['missingSkillPenalty']!,
+      `${cardPath}.missingSkillPenalty`,
+    );
+    if (!missingSkillPenalty.ok) return missingSkillPenalty;
+    if (missingSkillPenalty.value.kind === 'MISSING_SKILL_PENALTY') {
+      missingSkillPenaltyCount += 1;
+    }
     const requirements = card['requirements'];
     if (!Array.isArray(requirements) || requirements.length === 0) {
       return unrecognized(`${cardPath}.requirements`, requirements!);
@@ -2513,8 +2590,10 @@ function decodeSkillCardSummaries(
       ? 'ELIGIBLE'
       : 'REQUIREMENTS_NOT_MET';
     const decoded = decodeProjection(card, cardPath, {
+      bonusDomainScope: isNonEmptyString,
       eligibility: (field) => field === expectedEligibility,
       levelOptions: (field) => field === card['levelOptions'],
+      missingSkillPenalty: (field) => field === card['missingSkillPenalty'],
       requirements: (field) => field === requirements,
       skillId: (field) => field === skillId,
       skillLabel: isNonEmptyString,
@@ -2524,6 +2603,7 @@ function decodeSkillCardSummaries(
       return unrecognized(`${cardPath}.eligibility`, eligibility!);
     }
   }
+  if (missingSkillPenaltyCount !== 15) return unrecognized(path, value);
   return { ok: true, value: value as unknown as readonly SkillCardSummaryProjection[] };
 }
 
@@ -2640,8 +2720,15 @@ function decodeSkillOptions(
     ids.add(skillId);
     const levels = decodeSkillLevelOptions(option['levelOptions']!, `${optionPath}.levelOptions`);
     if (!levels.ok) return levels;
+    const missingSkillPenalty = decodeMissingSkillPenalty(
+      option['missingSkillPenalty']!,
+      `${optionPath}.missingSkillPenalty`,
+    );
+    if (!missingSkillPenalty.ok) return missingSkillPenalty;
     const decoded = decodeProjection(option, optionPath, {
+      bonusDomainScope: isNonEmptyString,
       levelOptions: (field) => field === option['levelOptions'],
+      missingSkillPenalty: (field) => field === option['missingSkillPenalty'],
       skillId: (field) => field === skillId,
       skillLabel: isNonEmptyString,
     });
@@ -3866,7 +3953,13 @@ function decodeFormActionSnapshot(
     const destination = decoded.value.projection as Chr015Projection;
     const expectedOptions = source.skillCardSummaries
       .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
-      .map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+      .map(({ bonusDomainScope, levelOptions, missingSkillPenalty, skillId, skillLabel }) => ({
+        bonusDomainScope,
+        levelOptions,
+        missingSkillPenalty,
+        skillId,
+        skillLabel,
+      }));
     if (
       destination.characterDraftId !== source.characterDraftId ||
       destination.wizardCheckpointId !== source.wizardCheckpointId ||

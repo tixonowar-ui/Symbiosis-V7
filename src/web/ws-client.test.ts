@@ -32,6 +32,11 @@ const ADDITIVE_S = {
   kind: 'ADDITIVE_STAT_MODIFIERS',
 } as const;
 const NO_STAT_MODIFIERS = { kind: 'NO_STAT_MODIFIERS' } as const;
+const NO_GRANTED_SKILLS = { kind: 'NO_GRANTED_SKILLS' } as const;
+const UNITED_GRANTED_SKILLS = {
+  entries: [{ skillId: 'FOLLOWING_PAIN', skillLabel: 'Идущий вслед за болью' }],
+  kind: 'GRANTED_SKILLS',
+} as const;
 const UNITED_MODE_OPTIONS = [
   {
     modeConsequences: {
@@ -80,6 +85,7 @@ const RACE_CONSEQUENCE_OPTIONS = [
       baseSymbiontSlots: 4,
       classPolicy: 'NO_CLASS',
       directXpMultiplier: 1,
+      grantedSkills: UNITED_GRANTED_SKILLS,
       raceLabel: 'Единый',
       raceStatModifiersByAcquisitionMode: {
         alternatives: UNITED_MODE_OPTIONS,
@@ -96,6 +102,7 @@ const RACE_CONSEQUENCE_OPTIONS = [
       baseSymbiontSlots: 1,
       classPolicy: 'NO_CLASS',
       directXpMultiplier: 2,
+      grantedSkills: NO_GRANTED_SKILLS,
       raceLabel: 'Вольный',
       raceStatModifiersByAcquisitionMode: {
         alternatives: FREE_MODE_OPTIONS,
@@ -112,6 +119,7 @@ const RACE_CONSEQUENCE_OPTIONS = [
       baseSymbiontSlots: 0,
       classPolicy: 'REQUIRED_PURE_CLASS',
       directXpMultiplier: 1,
+      grantedSkills: NO_GRANTED_SKILLS,
       raceLabel: 'Чистый',
       raceStatModifiersByAcquisitionMode: { kind: 'NOT_APPLICABLE' },
       symbiontXpPolicy: 'STANDARD_XP_AWARD',
@@ -245,11 +253,19 @@ const DECODER_SKILL_CARDS = Array.from({ length: 41 }, (_, index) => {
   const ordinal = String(index + 1).padStart(2, '0');
   const ineligible = index === 1;
   return {
+    bonusDomainScope:
+      index === 0
+        ? 'Source-owned English scope stays unchanged.'
+        : `Область действия бонуса ${ordinal}`,
     eligibility: ineligible ? ('REQUIREMENTS_NOT_MET' as const) : ('ELIGIBLE' as const),
     levelOptions: [
       { slotCost: 1, targetBonus: 1 },
       { slotCost: 2, targetBonus: 2 },
     ],
+    missingSkillPenalty:
+      index < 15
+        ? ({ kind: 'MISSING_SKILL_PENALTY', value: -5 } as const)
+        : ({ kind: 'NO_MISSING_SKILL_PENALTY' } as const),
     requirements: [
       {
         currentValue: 4,
@@ -268,7 +284,13 @@ const DECODER_ELIGIBLE_SKILL_IDS = DECODER_SKILL_CARDS.filter(
 ).map(({ skillId }) => skillId);
 const DECODER_SKILL_OPTIONS = DECODER_SKILL_CARDS.filter(
   ({ eligibility }) => eligibility === 'ELIGIBLE',
-).map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+).map(({ bonusDomainScope, levelOptions, missingSkillPenalty, skillId, skillLabel }) => ({
+  bonusDomainScope,
+  levelOptions,
+  missingSkillPenalty,
+  skillId,
+  skillLabel,
+}));
 const DECODER_CHR_013_PROJECTION = {
   characterDraftId: CHARACTER_DRAFT_ID,
   commandId: null,
@@ -557,6 +579,106 @@ describe('decision consequence projection decoder', () => {
     },
   );
 
+  it('requires the exact race-owned granted-skills variant', async () => {
+    const missing = mutableProjection(CHR_010_PROJECTION);
+    delete racePreviewAt(missing, 0)['grantedSkills'];
+    expect(await decodeProjectionFixture('CHR-010', missing as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.raceConsequenceOptions[0].raceConsequencesPreview.grantedSkills',
+      },
+    });
+
+    const unitedWithoutGrant = mutableProjection(CHR_010_PROJECTION);
+    racePreviewAt(unitedWithoutGrant, 0)['grantedSkills'] = structuredClone(NO_GRANTED_SKILLS);
+    expect(
+      await decodeProjectionFixture('CHR-010', unitedWithoutGrant as JsonObject),
+    ).toMatchObject({
+      kind: 'protocol-error',
+    });
+
+    const freeWithGrant = mutableProjection(CHR_010_PROJECTION);
+    racePreviewAt(freeWithGrant, 1)['grantedSkills'] = structuredClone(UNITED_GRANTED_SKILLS);
+    expect(await decodeProjectionFixture('CHR-010', freeWithGrant as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+    });
+
+    const pureWithGrant = mutableProjection(CHR_010_PROJECTION);
+    racePreviewAt(pureWithGrant, 2)['grantedSkills'] = structuredClone(UNITED_GRANTED_SKILLS);
+    expect(await decodeProjectionFixture('CHR-010', pureWithGrant as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+    });
+
+    const sourceOwnedPublicIdentity = mutableProjection(CHR_010_PROJECTION);
+    const granted = objectValue(
+      racePreviewAt(sourceOwnedPublicIdentity, 0)['grantedSkills'],
+      'UNITED grantedSkills',
+    );
+    objectValue(
+      arrayValue(granted['entries'], 'UNITED grantedSkills entries')[0],
+      'UNITED grantedSkills entry',
+    )['skillId'] = 'SOURCE_OWNED_PUBLIC_SKILL';
+    expect(
+      await decodeProjectionFixture('CHR-010', sourceOwnedPublicIdentity as JsonObject),
+    ).toMatchObject({ kind: 'ready' });
+  });
+
+  it('rejects malformed or private UNITED granted-skill entries', async () => {
+    const multiple = mutableProjection(CHR_010_PROJECTION);
+    const multipleGranted = objectValue(
+      racePreviewAt(multiple, 0)['grantedSkills'],
+      'UNITED grantedSkills',
+    );
+    multipleGranted['entries'] = [
+      ...arrayValue(multipleGranted['entries'], 'UNITED grantedSkills entries'),
+      { skillId: 'FOLLOWING_PAIN', skillLabel: 'Дубликат' },
+    ];
+    expect(await decodeProjectionFixture('CHR-010', multiple as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.raceConsequenceOptions[0].raceConsequencesPreview.grantedSkills.entries',
+      },
+    });
+
+    for (const [key, value] of [
+      ['skillId', 'SKL-042'],
+      ['skillLabel', '   '],
+    ] as const) {
+      const projection = mutableProjection(CHR_010_PROJECTION);
+      const granted = objectValue(
+        racePreviewAt(projection, 0)['grantedSkills'],
+        'UNITED grantedSkills',
+      );
+      const entry = objectValue(
+        arrayValue(granted['entries'], 'UNITED grantedSkills entries')[0],
+        'UNITED grantedSkills entry',
+      );
+      entry[key] = value;
+      expect(await decodeProjectionFixture('CHR-010', projection as JsonObject)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: {
+          path: `$.presentation.base.roleFilteredPayload.raceConsequenceOptions[0].raceConsequencesPreview.grantedSkills.entries[0].${key}`,
+        },
+      });
+    }
+
+    const privateField = mutableProjection(CHR_010_PROJECTION);
+    const granted = objectValue(
+      racePreviewAt(privateField, 0)['grantedSkills'],
+      'UNITED grantedSkills',
+    );
+    objectValue(
+      arrayValue(granted['entries'], 'UNITED grantedSkills entries')[0],
+      'UNITED grantedSkills entry',
+    )['SkillID'] = 'SKL-042';
+    expect(await decodeProjectionFixture('CHR-010', privateField as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.raceConsequenceOptions[0].raceConsequencesPreview.grantedSkills.entries[0].SkillID',
+      },
+    });
+  });
+
   it('rejects a malformed player-visible modifier label', async () => {
     const projection = mutableProjection(CHR_010_PROJECTION);
     const modeConsequences = objectValue(
@@ -710,6 +832,96 @@ describe('SKILLS projection decoder and local draft', () => {
     });
   });
 
+  it('rejects malformed skill content and a non-source penalty population in CHR-013', async () => {
+    const positivePenalty = mutableProjection(DECODER_CHR_013_PROJECTION);
+    optionAt(positivePenalty, 'skillCardSummaries', 0)['missingSkillPenalty'] = {
+      kind: 'MISSING_SKILL_PENALTY',
+      value: 7,
+    };
+    expect(await decodeProjectionFixture('CHR-013', positivePenalty as JsonObject)).toMatchObject({
+      kind: 'ready',
+    });
+
+    const blankScope = mutableProjection(DECODER_CHR_013_PROJECTION);
+    optionAt(blankScope, 'skillCardSummaries', 0)['bonusDomainScope'] = '   ';
+    expect(await decodeProjectionFixture('CHR-013', blankScope as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.skillCardSummaries[0].bonusDomainScope',
+      },
+    });
+
+    const malformedPenalties: readonly unknown[] = [
+      null,
+      {},
+      { kind: 'UNKNOWN' },
+      { kind: 'NO_MISSING_SKILL_PENALTY', value: -5 },
+      { kind: 'MISSING_SKILL_PENALTY' },
+      { kind: 'MISSING_SKILL_PENALTY', value: -1.5 },
+      { kind: 'MISSING_SKILL_PENALTY', value: Number.MAX_SAFE_INTEGER + 1 },
+    ];
+    for (const malformedPenalty of malformedPenalties) {
+      const projection = mutableProjection(DECODER_CHR_013_PROJECTION);
+      optionAt(projection, 'skillCardSummaries', 0)['missingSkillPenalty'] = malformedPenalty;
+      expect(await decodeProjectionFixture('CHR-013', projection as JsonObject)).toMatchObject({
+        kind: 'protocol-error',
+      });
+    }
+
+    const wrongPopulation = mutableProjection(DECODER_CHR_013_PROJECTION);
+    optionAt(wrongPopulation, 'skillCardSummaries', 15)['missingSkillPenalty'] = {
+      kind: 'MISSING_SKILL_PENALTY',
+      value: -5,
+    };
+    expect(await decodeProjectionFixture('CHR-013', wrongPopulation as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.skillCardSummaries' },
+    });
+  });
+
+  it('strictly decodes content on eligible CHR-015 options', async () => {
+    const blankScope = mutableProjection(decoderChr015Projection());
+    optionAt(blankScope, 'skillOptions', 0)['bonusDomainScope'] = '';
+    expect(await decodeProjectionFixture('CHR-015', blankScope as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.skillOptions[0].bonusDomainScope',
+      },
+    });
+
+    const positivePenalty = mutableProjection(decoderChr015Projection());
+    optionAt(positivePenalty, 'skillOptions', 0)['missingSkillPenalty'] = {
+      kind: 'MISSING_SKILL_PENALTY',
+      value: 7,
+    };
+    expect(await decodeProjectionFixture('CHR-015', positivePenalty as JsonObject)).toMatchObject({
+      kind: 'ready',
+    });
+
+    const fractionalPenalty = mutableProjection(decoderChr015Projection());
+    optionAt(fractionalPenalty, 'skillOptions', 0)['missingSkillPenalty'] = {
+      kind: 'MISSING_SKILL_PENALTY',
+      value: 1.5,
+    };
+    expect(await decodeProjectionFixture('CHR-015', fractionalPenalty as JsonObject)).toMatchObject(
+      {
+        kind: 'protocol-error',
+        refusal: {
+          path: '$.presentation.base.roleFilteredPayload.skillOptions[0].missingSkillPenalty.value',
+        },
+      },
+    );
+
+    const privateSourceField = mutableProjection(decoderChr015Projection());
+    optionAt(privateSourceField, 'skillOptions', 0)['SkillID'] = 'SKL-001';
+    expect(
+      await decodeProjectionFixture('CHR-015', privateSourceField as JsonObject),
+    ).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.skillOptions[0].SkillID' },
+    });
+  });
+
   it('rejects non-canonical selections and values absent from signed levelOptions', async () => {
     const nonCanonical = decoderChr015Projection(
       [
@@ -733,42 +945,49 @@ describe('SKILLS projection decoder and local draft', () => {
     });
   });
 
-  it('cross-checks the CHR-013 to CHR-015 signed option join', async () => {
-    const { connection, socket, states } = await connectDecoderFixture(
-      'CHR-013',
-      DECODER_CHR_013_PROJECTION,
-    );
-    expect(connection.requestFormAction('CHR-013::CTA::002')).toEqual({ ok: true });
-    const requestText = socket.sent.at(-1);
-    if (requestText === undefined) throw new Error('missing CHR-013 form action');
-    const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
-    if (!request.ok || request.value.messageType !== 'navigation.form-action') {
-      throw new Error('invalid CHR-013 form action');
-    }
-    const destination = mutableProjection(decoderChr015Projection());
-    optionAt(destination, 'skillOptions', 0)['skillLabel'] = 'Подменённая подпись';
-    socket.message(
-      checkedHostTextV2({
-        messageType: 'projection.snapshot',
-        presentation: {
-          assignment: {
-            correlationId: request.value.navigationRequestId,
-            reason: 'FORM_ACTION',
+  it.each([
+    ['skillLabel', 'Подменённая подпись'],
+    ['bonusDomainScope', 'Substituted scope.'],
+    ['missingSkillPenalty', { kind: 'MISSING_SKILL_PENALTY', value: -6 }],
+  ] as const)(
+    'cross-checks the CHR-013 to CHR-015 signed option join for %s',
+    async (key, value) => {
+      const { connection, socket, states } = await connectDecoderFixture(
+        'CHR-013',
+        DECODER_CHR_013_PROJECTION,
+      );
+      expect(connection.requestFormAction('CHR-013::CTA::002')).toEqual({ ok: true });
+      const requestText = socket.sent.at(-1);
+      if (requestText === undefined) throw new Error('missing CHR-013 form action');
+      const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
+      if (!request.ok || request.value.messageType !== 'navigation.form-action') {
+        throw new Error('invalid CHR-013 form action');
+      }
+      const destination = mutableProjection(decoderChr015Projection());
+      optionAt(destination, 'skillOptions', 0)[key] = value;
+      socket.message(
+        checkedHostTextV2({
+          messageType: 'projection.snapshot',
+          presentation: {
+            assignment: {
+              correlationId: request.value.navigationRequestId,
+              reason: 'FORM_ACTION',
+            },
+            base: projectionBase('CHR-015', destination as JsonObject),
+            layers: [],
           },
-          base: projectionBase('CHR-015', destination as JsonObject),
-          layers: [],
-        },
-        projectionRole: 'player',
-        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
-        revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
-      }),
-    );
+          projectionRole: 'player',
+          protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+          revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+        }),
+      );
 
-    expect(states.at(-1)).toMatchObject({
-      kind: 'protocol-error',
-      refusal: { path: '$.presentation.base.roleFilteredPayload.skillOptions' },
-    });
-  });
+      expect(states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: '$.presentation.base.roleFilteredPayload.skillOptions' },
+      });
+    },
+  );
 
   it('keeps toggles wire-free and canonical, rejects unsigned candidates, and checkpoints only EXACT', async () => {
     const { connection, skillDrafts, socket, states } = await connectDecoderFixture(
@@ -828,6 +1047,9 @@ describe('SKILLS projection decoder and local draft', () => {
       stage: 'SKILLS',
       wizardCheckpointId: WIZARD_CHECKPOINT_ID,
     });
+    expect(JSON.stringify(command.value.payload)).not.toMatch(
+      /bonusDomainScope|missingSkillPenalty|skillLabel|slotCost/u,
+    );
   });
 
   it('discards the local CHR-015 overlay when reconnect restores the durable snapshot', async () => {

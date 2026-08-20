@@ -39,14 +39,30 @@ describe('creation skill catalog', () => {
     // Source: skills.json has 45 active skills, 41 of them SELECTABLE_GENERAL.
     expect(catalog.skillLabels).toHaveLength(45);
     expect(catalog.selectableSkills).toHaveLength(41);
+    expect(
+      catalog.selectableSkills.filter(
+        ({ missingSkillPenalty }) => missingSkillPenalty.kind === 'MISSING_SKILL_PENALTY',
+      ),
+    ).toHaveLength(15);
+    expect(
+      catalog.selectableSkills.filter(
+        ({ missingSkillPenalty }) => missingSkillPenalty.kind === 'NO_MISSING_SKILL_PENALTY',
+      ),
+    ).toHaveLength(26);
     expect(catalog.skillLabels.find(({ skillId }) => skillId === 'FOLLOWING_PAIN')).toEqual({
       skillId: 'FOLLOWING_PAIN',
       skillLabel: 'Идущий вслед за болью',
     });
     expect(catalog.selectableSkills.find(({ skillId }) => skillId === 'ACROBATICS')).toEqual({
+      bonusDomainScope: 'Лазание, прыжки, кувырки, сложные маршруты, паркур',
+      missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
       requirements: [{ minValue: 14, statCode: 'D', statLabel: 'Ловкость' }],
       skillId: 'ACROBATICS',
       skillLabel: 'Акробатика',
+    });
+    expect(catalog.selectableSkills.find(({ skillId }) => skillId === 'UNARMED')).toMatchObject({
+      bonusDomainScope: 'Удары руками/ногами, блок без щита',
+      missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: -5 },
     });
   });
 
@@ -64,6 +80,16 @@ describe('creation skill catalog', () => {
       'ruleId',
       'Rule ID',
       'Source Question ID',
+      'Source Question IDs',
+      'Категория',
+      'OwnerScopeAllowed',
+      'CheckTags',
+      'ID unique',
+      'MaxBonus',
+      'SlotCostMode',
+      'Status',
+      'BonusDomain / Scope',
+      'MissingSkillPenalty',
       'SKL-',
       'CORE-',
       'REQ-',
@@ -73,7 +99,7 @@ describe('creation skill catalog', () => {
     }
   });
 
-  it('reads player labels from sources without turning them into mechanics', () => {
+  it('reads labels, scope text and penalties from sources without production literals', () => {
     const changed = structuredClone(sources()) as {
       requirements: Record<string, unknown>[];
       skills: Record<string, unknown>[];
@@ -81,14 +107,33 @@ describe('creation skill catalog', () => {
     };
     changed.skills.find((row) => row['SkillID'] === 'SKL-016')!['Название'] = 'Source-owned skill';
     changed.stats.find((row) => row['StatCode'] === 'D')!['Название'] = 'Source-owned stat';
+    const unarmedRow = changed.skills.find((row) => row['SkillKey'] === 'UNARMED')!;
+    unarmedRow['BonusDomain / Scope'] = 'Source-owned English scope.';
+    unarmedRow['MissingSkillPenalty'] = 0;
 
-    const acrobatics = createCreationSkillCatalog(changed, skillStageCatalog).selectableSkills.find(
+    const changedSkillStageCatalog: SkillStageCatalog = {
+      ...skillStageCatalog,
+      skills: skillStageCatalog.skills.map((skill) =>
+        skill.skillKey === 'UNARMED' ? { ...skill, missingSkillPenalty: 0 } : skill,
+      ),
+    };
+
+    const changedCatalog = createCreationSkillCatalog(changed, changedSkillStageCatalog);
+    const acrobatics = changedCatalog.selectableSkills.find(
       ({ skillId }) => skillId === 'ACROBATICS',
     );
     expect(acrobatics).toEqual({
+      bonusDomainScope: 'Лазание, прыжки, кувырки, сложные маршруты, паркур',
+      missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
       requirements: [{ minValue: 14, statCode: 'D', statLabel: 'Source-owned stat' }],
       skillId: 'ACROBATICS',
       skillLabel: 'Source-owned skill',
+    });
+    expect(
+      changedCatalog.selectableSkills.find(({ skillId }) => skillId === 'UNARMED'),
+    ).toMatchObject({
+      bonusDomainScope: 'Source-owned English scope.',
+      missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: 0 },
     });
   });
 
@@ -101,6 +146,26 @@ describe('creation skill catalog', () => {
     malformedLabel.skills[0]!['Название'] = '';
     expect(() => createCreationSkillCatalog(malformedLabel, skillStageCatalog)).toThrow(
       'creation skills[0].Название: expected a non-empty string',
+    );
+
+    const missingScope = structuredClone(sources()) as {
+      requirements: Record<string, unknown>[];
+      skills: Record<string, unknown>[];
+      stats: Record<string, unknown>[];
+    };
+    delete missingScope.skills[0]!['BonusDomain / Scope'];
+    expect(() => createCreationSkillCatalog(missingScope, skillStageCatalog)).toThrow(
+      'creation skills[0].BonusDomain / Scope: expected a non-empty string',
+    );
+
+    const nullPenalty = structuredClone(sources()) as {
+      requirements: Record<string, unknown>[];
+      skills: Record<string, unknown>[];
+      stats: Record<string, unknown>[];
+    };
+    nullPenalty.skills[0]!['MissingSkillPenalty'] = null;
+    expect(() => createCreationSkillCatalog(nullPenalty, skillStageCatalog)).toThrow(
+      'creation skills[0].MissingSkillPenalty: expected a safe integer',
     );
 
     const mismatchedRequirement = structuredClone(sources()) as {
