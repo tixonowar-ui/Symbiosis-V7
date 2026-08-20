@@ -66,6 +66,17 @@ import {
   type StatAssignmentCheckpointReceipt,
   type StatAssignmentStage,
 } from './creation-stat-assignment.js';
+import {
+  parseSkillEligibilityStage,
+  parseSkillSelectionStage,
+  prepareSkillEligibility,
+  prepareSkillSelection,
+  type SkillCheckpointCommandRequest,
+  type SkillEligibilityCheckpointReceipt,
+  type SkillEligibilityStage,
+  type SkillSelectionCheckpointReceipt,
+  type SkillSelectionStage,
+} from './creation-skill-selection.js';
 import type {
   DurableIdentityCheckpoint,
   IdentityCheckpointCommandRequest,
@@ -108,7 +119,9 @@ export type CreationNextFormId =
   | 'CHR-010'
   | 'CHR-011'
   | 'CHR-012'
+  | 'CHR-013'
   | 'CHR-016'
+  | 'CHR-017'
   | 'CHR-036';
 
 interface CreationSetDecidePayloadCommon extends JsonObject {
@@ -597,10 +610,21 @@ export interface CreationWizardStatAssignmentPayload extends Omit<
   readonly receipt: StatAssignmentCheckpointReceipt | PureClassDecisionReceipt;
 }
 
+export interface CreationWizardSkillPayload extends Omit<
+  CreationWizardStatAssignmentPayload,
+  'nextStageEnvelope' | 'receipt'
+> {
+  readonly skillEligibilityStage: SkillEligibilityStage;
+  readonly skillSelectionStage: SkillSelectionStage | null;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-013' | 'CHR-017'>;
+  readonly receipt: SkillEligibilityCheckpointReceipt | SkillSelectionCheckpointReceipt;
+}
+
 export type CreationWizardPostIdentityPayload =
   | CreationWizardPreRollPayload
   | CreationWizardStatRollPayload
-  | CreationWizardStatAssignmentPayload;
+  | CreationWizardStatAssignmentPayload
+  | CreationWizardSkillPayload;
 
 export type DurableCreationWizardPayload =
   | (IdentityCheckpointDurablePayload & {
@@ -619,17 +643,22 @@ export interface DurableCreationWizardCheckpoint {
   readonly statRollStage: StatRollStage | null;
   readonly statAssignmentStage: StatAssignmentStage | null;
   readonly pureClassStage: PureClassStage | null;
+  readonly skillEligibilityStage: SkillEligibilityStage | null;
+  readonly skillSelectionStage: SkillSelectionStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
     | DurableCreationSetDecideReceipt
     | IdentityCheckpointReceipt
     | StatAssignmentCheckpointReceipt
-    | PureClassDecisionReceipt;
+    | PureClassDecisionReceipt
+    | SkillEligibilityCheckpointReceipt
+    | SkillSelectionCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
     | IdentityCheckpointCommandRequest
-    | StatAssignmentCheckpointCommandRequest;
+    | StatAssignmentCheckpointCommandRequest
+    | SkillCheckpointCommandRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -640,12 +669,15 @@ export interface DurableCreationWizardCommand {
     | DurableCreationSetDecideReceipt
     | IdentityCheckpointReceipt
     | StatAssignmentCheckpointReceipt
-    | PureClassDecisionReceipt;
+    | PureClassDecisionReceipt
+    | SkillEligibilityCheckpointReceipt
+    | SkillSelectionCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
     | IdentityCheckpointCommandRequest
-    | StatAssignmentCheckpointCommandRequest;
+    | StatAssignmentCheckpointCommandRequest
+    | SkillCheckpointCommandRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -702,6 +734,11 @@ const STAT_ASSIGNMENT_PAYLOAD_KEYS = [
   ...STAT_ROLL_PAYLOAD_KEYS,
   'statAssignmentStage',
   'pureClassStage',
+] as const;
+const SKILL_PAYLOAD_KEYS = [
+  ...STAT_ASSIGNMENT_PAYLOAD_KEYS,
+  'skillEligibilityStage',
+  'skillSelectionStage',
 ] as const;
 const RECEIPT_RESULT_COMMON_KEYS = [
   'stage',
@@ -1041,6 +1078,8 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-009',
     'CHR-011',
     'CHR-012',
+    'CHR-013',
+    'CHR-017',
   ] as const);
   const bindings = object['routeBindings'];
   if (!Array.isArray(bindings)) return invalidShape(`${path}.routeBindings`, 'array', bindings);
@@ -2210,14 +2249,17 @@ const postIdentityPayloadAt = (
     const unshaped = objectAt(value, '$');
     const hasStatRollStage = Object.hasOwn(unshaped, 'statRollStage');
     const hasStatAssignmentStage = Object.hasOwn(unshaped, 'statAssignmentStage');
+    const hasSkillEligibilityStage = Object.hasOwn(unshaped, 'skillEligibilityStage');
     const object = exactObject(
       value,
       '$',
-      hasStatAssignmentStage
-        ? STAT_ASSIGNMENT_PAYLOAD_KEYS
-        : hasStatRollStage
-          ? STAT_ROLL_PAYLOAD_KEYS
-          : POST_IDENTITY_PAYLOAD_KEYS,
+      hasSkillEligibilityStage
+        ? SKILL_PAYLOAD_KEYS
+        : hasStatAssignmentStage
+          ? STAT_ASSIGNMENT_PAYLOAD_KEYS
+          : hasStatRollStage
+            ? STAT_ROLL_PAYLOAD_KEYS
+            : POST_IDENTITY_PAYLOAD_KEYS,
     );
     const branchCacheEntries = emptyArrayAt(object['branchCacheEntries'], '$.branchCacheEntries');
     const branchCacheHash = literal(
@@ -2249,15 +2291,27 @@ const postIdentityPayloadAt = (
       objectAt(object['receipt'], '$.receipt')['result'],
       '$.receipt.result',
     );
+    const skillEligibilityStage = hasSkillEligibilityStage
+      ? parseSkillEligibilityStage(object['skillEligibilityStage'], label)
+      : null;
+    const skillSelectionStage = hasSkillEligibilityStage
+      ? parseSkillSelectionStage(object['skillSelectionStage'], label)
+      : null;
     const receipt =
-      receiptResult['stage'] === 'STAT_ASSIGNMENT'
-        ? parseStatAssignmentReceipt(object['receipt'], label)
-        : receiptResult['stage'] !== 'STAT_ROLLS'
-          ? raceMethodReceiptAt(object['receipt'], '$.receipt')
-          : receiptResult['sourceFormId'] === 'CHR-003' ||
-              receiptResult['sourceFormId'] === 'CHR-004'
-            ? creationRollReceiptAt(object['receipt'], '$.receipt')
-            : statDecisionReceiptAt(object['receipt'], '$.receipt');
+      receiptResult['stage'] === 'SKILLS'
+        ? (skillSelectionStage?.receipt ??
+          skillEligibilityStage?.receipt ??
+          (() => {
+            throw new Error(`${label} SKILLS payload lacks a skill stage receipt`);
+          })())
+        : receiptResult['stage'] === 'STAT_ASSIGNMENT'
+          ? parseStatAssignmentReceipt(object['receipt'], label)
+          : receiptResult['stage'] !== 'STAT_ROLLS'
+            ? raceMethodReceiptAt(object['receipt'], '$.receipt')
+            : receiptResult['sourceFormId'] === 'CHR-003' ||
+                receiptResult['sourceFormId'] === 'CHR-004'
+              ? creationRollReceiptAt(object['receipt'], '$.receipt')
+              : statDecisionReceiptAt(object['receipt'], '$.receipt');
     const common = {
       branchCacheEntries,
       branchCacheHash,
@@ -2273,6 +2327,27 @@ const postIdentityPayloadAt = (
         throw new Error(`${label} pre-roll payload cannot carry a STAT_ROLLS receipt`);
       }
       return common as CreationWizardPreRollPayload;
+    }
+    if (hasSkillEligibilityStage) {
+      if (
+        receipt.result.stage !== 'SKILLS' ||
+        skillEligibilityStage === null ||
+        !isDeepStrictEqual(receipt, skillSelectionStage?.receipt ?? skillEligibilityStage.receipt)
+      ) {
+        throw new Error(`${label} skill payload must carry its latest SKILLS receipt`);
+      }
+      return {
+        ...common,
+        nextStageEnvelope: common.nextStageEnvelope as CreationNextStageEnvelope<
+          'CHR-013' | 'CHR-017'
+        >,
+        pureClassStage: parsePureClassStage(object['pureClassStage'], label),
+        receipt,
+        skillEligibilityStage,
+        skillSelectionStage,
+        statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
+        statRollStage: statRollStageAt(object['statRollStage'], label),
+      } as CreationWizardSkillPayload;
     }
     if (hasStatAssignmentStage) {
       if (receipt.result.stage !== 'STAT_ASSIGNMENT') {
@@ -2322,11 +2397,14 @@ interface RollValidationCursor {
     | CreationRollCommitReceipt
     | DurableCreationSetDecideReceipt
     | StatAssignmentCheckpointReceipt
-    | PureClassDecisionReceipt;
+    | PureClassDecisionReceipt
+    | SkillEligibilityCheckpointReceipt
+    | SkillSelectionCheckpointReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
-    | StatAssignmentCheckpointCommandRequest;
+    | StatAssignmentCheckpointCommandRequest
+    | SkillCheckpointCommandRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -2368,6 +2446,30 @@ const exactDurablePostRevisions = (
   }
   try {
     return incrementedRevisions(request.expectedRevisions);
+  } catch {
+    mismatches.push(`${label} entity revision overflow`);
+    return previous;
+  }
+};
+
+/** CHR-013 -> CHR-015 is a projection-only navigation between the two durable skill commits. */
+const presentationAdvancedDurablePostRevisions = (
+  previous: RevisionVector,
+  request: { readonly expectedRevisions: RevisionVector },
+  label: string,
+  mismatches: string[],
+): RevisionVector => {
+  const expected = request.expectedRevisions;
+  if (
+    expected.actorVisibilityRevision !== previous.actorVisibilityRevision ||
+    expected.stateRevision !== previous.stateRevision ||
+    previous.projectionRevision === Number.MAX_SAFE_INTEGER ||
+    expected.projectionRevision !== previous.projectionRevision + 1
+  ) {
+    mismatches.push(`${label} pre-commit revisions`);
+  }
+  try {
+    return incrementedRevisions(expected);
   } catch {
     mismatches.push(`${label} entity revision overflow`);
     return previous;
@@ -2932,6 +3034,8 @@ const assignmentCheckpointAtCursor = (
   raceAndMethodStage,
   receipt: cursor.latestReceipt,
   request: cursor.latestRequest,
+  skillEligibilityStage: null,
+  skillSelectionStage: null,
   statAssignmentStage,
   statRollStage,
 });
@@ -3127,6 +3231,217 @@ const validateStatAssignmentHistory = (
       mismatches.push('CHR-012 derived projection');
     }
   }
+  return cursor;
+};
+
+const skillCheckpointAtCursor = (
+  durablePayload: CreationWizardSkillPayload,
+  localCharacter: LocalCharacter,
+  checkpoint: LocalCharacterCheckpoint,
+  identityStage: CreationIdentityStage,
+  raceAndMethodStage: RaceAndMethodStage,
+  statRollStage: StatRollStage,
+  statAssignmentStage: StatAssignmentStage,
+  pureClassStage: PureClassStage | null,
+  cursor: RollValidationCursor,
+  skillEligibilityStage: SkillEligibilityStage | null,
+  skillSelectionStage: SkillSelectionStage | null,
+): DurableCreationWizardCheckpoint => ({
+  checkpoint,
+  durablePayload,
+  identityStage,
+  localCharacter,
+  nextStageEnvelope: cursor.latestEnvelope,
+  pureClassStage,
+  raceAndMethodStage,
+  receipt: cursor.latestReceipt,
+  request: cursor.latestRequest,
+  skillEligibilityStage,
+  skillSelectionStage,
+  statAssignmentStage,
+  statRollStage,
+});
+
+const validateSkillHistory = (
+  durablePayload: CreationWizardSkillPayload,
+  localCharacter: LocalCharacter,
+  checkpoint: LocalCharacterCheckpoint,
+  identityStage: CreationIdentityStage,
+  raceAndMethodStage: RaceAndMethodStage,
+  statRollStage: StatRollStage,
+  statAssignmentStage: StatAssignmentStage,
+  pureClassStage: PureClassStage | null,
+  cursorStart: RollValidationCursor,
+  commandIds: Set<string>,
+  receiptIds: Set<string>,
+  occupied: Set<string>,
+  catalog: SkillStageCatalog,
+  mismatches: string[],
+): RollValidationCursor => {
+  const eligibility = durablePayload.skillEligibilityStage;
+  const request = eligibility.request;
+  const receipt = eligibility.receipt;
+  const label = 'skillEligibilityStage';
+  if (
+    request.payload.characterDraftId !== localCharacter.localCharacterId ||
+    request.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+    request.payload.draftRevision !== cursorStart.draftRevision ||
+    request.payload.sourceFormId !== 'CHR-012'
+  ) {
+    mismatches.push(`${label} addressed request`);
+  }
+  if (occupied.has(request.commandId)) mismatches.push(`${label} command ID collision`);
+  occupied.add(request.commandId);
+  commandIds.add(request.commandId);
+  if (occupied.has(receipt.receiptId)) mismatches.push(`${label} receipt ID collision`);
+  occupied.add(receipt.receiptId);
+  receiptIds.add(receipt.receiptId);
+  const postRevisions = exactDurablePostRevisions(
+    cursorStart.revisions,
+    request,
+    label,
+    mismatches,
+  );
+  const preEligibility = skillCheckpointAtCursor(
+    durablePayload,
+    localCharacter,
+    checkpoint,
+    identityStage,
+    raceAndMethodStage,
+    statRollStage,
+    statAssignmentStage,
+    pureClassStage,
+    cursorStart,
+    null,
+    null,
+  );
+  let plan;
+  try {
+    plan = prepareSkillEligibility(preEligibility, request, catalog);
+  } catch {
+    mismatches.push(`${label} source/domain derivation`);
+    return cursorStart;
+  }
+  const envelope = nextStageEnvelope('CHR-013', localCharacter.localCharacterId);
+  const expectedResult: SkillEligibilityCheckpointReceipt['result'] = {
+    ...plan.derived,
+    branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+    branchUuid: statRollStage.branchUuid,
+    characterDraftId: localCharacter.localCharacterId,
+    checkpointId: checkpoint.checkpointId,
+    checkpointOwnerId: localCharacter.localCharacterId,
+    checkpointRevision: cursorStart.checkpointRevision + 1,
+    draftRevision: cursorStart.draftRevision + 1,
+    nextFormId: 'CHR-013',
+    sourceFormId: 'CHR-012',
+    stage: 'SKILLS',
+  };
+  if (receipt.commandId !== request.commandId)
+    mismatches.push(`${label} request/receipt commandId`);
+  if (!isDeepStrictEqual(receipt.result, expectedResult))
+    mismatches.push(`${label} receipt result`);
+  if (!isDeepStrictEqual(receipt.revisions, postRevisions)) {
+    mismatches.push(`${label} receipt revisions`);
+  }
+  if (!isDeepStrictEqual(eligibility.derived, plan.derived)) mismatches.push(`${label} derived`);
+  if (!isDeepStrictEqual(eligibility.nextStageEnvelope, envelope)) {
+    mismatches.push(`${label} signed destination`);
+  }
+  let cursor: RollValidationCursor = {
+    checkpointRevision: cursorStart.checkpointRevision + 1,
+    draftRevision: cursorStart.draftRevision + 1,
+    latestEnvelope: eligibility.nextStageEnvelope,
+    latestReceipt: receipt,
+    latestRequest: request,
+    revisions: postRevisions,
+  };
+
+  const selection = durablePayload.skillSelectionStage;
+  if (selection === null) return cursor;
+  const selectionRequest = selection.request;
+  const selectionReceipt = selection.receipt;
+  const selectionLabel = 'skillSelectionStage';
+  if (
+    selectionRequest.payload.characterDraftId !== localCharacter.localCharacterId ||
+    selectionRequest.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+    selectionRequest.payload.draftRevision !== cursor.draftRevision ||
+    selectionRequest.payload.sourceFormId !== 'CHR-015'
+  ) {
+    mismatches.push(`${selectionLabel} addressed request`);
+  }
+  if (occupied.has(selectionRequest.commandId)) {
+    mismatches.push(`${selectionLabel} command ID collision`);
+  }
+  occupied.add(selectionRequest.commandId);
+  commandIds.add(selectionRequest.commandId);
+  if (occupied.has(selectionReceipt.receiptId)) {
+    mismatches.push(`${selectionLabel} receipt ID collision`);
+  }
+  occupied.add(selectionReceipt.receiptId);
+  receiptIds.add(selectionReceipt.receiptId);
+  const selectionPostRevisions = presentationAdvancedDurablePostRevisions(
+    cursor.revisions,
+    selectionRequest,
+    selectionLabel,
+    mismatches,
+  );
+  const preSelection = skillCheckpointAtCursor(
+    durablePayload,
+    localCharacter,
+    checkpoint,
+    identityStage,
+    raceAndMethodStage,
+    statRollStage,
+    statAssignmentStage,
+    pureClassStage,
+    cursor,
+    eligibility,
+    null,
+  );
+  let selectionPlan;
+  try {
+    selectionPlan = prepareSkillSelection(preSelection, selectionRequest, catalog);
+  } catch {
+    mismatches.push(`${selectionLabel} source/domain derivation`);
+    return cursor;
+  }
+  const selectionEnvelope = nextStageEnvelope('CHR-017', localCharacter.localCharacterId);
+  const expectedSelectionResult: SkillSelectionCheckpointReceipt['result'] = {
+    ...selectionPlan.derived,
+    branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+    branchUuid: statRollStage.branchUuid,
+    characterDraftId: localCharacter.localCharacterId,
+    checkpointId: checkpoint.checkpointId,
+    checkpointOwnerId: localCharacter.localCharacterId,
+    checkpointRevision: cursor.checkpointRevision + 1,
+    draftRevision: cursor.draftRevision + 1,
+    nextFormId: 'CHR-017',
+    sourceFormId: 'CHR-015',
+    stage: 'SKILLS',
+  };
+  if (selectionReceipt.commandId !== selectionRequest.commandId) {
+    mismatches.push(`${selectionLabel} request/receipt commandId`);
+  }
+  if (!isDeepStrictEqual(selectionReceipt.result, expectedSelectionResult)) {
+    mismatches.push(`${selectionLabel} receipt result`);
+  }
+  if (!isDeepStrictEqual(selectionReceipt.revisions, selectionPostRevisions)) {
+    mismatches.push(`${selectionLabel} receipt revisions`);
+  }
+  if (!isDeepStrictEqual(selection.derived, selectionPlan.derived)) {
+    mismatches.push(`${selectionLabel} derived`);
+  }
+  if (!isDeepStrictEqual(selection.nextStageEnvelope, selectionEnvelope)) {
+    mismatches.push(`${selectionLabel} signed destination`);
+  }
+  cursor = {
+    checkpointRevision: cursor.checkpointRevision + 1,
+    draftRevision: cursor.draftRevision + 1,
+    latestEnvelope: selection.nextStageEnvelope,
+    latestReceipt: selectionReceipt,
+    latestRequest: selectionRequest,
+    revisions: selectionPostRevisions,
+  };
   return cursor;
 };
 
@@ -3346,11 +3661,41 @@ const validatePostIdentityPayload = (
       throw new Error(`${label} stat-assignment checkpoint requires a validated skill catalog`);
     }
     cursor = validateStatAssignmentHistory(
+      durablePayload as CreationWizardStatAssignmentPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+      catalog,
+      mismatches,
+    );
+  }
+  const skillEligibilityStage =
+    'skillEligibilityStage' in durablePayload ? durablePayload.skillEligibilityStage : null;
+  const skillSelectionStage =
+    'skillSelectionStage' in durablePayload ? durablePayload.skillSelectionStage : null;
+  if (skillEligibilityStage !== null) {
+    if (
+      catalog === undefined ||
+      statRollStage === null ||
+      statAssignmentStage === null ||
+      !('skillEligibilityStage' in durablePayload)
+    ) {
+      throw new Error(`${label} skill checkpoint requires a validated skill catalog`);
+    }
+    cursor = validateSkillHistory(
       durablePayload,
       localCharacter,
       checkpoint,
       identityStage,
       raceAndMethodStage,
+      statRollStage,
+      statAssignmentStage,
+      pureClassStage,
       cursor,
       commandIds,
       receiptIds,
@@ -3389,13 +3734,18 @@ const validatePostIdentityPayload = (
     projectionRevision: checkpoint.projectionRevision,
     stateRevision: checkpoint.stateRevision,
   };
-  const exactFinalProjection = statAssignmentStage !== null;
+  const projectionRevisionMatches =
+    skillEligibilityStage !== null && skillSelectionStage === null
+      ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
+        (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
+          currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
+      : statAssignmentStage !== null
+        ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
+        : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
   if (
     currentRevisions.actorVisibilityRevision !== previousRevisions.actorVisibilityRevision ||
     currentRevisions.stateRevision !== previousRevisions.stateRevision ||
-    (exactFinalProjection
-      ? currentRevisions.projectionRevision !== previousRevisions.projectionRevision
-      : currentRevisions.projectionRevision < previousRevisions.projectionRevision)
+    !projectionRevisionMatches
   ) {
     mismatches.push('localCharacter/latest receipt revisions');
   }
@@ -3412,6 +3762,8 @@ const validatePostIdentityPayload = (
     nextStageEnvelope: durablePayload.nextStageEnvelope,
     raceAndMethodStage,
     pureClassStage,
+    skillEligibilityStage,
+    skillSelectionStage,
     statRollStage,
     statAssignmentStage,
     receipt: durablePayload.receipt,
@@ -3431,6 +3783,8 @@ const identityOnlyCheckpoint = (
     nextStageEnvelope: identityStage.nextStageEnvelope,
     pureClassStage: null,
     raceAndMethodStage: null,
+    skillEligibilityStage: null,
+    skillSelectionStage: null,
     statAssignmentStage: null,
     statRollStage: null,
     receipt: durable.receipt,
@@ -3555,6 +3909,50 @@ export function advanceCreationWizardProjection(
   return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint, catalog);
 }
 
+function assertSkillSelectionPresentationAdvance(
+  checkpoint: DurableCreationWizardCheckpoint,
+  wizardCheckpointId: string,
+): void {
+  const eligibility = checkpoint.skillEligibilityStage;
+  if (
+    checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
+    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
+    eligibility === null ||
+    checkpoint.skillSelectionStage !== null ||
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), eligibility.receipt.revisions) ||
+    checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
+  ) {
+    throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
+  }
+}
+
+/** Advances only the CHR-013 -> CHR-015 presentation; no durable skill stage changes. */
+export function advanceCreationSkillSelectionProjection(
+  database: Database.Database,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  catalog: SkillStageCatalog,
+): DurableCreationWizardCheckpoint {
+  assertSkillSelectionPresentationAdvance(
+    loadCreationWizardCheckpoint(database, characterDraftId, catalog),
+    wizardCheckpointId,
+  );
+  const committed = commitLocalCharacterCheckpoint(
+    database,
+    characterDraftId,
+    wizardCheckpointId,
+    (update) => {
+      const current = loadCreationWizardCheckpoint(database, characterDraftId, catalog);
+      assertSkillSelectionPresentationAdvance(current, wizardCheckpointId);
+      return update(
+        { payloadJson: current.localCharacter.payloadJson },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      );
+    },
+  );
+  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint, catalog);
+}
+
 const rawCommandIds = (payloadJson: string): readonly string[] => {
   const value = JSON.parse(payloadJson) as unknown;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return [];
@@ -3628,7 +4026,12 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
       }
     }
   }
-  for (const stageKey of ['statAssignmentStage', 'pureClassStage'] as const) {
+  for (const stageKey of [
+    'statAssignmentStage',
+    'pureClassStage',
+    'skillEligibilityStage',
+    'skillSelectionStage',
+  ] as const) {
     const stage = object[stageKey];
     if (stage !== null && typeof stage === 'object' && !Array.isArray(stage)) {
       addRequestId((stage as Record<string, unknown>)['request']);
@@ -3675,7 +4078,12 @@ export function loadCreationWizardCommandByCommandId(
       request: decisionRecord.request,
     };
   }
-  for (const record of [durableCheckpoint.statAssignmentStage, durableCheckpoint.pureClassStage]) {
+  for (const record of [
+    durableCheckpoint.statAssignmentStage,
+    durableCheckpoint.pureClassStage,
+    durableCheckpoint.skillEligibilityStage,
+    durableCheckpoint.skillSelectionStage,
+  ]) {
     if (record?.request.commandId === commandId) {
       return {
         durableCheckpoint,
@@ -3722,6 +4130,8 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   ]) ?? []),
   ...(checkpoint.statAssignmentStage === null ? [] : [checkpoint.statAssignmentStage]),
   ...(checkpoint.pureClassStage === null ? [] : [checkpoint.pureClassStage]),
+  ...(checkpoint.skillEligibilityStage === null ? [] : [checkpoint.skillEligibilityStage]),
+  ...(checkpoint.skillSelectionStage === null ? [] : [checkpoint.skillSelectionStage]),
 ];
 
 const guardRejected = (): never => {

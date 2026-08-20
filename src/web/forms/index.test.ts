@@ -125,3 +125,34 @@ describe('STAT_ASSIGNMENT web form registry', () => {
     );
   });
 });
+
+describe('SKILLS web form registry', () => {
+  it.each([
+    ['CHR-013', '/player/characters/:localCharacterId/create/chr-013'],
+    ['CHR-015', '/player/characters/:localCharacterId/create/chr-015'],
+  ] as const)('publishes the exact %s screen and its three Atlas actions', (formId, route) => {
+    const definition = presentedFormDefinition(formId);
+    expect(definition).toMatchObject({ route, type: 'screen' });
+    expect(definition?.actions.map(({ actionKey }) => actionKey)).toEqual([
+      `${formId}::CTA::001`,
+      `${formId}::CTA::002`,
+      `${formId}::CTA::003`,
+    ]);
+  });
+
+  it('keeps the implemented CHR-013 and CHR-015 action subsets source-backed', () => {
+    expect(availableFormActions('CHR-013', ['CHR-013::CTA::002'])).toEqual([
+      { actionKey: 'CHR-013::CTA::002', label: 'Перейти к выбору навыков' },
+    ]);
+    expect(availableFormActions('CHR-015', ['CHR-015::CTA::003', 'CHR-015::CTA::001'])).toEqual([
+      {
+        actionKey: 'CHR-015::CTA::003',
+        label: 'Добавить или удалить допустимый навык',
+      },
+      {
+        actionKey: 'CHR-015::CTA::001',
+        label: 'Подтвердить заполненные стартовые слоты',
+      },
+    ]);
+  });
+});

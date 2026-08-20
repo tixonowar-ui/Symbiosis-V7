@@ -57,6 +57,8 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-009',
   'CHR-011',
   'CHR-012',
+  'CHR-013',
+  'CHR-015',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -149,6 +151,10 @@ const CHR_011_SELECTOR_ACTION_KEYS = [
   'CHR-011::CTA::004',
   'CHR-011::CTA::005',
 ] as const satisfies readonly ActionKey[];
+const CHR_013_ACTION_KEYS = ['CHR-013::CTA::002'] as const satisfies readonly ActionKey[];
+const CHR_015_MUTABLE_ACTION_KEYS = ['CHR-015::CTA::003'] as const satisfies readonly ActionKey[];
+const CHR_015_CONFIRM_ACTION_KEY = 'CHR-015::CTA::001' as const;
+const CHR_015_TOGGLE_ACTION_KEY = 'CHR-015::CTA::003' as const;
 const PURE_CLASS_BY_SELECTOR = new Map<ActionKey, PureClass>([
   ['CHR-011::CTA::003', 'SEEKER'],
   ['CHR-011::CTA::004', 'STALKER'],
@@ -560,6 +566,123 @@ export interface Chr012Projection extends JsonObject {
   readonly wizardCheckpointId: string;
 }
 
+export interface SkillLevelOptionProjection extends JsonObject {
+  readonly slotCost: number;
+  readonly targetBonus: number;
+}
+
+export interface SkillRequirementProjection extends JsonObject {
+  readonly currentValue: number;
+  readonly minValue: number;
+  readonly satisfied: boolean;
+  readonly statCode: StatCode;
+  readonly statLabel: string;
+}
+
+export interface SkillCardSummaryProjection extends JsonObject {
+  readonly eligibility: 'ELIGIBLE' | 'REQUIREMENTS_NOT_MET';
+  readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly requirements: readonly SkillRequirementProjection[];
+  readonly skillId: string;
+  readonly skillLabel: string;
+}
+
+export interface FixedSkillProjection extends JsonObject {
+  readonly bonus: number;
+  readonly skillId: string;
+  readonly skillLabel: string;
+  readonly slotCost: number;
+}
+
+export interface SkillSlotSourcesProjection extends JsonObject {
+  readonly mandatoryClassSkillOrNull: FixedSkillProjection | null;
+  readonly racialFreeSkills: readonly FixedSkillProjection[];
+  readonly requiredSlotCount: number;
+}
+
+export interface Chr013Projection extends JsonObject {
+  readonly characterDraftId: string;
+  readonly commandId: null;
+  readonly draftRevision: number;
+  readonly eligibleSkillIds: readonly string[];
+  readonly selectedSkillIdOrNull: null;
+  readonly skillCardSummaries: readonly SkillCardSummaryProjection[];
+  readonly skillStageStats: StatMap<number>;
+  readonly slotSources: SkillSlotSourcesProjection;
+  readonly wizardCheckpointId: string;
+}
+
+export interface SelectedSkillProjection extends JsonObject {
+  readonly skillId: string;
+  readonly slotCost: number;
+  readonly targetBonus: number;
+}
+
+export interface SkillOptionProjection extends JsonObject {
+  readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly skillId: string;
+  readonly skillLabel: string;
+}
+
+export interface PaidSkillUsageEntryProjection extends JsonObject {
+  readonly bonus: number;
+  readonly skillId: string;
+  readonly skillLabel: string;
+  readonly slotCost: number;
+  readonly source: 'CLASS_MANDATORY' | 'SELECTED';
+}
+
+export interface PaidSlotUsageProjection extends JsonObject {
+  readonly entries: readonly PaidSkillUsageEntryProjection[];
+  readonly usedSlotCount: number;
+}
+
+export type SkillSelectionValidation =
+  | {
+      readonly kind: 'UNDERFILLED';
+      readonly missingSlotCount: number;
+      readonly requiredSlotCount: number;
+      readonly usedSlotCount: number;
+    }
+  | {
+      readonly kind: 'EXACT';
+      readonly requiredSlotCount: number;
+      readonly usedSlotCount: number;
+    }
+  | {
+      readonly excessSlotCount: number;
+      readonly kind: 'OVERFILLED';
+      readonly requiredSlotCount: number;
+      readonly usedSlotCount: number;
+    };
+
+export interface Chr015Projection extends JsonObject {
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly draftRevision: number;
+  readonly eligibleSkillIds: readonly string[];
+  readonly mandatoryClassSkillOrNull: FixedSkillProjection | null;
+  readonly paidSlotUsage: PaidSlotUsageProjection;
+  readonly racialFreeSkillIds: readonly string[];
+  readonly racialFreeSkills: readonly FixedSkillProjection[];
+  readonly requiredSlotCount: number;
+  readonly selectedSkillIds: readonly string[];
+  readonly selectedSkills: readonly SelectedSkillProjection[];
+  readonly selectionValidation: SkillSelectionValidation;
+  readonly skillOptions: readonly SkillOptionProjection[];
+  readonly wizardCheckpointId: string;
+}
+
+export interface CharacterSkillSelectionDraft {
+  readonly candidateSkillIdOrNull: string | null;
+  readonly candidateTargetBonusOrNull: number | null;
+  readonly formId: 'CHR-015';
+  readonly paidSlotUsage: PaidSlotUsageProjection;
+  readonly selectedSkillIds: readonly string[];
+  readonly selectedSkills: readonly SelectedSkillProjection[];
+  readonly selectionValidation: SkillSelectionValidation;
+}
+
 export type StatAssignmentValidation = 'ASSIGNMENT_INVALID' | 'READY_TO_CHECKPOINT';
 
 export interface CharacterStatAssignmentDraft {
@@ -803,7 +926,27 @@ type StatAssignmentCheckpointRequest = WorkflowCommandRequestMessage<
   typeof IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
   StatAssignmentCheckpointPayload
 >;
-type CheckpointRequest = IdentityCheckpointRequest | StatAssignmentCheckpointRequest;
+
+interface SkillSelectionCheckpointInput extends JsonObject {
+  readonly skillId: string;
+  readonly targetBonus: number;
+}
+
+interface SkillSelectionCheckpointPayload extends JsonObject {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly selectedSkills: readonly SkillSelectionCheckpointInput[];
+  readonly sourceFormId: 'CHR-015';
+  readonly stage: 'SKILLS';
+  readonly wizardCheckpointId: string;
+}
+
+type SkillSelectionCheckpointRequest = WorkflowCommandRequestMessage<
+  typeof IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+  SkillSelectionCheckpointPayload
+>;
+type CheckpointRequest =
+  IdentityCheckpointRequest | SkillSelectionCheckpointRequest | StatAssignmentCheckpointRequest;
 
 interface RolledStatAssignmentResultEntry extends RolledAssignmentSourceEntry {
   readonly statCode: StatCode;
@@ -827,12 +970,43 @@ interface StatAssignmentCheckpointResult extends JsonObject {
   readonly stage: 'STAT_ASSIGNMENT';
 }
 
-type CheckpointResult = IdentityCheckpointResult | StatAssignmentCheckpointResult;
+interface DurableSelectedSkillResult extends JsonObject {
+  readonly skillKey: string;
+  readonly targetBonus: number;
+}
+
+interface DurableLearnedSkillResult extends JsonObject {
+  readonly bonus: number;
+  readonly skillKey: string;
+  readonly slotCost: number;
+  readonly source: 'CLASS_MANDATORY' | 'RACE_GRANTED' | 'SELECTED';
+}
+
+interface SkillSelectionCheckpointResult extends JsonObject {
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly learnedSkills: readonly DurableLearnedSkillResult[];
+  readonly nextFormId: 'CHR-017';
+  readonly requiredSlotCount: number;
+  readonly selectedSkills: readonly DurableSelectedSkillResult[];
+  readonly sourceFormId: 'CHR-015';
+  readonly stage: 'SKILLS';
+  readonly usedSlotCount: number;
+}
+
+type CheckpointResult =
+  IdentityCheckpointResult | SkillSelectionCheckpointResult | StatAssignmentCheckpointResult;
 
 interface PendingCheckpoint {
   readonly assignmentDraft: CharacterStatAssignmentDraft | null;
   readonly request: CheckpointRequest;
   readonly receipt: CommandReceipt<CheckpointResult> | null;
+  readonly skillSelectionDraft: CharacterSkillSelectionDraft | null;
   readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
@@ -1155,6 +1329,10 @@ export interface ProjectionConnection {
   replaceConfirmationManualFace(value: number | null): FormActionRequestResult;
   replaceSetManualFace(index: number, value: number | null): FormActionRequestResult;
   replaceIdentityDraft(values: IdentityDraftValues): FormActionRequestResult;
+  replaceSkillSelectionCandidate(
+    skillId: string | null,
+    targetBonus: number | null,
+  ): FormActionRequestResult;
   requestFormAction(actionKey: ActionKey): FormActionRequestResult;
   replaceStatAssignmentValue(statCode: StatCode, value: number | null): FormActionRequestResult;
 }
@@ -2216,6 +2394,415 @@ function decodeChr012Projection(
   });
 }
 
+function isPublicSkillId(value: JsonValue): value is string {
+  return isNonEmptyString(value) && !/^(?:CORE|Q|REQ|SKL)-/u.test(value);
+}
+
+function decodeSkillLevelOptions(
+  value: JsonValue,
+  path: string,
+): DecodeResult<readonly SkillLevelOptionProjection[]> {
+  if (!Array.isArray(value)) return unrecognized(path, value);
+  for (const [index, option] of (value as readonly JsonValue[]).entries()) {
+    const optionPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(option)) return unrecognized(optionPath, option);
+    const decoded = decodeProjection(option, optionPath, {
+      slotCost: (field) => isSafeIntegerAtLeast(field, 1),
+      targetBonus: (field) => field === index + 1,
+    });
+    if (!decoded.ok) return decoded;
+    if (index > 0) {
+      const previous = value[index - 1] as JsonObject;
+      if ((option['slotCost'] as number) < (previous['slotCost'] as number)) {
+        return unrecognized(`${optionPath}.slotCost`, option['slotCost']!);
+      }
+    }
+  }
+  return { ok: true, value: value as unknown as readonly SkillLevelOptionProjection[] };
+}
+
+function decodeFixedSkill(
+  value: JsonValue,
+  path: string,
+  expectedSlotCost: 0 | 1,
+): DecodeResult<FixedSkillProjection> {
+  if (!isJsonObject(value)) return unrecognized(path, value);
+  const decoded = decodeProjection(value, path, {
+    bonus: (field) => isSafeIntegerAtLeast(field, 1),
+    skillId: isPublicSkillId,
+    skillLabel: isNonEmptyString,
+    slotCost: (field) => field === expectedSlotCost,
+  });
+  return decoded.ok ? { ok: true, value: value as FixedSkillProjection } : decoded;
+}
+
+function decodeRacialFreeSkills(
+  value: JsonValue,
+  path: string,
+): DecodeResult<readonly FixedSkillProjection[]> {
+  if (!Array.isArray(value) || value.length > 1) return unrecognized(path, value);
+  for (const [index, skill] of (value as readonly JsonValue[]).entries()) {
+    const decoded = decodeFixedSkill(skill, `${path}[${String(index)}]`, 0);
+    if (!decoded.ok) return decoded;
+  }
+  return { ok: true, value: value as unknown as readonly FixedSkillProjection[] };
+}
+
+function decodeSkillCardSummaries(
+  value: JsonValue,
+  path: string,
+  skillStageStats: StatMap<number>,
+): DecodeResult<readonly SkillCardSummaryProjection[]> {
+  if (!Array.isArray(value) || value.length !== 41) return unrecognized(path, value);
+  const ids = new Set<string>();
+  const statLabels = new Map<StatCode, string>();
+  for (const [index, card] of (value as readonly JsonValue[]).entries()) {
+    const cardPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(card)) return unrecognized(cardPath, card);
+    const skillId = card['skillId'];
+    if (!isPublicSkillId(skillId!) || ids.has(skillId)) {
+      return unrecognized(`${cardPath}.skillId`, skillId!);
+    }
+    ids.add(skillId);
+    const levels = decodeSkillLevelOptions(card['levelOptions']!, `${cardPath}.levelOptions`);
+    if (!levels.ok) return levels;
+    const requirements = card['requirements'];
+    if (!Array.isArray(requirements) || requirements.length === 0) {
+      return unrecognized(`${cardPath}.requirements`, requirements!);
+    }
+    let previousStatOrder = -1;
+    for (const [requirementIndex, requirement] of (
+      requirements as readonly JsonValue[]
+    ).entries()) {
+      const requirementPath = `${cardPath}.requirements[${String(requirementIndex)}]`;
+      if (!isJsonObject(requirement)) return unrecognized(requirementPath, requirement);
+      const decoded = decodeProjection(requirement, requirementPath, {
+        currentValue: (field) => typeof field === 'number' && Number.isSafeInteger(field),
+        minValue: (field) => isSafeIntegerAtLeast(field, 1),
+        satisfied: (field) => typeof field === 'boolean',
+        statCode: (field) => typeof field === 'string' && STAT_CODES.includes(field as StatCode),
+        statLabel: isNonEmptyString,
+      });
+      if (!decoded.ok) return decoded;
+      const statCode = requirement['statCode'] as StatCode;
+      const order = STAT_CODES.indexOf(statCode);
+      const statLabel = requirement['statLabel'] as string;
+      if (order <= previousStatOrder || requirement['currentValue'] !== skillStageStats[statCode]) {
+        return unrecognized(`${requirementPath}.statCode`, statCode);
+      }
+      const previousLabel = statLabels.get(statCode);
+      if (previousLabel !== undefined && previousLabel !== statLabel) {
+        return unrecognized(`${requirementPath}.statLabel`, statLabel);
+      }
+      statLabels.set(statCode, statLabel);
+      previousStatOrder = order;
+      const currentValue = requirement['currentValue'];
+      const minValue = requirement['minValue'];
+      if (typeof currentValue !== 'number' || typeof minValue !== 'number') {
+        return unrecognized(requirementPath, requirement);
+      }
+      const expectedSatisfied = currentValue >= minValue;
+      if (requirement['satisfied'] !== expectedSatisfied) {
+        return unrecognized(`${requirementPath}.satisfied`, requirement['satisfied']!);
+      }
+    }
+    const eligibility = card['eligibility'];
+    const expectedEligibility = (requirements as readonly JsonObject[]).every(
+      (requirement) => requirement['satisfied'] === true,
+    )
+      ? 'ELIGIBLE'
+      : 'REQUIREMENTS_NOT_MET';
+    const decoded = decodeProjection(card, cardPath, {
+      eligibility: (field) => field === expectedEligibility,
+      levelOptions: (field) => field === card['levelOptions'],
+      requirements: (field) => field === requirements,
+      skillId: (field) => field === skillId,
+      skillLabel: isNonEmptyString,
+    });
+    if (!decoded.ok) return decoded;
+    if (eligibility !== expectedEligibility) {
+      return unrecognized(`${cardPath}.eligibility`, eligibility!);
+    }
+  }
+  return { ok: true, value: value as unknown as readonly SkillCardSummaryProjection[] };
+}
+
+function decodeChr013Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const integer = (entry: JsonValue): entry is number =>
+    typeof entry === 'number' && Number.isSafeInteger(entry);
+  const stats = decodeStatMap(value['skillStageStats']!, `${path}.skillStageStats`, integer);
+  if (!stats.ok) return stats;
+  const cards = decodeSkillCardSummaries(
+    value['skillCardSummaries']!,
+    `${path}.skillCardSummaries`,
+    stats.value,
+  );
+  if (!cards.ok) return cards;
+  const expectedEligibleIds = cards.value
+    .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+    .map(({ skillId }) => skillId);
+  if (!sameJson(value['eligibleSkillIds']!, expectedEligibleIds)) {
+    return unrecognized(`${path}.eligibleSkillIds`, value['eligibleSkillIds']!);
+  }
+  const slotSources = value['slotSources'];
+  if (!isJsonObject(slotSources)) return unrecognized(`${path}.slotSources`, slotSources!);
+  const mandatoryValue = slotSources['mandatoryClassSkillOrNull'];
+  if (mandatoryValue !== null) {
+    const mandatory = decodeFixedSkill(
+      mandatoryValue!,
+      `${path}.slotSources.mandatoryClassSkillOrNull`,
+      1,
+    );
+    if (!mandatory.ok) return mandatory;
+    if (expectedEligibleIds.includes(mandatory.value.skillId)) {
+      return unrecognized(
+        `${path}.slotSources.mandatoryClassSkillOrNull.skillId`,
+        mandatory.value.skillId,
+      );
+    }
+  }
+  const racial = decodeRacialFreeSkills(
+    slotSources['racialFreeSkills']!,
+    `${path}.slotSources.racialFreeSkills`,
+  );
+  if (!racial.ok) return racial;
+  if (mandatoryValue !== null && racial.value.length !== 0) {
+    return unrecognized(`${path}.slotSources.racialFreeSkills`, slotSources['racialFreeSkills']!);
+  }
+  const fixedIds = [
+    ...(mandatoryValue === null ? [] : [(mandatoryValue as FixedSkillProjection).skillId]),
+    ...racial.value.map(({ skillId }) => skillId),
+  ];
+  if (fixedIds.some((skillId) => cards.value.some((card) => card.skillId === skillId))) {
+    return unrecognized(`${path}.slotSources.racialFreeSkills`, slotSources['racialFreeSkills']!);
+  }
+  const decodedSlotSources = decodeProjection(slotSources, `${path}.slotSources`, {
+    mandatoryClassSkillOrNull: (field) => field === mandatoryValue,
+    racialFreeSkills: (field) => field === slotSources['racialFreeSkills'],
+    requiredSlotCount: (field) => isSafeIntegerAtLeast(field, 1),
+  });
+  if (!decodedSlotSources.ok) return decodedSlotSources;
+  const characterDraftId = value['characterDraftId'];
+  return decodeProjection(value, path, {
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === null,
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    eligibleSkillIds: (field) => field === value['eligibleSkillIds'],
+    selectedSkillIdOrNull: (field) => field === null,
+    skillCardSummaries: (field) => field === value['skillCardSummaries'],
+    skillStageStats: (field) => field === value['skillStageStats'],
+    slotSources: (field) => field === slotSources,
+    wizardCheckpointId: (field) => isNonEmptyString(field) && field !== characterDraftId,
+  });
+}
+
+function skillSelectionValidation(
+  requiredSlotCount: number,
+  usedSlotCount: number,
+): SkillSelectionValidation {
+  if (usedSlotCount < requiredSlotCount) {
+    return {
+      kind: 'UNDERFILLED',
+      missingSlotCount: requiredSlotCount - usedSlotCount,
+      requiredSlotCount,
+      usedSlotCount,
+    };
+  }
+  if (usedSlotCount > requiredSlotCount) {
+    return {
+      excessSlotCount: usedSlotCount - requiredSlotCount,
+      kind: 'OVERFILLED',
+      requiredSlotCount,
+      usedSlotCount,
+    };
+  }
+  return { kind: 'EXACT', requiredSlotCount, usedSlotCount };
+}
+
+function decodeSkillOptions(
+  value: JsonValue,
+  path: string,
+): DecodeResult<readonly SkillOptionProjection[]> {
+  if (!Array.isArray(value)) return unrecognized(path, value);
+  const ids = new Set<string>();
+  for (const [index, option] of (value as readonly JsonValue[]).entries()) {
+    const optionPath = `${path}[${String(index)}]`;
+    if (!isJsonObject(option)) return unrecognized(optionPath, option);
+    const skillId = option['skillId'];
+    if (!isPublicSkillId(skillId!) || ids.has(skillId)) {
+      return unrecognized(`${optionPath}.skillId`, skillId!);
+    }
+    ids.add(skillId);
+    const levels = decodeSkillLevelOptions(option['levelOptions']!, `${optionPath}.levelOptions`);
+    if (!levels.ok) return levels;
+    const decoded = decodeProjection(option, optionPath, {
+      levelOptions: (field) => field === option['levelOptions'],
+      skillId: (field) => field === skillId,
+      skillLabel: isNonEmptyString,
+    });
+    if (!decoded.ok) return decoded;
+  }
+  return { ok: true, value: value as unknown as readonly SkillOptionProjection[] };
+}
+
+function decodeChr015Projection(
+  value: JsonObject,
+  path: string,
+  routeBinding: JsonValue | undefined,
+): DecodeResult<JsonObject> {
+  const requiredSlotCount = value['requiredSlotCount'];
+  if (!isSafeIntegerAtLeast(requiredSlotCount!, 1)) {
+    return unrecognized(`${path}.requiredSlotCount`, requiredSlotCount!);
+  }
+  const options = decodeSkillOptions(value['skillOptions']!, `${path}.skillOptions`);
+  if (!options.ok) return options;
+  const eligibleSkillIds = options.value.map(({ skillId }) => skillId);
+  if (!sameJson(value['eligibleSkillIds']!, eligibleSkillIds)) {
+    return unrecognized(`${path}.eligibleSkillIds`, value['eligibleSkillIds']!);
+  }
+  const optionById = new Map(options.value.map((option) => [option.skillId, option]));
+  const mandatoryValue = value['mandatoryClassSkillOrNull'];
+  let mandatory: FixedSkillProjection | null = null;
+  if (mandatoryValue !== null) {
+    const decodedMandatory = decodeFixedSkill(
+      mandatoryValue!,
+      `${path}.mandatoryClassSkillOrNull`,
+      1,
+    );
+    if (!decodedMandatory.ok) return decodedMandatory;
+    mandatory = decodedMandatory.value;
+    if (optionById.has(mandatory.skillId)) {
+      return unrecognized(`${path}.mandatoryClassSkillOrNull.skillId`, mandatory.skillId);
+    }
+  }
+  const racial = decodeRacialFreeSkills(value['racialFreeSkills']!, `${path}.racialFreeSkills`);
+  if (!racial.ok) return racial;
+  if (
+    !sameJson(
+      value['racialFreeSkillIds']!,
+      racial.value.map(({ skillId }) => skillId),
+    )
+  ) {
+    return unrecognized(`${path}.racialFreeSkillIds`, value['racialFreeSkillIds']!);
+  }
+  if (
+    (mandatory !== null && racial.value.length !== 0) ||
+    racial.value.some(({ skillId }) => optionById.has(skillId))
+  ) {
+    return unrecognized(`${path}.racialFreeSkills`, value['racialFreeSkills']!);
+  }
+  const selectedValue = value['selectedSkills'];
+  if (!Array.isArray(selectedValue)) return unrecognized(`${path}.selectedSkills`, selectedValue!);
+  const selectedSkills: SelectedSkillProjection[] = [];
+  let previousOptionIndex = -1;
+  for (const [index, selected] of (selectedValue as readonly JsonValue[]).entries()) {
+    const selectedPath = `${path}.selectedSkills[${String(index)}]`;
+    if (!isJsonObject(selected)) return unrecognized(selectedPath, selected);
+    const skillId = selected['skillId'];
+    const option = typeof skillId === 'string' ? optionById.get(skillId) : undefined;
+    const optionIndex = option === undefined ? -1 : options.value.indexOf(option);
+    const matchingLevel = option?.levelOptions.find(
+      ({ slotCost, targetBonus }) =>
+        slotCost === selected['slotCost'] && targetBonus === selected['targetBonus'],
+    );
+    if (option === undefined || optionIndex <= previousOptionIndex || matchingLevel === undefined) {
+      return unrecognized(`${selectedPath}.skillId`, skillId!);
+    }
+    const decoded = decodeProjection(selected, selectedPath, {
+      skillId: (field) => field === skillId,
+      slotCost: (field) => field === matchingLevel.slotCost,
+      targetBonus: (field) => field === matchingLevel.targetBonus,
+    });
+    if (!decoded.ok) return decoded;
+    selectedSkills.push(selected as unknown as SelectedSkillProjection);
+    previousOptionIndex = optionIndex;
+  }
+  if (
+    !sameJson(
+      value['selectedSkillIds']!,
+      selectedSkills.map(({ skillId }) => skillId),
+    )
+  ) {
+    return unrecognized(`${path}.selectedSkillIds`, value['selectedSkillIds']!);
+  }
+  if (value['commandId'] === null && selectedSkills.length !== 0) {
+    return unrecognized(`${path}.selectedSkills`, selectedValue);
+  }
+  const expectedUsageEntries: PaidSkillUsageEntryProjection[] = [
+    ...(mandatory === null ? [] : [{ ...mandatory, source: 'CLASS_MANDATORY' as const }]),
+    ...selectedSkills.map((selected) => ({
+      bonus: selected.targetBonus,
+      skillId: selected.skillId,
+      skillLabel: optionById.get(selected.skillId)!.skillLabel,
+      slotCost: selected.slotCost,
+      source: 'SELECTED' as const,
+    })),
+  ];
+  const usedSlotCount = expectedUsageEntries.reduce((sum, entry) => sum + entry.slotCost, 0);
+  const paidSlotUsage = value['paidSlotUsage'];
+  if (!isJsonObject(paidSlotUsage)) {
+    return unrecognized(`${path}.paidSlotUsage`, paidSlotUsage!);
+  }
+  const decodedUsage = decodeProjection(paidSlotUsage, `${path}.paidSlotUsage`, {
+    entries: (field) => sameJson(field, expectedUsageEntries),
+    usedSlotCount: (field) => field === usedSlotCount,
+  });
+  if (!decodedUsage.ok) return decodedUsage;
+  const expectedValidation = skillSelectionValidation(requiredSlotCount, usedSlotCount);
+  if (!isJsonObject(value['selectionValidation'])) {
+    return unrecognized(`${path}.selectionValidation`, value['selectionValidation']!);
+  }
+  const decodedValidation = decodeProjection(
+    value['selectionValidation'],
+    `${path}.selectionValidation`,
+    Object.fromEntries(
+      Object.entries(expectedValidation).map(([key, expected]) => [
+        key,
+        (field: JsonValue) => field === expected,
+      ]),
+    ),
+  );
+  if (!decodedValidation.ok) return decodedValidation;
+  const commandId = value['commandId'];
+  if (commandId === undefined) {
+    return refused({
+      actualType: 'undefined',
+      code: 'INVALID_SHAPE',
+      expected: 'null or non-empty command id',
+      path: `${path}.commandId`,
+    });
+  }
+  if (commandId !== null && !isNonEmptyString(commandId)) {
+    return unrecognized(`${path}.commandId`, commandId);
+  }
+  if (commandId !== null && expectedValidation.kind !== 'EXACT') {
+    return unrecognized(`${path}.selectionValidation.kind`, expectedValidation.kind);
+  }
+  const characterDraftId = value['characterDraftId'];
+  return decodeProjection(value, path, {
+    characterDraftId: (field) =>
+      typeof field === 'string' && UUID_PATTERN.test(field) && field === routeBinding,
+    commandId: (field) => field === commandId,
+    draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
+    eligibleSkillIds: (field) => field === value['eligibleSkillIds'],
+    mandatoryClassSkillOrNull: (field) => field === mandatoryValue,
+    paidSlotUsage: (field) => field === paidSlotUsage,
+    racialFreeSkillIds: (field) => field === value['racialFreeSkillIds'],
+    racialFreeSkills: (field) => field === value['racialFreeSkills'],
+    requiredSlotCount: (field) => field === requiredSlotCount,
+    selectedSkillIds: (field) => field === value['selectedSkillIds'],
+    selectedSkills: (field) => field === selectedValue,
+    selectionValidation: (field) => field === value['selectionValidation'],
+    skillOptions: (field) => field === value['skillOptions'],
+    wizardCheckpointId: (field) => isNonEmptyString(field) && field !== characterDraftId,
+  });
+}
+
 function isSafeIntegerAtLeast(value: JsonValue, minimum: number): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum;
 }
@@ -2833,6 +3420,36 @@ function decodeConfirmedSnapshot(
         if (!actions.ok) return actions;
       }
       break;
+    case 'CHR-013':
+      projection = decodeChr013Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          CHR_013_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    case 'CHR-015':
+      projection = decodeChr015Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+        base.routeBindings[0]?.value,
+      );
+      if (projection.ok) {
+        const actions = exactActionKeys(
+          base.availableActionKeys,
+          projection.value['commandId'] === null ? CHR_015_MUTABLE_ACTION_KEYS : NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
     default:
       return unrecognized('$.presentation.base.formId', base.formId);
   }
@@ -2981,6 +3598,86 @@ function creationStatAssignmentDraftFromSnapshot(
   };
 }
 
+function creationSkillSelectionDraftFromSnapshot(
+  snapshot: ConfirmedProjectionSnapshot,
+): CharacterSkillSelectionDraft | null {
+  if (snapshot.formId !== 'CHR-015') return null;
+  const projection = snapshot.projection as Chr015Projection;
+  if (projection.commandId !== null) return null;
+  return {
+    candidateSkillIdOrNull: null,
+    candidateTargetBonusOrNull: null,
+    formId: 'CHR-015',
+    paidSlotUsage: projection.paidSlotUsage,
+    selectedSkillIds: [...projection.selectedSkillIds],
+    selectedSkills: [...projection.selectedSkills],
+    selectionValidation: projection.selectionValidation,
+  };
+}
+
+function paidSlotUsageForSkillSelection(
+  projection: Chr015Projection,
+  selectedSkills: readonly SelectedSkillProjection[],
+): PaidSlotUsageProjection {
+  const optionById = new Map(projection.skillOptions.map((option) => [option.skillId, option]));
+  const entries: PaidSkillUsageEntryProjection[] = [
+    ...(projection.mandatoryClassSkillOrNull === null
+      ? []
+      : [{ ...projection.mandatoryClassSkillOrNull, source: 'CLASS_MANDATORY' as const }]),
+    ...selectedSkills.map((selected) => ({
+      bonus: selected.targetBonus,
+      skillId: selected.skillId,
+      skillLabel: optionById.get(selected.skillId)!.skillLabel,
+      slotCost: selected.slotCost,
+      source: 'SELECTED' as const,
+    })),
+  ];
+  return {
+    entries,
+    usedSlotCount: entries.reduce((sum, entry) => sum + entry.slotCost, 0),
+  };
+}
+
+function toggleSkillSelectionDraft(
+  projection: Chr015Projection,
+  draft: CharacterSkillSelectionDraft,
+): CharacterSkillSelectionDraft {
+  const skillId = draft.candidateSkillIdOrNull;
+  if (skillId === null) throw new Error('CHR-015 requires an explicit skill candidate');
+  const existing = draft.selectedSkills.find((selected) => selected.skillId === skillId);
+  let selectedSkills: readonly SelectedSkillProjection[];
+  if (existing !== undefined) {
+    selectedSkills = draft.selectedSkills.filter((selected) => selected.skillId !== skillId);
+  } else {
+    const option = projection.skillOptions.find((candidate) => candidate.skillId === skillId);
+    const level = option?.levelOptions.find(
+      ({ targetBonus }) => targetBonus === draft.candidateTargetBonusOrNull,
+    );
+    if (option === undefined || level === undefined) {
+      throw new Error('CHR-015 requires a host-signed skill and target bonus candidate');
+    }
+    const selected = { skillId, slotCost: level.slotCost, targetBonus: level.targetBonus };
+    selectedSkills = projection.skillOptions.flatMap((candidate) => {
+      if (candidate.skillId === skillId) return [selected];
+      const retained = draft.selectedSkills.find((entry) => entry.skillId === candidate.skillId);
+      return retained === undefined ? [] : [retained];
+    });
+  }
+  const paidSlotUsage = paidSlotUsageForSkillSelection(projection, selectedSkills);
+  return {
+    candidateSkillIdOrNull: null,
+    candidateTargetBonusOrNull: null,
+    formId: 'CHR-015',
+    paidSlotUsage,
+    selectedSkillIds: selectedSkills.map(({ skillId: selectedSkillId }) => selectedSkillId),
+    selectedSkills,
+    selectionValidation: skillSelectionValidation(
+      projection.requiredSlotCount,
+      paidSlotUsage.usedSlotCount,
+    ),
+  };
+}
+
 function completeManualRollDraft(draft: CharacterCreationRollDraft | null): boolean {
   if (draft === null) return false;
   return draft.formId === 'CHR-003'
@@ -2995,6 +3692,7 @@ function visibleSnapshot(
   creationChoice: CharacterCreationChoiceDraft | null = null,
   creationRollDraft: CharacterCreationRollDraft | null = null,
   statAssignmentDraft: CharacterStatAssignmentDraft | null = null,
+  skillSelectionDraft: CharacterSkillSelectionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
@@ -3041,9 +3739,38 @@ function visibleSnapshot(
     (commandPending || statAssignmentDraft?.validation !== 'READY_TO_CHECKPOINT')
   ) {
     availableActionKeys = [];
+  } else if (snapshot.formId === 'CHR-015') {
+    const projection = snapshot.projection as Chr015Projection;
+    const candidateSkillId = skillSelectionDraft?.candidateSkillIdOrNull;
+    const selectedCandidate = skillSelectionDraft?.selectedSkills.some(
+      ({ skillId }) => skillId === candidateSkillId,
+    );
+    const candidateOption = projection.skillOptions.find(
+      ({ skillId }) => skillId === candidateSkillId,
+    );
+    const signedLevel = candidateOption?.levelOptions.some(
+      ({ targetBonus }) => targetBonus === skillSelectionDraft?.candidateTargetBonusOrNull,
+    );
+    if (
+      commandPending ||
+      skillSelectionDraft === null ||
+      projection.commandId !== null ||
+      (!selectedCandidate && signedLevel !== true)
+    ) {
+      availableActionKeys = availableActionKeys.filter((key) => key !== CHR_015_TOGGLE_ACTION_KEY);
+    }
+    if (
+      !commandPending &&
+      projection.commandId === null &&
+      skillSelectionDraft?.selectionValidation.kind === 'EXACT' &&
+      snapshot.executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
+    ) {
+      availableActionKeys.push(CHR_015_CONFIRM_ACTION_KEY);
+    }
   }
   const visible =
-    availableActionKeys.length === snapshot.availableActionKeys.length
+    availableActionKeys.length === snapshot.availableActionKeys.length &&
+    availableActionKeys.every((key, index) => key === snapshot.availableActionKeys[index])
       ? presentation
       : { ...presentation, availableActionKeys };
   if (
@@ -3131,6 +3858,36 @@ function decodeFormActionSnapshot(
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   if (!decoded.ok) return decoded;
+  if (pending.sourceFormId === 'CHR-013' && pending.actionKey === 'CHR-013::CTA::002') {
+    const source = previous.projection as Chr013Projection;
+    if (decoded.value.formId !== 'CHR-015' || decoded.value.layers.length !== 0) {
+      return unrecognized('$.presentation.base.formId', decoded.value.formId);
+    }
+    const destination = decoded.value.projection as Chr015Projection;
+    const expectedOptions = source.skillCardSummaries
+      .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+      .map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+    if (
+      destination.characterDraftId !== source.characterDraftId ||
+      destination.wizardCheckpointId !== source.wizardCheckpointId ||
+      destination.draftRevision !== source.draftRevision ||
+      destination.commandId !== null ||
+      !sameJson(destination.eligibleSkillIds, source.eligibleSkillIds) ||
+      !sameJson(destination.skillOptions, expectedOptions) ||
+      !sameJson(
+        destination.mandatoryClassSkillOrNull,
+        source.slotSources.mandatoryClassSkillOrNull,
+      ) ||
+      !sameJson(destination.racialFreeSkills, source.slotSources.racialFreeSkills) ||
+      destination.requiredSlotCount !== source.slotSources.requiredSlotCount ||
+      destination.selectedSkills.length !== 0
+    ) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.skillOptions',
+        destination.skillOptions,
+      );
+    }
+  }
   if (
     isCreationSetDecisionFormId(pending.sourceFormId) &&
     pending.actionKey === CREATION_SET_DECISION_FORMS[pending.sourceFormId].alternateActionKey
@@ -3184,6 +3941,81 @@ function decodeCheckpointTerminal(
       return unrecognized('$.receipt.revisions', { ...receipt.revisions });
     }
     return { ok: true, value: receipt as CommandReceipt<IdentityCheckpointResult> };
+  }
+  if (payload.stage === 'SKILLS') {
+    if (
+      pending.sourceSnapshot.formId !== 'CHR-015' ||
+      pending.skillSelectionDraft === null ||
+      pending.skillSelectionDraft.selectionValidation.kind !== 'EXACT'
+    ) {
+      return unrecognized('$.receipt.result.sourceFormId', receipt.result['sourceFormId']!);
+    }
+    const source = pending.sourceSnapshot.projection as Chr015Projection;
+    const draft = pending.skillSelectionDraft;
+    const expectedSelectedSkills = payload.selectedSkills.map(({ skillId, targetBonus }) => ({
+      skillKey: skillId,
+      targetBonus,
+    }));
+    const expectedLearnedSkills: DurableLearnedSkillResult[] = [
+      ...source.racialFreeSkills.map(({ bonus, skillId, slotCost }) => ({
+        bonus,
+        skillKey: skillId,
+        slotCost,
+        source: 'RACE_GRANTED' as const,
+      })),
+      ...(source.mandatoryClassSkillOrNull === null
+        ? []
+        : [
+            {
+              bonus: source.mandatoryClassSkillOrNull.bonus,
+              skillKey: source.mandatoryClassSkillOrNull.skillId,
+              slotCost: source.mandatoryClassSkillOrNull.slotCost,
+              source: 'CLASS_MANDATORY' as const,
+            },
+          ]),
+      ...draft.selectedSkills.map(({ skillId, slotCost, targetBonus }) => ({
+        bonus: targetBonus,
+        skillKey: skillId,
+        slotCost,
+        source: 'SELECTED' as const,
+      })),
+    ];
+    const result = decodeProjection(receipt.result, '$.receipt.result', {
+      branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: isNonEmptyString,
+      characterDraftId: (field) => field === payload.characterDraftId,
+      checkpointId: (field) => field === payload.wizardCheckpointId,
+      checkpointOwnerId: (field) => field === payload.characterDraftId,
+      checkpointRevision: (field) => isSafeIntegerAtLeast(field, 1),
+      draftRevision: (field) => field === payload.draftRevision + 1,
+      learnedSkills: (field) => sameJson(field, expectedLearnedSkills),
+      nextFormId: (field) => field === 'CHR-017',
+      requiredSlotCount: (field) => field === draft.selectionValidation.requiredSlotCount,
+      selectedSkills: (field) => sameJson(field, expectedSelectedSkills),
+      sourceFormId: (field) => field === 'CHR-015',
+      stage: (field) => field === 'SKILLS',
+      usedSlotCount: (field) => field === draft.selectionValidation.usedSlotCount,
+    });
+    if (!result.ok) return result;
+    const ids = [
+      payload.characterDraftId,
+      payload.wizardCheckpointId,
+      pending.request.commandId,
+      receipt.receiptId,
+      receipt.result['branchUuid'],
+    ];
+    if (new Set(ids).size !== ids.length) {
+      return unrecognized('$.receipt.result.branchUuid', receipt.result['branchUuid']!);
+    }
+    const expected = pending.request.expectedRevisions;
+    if (
+      receipt.revisions.stateRevision !== expected.stateRevision + 1 ||
+      receipt.revisions.projectionRevision !== expected.projectionRevision + 1 ||
+      receipt.revisions.actorVisibilityRevision !== expected.actorVisibilityRevision
+    ) {
+      return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+    }
+    return { ok: true, value: receipt as CommandReceipt<SkillSelectionCheckpointResult> };
   }
   const source = pending.sourceSnapshot.projection as Chr009Projection;
   const assignmentMode = source.assignmentMode;
@@ -3704,8 +4536,51 @@ function sameRollCommitReceipt(
 function checkpointSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<CheckpointResult>,
+  sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (result.stage === 'SKILLS') {
+    if (snapshot.formId !== 'CHR-015') {
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    }
+    const projection = snapshot.projection as Chr015Projection;
+    if (sourceSnapshot.formId !== 'CHR-015') {
+      return unrecognized('$.presentation.base.formId', sourceSnapshot.formId);
+    }
+    const source = sourceSnapshot.projection as Chr015Projection;
+    const projectedSelection = projection.selectedSkills.map(({ skillId, targetBonus }) => ({
+      skillKey: skillId,
+      targetBonus,
+    }));
+    if (
+      projection.commandId !== receipt.commandId ||
+      projection.characterDraftId !== result.characterDraftId ||
+      projection.wizardCheckpointId !== result.checkpointId ||
+      projection.draftRevision !== result.draftRevision ||
+      projection.requiredSlotCount !== result.requiredSlotCount ||
+      projection.paidSlotUsage.usedSlotCount !== result.usedSlotCount ||
+      projection.selectionValidation.kind !== 'EXACT' ||
+      !sameJson(projectedSelection, result.selectedSkills) ||
+      !sameJson(projection.eligibleSkillIds, source.eligibleSkillIds) ||
+      !sameJson(projection.skillOptions, source.skillOptions) ||
+      !sameJson(projection.mandatoryClassSkillOrNull, source.mandatoryClassSkillOrNull) ||
+      !sameJson(projection.racialFreeSkillIds, source.racialFreeSkillIds) ||
+      !sameJson(projection.racialFreeSkills, source.racialFreeSkills)
+    ) {
+      return unrecognized(
+        '$.presentation.base.roleFilteredPayload.selectedSkills',
+        projection.selectedSkills,
+      );
+    }
+    if (
+      snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+      snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision ||
+      snapshot.revisions.stateRevision !== receipt.revisions.stateRevision
+    ) {
+      return unrecognized('$.revisions', { ...snapshot.revisions });
+    }
+    return { ok: true, value: snapshot };
+  }
   let advance = 0;
   if (result.stage === 'IDENTITY') {
     if (snapshot.formId !== 'CHR-010') {
@@ -4092,7 +4967,9 @@ function decodeCommandDestinationSnapshot(
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
-  return decoded.ok ? checkpointSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
+  return decoded.ok
+    ? checkpointSnapshotMatchesReceipt(decoded.value, pending.receipt, pending.sourceSnapshot)
+    : decoded;
 }
 
 function decodeSetDecisionDestinationSnapshot(
@@ -4261,6 +5138,31 @@ function statAssignmentCheckpointPayload(
     : { ...common, pointBuyStats: values };
 }
 
+function skillSelectionCheckpointPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+  draft: CharacterSkillSelectionDraft | null,
+): SkillSelectionCheckpointPayload {
+  if (
+    snapshot.formId !== 'CHR-015' ||
+    snapshot.projection['commandId'] !== null ||
+    draft === null ||
+    draft.selectionValidation.kind !== 'EXACT'
+  ) {
+    throw new Error('CHR-015 requires an exact valid local skill selection');
+  }
+  return {
+    characterDraftId: snapshot.projection['characterDraftId'] as string,
+    draftRevision: snapshot.projection['draftRevision'] as number,
+    selectedSkills: draft.selectedSkills.map(({ skillId, targetBonus }) => ({
+      skillId,
+      targetBonus,
+    })),
+    sourceFormId: 'CHR-015',
+    stage: 'SKILLS',
+    wizardCheckpointId: snapshot.projection['wizardCheckpointId'] as string,
+  };
+}
+
 function setDecisionPayload(
   snapshot: ConfirmedProjectionSnapshot,
   choice: CharacterCreationChoiceDraft,
@@ -4382,6 +5284,7 @@ export function connectProjection(
   onCreationChoiceDraft: (value: CharacterCreationChoiceDraft | null) => void = () => {},
   onCreationRollDraft: (value: CharacterCreationRollDraft | null) => void = () => {},
   onStatAssignmentDraft: (value: CharacterStatAssignmentDraft | null) => void = () => {},
+  onSkillSelectionDraft: (value: CharacterSkillSelectionDraft | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -4396,6 +5299,7 @@ export function connectProjection(
   let creationChoiceDraft: CharacterCreationChoiceDraft | null = null;
   let creationRollDraft: CharacterCreationRollDraft | null = null;
   let statAssignmentDraft: CharacterStatAssignmentDraft | null = null;
+  let skillSelectionDraft: CharacterSkillSelectionDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
@@ -4410,6 +5314,7 @@ export function connectProjection(
           creationChoiceDraft,
           creationRollDraft,
           statAssignmentDraft,
+          skillSelectionDraft,
         );
 
   const closeAfterTerminalState = () => {
@@ -4479,6 +5384,8 @@ export function connectProjection(
     onCreationRollDraft(creationRollDraft);
     statAssignmentDraft = creationStatAssignmentDraftFromSnapshot(next);
     onStatAssignmentDraft(statAssignmentDraft);
+    skillSelectionDraft = creationSkillSelectionDraftFromSnapshot(next);
+    onSkillSelectionDraft(skillSelectionDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -4497,6 +5404,7 @@ export function connectProjection(
         creationChoiceDraft,
         creationRollDraft,
         statAssignmentDraft,
+        skillSelectionDraft,
       ),
     });
     sendIdentity(replay);
@@ -4655,6 +5563,7 @@ export function connectProjection(
                 creationChoiceDraft,
                 creationRollDraft,
                 statAssignmentDraft,
+                skillSelectionDraft,
               ),
             });
           }
@@ -4698,6 +5607,7 @@ export function connectProjection(
                 creationChoiceDraft,
                 creationRollDraft,
                 statAssignmentDraft,
+                skillSelectionDraft,
               ),
             });
           }
@@ -4780,6 +5690,7 @@ export function connectProjection(
               creationChoiceDraft,
               creationRollDraft,
               statAssignmentDraft,
+              skillSelectionDraft,
             ),
           });
           sendIdentity(next);
@@ -4797,6 +5708,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         sendIdentity(next);
@@ -4855,6 +5767,7 @@ export function connectProjection(
               snapshot = checkpointSnapshotMatchesReceipt(
                 snapshot.value,
                 pendingCheckpoint.receipt,
+                pendingCheckpoint.sourceSnapshot,
               );
             }
           } else if (snapshot.ok && pendingSetDecision !== null) {
@@ -4959,6 +5872,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return;
@@ -5114,6 +6028,7 @@ export function connectProjection(
           creationChoiceDraft,
           creationRollDraft,
           statAssignmentDraft,
+          skillSelectionDraft,
         ),
       });
       return { ok: true };
@@ -5150,6 +6065,7 @@ export function connectProjection(
           creationChoiceDraft,
           creationRollDraft,
           statAssignmentDraft,
+          skillSelectionDraft,
         ),
       });
       return { ok: true };
@@ -5176,6 +6092,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
       try {
@@ -5217,6 +6134,60 @@ export function connectProjection(
           creationChoiceDraft,
           creationRollDraft,
           statAssignmentDraft,
+          skillSelectionDraft,
+        ),
+      });
+      return { ok: true };
+    },
+    replaceSkillSelectionCandidate: (skillId, targetBonus) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-015' ||
+        lastSnapshot.projection['commandId'] !== null ||
+        skillSelectionDraft === null
+      ) {
+        return { ok: false, detail: 'no active CHR-015 skill selection scope' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'skill selection is frozen while delivery is pending' };
+      }
+      if (skillId === null) {
+        if (targetBonus !== null) {
+          return { ok: false, detail: 'a target bonus requires an explicit skill candidate' };
+        }
+      } else {
+        const projection = lastSnapshot.projection as Chr015Projection;
+        const option = projection.skillOptions.find((candidate) => candidate.skillId === skillId);
+        if (option === undefined) {
+          return { ok: false, detail: 'skill candidate is absent from signed skillOptions' };
+        }
+        const selected = skillSelectionDraft.selectedSkills.find(
+          (candidate) => candidate.skillId === skillId,
+        );
+        if (
+          targetBonus !== null &&
+          selected?.targetBonus !== targetBonus &&
+          !option.levelOptions.some((level) => level.targetBonus === targetBonus)
+        ) {
+          return { ok: false, detail: 'target bonus is absent from signed levelOptions' };
+        }
+      }
+      skillSelectionDraft = {
+        ...skillSelectionDraft,
+        candidateSkillIdOrNull: skillId,
+        candidateTargetBonusOrNull: targetBonus,
+      };
+      onSkillSelectionDraft(skillSelectionDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshot(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+          statAssignmentDraft,
+          skillSelectionDraft,
         ),
       });
       return { ok: true };
@@ -5238,6 +6209,7 @@ export function connectProjection(
         creationChoiceDraft,
         creationRollDraft,
         statAssignmentDraft,
+        skillSelectionDraft,
       );
       const activeForm = activePresentedForm(visible);
       if (!activeForm.availableActionKeys.includes(actionKey)) {
@@ -5248,6 +6220,33 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (activeForm.formId === 'CHR-015' && actionKey === CHR_015_TOGGLE_ACTION_KEY) {
+        if (skillSelectionDraft === null) {
+          return { ok: false, detail: 'no active CHR-015 skill selection draft' };
+        }
+        try {
+          skillSelectionDraft = toggleSkillSelectionDraft(
+            lastSnapshot.projection as Chr015Projection,
+            skillSelectionDraft,
+          );
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        onSkillSelectionDraft(skillSelectionDraft);
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            false,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        });
+        return { ok: true };
       }
       const selectedChoice = characterCreationSelectorChoice(lastSnapshot, actionKey);
       if (selectedChoice !== undefined && selectedChoice.formId === activeForm.formId) {
@@ -5262,6 +6261,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return { ok: true };
@@ -5288,6 +6288,7 @@ export function connectProjection(
           assignmentDraft: null,
           receipt: null,
           request,
+          skillSelectionDraft: null,
           sourceSnapshot: lastSnapshot,
         };
         try {
@@ -5308,6 +6309,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return { ok: true };
@@ -5340,6 +6342,7 @@ export function connectProjection(
           assignmentDraft: statAssignmentDraft,
           receipt: null,
           request,
+          skillSelectionDraft: null,
           sourceSnapshot: lastSnapshot,
         };
         try {
@@ -5360,6 +6363,61 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (activeForm.formId === 'CHR-015' && actionKey === CHR_015_CONFIRM_ACTION_KEY) {
+        let payload: SkillSelectionCheckpointPayload;
+        try {
+          payload = skillSelectionCheckpointPayload(lastSnapshot, skillSelectionDraft);
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload,
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        } as const satisfies SkillSelectionCheckpointRequest;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `skill selection checkpoint failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request,
+          skillSelectionDraft,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return {
+            ok: false,
+            detail: `skill selection checkpoint could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshot(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return { ok: true };
@@ -5410,6 +6468,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return { ok: true };
@@ -5457,6 +6516,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return { ok: true };
@@ -5508,6 +6568,7 @@ export function connectProjection(
             creationChoiceDraft,
             creationRollDraft,
             statAssignmentDraft,
+            skillSelectionDraft,
           ),
         });
         return { ok: true };

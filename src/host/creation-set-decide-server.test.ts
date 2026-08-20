@@ -764,6 +764,33 @@ function statAssignmentRequest(
   };
 }
 
+function skillCheckpointRequest(
+  commandId: string,
+  harness: Pick<JourneyHarness, 'characterDraftId' | 'wizardCheckpointId'>,
+  sourceFormId: 'CHR-012' | 'CHR-015',
+  draftRevision: number,
+  expectedRevisions: RevisionVector,
+  selectedSkills: readonly { readonly skillId: string; readonly targetBonus: number }[] = [],
+): WorkflowRequest {
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions,
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: harness.characterDraftId,
+      draftRevision,
+      sourceFormId,
+      stage: 'SKILLS',
+      wizardCheckpointId: harness.wizardCheckpointId,
+      ...(sourceFormId === 'CHR-015' ? { selectedSkills } : {}),
+    },
+    protocolVersion: WIRE_PROTOCOL_VERSION,
+    role: 'player',
+    workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+  };
+}
+
 function pureClassDecisionRequest(
   commandId: string,
   harness: JourneyHarness,
@@ -1661,10 +1688,14 @@ describe('durable character creation decisions', () => {
     }
   });
 
-  it('accepts the current set into the real rolled-bijection CHR-009 projection', async () => {
+  it('accepts the current set and completes the real CHR-012 → CHR-015 skill route', async () => {
     const harness = await createJourneyHarness(staticRoot, vocabulary, 'accept-set');
     let limitedSocket: WebSocket | undefined;
     let recoverySocket: WebSocket | undefined;
+    let restartedApp: FastifyInstance | undefined;
+    let restartedSocket: WebSocket | undefined;
+    let selectionRecoverySocket: WebSocket | undefined;
+    let harnessAppClosed = false;
     try {
       const committed = await commitNonCriticalSet(harness, vocabulary, 'accept-set');
       const request = statDecisionRequest(
@@ -1803,7 +1834,7 @@ describe('durable character creation decisions', () => {
       expect(chr012).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
+            availableActionKeys: ['CHR-012::CTA::001'],
             formId: 'CHR-012',
             roleFilteredPayload: {
               baseStats,
@@ -1833,7 +1864,10 @@ describe('durable character creation decisions', () => {
         receipt: assignmentResult.receipt,
       });
       expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
-        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        presentation: {
+          base: { availableActionKeys: ['CHR-012::CTA::001'], formId: 'CHR-012' },
+          layers: [],
+        },
         revisions: assignmentResult.receipt.revisions,
       });
       expect(harness.receiptAllocations()).toBe(allocationsAfterAssignment);
@@ -1845,14 +1879,365 @@ describe('durable character creation decisions', () => {
       );
       const recovered = await frames;
       expect(hostMessageV2(recovered[1] ?? '', vocabulary)).toMatchObject({
-        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        presentation: {
+          base: { availableActionKeys: ['CHR-012::CTA::001'], formId: 'CHR-012' },
+          layers: [],
+        },
         revisions: assignmentResult.receipt.revisions,
       });
+
+      const eligibilityRequest = skillCheckpointRequest(
+        'accept-set-skill-eligibility',
+        harness,
+        'CHR-012',
+        resultRevision(assignmentResult, 'draftRevision'),
+        assignmentResult.receipt.revisions,
+      );
+      const [eligibilityTerminal, chr013] = await sendCommand(
+        harness.socket,
+        eligibilityRequest,
+        vocabulary,
+      );
+      const eligibilityResult = committedResult(eligibilityTerminal);
+      expect(eligibilityResult.receipt).toMatchObject({
+        result: {
+          nextFormId: 'CHR-013',
+          sourceFormId: 'CHR-012',
+          stage: 'SKILLS',
+        },
+      });
+      expect(chr013).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-013::CTA::002'],
+            formId: 'CHR-013',
+            roleFilteredPayload: {
+              commandId: null,
+              selectedSkillIdOrNull: null,
+            },
+          },
+          layers: [],
+        },
+        revisions: eligibilityResult.receipt.revisions,
+      });
+      if (chr013.messageType !== 'projection.snapshot') {
+        throw new Error('skill eligibility did not publish CHR-013');
+      }
+      const chr015 = await sendV2(
+        harness.socket,
+        formAction(
+          'accept-set-open-skill-selection',
+          'CHR-013',
+          'CHR-013::CTA::002',
+          chr013.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(chr015).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-015::CTA::003'],
+            formId: 'CHR-015',
+            roleFilteredPayload: {
+              commandId: null,
+              paidSlotUsage: { usedSlotCount: 0 },
+              selectedSkillIds: [],
+              selectedSkills: [],
+              selectionValidation: {
+                kind: 'UNDERFILLED',
+                usedSlotCount: 0,
+              },
+            },
+          },
+          layers: [],
+        },
+        revisions: {
+          actorVisibilityRevision: eligibilityResult.receipt.revisions.actorVisibilityRevision,
+          projectionRevision: eligibilityResult.receipt.revisions.projectionRevision + 1,
+          stateRevision: eligibilityResult.receipt.revisions.stateRevision,
+        },
+      });
+      if (chr015.messageType !== 'projection.snapshot') {
+        throw new Error('skill catalog did not advance to CHR-015');
+      }
+      const eligibilityCheckpoint = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const eligibility = eligibilityCheckpoint.skillEligibilityStage?.derived;
+      if (eligibility === undefined) throw new Error('durable skill eligibility is missing');
+      if (eligibility.mandatoryClassSkillOrNull !== null) {
+        throw new Error('UNITED test fixture unexpectedly has a mandatory class skill');
+      }
+      let remainingSlots = eligibility.requiredSlotCount;
+      const selectedSkills: { skillId: string; targetBonus: number }[] = [];
+      for (const skillId of eligibility.eligibleSkillIds) {
+        const definition = skillCatalog.skills.find((skill) => skill.skillKey === skillId);
+        if (definition === undefined) throw new Error(`test catalog lacks ${skillId}`);
+        // CORE-165 in skills.ts makes bonuses 1..5 linear even when the generated maximum is open.
+        const maximumLinearBonus =
+          definition.maxBonus === 'NO_RULED_UPPER_LIMIT' ? 5 : Math.min(definition.maxBonus, 5);
+        const targetBonus = Math.min(remainingSlots, maximumLinearBonus);
+        if (targetBonus > 0) {
+          selectedSkills.push({ skillId, targetBonus });
+          remainingSlots -= targetBonus;
+        }
+        if (remainingSlots === 0) break;
+      }
+      if (remainingSlots !== 0) {
+        throw new Error('test fixture lacks enough eligible skill levels to fill paid slots');
+      }
+
+      recoverySocket?.terminate();
+      recoverySocket = undefined;
+      harness.socket.terminate();
+      await harness.app.close();
+      harnessAppClosed = true;
+
+      const restartRuntime = revisionRuntime();
+      let restartReceiptAllocations = 0;
+      restartedApp = await createHost({
+        advanceRevisions: restartRuntime.advance,
+        allocateCreationBranchUuid: () => '50000000-0000-4000-8000-000000000001',
+        allocateCreationRollRequestId: () => 'accept-set-restart-roll-request',
+        allocateContextId: () => '60000000-0000-4000-8000-000000000001',
+        allocateLocalCharacterId: () => '70000000-0000-4000-8000-000000000001',
+        allocateReceiptId: () =>
+          `accept-set-restart-receipt-${String(++restartReceiptAllocations)}`,
+        allocateWizardCheckpointId: () => 'accept-set-restart-wizard',
+        database: harness.database,
+        onFrameError: (error) => {
+          throw error;
+        },
+        projectRoot: PROJECT_ROOT,
+        readRevisions: restartRuntime.read,
+        sampleCreationD20: () => 10,
+        staticRoot,
+      });
+      await startHost(restartedApp, { interface: '127.0.0.1', port: 0 });
+      restartedSocket = await restartedApp.injectWS('/state');
+      frames = receiveFrames(restartedSocket, 3);
+      restartedSocket.send(
+        clientTextV2(
+          reconnect(harness.deviceId, 'accept-set-skill-restart', [eligibilityRequest.commandId]),
+          vocabulary,
+        ),
+      );
+      const restarted = await frames;
+      expect(hostMessage(restarted[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: eligibilityResult.receipt,
+      });
+      const restartedChr015 = hostMessageV2(restarted[2] ?? '', vocabulary);
+      expect(restartedChr015).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-015::CTA::003'],
+            formId: 'CHR-015',
+            roleFilteredPayload: { commandId: null, selectedSkills: [] },
+          },
+          layers: [],
+        },
+        revisions: chr015.revisions,
+      });
+
+      const beforeRepeatedNavigation = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const writesBeforeRepeatedNavigation = [...restartRuntime.writes];
+      const repeatedNavigation = await sendV2(
+        restartedSocket,
+        formAction(
+          'accept-set-repeat-open-skill-selection',
+          'CHR-013',
+          'CHR-013::CTA::002',
+          chr015.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(repeatedNavigation).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        presentationUnchanged: true,
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        revisions: chr015.revisions,
+      });
+      expect(restartReceiptAllocations).toBe(0);
+      expect(restartRuntime.writes).toEqual(writesBeforeRepeatedNavigation);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(beforeRepeatedNavigation);
+
+      const beforeUnavailableChr015Actions = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const writesBeforeUnavailableChr015Actions = [...restartRuntime.writes];
+      for (const actionKey of ['CHR-015::CTA::001', 'CHR-015::CTA::002'] as const) {
+        const refusal = await sendV2(
+          restartedSocket,
+          formAction(
+            `accept-set-unavailable-${actionKey}`,
+            'CHR-015',
+            actionKey,
+            chr015.revisions.projectionRevision,
+          ),
+          vocabulary,
+        );
+        expect(refusal).toMatchObject({
+          messageType: 'navigation.form-action.refusal',
+          presentationUnchanged: true,
+          refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+          revisions: chr015.revisions,
+        });
+      }
+      expect(restartReceiptAllocations).toBe(0);
+      expect(restartRuntime.writes).toEqual(writesBeforeUnavailableChr015Actions);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(beforeUnavailableChr015Actions);
+
+      const ineligibleSkill = skillCatalog.skills.find(
+        (skill) =>
+          skill.category === 'SELECTABLE_GENERAL' &&
+          !eligibility.eligibleSkillIds.includes(skill.skillKey),
+      );
+      if (ineligibleSkill === undefined) {
+        throw new Error('test fixture lacks an ineligible selectable skill');
+      }
+      const forgedSelection = skillCheckpointRequest(
+        'accept-set-forged-skill-selection',
+        harness,
+        'CHR-015',
+        resultRevision(eligibilityResult, 'draftRevision'),
+        chr015.revisions,
+        [{ skillId: ineligibleSkill.skillKey, targetBonus: 1 }],
+      );
+      const beforeForged = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const writesBeforeForged = [...restartRuntime.writes];
+      frames = receiveFrames(restartedSocket, 1);
+      restartedSocket.send(clientText(forgedSelection, vocabulary));
+      expect(hostMessage((await frames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: forgedSelection.commandId,
+        messageType: 'command.refusal',
+        refusal: { code: 'GUARD_REJECTED' },
+        revisions: chr015.revisions,
+      });
+      expect(restartReceiptAllocations).toBe(0);
+      expect(restartRuntime.writes).toEqual(writesBeforeForged);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(beforeForged);
+
+      const selectionRequest = skillCheckpointRequest(
+        'accept-set-skill-selection',
+        harness,
+        'CHR-015',
+        resultRevision(eligibilityResult, 'draftRevision'),
+        chr015.revisions,
+        selectedSkills,
+      );
+      const [selectionTerminal, checkpointedChr015] = await sendCommand(
+        restartedSocket,
+        selectionRequest,
+        vocabulary,
+      );
+      const selectionResult = committedResult(selectionTerminal);
+      expect(selectionResult.receipt).toMatchObject({
+        result: {
+          nextFormId: 'CHR-017',
+          requiredSlotCount: eligibility.requiredSlotCount,
+          selectedSkills: selectedSkills.map(({ skillId, targetBonus }) => ({
+            skillKey: skillId,
+            targetBonus,
+          })),
+          sourceFormId: 'CHR-015',
+          stage: 'SKILLS',
+          usedSlotCount: eligibility.requiredSlotCount,
+        },
+      });
+      expect(checkpointedChr015).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-015',
+            roleFilteredPayload: {
+              commandId: selectionRequest.commandId,
+              paidSlotUsage: { usedSlotCount: eligibility.requiredSlotCount },
+              selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
+              selectionValidation: {
+                kind: 'EXACT',
+                requiredSlotCount: eligibility.requiredSlotCount,
+                usedSlotCount: eligibility.requiredSlotCount,
+              },
+            },
+          },
+          layers: [],
+        },
+        revisions: selectionResult.receipt.revisions,
+      });
+      if (checkpointedChr015.messageType !== 'projection.snapshot') {
+        throw new Error('skill selection did not publish checkpointed CHR-015');
+      }
+      expect(JSON.stringify(checkpointedChr015.presentation.base.roleFilteredPayload)).not.toMatch(
+        /SKL-|CORE-|REQ-|Q-/u,
+      );
+      expect(restartReceiptAllocations).toBe(1);
+
+      frames = receiveFrames(restartedSocket, 2);
+      restartedSocket.send(clientText(selectionRequest, vocabulary));
+      const directSelectionReplay = await frames;
+      expect(hostMessage(directSelectionReplay[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: selectionResult.receipt,
+      });
+      expect(hostMessageV2(directSelectionReplay[1] ?? '', vocabulary)).toMatchObject({
+        presentation: {
+          base: { availableActionKeys: [], formId: 'CHR-015' },
+          layers: [],
+        },
+        revisions: selectionResult.receipt.revisions,
+      });
+      expect(restartReceiptAllocations).toBe(1);
+
+      selectionRecoverySocket = await restartedApp.injectWS('/state');
+      frames = receiveFrames(selectionRecoverySocket, 3);
+      selectionRecoverySocket.send(
+        clientTextV2(
+          reconnect(harness.deviceId, 'accept-set-skill-selection-reconnect', [
+            selectionRequest.commandId,
+          ]),
+          vocabulary,
+        ),
+      );
+      const selectionRecovered = await frames;
+      expect(hostMessage(selectionRecovered[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: selectionResult.receipt,
+      });
+      expect(hostMessageV2(selectionRecovered[2] ?? '', vocabulary)).toMatchObject({
+        presentation: {
+          base: { availableActionKeys: [], formId: 'CHR-015' },
+          layers: [],
+        },
+        revisions: selectionResult.receipt.revisions,
+      });
+      expect(restartReceiptAllocations).toBe(1);
     } finally {
+      selectionRecoverySocket?.terminate();
+      restartedSocket?.terminate();
       recoverySocket?.terminate();
       limitedSocket?.terminate();
       harness.socket.terminate();
-      await harness.app.close();
+      if (!harnessAppClosed) await harness.app.close();
+      await restartedApp?.close();
       harness.database.close();
     }
   });
@@ -2579,7 +2964,7 @@ describe('durable character creation decisions', () => {
     }
   });
 
-  it('routes PURE assignment through CHR-011 and derives actionless CHR-012 durably', async () => {
+  it('routes PURE assignment through CHR-011 and derives checkpoint-capable CHR-012 durably', async () => {
     const harness = await createJourneyHarness(staticRoot, vocabulary, 'pure-assignment');
     let limitedSocket: WebSocket | undefined;
     let recoverySocket: WebSocket | undefined;
@@ -2830,7 +3215,7 @@ describe('durable character creation decisions', () => {
       expect(chr012).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
+            availableActionKeys: ['CHR-012::CTA::001'],
             formId: 'CHR-012',
             roleFilteredPayload: {
               baseStats,
@@ -2914,7 +3299,10 @@ describe('durable character creation decisions', () => {
         receipt: classResult.receipt,
       });
       expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
-        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        presentation: {
+          base: { availableActionKeys: ['CHR-012::CTA::001'], formId: 'CHR-012' },
+          layers: [],
+        },
         revisions: classResult.receipt.revisions,
       });
       expect(harness.receiptAllocations()).toBe(allocationsAfterClass);
@@ -2933,7 +3321,10 @@ describe('durable character creation decisions', () => {
         ],
       });
       expect(hostMessageV2(recovered[1] ?? '', vocabulary)).toMatchObject({
-        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        presentation: {
+          base: { availableActionKeys: ['CHR-012::CTA::001'], formId: 'CHR-012' },
+          layers: [],
+        },
         revisions: classResult.receipt.revisions,
       });
 
@@ -2991,7 +3382,7 @@ describe('durable character creation decisions', () => {
     }
   });
 
-  it('routes FREE/RANDOM point-buy 85 through CHR-009 to durable actionless CHR-012', async () => {
+  it('routes FREE/RANDOM point-buy 85 through CHR-009 to durable checkpoint-capable CHR-012', async () => {
     const harness = await createJourneyHarness(staticRoot, vocabulary, 'free-random-point-buy-85');
     try {
       const first = await commitNonCriticalSet(
@@ -3157,7 +3548,7 @@ describe('durable character creation decisions', () => {
       expect(chr012).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
+            availableActionKeys: ['CHR-012::CTA::001'],
             formId: 'CHR-012',
             roleFilteredPayload: {
               baseStats: pointBuyStats,
@@ -3203,7 +3594,7 @@ describe('durable character creation decisions', () => {
       expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
+            availableActionKeys: ['CHR-012::CTA::001'],
             formId: 'CHR-012',
             roleFilteredPayload: { raceModifiers: [], skillStageStats: pointBuyStats },
           },

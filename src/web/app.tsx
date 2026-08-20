@@ -10,6 +10,7 @@ import type {
   App001Projection,
   CharacterCreationChoiceDraft,
   CharacterCreationRollDraft,
+  CharacterSkillSelectionDraft,
   CharacterStatAssignmentDraft,
   CharacterSetDecisionProjection,
   Chr002Projection,
@@ -19,6 +20,8 @@ import type {
   Chr010Projection,
   Chr011Projection,
   Chr012Projection,
+  Chr013Projection,
+  Chr015Projection,
   Chr016Projection,
   ConfirmedPresentationLayer,
   ConfirmedProjectionSnapshot,
@@ -921,6 +924,199 @@ function StatBreakdownFields({
   );
 }
 
+function SkillCatalogFields({
+  snapshot,
+}: {
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-013') return null;
+  const projection = snapshot.projection as Chr013Projection;
+  return (
+    <section aria-labelledby="chr-013-catalog-title" data-skill-catalog>
+      <h2 id="chr-013-catalog-title">Каталог стартовых навыков</h2>
+      <p data-required-skill-slots>
+        Требуется платных слотов: {projection.slotSources.requiredSlotCount}
+      </p>
+      {projection.slotSources.mandatoryClassSkillOrNull === null ? null : (
+        <p data-catalog-mandatory-class-skill>
+          Классовый навык: {projection.slotSources.mandatoryClassSkillOrNull.skillLabel} +
+          {projection.slotSources.mandatoryClassSkillOrNull.bonus}
+        </p>
+      )}
+      {projection.slotSources.racialFreeSkills.map((skill) => (
+        <p key={skill.skillId} data-catalog-racial-free-skill={skill.skillId}>
+          Бесплатный расовый навык: {skill.skillLabel} +{skill.bonus}
+        </p>
+      ))}
+      <div data-skill-card-count={projection.skillCardSummaries.length}>
+        {projection.skillCardSummaries.map((card) => (
+          <article
+            key={card.skillId}
+            data-skill-card={card.skillId}
+            data-skill-eligibility={card.eligibility}
+          >
+            <h3>{card.skillLabel}</h3>
+            <p>{card.eligibility}</p>
+            {card.requirements.length === 0 ? (
+              <p>Требования отсутствуют.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Характеристика</th>
+                    <th>Текущее</th>
+                    <th>Требуется</th>
+                    <th>Выполнено</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {card.requirements.map((requirement) => (
+                    <tr
+                      key={requirement.statCode}
+                      data-skill-requirement={requirement.statCode}
+                      data-skill-requirement-satisfied={requirement.satisfied}
+                    >
+                      <th>{requirement.statLabel}</th>
+                      <td>{requirement.currentValue}</td>
+                      <td>{requirement.minValue}</td>
+                      <td>{requirement.satisfied ? 'Да' : 'Нет'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <ul data-skill-level-options>
+              {card.levelOptions.map((level) => (
+                <li key={level.targetBonus}>
+                  +{level.targetBonus}: {level.slotCost} сл.
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SkillSelectionFields({
+  draft,
+  onCandidateChange,
+  snapshot,
+}: {
+  readonly draft: CharacterSkillSelectionDraft | null;
+  readonly onCandidateChange: (skillId: string | null, targetBonus: number | null) => void;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-015') return null;
+  const projection = snapshot.projection as Chr015Projection;
+  const selectedSkills = draft?.selectedSkills ?? projection.selectedSkills;
+  const paidSlotUsage = draft?.paidSlotUsage ?? projection.paidSlotUsage;
+  const validation = draft?.selectionValidation ?? projection.selectionValidation;
+  const candidateSkillId = draft?.candidateSkillIdOrNull ?? null;
+  const candidateTargetBonus = draft?.candidateTargetBonusOrNull ?? null;
+  const candidateOption = projection.skillOptions.find(
+    ({ skillId }) => skillId === candidateSkillId,
+  );
+  const selectedCandidate = selectedSkills.find(({ skillId }) => skillId === candidateSkillId);
+  const mutable = draft !== null && projection.commandId === null;
+  return (
+    <section aria-labelledby="chr-015-selection-title" data-skill-selection>
+      <h2 id="chr-015-selection-title">Стартовые навыки</h2>
+      <p data-skill-slot-usage>
+        Платные слоты: {paidSlotUsage.usedSlotCount} / {projection.requiredSlotCount}
+      </p>
+      <p data-skill-selection-validation={validation.kind}>
+        {validation.kind}
+        {validation.kind === 'UNDERFILLED'
+          ? `: не хватает ${String(validation.missingSlotCount)}`
+          : validation.kind === 'OVERFILLED'
+            ? `: превышение ${String(validation.excessSlotCount)}`
+            : ''}
+      </p>
+      {projection.mandatoryClassSkillOrNull === null ? null : (
+        <p data-selection-mandatory-class-skill>
+          Классовый: {projection.mandatoryClassSkillOrNull.skillLabel} +
+          {projection.mandatoryClassSkillOrNull.bonus} (
+          {projection.mandatoryClassSkillOrNull.slotCost} сл.)
+        </p>
+      )}
+      {projection.racialFreeSkills.map((skill) => (
+        <p key={skill.skillId} data-selection-racial-free-skill={skill.skillId}>
+          Расовый бесплатный: {skill.skillLabel} +{skill.bonus}
+        </p>
+      ))}
+      <ul data-selected-skills>
+        {selectedSkills.map((skill) => {
+          const option = projection.skillOptions.find(({ skillId }) => skillId === skill.skillId)!;
+          return (
+            <li key={skill.skillId} data-selected-skill={skill.skillId}>
+              {option.skillLabel} +{skill.targetBonus} ({skill.slotCost} сл.)
+            </li>
+          );
+        })}
+      </ul>
+      <ol data-paid-slot-usage>
+        {paidSlotUsage.entries.map((entry) => (
+          <li key={`${entry.source}:${entry.skillId}`} data-paid-slot-source={entry.source}>
+            {entry.skillLabel} +{entry.bonus}: {entry.slotCost} сл.
+          </li>
+        ))}
+      </ol>
+      {mutable ? (
+        <fieldset data-skill-selection-controls>
+          <legend>Локальное добавление или удаление</legend>
+          <label>
+            Навык{' '}
+            <select
+              data-skill-candidate
+              value={candidateSkillId ?? ''}
+              onChange={(event) => {
+                const skillId = event.target.value || null;
+                const selected = selectedSkills.find((entry) => entry.skillId === skillId);
+                onCandidateChange(skillId, selected?.targetBonus ?? null);
+              }}
+            >
+              <option value="">—</option>
+              {projection.skillOptions.map((option) => (
+                <option key={option.skillId} value={option.skillId}>
+                  {option.skillLabel}
+                  {selectedSkills.some(({ skillId }) => skillId === option.skillId)
+                    ? ' — удалить'
+                    : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Целевой бонус{' '}
+            <select
+              data-skill-target-bonus
+              disabled={candidateOption === undefined || selectedCandidate !== undefined}
+              value={candidateTargetBonus ?? ''}
+              onChange={(event) =>
+                onCandidateChange(
+                  candidateSkillId,
+                  event.target.value === '' ? null : Number(event.target.value),
+                )
+              }
+            >
+              <option value="">—</option>
+              {(candidateOption?.levelOptions ?? []).map((level) => (
+                <option key={level.targetBonus} value={level.targetBonus}>
+                  +{level.targetBonus} — {level.slotCost} сл.
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+      ) : (
+        <p data-skill-selection-checkpointed>Выбор зафиксирован.</p>
+      )}
+    </section>
+  );
+}
+
 function AbandonmentDialogFields({
   layer,
 }: {
@@ -964,6 +1160,8 @@ export function App(): ReactElement {
   );
   const [statAssignmentDraft, setStatAssignmentDraft] =
     useState<CharacterStatAssignmentDraft | null>(null);
+  const [skillSelectionDraft, setSkillSelectionDraft] =
+    useState<CharacterSkillSelectionDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -974,6 +1172,7 @@ export function App(): ReactElement {
       setCreationChoiceDraft,
       setCreationRollDraft,
       setStatAssignmentDraft,
+      setSkillSelectionDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -1092,6 +1291,20 @@ export function App(): ReactElement {
             />
             <PureClassFields choice={activeCreationChoice} snapshot={snapshot} />
             <StatBreakdownFields snapshot={snapshot} />
+            <SkillCatalogFields snapshot={snapshot} />
+            <SkillSelectionFields
+              draft={skillSelectionDraft}
+              snapshot={snapshot}
+              onCandidateChange={(skillId, targetBonus) => {
+                const result = connectionRef.current?.replaceSkillSelectionCandidate(
+                  skillId,
+                  targetBonus,
+                );
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+            />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}

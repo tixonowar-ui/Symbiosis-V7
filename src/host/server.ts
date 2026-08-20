@@ -51,6 +51,11 @@ import type { RevisionImpact } from '../persistence/index.js';
 import { createIdentityDraftRuntime } from './identity-draft.js';
 import type { IdentityDraftRuntime } from './identity-draft.js';
 import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
+import { loadCreationSkillCatalog } from './creation-skill-catalog.js';
+import {
+  deriveChr013SkillCatalogView,
+  deriveChr015SkillSelectionView,
+} from './creation-skill-selection.js';
 import {
   deriveChr009AssignmentView,
   deriveChr011ClassView,
@@ -65,6 +70,7 @@ import {
 } from './creation-roll-commit.js';
 import type { CreationRollCommitCommandRequest } from './creation-set-decide.js';
 import {
+  advanceCreationSkillSelectionProjection,
   advanceCreationWizardProjection,
   commitCreationSetDecide,
   CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
@@ -143,9 +149,17 @@ import {
   CHR_011_FORM_ID,
   CHR_011_INITIAL_ACTION_KEYS,
   CHR_011_ROUTE,
-  CHR_012_ACTION_KEYS,
+  CHR_012_CHECKPOINT_ACTION_KEYS,
   CHR_012_FORM_ID,
   CHR_012_ROUTE,
+  CHR_013_ACTION_KEYS,
+  CHR_013_CONTINUE_ACTION_KEY,
+  CHR_013_FORM_ID,
+  CHR_013_ROUTE,
+  CHR_015_CHECKPOINTED_ACTION_KEYS,
+  CHR_015_FORM_ID,
+  CHR_015_INITIAL_ACTION_KEYS,
+  CHR_015_ROUTE,
   CHR_028_FORM_ID,
   CHR_036_FORM_ID,
   CHR_036_INITIAL_ACTION_KEYS,
@@ -169,6 +183,8 @@ import {
   projectInitialChr016,
   projectInitialChr036,
   projectChr012,
+  projectChr013,
+  projectChr015,
 } from './projections/chr.js';
 
 export interface HostServerConfig {
@@ -231,6 +247,8 @@ interface ConfirmedNavigationContext {
     | typeof CHR_009_FORM_ID
     | typeof CHR_011_FORM_ID
     | typeof CHR_012_FORM_ID
+    | typeof CHR_013_FORM_ID
+    | typeof CHR_015_FORM_ID
     | typeof CHR_001_FORM_ID
     | typeof CHR_010_FORM_ID
     | typeof CHR_016_FORM_ID
@@ -270,6 +288,7 @@ interface NavigationDependencies {
   readonly creationDecisionConsequenceCatalog: Awaited<
     ReturnType<typeof loadCreationDecisionConsequenceCatalog>
   >;
+  readonly creationSkillCatalog: Awaited<ReturnType<typeof loadCreationSkillCatalog>>;
   readonly database: HostServerConfig['database'];
   readonly journal: NavigationJournal;
   readonly identityDraft: IdentityDraftRuntime;
@@ -705,7 +724,9 @@ function adoptNavigationContext(
     next.formId === CHR_008_FORM_ID ||
     next.formId === CHR_009_FORM_ID ||
     next.formId === CHR_011_FORM_ID ||
-    next.formId === CHR_012_FORM_ID
+    next.formId === CHR_012_FORM_ID ||
+    next.formId === CHR_013_FORM_ID ||
+    next.formId === CHR_015_FORM_ID
   ) {
     dependencies.identitySessions.set(next.deviceId, next);
   }
@@ -1011,6 +1032,7 @@ function creationWarningNavigation(
     creationWizardCapabilities(connection.executableWorkflowCommandIds),
     dependencies.skillStageCatalog,
     dependencies.creationDecisionConsequenceCatalog,
+    dependencies.creationSkillCatalog,
   );
   const nextContext = creationWizardContext(connection, dependencies, checkpoint);
   return {
@@ -1027,16 +1049,118 @@ function creationWarningNavigation(
   };
 }
 
+function creationSkillSelectionNavigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): NavigationSuccess | undefined {
+  if (
+    message.actionKey !== CHR_013_CONTINUE_ACTION_KEY ||
+    current.formId !== CHR_013_FORM_ID ||
+    current.entityLocalCharacterId === null ||
+    connection.activeLayer !== null
+  ) {
+    return undefined;
+  }
+  let checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    current.entityLocalCharacterId,
+    dependencies.skillStageCatalog,
+  );
+  if (
+    checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID ||
+    checkpoint.skillEligibilityStage === null ||
+    checkpoint.skillSelectionStage !== null ||
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
+    !isDeepStrictEqual(checkpoint.skillEligibilityStage.receipt.revisions, before) ||
+    connection.current !== current ||
+    !confirmedPlayerContext(current, dependencies)
+  ) {
+    return undefined;
+  }
+  checkpoint = advanceCreationSkillSelectionProjection(
+    dependencies.database,
+    current.entityLocalCharacterId,
+    checkpoint.checkpoint.checkpointId,
+    dependencies.skillStageCatalog,
+  );
+  const after = currentCreationWizardRevisions(checkpoint);
+  if (
+    after.actorVisibilityRevision !== before.actorVisibilityRevision ||
+    after.stateRevision !== before.stateRevision ||
+    after.projectionRevision !== before.projectionRevision + 1
+  ) {
+    throw new Error('CHR-013 to CHR-015 navigation advanced a non-projection revision');
+  }
+  const nextContext = creationWizardContext(connection, dependencies, checkpoint, CHR_015_FORM_ID);
+  return {
+    nextContext,
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        checkpoint,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+        CHR_015_FORM_ID,
+      ),
+      'player',
+      after,
+    ),
+  };
+}
+
+function inferredCreationSkillPresentationFormId(
+  checkpoint: DurableCreationWizardCheckpoint,
+): typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID | undefined {
+  if (checkpoint.nextStageEnvelope.formId === 'CHR-017') return CHR_015_FORM_ID;
+  if (checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID) return undefined;
+  const eligibility = checkpoint.skillEligibilityStage;
+  if (eligibility === null || checkpoint.skillSelectionStage !== null) {
+    throw new Error('durable CHR-013 lacks its exclusive skill eligibility stage');
+  }
+  const current = currentCreationWizardRevisions(checkpoint);
+  const committed = eligibility.receipt.revisions;
+  if (isDeepStrictEqual(current, committed)) return CHR_013_FORM_ID;
+  if (
+    committed.projectionRevision < Number.MAX_SAFE_INTEGER &&
+    current.actorVisibilityRevision === committed.actorVisibilityRevision &&
+    current.stateRevision === committed.stateRevision &&
+    current.projectionRevision === committed.projectionRevision + 1
+  ) {
+    return CHR_015_FORM_ID;
+  }
+  throw new Error('durable CHR-013 has an unrecognized skill presentation revision gap');
+}
+
 function creationWizardBase(
   checkpoint: DurableCreationWizardCheckpoint,
   capabilities: CreationWizardCapabilities,
   skillStageCatalog: NavigationDependencies['skillStageCatalog'],
   consequenceCatalog: NavigationDependencies['creationDecisionConsequenceCatalog'],
+  creationSkillCatalog: NavigationDependencies['creationSkillCatalog'],
+  requestedPresentationFormId?: typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID,
 ): PresentedBaseForm {
   const { characterDraftId, wizardCheckpointId } = checkpoint.identityStage.request.payload;
   const draftRevision = checkpoint.receipt.result.draftRevision;
   const routeBindings = checkpoint.nextStageEnvelope.routeBindings;
-  switch (checkpoint.nextStageEnvelope.formId) {
+  const durableFormId = checkpoint.nextStageEnvelope.formId;
+  const presentationFormId =
+    requestedPresentationFormId ??
+    inferredCreationSkillPresentationFormId(checkpoint) ??
+    durableFormId;
+  if (
+    (presentationFormId === CHR_013_FORM_ID && durableFormId !== CHR_013_FORM_ID) ||
+    (presentationFormId === CHR_015_FORM_ID &&
+      durableFormId !== CHR_013_FORM_ID &&
+      durableFormId !== 'CHR-017')
+  ) {
+    throw new Error(`durable ${durableFormId} cannot present requested ${presentationFormId}`);
+  }
+  switch (presentationFormId) {
     case CHR_010_FORM_ID:
       return {
         availableActionKeys: CHR_010_INITIAL_ACTION_KEYS,
@@ -1172,16 +1296,41 @@ function creationWizardBase(
       };
     case CHR_012_FORM_ID:
       return {
-        availableActionKeys: CHR_012_ACTION_KEYS,
+        availableActionKeys: capabilities.checkpoint ? CHR_012_CHECKPOINT_ACTION_KEYS : [],
         formId: CHR_012_FORM_ID,
         formType: 'screen',
         roleFilteredPayload: projectChr012(deriveChr012StatsView(checkpoint, skillStageCatalog)),
         routeBindings,
         routeTemplate: CHR_012_ROUTE,
       };
+    case CHR_013_FORM_ID:
+      return {
+        availableActionKeys: CHR_013_ACTION_KEYS,
+        formId: CHR_013_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectChr013(
+          deriveChr013SkillCatalogView(checkpoint, creationSkillCatalog),
+        ),
+        routeBindings,
+        routeTemplate: CHR_013_ROUTE,
+      };
+    case CHR_015_FORM_ID:
+      return {
+        availableActionKeys:
+          checkpoint.skillSelectionStage === null
+            ? CHR_015_INITIAL_ACTION_KEYS
+            : CHR_015_CHECKPOINTED_ACTION_KEYS,
+        formId: CHR_015_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectChr015(
+          deriveChr015SkillSelectionView(checkpoint, creationSkillCatalog),
+        ),
+        routeBindings,
+        routeTemplate: CHR_015_ROUTE,
+      };
     default:
       throw new Error(
-        `durable creation wizard destination ${JSON.stringify(checkpoint.nextStageEnvelope.formId)} is not publishable`,
+        `durable creation wizard destination ${JSON.stringify(durableFormId)} is not publishable`,
       );
   }
 }
@@ -1448,6 +1597,21 @@ function handleFormAction(
         success = app002Navigation(message, current, revisions, dependencies);
       }
       break;
+    case CHR_013_CONTINUE_ACTION_KEY:
+      if (
+        action.to === CHR_015_FORM_ID &&
+        current.formId === CHR_013_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = creationSkillSelectionNavigation(
+          message,
+          current,
+          revisions,
+          connection,
+          dependencies,
+        );
+      }
+      break;
     default:
       break;
   }
@@ -1642,6 +1806,7 @@ function creationWizardContext(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
   checkpoint: DurableCreationWizardCheckpoint,
+  requestedPresentationFormId?: typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID,
 ): ConfirmedNavigationContext {
   const deviceId = loadDeviceId(dependencies.database);
   const contextId =
@@ -1653,7 +1818,12 @@ function creationWizardContext(
     deviceId,
     entityLocalCharacterId: checkpoint.localCharacter.localCharacterId,
     entityRevisions: currentCreationWizardRevisions(checkpoint),
-    formId: checkpoint.nextStageEnvelope.formId,
+    formId:
+      requestedPresentationFormId ??
+      inferredCreationSkillPresentationFormId(checkpoint) ??
+      (checkpoint.nextStageEnvelope.formId === 'CHR-017'
+        ? CHR_015_FORM_ID
+        : checkpoint.nextStageEnvelope.formId),
     identityDraftScope: null,
   };
 }
@@ -1675,6 +1845,7 @@ function sendCreationWizardDestination(
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
         dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
       ),
       'player',
       currentCreationWizardRevisions(checkpoint),
@@ -2034,14 +2205,23 @@ function handleCommandRequest(
     return;
   }
 
-  if (checkpointRequest.payload.stage === 'STAT_ASSIGNMENT') {
+  if (
+    checkpointRequest.payload.stage === 'STAT_ASSIGNMENT' ||
+    checkpointRequest.payload.stage === 'SKILLS'
+  ) {
     const request = checkpointRequest;
     const current = connection.sessionEstablished ? connection.current : null;
+    const expectedFormId =
+      request.payload.stage === 'STAT_ASSIGNMENT'
+        ? CHR_009_FORM_ID
+        : request.payload.sourceFormId === 'CHR-012'
+          ? CHR_012_FORM_ID
+          : CHR_015_FORM_ID;
     if (
       current === null ||
       current.identityDraftScope !== null ||
       current.entityLocalCharacterId !== request.payload.characterDraftId ||
-      current.formId !== CHR_009_FORM_ID ||
+      current.formId !== expectedFormId ||
       !confirmedPlayerContext(current, dependencies) ||
       !connection.executableWorkflowCommandIds.has(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
     ) {
@@ -2398,6 +2578,7 @@ function handleReconnectV2(
       creationCapabilities,
       dependencies.skillStageCatalog,
       dependencies.creationDecisionConsequenceCatalog,
+      dependencies.creationSkillCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, replayDestination);
     projectionRole = 'player';
@@ -2417,7 +2598,9 @@ function handleReconnectV2(
       restored.formId === CHR_008_FORM_ID ||
       restored.formId === CHR_009_FORM_ID ||
       restored.formId === CHR_011_FORM_ID ||
-      restored.formId === CHR_012_FORM_ID)
+      restored.formId === CHR_012_FORM_ID ||
+      restored.formId === CHR_013_FORM_ID ||
+      restored.formId === CHR_015_FORM_ID)
   ) {
     const checkpoint = loadCreationWizardCheckpoint(
       dependencies.database,
@@ -2429,8 +2612,15 @@ function handleReconnectV2(
       creationCapabilities,
       dependencies.skillStageCatalog,
       dependencies.creationDecisionConsequenceCatalog,
+      dependencies.creationSkillCatalog,
+      restored.formId === CHR_015_FORM_ID ? CHR_015_FORM_ID : undefined,
     );
-    nextContext = creationWizardContext(connection, dependencies, checkpoint);
+    nextContext = creationWizardContext(
+      connection,
+      dependencies,
+      checkpoint,
+      restored.formId === CHR_015_FORM_ID ? CHR_015_FORM_ID : undefined,
+    );
     projectionRole = 'player';
     revisions = currentCreationWizardRevisions(checkpoint);
   } else if (restored !== undefined && restored.identityDraftScope !== null) {
@@ -2707,10 +2897,10 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     loadSkillStageCatalog(projectRoot),
     loadProtocolVocabulary(projectRoot),
   ]);
-  const creationDecisionConsequenceCatalog = await loadCreationDecisionConsequenceCatalog(
-    projectRoot,
-    skillStageCatalog,
-  );
+  const [creationDecisionConsequenceCatalog, creationSkillCatalog] = await Promise.all([
+    loadCreationDecisionConsequenceCatalog(projectRoot, skillStageCatalog),
+    loadCreationSkillCatalog(projectRoot, skillStageCatalog),
+  ]);
 
   const app = Fastify({ logger: false });
   const commandJournal: CommandJournal = new Map();
@@ -2724,6 +2914,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     allocateWizardCheckpointId: config.allocateWizardCheckpointId,
     catalog,
     creationDecisionConsequenceCatalog,
+    creationSkillCatalog,
     database: config.database,
     identityDraft: createIdentityDraftRuntime(new Set(LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS)),
     identitySessions: new Map(),

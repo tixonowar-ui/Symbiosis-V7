@@ -77,6 +77,7 @@
 | [0043](0043-character-set-decision-and-abandonment.md)    | Решение о наборе и необратимый отказ | принято                                     |
 | [0044](0044-character-stat-assignment-and-pure-class.md)  | Распределение и класс Чистого        | принято                                     |
 | [0045](0045-character-decision-consequences.md)           | Последствия первых решений           | принято                                     |
+| [0046](0046-character-starting-skills.md)                 | Каталог и стартовый выбор навыков    | принято; CHR-012 часть заменяет 0044 §8     |
 
 ## Перенос решений аудита
 

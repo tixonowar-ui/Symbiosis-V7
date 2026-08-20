@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  decodeClientMessage,
   decodeClientMessageV2,
   encodeHostMessageV2,
   WIRE_PROTOCOL_V2_VERSION,
@@ -13,7 +14,11 @@ import type {
 } from '@shared/index.js';
 
 import { connectProjection, WEB_PROTOCOL_VOCABULARY } from './ws-client.js';
-import type { ProjectionConnection, WebClientState } from './ws-client.js';
+import type {
+  CharacterSkillSelectionDraft,
+  ProjectionConnection,
+  WebClientState,
+} from './ws-client.js';
 
 const CHARACTER_DRAFT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const WIZARD_CHECKPOINT_ID = 'opaque-wizard-checkpoint';
@@ -212,6 +217,11 @@ class DecoderFakeWebSocket {
   message(data: string): void {
     this.onmessage?.call(this as unknown as WebSocket, new MessageEvent('message', { data }));
   }
+
+  serverClose(code: number, reason: string): void {
+    this.readyState = DecoderFakeWebSocket.CLOSED;
+    this.onclose?.call(this as unknown as WebSocket, new CloseEvent('close', { code, reason }));
+  }
 }
 
 const decoderConnections: ProjectionConnection[] = [];
@@ -228,8 +238,112 @@ function checkedHostTextV2(message: HostToClientV2Message): string {
   return encoded.text;
 }
 
+// skills.json owns the 41-card cardinality. The remaining values below are a synthetic,
+// internally signed protocol fixture; host tests separately assert CORE-081/165/167 values.
+const DECODER_SKILL_STATS = { C: 8, D: 8, I: 8, M: 8, S: 8, W: 4, Z: 8 } as const;
+const DECODER_SKILL_CARDS = Array.from({ length: 41 }, (_, index) => {
+  const ordinal = String(index + 1).padStart(2, '0');
+  const ineligible = index === 1;
+  return {
+    eligibility: ineligible ? ('REQUIREMENTS_NOT_MET' as const) : ('ELIGIBLE' as const),
+    levelOptions: [
+      { slotCost: 1, targetBonus: 1 },
+      { slotCost: 2, targetBonus: 2 },
+    ],
+    requirements: [
+      {
+        currentValue: 4,
+        minValue: ineligible ? 5 : 1,
+        satisfied: !ineligible,
+        statCode: 'W' as const,
+        statLabel: 'Мудрость',
+      },
+    ],
+    skillId: `SKILL_${ordinal}`,
+    skillLabel: `Навык ${ordinal}`,
+  };
+});
+const DECODER_ELIGIBLE_SKILL_IDS = DECODER_SKILL_CARDS.filter(
+  ({ eligibility }) => eligibility === 'ELIGIBLE',
+).map(({ skillId }) => skillId);
+const DECODER_SKILL_OPTIONS = DECODER_SKILL_CARDS.filter(
+  ({ eligibility }) => eligibility === 'ELIGIBLE',
+).map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+const DECODER_CHR_013_PROJECTION = {
+  characterDraftId: CHARACTER_DRAFT_ID,
+  commandId: null,
+  draftRevision: 9,
+  eligibleSkillIds: DECODER_ELIGIBLE_SKILL_IDS,
+  selectedSkillIdOrNull: null,
+  skillCardSummaries: DECODER_SKILL_CARDS,
+  skillStageStats: DECODER_SKILL_STATS,
+  slotSources: {
+    mandatoryClassSkillOrNull: null,
+    racialFreeSkills: [],
+    requiredSlotCount: 2,
+  },
+  wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+} as const;
+
+function decoderSelectionValidation(requiredSlotCount: number, usedSlotCount: number) {
+  if (usedSlotCount < requiredSlotCount) {
+    return {
+      kind: 'UNDERFILLED' as const,
+      missingSlotCount: requiredSlotCount - usedSlotCount,
+      requiredSlotCount,
+      usedSlotCount,
+    };
+  }
+  if (usedSlotCount > requiredSlotCount) {
+    return {
+      excessSlotCount: usedSlotCount - requiredSlotCount,
+      kind: 'OVERFILLED' as const,
+      requiredSlotCount,
+      usedSlotCount,
+    };
+  }
+  return { kind: 'EXACT' as const, requiredSlotCount, usedSlotCount };
+}
+
+function decoderChr015Projection(
+  selectedSkills: readonly {
+    readonly skillId: string;
+    readonly slotCost: number;
+    readonly targetBonus: number;
+  }[] = [],
+  commandId: string | null = null,
+) {
+  const options = new Map(DECODER_SKILL_OPTIONS.map((option) => [option.skillId, option]));
+  const entries = selectedSkills.map((selected) => ({
+    bonus: selected.targetBonus,
+    skillId: selected.skillId,
+    skillLabel: options.get(selected.skillId)?.skillLabel ?? 'forged',
+    slotCost: selected.slotCost,
+    source: 'SELECTED' as const,
+  }));
+  const usedSlotCount = entries.reduce((sum, entry) => sum + entry.slotCost, 0);
+  return {
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId,
+    draftRevision: 9,
+    eligibleSkillIds: DECODER_ELIGIBLE_SKILL_IDS,
+    mandatoryClassSkillOrNull: null,
+    paidSlotUsage: { entries, usedSlotCount },
+    racialFreeSkillIds: [],
+    racialFreeSkills: [],
+    requiredSlotCount: 2,
+    selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
+    selectedSkills,
+    selectionValidation: decoderSelectionValidation(2, usedSlotCount),
+    skillOptions: DECODER_SKILL_OPTIONS,
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  } as const;
+}
+
+type DecoderFormId = 'CHR-002' | 'CHR-010' | 'CHR-013' | 'CHR-015' | 'CHR-016';
+
 function projectionBase(
-  formId: 'CHR-002' | 'CHR-010' | 'CHR-016',
+  formId: DecoderFormId,
   projection: JsonObject,
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   const actions =
@@ -237,7 +351,13 @@ function projectionBase(
       ? (['CHR-010::CTA::004', 'CHR-010::CTA::005', 'CHR-010::CTA::006'] as const)
       : formId === 'CHR-016'
         ? (['CHR-016::CTA::003', 'CHR-016::CTA::004'] as const)
-        : (['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'] as const);
+        : formId === 'CHR-013'
+          ? (['CHR-013::CTA::002'] as const)
+          : formId === 'CHR-015'
+            ? projection['commandId'] === null
+              ? (['CHR-015::CTA::003'] as const)
+              : ([] as const)
+            : (['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'] as const);
   return {
     availableActionKeys: actions,
     formId,
@@ -248,10 +368,17 @@ function projectionBase(
   };
 }
 
-async function decodeProjectionFixture(
-  formId: 'CHR-002' | 'CHR-010' | 'CHR-016',
+interface DecoderHarness {
+  readonly connection: ProjectionConnection;
+  readonly skillDrafts: readonly (CharacterSkillSelectionDraft | null)[];
+  readonly socket: DecoderFakeWebSocket;
+  readonly states: readonly WebClientState[];
+}
+
+async function connectDecoderFixture(
+  formId: DecoderFormId,
   projection: JsonObject,
-): Promise<WebClientState> {
+): Promise<DecoderHarness> {
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
       values.set([1, 2, 3, 4]);
@@ -271,7 +398,15 @@ async function decodeProjectionFixture(
   );
   vi.stubGlobal('WebSocket', DecoderFakeWebSocket);
   const states: WebClientState[] = [];
-  const connection = connectProjection((state) => states.push(state));
+  const skillDrafts: (CharacterSkillSelectionDraft | null)[] = [];
+  const connection = connectProjection(
+    (state) => states.push(state),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (draft) => skillDrafts.push(draft),
+  );
   decoderConnections.push(connection);
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   const socket = DecoderFakeWebSocket.instances.at(-1);
@@ -307,6 +442,14 @@ async function decodeProjectionFixture(
   };
   socket.message(checkedHostTextV2(capabilities));
   socket.message(checkedHostTextV2(snapshot));
+  return { connection, skillDrafts, socket, states };
+}
+
+async function decodeProjectionFixture(
+  formId: DecoderFormId,
+  projection: JsonObject,
+): Promise<WebClientState> {
+  const { states } = await connectDecoderFixture(formId, projection);
   const finalState = states.at(-1);
   if (finalState === undefined) throw new Error('decoder test emitted no state');
   return finalState;
@@ -521,6 +664,221 @@ describe('decision consequence projection decoder', () => {
         path: '$.presentation.base.roleFilteredPayload.methodConsequenceOptions[0].methodConsequences.terminalRule.afterAttempt',
       },
     });
+  });
+});
+
+describe('SKILLS projection decoder and local draft', () => {
+  it.each([
+    ['CHR-013', DECODER_CHR_013_PROJECTION],
+    ['CHR-015', decoderChr015Projection()],
+  ] as const)('accepts the exact %s player projection', async (formId, projection) => {
+    const state = await decodeProjectionFixture(formId, projection);
+    expect(state.kind).toBe('ready');
+  });
+
+  it('rejects missing, extra, internal-id, and contradictory CHR-013 fields', async () => {
+    const missing = mutableProjection(DECODER_CHR_013_PROJECTION);
+    delete missing['selectedSkillIdOrNull'];
+    expect(await decodeProjectionFixture('CHR-013', missing as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.selectedSkillIdOrNull' },
+    });
+
+    const extra = mutableProjection(DECODER_CHR_013_PROJECTION);
+    extra['requirementId'] = 'REQ-001';
+    expect(await decodeProjectionFixture('CHR-013', extra as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.requirementId' },
+    });
+
+    const internal = mutableProjection(DECODER_CHR_013_PROJECTION);
+    optionAt(internal, 'skillCardSummaries', 0)['skillId'] = 'SKL-001';
+    expect(await decodeProjectionFixture('CHR-013', internal as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.skillCardSummaries[0].skillId',
+      },
+    });
+
+    const contradictory = mutableProjection(DECODER_CHR_013_PROJECTION);
+    optionAt(contradictory, 'skillCardSummaries', 1)['eligibility'] = 'ELIGIBLE';
+    expect(await decodeProjectionFixture('CHR-013', contradictory as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.skillCardSummaries[1].eligibility',
+      },
+    });
+  });
+
+  it('rejects non-canonical selections and values absent from signed levelOptions', async () => {
+    const nonCanonical = decoderChr015Projection(
+      [
+        { skillId: 'SKILL_03', slotCost: 1, targetBonus: 1 },
+        { skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 },
+      ],
+      'terminal-command',
+    );
+    expect(await decodeProjectionFixture('CHR-015', nonCanonical)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.selectedSkills[1].skillId' },
+    });
+
+    const forgedLevel = decoderChr015Projection(
+      [{ skillId: 'SKILL_01', slotCost: 3, targetBonus: 3 }],
+      'terminal-command',
+    );
+    expect(await decodeProjectionFixture('CHR-015', forgedLevel)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.selectedSkills[0].skillId' },
+    });
+  });
+
+  it('cross-checks the CHR-013 to CHR-015 signed option join', async () => {
+    const { connection, socket, states } = await connectDecoderFixture(
+      'CHR-013',
+      DECODER_CHR_013_PROJECTION,
+    );
+    expect(connection.requestFormAction('CHR-013::CTA::002')).toEqual({ ok: true });
+    const requestText = socket.sent.at(-1);
+    if (requestText === undefined) throw new Error('missing CHR-013 form action');
+    const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
+    if (!request.ok || request.value.messageType !== 'navigation.form-action') {
+      throw new Error('invalid CHR-013 form action');
+    }
+    const destination = mutableProjection(decoderChr015Projection());
+    optionAt(destination, 'skillOptions', 0)['skillLabel'] = 'Подменённая подпись';
+    socket.message(
+      checkedHostTextV2({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: {
+            correlationId: request.value.navigationRequestId,
+            reason: 'FORM_ACTION',
+          },
+          base: projectionBase('CHR-015', destination as JsonObject),
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+      }),
+    );
+
+    expect(states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.skillOptions' },
+    });
+  });
+
+  it('keeps toggles wire-free and canonical, rejects unsigned candidates, and checkpoints only EXACT', async () => {
+    const { connection, skillDrafts, socket, states } = await connectDecoderFixture(
+      'CHR-015',
+      decoderChr015Projection(),
+    );
+    const wireCount = socket.sent.length;
+    expect(connection.requestFormAction('CHR-015::CTA::001').ok).toBe(false);
+    expect(connection.replaceSkillSelectionCandidate('SKILL_01', 3)).toEqual({
+      detail: 'target bonus is absent from signed levelOptions',
+      ok: false,
+    });
+    expect(connection.replaceSkillSelectionCandidate('SKILL_03', 1)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-015::CTA::003')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(skillDrafts.at(-1)?.selectionValidation.kind).toBe('UNDERFILLED');
+
+    expect(connection.replaceSkillSelectionCandidate('SKILL_01', 1)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-015::CTA::003')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(skillDrafts.at(-1)?.selectedSkillIds).toEqual(['SKILL_01', 'SKILL_03']);
+    expect(skillDrafts.at(-1)?.selectionValidation.kind).toBe('EXACT');
+    const exactState = states.at(-1);
+    expect(exactState?.kind).toBe('ready');
+    if (exactState?.kind !== 'ready') throw new Error('missing exact local state');
+    expect(exactState.snapshot.revisions).toEqual(REVISIONS);
+    expect(exactState.snapshot.availableActionKeys).toContain('CHR-015::CTA::001');
+
+    expect(connection.replaceSkillSelectionCandidate('SKILL_04', 1)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-015::CTA::003')).toEqual({ ok: true });
+    expect(skillDrafts.at(-1)?.selectionValidation).toMatchObject({
+      excessSlotCount: 1,
+      kind: 'OVERFILLED',
+    });
+    expect(connection.requestFormAction('CHR-015::CTA::001').ok).toBe(false);
+    expect(socket.sent).toHaveLength(wireCount);
+
+    expect(connection.replaceSkillSelectionCandidate('SKILL_04', 1)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-015::CTA::003')).toEqual({ ok: true });
+    expect(skillDrafts.at(-1)?.selectionValidation.kind).toBe('EXACT');
+    expect(connection.requestFormAction('CHR-015::CTA::001')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount + 1);
+    const commandText = socket.sent.at(-1);
+    if (commandText === undefined) throw new Error('missing skill checkpoint');
+    const command = decodeClientMessage(commandText, WEB_PROTOCOL_VOCABULARY);
+    if (!command.ok || command.value.messageType !== 'command.request') {
+      throw new Error('invalid skill checkpoint');
+    }
+    expect(command.value.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      selectedSkills: [
+        { skillId: 'SKILL_01', targetBonus: 1 },
+        { skillId: 'SKILL_03', targetBonus: 1 },
+      ],
+      sourceFormId: 'CHR-015',
+      stage: 'SKILLS',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+  });
+
+  it('discards the local CHR-015 overlay when reconnect restores the durable snapshot', async () => {
+    const { connection, skillDrafts, socket } = await connectDecoderFixture(
+      'CHR-015',
+      decoderChr015Projection(),
+    );
+    expect(connection.replaceSkillSelectionCandidate('SKILL_01', 1)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-015::CTA::003')).toEqual({ ok: true });
+    expect(skillDrafts.at(-1)?.selectedSkillIds).toEqual(['SKILL_01']);
+    socket.serverClose(1006, 'overlay lost');
+    expect(connection.reconnect()).toEqual({ ok: true });
+    const resumedSocket = DecoderFakeWebSocket.instances.at(-1);
+    if (resumedSocket === undefined) throw new Error('missing resumed socket');
+    resumedSocket.open();
+    const reconnectText = resumedSocket.sent[0];
+    if (reconnectText === undefined) throw new Error('missing reconnect request');
+    const reconnect = decodeClientMessageV2(reconnectText, WEB_PROTOCOL_VOCABULARY);
+    if (!reconnect.ok || reconnect.value.messageType !== 'session.reconnect') {
+      throw new Error('invalid reconnect request');
+    }
+    const capabilities: SessionReconnectCapabilitiesV2Message = {
+      executableWorkflowCommandIds: [
+        'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+        'UI-CMD-CHAR-CREATION-SET-DECIDE',
+        'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+      ],
+      messageType: 'session.reconnect.capabilities',
+      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      reconnectRequestId: reconnect.value.reconnectRequestId,
+      revisions: REVISIONS,
+    };
+    const snapshot: ProjectionSnapshotV2Message = {
+      messageType: 'projection.snapshot',
+      presentation: {
+        assignment: {
+          correlationId: reconnect.value.reconnectRequestId,
+          reason: 'RECONNECT',
+        },
+        base: projectionBase('CHR-015', decoderChr015Projection()),
+        layers: [],
+      },
+      projectionRole: 'player',
+      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      revisions: REVISIONS,
+    };
+    resumedSocket.message(checkedHostTextV2(capabilities));
+    resumedSocket.message(checkedHostTextV2(snapshot));
+
+    expect(skillDrafts.at(-1)?.selectedSkillIds).toEqual([]);
+    expect(skillDrafts.at(-1)?.selectionValidation.kind).toBe('UNDERFILLED');
   });
 });
 
