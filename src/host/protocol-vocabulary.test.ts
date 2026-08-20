@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
-import { CHR_002_SET_DECIDE_ACTION_KEYS } from './projections/chr.js';
+import {
+  CHR_002_SET_DECIDE_ACTION_KEYS,
+  CHR_009_CHECKPOINT_ACTION_KEYS,
+  CHR_011_SET_DECIDE_ACTION_KEYS,
+} from './projections/chr.js';
 import type { ProtocolVocabulary } from '@shared/wire-protocol.js';
 import type { WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
 
@@ -35,7 +39,7 @@ describe('host protocol vocabulary implemented presentation support', () => {
     expect(vocabulary.isFormActionKey('APP-004', 'APP-004::CTA::009')).toBe(false);
   });
 
-  it('accepts the ten exact inherited character routes and source action vocabularies', () => {
+  it('accepts the thirteen exact inherited character routes and source action vocabularies', () => {
     const forms = [
       { actionCount: 5, formId: 'CHR-002', routeSuffix: 'chr-002' },
       { actionCount: 2, formId: 'CHR-003', routeSuffix: 'chr-003' },
@@ -44,7 +48,10 @@ describe('host protocol vocabulary implemented presentation support', () => {
       { actionCount: 2, formId: 'CHR-006', routeSuffix: 'chr-006' },
       { actionCount: 2, formId: 'CHR-007', routeSuffix: 'chr-007' },
       { actionCount: 2, formId: 'CHR-008', routeSuffix: 'chr-008' },
+      { actionCount: 3, formId: 'CHR-009', routeSuffix: 'chr-009' },
       { actionCount: 6, formId: 'CHR-010', routeSuffix: 'chr-010' },
+      { actionCount: 5, formId: 'CHR-011', routeSuffix: 'chr-011' },
+      { actionCount: 3, formId: 'CHR-012', routeSuffix: 'chr-012' },
       { actionCount: 4, formId: 'CHR-016', routeSuffix: 'chr-016' },
       { actionCount: 5, formId: 'CHR-036', routeSuffix: 'chr-036' },
     ] as const;
@@ -103,10 +110,12 @@ describe('host protocol vocabulary implemented presentation support', () => {
     ).toBe(false);
   });
 
-  it('recognizes both creation workflow commands and exposes CHR-002 confirmation', () => {
+  it('recognizes both creation workflow commands and exposes implemented confirmations', () => {
     expect(vocabulary.isWorkflowCommandId('UI-CMD-CHAR-CREATION-SET-DECIDE')).toBe(true);
     expect(vocabulary.isWorkflowCommandId('UI-CMD-CHAR-CREATION-ROLL-COMMIT')).toBe(true);
     expect(vocabulary.isFormActionKey('CHR-002', 'CHR-002::CTA::001')).toBe(true);
     expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-002::CTA::001']);
+    expect(CHR_009_CHECKPOINT_ACTION_KEYS).toEqual(['CHR-009::CTA::001', 'CHR-009::CTA::002']);
+    expect(CHR_011_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-011::CTA::001']);
   });
 });

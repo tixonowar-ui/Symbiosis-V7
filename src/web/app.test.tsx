@@ -490,6 +490,166 @@ const chr004Base = (
   routeTemplate: '/player/characters/:localCharacterId/create/chr-004',
 });
 
+const SOURCE_ENTRIES = Array.from({ length: 7 }, (_, setEntryIndex) => ({
+  creationCriticalPenaltyOrNull: setEntryIndex === 0 ? (-1 as const) : null,
+  setEntryIndex,
+  value: setEntryIndex + 1,
+}));
+const PURE_CLASS_OPTIONS = [
+  {
+    classConsequences: {
+      statModifiers: [
+        { delta: 2, statCode: 'S' },
+        { delta: 2, statCode: 'D' },
+        { delta: 5, statCode: 'Z' },
+        { delta: 7, statCode: 'I' },
+      ],
+    },
+    mandatoryClassSkill: { bonus: 5, skillKey: 'PURE_SEEKER', slotCost: 1 },
+    pureClass: 'SEEKER',
+  },
+  {
+    classConsequences: {
+      statModifiers: [
+        { delta: 2, statCode: 'S' },
+        { delta: 5, statCode: 'D' },
+        { delta: 5, statCode: 'M' },
+        { delta: 5, statCode: 'Z' },
+      ],
+    },
+    mandatoryClassSkill: { bonus: 4, skillKey: 'PURE_STALKER', slotCost: 1 },
+    pureClass: 'STALKER',
+  },
+  {
+    classConsequences: {
+      statModifiers: [
+        { delta: 5, statCode: 'S' },
+        { delta: 2, statCode: 'D' },
+        { delta: 5, statCode: 'M' },
+        { delta: 5, statCode: 'Z' },
+      ],
+    },
+    mandatoryClassSkill: { bonus: 3, skillKey: 'PURE_SOLDIER', slotCost: 1 },
+    pureClass: 'SOLDIER',
+  },
+] as const;
+
+function chr009Projection(
+  assignmentMode: 'POINT_BUY_85' | 'POINT_BUY_90' | 'ROLLED_BIJECTION',
+  raceChoice: 'FREE' | 'PURE' | 'UNITED',
+  draftRevision = 7,
+) {
+  return {
+    C: null,
+    D: null,
+    I: null,
+    M: null,
+    S: null,
+    W: null,
+    Z: null,
+    assignmentMode,
+    assignmentValidation: null,
+    bijectionProofOrExactSum:
+      assignmentMode === 'ROLLED_BIJECTION'
+        ? {
+            assignedSetEntryIndexByStat: null,
+            kind: 'ROLLED_BIJECTION',
+            sourceEntries: SOURCE_ENTRIES,
+          }
+        : {
+            actualTotal: null,
+            kind: 'EXACT_SUM',
+            requiredTotal: assignmentMode === 'POINT_BUY_90' ? 90 : 85,
+          },
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId: null,
+    draftRevision,
+    eachValueRange: assignmentMode === 'ROLLED_BIJECTION' ? null : { maximum: 20, minimum: 1 },
+    raceChoice,
+    sourceSetReceiptIdOrNull:
+      assignmentMode === 'ROLLED_BIJECTION' ? DECISION_SET_RECEIPT_ID : null,
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  } as const;
+}
+
+function chr009Base(
+  projection: ReturnType<typeof chr009Projection>,
+): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys: [
+      projection.raceChoice === 'PURE' ? 'CHR-009::CTA::001' : 'CHR-009::CTA::002',
+    ],
+    formId: 'CHR-009',
+    formType: 'screen',
+    roleFilteredPayload: projection,
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: '/player/characters/:localCharacterId/create/chr-009',
+  };
+}
+
+function chr011Base(draftRevision = 8): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys: ['CHR-011::CTA::003', 'CHR-011::CTA::004', 'CHR-011::CTA::005'],
+    formId: 'CHR-011',
+    formType: 'screen',
+    roleFilteredPayload: {
+      characterDraftId: CHARACTER_DRAFT_ID,
+      classConsequences: null,
+      classOptions: PURE_CLASS_OPTIONS,
+      commandId: null,
+      draftRevision,
+      mandatoryClassSkill: null,
+      pureClass: null,
+      raceChoice: 'PURE',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    },
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: '/player/characters/:localCharacterId/create/chr-011',
+  };
+}
+
+function chr012Base(
+  baseStats: Readonly<Record<'S' | 'D' | 'M' | 'Z' | 'I' | 'W' | 'C', number>>,
+  {
+    classModifiersOrNull = null,
+    draftRevision = 8,
+    mandatoryClassSkillOrNull = null,
+    raceModifiers = [],
+    skillStageStats = baseStats,
+  }: {
+    readonly classModifiersOrNull?:
+      readonly { readonly delta: number; readonly statCode: string }[] | null;
+    readonly draftRevision?: number;
+    readonly mandatoryClassSkillOrNull?: {
+      readonly bonus: number;
+      readonly skillKey: string;
+      readonly slotCost: number;
+    } | null;
+    readonly raceModifiers?: readonly { readonly delta: number; readonly statCode: string }[];
+    readonly skillStageStats?: Readonly<Record<'S' | 'D' | 'M' | 'Z' | 'I' | 'W' | 'C', number>>;
+  } = {},
+): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys: [],
+    formId: 'CHR-012',
+    formType: 'screen',
+    roleFilteredPayload: {
+      baseStats,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      classModifiersOrNull,
+      commandId: null,
+      draftRevision,
+      mandatoryClassSkillOrNull,
+      raceModifiers,
+      skillStageStats,
+      symbiontModifiersExcluded: true,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    },
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: '/player/characters/:localCharacterId/create/chr-012',
+  };
+}
+
 type DecisionFormId = 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
 const SET_DECISION_RULES = {
   'CHR-005': {
@@ -989,6 +1149,75 @@ function inputNumber(input: HTMLInputElement, value: number): void {
     descriptor.set!.call(input, String(value));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   });
+}
+
+async function beginPendingPureAssignmentReconnect() {
+  const projection = chr009Projection('ROLLED_BIJECTION', 'PURE');
+  const { container, socket } = await connectToWizardBase(chr009Base(projection), 7);
+  const indices = { C: 0, D: 5, I: 2, M: 4, S: 6, W: 1, Z: 3 } as const;
+  for (const [statCode, index] of Object.entries(indices)) {
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>(`[data-stat-assignment="${statCode}"]`),
+        `${statCode} rolled assignment`,
+      ),
+      String(index),
+    );
+  }
+  act(() => {
+    requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-009::CTA::001"]'),
+      'CHR-009 PURE checkpoint',
+    ).click();
+  });
+  const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+  if (request.messageType !== 'command.request') {
+    throw new Error('test setup: missing rolled assignment command');
+  }
+  const baseStats = { C: 1, D: 6, I: 3, M: 5, S: 7, W: 2, Z: 4 } as const;
+  const rolledAssignmentsOrNull = (['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const).map(
+    (statCode) => ({ ...SOURCE_ENTRIES[indices[statCode]]!, statCode }),
+  );
+  const receiptId = 'historic-pure-assignment-receipt';
+  const receiptRevisions = entityRevisions(8);
+  const result = {
+    assignmentMode: 'ROLLED_BIJECTION',
+    baseStats,
+    branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+    branchUuid: BRANCH_UUID,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    checkpointId: WIZARD_CHECKPOINT_ID,
+    checkpointOwnerId: CHARACTER_DRAFT_ID,
+    checkpointRevision: 8,
+    draftRevision: 8,
+    nextFormId: 'CHR-011',
+    raceChoice: 'PURE',
+    rolledAssignmentsOrNull,
+    sourceFormId: 'CHR-009',
+    sourceSetReceiptIdOrNull: DECISION_SET_RECEIPT_ID,
+    stage: 'STAT_ASSIGNMENT',
+  } as const;
+  deliver(
+    socket,
+    checkedHostTextV1(
+      statSetDecisionTerminal(request.commandId, receiptId, result, receiptRevisions),
+    ),
+  );
+  act(() => socket.serverClose(1006, 'assignment destination lost'));
+  act(() => requiredElement(container.querySelector('button'), 'reconnect action').click());
+  const resumedSocket = FakeWebSocket.instances.at(-1)!;
+  open(resumedSocket);
+  const reconnect = decodedClientMessageV2(resumedSocket, 0);
+  if (reconnect.messageType !== 'session.reconnect') {
+    throw new Error('test setup: missing reconnect request');
+  }
+  deliver(
+    resumedSocket,
+    checkedHostTextV1(
+      statSetDecisionTerminal(request.commandId, receiptId, result, receiptRevisions, true),
+    ),
+  );
+  return { baseStats, container, reconnect, resumedSocket };
 }
 
 async function chooseFile(input: HTMLInputElement, file: File): Promise<void> {
@@ -3300,7 +3529,7 @@ describe('APP-001 web entry', () => {
     },
   );
 
-  it('accepts an immutable set through exact result, replay and actionless signed CHR-009 boundary', async () => {
+  it('accepts an immutable set through exact result, replay and initial CHR-009', async () => {
     const formId = 'CHR-005';
     const { container, socket } = await connectToWizardBase(setDecisionBase(formId), 6);
     act(() => {
@@ -3344,15 +3573,7 @@ describe('APP-001 web entry', () => {
         setDecisionPresentationSnapshot(
           request.commandId,
           'COMMAND_DESTINATION',
-          setDecisionBase(
-            formId,
-            setDecisionProjection(formId, {
-              commandId: request.commandId,
-              decision: 'ACCEPT_SET',
-              decisionReceiptIdOrNull: receiptId,
-              draftRevision: 7,
-            }),
-          ),
+          chr009Base(chr009Projection('ROLLED_BIJECTION', 'UNITED')),
           [],
           revisions,
         ),
@@ -3360,9 +3581,11 @@ describe('APP-001 web entry', () => {
     );
 
     expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
-    expect(container.querySelector('[data-character-set-decision="ACCEPT_SET"]')).not.toBeNull();
-    expect(container.querySelector('[data-atlas-form-id="CHR-009"]')).toBeNull();
-    expect(container.querySelector('[data-atlas-action-key^="CHR-005::CTA::"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-009"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-stat-assignment-validation="ASSIGNMENT_INVALID"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key^="CHR-009::CTA::"]')).toBeNull();
   });
 
   it('opens CHR-028 as an unbound semantic top layer and CANCEL restores the unchanged set', async () => {
@@ -3544,7 +3767,7 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-character-set-decision="PENDING"]')).not.toBeNull();
   });
 
-  it('CONFIRM point-buy keeps an actionless CHR-028/COMMITTED layer and CHR-009 unpublished', async () => {
+  it('CONFIRM point-buy closes CHR-028 and publishes initial CHR-009', async () => {
     const formId = 'CHR-005';
     const base = setDecisionBase(formId);
     const { container, socket } = await connectToWizardBase(base, 6);
@@ -3601,38 +3824,476 @@ describe('APP-001 web entry', () => {
         statSetDecisionTerminal(request.commandId, receiptId, result, revisions, true),
       ),
     );
-    const committedBase = setDecisionBase(
-      formId,
-      setDecisionProjection(formId, {
-        commandId: request.commandId,
-        decision: 'USE_POINT_BUY_90',
-        decisionReceiptIdOrNull: receiptId,
-        draftRevision: 7,
-      }),
-    );
     deliver(
       socket,
       checkedHostTextV2(
         setDecisionPresentationSnapshot(
           request.commandId,
           'COMMAND_DESTINATION',
-          committedBase,
-          [
-            chr028Layer(formId, {
-              commandId: request.commandId,
-              decision: 'CONFIRM',
-              decisionReceiptIdOrNull: receiptId,
-              draftRevision: 7,
-            }),
-          ],
+          chr009Base(chr009Projection('POINT_BUY_90', 'FREE')),
+          [],
           revisions,
         ),
       ),
     );
 
     expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
-    expect(container.querySelector('[data-chr-028-decision="CONFIRM"]')).not.toBeNull();
-    expect(container.querySelector('[data-atlas-form-id="CHR-009"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-028"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-009"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+  });
+
+  it('keeps point-buy local until exact 90 and checkpoints only the seven stat values', async () => {
+    const projection = chr009Projection('POINT_BUY_90', 'FREE');
+    const { container, socket } = await connectToWizardBase(chr009Base(projection), 7);
+    expect(container.querySelector('[data-atlas-action-key="CHR-009::CTA::002"]')).toBeNull();
+    const values = { C: 5, D: 20, I: 10, M: 20, S: 20, W: 5, Z: 10 } as const;
+    for (const [statCode, value] of Object.entries(values)) {
+      inputNumber(
+        requiredElement(
+          container.querySelector<HTMLInputElement>(`[data-stat-assignment="${statCode}"]`),
+          `${statCode} point-buy input`,
+        ),
+        value,
+      );
+    }
+    expect(
+      container.querySelector('[data-stat-assignment-validation="READY_TO_CHECKPOINT"]'),
+    ).not.toBeNull();
+    const cInput = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-stat-assignment="C"]'),
+      'C point-buy input',
+    );
+    inputNumber(cInput, 4);
+    expect(
+      container.querySelector('[data-stat-assignment-validation="ASSIGNMENT_INVALID"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-009::CTA::002"]')).toBeNull();
+    inputNumber(cInput, 5);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-009::CTA::002"]'),
+        'CHR-009 classless checkpoint',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing assignment command');
+    expect(request.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 7,
+      pointBuyStats: values,
+      sourceFormId: 'CHR-009',
+      stage: 'STAT_ASSIGNMENT',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const receiptId = 'point-assignment-receipt';
+    const revisions = entityRevisions(8);
+    const result = {
+      assignmentMode: 'POINT_BUY_90',
+      baseStats: values,
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 8,
+      draftRevision: 8,
+      nextFormId: 'CHR-012',
+      raceChoice: 'FREE',
+      rolledAssignmentsOrNull: null,
+      sourceFormId: 'CHR-009',
+      sourceSetReceiptIdOrNull: null,
+      stage: 'STAT_ASSIGNMENT',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(statSetDecisionTerminal(request.commandId, receiptId, result, revisions)),
+    );
+    act(() => socket.serverClose(1006, 'assignment destination lost'));
+    act(() => requiredElement(container.querySelector('button'), 'reconnect action').click());
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect request');
+    expect(reconnect.unacknowledgedCommandIds).toEqual([request.commandId]);
+    deliver(
+      resumedSocket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, receiptId, result, revisions, true),
+      ),
+    );
+    deliverPair(
+      resumedSocket,
+      capabilities({ reconnectRequestId: reconnect.reconnectRequestId, revisions }),
+      reconnectWizardSnapshot(reconnect.reconnectRequestId, chr012Base(values), 8),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).not.toBeNull();
+    expect(container.querySelector('[data-stat-breakdown]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+  });
+
+  it('accepts a historic PURE assignment replay paired with the next signed class checkpoint', async () => {
+    const { baseStats, container, reconnect, resumedSocket } =
+      await beginPendingPureAssignmentReconnect();
+    const option = PURE_CLASS_OPTIONS[1];
+    const revisions = entityRevisions(9);
+    deliverPair(
+      resumedSocket,
+      capabilities({ reconnectRequestId: reconnect.reconnectRequestId, revisions }),
+      reconnectWizardSnapshot(
+        reconnect.reconnectRequestId,
+        chr012Base(baseStats, {
+          classModifiersOrNull: option.classConsequences.statModifiers,
+          draftRevision: 9,
+          mandatoryClassSkillOrNull: option.mandatoryClassSkill,
+          skillStageStats: { C: 1, D: 11, I: 3, M: 10, S: 9, W: 2, Z: 9 },
+        }),
+        9,
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).not.toBeNull();
+    expect(container.querySelector('[data-mandatory-class-skill]')?.textContent).toContain(
+      'PURE_STALKER',
+    );
+  });
+
+  it.each([
+    ['a two-checkpoint revision jump', 10, true],
+    ['a CHR-012 projection without class facts', 9, false],
+  ] as const)(
+    'rejects a historic PURE assignment replay followed by %s',
+    async (_, revision, withClass) => {
+      const { baseStats, container, reconnect, resumedSocket } =
+        await beginPendingPureAssignmentReconnect();
+      const option = PURE_CLASS_OPTIONS[1];
+      const revisions = entityRevisions(revision);
+      deliverPair(
+        resumedSocket,
+        capabilities({ reconnectRequestId: reconnect.reconnectRequestId, revisions }),
+        reconnectWizardSnapshot(
+          reconnect.reconnectRequestId,
+          chr012Base(baseStats, {
+            classModifiersOrNull: withClass ? option.classConsequences.statModifiers : null,
+            draftRevision: revision,
+            mandatoryClassSkillOrNull: withClass ? option.mandatoryClassSkill : null,
+            skillStageStats: withClass ? { C: 1, D: 11, I: 3, M: 10, S: 9, W: 2, Z: 9 } : baseStats,
+          }),
+          revision,
+        ),
+      );
+
+      expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+      expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).toBeNull();
+    },
+  );
+
+  it('drops an uncommitted CHR-009 assignment when reconnect restores the signed initial form', async () => {
+    const base = chr009Base(chr009Projection('POINT_BUY_85', 'UNITED'));
+    const { container, socket } = await connectToWizardBase(base, 7);
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-stat-assignment="S"]'),
+        'S point-buy input',
+      ),
+      20,
+    );
+    act(() => socket.serverClose(1006, 'local assignment lost'));
+    act(() => requiredElement(container.querySelector('button'), 'reconnect action').click());
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect request');
+    deliverPair(
+      resumedSocket,
+      capabilities({
+        reconnectRequestId: reconnect.reconnectRequestId,
+        revisions: entityRevisions(7),
+      }),
+      reconnectWizardSnapshot(reconnect.reconnectRequestId, base, 7),
+    );
+
+    expect(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-stat-assignment="S"]'),
+        'restored S point-buy input',
+      ).value,
+    ).toBe('');
+    expect(
+      container.querySelector('[data-stat-assignment-validation="ASSIGNMENT_INVALID"]'),
+    ).not.toBeNull();
+  });
+
+  it('refuses authority-only metadata in the CHR-012 player projection', async () => {
+    const stats = { C: 10, D: 10, I: 10, M: 10, S: 10, W: 10, Z: 10 } as const;
+    const base = chr012Base(stats);
+    const { container } = await connectToWizardBase(
+      { ...base, roleFilteredPayload: { ...base.roleFilteredPayload, rngSeed: 'leak' } },
+      8,
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-host-field="rngSeed"]')).toBeNull();
+  });
+
+  it('refuses a CHR-012 breakdown whose signed total does not match its modifier rows', async () => {
+    const stats = { C: 10, D: 10, I: 10, M: 10, S: 10, W: 10, Z: 10 } as const;
+    const { container } = await connectToWizardBase(
+      chr012Base(stats, { skillStageStats: { ...stats, S: 11 } }),
+      8,
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).toBeNull();
+  });
+
+  it('refuses CHR-011 host options that reuse one mandatory skill across classes', async () => {
+    const base = chr011Base();
+    const options: {
+      readonly classConsequences: {
+        readonly statModifiers: readonly { readonly delta: number; readonly statCode: string }[];
+      };
+      readonly mandatoryClassSkill: {
+        readonly bonus: number;
+        readonly skillKey: string;
+        readonly slotCost: number;
+      };
+      readonly pureClass: string;
+    }[] = [...PURE_CLASS_OPTIONS];
+    options[1] = {
+      ...options[1]!,
+      mandatoryClassSkill: {
+        ...options[1]!.mandatoryClassSkill,
+        skillKey: options[0]!.mandatoryClassSkill.skillKey,
+      },
+    };
+    const { container } = await connectToWizardBase(
+      { ...base, roleFilteredPayload: { ...base.roleFilteredPayload, classOptions: options } },
+      8,
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-011"]')).toBeNull();
+  });
+
+  it('preserves rolled index provenance, then confirms a host-owned PURE class into CHR-012', async () => {
+    const projection = chr009Projection('ROLLED_BIJECTION', 'PURE');
+    const { container, socket } = await connectToWizardBase(chr009Base(projection), 7);
+    const indices = { C: 0, D: 5, I: 2, M: 4, S: 6, W: 1, Z: 3 } as const;
+    for (const statCode of Object.keys(indices)) {
+      select(
+        requiredElement(
+          container.querySelector<HTMLSelectElement>(`[data-stat-assignment="${statCode}"]`),
+          `${statCode} duplicate assignment`,
+        ),
+        '0',
+      );
+    }
+    expect(
+      container.querySelector('[data-stat-assignment-validation="ASSIGNMENT_INVALID"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-009::CTA::001"]')).toBeNull();
+    for (const [statCode, index] of Object.entries(indices)) {
+      select(
+        requiredElement(
+          container.querySelector<HTMLSelectElement>(`[data-stat-assignment="${statCode}"]`),
+          `${statCode} rolled assignment`,
+        ),
+        String(index),
+      );
+    }
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-009::CTA::001"]'),
+        'CHR-009 PURE checkpoint',
+      ).click();
+    });
+    const assignmentRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (assignmentRequest.messageType !== 'command.request') {
+      throw new Error('missing rolled assignment command');
+    }
+    expect(assignmentRequest.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 7,
+      setEntryIndexByStat: indices,
+      sourceFormId: 'CHR-009',
+      stage: 'STAT_ASSIGNMENT',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const baseStats = { C: 1, D: 6, I: 3, M: 5, S: 7, W: 2, Z: 4 } as const;
+    const rolledAssignmentsOrNull = (['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const).map(
+      (statCode) => ({ ...SOURCE_ENTRIES[indices[statCode]]!, statCode }),
+    );
+    const assignmentReceiptId = 'rolled-assignment-receipt';
+    const assignmentRevisions = entityRevisions(8);
+    const assignmentResult = {
+      assignmentMode: 'ROLLED_BIJECTION',
+      baseStats,
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 8,
+      draftRevision: 8,
+      nextFormId: 'CHR-011',
+      raceChoice: 'PURE',
+      rolledAssignmentsOrNull,
+      sourceFormId: 'CHR-009',
+      sourceSetReceiptIdOrNull: DECISION_SET_RECEIPT_ID,
+      stage: 'STAT_ASSIGNMENT',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(
+          assignmentRequest.commandId,
+          assignmentReceiptId,
+          assignmentResult,
+          assignmentRevisions,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(
+          assignmentRequest.commandId,
+          assignmentReceiptId,
+          assignmentResult,
+          assignmentRevisions,
+          true,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(assignmentRequest.commandId, chr011Base(), 8),
+      ),
+    );
+    const selectorWireCount = socket.sent.length;
+    const selectorRevisions = { ...assignmentRevisions };
+    const selectorActionKeys: readonly string[] = [
+      'CHR-011::CTA::003',
+      'CHR-011::CTA::004',
+      'CHR-011::CTA::005',
+    ];
+    for (const [actionKey, option] of [
+      ['CHR-011::CTA::003', PURE_CLASS_OPTIONS[0]],
+      ['CHR-011::CTA::005', PURE_CLASS_OPTIONS[2]],
+      ['CHR-011::CTA::004', PURE_CLASS_OPTIONS[1]],
+    ] as const) {
+      act(() => {
+        requiredElement(
+          container.querySelector<HTMLButtonElement>(`[data-atlas-action-key="${actionKey}"]`),
+          `${option.pureClass} selector`,
+        ).click();
+      });
+      expect(socket.sent).toHaveLength(selectorWireCount);
+      expect(container.querySelector('[data-selected-pure-class]')?.textContent).toBe(
+        option.pureClass,
+      );
+      const selectedOption = requiredElement(
+        container.querySelector(`[data-pure-class-option="${option.pureClass}"]`),
+        `${option.pureClass} host option`,
+      );
+      const [consequences, mandatorySkill] = selectedOption.querySelectorAll('pre');
+      expect(consequences?.textContent).toBe(JSON.stringify(option.classConsequences, null, 2));
+      expect(mandatorySkill?.textContent).toBe(JSON.stringify(option.mandatoryClassSkill, null, 2));
+      const visibleActionKeys = [
+        ...container.querySelectorAll<HTMLElement>('[data-atlas-action-key]'),
+      ].map((element) => element.dataset['atlasActionKey'] ?? '');
+      expect(visibleActionKeys.filter((key) => !selectorActionKeys.includes(key))).toEqual([
+        'CHR-011::CTA::001',
+      ]);
+    }
+    const confirmWireCount = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-011::CTA::001"]'),
+        'CHR-011 class confirm',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(confirmWireCount + 1);
+    const classRequest = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (classRequest.messageType !== 'command.request') throw new Error('missing class command');
+    expect(classRequest.expectedRevisions).toEqual(selectorRevisions);
+    expect(classRequest.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 8,
+      pureClass: 'STALKER',
+      sourceFormId: 'CHR-011',
+      stage: 'STAT_ASSIGNMENT',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(container.querySelector('[data-atlas-action-key^="CHR-011::CTA::"]')).toBeNull();
+    const option = PURE_CLASS_OPTIONS[1];
+    const classReceiptId = 'pure-class-receipt';
+    const classRevisions = entityRevisions(9);
+    const classResult = {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 9,
+      classConsequences: option.classConsequences,
+      draftRevision: 9,
+      mandatoryClassSkill: option.mandatoryClassSkill,
+      nextFormId: 'CHR-012',
+      pureClass: 'STALKER',
+      sourceFormId: 'CHR-011',
+      stage: 'STAT_ASSIGNMENT',
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(
+          classRequest.commandId,
+          classReceiptId,
+          classResult,
+          classRevisions,
+        ),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(
+          classRequest.commandId,
+          classReceiptId,
+          classResult,
+          classRevisions,
+          true,
+        ),
+      ),
+    );
+    const skillStageStats = { C: 1, D: 11, I: 3, M: 10, S: 9, W: 2, Z: 9 } as const;
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(
+          classRequest.commandId,
+          chr012Base(baseStats, {
+            classModifiersOrNull: option.classConsequences.statModifiers,
+            draftRevision: 9,
+            mandatoryClassSkillOrNull: option.mandatoryClassSkill,
+            skillStageStats,
+          }),
+          9,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).not.toBeNull();
+    expect(container.querySelector('[data-mandatory-class-skill]')?.textContent).toContain(
+      'PURE_STALKER',
+    );
     expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
   });
 

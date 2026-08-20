@@ -1,4 +1,5 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import type { ClassCode, StatCode } from '@generated/types/character.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import type { IdentityDraftValues } from '@shared/wire-v3-protocol.js';
 
@@ -249,6 +250,97 @@ export const CHR_008_REQUIRED_FIELDS = [
   'commandId',
 ] as const;
 
+export const CHR_009_FORM_ID = 'CHR-009' as const;
+export const CHR_009_ROUTE = '/player/characters/:localCharacterId/create/chr-009' as const;
+/** Source: forms-by-id.json["CHR-009"].requiredFields. */
+export const CHR_009_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'assignmentMode=ROLLED_BIJECTION|POINT_BUY_90|POINT_BUY_85',
+  'sourceSetReceiptIdOrNull',
+  'S',
+  'D',
+  'M',
+  'Z',
+  'I',
+  'W',
+  'C',
+  'bijectionProofOrExactSum',
+  'eachValueRange=1..20 when point-buy',
+  'assignmentValidation',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+export const CHR_009_CONFIRM_PURE_ACTION_KEY = 'CHR-009::CTA::001' as const satisfies ActionKey;
+export const CHR_009_CONFIRM_CLASSLESS_ACTION_KEY =
+  'CHR-009::CTA::002' as const satisfies ActionKey;
+export const CHR_009_SAFE_RETURN_ACTION_KEY = 'CHR-009::CTA::003' as const satisfies ActionKey;
+export const CHR_009_CHECKPOINT_ACTION_KEYS = [
+  CHR_009_CONFIRM_PURE_ACTION_KEY,
+  CHR_009_CONFIRM_CLASSLESS_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+
+export function chr009CheckpointActionKeys(
+  raceChoice: RaceChoice,
+  capabilityAvailable: boolean,
+): readonly ActionKey[] {
+  switch (raceChoice) {
+    case 'PURE':
+      return capabilityAvailable ? [CHR_009_CONFIRM_PURE_ACTION_KEY] : [];
+    case 'FREE':
+    case 'UNITED':
+      return capabilityAvailable ? [CHR_009_CONFIRM_CLASSLESS_ACTION_KEY] : [];
+    default:
+      throw new Error(`CHR-009 has unrecognized raceChoice ${JSON.stringify(raceChoice)}`);
+  }
+}
+
+export const CHR_011_FORM_ID = 'CHR-011' as const;
+export const CHR_011_ROUTE = '/player/characters/:localCharacterId/create/chr-011' as const;
+/** Source: forms-by-id.json["CHR-011"].requiredFields. */
+export const CHR_011_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'raceChoice=PURE',
+  'pureClass=SEEKER|STALKER|SOLDIER',
+  'classConsequences',
+  'mandatoryClassSkill',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+export const CHR_011_CONFIRM_ACTION_KEY = 'CHR-011::CTA::001' as const satisfies ActionKey;
+export const CHR_011_SAFE_RETURN_ACTION_KEY = 'CHR-011::CTA::002' as const satisfies ActionKey;
+export const CHR_011_INITIAL_ACTION_KEYS = [
+  'CHR-011::CTA::003',
+  'CHR-011::CTA::004',
+  'CHR-011::CTA::005',
+] as const satisfies readonly ActionKey[];
+export const CHR_011_SET_DECIDE_ACTION_KEYS = [
+  CHR_011_CONFIRM_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+
+export const CHR_012_FORM_ID = 'CHR-012' as const;
+export const CHR_012_ROUTE = '/player/characters/:localCharacterId/create/chr-012' as const;
+/** Source: forms-by-id.json["CHR-012"].requiredFields. */
+export const CHR_012_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'baseStats',
+  'raceModifiers',
+  'classModifiersOrNull',
+  'skillStageStats',
+  'symbiontModifiersExcluded=true',
+  'mandatoryClassSkillOrNull',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+export const CHR_012_EXCLUDED_ACTION_KEYS = [
+  'CHR-012::CTA::001',
+  'CHR-012::CTA::002',
+  'CHR-012::CTA::003',
+] as const satisfies readonly ActionKey[];
+export const CHR_012_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+
 export const CHR_028_FORM_ID = 'CHR-028' as const;
 export const CHR_028_ROUTE = '@dialog/chr-028' as const;
 /** Source: forms-by-id.json["CHR-028"].requiredFields. */
@@ -488,6 +580,7 @@ export const SET_DECIDE_ACTION_KEYS_BY_FORM = {
   [CHR_007_FORM_ID]: [creationSetDecisionFormContract(CHR_007_FORM_ID).acceptActionKey],
   [CHR_008_FORM_ID]: [creationSetDecisionFormContract(CHR_008_FORM_ID).acceptActionKey],
   [CHR_010_FORM_ID]: CHR_010_SET_DECIDE_ACTION_KEYS,
+  [CHR_011_FORM_ID]: CHR_011_SET_DECIDE_ACTION_KEYS,
   [CHR_016_FORM_ID]: CHR_016_SET_DECIDE_ACTION_KEYS,
   [CHR_028_FORM_ID]: CHR_028_WARNING_ACTION_KEYS,
   [CHR_036_FORM_ID]: CHR_036_SET_DECIDE_ACTION_KEYS,
@@ -500,6 +593,7 @@ export const SET_DECIDE_CAPABLE_FORM_IDS = [
   CHR_007_FORM_ID,
   CHR_008_FORM_ID,
   CHR_010_FORM_ID,
+  CHR_011_FORM_ID,
   CHR_016_FORM_ID,
   CHR_028_FORM_ID,
   CHR_036_FORM_ID,
@@ -688,5 +782,283 @@ export function projectInitialChr002(
     methodConsequences: null,
     statMethod: null,
     wizardCheckpointId,
+  };
+}
+
+export interface Chr009SourceEntry extends JsonObject {
+  readonly creationCriticalPenaltyOrNull: -1 | -2 | -3 | -4 | -5 | null;
+  readonly setEntryIndex: number;
+  readonly value: number;
+}
+
+interface Chr009InitialProjectionCommon {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly raceChoice: RaceChoice;
+  readonly wizardCheckpointId: string;
+}
+
+export type Chr009InitialProjectionValues = Chr009InitialProjectionCommon &
+  (
+    | {
+        readonly assignmentMode: 'ROLLED_BIJECTION';
+        readonly sourceEntries: readonly Chr009SourceEntry[];
+        readonly sourceSetReceiptIdOrNull: string;
+      }
+    | {
+        readonly assignmentMode: 'POINT_BUY_85' | 'POINT_BUY_90';
+        readonly sourceSetReceiptIdOrNull: null;
+      }
+  );
+
+export interface StatModifierProjection extends JsonObject {
+  readonly delta: number;
+  readonly statCode: StatCode;
+}
+
+export interface MandatoryClassSkillProjection extends JsonObject {
+  readonly bonus: number;
+  readonly skillKey: string;
+  readonly slotCost: number;
+}
+
+export interface PureClassOptionProjection extends JsonObject {
+  readonly classConsequences: {
+    readonly statModifiers: readonly StatModifierProjection[];
+  };
+  readonly mandatoryClassSkill: MandatoryClassSkillProjection;
+  readonly pureClass: ClassCode;
+}
+
+export interface Chr011InitialProjectionValues {
+  readonly characterDraftId: string;
+  readonly classOptions: readonly PureClassOptionProjection[];
+  readonly draftRevision: number;
+  readonly wizardCheckpointId: string;
+}
+
+export type StatMapProjection = Readonly<Record<StatCode, number>>;
+
+export interface Chr012ProjectionValues {
+  readonly baseStats: StatMapProjection;
+  readonly characterDraftId: string;
+  readonly classModifiersOrNull: readonly StatModifierProjection[] | null;
+  readonly draftRevision: number;
+  readonly mandatoryClassSkillOrNull: MandatoryClassSkillProjection | null;
+  readonly raceModifiers: readonly StatModifierProjection[];
+  readonly skillStageStats: StatMapProjection;
+  readonly wizardCheckpointId: string;
+}
+
+const STAT_CODES = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const satisfies readonly StatCode[];
+const PURE_CLASSES = ['SEEKER', 'STALKER', 'SOLDIER'] as const satisfies readonly ClassCode[];
+
+function assertProjectionAuthority(
+  formId: string,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  draftRevision: number,
+): void {
+  nonEmpty(characterDraftId, `${formId} characterDraftId`);
+  nonEmpty(wizardCheckpointId, `${formId} wizardCheckpointId`);
+  if (!Number.isSafeInteger(draftRevision) || draftRevision < 0) {
+    throw new Error(`${formId} draftRevision must be a non-negative safe integer`);
+  }
+}
+
+function copyStatMap(value: StatMapProjection, label: string): Record<StatCode, number> {
+  const keys = Object.keys(value);
+  if (
+    keys.length !== STAT_CODES.length ||
+    !keys.every((key) => STAT_CODES.includes(key as StatCode))
+  ) {
+    throw new Error(`${label} must contain exact StatCode keys ${STAT_CODES.join(',')}`);
+  }
+  const result = {} as Record<StatCode, number>;
+  for (const statCode of STAT_CODES) {
+    const statValue = value[statCode];
+    if (!Number.isSafeInteger(statValue)) {
+      throw new Error(`${label}.${statCode} must be a safe integer`);
+    }
+    result[statCode] = statValue;
+  }
+  return result;
+}
+
+function copyModifiers(
+  value: readonly StatModifierProjection[],
+  label: string,
+): StatModifierProjection[] {
+  return value.map((modifier, index) => {
+    if (!STAT_CODES.includes(modifier.statCode) || !Number.isSafeInteger(modifier.delta)) {
+      throw new Error(`${label}[${String(index)}] must contain StatCode and safe integer delta`);
+    }
+    return { delta: modifier.delta, statCode: modifier.statCode };
+  });
+}
+
+function copyMandatoryClassSkill(
+  value: MandatoryClassSkillProjection,
+  label: string,
+): MandatoryClassSkillProjection {
+  nonEmpty(value.skillKey, `${label}.skillKey`);
+  if (
+    !Number.isSafeInteger(value.bonus) ||
+    !Number.isSafeInteger(value.slotCost) ||
+    value.slotCost < 0
+  ) {
+    throw new Error(`${label} bonus and slotCost must be safe integers`);
+  }
+  return { bonus: value.bonus, skillKey: value.skillKey, slotCost: value.slotCost };
+}
+
+export function projectInitialChr009(values: Chr009InitialProjectionValues): JsonObject {
+  assertProjectionAuthority(
+    CHR_009_FORM_ID,
+    values.characterDraftId,
+    values.wizardCheckpointId,
+    values.draftRevision,
+  );
+  if (
+    values.assignmentMode !== 'ROLLED_BIJECTION' &&
+    values.assignmentMode !== 'POINT_BUY_90' &&
+    values.assignmentMode !== 'POINT_BUY_85'
+  ) {
+    throw new Error(
+      `CHR-009 has unrecognized assignmentMode ${JSON.stringify(values.assignmentMode)}`,
+    );
+  }
+  let bijectionProofOrExactSum: JsonObject;
+  let eachValueRange: JsonObject | null;
+  if (values.assignmentMode === 'ROLLED_BIJECTION') {
+    nonEmpty(values.sourceSetReceiptIdOrNull, 'CHR-009 source set receipt');
+    if (
+      values.sourceEntries.length !== STAT_CODES.length ||
+      values.sourceEntries.some(({ setEntryIndex }, index) => setEntryIndex !== index)
+    ) {
+      throw new Error('CHR-009 rolled sourceEntries must contain canonical indices 0..6');
+    }
+    const sourceEntries = values.sourceEntries.map((entry) => {
+      if (!Number.isSafeInteger(entry.value)) {
+        throw new Error(`CHR-009 sourceEntries[${String(entry.setEntryIndex)}].value must be safe`);
+      }
+      if (
+        entry.creationCriticalPenaltyOrNull !== null &&
+        ![-1, -2, -3, -4, -5].includes(entry.creationCriticalPenaltyOrNull)
+      ) {
+        throw new Error(
+          `CHR-009 sourceEntries[${String(entry.setEntryIndex)}] has invalid critical penalty`,
+        );
+      }
+      return { ...entry };
+    });
+    bijectionProofOrExactSum = {
+      assignedSetEntryIndexByStat: null,
+      kind: 'ROLLED_BIJECTION',
+      sourceEntries,
+    };
+    eachValueRange = null;
+  } else {
+    if (values.sourceSetReceiptIdOrNull !== null) {
+      throw new Error('CHR-009 point-buy sourceSetReceiptIdOrNull must be null');
+    }
+    bijectionProofOrExactSum = {
+      actualTotal: null,
+      kind: 'EXACT_SUM',
+      requiredTotal: values.assignmentMode === 'POINT_BUY_90' ? 90 : 85,
+    };
+    // ADR 0044 §2 materializes the source-owned point-buy range exactly here.
+    eachValueRange = { maximum: 20, minimum: 1 };
+  }
+  return {
+    C: null,
+    D: null,
+    I: null,
+    M: null,
+    S: null,
+    W: null,
+    Z: null,
+    assignmentMode: values.assignmentMode,
+    assignmentValidation: null,
+    bijectionProofOrExactSum,
+    characterDraftId: values.characterDraftId,
+    commandId: null,
+    draftRevision: values.draftRevision,
+    eachValueRange,
+    raceChoice: values.raceChoice,
+    sourceSetReceiptIdOrNull: values.sourceSetReceiptIdOrNull,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+export function projectInitialChr011(values: Chr011InitialProjectionValues): JsonObject {
+  assertProjectionAuthority(
+    CHR_011_FORM_ID,
+    values.characterDraftId,
+    values.wizardCheckpointId,
+    values.draftRevision,
+  );
+  if (
+    values.classOptions.length !== PURE_CLASSES.length ||
+    values.classOptions.some(({ pureClass }, index) => pureClass !== PURE_CLASSES[index])
+  ) {
+    throw new Error('CHR-011 classOptions must use canonical SEEKER,STALKER,SOLDIER order');
+  }
+  const classOptions = values.classOptions.map((option, index) => ({
+    classConsequences: {
+      statModifiers: copyModifiers(
+        option.classConsequences.statModifiers,
+        `CHR-011 classOptions[${String(index)}].classConsequences.statModifiers`,
+      ),
+    },
+    mandatoryClassSkill: copyMandatoryClassSkill(
+      option.mandatoryClassSkill,
+      `CHR-011 classOptions[${String(index)}].mandatoryClassSkill`,
+    ),
+    pureClass: option.pureClass,
+  }));
+  return {
+    characterDraftId: values.characterDraftId,
+    classConsequences: null,
+    classOptions,
+    commandId: null,
+    draftRevision: values.draftRevision,
+    mandatoryClassSkill: null,
+    pureClass: null,
+    raceChoice: 'PURE',
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+export function projectChr012(values: Chr012ProjectionValues): JsonObject {
+  assertProjectionAuthority(
+    CHR_012_FORM_ID,
+    values.characterDraftId,
+    values.wizardCheckpointId,
+    values.draftRevision,
+  );
+  if ((values.classModifiersOrNull === null) !== (values.mandatoryClassSkillOrNull === null)) {
+    throw new Error('CHR-012 class modifiers and mandatory class skill must share nullability');
+  }
+  return {
+    baseStats: copyStatMap(values.baseStats, 'CHR-012 baseStats'),
+    characterDraftId: values.characterDraftId,
+    classModifiersOrNull:
+      values.classModifiersOrNull === null
+        ? null
+        : copyModifiers(values.classModifiersOrNull, 'CHR-012 classModifiersOrNull'),
+    commandId: null,
+    draftRevision: values.draftRevision,
+    mandatoryClassSkillOrNull:
+      values.mandatoryClassSkillOrNull === null
+        ? null
+        : copyMandatoryClassSkill(
+            values.mandatoryClassSkillOrNull,
+            'CHR-012 mandatoryClassSkillOrNull',
+          ),
+    raceModifiers: copyModifiers(values.raceModifiers, 'CHR-012 raceModifiers'),
+    skillStageStats: copyStatMap(values.skillStageStats, 'CHR-012 skillStageStats'),
+    symbiontModifiersExcluded: true,
+    wizardCheckpointId: values.wizardCheckpointId,
   };
 }

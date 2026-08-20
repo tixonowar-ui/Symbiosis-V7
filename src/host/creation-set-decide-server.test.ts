@@ -45,6 +45,7 @@ import { CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID } from './creation-roll-commit
 import { IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID } from './identity-checkpoint.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
+import { loadSkillStageCatalog } from './skill-stage-catalog.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const ZERO_REVISIONS = {
@@ -103,6 +104,16 @@ const ALL_CREATION_WORKFLOW_COMMAND_IDS = [
 const WITHOUT_ROLL_COMMIT = [
   IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
   CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
+] as const;
+
+const WITHOUT_WIZARD_CHECKPOINT = [
+  CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
+  CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+] as const;
+
+const WITHOUT_SET_DECIDE = [
+  IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+  CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID,
 ] as const;
 
 function revisionRuntime(): RevisionRuntime {
@@ -492,6 +503,8 @@ async function advanceToChr003(
   vocabulary: ProtocolVocabulary & WireV2Vocabulary,
   prefix: string,
   statMethod: Chr003Journey['statMethod'] = 'CLASSIC',
+  raceChoice: 'FREE' | 'PURE' | 'UNITED' = 'UNITED',
+  acquisitionMode: 'MANUAL' | 'RANDOM' = 'MANUAL',
 ): Promise<Chr003Journey> {
   const raceRequest = setDecideRequest(
     `${prefix}-race`,
@@ -500,28 +513,31 @@ async function advanceToChr003(
     harness.wizardCheckpointId,
     resultRevision(harness.checkpointResult, 'draftRevision'),
     harness.checkpointResult.receipt.revisions,
-    { raceChoice: 'UNITED' },
+    { raceChoice },
   );
   const [raceTerminal] = await sendCommand(harness.socket, raceRequest, vocabulary);
   const raceResult = committedResult(raceTerminal);
-  const acquisitionRequest = setDecideRequest(
-    `${prefix}-acquisition`,
-    'CHR-016',
-    harness.characterDraftId,
-    harness.wizardCheckpointId,
-    resultRevision(raceResult, 'draftRevision'),
-    raceResult.receipt.revisions,
-    { symbiontAcquisitionMode: 'MANUAL' },
-  );
-  const [acquisitionTerminal] = await sendCommand(harness.socket, acquisitionRequest, vocabulary);
-  const acquisitionResult = committedResult(acquisitionTerminal);
+  let previousResult = raceResult;
+  if (raceChoice !== 'PURE') {
+    const acquisitionRequest = setDecideRequest(
+      `${prefix}-acquisition`,
+      'CHR-016',
+      harness.characterDraftId,
+      harness.wizardCheckpointId,
+      resultRevision(raceResult, 'draftRevision'),
+      raceResult.receipt.revisions,
+      { symbiontAcquisitionMode: acquisitionMode },
+    );
+    const [acquisitionTerminal] = await sendCommand(harness.socket, acquisitionRequest, vocabulary);
+    previousResult = committedResult(acquisitionTerminal);
+  }
   const diceRequest = setDecideRequest(
     `${prefix}-dice`,
     'CHR-036',
     harness.characterDraftId,
     harness.wizardCheckpointId,
-    resultRevision(acquisitionResult, 'draftRevision'),
-    acquisitionResult.receipt.revisions,
+    resultRevision(previousResult, 'draftRevision'),
+    previousResult.receipt.revisions,
     { diceInputMode: 'AUTO' },
   );
   const [diceTerminal] = await sendCommand(harness.socket, diceRequest, vocabulary);
@@ -631,8 +647,17 @@ async function commitNonCriticalSet(
   vocabulary: ProtocolVocabulary & WireV2Vocabulary,
   prefix: string,
   statMethod: Chr003Journey['statMethod'] = 'CLASSIC',
+  raceChoice: 'FREE' | 'PURE' | 'UNITED' = 'UNITED',
+  acquisitionMode: 'MANUAL' | 'RANDOM' = 'MANUAL',
 ): Promise<CommittedNonCriticalSet> {
-  const journey = await advanceToChr003(harness, vocabulary, prefix, statMethod);
+  const journey = await advanceToChr003(
+    harness,
+    vocabulary,
+    prefix,
+    statMethod,
+    raceChoice,
+    acquisitionMode,
+  );
   const setRequest = statSetRollRequest(`${prefix}-set`, harness, journey);
   const [setTerminal, setDestination] = await sendCommand(harness.socket, setRequest, vocabulary);
   const setResult = committedResult(setTerminal);
@@ -700,6 +725,70 @@ function statDecisionRequest(
   };
 }
 
+const CANONICAL_SET_ENTRY_INDEX_BY_STAT = {
+  C: 6,
+  D: 1,
+  I: 4,
+  M: 2,
+  S: 0,
+  W: 5,
+  Z: 3,
+} as const;
+type TestStatMap = Readonly<Record<'C' | 'D' | 'I' | 'M' | 'S' | 'W' | 'Z', number>>;
+
+function statAssignmentRequest(
+  commandId: string,
+  harness: JourneyHarness,
+  draftRevision: number,
+  expectedRevisions: RevisionVector,
+  assignment:
+    { readonly pointBuyStats: TestStatMap } | { readonly setEntryIndexByStat: TestStatMap },
+): WorkflowRequest {
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions,
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: harness.characterDraftId,
+      draftRevision,
+      sourceFormId: 'CHR-009',
+      stage: 'STAT_ASSIGNMENT',
+      wizardCheckpointId: harness.wizardCheckpointId,
+      ...assignment,
+    },
+    protocolVersion: WIRE_PROTOCOL_VERSION,
+    role: 'player',
+    workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+  };
+}
+
+function pureClassDecisionRequest(
+  commandId: string,
+  harness: JourneyHarness,
+  pureClass: 'SEEKER' | 'SOLDIER' | 'STALKER',
+  draftRevision: number,
+  expectedRevisions: RevisionVector,
+): WorkflowRequest {
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions,
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: harness.characterDraftId,
+      draftRevision,
+      pureClass,
+      sourceFormId: 'CHR-011',
+      stage: 'STAT_ASSIGNMENT',
+      wizardCheckpointId: harness.wizardCheckpointId,
+    },
+    protocolVersion: WIRE_PROTOCOL_VERSION,
+    role: 'player',
+    workflowCommandId: CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
+  };
+}
+
 async function openWarning(
   harness: JourneyHarness,
   vocabulary: ProtocolVocabulary & WireV2Vocabulary,
@@ -749,12 +838,14 @@ function nextAttemptJourney(
 }
 
 describe('durable character creation decisions', () => {
+  let skillCatalog: Awaited<ReturnType<typeof loadSkillStageCatalog>>;
   let staticRoot: string;
   let vocabulary: ProtocolVocabulary & WireV3Vocabulary;
 
   beforeAll(async () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-set-decide-host-'));
     await writeFile(join(staticRoot, 'index.html'), '<main>set decide</main>', 'utf8');
+    skillCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
 
@@ -1565,8 +1656,10 @@ describe('durable character creation decisions', () => {
     }
   });
 
-  it('accepts the current set into an actionless rolled-bijection boundary', async () => {
+  it('accepts the current set into the real rolled-bijection CHR-009 projection', async () => {
     const harness = await createJourneyHarness(staticRoot, vocabulary, 'accept-set');
+    let limitedSocket: WebSocket | undefined;
+    let recoverySocket: WebSocket | undefined;
     try {
       const committed = await commitNonCriticalSet(harness, vocabulary, 'accept-set');
       const request = statDecisionRequest(
@@ -1591,11 +1684,31 @@ describe('durable character creation decisions', () => {
       expect(destination).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
-            formId: 'CHR-005',
+            availableActionKeys: ['CHR-009::CTA::002'],
+            formId: 'CHR-009',
             roleFilteredPayload: {
-              decision: 'ACCEPT_SET',
-              decisionReceiptIdOrNull: result.receipt.receiptId,
+              C: null,
+              D: null,
+              I: null,
+              M: null,
+              S: null,
+              W: null,
+              Z: null,
+              assignmentMode: 'ROLLED_BIJECTION',
+              assignmentValidation: null,
+              bijectionProofOrExactSum: {
+                assignedSetEntryIndexByStat: null,
+                kind: 'ROLLED_BIJECTION',
+                sourceEntries: Array.from({ length: 7 }, (_, setEntryIndex) => ({
+                  creationCriticalPenaltyOrNull: null,
+                  setEntryIndex,
+                  value: 10,
+                })),
+              },
+              commandId: null,
+              eachValueRange: null,
+              raceChoice: 'UNITED',
+              sourceSetReceiptIdOrNull: committed.setResult.receipt.receiptId,
             },
           },
           layers: [],
@@ -1607,7 +1720,132 @@ describe('durable character creation decisions', () => {
       expect(durable.statRollStage?.attempts[0]?.decisionRecordOrNull).toMatchObject({
         derived: { assignmentMode: 'ROLLED_BIJECTION', decision: 'ACCEPT_SET' },
       });
+
+      limitedSocket = await harness.app.injectWS('/state');
+      let frames = receiveFrames(limitedSocket, 2);
+      limitedSocket.send(
+        clientTextV2(
+          reconnect(
+            harness.deviceId,
+            'accept-set-without-checkpoint',
+            [],
+            WITHOUT_WIZARD_CHECKPOINT,
+          ),
+          vocabulary,
+        ),
+      );
+      const limited = await frames;
+      expect(hostMessageV2(limited[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { availableActionKeys: [], formId: 'CHR-009' } },
+        revisions: result.receipt.revisions,
+      });
+      const forgedAssignmentRequest = statAssignmentRequest(
+        'accept-set-forged-assignment',
+        harness,
+        resultRevision(result, 'draftRevision'),
+        result.receipt.revisions,
+        { setEntryIndexByStat: CANONICAL_SET_ENTRY_INDEX_BY_STAT },
+      );
+      const allocationsBeforeForged = harness.receiptAllocations();
+      frames = receiveFrames(limitedSocket, 1);
+      limitedSocket.send(clientText(forgedAssignmentRequest, vocabulary));
+      expect(hostMessage((await frames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: forgedAssignmentRequest.commandId,
+        messageType: 'command.refusal',
+        refusal: { code: 'GUARD_REJECTED' },
+        revisions: result.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeForged);
+      limitedSocket.terminate();
+      limitedSocket = undefined;
+
+      const assignmentRequest = statAssignmentRequest(
+        'accept-set-assignment',
+        harness,
+        resultRevision(result, 'draftRevision'),
+        result.receipt.revisions,
+        { setEntryIndexByStat: CANONICAL_SET_ENTRY_INDEX_BY_STAT },
+      );
+      const [assignmentTerminal, chr012] = await sendCommand(
+        harness.socket,
+        assignmentRequest,
+        vocabulary,
+      );
+      const assignmentResult = committedResult(assignmentTerminal);
+      const baseStats = { C: 10, D: 10, I: 10, M: 10, S: 10, W: 10, Z: 10 };
+      expect(assignmentResult).toMatchObject({
+        receipt: {
+          result: {
+            assignmentMode: 'ROLLED_BIJECTION',
+            baseStats,
+            nextFormId: 'CHR-012',
+            raceChoice: 'UNITED',
+            rolledAssignmentsOrNull: [
+              { setEntryIndex: 0, statCode: 'S', value: 10 },
+              { setEntryIndex: 1, statCode: 'D', value: 10 },
+              { setEntryIndex: 2, statCode: 'M', value: 10 },
+              { setEntryIndex: 3, statCode: 'Z', value: 10 },
+              { setEntryIndex: 4, statCode: 'I', value: 10 },
+              { setEntryIndex: 5, statCode: 'W', value: 10 },
+              { setEntryIndex: 6, statCode: 'C', value: 10 },
+            ],
+            sourceFormId: 'CHR-009',
+            sourceSetReceiptIdOrNull: committed.setResult.receipt.receiptId,
+            stage: 'STAT_ASSIGNMENT',
+          },
+        },
+      });
+      expect(chr012).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-012',
+            roleFilteredPayload: {
+              baseStats,
+              classModifiersOrNull: null,
+              commandId: null,
+              mandatoryClassSkillOrNull: null,
+              raceModifiers: [
+                { delta: -7, statCode: 'S' },
+                { delta: -10, statCode: 'M' },
+                { delta: -10, statCode: 'Z' },
+              ],
+              skillStageStats: { ...baseStats, M: 0, S: 3, Z: 0 },
+              symbiontModifiersExcluded: true,
+            },
+          },
+          layers: [],
+        },
+        revisions: assignmentResult.receipt.revisions,
+      });
+
+      const allocationsAfterAssignment = harness.receiptAllocations();
+      frames = receiveFrames(harness.socket, 2);
+      harness.socket.send(clientText(assignmentRequest, vocabulary));
+      const replay = await frames;
+      expect(hostMessage(replay[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: assignmentResult.receipt,
+      });
+      expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsAfterAssignment);
+
+      recoverySocket = await harness.app.injectWS('/state');
+      frames = receiveFrames(recoverySocket, 2);
+      recoverySocket.send(
+        clientTextV2(reconnect(harness.deviceId, 'accept-set-assignment-reconnect'), vocabulary),
+      );
+      const recovered = await frames;
+      expect(hostMessageV2(recovered[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        revisions: assignmentResult.receipt.revisions,
+      });
     } finally {
+      recoverySocket?.terminate();
+      limitedSocket?.terminate();
       harness.socket.terminate();
       await harness.app.close();
       harness.database.close();
@@ -1649,8 +1887,23 @@ describe('durable character creation decisions', () => {
         });
         expect(committedPresentation).toMatchObject({
           presentation: {
-            base: { availableActionKeys: [], formId: 'CHR-005' },
-            layers: [{ availableActionKeys: [], formId: 'CHR-028' }],
+            base: {
+              availableActionKeys: ['CHR-009::CTA::002'],
+              formId: 'CHR-009',
+              roleFilteredPayload: {
+                assignmentMode: 'POINT_BUY_90',
+                assignmentValidation: null,
+                bijectionProofOrExactSum: {
+                  actualTotal: null,
+                  kind: 'EXACT_SUM',
+                  requiredTotal: 90,
+                },
+                eachValueRange: { maximum: 20, minimum: 1 },
+                raceChoice: 'UNITED',
+                sourceSetReceiptIdOrNull: null,
+              },
+            },
+            layers: [],
           },
           revisions: result.receipt.revisions,
         });
@@ -1686,23 +1939,22 @@ describe('durable character creation decisions', () => {
         expect(recovered).toMatchObject({
           presentation: {
             base: {
-              availableActionKeys: [],
-              formId: 'CHR-005',
+              availableActionKeys: ['CHR-009::CTA::002'],
+              formId: 'CHR-009',
               roleFilteredPayload: {
-                decision: 'USE_POINT_BUY_90',
-                decisionReceiptIdOrNull: result.receipt.receiptId,
+                assignmentMode: 'POINT_BUY_90',
+                assignmentValidation: null,
+                bijectionProofOrExactSum: {
+                  actualTotal: null,
+                  kind: 'EXACT_SUM',
+                  requiredTotal: 90,
+                },
+                eachValueRange: { maximum: 20, minimum: 1 },
+                raceChoice: 'UNITED',
+                sourceSetReceiptIdOrNull: null,
               },
             },
-            layers: [
-              {
-                availableActionKeys: [],
-                formId: 'CHR-028',
-                roleFilteredPayload: {
-                  decision: 'CONFIRM',
-                  decisionReceiptIdOrNull: result.receipt.receiptId,
-                },
-              },
-            ],
+            layers: [],
           },
           revisions: result.receipt.revisions,
         });
@@ -2316,6 +2568,646 @@ describe('durable character creation decisions', () => {
       expect(harness.sampleCalls()).toBe(9);
     } finally {
       limitedSocket?.terminate();
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('routes PURE assignment through CHR-011 and derives actionless CHR-012 durably', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'pure-assignment');
+    let limitedSocket: WebSocket | undefined;
+    let recoverySocket: WebSocket | undefined;
+    try {
+      const committed = await commitNonCriticalSet(
+        harness,
+        vocabulary,
+        'pure-assignment',
+        'CLASSIC',
+        'PURE',
+      );
+      const acceptRequest = statDecisionRequest(
+        'pure-assignment-accept',
+        harness,
+        'CHR-005',
+        'ACCEPT_SET',
+        resultRevision(committed.setResult, 'draftRevision'),
+        committed.setResult.receipt.revisions,
+      );
+      const [acceptTerminal, chr009] = await sendCommand(harness.socket, acceptRequest, vocabulary);
+      const acceptResult = committedResult(acceptTerminal);
+      expect(chr009).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-009::CTA::001'],
+            formId: 'CHR-009',
+            roleFilteredPayload: {
+              assignmentMode: 'ROLLED_BIJECTION',
+              raceChoice: 'PURE',
+              sourceSetReceiptIdOrNull: committed.setResult.receipt.receiptId,
+            },
+          },
+          layers: [],
+        },
+        revisions: acceptResult.receipt.revisions,
+      });
+
+      const checkpointBeforeAssignment = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+      );
+      const allocationsBeforeAssignment = harness.receiptAllocations();
+      const chr009SafeReturn = await sendV2(
+        harness.socket,
+        formAction(
+          'pure-assignment-forged-chr009-return',
+          'CHR-009',
+          'CHR-009::CTA::003',
+          acceptResult.receipt.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(chr009SafeReturn).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        revisions: acceptResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeAssignment);
+      expect(loadCreationWizardCheckpoint(harness.database, harness.characterDraftId)).toEqual(
+        checkpointBeforeAssignment,
+      );
+
+      const assignmentRequest = statAssignmentRequest(
+        'pure-assignment-checkpoint',
+        harness,
+        resultRevision(acceptResult, 'draftRevision'),
+        acceptResult.receipt.revisions,
+        { setEntryIndexByStat: CANONICAL_SET_ENTRY_INDEX_BY_STAT },
+      );
+      const [assignmentTerminal, chr011] = await sendCommand(
+        harness.socket,
+        assignmentRequest,
+        vocabulary,
+      );
+      const assignmentResult = committedResult(assignmentTerminal);
+      const baseStats = { C: 10, D: 10, I: 10, M: 10, S: 10, W: 10, Z: 10 };
+      expect(assignmentResult).toMatchObject({
+        receipt: {
+          result: {
+            assignmentMode: 'ROLLED_BIJECTION',
+            baseStats,
+            nextFormId: 'CHR-011',
+            raceChoice: 'PURE',
+            sourceFormId: 'CHR-009',
+          },
+        },
+      });
+      expect(chr011).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-011::CTA::003', 'CHR-011::CTA::004', 'CHR-011::CTA::005'],
+            formId: 'CHR-011',
+            roleFilteredPayload: {
+              classConsequences: null,
+              classOptions: [
+                {
+                  classConsequences: {
+                    statModifiers: [
+                      { delta: 2, statCode: 'S' },
+                      { delta: 2, statCode: 'D' },
+                      { delta: 5, statCode: 'Z' },
+                      { delta: 7, statCode: 'I' },
+                    ],
+                  },
+                  mandatoryClassSkill: { bonus: 5, skillKey: 'PURE_SEEKER', slotCost: 1 },
+                  pureClass: 'SEEKER',
+                },
+                {
+                  mandatoryClassSkill: { bonus: 4, skillKey: 'PURE_STALKER', slotCost: 1 },
+                  pureClass: 'STALKER',
+                },
+                {
+                  mandatoryClassSkill: { bonus: 3, skillKey: 'PURE_SOLDIER', slotCost: 1 },
+                  pureClass: 'SOLDIER',
+                },
+              ],
+              commandId: null,
+              mandatoryClassSkill: null,
+              pureClass: null,
+              raceChoice: 'PURE',
+            },
+          },
+          layers: [],
+        },
+        revisions: assignmentResult.receipt.revisions,
+      });
+
+      const checkpointBeforeClass = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const allocationsBeforeClass = harness.receiptAllocations();
+      const runtimeRevisionsBeforeAssignmentConflict = harness.runtime.read();
+      const runtimeWritesBeforeAssignmentConflict = [...harness.runtime.writes];
+      const changedAssignmentRequest = statAssignmentRequest(
+        assignmentRequest.commandId,
+        harness,
+        resultRevision(acceptResult, 'draftRevision'),
+        acceptResult.receipt.revisions,
+        { setEntryIndexByStat: { ...CANONICAL_SET_ENTRY_INDEX_BY_STAT, S: 1 } },
+      );
+      const assignmentConflictFrames = receiveFrames(harness.socket, 1);
+      harness.socket.send(clientText(changedAssignmentRequest, vocabulary));
+      expect(hostMessage((await assignmentConflictFrames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: assignmentRequest.commandId,
+        messageType: 'command.refusal',
+        refusal: {
+          code: 'IDEMPOTENCY_CONFLICT',
+          commandId: assignmentRequest.commandId,
+          detail: 'PAYLOAD_MISMATCH',
+        },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeClass);
+      expect(harness.runtime.read()).toEqual(runtimeRevisionsBeforeAssignmentConflict);
+      expect(harness.runtime.writes).toEqual(runtimeWritesBeforeAssignmentConflict);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(checkpointBeforeClass);
+
+      const chr011SafeReturn = await sendV2(
+        harness.socket,
+        formAction(
+          'pure-assignment-forged-chr011-return',
+          'CHR-011',
+          'CHR-011::CTA::002',
+          assignmentResult.receipt.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(chr011SafeReturn).toMatchObject({
+        messageType: 'navigation.form-action.refusal',
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeClass);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(checkpointBeforeClass);
+
+      limitedSocket = await harness.app.injectWS('/state');
+      let frames = receiveFrames(limitedSocket, 2);
+      limitedSocket.send(
+        clientTextV2(
+          reconnect(harness.deviceId, 'pure-assignment-without-set-decide', [], WITHOUT_SET_DECIDE),
+          vocabulary,
+        ),
+      );
+      const limited = await frames;
+      expect(hostMessageV2(limited[1] ?? '', vocabulary)).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-011::CTA::003', 'CHR-011::CTA::004', 'CHR-011::CTA::005'],
+            formId: 'CHR-011',
+          },
+        },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      const forgedClassRequest = pureClassDecisionRequest(
+        'pure-assignment-forged-class',
+        harness,
+        'SEEKER',
+        resultRevision(assignmentResult, 'draftRevision'),
+        assignmentResult.receipt.revisions,
+      );
+      const allocationsBeforeForged = harness.receiptAllocations();
+      frames = receiveFrames(limitedSocket, 1);
+      limitedSocket.send(clientText(forgedClassRequest, vocabulary));
+      expect(hostMessage((await frames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: forgedClassRequest.commandId,
+        messageType: 'command.refusal',
+        refusal: { code: 'GUARD_REJECTED' },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeForged);
+      limitedSocket.terminate();
+      limitedSocket = undefined;
+
+      const classRequest = pureClassDecisionRequest(
+        'pure-assignment-class',
+        harness,
+        'SEEKER',
+        resultRevision(assignmentResult, 'draftRevision'),
+        assignmentResult.receipt.revisions,
+      );
+      const [classTerminal, chr012] = await sendCommand(harness.socket, classRequest, vocabulary);
+      const classResult = committedResult(classTerminal);
+      const classModifiers = [
+        { delta: 2, statCode: 'S' },
+        { delta: 2, statCode: 'D' },
+        { delta: 5, statCode: 'Z' },
+        { delta: 7, statCode: 'I' },
+      ];
+      const mandatoryClassSkill = { bonus: 5, skillKey: 'PURE_SEEKER', slotCost: 1 };
+      expect(classResult).toMatchObject({
+        receipt: {
+          result: {
+            classConsequences: { statModifiers: classModifiers },
+            mandatoryClassSkill,
+            nextFormId: 'CHR-012',
+            pureClass: 'SEEKER',
+            sourceFormId: 'CHR-011',
+            stage: 'STAT_ASSIGNMENT',
+          },
+        },
+      });
+      expect(chr012).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-012',
+            roleFilteredPayload: {
+              baseStats,
+              classModifiersOrNull: classModifiers,
+              commandId: null,
+              mandatoryClassSkillOrNull: mandatoryClassSkill,
+              raceModifiers: [],
+              skillStageStats: { ...baseStats, D: 12, I: 17, S: 12, Z: 15 },
+              symbiontModifiersExcluded: true,
+            },
+          },
+          layers: [],
+        },
+        revisions: classResult.receipt.revisions,
+      });
+
+      const checkpointAtChr012 = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const allocationsAtChr012 = harness.receiptAllocations();
+      const runtimeRevisionsBeforeClassConflict = harness.runtime.read();
+      const runtimeWritesBeforeClassConflict = [...harness.runtime.writes];
+      const changedClassRequest = pureClassDecisionRequest(
+        classRequest.commandId,
+        harness,
+        'STALKER',
+        resultRevision(assignmentResult, 'draftRevision'),
+        assignmentResult.receipt.revisions,
+      );
+      const classConflictFrames = receiveFrames(harness.socket, 1);
+      harness.socket.send(clientText(changedClassRequest, vocabulary));
+      expect(hostMessage((await classConflictFrames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: classRequest.commandId,
+        messageType: 'command.refusal',
+        refusal: {
+          code: 'IDEMPOTENCY_CONFLICT',
+          commandId: classRequest.commandId,
+          detail: 'PAYLOAD_MISMATCH',
+        },
+        revisions: classResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsAtChr012);
+      expect(harness.runtime.read()).toEqual(runtimeRevisionsBeforeClassConflict);
+      expect(harness.runtime.writes).toEqual(runtimeWritesBeforeClassConflict);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(checkpointAtChr012);
+
+      for (const [index, actionKey] of (
+        ['CHR-012::CTA::001', 'CHR-012::CTA::002', 'CHR-012::CTA::003'] as const
+      ).entries()) {
+        const refusal = await sendV2(
+          harness.socket,
+          formAction(
+            `pure-assignment-forged-chr012-${String(index + 1)}`,
+            'CHR-012',
+            actionKey,
+            classResult.receipt.revisions.projectionRevision,
+          ),
+          vocabulary,
+        );
+        expect(refusal).toMatchObject({
+          messageType: 'navigation.form-action.refusal',
+          refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+          revisions: classResult.receipt.revisions,
+        });
+      }
+      expect(harness.receiptAllocations()).toBe(allocationsAtChr012);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(checkpointAtChr012);
+
+      const allocationsAfterClass = harness.receiptAllocations();
+      frames = receiveFrames(harness.socket, 2);
+      harness.socket.send(clientText(classRequest, vocabulary));
+      const replay = await frames;
+      expect(hostMessage(replay[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: classResult.receipt,
+      });
+      expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        revisions: classResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsAfterClass);
+
+      recoverySocket = await harness.app.injectWS('/state');
+      frames = receiveFrames(recoverySocket, 2);
+      recoverySocket.send(
+        clientTextV2(reconnect(harness.deviceId, 'pure-assignment-reconnect'), vocabulary),
+      );
+      const recovered = await frames;
+      expect(hostMessageV2(recovered[0] ?? '', vocabulary)).toMatchObject({
+        executableWorkflowCommandIds: [
+          IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+          CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
+          CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+        ],
+      });
+      expect(hostMessageV2(recovered[1] ?? '', vocabulary)).toMatchObject({
+        presentation: { base: { availableActionKeys: [], formId: 'CHR-012' }, layers: [] },
+        revisions: classResult.receipt.revisions,
+      });
+
+      const checkpointBeforeBacktracking = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      );
+      const allocationsBeforeBacktracking = harness.receiptAllocations();
+      const runtimeRevisionsBeforeBacktracking = harness.runtime.read();
+      const runtimeWritesBeforeBacktracking = [...harness.runtime.writes];
+      const forgedAssignment = statAssignmentRequest(
+        'pure-assignment-forged-checkpoint-at-chr012',
+        harness,
+        resultRevision(classResult, 'draftRevision'),
+        classResult.receipt.revisions,
+        { setEntryIndexByStat: CANONICAL_SET_ENTRY_INDEX_BY_STAT },
+      );
+      frames = receiveFrames(recoverySocket, 1);
+      recoverySocket.send(clientText(forgedAssignment, vocabulary));
+      expect(hostMessage((await frames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: forgedAssignment.commandId,
+        messageType: 'command.refusal',
+        refusal: { code: 'GUARD_REJECTED' },
+        revisions: classResult.receipt.revisions,
+      });
+
+      const forgedClassDecision = pureClassDecisionRequest(
+        'pure-assignment-forged-class-at-chr012',
+        harness,
+        'STALKER',
+        resultRevision(classResult, 'draftRevision'),
+        classResult.receipt.revisions,
+      );
+      frames = receiveFrames(recoverySocket, 1);
+      recoverySocket.send(clientText(forgedClassDecision, vocabulary));
+      expect(hostMessage((await frames)[0] ?? '', vocabulary)).toMatchObject({
+        commandId: forgedClassDecision.commandId,
+        messageType: 'command.refusal',
+        refusal: { code: 'GUARD_REJECTED' },
+        revisions: classResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeBacktracking);
+      expect(harness.runtime.read()).toEqual(runtimeRevisionsBeforeBacktracking);
+      expect(harness.runtime.writes).toEqual(runtimeWritesBeforeBacktracking);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toEqual(checkpointBeforeBacktracking);
+    } finally {
+      recoverySocket?.terminate();
+      limitedSocket?.terminate();
+      harness.socket.terminate();
+      await harness.app.close();
+      harness.database.close();
+    }
+  });
+
+  it('routes FREE/RANDOM point-buy 85 through CHR-009 to durable actionless CHR-012', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'free-random-point-buy-85');
+    try {
+      const first = await commitNonCriticalSet(
+        harness,
+        vocabulary,
+        'free-random-point-buy-85',
+        'ADVENTUROUS',
+        'FREE',
+        'RANDOM',
+      );
+      const firstWarning = await openWarning(
+        harness,
+        vocabulary,
+        first,
+        'free-random-point-buy-85-first-warning',
+      );
+      const firstAbandonRequest = statDecisionRequest(
+        'free-random-point-buy-85-first-abandon',
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(first.setResult, 'draftRevision'),
+        firstWarning.revisions,
+      );
+      const [firstAbandonTerminal, secondPending] = await sendCommand(
+        harness.socket,
+        firstAbandonRequest,
+        vocabulary,
+      );
+      const firstAbandonResult = committedResult(firstAbandonTerminal);
+      expect(firstAbandonResult).toMatchObject({
+        receipt: {
+          result: {
+            alternateDecision: 'GO_ATTEMPT_2',
+            assignmentModeOrNull: null,
+            nextAttemptIndexOrNull: 2,
+            nextFormId: 'CHR-003',
+            originDecisionFormId: 'CHR-006',
+          },
+        },
+      });
+
+      const secondJourney = nextAttemptJourney(first, firstAbandonResult, secondPending);
+      const secondSetRequest = statSetRollRequest(
+        'free-random-point-buy-85-second-set',
+        harness,
+        secondJourney,
+      );
+      const [secondSetTerminal, secondDecision] = await sendCommand(
+        harness.socket,
+        secondSetRequest,
+        vocabulary,
+      );
+      const secondSetResult = committedResult(secondSetTerminal);
+      expect(secondDecision).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-007::CTA::001', 'CHR-007::CTA::002'],
+            formId: 'CHR-007',
+            roleFilteredPayload: {
+              attemptIndex: 2,
+              decision: 'PENDING',
+              setReceiptId: secondSetResult.receipt.receiptId,
+            },
+          },
+        },
+      });
+      const second = {
+        ...secondJourney,
+        setDestination: secondDecision,
+        setRequest: secondSetRequest,
+        setResult: secondSetResult,
+      };
+      const secondWarning = await openWarning(
+        harness,
+        vocabulary,
+        second,
+        'free-random-point-buy-85-second-warning',
+      );
+      const secondAbandonRequest = statDecisionRequest(
+        'free-random-point-buy-85-second-abandon',
+        harness,
+        'CHR-028',
+        'CONFIRM',
+        resultRevision(secondSetResult, 'draftRevision'),
+        secondWarning.revisions,
+      );
+      const [secondAbandonTerminal, chr009] = await sendCommand(
+        harness.socket,
+        secondAbandonRequest,
+        vocabulary,
+      );
+      const secondAbandonResult = committedResult(secondAbandonTerminal);
+      expect(secondAbandonResult).toMatchObject({
+        receipt: {
+          result: {
+            alternateDecision: 'USE_POINT_BUY_85',
+            assignmentModeOrNull: 'POINT_BUY_85',
+            nextAttemptIndexOrNull: null,
+            nextFormId: 'CHR-009',
+            originDecisionFormId: 'CHR-007',
+          },
+        },
+      });
+      expect(chr009).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-009::CTA::002'],
+            formId: 'CHR-009',
+            roleFilteredPayload: {
+              C: null,
+              D: null,
+              I: null,
+              M: null,
+              S: null,
+              W: null,
+              Z: null,
+              assignmentMode: 'POINT_BUY_85',
+              assignmentValidation: null,
+              bijectionProofOrExactSum: {
+                actualTotal: null,
+                kind: 'EXACT_SUM',
+                requiredTotal: 85,
+              },
+              eachValueRange: { maximum: 20, minimum: 1 },
+              raceChoice: 'FREE',
+              sourceSetReceiptIdOrNull: null,
+            },
+          },
+          layers: [],
+        },
+        revisions: secondAbandonResult.receipt.revisions,
+      });
+
+      const pointBuyStats = { C: 12, D: 12, I: 12, M: 12, S: 13, W: 12, Z: 12 };
+      const assignmentRequest = statAssignmentRequest(
+        'free-random-point-buy-85-assignment',
+        harness,
+        resultRevision(secondAbandonResult, 'draftRevision'),
+        secondAbandonResult.receipt.revisions,
+        { pointBuyStats },
+      );
+      const [assignmentTerminal, chr012] = await sendCommand(
+        harness.socket,
+        assignmentRequest,
+        vocabulary,
+      );
+      const assignmentResult = committedResult(assignmentTerminal);
+      expect(assignmentResult).toMatchObject({
+        receipt: {
+          result: {
+            assignmentMode: 'POINT_BUY_85',
+            baseStats: pointBuyStats,
+            nextFormId: 'CHR-012',
+            raceChoice: 'FREE',
+            rolledAssignmentsOrNull: null,
+            sourceFormId: 'CHR-009',
+            sourceSetReceiptIdOrNull: null,
+            stage: 'STAT_ASSIGNMENT',
+          },
+        },
+      });
+      expect(chr012).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-012',
+            roleFilteredPayload: {
+              baseStats: pointBuyStats,
+              classModifiersOrNull: null,
+              commandId: null,
+              mandatoryClassSkillOrNull: null,
+              raceModifiers: [],
+              skillStageStats: pointBuyStats,
+              symbiontModifiersExcluded: true,
+            },
+          },
+          layers: [],
+        },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
+      ).toMatchObject({
+        nextStageEnvelope: { formId: 'CHR-012' },
+        raceAndMethodStage: {
+          race: { value: 'FREE' },
+          symbiontAcquisition: { value: 'RANDOM' },
+        },
+        statAssignmentStage: {
+          derived: {
+            assignmentMode: 'POINT_BUY_85',
+            baseStats: pointBuyStats,
+            raceChoice: 'FREE',
+            rolledAssignmentsOrNull: null,
+            sourceSetReceiptIdOrNull: null,
+          },
+        },
+      });
+
+      const allocationsAfterAssignment = harness.receiptAllocations();
+      const frames = receiveFrames(harness.socket, 2);
+      harness.socket.send(clientText(assignmentRequest, vocabulary));
+      const replay = await frames;
+      expect(hostMessage(replay[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: assignmentResult.receipt,
+      });
+      expect(hostMessageV2(replay[1] ?? '', vocabulary)).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: [],
+            formId: 'CHR-012',
+            roleFilteredPayload: { raceModifiers: [], skillStageStats: pointBuyStats },
+          },
+          layers: [],
+        },
+        revisions: assignmentResult.receipt.revisions,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsAfterAssignment);
+    } finally {
       harness.socket.terminate();
       await harness.app.close();
       harness.database.close();

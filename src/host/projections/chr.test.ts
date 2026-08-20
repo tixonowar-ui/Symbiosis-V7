@@ -10,6 +10,11 @@ import {
   CHR_003_REQUEST_ACTION_KEYS,
   CHR_004_COMPLETE_ACTION_KEYS,
   CHR_004_PENDING_ACTION_KEYS,
+  CHR_009_CHECKPOINT_ACTION_KEYS,
+  CHR_011_INITIAL_ACTION_KEYS,
+  CHR_011_SET_DECIDE_ACTION_KEYS,
+  CHR_012_ACTION_KEYS,
+  CHR_012_EXCLUDED_ACTION_KEYS,
   CHR_028_COMMITTED_ACTION_KEYS,
   CHR_028_WARNING_ACTION_KEYS,
   CHR_010_INITIAL_ACTION_KEYS,
@@ -26,14 +31,18 @@ import {
   STAT_METHODS,
   SYMBIONT_ACQUISITION_MODES,
   projectInitialChr002,
+  projectInitialChr009,
   projectInitialChr010,
+  projectInitialChr011,
   projectInitialChr016,
   projectInitialChr036,
   projectChr003,
   projectChr004,
+  projectChr012,
   projectChr028,
   projectCreationSetDecision,
   creationSetDecisionPendingActionKeys,
+  chr009CheckpointActionKeys,
 } from './chr.js';
 
 describe('CHR host projection vocabulary', () => {
@@ -67,6 +76,25 @@ describe('CHR host projection vocabulary', () => {
       'CHR-002::CTA::005',
     ]);
     expect(CHR_002_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-002::CTA::001']);
+    expect(CHR_009_CHECKPOINT_ACTION_KEYS).toEqual(['CHR-009::CTA::001', 'CHR-009::CTA::002']);
+    expect(chr009CheckpointActionKeys('PURE', true)).toEqual(['CHR-009::CTA::001']);
+    expect(chr009CheckpointActionKeys('UNITED', true)).toEqual(['CHR-009::CTA::002']);
+    expect(chr009CheckpointActionKeys('FREE', false)).toEqual([]);
+    expect(() => chr009CheckpointActionKeys('UNKNOWN' as never, false)).toThrow(
+      'CHR-009 has unrecognized raceChoice "UNKNOWN"',
+    );
+    expect(CHR_011_INITIAL_ACTION_KEYS).toEqual([
+      'CHR-011::CTA::003',
+      'CHR-011::CTA::004',
+      'CHR-011::CTA::005',
+    ]);
+    expect(CHR_011_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-011::CTA::001']);
+    expect(CHR_012_ACTION_KEYS).toEqual([]);
+    expect(CHR_012_EXCLUDED_ACTION_KEYS).toEqual([
+      'CHR-012::CTA::001',
+      'CHR-012::CTA::002',
+      'CHR-012::CTA::003',
+    ]);
     expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual([
       'CHR-002',
       'CHR-005',
@@ -74,6 +102,7 @@ describe('CHR host projection vocabulary', () => {
       'CHR-007',
       'CHR-008',
       'CHR-010',
+      'CHR-011',
       'CHR-016',
       'CHR-028',
       'CHR-036',
@@ -85,6 +114,7 @@ describe('CHR host projection vocabulary', () => {
       'CHR-007': ['CHR-007::CTA::001'],
       'CHR-008': ['CHR-008::CTA::001'],
       'CHR-010': ['CHR-010::CTA::001', 'CHR-010::CTA::002'],
+      'CHR-011': ['CHR-011::CTA::001'],
       'CHR-016': ['CHR-016::CTA::001'],
       'CHR-028': ['CHR-028::CTA::001', 'CHR-028::CTA::002'],
       'CHR-036': ['CHR-036::CTA::001'],
@@ -376,5 +406,260 @@ describe('CHR host projection vocabulary', () => {
     });
     expect(CHR_004_PENDING_ACTION_KEYS).toEqual(['CHR-004::CTA::001']);
     expect(CHR_004_COMPLETE_ACTION_KEYS).toEqual([]);
+  });
+
+  it('projects the exact initial rolled CHR-009 source without assigning duplicate values', () => {
+    const sourceEntries = [
+      { creationCriticalPenaltyOrNull: -2 as const, setEntryIndex: 0, value: 1 },
+      { creationCriticalPenaltyOrNull: null, setEntryIndex: 1, value: 1 },
+      { creationCriticalPenaltyOrNull: null, setEntryIndex: 2, value: 12 },
+      { creationCriticalPenaltyOrNull: null, setEntryIndex: 3, value: 13 },
+      { creationCriticalPenaltyOrNull: null, setEntryIndex: 4, value: 14 },
+      { creationCriticalPenaltyOrNull: null, setEntryIndex: 5, value: 15 },
+      { creationCriticalPenaltyOrNull: null, setEntryIndex: 6, value: 23 },
+    ];
+    const projected = projectInitialChr009({
+      assignmentMode: 'ROLLED_BIJECTION',
+      characterDraftId: 'character-draft',
+      draftRevision: 13,
+      raceChoice: 'PURE',
+      sourceEntries,
+      sourceSetReceiptIdOrNull: 'accepted-set-receipt',
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(projected).toEqual({
+      C: null,
+      D: null,
+      I: null,
+      M: null,
+      S: null,
+      W: null,
+      Z: null,
+      assignmentMode: 'ROLLED_BIJECTION',
+      assignmentValidation: null,
+      bijectionProofOrExactSum: {
+        assignedSetEntryIndexByStat: null,
+        kind: 'ROLLED_BIJECTION',
+        sourceEntries,
+      },
+      characterDraftId: 'character-draft',
+      commandId: null,
+      draftRevision: 13,
+      eachValueRange: null,
+      raceChoice: 'PURE',
+      sourceSetReceiptIdOrNull: 'accepted-set-receipt',
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    sourceEntries[0]!.value = 20;
+    expect(
+      (
+        projected['bijectionProofOrExactSum'] as {
+          readonly sourceEntries: readonly { readonly value: number }[];
+        }
+      ).sourceEntries[0]?.value,
+    ).toBe(1);
+  });
+
+  it.each([
+    ['POINT_BUY_90', 90],
+    ['POINT_BUY_85', 85],
+  ] as const)('projects exact initial %s CHR-009 proof and range', (assignmentMode, total) => {
+    expect(
+      projectInitialChr009({
+        assignmentMode,
+        characterDraftId: 'character-draft',
+        draftRevision: 14,
+        raceChoice: 'FREE',
+        sourceSetReceiptIdOrNull: null,
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toMatchObject({
+      assignmentMode,
+      assignmentValidation: null,
+      bijectionProofOrExactSum: { actualTotal: null, kind: 'EXACT_SUM', requiredTotal: total },
+      eachValueRange: { maximum: 20, minimum: 1 },
+      sourceSetReceiptIdOrNull: null,
+    });
+  });
+
+  it('rejects a source set receipt on point-buy CHR-009 ingress', () => {
+    expect(() =>
+      projectInitialChr009({
+        assignmentMode: 'POINT_BUY_90',
+        characterDraftId: 'character-draft',
+        draftRevision: 14,
+        raceChoice: 'FREE',
+        sourceSetReceiptIdOrNull: 'unexpected-receipt',
+        wizardCheckpointId: 'wizard-checkpoint',
+      } as never),
+    ).toThrow('CHR-009 point-buy sourceSetReceiptIdOrNull must be null');
+    expect(() =>
+      projectInitialChr009({
+        assignmentMode: 'UNKNOWN',
+        characterDraftId: 'character-draft',
+        draftRevision: 14,
+        raceChoice: 'FREE',
+        sourceSetReceiptIdOrNull: null,
+        wizardCheckpointId: 'wizard-checkpoint',
+      } as never),
+    ).toThrow('CHR-009 has unrecognized assignmentMode "UNKNOWN"');
+  });
+
+  it('rejects non-canonical rolled CHR-009 source provenance', () => {
+    expect(() =>
+      projectInitialChr009({
+        assignmentMode: 'ROLLED_BIJECTION',
+        characterDraftId: 'character-draft',
+        draftRevision: 13,
+        raceChoice: 'UNITED',
+        sourceEntries: Array.from({ length: 7 }, (_, index) => ({
+          creationCriticalPenaltyOrNull: null,
+          setEntryIndex: index === 6 ? 5 : index,
+          value: 10,
+        })),
+        sourceSetReceiptIdOrNull: 'accepted-set-receipt',
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toThrow('CHR-009 rolled sourceEntries must contain canonical indices 0..6');
+  });
+
+  it('projects the exact signed CHR-011 class options in catalog order', () => {
+    const classOptions = [
+      {
+        classConsequences: {
+          statModifiers: [
+            { delta: 2, statCode: 'S' as const },
+            { delta: 2, statCode: 'D' as const },
+            { delta: 5, statCode: 'Z' as const },
+            { delta: 7, statCode: 'I' as const },
+          ],
+        },
+        mandatoryClassSkill: { bonus: 5, skillKey: 'PURE_SEEKER', slotCost: 1 },
+        pureClass: 'SEEKER' as const,
+      },
+      {
+        classConsequences: {
+          statModifiers: [
+            { delta: 2, statCode: 'S' as const },
+            { delta: 5, statCode: 'D' as const },
+            { delta: 5, statCode: 'M' as const },
+            { delta: 5, statCode: 'Z' as const },
+          ],
+        },
+        mandatoryClassSkill: { bonus: 4, skillKey: 'PURE_STALKER', slotCost: 1 },
+        pureClass: 'STALKER' as const,
+      },
+      {
+        classConsequences: {
+          statModifiers: [
+            { delta: 5, statCode: 'S' as const },
+            { delta: 2, statCode: 'D' as const },
+            { delta: 5, statCode: 'M' as const },
+            { delta: 5, statCode: 'Z' as const },
+          ],
+        },
+        mandatoryClassSkill: { bonus: 3, skillKey: 'PURE_SOLDIER', slotCost: 1 },
+        pureClass: 'SOLDIER' as const,
+      },
+    ];
+    expect(
+      projectInitialChr011({
+        characterDraftId: 'character-draft',
+        classOptions,
+        draftRevision: 14,
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toEqual({
+      characterDraftId: 'character-draft',
+      classConsequences: null,
+      classOptions,
+      commandId: null,
+      draftRevision: 14,
+      mandatoryClassSkill: null,
+      pureClass: null,
+      raceChoice: 'PURE',
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(() =>
+      projectInitialChr011({
+        characterDraftId: 'character-draft',
+        classOptions: [...classOptions].reverse(),
+        draftRevision: 14,
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toThrow('CHR-011 classOptions must use canonical SEEKER,STALKER,SOLDIER order');
+  });
+
+  it('projects exact classless and PURE CHR-012 breakdowns without internal source IDs', () => {
+    const baseStats = { C: 7, D: 8, I: 9, M: 10, S: 11, W: 12, Z: 13 };
+    const classless = projectChr012({
+      baseStats,
+      characterDraftId: 'character-draft',
+      classModifiersOrNull: null,
+      draftRevision: 15,
+      mandatoryClassSkillOrNull: null,
+      raceModifiers: [{ delta: -2, statCode: 'S' }],
+      skillStageStats: { ...baseStats, S: 9 },
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(classless).toEqual({
+      baseStats,
+      characterDraftId: 'character-draft',
+      classModifiersOrNull: null,
+      commandId: null,
+      draftRevision: 15,
+      mandatoryClassSkillOrNull: null,
+      raceModifiers: [{ delta: -2, statCode: 'S' }],
+      skillStageStats: { ...baseStats, S: 9 },
+      symbiontModifiersExcluded: true,
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(JSON.stringify(classless)).not.toMatch(/RNG|seed|Rule|ModifierID|availability/u);
+
+    expect(
+      projectChr012({
+        baseStats,
+        characterDraftId: 'pure-draft',
+        classModifiersOrNull: [{ delta: 7, statCode: 'I' }],
+        draftRevision: 16,
+        mandatoryClassSkillOrNull: { bonus: 5, skillKey: 'PURE_SEEKER', slotCost: 1 },
+        raceModifiers: [],
+        skillStageStats: { ...baseStats, I: 16 },
+        wizardCheckpointId: 'pure-checkpoint',
+      }),
+    ).toMatchObject({
+      classModifiersOrNull: [{ delta: 7, statCode: 'I' }],
+      mandatoryClassSkillOrNull: { bonus: 5, skillKey: 'PURE_SEEKER', slotCost: 1 },
+      raceModifiers: [],
+      symbiontModifiersExcluded: true,
+    });
+  });
+
+  it('rejects a CHR-012 class fact with mismatched nullability or malformed StatMap', () => {
+    const baseStats = { C: 7, D: 8, I: 9, M: 10, S: 11, W: 12, Z: 13 };
+    expect(() =>
+      projectChr012({
+        baseStats,
+        characterDraftId: 'character-draft',
+        classModifiersOrNull: [],
+        draftRevision: 15,
+        mandatoryClassSkillOrNull: null,
+        raceModifiers: [],
+        skillStageStats: baseStats,
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toThrow('CHR-012 class modifiers and mandatory class skill must share nullability');
+    expect(() =>
+      projectChr012({
+        baseStats: { ...baseStats, X: 1 } as never,
+        characterDraftId: 'character-draft',
+        classModifiersOrNull: null,
+        draftRevision: 15,
+        mandatoryClassSkillOrNull: null,
+        raceModifiers: [],
+        skillStageStats: baseStats,
+        wizardCheckpointId: 'wizard-checkpoint',
+      }),
+    ).toThrow('CHR-012 baseStats must contain exact StatCode keys S,D,M,Z,I,W,C');
   });
 });

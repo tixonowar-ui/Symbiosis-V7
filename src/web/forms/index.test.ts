@@ -108,3 +108,20 @@ describe('STAT_ROLLS set-decision web form registry', () => {
     ]);
   });
 });
+
+describe('STAT_ASSIGNMENT web form registry', () => {
+  it.each([
+    ['CHR-009', '/player/characters/:localCharacterId/create/chr-009', 3],
+    ['CHR-011', '/player/characters/:localCharacterId/create/chr-011', 5],
+    ['CHR-012', '/player/characters/:localCharacterId/create/chr-012', 3],
+  ] as const)('publishes the exact %s screen and Atlas actions', (formId, route, count) => {
+    const definition = presentedFormDefinition(formId);
+    expect(definition).toMatchObject({ route, type: 'screen' });
+    expect(definition?.actions.map(({ actionKey }) => actionKey)).toEqual(
+      Array.from(
+        { length: count },
+        (_, index) => `${formId}::CTA::${String(index + 1).padStart(3, '0')}`,
+      ),
+    );
+  });
+});

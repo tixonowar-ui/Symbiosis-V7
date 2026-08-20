@@ -35,7 +35,9 @@ const ZERO_REVISIONS = {
 } as const;
 interface CorruptiblePayload {
   branchCacheHash: string;
-  lastCompleteStage: { request: { payload: { wizardCheckpointId: string } } };
+  lastCompleteStage: {
+    request: { commandId: string; payload: { wizardCheckpointId: string } };
+  };
   nextStageEnvelope: { routeBindings: [{ value: string }] };
   receipt: {
     commandId: string;
@@ -261,6 +263,26 @@ describe('CHR-001 IDENTITY durable checkpoint', () => {
         { ...committed.checkpoint, checkpointId: VALID_PAYLOAD.characterDraftId },
       ),
     ).toThrow(/checkpoint\/character ID collision/);
+  });
+
+  it('rejects cross-kind identity IDs before write and while restoring', () => {
+    const database = memoryDatabase();
+    expect(
+      refusalFrom(() =>
+        commitIdentityCheckpoint(database, request(VALID_PAYLOAD.characterDraftId), 'receipt'),
+      ),
+    ).toEqual({ code: 'GUARD_REJECTED' });
+    expect(database.prepare('SELECT COUNT(*) FROM local_character').pluck().get()).toBe(0);
+
+    const committed = commitIdentityCheckpoint(database, request(), 'receipt-identity');
+    const payload = structuredClone(committed.durablePayload) as unknown as CorruptiblePayload;
+    payload.receipt.receiptId = payload.lastCompleteStage.request.commandId;
+    expect(() =>
+      validateDurableIdentityCheckpoint(
+        { ...committed.localCharacter, payloadJson: JSON.stringify(payload) },
+        committed.checkpoint,
+      ),
+    ).toThrow(/receipt ID collision/);
   });
 
   it('requires the first checkpoint receipt, checkpoint, and root to stay at zero', () => {

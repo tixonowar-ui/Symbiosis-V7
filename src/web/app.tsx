@@ -10,17 +10,24 @@ import type {
   App001Projection,
   CharacterCreationChoiceDraft,
   CharacterCreationRollDraft,
+  CharacterStatAssignmentDraft,
   CharacterSetDecisionProjection,
   Chr003Projection,
   Chr004Projection,
+  Chr009Projection,
+  Chr011Projection,
+  Chr012Projection,
   ConfirmedPresentationLayer,
   ConfirmedProjectionSnapshot,
   FormActionRequestResult,
   IdentityDraftClientState,
   IdentityDraftValues,
   ProjectionConnection,
+  StatCode,
   WebClientState,
 } from './ws-client.js';
+
+const STAT_CODES = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const satisfies readonly StatCode[];
 
 const LOCAL_CHARACTER_PORTRAIT_ASSET_KEY_SET: ReadonlySet<string> = new Set(
   LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS,
@@ -555,6 +562,152 @@ function CharacterSetDecisionFields({
   );
 }
 
+function StatAssignmentFields({
+  draft,
+  onChange,
+  snapshot,
+}: {
+  readonly draft: CharacterStatAssignmentDraft | null;
+  readonly onChange: (statCode: StatCode, value: number | null) => void;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-009') return null;
+  const projection = snapshot.projection as Chr009Projection;
+  const values = draft?.valuesByStat;
+  const rolled = projection.assignmentMode === 'ROLLED_BIJECTION';
+  const sourceEntries =
+    projection.bijectionProofOrExactSum.kind === 'ROLLED_BIJECTION'
+      ? projection.bijectionProofOrExactSum.sourceEntries
+      : [];
+  const total = rolled
+    ? null
+    : STAT_CODES.reduce((sum, statCode) => sum + (values?.[statCode] ?? 0), 0);
+  return (
+    <section
+      aria-labelledby="chr-009-assignment-title"
+      data-stat-assignment-mode={projection.assignmentMode}
+    >
+      <h2 id="chr-009-assignment-title">Распределение характеристик</h2>
+      {STAT_CODES.map((statCode) => (
+        <label key={statCode}>
+          {statCode}{' '}
+          {rolled ? (
+            <select
+              data-stat-assignment={statCode}
+              value={values?.[statCode] ?? ''}
+              onChange={(event) =>
+                onChange(statCode, event.target.value === '' ? null : Number(event.target.value))
+              }
+            >
+              <option value="">—</option>
+              {sourceEntries.map((entry) => (
+                <option key={entry.setEntryIndex} value={entry.setEntryIndex}>
+                  #{entry.setEntryIndex + 1}: {entry.value}
+                  {entry.creationCriticalPenaltyOrNull === null
+                    ? ''
+                    : ` (${entry.creationCriticalPenaltyOrNull})`}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              data-stat-assignment={statCode}
+              max={20}
+              min={1}
+              step={1}
+              type="number"
+              value={values?.[statCode] ?? ''}
+              onChange={(event) =>
+                onChange(statCode, event.target.value === '' ? null : Number(event.target.value))
+              }
+            />
+          )}
+        </label>
+      ))}
+      {total === null ? null : (
+        <p data-stat-assignment-total>
+          Сумма: {total} /{' '}
+          {projection.bijectionProofOrExactSum.kind === 'EXACT_SUM'
+            ? projection.bijectionProofOrExactSum.requiredTotal
+            : ''}
+        </p>
+      )}
+      <p data-stat-assignment-validation={draft?.validation ?? 'ASSIGNMENT_INVALID'}>
+        {draft?.validation ?? 'ASSIGNMENT_INVALID'}
+      </p>
+    </section>
+  );
+}
+
+function PureClassFields({
+  choice,
+  snapshot,
+}: {
+  readonly choice: CharacterCreationChoiceDraft | null;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-011') return null;
+  const projection = snapshot.projection as Chr011Projection;
+  return (
+    <section aria-labelledby="chr-011-class-title" data-pure-class={choice?.value ?? 'null'}>
+      <h2 id="chr-011-class-title">Класс Чистого</h2>
+      {projection.classOptions.map((option) => (
+        <article key={option.pureClass} data-pure-class-option={option.pureClass}>
+          <h3>{option.pureClass}</h3>
+          <pre>{JSON.stringify(option.classConsequences, null, 2)}</pre>
+          <pre>{JSON.stringify(option.mandatoryClassSkill, null, 2)}</pre>
+        </article>
+      ))}
+      {choice?.formId === 'CHR-011' ? (
+        <output data-selected-pure-class>{choice.value}</output>
+      ) : null}
+    </section>
+  );
+}
+
+function StatBreakdownFields({
+  snapshot,
+}: {
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-012') return null;
+  const projection = snapshot.projection as Chr012Projection;
+  const delta = (rows: Chr012Projection['raceModifiers'], statCode: StatCode) =>
+    rows.find((row) => row.statCode === statCode)?.delta ?? 0;
+  return (
+    <section aria-labelledby="chr-012-summary-title" data-stat-breakdown>
+      <h2 id="chr-012-summary-title">Характеристики на этапе навыков</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Код</th>
+            <th>База</th>
+            <th>Раса</th>
+            <th>Класс</th>
+            <th>Итого</th>
+          </tr>
+        </thead>
+        <tbody>
+          {STAT_CODES.map((statCode) => (
+            <tr key={statCode}>
+              <th>{statCode}</th>
+              <td>{projection.baseStats[statCode]}</td>
+              <td>{delta(projection.raceModifiers, statCode)}</td>
+              <td>{delta(projection.classModifiersOrNull ?? [], statCode)}</td>
+              <td>{projection.skillStageStats[statCode]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {projection.mandatoryClassSkillOrNull === null ? null : (
+        <pre data-mandatory-class-skill>
+          {JSON.stringify(projection.mandatoryClassSkillOrNull, null, 2)}
+        </pre>
+      )}
+    </section>
+  );
+}
+
 function AbandonmentDialogFields({
   layer,
 }: {
@@ -596,6 +749,8 @@ export function App(): ReactElement {
   const [creationRollDraft, setCreationRollDraft] = useState<CharacterCreationRollDraft | null>(
     null,
   );
+  const [statAssignmentDraft, setStatAssignmentDraft] =
+    useState<CharacterStatAssignmentDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -605,6 +760,7 @@ export function App(): ReactElement {
       setIdentityDraft,
       setCreationChoiceDraft,
       setCreationRollDraft,
+      setStatAssignmentDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -663,7 +819,8 @@ export function App(): ReactElement {
             {snapshot.formId === 'CHR-010' ||
             snapshot.formId === 'CHR-016' ||
             snapshot.formId === 'CHR-036' ||
-            snapshot.formId === 'CHR-002' ? (
+            snapshot.formId === 'CHR-002' ||
+            snapshot.formId === 'CHR-011' ? (
               <section
                 aria-label={
                   snapshot.formId === 'CHR-010'
@@ -707,6 +864,18 @@ export function App(): ReactElement {
               }}
             />
             <CharacterSetDecisionFields snapshot={snapshot} />
+            <StatAssignmentFields
+              draft={statAssignmentDraft}
+              snapshot={snapshot}
+              onChange={(statCode, value) => {
+                const result = connectionRef.current?.replaceStatAssignmentValue(statCode, value);
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+            />
+            <PureClassFields choice={activeCreationChoice} snapshot={snapshot} />
+            <StatBreakdownFields snapshot={snapshot} />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}
