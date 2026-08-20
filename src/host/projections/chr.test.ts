@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { resolve } from 'node:path';
+
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { loadCreationDecisionConsequenceCatalog } from '../creation-decision-consequence-catalog.js';
+import { loadSkillStageCatalog } from '../skill-stage-catalog.js';
 
 import {
   CHOICE_LOCK_STATUSES,
@@ -46,6 +51,17 @@ import {
 } from './chr.js';
 
 describe('CHR host projection vocabulary', () => {
+  let consequenceCatalog: Awaited<ReturnType<typeof loadCreationDecisionConsequenceCatalog>>;
+
+  beforeAll(async () => {
+    const projectRoot = resolve(import.meta.dirname, '..', '..', '..');
+    const skillStageCatalog = await loadSkillStageCatalog(projectRoot);
+    consequenceCatalog = await loadCreationDecisionConsequenceCatalog(
+      projectRoot,
+      skillStageCatalog,
+    );
+  });
+
   it('publishes Continue only in the eligible CHR-001 action set', () => {
     expect(CHR_001_INITIAL_ACTION_KEYS).toEqual(['CHR-001::CTA::002']);
     expect(CHR_001_CHECKPOINT_ACTION_KEYS).toEqual(['CHR-001::CTA::001', 'CHR-001::CTA::002']);
@@ -268,13 +284,16 @@ describe('CHR host projection vocabulary', () => {
   });
 
   it('projects the superseding exact initial CHR-010 payload', () => {
-    expect(projectInitialChr010('character-draft', 'wizard-checkpoint', 7)).toEqual({
+    expect(
+      projectInitialChr010('character-draft', 'wizard-checkpoint', 7, consequenceCatalog),
+    ).toEqual({
       ancientOptionSerialized: false,
       characterDraftId: 'character-draft',
       choiceLockStatus: 'UNLOCKED',
       commandId: null,
       draftRevision: 7,
       raceChoice: null,
+      raceConsequenceOptions: consequenceCatalog.raceConsequenceOptions,
       raceConsequencesPreview: null,
       wizardCheckpointId: 'wizard-checkpoint',
     });
@@ -283,11 +302,20 @@ describe('CHR host projection vocabulary', () => {
   it.each(['UNITED', 'FREE'] as const)(
     'projects the exact initial CHR-016 payload for committed race %s',
     (raceChoice) => {
-      expect(projectInitialChr016('character-draft', 'wizard-checkpoint', 8, raceChoice)).toEqual({
+      expect(
+        projectInitialChr016(
+          'character-draft',
+          'wizard-checkpoint',
+          8,
+          raceChoice,
+          consequenceCatalog,
+        ),
+      ).toEqual({
         characterDraftId: 'character-draft',
         choiceLockStatus: 'UNLOCKED',
         commandId: null,
         draftRevision: 8,
+        modeConsequenceOptions: consequenceCatalog.modeConsequenceOptionsByRace[raceChoice],
         modeConsequences: null,
         raceChoice,
         symbiontAcquisitionMode: null,
@@ -298,8 +326,58 @@ describe('CHR host projection vocabulary', () => {
 
   it('refuses CHR-016 projection for PURE instead of inventing an applicable payload', () => {
     expect(() =>
-      projectInitialChr016('character-draft', 'wizard-checkpoint', 8, 'PURE' as never),
+      projectInitialChr016(
+        'character-draft',
+        'wizard-checkpoint',
+        8,
+        'PURE' as never,
+        consequenceCatalog,
+      ),
     ).toThrow('CHR-016 raceChoice is "PURE", expected "UNITED" or "FREE"');
+  });
+
+  it('keeps every CHR-010 mode alternative relationally identical to CHR-016', () => {
+    const raceOptions = projectInitialChr010(
+      'character-draft',
+      'wizard-checkpoint',
+      7,
+      consequenceCatalog,
+    )['raceConsequenceOptions'] as typeof consequenceCatalog.raceConsequenceOptions;
+    for (const raceChoice of ['UNITED', 'FREE'] as const) {
+      const raceOption = raceOptions.find((option) => option.raceChoice === raceChoice);
+      expect(raceOption?.raceConsequencesPreview.raceStatModifiersByAcquisitionMode).toMatchObject({
+        kind: 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE',
+      });
+      const conditional = raceOption?.raceConsequencesPreview.raceStatModifiersByAcquisitionMode;
+      if (conditional?.kind !== 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE') {
+        throw new Error(`missing ${raceChoice} conditional modifier alternatives`);
+      }
+      expect(conditional.alternatives).toEqual(
+        projectInitialChr016(
+          'character-draft',
+          'wizard-checkpoint',
+          8,
+          raceChoice,
+          consequenceCatalog,
+        )['modeConsequenceOptions'],
+      );
+    }
+    expect(
+      consequenceCatalog.modeConsequenceOptionsByRace.FREE.find(
+        (option) => option.symbiontAcquisitionMode === 'RANDOM',
+      )?.modeConsequences.statModifiers,
+    ).toEqual({ kind: 'NO_STAT_MODIFIERS' });
+  });
+
+  it('serializes player consequence payloads without internal catalog provenance', () => {
+    const serialized = JSON.stringify([
+      projectInitialChr010('character-draft', 'wizard-checkpoint', 7, consequenceCatalog),
+      projectInitialChr016('character-draft', 'wizard-checkpoint', 8, 'UNITED', consequenceCatalog),
+      projectInitialChr002('character-draft', 'wizard-checkpoint', 10, consequenceCatalog),
+    ]);
+    expect(serialized).not.toMatch(
+      /CORE-|Q-CORE-|MOD-|"(?:Rule ID|Rule IDs|Creation Rule IDs|ModifierID|SourceType|SourceID|Source Question IDs|ContextPredicate|ApplicationStage|StackPolicy|ruleId|ruleIds|modifierId|sourceType|sourceId|contextPredicate|applicationStage|stackPolicy|questionId|sourceQuestionId|availabilityTrace)"/u,
+    );
   });
 
   it('projects the exact initial CHR-036 destination payload', () => {
@@ -315,11 +393,14 @@ describe('CHR host projection vocabulary', () => {
   });
 
   it('projects the exact initial CHR-002 destination with its atomic method capability', () => {
-    expect(projectInitialChr002('character-draft', 'wizard-checkpoint', 10)).toEqual({
+    expect(
+      projectInitialChr002('character-draft', 'wizard-checkpoint', 10, consequenceCatalog),
+    ).toEqual({
       characterDraftId: 'character-draft',
       choiceLockStatus: 'UNLOCKED',
       commandId: null,
       draftRevision: 10,
+      methodConsequenceOptions: consequenceCatalog.methodConsequenceOptions,
       methodConsequences: null,
       statMethod: null,
       wizardCheckpointId: 'wizard-checkpoint',

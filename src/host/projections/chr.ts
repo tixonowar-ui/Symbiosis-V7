@@ -12,6 +12,7 @@ import {
   type CreationStatReturnDecisionFormId,
   type CreationStatSetDecision,
 } from '../../domain/index.js';
+import type { CreationDecisionConsequenceCatalog } from '../creation-decision-consequence-catalog.js';
 
 export const CHOICE_LOCK_STATUSES = ['UNLOCKED', 'LOCKED_AFTER_RESULT', 'NOT_APPLICABLE'] as const;
 export type ChoiceLockStatus = (typeof CHOICE_LOCK_STATUSES)[number];
@@ -717,6 +718,7 @@ export function projectInitialChr010(
   characterDraftId: string,
   wizardCheckpointId: string,
   draftRevision: number,
+  consequenceCatalog: CreationDecisionConsequenceCatalog,
 ): JsonObject {
   return {
     ancientOptionSerialized: false,
@@ -725,6 +727,7 @@ export function projectInitialChr010(
     commandId: null,
     draftRevision,
     raceChoice: null,
+    raceConsequenceOptions: consequenceCatalog.raceConsequenceOptions,
     raceConsequencesPreview: null,
     wizardCheckpointId,
   };
@@ -735,6 +738,7 @@ export function projectInitialChr016(
   wizardCheckpointId: string,
   draftRevision: number,
   raceChoice: SymbiontRaceChoice,
+  consequenceCatalog: CreationDecisionConsequenceCatalog,
 ): JsonObject {
   if (raceChoice !== 'UNITED' && raceChoice !== 'FREE') {
     throw new Error(
@@ -746,6 +750,7 @@ export function projectInitialChr016(
     choiceLockStatus: 'UNLOCKED',
     commandId: null,
     draftRevision,
+    modeConsequenceOptions: consequenceCatalog.modeConsequenceOptionsByRace[raceChoice],
     modeConsequences: null,
     raceChoice,
     symbiontAcquisitionMode: null,
@@ -773,12 +778,14 @@ export function projectInitialChr002(
   characterDraftId: string,
   wizardCheckpointId: string,
   draftRevision: number,
+  consequenceCatalog: CreationDecisionConsequenceCatalog,
 ): JsonObject {
   return {
     characterDraftId,
     choiceLockStatus: 'UNLOCKED',
     commandId: null,
     draftRevision,
+    methodConsequenceOptions: consequenceCatalog.methodConsequenceOptions,
     methodConsequences: null,
     statMethod: null,
     wizardCheckpointId,

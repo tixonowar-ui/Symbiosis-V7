@@ -102,12 +102,163 @@ const VALID_CHR_001_PROJECTION = {
   name: 'Алиса',
   sex: 'FEMALE',
 } as const;
+const STAT_LABELS = {
+  C: 'Харизма',
+  D: 'Ловкость',
+  I: 'Интеллект',
+  M: 'Метаболизм',
+  S: 'Сила',
+  W: 'Мудрость',
+  Z: 'Здоровье',
+} as const;
+const additiveModifiers = (
+  entries: readonly { readonly delta: number; readonly statCode: keyof typeof STAT_LABELS }[],
+) => ({
+  entries: entries.map(({ delta, statCode }) => ({
+    delta,
+    statCode,
+    statLabel: STAT_LABELS[statCode],
+  })),
+  kind: 'ADDITIVE_STAT_MODIFIERS' as const,
+});
+const noStatModifiers = { kind: 'NO_STAT_MODIFIERS' } as const;
+const UNITED_MODE_OPTIONS = [
+  {
+    modeConsequences: {
+      baseSymbiontSlots: 4,
+      raceChoice: 'UNITED',
+      raceLabel: 'Единый',
+      statModifiers: additiveModifiers([
+        { delta: -7, statCode: 'S' },
+        { delta: -10, statCode: 'M' },
+        { delta: -10, statCode: 'Z' },
+      ]),
+    },
+    symbiontAcquisitionMode: 'MANUAL',
+  },
+  {
+    modeConsequences: {
+      baseSymbiontSlots: 4,
+      raceChoice: 'UNITED',
+      raceLabel: 'Единый',
+      statModifiers: additiveModifiers([
+        { delta: -3, statCode: 'S' },
+        { delta: -6, statCode: 'M' },
+        { delta: -6, statCode: 'Z' },
+      ]),
+    },
+    symbiontAcquisitionMode: 'RANDOM',
+  },
+] as const;
+const FREE_MODE_OPTIONS = [
+  {
+    modeConsequences: {
+      baseSymbiontSlots: 1,
+      raceChoice: 'FREE',
+      raceLabel: 'Вольный',
+      statModifiers: additiveModifiers([
+        { delta: -2, statCode: 'S' },
+        { delta: -2, statCode: 'M' },
+        { delta: -2, statCode: 'Z' },
+      ]),
+    },
+    symbiontAcquisitionMode: 'MANUAL',
+  },
+  {
+    modeConsequences: {
+      baseSymbiontSlots: 1,
+      raceChoice: 'FREE',
+      raceLabel: 'Вольный',
+      statModifiers: noStatModifiers,
+    },
+    symbiontAcquisitionMode: 'RANDOM',
+  },
+] as const;
+const RACE_CONSEQUENCE_OPTIONS = [
+  {
+    raceChoice: 'UNITED',
+    raceConsequencesPreview: {
+      allocationXpMultiplier: 1,
+      baseSymbiontSlots: 4,
+      classPolicy: 'NO_CLASS',
+      directXpMultiplier: 1,
+      raceLabel: 'Единый',
+      raceStatModifiersByAcquisitionMode: {
+        alternatives: UNITED_MODE_OPTIONS,
+        kind: 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE',
+      },
+      symbiontXpPolicy: 'STANDARD_XP_AWARD',
+      symbioticMonsterAllowed: true,
+    },
+  },
+  {
+    raceChoice: 'FREE',
+    raceConsequencesPreview: {
+      allocationXpMultiplier: 2,
+      baseSymbiontSlots: 1,
+      classPolicy: 'NO_CLASS',
+      directXpMultiplier: 2,
+      raceLabel: 'Вольный',
+      raceStatModifiersByAcquisitionMode: {
+        alternatives: FREE_MODE_OPTIONS,
+        kind: 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE',
+      },
+      symbiontXpPolicy: 'XP_AWARD_X2',
+      symbioticMonsterAllowed: false,
+    },
+  },
+  {
+    raceChoice: 'PURE',
+    raceConsequencesPreview: {
+      allocationXpMultiplier: 1,
+      baseSymbiontSlots: 0,
+      classPolicy: 'REQUIRED_PURE_CLASS',
+      directXpMultiplier: 1,
+      raceLabel: 'Чистый',
+      raceStatModifiersByAcquisitionMode: { kind: 'NOT_APPLICABLE' },
+      symbiontXpPolicy: 'STANDARD_XP_AWARD',
+      symbioticMonsterAllowed: false,
+    },
+  },
+] as const;
+const REJECTED_SET_CONSEQUENCES = {
+  creationCriticalConsequencesDiscarded: true,
+  irreversible: true,
+  setValuesDiscarded: true,
+} as const;
+const METHOD_CONSEQUENCE_OPTIONS = [
+  {
+    methodConsequences: {
+      maximumAttempts: 1,
+      rejectedSet: REJECTED_SET_CONSEQUENCES,
+      terminalRule: { afterAttempt: 1, exactTotal: 90, kind: 'POINT_BUY_AFTER_REJECTION' },
+    },
+    statMethod: 'CLASSIC',
+  },
+  {
+    methodConsequences: {
+      maximumAttempts: 2,
+      rejectedSet: REJECTED_SET_CONSEQUENCES,
+      terminalRule: { afterAttempt: 2, exactTotal: 85, kind: 'POINT_BUY_AFTER_REJECTION' },
+    },
+    statMethod: 'ADVENTUROUS',
+  },
+  {
+    methodConsequences: {
+      maximumAttempts: 5,
+      rejectedSet: REJECTED_SET_CONSEQUENCES,
+      terminalRule: { attemptIndex: 5, kind: 'MANDATORY_ACCEPT' },
+    },
+    statMethod: 'ALL_OR_NOTHING',
+  },
+] as const;
 const CHR_010_PROJECTION = {
   ancientOptionSerialized: false,
   characterDraftId: CHARACTER_DRAFT_ID,
   choiceLockStatus: 'UNLOCKED',
   commandId: null,
   draftRevision: 0,
+  raceConsequenceOptions: RACE_CONSEQUENCE_OPTIONS,
   raceChoice: null,
   raceConsequencesPreview: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
@@ -118,6 +269,7 @@ const CHR_016_PROJECTION = {
   commandId: null,
   draftRevision: 1,
   modeConsequences: null,
+  modeConsequenceOptions: UNITED_MODE_OPTIONS,
   raceChoice: 'UNITED',
   symbiontAcquisitionMode: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
@@ -137,6 +289,7 @@ const CHR_002_PROJECTION = {
   commandId: null,
   draftRevision: 3,
   methodConsequences: null,
+  methodConsequenceOptions: METHOD_CONSEQUENCE_OPTIONS,
   statMethod: null,
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
 } as const;
@@ -426,11 +579,13 @@ const chr001Base = (
   routeTemplate: '/player/characters/:localCharacterId/create/chr-001',
 });
 
-const chr010Base = (): ProjectionSnapshotV2Message['presentation']['base'] => ({
+const chr010Base = (
+  projection: ProjectionSnapshotV2Message['presentation']['base']['roleFilteredPayload'] = CHR_010_PROJECTION,
+): ProjectionSnapshotV2Message['presentation']['base'] => ({
   availableActionKeys: ['CHR-010::CTA::004', 'CHR-010::CTA::005', 'CHR-010::CTA::006'],
   formId: 'CHR-010',
   formType: 'screen',
-  roleFilteredPayload: CHR_010_PROJECTION,
+  roleFilteredPayload: projection,
   routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
   routeTemplate: '/player/characters/:localCharacterId/create/chr-010',
 });
@@ -2118,6 +2273,173 @@ describe('APP-001 web entry', () => {
     }
   });
 
+  it.each([
+    {
+      base: chr010Base,
+      confirmationLabel: 'Подтвердить Чистого',
+      formId: 'CHR-010',
+      hostConsequenceField: 'raceConsequencesPreview',
+      optionSelector: '[data-race-consequence-option]',
+      optionCount: 3,
+      revision: 0,
+      selectedConsequenceSelector: '[data-race-consequences="Чистый"]',
+      selectors: ['Выбрать Единого', 'Выбрать Вольного', 'Выбрать Чистого'],
+    },
+    {
+      base: chr016Base,
+      confirmationLabel: 'Подтвердить способ получения симбионтов',
+      formId: 'CHR-016',
+      hostConsequenceField: 'modeConsequences',
+      optionSelector: '[data-mode-consequence-option]',
+      optionCount: 2,
+      revision: 1,
+      selectedConsequenceSelector:
+        '[data-mode-consequences="UNITED"] [data-stat-modifier-kind="ADDITIVE_STAT_MODIFIERS"]',
+      selectors: ['Выбрать ручное получение симбионтов', 'Выбрать случайное получение симбионтов'],
+    },
+    {
+      base: chr002Base,
+      confirmationLabel: 'Подтвердить метод характеристик',
+      formId: 'CHR-002',
+      hostConsequenceField: 'methodConsequences',
+      optionSelector: '[data-method-consequence-option]',
+      optionCount: 3,
+      revision: 3,
+      selectedConsequenceSelector: '[data-terminal-rule="MANDATORY_ACCEPT"]',
+      selectors: [
+        'Выбрать классический метод',
+        'Выбрать авантюристский метод',
+        'Выбрать «Всё или ничего»',
+      ],
+    },
+  ] as const)(
+    'renders every $formId consequence option before selection and keeps every selector local',
+    async ({
+      base,
+      confirmationLabel,
+      formId,
+      hostConsequenceField,
+      optionCount,
+      optionSelector,
+      revision,
+      selectedConsequenceSelector,
+      selectors,
+    }) => {
+      const { container, socket } = await connectToWizardBase(base(), revision);
+      const options = requiredElement(
+        container.querySelector(`[data-character-consequence-options="${formId}"]`),
+        `${formId} consequence options`,
+      );
+      expect(options.querySelectorAll(optionSelector)).toHaveLength(optionCount);
+      expect(container.querySelector('[data-character-creation-consequence]')).toBeNull();
+      expect(
+        container.querySelector(`[data-host-field="${hostConsequenceField}"]`)?.textContent,
+      ).toContain('null');
+      expect(container.querySelector('[data-host-field="draftRevision"]')?.textContent).toContain(
+        String(revision),
+      );
+
+      const sentBeforeSelectors = socket.sent.length;
+      for (const label of selectors) {
+        act(() => {
+          requiredElement(
+            container.querySelector<HTMLButtonElement>(`[data-atlas-action="${label}"]`),
+            `${formId} ${label} selector`,
+          ).click();
+        });
+        expect(socket.sent).toHaveLength(sentBeforeSelectors);
+        expect(
+          container.querySelector(`[data-host-field="${hostConsequenceField}"]`)?.textContent,
+        ).toContain('null');
+        expect(container.querySelector('[data-host-field="draftRevision"]')?.textContent).toContain(
+          String(revision),
+        );
+      }
+
+      const selectedConsequences = requiredElement(
+        container.querySelector('[data-character-creation-consequence]'),
+        `${formId} selected consequences`,
+      );
+      expect(selectedConsequences.querySelector(selectedConsequenceSelector)).not.toBeNull();
+      act(() => {
+        requiredElement(
+          container.querySelector<HTMLButtonElement>(`[data-atlas-action="${confirmationLabel}"]`),
+          `${formId} confirmation`,
+        ).click();
+      });
+      expect(decodedClientMessageV1(socket, socket.sent.length - 1)).toMatchObject({
+        expectedRevisions: entityRevisions(revision),
+        messageType: 'command.request',
+      });
+    },
+  );
+
+  it.each([
+    ['UNITED', UNITED_MODE_OPTIONS],
+    ['FREE', FREE_MODE_OPTIONS],
+  ] as const)(
+    'keeps %s mode alternatives identical between CHR-010 preview and CHR-016 options',
+    async (raceChoice, modeOptions) => {
+      const raceConnection = await connectToWizardBase(chr010Base(), 0);
+      const modeProjection = {
+        ...CHR_016_PROJECTION,
+        modeConsequenceOptions: modeOptions,
+        raceChoice,
+      } as const;
+      const modeConnection = await connectToWizardBase(chr016Base(modeProjection), 1);
+      const raceOption = requiredElement(
+        raceConnection.container.querySelector(`[data-race-consequence-option="${raceChoice}"]`),
+        `${raceChoice} race consequence option`,
+      );
+      const modeOptionList = requiredElement(
+        modeConnection.container.querySelector('[data-character-consequence-options="CHR-016"]'),
+        `${raceChoice} mode consequence options`,
+      );
+
+      for (const mode of ['MANUAL', 'RANDOM'] as const) {
+        const nested = requiredElement(
+          raceOption.querySelector(
+            `[data-mode-alternative="${mode}"] [data-mode-consequences="${raceChoice}"]`,
+          ),
+          `${raceChoice} ${mode} nested mode consequences`,
+        );
+        const direct = requiredElement(
+          modeOptionList.querySelector(
+            `[data-mode-consequence-option="${mode}"] [data-mode-consequences="${raceChoice}"]`,
+          ),
+          `${raceChoice} ${mode} direct mode consequences`,
+        );
+        expect(nested.textContent).toBe(direct.textContent);
+      }
+
+      if (raceChoice === 'FREE') {
+        const random = requiredElement(
+          raceOption.querySelector('[data-mode-alternative="RANDOM"]'),
+          'FREE RANDOM mode alternative',
+        );
+        expect(
+          random.querySelector('[data-stat-modifier-kind="NO_STAT_MODIFIERS"]')?.textContent,
+        ).toContain('Нет');
+      }
+    },
+  );
+
+  it('scopes PURE NOT_APPLICABLE copy to race modifiers controlled by acquisition mode', async () => {
+    const { container } = await connectToWizardBase(chr010Base(), 0);
+    const pure = requiredElement(
+      container.querySelector('[data-race-consequence-option="PURE"]'),
+      'PURE race consequence option',
+    );
+    const conditional = requiredElement(
+      pure.querySelector('[data-race-stat-modifiers-by-acquisition-mode="NOT_APPLICABLE"]'),
+      'PURE race modifiers by acquisition mode',
+    );
+    expect(conditional.textContent).toContain(
+      'Расовые поправки по способу получения симбионтов: не применяются',
+    );
+    expect(conditional.textContent).not.toContain('этапа навыков');
+  });
+
   it('walks CHR-010 through CHR-016 and CHR-036 to CHR-002 method selection', async () => {
     const { container, socket } = await connectToChr010();
 
@@ -2132,9 +2454,19 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-character-creation-choice]')?.textContent).toContain(
       'UNITED',
     );
-    expect(container.querySelector('[data-character-creation-consequence]')?.textContent).toBe(
-      'Выбрать Единого',
+    const selectedRaceConsequences = requiredElement(
+      container.querySelector('[data-character-creation-consequence]'),
+      'selected UNITED consequences',
     );
+    expect(
+      selectedRaceConsequences.querySelector('[data-race-consequences="Единый"]'),
+    ).not.toBeNull();
+    expect(
+      selectedRaceConsequences.querySelector('[data-mode-alternative="MANUAL"]')?.textContent,
+    ).toContain('−7');
+    expect(
+      selectedRaceConsequences.querySelector('[data-mode-alternative="RANDOM"]')?.textContent,
+    ).toContain('−3');
     act(() => {
       requiredElement(
         container.querySelector<HTMLButtonElement>(
@@ -2192,9 +2524,16 @@ describe('APP-001 web entry', () => {
       ).click();
     });
     expect(socket.sent).toHaveLength(sentBeforeAcquisition);
-    expect(container.querySelector('[data-character-creation-consequence]')?.textContent).toBe(
-      'Выбрать ручное получение симбионтов',
+    const selectedModeConsequences = requiredElement(
+      container.querySelector('[data-character-creation-consequence]'),
+      'selected MANUAL consequences',
     );
+    expect(
+      selectedModeConsequences.querySelector('[data-mode-consequences="UNITED"]'),
+    ).not.toBeNull();
+    expect(
+      selectedModeConsequences.querySelector('[data-stat-modifier="S"]')?.textContent,
+    ).toContain('−7');
     act(() => {
       requiredElement(
         container.querySelector<HTMLButtonElement>(
