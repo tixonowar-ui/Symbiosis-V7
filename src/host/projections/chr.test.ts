@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { loadCreationDecisionConsequenceCatalog } from '../creation-decision-consequence-catalog.js';
+import { loadCreationSkillCatalog } from '../creation-skill-catalog.js';
 import { loadSkillStageCatalog } from '../skill-stage-catalog.js';
 
 import {
@@ -19,7 +20,13 @@ import {
   CHR_011_INITIAL_ACTION_KEYS,
   CHR_011_SET_DECIDE_ACTION_KEYS,
   CHR_012_ACTION_KEYS,
+  CHR_012_CHECKPOINT_ACTION_KEYS,
   CHR_012_EXCLUDED_ACTION_KEYS,
+  CHR_013_ACTION_KEYS,
+  CHR_013_EXCLUDED_ACTION_KEYS,
+  CHR_015_CHECKPOINTED_ACTION_KEYS,
+  CHR_015_HOST_EXCLUDED_ACTION_KEYS,
+  CHR_015_INITIAL_ACTION_KEYS,
   CHR_028_COMMITTED_ACTION_KEYS,
   CHR_028_WARNING_ACTION_KEYS,
   CHR_010_INITIAL_ACTION_KEYS,
@@ -44,14 +51,127 @@ import {
   projectChr003,
   projectChr004,
   projectChr012,
+  projectChr013,
+  projectChr015,
   projectChr028,
   projectCreationSetDecision,
   creationSetDecisionPendingActionKeys,
   chr009CheckpointActionKeys,
+  type Chr013ProjectionValues,
+  type Chr015ProjectionValues,
 } from './chr.js';
+
+type SkillPresentationCatalog = Awaited<ReturnType<typeof loadCreationSkillCatalog>>;
+
+const SKILL_STAGE_STATS = { C: 20, D: 20, I: 20, M: 20, S: 20, W: 6, Z: 20 } as const;
+
+function skillProjectionValues(catalog: SkillPresentationCatalog): {
+  readonly chr013: Chr013ProjectionValues;
+  readonly initialChr015: Chr015ProjectionValues;
+  readonly checkpointedChr015: Chr015ProjectionValues;
+} {
+  const skillCardSummaries = catalog.selectableSkills.map((skill) => {
+    const requirements = skill.requirements.map((requirement) => {
+      const currentValue = SKILL_STAGE_STATS[requirement.statCode];
+      return { ...requirement, currentValue, satisfied: currentValue >= requirement.minValue };
+    });
+    return {
+      eligibility: requirements.every(({ satisfied }) => satisfied)
+        ? ('ELIGIBLE' as const)
+        : ('REQUIREMENTS_NOT_MET' as const),
+      levelOptions: [{ slotCost: 1, targetBonus: 1 }],
+      requirements,
+      skillId: skill.skillId,
+      skillLabel: skill.skillLabel,
+    };
+  });
+  const eligibleSkillIds = skillCardSummaries
+    .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+    .map(({ skillId }) => skillId);
+  const skillOptions = skillCardSummaries
+    .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+    .map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+  const mandatoryLabel = catalog.skillLabels.find(({ skillId }) => skillId === 'PURE_SEEKER');
+  if (mandatoryLabel === undefined) throw new Error('test catalog lacks PURE_SEEKER');
+  const mandatoryClassSkillOrNull = {
+    bonus: 5,
+    skillId: mandatoryLabel.skillId,
+    skillLabel: mandatoryLabel.skillLabel,
+    slotCost: 1,
+  } as const;
+  const common = {
+    characterDraftId: 'character-draft',
+    draftRevision: 18,
+    eligibleSkillIds,
+    mandatoryClassSkillOrNull,
+    racialFreeSkillIds: [],
+    racialFreeSkills: [],
+    requiredSlotCount: 3,
+    skillOptions,
+    wizardCheckpointId: 'wizard-checkpoint',
+  } as const;
+  const selectedSkills = skillOptions.slice(0, 2).map(({ skillId }) => ({
+    skillId,
+    slotCost: 1,
+    targetBonus: 1,
+  }));
+  return {
+    chr013: {
+      characterDraftId: common.characterDraftId,
+      draftRevision: common.draftRevision,
+      eligibleSkillIds,
+      skillCardSummaries,
+      skillStageStats: SKILL_STAGE_STATS,
+      slotSources: {
+        mandatoryClassSkillOrNull,
+        racialFreeSkills: [],
+        requiredSlotCount: common.requiredSlotCount,
+      },
+      wizardCheckpointId: common.wizardCheckpointId,
+    },
+    checkpointedChr015: {
+      ...common,
+      commandId: 'skill-selection-command',
+      paidSlotUsage: {
+        entries: [
+          { ...mandatoryClassSkillOrNull, source: 'CLASS_MANDATORY' },
+          ...selectedSkills.map((selected) => ({
+            bonus: selected.targetBonus,
+            skillId: selected.skillId,
+            skillLabel: skillOptions.find(({ skillId }) => skillId === selected.skillId)!
+              .skillLabel,
+            slotCost: selected.slotCost,
+            source: 'SELECTED' as const,
+          })),
+        ],
+        usedSlotCount: 3,
+      },
+      selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
+      selectedSkills,
+      selectionValidation: { kind: 'EXACT', requiredSlotCount: 3, usedSlotCount: 3 },
+    },
+    initialChr015: {
+      ...common,
+      commandId: null,
+      paidSlotUsage: {
+        entries: [{ ...mandatoryClassSkillOrNull, source: 'CLASS_MANDATORY' }],
+        usedSlotCount: 1,
+      },
+      selectedSkillIds: [],
+      selectedSkills: [],
+      selectionValidation: {
+        kind: 'UNDERFILLED',
+        missingSlotCount: 2,
+        requiredSlotCount: 3,
+        usedSlotCount: 1,
+      },
+    },
+  };
+}
 
 describe('CHR host projection vocabulary', () => {
   let consequenceCatalog: Awaited<ReturnType<typeof loadCreationDecisionConsequenceCatalog>>;
+  let skillCatalog: Awaited<ReturnType<typeof loadCreationSkillCatalog>>;
 
   beforeAll(async () => {
     const projectRoot = resolve(import.meta.dirname, '..', '..', '..');
@@ -60,6 +180,7 @@ describe('CHR host projection vocabulary', () => {
       projectRoot,
       skillStageCatalog,
     );
+    skillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
   });
 
   it('publishes Continue only in the eligible CHR-001 action set', () => {
@@ -106,11 +227,13 @@ describe('CHR host projection vocabulary', () => {
     ]);
     expect(CHR_011_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-011::CTA::001']);
     expect(CHR_012_ACTION_KEYS).toEqual([]);
-    expect(CHR_012_EXCLUDED_ACTION_KEYS).toEqual([
-      'CHR-012::CTA::001',
-      'CHR-012::CTA::002',
-      'CHR-012::CTA::003',
-    ]);
+    expect(CHR_012_CHECKPOINT_ACTION_KEYS).toEqual(['CHR-012::CTA::001']);
+    expect(CHR_012_EXCLUDED_ACTION_KEYS).toEqual(['CHR-012::CTA::002', 'CHR-012::CTA::003']);
+    expect(CHR_013_ACTION_KEYS).toEqual(['CHR-013::CTA::002']);
+    expect(CHR_013_EXCLUDED_ACTION_KEYS).toEqual(['CHR-013::CTA::001', 'CHR-013::CTA::003']);
+    expect(CHR_015_INITIAL_ACTION_KEYS).toEqual(['CHR-015::CTA::003']);
+    expect(CHR_015_CHECKPOINTED_ACTION_KEYS).toEqual([]);
+    expect(CHR_015_HOST_EXCLUDED_ACTION_KEYS).toEqual(['CHR-015::CTA::001', 'CHR-015::CTA::002']);
     expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual([
       'CHR-002',
       'CHR-005',
@@ -742,5 +865,189 @@ describe('CHR host projection vocabulary', () => {
         wizardCheckpointId: 'wizard-checkpoint',
       }),
     ).toThrow('CHR-012 baseStats must contain exact StatCode keys S,D,M,Z,I,W,C');
+  });
+
+  it('projects all CHR-013 cards and exact initial/checkpointed CHR-015 states', () => {
+    const values = skillProjectionValues(skillCatalog);
+    const chr013 = projectChr013(values.chr013);
+    expect(chr013).toMatchObject({
+      characterDraftId: 'character-draft',
+      commandId: null,
+      draftRevision: 18,
+      selectedSkillIdOrNull: null,
+      skillStageStats: SKILL_STAGE_STATS,
+      slotSources: {
+        mandatoryClassSkillOrNull: { skillId: 'PURE_SEEKER', slotCost: 1 },
+        racialFreeSkills: [],
+        requiredSlotCount: 3,
+      },
+      wizardCheckpointId: 'wizard-checkpoint',
+    });
+    expect(chr013.skillCardSummaries).toHaveLength(41);
+    expect(chr013.eligibleSkillIds).toEqual(
+      chr013.skillCardSummaries
+        .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+        .map(({ skillId }) => skillId),
+    );
+    expect(chr013.skillCardSummaries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eligibility: 'ELIGIBLE' }),
+        expect.objectContaining({ eligibility: 'REQUIREMENTS_NOT_MET' }),
+      ]),
+    );
+
+    expect(projectChr015(values.initialChr015)).toMatchObject({
+      commandId: null,
+      paidSlotUsage: { usedSlotCount: 1 },
+      selectedSkillIds: [],
+      selectedSkills: [],
+      selectionValidation: {
+        kind: 'UNDERFILLED',
+        missingSlotCount: 2,
+        requiredSlotCount: 3,
+        usedSlotCount: 1,
+      },
+    });
+    expect(projectChr015(values.checkpointedChr015)).toMatchObject({
+      commandId: 'skill-selection-command',
+      paidSlotUsage: { usedSlotCount: 3 },
+      selectionValidation: { kind: 'EXACT', requiredSlotCount: 3, usedSlotCount: 3 },
+    });
+  });
+
+  it('keeps internal skill registry IDs and traces out of CHR-013 and CHR-015 payloads', () => {
+    const values = skillProjectionValues(skillCatalog);
+    const serialized = JSON.stringify([
+      projectChr013(values.chr013),
+      projectChr015(values.initialChr015),
+      projectChr015(values.checkpointedChr015),
+    ]);
+    for (const forbidden of [
+      'skillKey',
+      'SkillKey',
+      'SKL-',
+      'RequirementID',
+      'RequirementSetID',
+      'Rule ID',
+      'CORE-',
+      'REQ-',
+      'Q-',
+      'BeforeSymbiontBonuses',
+      'EvaluationStage',
+      'availabilityTrace',
+    ]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  it('allows empty level options when a PURE class skill fills the only paid slot', () => {
+    const values = skillProjectionValues(skillCatalog);
+    const skillStageStats = { ...SKILL_STAGE_STATS, W: 2 };
+    const skillCardSummaries = values.chr013.skillCardSummaries.map((card) => {
+      const requirements = card.requirements.map((requirement) => {
+        const currentValue = skillStageStats[requirement.statCode];
+        return { ...requirement, currentValue, satisfied: currentValue >= requirement.minValue };
+      });
+      return {
+        ...card,
+        eligibility: requirements.every(({ satisfied }) => satisfied)
+          ? ('ELIGIBLE' as const)
+          : ('REQUIREMENTS_NOT_MET' as const),
+        levelOptions: [],
+        requirements,
+      };
+    });
+    const eligibleSkillIds = skillCardSummaries
+      .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+      .map(({ skillId }) => skillId);
+    const chr013 = projectChr013({
+      ...values.chr013,
+      eligibleSkillIds,
+      skillCardSummaries,
+      skillStageStats,
+      slotSources: { ...values.chr013.slotSources, requiredSlotCount: 1 },
+    });
+    expect(chr013.skillCardSummaries.every(({ levelOptions }) => levelOptions.length === 0)).toBe(
+      true,
+    );
+    const mandatoryClassSkillOrNull = chr013.slotSources.mandatoryClassSkillOrNull;
+    if (mandatoryClassSkillOrNull === null) throw new Error('test fixture lacks class skill');
+    expect(
+      projectChr015({
+        characterDraftId: chr013.characterDraftId,
+        commandId: null,
+        draftRevision: chr013.draftRevision,
+        eligibleSkillIds: chr013.eligibleSkillIds,
+        mandatoryClassSkillOrNull,
+        paidSlotUsage: {
+          entries: [{ ...mandatoryClassSkillOrNull, source: 'CLASS_MANDATORY' }],
+          usedSlotCount: 1,
+        },
+        racialFreeSkillIds: [],
+        racialFreeSkills: [],
+        requiredSlotCount: 1,
+        selectedSkillIds: [],
+        selectedSkills: [],
+        selectionValidation: { kind: 'EXACT', requiredSlotCount: 1, usedSlotCount: 1 },
+        skillOptions: chr013.skillCardSummaries
+          .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+          .map(({ levelOptions, skillId, skillLabel }) => ({
+            levelOptions,
+            skillId,
+            skillLabel,
+          })),
+        wizardCheckpointId: chr013.wizardCheckpointId,
+      }),
+    ).toMatchObject({
+      selectedSkills: [],
+      selectionValidation: { kind: 'EXACT', requiredSlotCount: 1, usedSlotCount: 1 },
+    });
+  });
+
+  it('fails closed on CHR-013 catalog drift and CHR-015 forged local facts', () => {
+    const values = skillProjectionValues(skillCatalog);
+    const eligibilityDrift: Chr013ProjectionValues = {
+      ...values.chr013,
+      skillCardSummaries: values.chr013.skillCardSummaries.map((card, index) =>
+        index === 0
+          ? {
+              ...card,
+              eligibility: card.eligibility === 'ELIGIBLE' ? 'REQUIREMENTS_NOT_MET' : 'ELIGIBLE',
+            }
+          : card,
+      ),
+    };
+    expect(() => projectChr013(eligibilityDrift)).toThrow(
+      'eligibility disagrees with its requirement rows',
+    );
+
+    const leakedInternalId: Chr013ProjectionValues = {
+      ...values.chr013,
+      skillCardSummaries: values.chr013.skillCardSummaries.map((card, index) =>
+        index === 0 ? { ...card, skillId: 'SKL-001' } : card,
+      ),
+    };
+    expect(() => projectChr013(leakedInternalId)).toThrow(
+      'must be a public SkillKey, not an internal registry ID',
+    );
+
+    const forgedLevel: Chr015ProjectionValues = {
+      ...values.checkpointedChr015,
+      selectedSkills: values.checkpointedChr015.selectedSkills.map((selected, index) =>
+        index === 0 ? { ...selected, slotCost: 2 } : selected,
+      ),
+    };
+    expect(() => projectChr015(forgedLevel)).toThrow('must match a signed skill level option');
+
+    const wrongDiagnostic: Chr015ProjectionValues = {
+      ...values.initialChr015,
+      selectionValidation: {
+        kind: 'UNDERFILLED',
+        missingSlotCount: 1,
+        requiredSlotCount: 3,
+        usedSlotCount: 1,
+      },
+    };
+    expect(() => projectChr015(wrongDiagnostic)).toThrow('is not an exact UNDERFILLED diagnostic');
   });
 });

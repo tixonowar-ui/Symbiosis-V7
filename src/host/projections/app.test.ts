@@ -50,6 +50,12 @@ import {
   CHR_012_FORM_ID,
   CHR_012_REQUIRED_FIELDS,
   CHR_012_ROUTE,
+  CHR_013_FORM_ID,
+  CHR_013_REQUIRED_FIELDS,
+  CHR_013_ROUTE,
+  CHR_015_FORM_ID,
+  CHR_015_REQUIRED_FIELDS,
+  CHR_015_ROUTE,
   CHR_016_FORM_ID,
   CHR_016_REQUIRED_FIELDS,
   CHR_016_ROUTE,
@@ -116,10 +122,10 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the ten slice actions with their exact source-owned guards', () => {
+  it('loads the eleven slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(10);
+    expect(catalog.actions.size).toBe(11);
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:
@@ -149,6 +155,13 @@ describe('APP host projection', () => {
       kind: 'safe-return',
       to: 'APP-004',
       trigger: 'Отменить новый черновик',
+    });
+    expect(catalog.actions.get('CHR-013::CTA::002')).toEqual({
+      from: 'CHR-013',
+      guard: 'skill-stage revision current',
+      kind: 'normative',
+      to: 'CHR-015',
+      trigger: 'Перейти к выбору навыков',
     });
     const createCharacterTrigger = 'Открыть «Создание персонажа: идентичность»';
     expect(catalog.actions.get('APP-004::CTA::001')).toEqual({
@@ -209,6 +222,8 @@ describe('APP host projection', () => {
     [CHR_010_FORM_ID, CHR_010_ROUTE, CHR_010_REQUIRED_FIELDS, 'screen'],
     [CHR_011_FORM_ID, CHR_011_ROUTE, CHR_011_REQUIRED_FIELDS, 'screen'],
     [CHR_012_FORM_ID, CHR_012_ROUTE, CHR_012_REQUIRED_FIELDS, 'screen'],
+    [CHR_013_FORM_ID, CHR_013_ROUTE, CHR_013_REQUIRED_FIELDS, 'screen'],
+    [CHR_015_FORM_ID, CHR_015_ROUTE, CHR_015_REQUIRED_FIELDS, 'screen'],
     [CHR_016_FORM_ID, CHR_016_ROUTE, CHR_016_REQUIRED_FIELDS, 'screen'],
     [CHR_028_FORM_ID, CHR_028_ROUTE, CHR_028_REQUIRED_FIELDS, 'dialog'],
     [CHR_036_FORM_ID, CHR_036_ROUTE, CHR_036_REQUIRED_FIELDS, 'screen'],

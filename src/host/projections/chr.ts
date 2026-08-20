@@ -336,11 +336,65 @@ export const CHR_012_REQUIRED_FIELDS = [
   'commandId',
 ] as const;
 export const CHR_012_EXCLUDED_ACTION_KEYS = [
-  'CHR-012::CTA::001',
   'CHR-012::CTA::002',
   'CHR-012::CTA::003',
 ] as const satisfies readonly ActionKey[];
+export const CHR_012_CHECKPOINT_ACTION_KEY = 'CHR-012::CTA::001' as const satisfies ActionKey;
+export const CHR_012_CHECKPOINT_ACTION_KEYS = [
+  CHR_012_CHECKPOINT_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+/** No capability means no executable CHR-012 action. */
 export const CHR_012_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+
+export const CHR_013_FORM_ID = 'CHR-013' as const;
+export const CHR_013_ROUTE = '/player/characters/:localCharacterId/create/chr-013' as const;
+/** Source: forms-by-id.json["CHR-013"].requiredFields. */
+export const CHR_013_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'skillStageStats',
+  'eligibleSkillIds[]',
+  'skillCardSummaries[]',
+  'slotSources',
+  'selectedSkillIdOrNull',
+  'wizardCheckpointId',
+  'draftRevision',
+] as const;
+export const CHR_013_CONTINUE_ACTION_KEY = 'CHR-013::CTA::002' as const satisfies ActionKey;
+export const CHR_013_ACTION_KEYS = [
+  CHR_013_CONTINUE_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+/** CHR-014 is deferred and the safe return lacks a reverse durable contract. */
+export const CHR_013_EXCLUDED_ACTION_KEYS = [
+  'CHR-013::CTA::001',
+  'CHR-013::CTA::003',
+] as const satisfies readonly ActionKey[];
+
+export const CHR_015_FORM_ID = 'CHR-015' as const;
+export const CHR_015_ROUTE = '/player/characters/:localCharacterId/create/chr-015' as const;
+/** Source: forms-by-id.json["CHR-015"].requiredFields. */
+export const CHR_015_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'selectedSkillIds[]',
+  'mandatoryClassSkillOrNull',
+  'racialFreeSkillIds[]',
+  'paidSlotUsage',
+  'requiredSlotCount',
+  'eligibleSkillIds[]',
+  'selectionValidation',
+  'wizardCheckpointId',
+  'draftRevision',
+  'commandId',
+] as const;
+export const CHR_015_LOCAL_DRAFT_ACTION_KEY = 'CHR-015::CTA::003' as const satisfies ActionKey;
+export const CHR_015_INITIAL_ACTION_KEYS = [
+  CHR_015_LOCAL_DRAFT_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const CHR_015_CHECKPOINTED_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+/** Confirm is a web-derived EXACT capability; safe return remains excluded by ADR 0044. */
+export const CHR_015_HOST_EXCLUDED_ACTION_KEYS = [
+  'CHR-015::CTA::001',
+  'CHR-015::CTA::002',
+] as const satisfies readonly ActionKey[];
 
 export const CHR_028_FORM_ID = 'CHR-028' as const;
 export const CHR_028_ROUTE = '@dialog/chr-028' as const;
@@ -857,6 +911,131 @@ export interface Chr012ProjectionValues {
   readonly wizardCheckpointId: string;
 }
 
+export interface SkillLevelOptionProjection extends JsonObject {
+  readonly slotCost: number;
+  readonly targetBonus: number;
+}
+
+export interface SkillRequirementProjection extends JsonObject {
+  readonly currentValue: number;
+  readonly minValue: number;
+  readonly satisfied: boolean;
+  readonly statCode: StatCode;
+  readonly statLabel: string;
+}
+
+export interface SkillCardSummaryProjection extends JsonObject {
+  readonly eligibility: 'ELIGIBLE' | 'REQUIREMENTS_NOT_MET';
+  readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly requirements: readonly SkillRequirementProjection[];
+  readonly skillId: string;
+  readonly skillLabel: string;
+}
+
+export interface FixedSkillProjection extends JsonObject {
+  readonly bonus: number;
+  readonly skillId: string;
+  readonly skillLabel: string;
+  readonly slotCost: number;
+}
+
+export interface SkillSlotSourcesProjection extends JsonObject {
+  readonly mandatoryClassSkillOrNull: FixedSkillProjection | null;
+  readonly racialFreeSkills: readonly FixedSkillProjection[];
+  readonly requiredSlotCount: number;
+}
+
+export interface Chr013ProjectionValues {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly eligibleSkillIds: readonly string[];
+  readonly skillCardSummaries: readonly SkillCardSummaryProjection[];
+  readonly skillStageStats: StatMapProjection;
+  readonly slotSources: SkillSlotSourcesProjection;
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr013Projection extends JsonObject {
+  readonly characterDraftId: string;
+  readonly commandId: null;
+  readonly draftRevision: number;
+  readonly eligibleSkillIds: readonly string[];
+  readonly selectedSkillIdOrNull: null;
+  readonly skillCardSummaries: readonly SkillCardSummaryProjection[];
+  readonly skillStageStats: StatMapProjection;
+  readonly slotSources: SkillSlotSourcesProjection;
+  readonly wizardCheckpointId: string;
+}
+
+export interface SelectedSkillProjection extends JsonObject {
+  readonly skillId: string;
+  readonly slotCost: number;
+  readonly targetBonus: number;
+}
+
+export interface SkillOptionProjection extends JsonObject {
+  readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly skillId: string;
+  readonly skillLabel: string;
+}
+
+export interface PaidSkillUsageEntryProjection extends JsonObject {
+  readonly bonus: number;
+  readonly skillId: string;
+  readonly skillLabel: string;
+  readonly slotCost: number;
+  readonly source: 'CLASS_MANDATORY' | 'SELECTED';
+}
+
+export interface PaidSlotUsageProjection extends JsonObject {
+  readonly entries: readonly PaidSkillUsageEntryProjection[];
+  readonly usedSlotCount: number;
+}
+
+export interface UnderfilledSkillSelectionValidation extends JsonObject {
+  readonly kind: 'UNDERFILLED';
+  readonly missingSlotCount: number;
+  readonly requiredSlotCount: number;
+  readonly usedSlotCount: number;
+}
+
+export interface ExactSkillSelectionValidation extends JsonObject {
+  readonly kind: 'EXACT';
+  readonly requiredSlotCount: number;
+  readonly usedSlotCount: number;
+}
+
+export interface OverfilledSkillSelectionValidation extends JsonObject {
+  readonly excessSlotCount: number;
+  readonly kind: 'OVERFILLED';
+  readonly requiredSlotCount: number;
+  readonly usedSlotCount: number;
+}
+
+export type SkillSelectionValidation =
+  | UnderfilledSkillSelectionValidation
+  | ExactSkillSelectionValidation
+  | OverfilledSkillSelectionValidation;
+
+export interface Chr015ProjectionValues {
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly draftRevision: number;
+  readonly eligibleSkillIds: readonly string[];
+  readonly mandatoryClassSkillOrNull: FixedSkillProjection | null;
+  readonly paidSlotUsage: PaidSlotUsageProjection;
+  readonly racialFreeSkillIds: readonly string[];
+  readonly racialFreeSkills: readonly FixedSkillProjection[];
+  readonly requiredSlotCount: number;
+  readonly selectedSkillIds: readonly string[];
+  readonly selectedSkills: readonly SelectedSkillProjection[];
+  readonly selectionValidation: SkillSelectionValidation;
+  readonly skillOptions: readonly SkillOptionProjection[];
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr015Projection extends JsonObject, Chr015ProjectionValues {}
+
 const STAT_CODES = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const satisfies readonly StatCode[];
 const PURE_CLASSES = ['SEEKER', 'STALKER', 'SOLDIER'] as const satisfies readonly ClassCode[];
 
@@ -1066,6 +1245,539 @@ export function projectChr012(values: Chr012ProjectionValues): JsonObject {
     raceModifiers: copyModifiers(values.raceModifiers, 'CHR-012 raceModifiers'),
     skillStageStats: copyStatMap(values.skillStageStats, 'CHR-012 skillStageStats'),
     symbiontModifiersExcluded: true,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+function assertExactProjectionKeys(
+  value: object,
+  label: string,
+  expectedKeys: readonly string[],
+): void {
+  const actual = Object.keys(value).sort();
+  const expected = [...expectedKeys].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new Error(
+      `${label} must contain exact fields ${expectedKeys.join(',')}; got ${actual.join(',')}`,
+    );
+  }
+}
+
+function projectionInteger(value: number, label: string, minimum: number): number {
+  if (!Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(`${label} must be a safe integer >= ${String(minimum)}`);
+  }
+  return Object.is(value, -0) ? 0 : value;
+}
+
+function playerSkillId(value: string, label: string): string {
+  nonEmpty(value, label);
+  if (/^(?:CORE|Q|REQ|SKL)-/u.test(value)) {
+    throw new Error(`${label} must be a public SkillKey, not an internal registry ID`);
+  }
+  return value;
+}
+
+function playerLabel(value: string, label: string): string {
+  nonEmpty(value, label);
+  return value;
+}
+
+function copyPlayerSkillIds(values: readonly string[], label: string): string[] {
+  const result = values.map((value, index) => playerSkillId(value, `${label}[${String(index)}]`));
+  if (new Set(result).size !== result.length) throw new Error(`${label} must contain unique IDs`);
+  return result;
+}
+
+function sameStringsExact(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function copySkillLevelOptions(
+  values: readonly SkillLevelOptionProjection[],
+  label: string,
+): SkillLevelOptionProjection[] {
+  let previousSlotCost = 0;
+  return values.map((option, index) => {
+    assertExactProjectionKeys(option, `${label}[${String(index)}]`, ['slotCost', 'targetBonus']);
+    const targetBonus = projectionInteger(
+      option.targetBonus,
+      `${label}[${String(index)}].targetBonus`,
+      1,
+    );
+    const slotCost = projectionInteger(option.slotCost, `${label}[${String(index)}].slotCost`, 1);
+    if (targetBonus !== index + 1 || slotCost < previousSlotCost) {
+      throw new Error(`${label} must use contiguous target bonuses and nondecreasing slot costs`);
+    }
+    previousSlotCost = slotCost;
+    return { slotCost, targetBonus };
+  });
+}
+
+function copySkillRequirements(
+  values: readonly SkillRequirementProjection[],
+  skillStageStats: StatMapProjection,
+  label: string,
+): SkillRequirementProjection[] {
+  if (values.length === 0) throw new Error(`${label} must be non-empty`);
+  let previousStatIndex = -1;
+  return values.map((requirement, index) => {
+    const path = `${label}[${String(index)}]`;
+    assertExactProjectionKeys(requirement, path, [
+      'currentValue',
+      'minValue',
+      'satisfied',
+      'statCode',
+      'statLabel',
+    ]);
+    if (!STAT_CODES.includes(requirement.statCode)) {
+      throw new Error(`${path}.statCode is not a recognized StatCode`);
+    }
+    const statIndex = STAT_CODES.indexOf(requirement.statCode);
+    if (statIndex <= previousStatIndex) {
+      throw new Error(`${label} must use unique canonical StatCode order`);
+    }
+    previousStatIndex = statIndex;
+    const minValue = projectionInteger(requirement.minValue, `${path}.minValue`, 1);
+    const currentValue = projectionInteger(
+      requirement.currentValue,
+      `${path}.currentValue`,
+      Number.MIN_SAFE_INTEGER,
+    );
+    if (currentValue !== skillStageStats[requirement.statCode]) {
+      throw new Error(`${path}.currentValue disagrees with skillStageStats`);
+    }
+    const expectedSatisfied = currentValue >= minValue;
+    if (requirement.satisfied !== expectedSatisfied) {
+      throw new Error(`${path}.satisfied disagrees with currentValue/minValue`);
+    }
+    return {
+      currentValue,
+      minValue,
+      satisfied: expectedSatisfied,
+      statCode: requirement.statCode,
+      statLabel: playerLabel(requirement.statLabel, `${path}.statLabel`),
+    };
+  });
+}
+
+function copySkillCardSummaries(
+  values: readonly SkillCardSummaryProjection[],
+  skillStageStats: StatMapProjection,
+  label: string,
+): SkillCardSummaryProjection[] {
+  // Source-owned count: all 41 SELECTABLE_GENERAL rows, including ineligible rows.
+  if (values.length !== 41) throw new Error(`${label} must contain all 41 selectable skills`);
+  const seen = new Set<string>();
+  return values.map((card, index) => {
+    const path = `${label}[${String(index)}]`;
+    assertExactProjectionKeys(card, path, [
+      'eligibility',
+      'levelOptions',
+      'requirements',
+      'skillId',
+      'skillLabel',
+    ]);
+    const skillId = playerSkillId(card.skillId, `${path}.skillId`);
+    if (seen.has(skillId)) throw new Error(`${label} contains duplicate skillId ${skillId}`);
+    seen.add(skillId);
+    const requirements = copySkillRequirements(
+      card.requirements,
+      skillStageStats,
+      `${path}.requirements`,
+    );
+    const eligibility = requirements.every(({ satisfied }) => satisfied)
+      ? 'ELIGIBLE'
+      : 'REQUIREMENTS_NOT_MET';
+    if (card.eligibility !== eligibility) {
+      throw new Error(`${path}.eligibility disagrees with its requirement rows`);
+    }
+    return {
+      eligibility,
+      levelOptions: copySkillLevelOptions(card.levelOptions, `${path}.levelOptions`),
+      requirements,
+      skillId,
+      skillLabel: playerLabel(card.skillLabel, `${path}.skillLabel`),
+    };
+  });
+}
+
+function copyFixedSkill(
+  value: FixedSkillProjection,
+  label: string,
+  expectedSlotCost: 0 | 1,
+): FixedSkillProjection {
+  assertExactProjectionKeys(value, label, ['bonus', 'skillId', 'skillLabel', 'slotCost']);
+  const slotCost = projectionInteger(value.slotCost, `${label}.slotCost`, 0);
+  if (slotCost !== expectedSlotCost) {
+    throw new Error(`${label}.slotCost must equal ${String(expectedSlotCost)}`);
+  }
+  return {
+    bonus: projectionInteger(value.bonus, `${label}.bonus`, 1),
+    skillId: playerSkillId(value.skillId, `${label}.skillId`),
+    skillLabel: playerLabel(value.skillLabel, `${label}.skillLabel`),
+    slotCost,
+  };
+}
+
+function copySkillSlotSources(
+  value: SkillSlotSourcesProjection,
+  label: string,
+): SkillSlotSourcesProjection {
+  assertExactProjectionKeys(value, label, [
+    'mandatoryClassSkillOrNull',
+    'racialFreeSkills',
+    'requiredSlotCount',
+  ]);
+  if (value.racialFreeSkills.length > 1) {
+    throw new Error(`${label}.racialFreeSkills must be empty or singleton`);
+  }
+  const mandatoryClassSkillOrNull =
+    value.mandatoryClassSkillOrNull === null
+      ? null
+      : copyFixedSkill(value.mandatoryClassSkillOrNull, `${label}.mandatoryClassSkillOrNull`, 1);
+  const racialFreeSkills = value.racialFreeSkills.map((skill, index) =>
+    copyFixedSkill(skill, `${label}.racialFreeSkills[${String(index)}]`, 0),
+  );
+  if (mandatoryClassSkillOrNull !== null && racialFreeSkills.length !== 0) {
+    throw new Error(`${label} cannot combine a PURE class skill with a racial free skill`);
+  }
+  return {
+    mandatoryClassSkillOrNull,
+    racialFreeSkills,
+    requiredSlotCount: projectionInteger(value.requiredSlotCount, `${label}.requiredSlotCount`, 1),
+  };
+}
+
+export function projectChr013(values: Chr013ProjectionValues): Chr013Projection {
+  assertProjectionAuthority(
+    CHR_013_FORM_ID,
+    values.characterDraftId,
+    values.wizardCheckpointId,
+    values.draftRevision,
+  );
+  const skillStageStats = copyStatMap(values.skillStageStats, 'CHR-013 skillStageStats');
+  const skillCardSummaries = copySkillCardSummaries(
+    values.skillCardSummaries,
+    skillStageStats,
+    'CHR-013 skillCardSummaries',
+  );
+  const eligibleSkillIds = copyPlayerSkillIds(values.eligibleSkillIds, 'CHR-013 eligibleSkillIds');
+  const expectedEligibleSkillIds = skillCardSummaries
+    .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
+    .map(({ skillId }) => skillId);
+  if (!sameStringsExact(eligibleSkillIds, expectedEligibleSkillIds)) {
+    throw new Error('CHR-013 eligibleSkillIds must equal the canonical ELIGIBLE card subset');
+  }
+  const slotSources = copySkillSlotSources(values.slotSources, 'CHR-013 slotSources');
+  const fixedIds = [
+    ...(slotSources.mandatoryClassSkillOrNull === null
+      ? []
+      : [slotSources.mandatoryClassSkillOrNull.skillId]),
+    ...slotSources.racialFreeSkills.map(({ skillId }) => skillId),
+  ];
+  if (fixedIds.some((skillId) => skillCardSummaries.some((card) => card.skillId === skillId))) {
+    throw new Error('CHR-013 fixed skills must not appear in the selectable catalog');
+  }
+  return {
+    characterDraftId: values.characterDraftId,
+    commandId: null,
+    draftRevision: values.draftRevision,
+    eligibleSkillIds,
+    selectedSkillIdOrNull: null,
+    skillCardSummaries,
+    skillStageStats,
+    slotSources,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
+function copySkillOptions(
+  values: readonly SkillOptionProjection[],
+  label: string,
+): SkillOptionProjection[] {
+  const seen = new Set<string>();
+  return values.map((option, index) => {
+    const path = `${label}[${String(index)}]`;
+    assertExactProjectionKeys(option, path, ['levelOptions', 'skillId', 'skillLabel']);
+    const skillId = playerSkillId(option.skillId, `${path}.skillId`);
+    if (seen.has(skillId)) throw new Error(`${label} contains duplicate skillId ${skillId}`);
+    seen.add(skillId);
+    return {
+      levelOptions: copySkillLevelOptions(option.levelOptions, `${path}.levelOptions`),
+      skillId,
+      skillLabel: playerLabel(option.skillLabel, `${path}.skillLabel`),
+    };
+  });
+}
+
+function copySelectedSkills(
+  values: readonly SelectedSkillProjection[],
+  label: string,
+): SelectedSkillProjection[] {
+  const seen = new Set<string>();
+  return values.map((selected, index) => {
+    const path = `${label}[${String(index)}]`;
+    assertExactProjectionKeys(selected, path, ['skillId', 'slotCost', 'targetBonus']);
+    const skillId = playerSkillId(selected.skillId, `${path}.skillId`);
+    if (seen.has(skillId)) throw new Error(`${label} contains duplicate skillId ${skillId}`);
+    seen.add(skillId);
+    return {
+      skillId,
+      slotCost: projectionInteger(selected.slotCost, `${path}.slotCost`, 1),
+      targetBonus: projectionInteger(selected.targetBonus, `${path}.targetBonus`, 1),
+    };
+  });
+}
+
+function copyPaidSlotUsage(value: PaidSlotUsageProjection, label: string): PaidSlotUsageProjection {
+  assertExactProjectionKeys(value, label, ['entries', 'usedSlotCount']);
+  return {
+    entries: value.entries.map((entry, index) => {
+      const path = `${label}.entries[${String(index)}]`;
+      assertExactProjectionKeys(entry, path, [
+        'bonus',
+        'skillId',
+        'skillLabel',
+        'slotCost',
+        'source',
+      ]);
+      if (entry.source !== 'CLASS_MANDATORY' && entry.source !== 'SELECTED') {
+        throw new Error(`${path}.source is not recognized`);
+      }
+      return {
+        bonus: projectionInteger(entry.bonus, `${path}.bonus`, 1),
+        skillId: playerSkillId(entry.skillId, `${path}.skillId`),
+        skillLabel: playerLabel(entry.skillLabel, `${path}.skillLabel`),
+        slotCost: projectionInteger(entry.slotCost, `${path}.slotCost`, 1),
+        source: entry.source,
+      };
+    }),
+    usedSlotCount: projectionInteger(value.usedSlotCount, `${label}.usedSlotCount`, 0),
+  };
+}
+
+function copySkillSelectionValidation(
+  value: SkillSelectionValidation,
+  requiredSlotCount: number,
+  usedSlotCount: number,
+  label: string,
+): SkillSelectionValidation {
+  if (value.requiredSlotCount !== requiredSlotCount || value.usedSlotCount !== usedSlotCount) {
+    throw new Error(`${label} counts disagree with requiredSlotCount/paidSlotUsage`);
+  }
+  switch (value.kind) {
+    case 'UNDERFILLED': {
+      assertExactProjectionKeys(value, label, [
+        'kind',
+        'missingSlotCount',
+        'requiredSlotCount',
+        'usedSlotCount',
+      ]);
+      const missingSlotCount = projectionInteger(
+        value.missingSlotCount,
+        `${label}.missingSlotCount`,
+        1,
+      );
+      if (
+        usedSlotCount >= requiredSlotCount ||
+        missingSlotCount !== requiredSlotCount - usedSlotCount
+      ) {
+        throw new Error(`${label} is not an exact UNDERFILLED diagnostic`);
+      }
+      return { kind: value.kind, missingSlotCount, requiredSlotCount, usedSlotCount };
+    }
+    case 'EXACT':
+      assertExactProjectionKeys(value, label, ['kind', 'requiredSlotCount', 'usedSlotCount']);
+      if (usedSlotCount !== requiredSlotCount) {
+        throw new Error(`${label} is not an exact EXACT diagnostic`);
+      }
+      return { kind: value.kind, requiredSlotCount, usedSlotCount };
+    case 'OVERFILLED': {
+      assertExactProjectionKeys(value, label, [
+        'excessSlotCount',
+        'kind',
+        'requiredSlotCount',
+        'usedSlotCount',
+      ]);
+      const excessSlotCount = projectionInteger(
+        value.excessSlotCount,
+        `${label}.excessSlotCount`,
+        1,
+      );
+      if (
+        usedSlotCount <= requiredSlotCount ||
+        excessSlotCount !== usedSlotCount - requiredSlotCount
+      ) {
+        throw new Error(`${label} is not an exact OVERFILLED diagnostic`);
+      }
+      return { excessSlotCount, kind: value.kind, requiredSlotCount, usedSlotCount };
+    }
+    default:
+      throw new Error(`${label}.kind is not recognized`);
+  }
+}
+
+function paidUsageEntryMatches(
+  actual: PaidSkillUsageEntryProjection,
+  expected: PaidSkillUsageEntryProjection,
+): boolean {
+  return (
+    actual.bonus === expected.bonus &&
+    actual.skillId === expected.skillId &&
+    actual.skillLabel === expected.skillLabel &&
+    actual.slotCost === expected.slotCost &&
+    actual.source === expected.source
+  );
+}
+
+export function projectChr015(values: Chr015ProjectionValues): Chr015Projection {
+  assertProjectionAuthority(
+    CHR_015_FORM_ID,
+    values.characterDraftId,
+    values.wizardCheckpointId,
+    values.draftRevision,
+  );
+  if (values.commandId !== null) nonEmpty(values.commandId, 'CHR-015 commandId');
+  const eligibleSkillIds = copyPlayerSkillIds(values.eligibleSkillIds, 'CHR-015 eligibleSkillIds');
+  const skillOptions = copySkillOptions(values.skillOptions, 'CHR-015 skillOptions');
+  if (
+    !sameStringsExact(
+      eligibleSkillIds,
+      skillOptions.map(({ skillId }) => skillId),
+    )
+  ) {
+    throw new Error('CHR-015 skillOptions must exactly follow eligibleSkillIds');
+  }
+  const selectedSkills = copySelectedSkills(values.selectedSkills, 'CHR-015 selectedSkills');
+  const selectedSkillIds = copyPlayerSkillIds(values.selectedSkillIds, 'CHR-015 selectedSkillIds');
+  if (
+    !sameStringsExact(
+      selectedSkillIds,
+      selectedSkills.map(({ skillId }) => skillId),
+    )
+  ) {
+    throw new Error('CHR-015 selectedSkillIds must exactly mirror selectedSkills');
+  }
+  let previousOptionIndex = -1;
+  for (const [index, selected] of selectedSkills.entries()) {
+    const optionIndex = skillOptions.findIndex(({ skillId }) => skillId === selected.skillId);
+    if (optionIndex <= previousOptionIndex) {
+      throw new Error('CHR-015 selectedSkills must be a canonical skillOptions subset');
+    }
+    previousOptionIndex = optionIndex;
+    const level = skillOptions[optionIndex]?.levelOptions.find(
+      ({ targetBonus }) => targetBonus === selected.targetBonus,
+    );
+    if (level === undefined || level.slotCost !== selected.slotCost) {
+      throw new Error(
+        `CHR-015 selectedSkills[${String(index)}] must match a signed skill level option`,
+      );
+    }
+  }
+  if (values.commandId === null && selectedSkills.length !== 0) {
+    throw new Error('CHR-015 initial host projection cannot contain client-local selection');
+  }
+
+  const mandatoryClassSkillOrNull =
+    values.mandatoryClassSkillOrNull === null
+      ? null
+      : copyFixedSkill(values.mandatoryClassSkillOrNull, 'CHR-015 mandatoryClassSkillOrNull', 1);
+  if (
+    mandatoryClassSkillOrNull !== null &&
+    eligibleSkillIds.includes(mandatoryClassSkillOrNull.skillId)
+  ) {
+    throw new Error('CHR-015 mandatory class skill cannot be selectable');
+  }
+  if (values.racialFreeSkills.length > 1) {
+    throw new Error('CHR-015 racialFreeSkills must be empty or singleton');
+  }
+  const racialFreeSkills = values.racialFreeSkills.map((skill, index) =>
+    copyFixedSkill(skill, `CHR-015 racialFreeSkills[${String(index)}]`, 0),
+  );
+  const racialFreeSkillIds = copyPlayerSkillIds(
+    values.racialFreeSkillIds,
+    'CHR-015 racialFreeSkillIds',
+  );
+  if (
+    !sameStringsExact(
+      racialFreeSkillIds,
+      racialFreeSkills.map(({ skillId }) => skillId),
+    )
+  ) {
+    throw new Error('CHR-015 racialFreeSkillIds must exactly mirror racialFreeSkills');
+  }
+  if (
+    (mandatoryClassSkillOrNull !== null && racialFreeSkills.length !== 0) ||
+    racialFreeSkillIds.some((skillId) => eligibleSkillIds.includes(skillId))
+  ) {
+    throw new Error('CHR-015 fixed skill sources conflict with selectable skills');
+  }
+
+  const paidSlotUsage = copyPaidSlotUsage(values.paidSlotUsage, 'CHR-015 paidSlotUsage');
+  const optionById = new Map(skillOptions.map((option) => [option.skillId, option]));
+  const expectedEntries: PaidSkillUsageEntryProjection[] = [
+    ...(mandatoryClassSkillOrNull === null
+      ? []
+      : [
+          {
+            bonus: mandatoryClassSkillOrNull.bonus,
+            skillId: mandatoryClassSkillOrNull.skillId,
+            skillLabel: mandatoryClassSkillOrNull.skillLabel,
+            slotCost: mandatoryClassSkillOrNull.slotCost,
+            source: 'CLASS_MANDATORY' as const,
+          },
+        ]),
+    ...selectedSkills.map((selected): PaidSkillUsageEntryProjection => ({
+      bonus: selected.targetBonus,
+      skillId: selected.skillId,
+      skillLabel: optionById.get(selected.skillId)!.skillLabel,
+      slotCost: selected.slotCost,
+      source: 'SELECTED',
+    })),
+  ];
+  if (
+    paidSlotUsage.entries.length !== expectedEntries.length ||
+    paidSlotUsage.entries.some(
+      (entry, index) =>
+        expectedEntries[index] === undefined ||
+        !paidUsageEntryMatches(entry, expectedEntries[index]),
+    )
+  ) {
+    throw new Error('CHR-015 paidSlotUsage.entries must equal class plus selected skills');
+  }
+  const expectedUsedSlotCount = expectedEntries.reduce((sum, entry) => sum + entry.slotCost, 0);
+  if (paidSlotUsage.usedSlotCount !== expectedUsedSlotCount) {
+    throw new Error('CHR-015 paidSlotUsage.usedSlotCount disagrees with its entries');
+  }
+  const requiredSlotCount = projectionInteger(
+    values.requiredSlotCount,
+    'CHR-015 requiredSlotCount',
+    1,
+  );
+  const selectionValidation = copySkillSelectionValidation(
+    values.selectionValidation,
+    requiredSlotCount,
+    paidSlotUsage.usedSlotCount,
+    'CHR-015 selectionValidation',
+  );
+  if (values.commandId !== null && selectionValidation.kind !== 'EXACT') {
+    throw new Error('CHR-015 checkpointed projection must have EXACT selectionValidation');
+  }
+  return {
+    characterDraftId: values.characterDraftId,
+    commandId: values.commandId,
+    draftRevision: values.draftRevision,
+    eligibleSkillIds,
+    mandatoryClassSkillOrNull,
+    paidSlotUsage,
+    racialFreeSkillIds,
+    racialFreeSkills,
+    requiredSlotCount,
+    selectedSkillIds,
+    selectedSkills,
+    selectionValidation,
+    skillOptions,
     wizardCheckpointId: values.wizardCheckpointId,
   };
 }

@@ -805,6 +805,174 @@ function chr012Base(
   };
 }
 
+// skills.json owns the 41-card cardinality and UNITED's FOLLOWING_PAIN +15 FIXED_0 row.
+// Other values are a synthetic signed UI fixture, not assertions about game mechanics.
+const SKILL_STAGE_STATS = { C: 8, D: 8, I: 8, M: 8, S: 8, W: 4, Z: 8 } as const;
+const RACIAL_FREE_SKILLS = [
+  {
+    bonus: 15,
+    skillId: 'FOLLOWING_PAIN',
+    skillLabel: 'Идущий вслед за болью',
+    slotCost: 0,
+  },
+] as const;
+const SKILL_CARD_SUMMARIES = Array.from({ length: 41 }, (_, index) => {
+  const ordinal = String(index + 1).padStart(2, '0');
+  const ineligible = index === 1;
+  return {
+    eligibility: ineligible ? ('REQUIREMENTS_NOT_MET' as const) : ('ELIGIBLE' as const),
+    levelOptions:
+      index === 40
+        ? []
+        : [
+            { slotCost: 1, targetBonus: 1 },
+            { slotCost: 2, targetBonus: 2 },
+          ],
+    requirements: [
+      {
+        currentValue: SKILL_STAGE_STATS.W,
+        minValue: ineligible ? 20 : 1,
+        satisfied: !ineligible,
+        statCode: 'W' as const,
+        statLabel: 'Мудрость',
+      },
+    ],
+    skillId: `SKILL_${ordinal}`,
+    skillLabel: `Навык ${ordinal}`,
+  };
+});
+const ELIGIBLE_SKILL_IDS = SKILL_CARD_SUMMARIES.filter(
+  ({ eligibility }) => eligibility === 'ELIGIBLE',
+).map(({ skillId }) => skillId);
+const SKILL_OPTIONS = SKILL_CARD_SUMMARIES.filter(
+  ({ eligibility }) => eligibility === 'ELIGIBLE',
+).map(({ levelOptions, skillId, skillLabel }) => ({ levelOptions, skillId, skillLabel }));
+
+function chr013Base(): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys: ['CHR-013::CTA::002'],
+    formId: 'CHR-013',
+    formType: 'screen',
+    roleFilteredPayload: {
+      characterDraftId: CHARACTER_DRAFT_ID,
+      commandId: null,
+      draftRevision: 9,
+      eligibleSkillIds: ELIGIBLE_SKILL_IDS,
+      selectedSkillIdOrNull: null,
+      skillCardSummaries: SKILL_CARD_SUMMARIES,
+      skillStageStats: SKILL_STAGE_STATS,
+      slotSources: {
+        mandatoryClassSkillOrNull: null,
+        racialFreeSkills: RACIAL_FREE_SKILLS,
+        requiredSlotCount: 2,
+      },
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    },
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: '/player/characters/:localCharacterId/create/chr-013',
+  };
+}
+
+function fixtureSkillSelectionValidation(requiredSlotCount: number, usedSlotCount: number) {
+  if (usedSlotCount < requiredSlotCount) {
+    return {
+      kind: 'UNDERFILLED' as const,
+      missingSlotCount: requiredSlotCount - usedSlotCount,
+      requiredSlotCount,
+      usedSlotCount,
+    };
+  }
+  if (usedSlotCount > requiredSlotCount) {
+    return {
+      excessSlotCount: usedSlotCount - requiredSlotCount,
+      kind: 'OVERFILLED' as const,
+      requiredSlotCount,
+      usedSlotCount,
+    };
+  }
+  return { kind: 'EXACT' as const, requiredSlotCount, usedSlotCount };
+}
+
+function chr015Projection({
+  commandId = null,
+  draftRevision = 9,
+  mandatoryClassSkillOrNull = null,
+  racialFreeSkills = RACIAL_FREE_SKILLS,
+  requiredSlotCount = 2,
+  selectedSkills = [],
+  skillOptions = SKILL_OPTIONS,
+}: {
+  readonly commandId?: string | null;
+  readonly draftRevision?: number;
+  readonly mandatoryClassSkillOrNull?: {
+    readonly bonus: number;
+    readonly skillId: string;
+    readonly skillLabel: string;
+    readonly slotCost: 1;
+  } | null;
+  readonly racialFreeSkills?: readonly {
+    readonly bonus: number;
+    readonly skillId: string;
+    readonly skillLabel: string;
+    readonly slotCost: 0;
+  }[];
+  readonly requiredSlotCount?: number;
+  readonly selectedSkills?: readonly {
+    readonly skillId: string;
+    readonly slotCost: number;
+    readonly targetBonus: number;
+  }[];
+  readonly skillOptions?: readonly {
+    readonly levelOptions: readonly { readonly slotCost: number; readonly targetBonus: number }[];
+    readonly skillId: string;
+    readonly skillLabel: string;
+  }[];
+} = {}) {
+  const optionById = new Map(skillOptions.map((option) => [option.skillId, option]));
+  const entries = [
+    ...(mandatoryClassSkillOrNull === null
+      ? []
+      : [{ ...mandatoryClassSkillOrNull, source: 'CLASS_MANDATORY' as const }]),
+    ...selectedSkills.map((selected) => ({
+      bonus: selected.targetBonus,
+      skillId: selected.skillId,
+      skillLabel: optionById.get(selected.skillId)!.skillLabel,
+      slotCost: selected.slotCost,
+      source: 'SELECTED' as const,
+    })),
+  ];
+  const usedSlotCount = entries.reduce((sum, entry) => sum + entry.slotCost, 0);
+  return {
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId,
+    draftRevision,
+    eligibleSkillIds: skillOptions.map(({ skillId }) => skillId),
+    mandatoryClassSkillOrNull,
+    paidSlotUsage: { entries, usedSlotCount },
+    racialFreeSkillIds: racialFreeSkills.map(({ skillId }) => skillId),
+    racialFreeSkills,
+    requiredSlotCount,
+    selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
+    selectedSkills,
+    selectionValidation: fixtureSkillSelectionValidation(requiredSlotCount, usedSlotCount),
+    skillOptions,
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  } as const;
+}
+
+function chr015Base(
+  projection: ReturnType<typeof chr015Projection> = chr015Projection(),
+): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys: projection.commandId === null ? ['CHR-015::CTA::003'] : [],
+    formId: 'CHR-015',
+    formType: 'screen',
+    roleFilteredPayload: projection,
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: '/player/characters/:localCharacterId/create/chr-015',
+  };
+}
+
 type DecisionFormId = 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
 const SET_DECISION_RULES = {
   'CHR-005': {
@@ -4716,5 +4884,391 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-atlas-action-key="CHR-008::CTA::001"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-action-key="CHR-008::CTA::002"]')).toBeNull();
     expect(container.querySelector('[data-atlas-form-id="CHR-028"]')).toBeNull();
+  });
+
+  it('renders the sanitized CHR-013 catalog and accepts only its exact transition to CHR-015', async () => {
+    const { container, socket } = await connectToWizardBase(chr013Base(), 9);
+
+    expect(container.querySelectorAll('[data-skill-card]')).toHaveLength(41);
+    expect(
+      container
+        .querySelector('[data-skill-card="SKILL_02"]')
+        ?.getAttribute('data-skill-eligibility'),
+    ).toBe('REQUIREMENTS_NOT_MET');
+    expect(
+      container.querySelector('[data-skill-card="SKILL_02"] [data-skill-requirement="W"]')
+        ?.textContent,
+    ).toContain('20');
+    expect(container.textContent).not.toContain('SKL-');
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-013::CTA::002"]'),
+        'CHR-013 selection transition',
+      ).click();
+    });
+    const request = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (request.messageType !== 'navigation.form-action') {
+      throw new Error('missing CHR-013 form action');
+    }
+    expect(request).toMatchObject({
+      actionKey: 'CHR-013::CTA::002',
+      expectedProjectionRevision: 9,
+      sourceFormId: 'CHR-013',
+    });
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.navigationRequestId,
+          'FORM_ACTION',
+          chr015Base(),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 10, stateRevision: 9 },
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-015"]')).not.toBeNull();
+    const candidate = requiredElement(
+      container.querySelector<HTMLSelectElement>('[data-skill-candidate]'),
+      'CHR-015 eligible skill selector',
+    );
+    expect([...candidate.options].map(({ value }) => value)).not.toContain('SKILL_02');
+  });
+
+  it('refuses an internal registry id or an extra authority field in the CHR-013 projection', async () => {
+    const base = chr013Base();
+    const cards = [...SKILL_CARD_SUMMARIES];
+    cards[0] = { ...cards[0]!, skillId: 'SKL-001' };
+    const { container } = await connectToWizardBase(
+      {
+        ...base,
+        roleFilteredPayload: {
+          ...base.roleFilteredPayload,
+          internalRuleTrace: 'CORE-167',
+          skillCardSummaries: cards,
+        },
+      },
+      9,
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-skill-card="SKL-001"]')).toBeNull();
+    expect(container.textContent).not.toContain('CORE-167');
+  });
+
+  it('refuses an otherwise valid CHR-013 projection with an extra authority field', async () => {
+    const base = chr013Base();
+    const { container } = await connectToWizardBase(
+      {
+        ...base,
+        roleFilteredPayload: {
+          ...base.roleFilteredPayload,
+          internalRuleTrace: 'hidden',
+        },
+      },
+      9,
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-host-field="internalRuleTrace"]')).toBeNull();
+  });
+
+  it('refuses excluded CHR-015 safe-return actions instead of routing them generically', async () => {
+    const base = chr015Base();
+    const { container, socket } = await connectToWizardBase(
+      { ...base, availableActionKeys: ['CHR-015::CTA::003', 'CHR-015::CTA::002'] },
+      9,
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-015::CTA::002"]')).toBeNull();
+    expect(socket.sent).toHaveLength(2);
+    expect(decodedClientMessageV1(socket, 1).messageType).toBe('protocol.refusal');
+  });
+
+  it('keeps CHR-015 add/remove local, distinguishes under/exact/over, and sends a minimal checkpoint', async () => {
+    const { container, socket } = await connectToWizardBase(chr015Base(), 9);
+    expect(
+      container.querySelector('[data-skill-selection-validation="UNDERFILLED"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-015::CTA::003"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-015::CTA::001"]')).toBeNull();
+    const wireCount = socket.sent.length;
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-candidate]'),
+        'skill candidate',
+      ),
+      'SKILL_01',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-target-bonus]'),
+        'skill target bonus',
+      ),
+      '2',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::003"]'),
+        'local add action',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(container.querySelector('[data-skill-selection-validation="EXACT"]')).not.toBeNull();
+    expect(container.querySelector('[data-selected-skill="SKILL_01"]')?.textContent).toContain(
+      '+2',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-015::CTA::001"]')).not.toBeNull();
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-candidate]'),
+        'second skill candidate',
+      ),
+      'SKILL_03',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-target-bonus]'),
+        'second target bonus',
+      ),
+      '1',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::003"]'),
+        'local overfill action',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(
+      container.querySelector('[data-skill-selection-validation="OVERFILLED"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-015::CTA::001"]')).toBeNull();
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-candidate]'),
+        'selected skill removal candidate',
+      ),
+      'SKILL_03',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::003"]'),
+        'local remove action',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(container.querySelector('[data-skill-selection-validation="EXACT"]')).not.toBeNull();
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::001"]'),
+        'skill selection checkpoint',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(wireCount + 1);
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') {
+      throw new Error('missing CHR-015 checkpoint command');
+    }
+    expect(request.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      selectedSkills: [{ skillId: 'SKILL_01', targetBonus: 2 }],
+      sourceFormId: 'CHR-015',
+      stage: 'SKILLS',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(JSON.stringify(request.payload)).not.toMatch(/slotCost|eligibility|skillLabel|SKL-/u);
+
+    deliver(
+      socket,
+      checkedHostTextV1({
+        commandId: request.commandId,
+        lastLifecycleState: null,
+        messageType: 'command.refusal',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        refusal: { code: 'GUARD_REJECTED' },
+        revisions: entityRevisions(9),
+      }),
+    );
+    expect(container.querySelector('[data-client-state="command-refusal"]')).not.toBeNull();
+    expect(container.querySelector('[data-selected-skill="SKILL_01"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-015::CTA::001"]')).not.toBeNull();
+  });
+
+  it('accepts a skill checkpoint receipt only with its actionless CHR-015 terminal projection', async () => {
+    const { container, socket } = await connectToWizardBase(chr015Base(), 9);
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-candidate]'),
+        'terminal skill candidate',
+      ),
+      'SKILL_01',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-target-bonus]'),
+        'terminal target bonus',
+      ),
+      '2',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::003"]'),
+        'terminal local add',
+      ).click();
+    });
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::001"]'),
+        'terminal checkpoint',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing skill checkpoint');
+    const revisions = entityRevisions(10);
+    const result = {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 10,
+      draftRevision: 10,
+      learnedSkills: [
+        { bonus: 15, skillKey: 'FOLLOWING_PAIN', slotCost: 0, source: 'RACE_GRANTED' },
+        { bonus: 2, skillKey: 'SKILL_01', slotCost: 2, source: 'SELECTED' },
+      ],
+      nextFormId: 'CHR-017',
+      requiredSlotCount: 2,
+      selectedSkills: [{ skillKey: 'SKILL_01', targetBonus: 2 }],
+      sourceFormId: 'CHR-015',
+      stage: 'SKILLS',
+      usedSlotCount: 2,
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, 'skill-selection-receipt', result, revisions),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionDestinationSnapshot(
+          request.commandId,
+          chr015Base(
+            chr015Projection({
+              commandId: request.commandId,
+              draftRevision: 10,
+              selectedSkills: [{ skillId: 'SKILL_01', slotCost: 2, targetBonus: 2 }],
+            }),
+          ),
+          10,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-skill-selection-checkpointed]')).not.toBeNull();
+    expect(container.querySelector('[data-skill-selection-controls]')).toBeNull();
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+  });
+
+  it('drops the uncommitted CHR-015 overlay on reconnect and supports class-only exact fill', async () => {
+    const { container, socket } = await connectToWizardBase(chr015Base(), 9);
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-candidate]'),
+        'reconnect skill candidate',
+      ),
+      'SKILL_01',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-skill-target-bonus]'),
+        'reconnect target bonus',
+      ),
+      '1',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::003"]'),
+        'reconnect local add',
+      ).click();
+      socket.serverClose(1006, 'local skill overlay lost');
+    });
+    act(() => {
+      const reconnectButton = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Переподключиться',
+      );
+      requiredElement(reconnectButton ?? null, 'skill reconnect action').click();
+    });
+    const resumedSocket = FakeWebSocket.instances.at(-1)!;
+    open(resumedSocket);
+    const reconnect = decodedClientMessageV2(resumedSocket, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect');
+    deliverPair(
+      resumedSocket,
+      capabilities({
+        reconnectRequestId: reconnect.reconnectRequestId,
+        revisions: entityRevisions(9),
+      }),
+      reconnectWizardSnapshot(reconnect.reconnectRequestId, chr015Base(), 9),
+    );
+    expect(container.querySelector('[data-selected-skill]')).toBeNull();
+    expect(
+      container.querySelector('[data-skill-selection-validation="UNDERFILLED"]'),
+    ).not.toBeNull();
+
+    const classOptions = SKILL_OPTIONS.map((option) => ({ ...option, levelOptions: [] }));
+    const classProjection = chr015Projection({
+      mandatoryClassSkillOrNull: {
+        bonus: 4,
+        skillId: 'PURE_STALKER',
+        skillLabel: 'Навык чистого охотника',
+        slotCost: 1,
+      },
+      racialFreeSkills: [],
+      requiredSlotCount: 1,
+      skillOptions: classOptions,
+    });
+    act(() => resumedSocket.serverClose(1006, 'switch class-only fixture'));
+    act(() => {
+      const reconnectButton = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Переподключиться',
+      );
+      requiredElement(reconnectButton ?? null, 'class-only reconnect action').click();
+    });
+    const classSocket = FakeWebSocket.instances.at(-1)!;
+    open(classSocket);
+    const classReconnect = decodedClientMessageV2(classSocket, 0);
+    if (classReconnect.messageType !== 'session.reconnect') throw new Error('missing reconnect');
+    deliverPair(
+      classSocket,
+      capabilities({
+        reconnectRequestId: classReconnect.reconnectRequestId,
+        revisions: entityRevisions(9),
+      }),
+      reconnectWizardSnapshot(classReconnect.reconnectRequestId, chr015Base(classProjection), 9),
+    );
+    expect(container.querySelector('[data-skill-selection-validation="EXACT"]')).not.toBeNull();
+    expect(container.querySelector('[data-paid-slot-source="CLASS_MANDATORY"]')).not.toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-015::CTA::001"]'),
+        'class-only checkpoint',
+      ).click();
+    });
+    const request = decodedClientMessageV1(classSocket, classSocket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing class-only checkpoint');
+    expect(request.payload).toMatchObject({ selectedSkills: [] });
   });
 });

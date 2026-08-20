@@ -3,8 +3,8 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-08-20`
-- Тестов: 985, все зелёные
+- Снимок: `2026-08-21`
+- Тестов: 1022, все зелёные
 - `npm run verify` — проходит
 
 ## Легенда
@@ -72,22 +72,27 @@ addressed set request и открывает `CHR-003`. Первый показ �
 набор по индексам либо проверяет point-buy 90/85, сохраняя provenance каждого
 критического штрафа. `UNITED` и `FREE` переходят прямо на read-only `CHR-012`,
 а `PURE` сначала выбирает класс на `CHR-011`; host выводит обязательный навык и
-пересчитывает base + race + class существующим domain-каталогом. Поправки
-симбионтов остаются за следующим срезом.
+пересчитывает base + race + class существующим domain-каталогом. Следующий
+checkpoint фиксирует eligibility baseline и открывает очищенный каталог
+`CHR-013`; `CHR-015` ведёт локальный выбор, а затем одним durable checkpoint
+сохраняет полный exact-fill набор. Классовый навык учитывается один раз,
+бесплатный навык `UNITED` не занимает слот, и runtime останавливается actionless
+на `CHR-015/CHECKPOINTED`. Поправки симбионтов и `CHR-017` остаются за следующим
+срезом.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                            | Веха |
-| ---------------------------- | ------------ | ------------------------------------------------------------------ | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft        | M4   |
-| `src/domain/rules`           | **частично** | броски, assignment и skill-stage base + race + class               | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет      | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/assignment/class checkpoint, library, identity   | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity | M2   |
-| `src/host`                   | **частично** | identity и creation journey до read-only CHR-012                   | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–012 и CHR-016/028/036 exact slice         | M4   |
-| `src/web`                    | **частично** | recovery, rolls, stat assignment, PURE class и CHR-012             | M5   |
-| `src/web/renderer`           | **частично** | 26 форм: 11 APP и 15 CHR; остальные fail-closed                    | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и пятнадцати CHR            | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                 | Веха |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft             | M4   |
+| `src/domain/rules`           | **частично** | броски, assignment и skill-stage base + race + class                    | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет           | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/assignment/class/skills checkpoint, library, identity | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity      | M2   |
+| `src/host`                   | **частично** | identity и creation journey до actionless CHR-015/CHECKPOINTED          | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–013, CHR-015/016/028/036 exact slice           | M4   |
+| `src/web`                    | **частично** | recovery, rolls, stats, PURE class, skill catalog и local selection     | M5   |
+| `src/web/renderer`           | **частично** | 28 форм: 11 APP и 17 CHR; остальные fail-closed                         | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и семнадцати CHR                 | M6   |
 
 ## generated/ — вывод конвейера
 
