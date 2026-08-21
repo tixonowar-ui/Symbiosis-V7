@@ -418,6 +418,64 @@ function isTestPath(path: string): boolean {
   return /(?:^|\/)(?:__tests__)(?:\/|$)|\.(?:test|spec)\.[^.]+$/.test(path);
 }
 
+/**
+ * The published-form roster lives in one place and this reads that place, rather
+ * than inferring publication from a mention. A form ID appears as a string
+ * literal long before the form exists: `CHR-005`–`CHR-008` were counted from
+ * #119, where they were only a `returnDecisionFormId` value, and `CHR-017` from
+ * #130, where it is only a signed future destination. Counting mentions
+ * overstated the matrix by nine forms out of twenty-nine.
+ */
+export const PUBLISHED_FORMS_SOURCE = 'src/host/protocol-vocabulary.ts';
+const PUBLISHED_FORMS_DECLARATION = 'PRESENTED_FORM_IDS';
+
+export function readPublishedFormIds(repoRoot: string): ReadonlySet<string> {
+  const path = join(repoRoot, ...PUBLISHED_FORMS_SOURCE.split('/'));
+  const label = `${PUBLISHED_FORMS_SOURCE}: ${PUBLISHED_FORMS_DECLARATION}`;
+  if (!existsSync(path)) throw new Error(`${label}: source file not found`);
+  const file = ts.createSourceFile(
+    PUBLISHED_FORMS_SOURCE,
+    readFileSync(path, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  let elements: ts.NodeArray<ts.Expression> | undefined;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === PUBLISHED_FORMS_DECLARATION
+    ) {
+      const initializer = node.initializer;
+      if (
+        initializer === undefined ||
+        !ts.isNewExpression(initializer) ||
+        initializer.arguments?.length !== 1 ||
+        !ts.isArrayLiteralExpression(initializer.arguments[0]!)
+      ) {
+        throw new Error(`${label}: expected new Set([...]) with one array literal`);
+      }
+      elements = initializer.arguments[0].elements;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+
+  if (elements === undefined) throw new Error(`${label}: declaration not found`);
+  const ids = new Set<string>();
+  for (const element of elements) {
+    if (!ts.isStringLiteralLike(element)) {
+      throw new Error(`${label}: every entry must be a string literal`);
+    }
+    if (ids.has(element.text)) throw new Error(`${label}: duplicate ${element.text}`);
+    ids.add(element.text);
+  }
+  if (ids.size === 0) throw new Error(`${label}: no published forms`);
+  return ids;
+}
+
 export function scanRepository(repoRoot: string): {
   implementation: ReferenceScan;
   tests: ReferenceScan;
@@ -482,15 +540,25 @@ function groupForms(
     );
 }
 
+/**
+ * `publishedForms` defaults to empty rather than to the scanned literals: a
+ * caller that forgets it under-reports loudly instead of silently restoring the
+ * mention-counting it replaces.
+ */
 export function buildCoverage(
   catalog: Catalog,
   implementation: ReferenceScan,
   tests: ReferenceScan,
   source: ReferenceScan = implementation,
+  publishedForms: ReadonlySet<string> = new Set(),
 ): CoverageModel {
   const categories = catalog.categories.map((category) => {
     const implemented =
-      category.key === 'transitions' ? implementation.transitions : implementation.literals;
+      category.key === 'transitions'
+        ? implementation.transitions
+        : category.key === 'forms'
+          ? publishedForms
+          : implementation.literals;
     const tested = category.key === 'transitions' ? tests.transitions : tests.literals;
     return {
       key: category.key,
@@ -524,20 +592,8 @@ export function buildCoverage(
 
   return {
     categories,
-    domains: groupForms(
-      catalog.forms,
-      implementation.literals,
-      tests.literals,
-      (form) => form.domain,
-      true,
-    ),
-    types: groupForms(
-      catalog.forms,
-      implementation.literals,
-      tests.literals,
-      (form) => form.type,
-      false,
-    ),
+    domains: groupForms(catalog.forms, publishedForms, tests.literals, (form) => form.domain, true),
+    types: groupForms(catalog.forms, publishedForms, tests.literals, (form) => form.type, false),
     discrepancies,
   };
 }
@@ -569,6 +625,14 @@ export async function renderReport(model: CoverageModel): Promise<string> {
     '> Покрытие сканируется в `src/**/*.{test,spec}.*` и `tests/`. `generated/`,',
     '> `docs/`, `artifacts/` и весь `tools/` не являются свидетельством реализации',
     '> или покрытия приложения.',
+    '>',
+    '> **Формы — исключение.** Форма считается реализованной, только если она',
+    `> перечислена в \`${PUBLISHED_FORMS_DECLARATION}\` (\`${PUBLISHED_FORMS_SOURCE}\`),`,
+    '> то есть публикуется хостом. Упоминания ID недостаточно: форма появляется',
+    '> строковым литералом задолго до реализации — как подписанное будущее',
+    '> назначение или как значение чужого поля. Покрытие тестами по-прежнему',
+    '> считается по ссылке и потому может опережать реализацию: тест на',
+    '> fail-closed законно называет форму, которой ещё нет.',
     '',
     '- Источник ожидаемых значений: `generated/spec`',
     '',
