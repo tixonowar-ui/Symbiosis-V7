@@ -17,7 +17,16 @@ export interface CreationSkillRequirementSummary {
   readonly statLabel: string;
 }
 
+export type CreationMissingSkillPenalty =
+  | Readonly<{ readonly kind: 'NO_MISSING_SKILL_PENALTY' }>
+  | Readonly<{
+      readonly kind: 'MISSING_SKILL_PENALTY';
+      readonly value: number;
+    }>;
+
 export interface CreationSelectableSkillSummary extends CreationSkillLabel {
+  readonly bonusDomainScope: string;
+  readonly missingSkillPenalty: CreationMissingSkillPenalty;
   readonly requirements: readonly CreationSkillRequirementSummary[];
 }
 
@@ -122,9 +131,15 @@ interface RequirementJoin {
   readonly statCode: StatCode;
 }
 
+interface SkillPresentationFacts extends CreationSkillLabel {
+  readonly bonusDomainScope: string;
+  readonly category: string;
+  readonly missingSkillPenalty: CreationMissingSkillPenalty;
+}
+
 /**
- * Builds the issue #126 player-facing allowlist while cross-checking every join
- * against the already validated domain catalog.
+ * Builds the issue #126 player-facing allowlist plus the issue #131 delivered
+ * content fields while cross-checking every join against the validated catalog.
  */
 export function createCreationSkillCatalog(
   sources: CreationSkillCatalogSources,
@@ -163,7 +178,7 @@ export function createCreationSkillCatalog(
     fail('creation skill stats.StatCode', 'contains duplicates');
   const statOrder = new Map(stats.map((stat, index) => [stat.statCode, index]));
 
-  const skillLabels = skillRows.map((row, index): CreationSkillLabel => {
+  const skillFacts = skillRows.map((row, index): SkillPresentationFacts => {
     const path = `creation skills[${String(index)}]`;
     const validated = skillStageCatalog.skills[index];
     if (validated === undefined) mismatch(path, 'row count/order');
@@ -188,17 +203,37 @@ export function createCreationSkillCatalog(
       mismatch(path, 'skill identity/mechanics');
     }
     return Object.freeze({
+      bonusDomainScope: text(row, 'BonusDomain / Scope', path),
+      category,
+      missingSkillPenalty:
+        rawPenalty === undefined
+          ? Object.freeze({ kind: 'NO_MISSING_SKILL_PENALTY' as const })
+          : Object.freeze({ kind: 'MISSING_SKILL_PENALTY' as const, value: rawPenalty }),
       skillId: validated.skillKey,
       skillLabel: text(row, 'Название', path),
     });
   });
-  if (skillLabels.length !== skillStageCatalog.skills.length) {
+  if (skillFacts.length !== skillStageCatalog.skills.length) {
     mismatch('creation skills', 'row count');
   }
+  const missingPenaltyCount = skillFacts.filter(
+    ({ missingSkillPenalty }) => missingSkillPenalty.kind === 'MISSING_SKILL_PENALTY',
+  ).length;
+  // Source-owned population printed in issue #131: 15 present, 30 absent.
+  if (missingPenaltyCount !== 15) {
+    fail(
+      'creation skills.MissingSkillPenalty',
+      `expected 15 populated rows, got ${String(missingPenaltyCount)}`,
+    );
+  }
+  const skillLabels = skillFacts.map(({ skillId, skillLabel }) =>
+    Object.freeze({ skillId, skillLabel }),
+  );
   if (new Set(skillLabels.map(({ skillId }) => skillId)).size !== skillLabels.length) {
     fail('creation skills.SkillKey', 'contains duplicates');
   }
   const labelBySkillId = new Map(skillLabels.map((skill) => [skill.skillId, skill.skillLabel]));
+  const factsBySkillId = new Map(skillFacts.map((skill) => [skill.skillId, skill]));
 
   const requirementJoins = requirementRows.map((row, index): RequirementJoin => {
     const path = `creation skill requirements[${String(index)}]`;
@@ -235,8 +270,18 @@ export function createCreationSkillCatalog(
     .filter(({ category }) => category === 'SELECTABLE_GENERAL')
     .map((skill): CreationSelectableSkillSummary => {
       const skillLabel = labelBySkillId.get(skill.skillKey);
-      if (skillLabel === undefined) {
-        fail('creation skills.SkillKey', `missing label for ${JSON.stringify(skill.skillKey)}`);
+      const facts = factsBySkillId.get(skill.skillKey);
+      if (skillLabel === undefined || facts === undefined) {
+        fail(
+          'creation skills.SkillKey',
+          `missing presentation facts for ${JSON.stringify(skill.skillKey)}`,
+        );
+      }
+      if (facts.category !== 'SELECTABLE_GENERAL') {
+        fail(
+          'creation skills.Категория',
+          `expected SELECTABLE_GENERAL for ${JSON.stringify(skill.skillKey)}`,
+        );
       }
       const requirements = requirementJoins
         .filter(({ skillKey }) => skillKey === skill.skillKey)
@@ -272,6 +317,8 @@ export function createCreationSkillCatalog(
         );
       }
       return Object.freeze({
+        bonusDomainScope: facts.bonusDomainScope,
+        missingSkillPenalty: facts.missingSkillPenalty,
         requirements: Object.freeze(requirements),
         skillId: skill.skillKey,
         skillLabel,

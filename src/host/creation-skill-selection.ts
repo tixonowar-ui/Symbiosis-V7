@@ -28,7 +28,10 @@ import type {
   DurableCreationWizardCheckpoint,
   RaceChoice,
 } from './creation-set-decide.js';
-import type { CreationSkillCatalog } from './creation-skill-catalog.js';
+import type {
+  CreationMissingSkillPenalty,
+  CreationSkillCatalog,
+} from './creation-skill-catalog.js';
 import {
   deriveChr012StatsView,
   STAT_CODES,
@@ -825,9 +828,11 @@ export interface SkillRequirementView extends JsonObject {
 }
 
 export interface SkillCardSummaryView extends JsonObject {
+  readonly bonusDomainScope: string;
   readonly skillId: string;
   readonly skillLabel: string;
   readonly eligibility: 'ELIGIBLE' | 'REQUIREMENTS_NOT_MET';
+  readonly missingSkillPenalty: CreationMissingSkillPenalty;
   readonly requirements: readonly SkillRequirementView[];
   readonly levelOptions: readonly SkillLevelOption[];
 }
@@ -855,9 +860,11 @@ export interface Chr013SkillCatalogView {
 }
 
 export interface SkillOptionView extends JsonObject {
+  readonly bonusDomainScope: string;
   readonly skillId: string;
   readonly skillLabel: string;
   readonly levelOptions: readonly SkillLevelOption[];
+  readonly missingSkillPenalty: CreationMissingSkillPenalty;
 }
 
 export interface SelectedSkillView extends JsonObject {
@@ -954,8 +961,10 @@ const cardSummaries = (
       );
     }
     return {
+      bonusDomainScope: skill.bonusDomainScope,
       eligibility: projectedEligibility ? 'ELIGIBLE' : 'REQUIREMENTS_NOT_MET',
       levelOptions: levels,
+      missingSkillPenalty: skill.missingSkillPenalty,
       requirements,
       skillId: skill.skillId,
       skillLabel: skill.skillLabel,
@@ -1086,7 +1095,13 @@ export function deriveChr015SkillSelectionView(
     selectionValidation: selectionValidation(usedSlotCount, derived.requiredSlotCount),
     skillOptions: summaries
       .filter(({ skillId }) => eligible.has(skillId))
-      .map(({ skillId, skillLabel, levelOptions }) => ({ skillId, skillLabel, levelOptions })),
+      .map(({ bonusDomainScope, skillId, skillLabel, levelOptions, missingSkillPenalty }) => ({
+        bonusDomainScope,
+        levelOptions,
+        missingSkillPenalty,
+        skillId,
+        skillLabel,
+      })),
     wizardCheckpointId: checkpoint.checkpoint.checkpointId,
   };
 }

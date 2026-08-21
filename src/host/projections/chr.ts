@@ -924,9 +924,18 @@ export interface SkillRequirementProjection extends JsonObject {
   readonly statLabel: string;
 }
 
+export type MissingSkillPenaltyProjection =
+  | Readonly<{ readonly kind: 'NO_MISSING_SKILL_PENALTY' }>
+  | Readonly<{
+      readonly kind: 'MISSING_SKILL_PENALTY';
+      readonly value: number;
+    }>;
+
 export interface SkillCardSummaryProjection extends JsonObject {
+  readonly bonusDomainScope: string;
   readonly eligibility: 'ELIGIBLE' | 'REQUIREMENTS_NOT_MET';
   readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly missingSkillPenalty: MissingSkillPenaltyProjection;
   readonly requirements: readonly SkillRequirementProjection[];
   readonly skillId: string;
   readonly skillLabel: string;
@@ -974,7 +983,9 @@ export interface SelectedSkillProjection extends JsonObject {
 }
 
 export interface SkillOptionProjection extends JsonObject {
+  readonly bonusDomainScope: string;
   readonly levelOptions: readonly SkillLevelOptionProjection[];
+  readonly missingSkillPenalty: MissingSkillPenaltyProjection;
   readonly skillId: string;
   readonly skillLabel: string;
 }
@@ -1361,6 +1372,26 @@ function copySkillRequirements(
   });
 }
 
+function copyMissingSkillPenalty(value: unknown, label: string): MissingSkillPenaltyProjection {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const candidate = value as Record<string, unknown>;
+  if (candidate['kind'] === 'NO_MISSING_SKILL_PENALTY') {
+    assertExactProjectionKeys(candidate, label, ['kind']);
+    return { kind: 'NO_MISSING_SKILL_PENALTY' };
+  }
+  if (candidate['kind'] !== 'MISSING_SKILL_PENALTY') {
+    throw new Error(`${label}.kind is not a recognized missing-skill-penalty variant`);
+  }
+  assertExactProjectionKeys(candidate, label, ['kind', 'value']);
+  const penaltyValue = candidate['value'];
+  if (typeof penaltyValue !== 'number' || !Number.isSafeInteger(penaltyValue)) {
+    throw new Error(`${label}.value must be a signed safe integer`);
+  }
+  return { kind: 'MISSING_SKILL_PENALTY', value: penaltyValue };
+}
+
 function copySkillCardSummaries(
   values: readonly SkillCardSummaryProjection[],
   skillStageStats: StatMapProjection,
@@ -1369,11 +1400,13 @@ function copySkillCardSummaries(
   // Source-owned count: all 41 SELECTABLE_GENERAL rows, including ineligible rows.
   if (values.length !== 41) throw new Error(`${label} must contain all 41 selectable skills`);
   const seen = new Set<string>();
-  return values.map((card, index) => {
+  const cards = values.map((card, index) => {
     const path = `${label}[${String(index)}]`;
     assertExactProjectionKeys(card, path, [
+      'bonusDomainScope',
       'eligibility',
       'levelOptions',
+      'missingSkillPenalty',
       'requirements',
       'skillId',
       'skillLabel',
@@ -1386,20 +1419,37 @@ function copySkillCardSummaries(
       skillStageStats,
       `${path}.requirements`,
     );
-    const eligibility = requirements.every(({ satisfied }) => satisfied)
+    const eligibility: SkillCardSummaryProjection['eligibility'] = requirements.every(
+      ({ satisfied }) => satisfied,
+    )
       ? 'ELIGIBLE'
       : 'REQUIREMENTS_NOT_MET';
     if (card.eligibility !== eligibility) {
       throw new Error(`${path}.eligibility disagrees with its requirement rows`);
     }
     return {
+      bonusDomainScope: playerLabel(card.bonusDomainScope, `${path}.bonusDomainScope`),
       eligibility,
       levelOptions: copySkillLevelOptions(card.levelOptions, `${path}.levelOptions`),
+      missingSkillPenalty: copyMissingSkillPenalty(
+        card.missingSkillPenalty,
+        `${path}.missingSkillPenalty`,
+      ),
       requirements,
       skillId,
       skillLabel: playerLabel(card.skillLabel, `${path}.skillLabel`),
     };
   });
+  const populatedPenaltyCount = cards.filter(
+    ({ missingSkillPenalty }) => missingSkillPenalty.kind === 'MISSING_SKILL_PENALTY',
+  ).length;
+  // Source-owned selectable population from issue #131: 15 present, 26 absent.
+  if (populatedPenaltyCount !== 15) {
+    throw new Error(
+      `${label} must contain 15 populated missing-skill penalties, got ${String(populatedPenaltyCount)}`,
+    );
+  }
+  return cards;
 }
 
 function copyFixedSkill(
@@ -1499,12 +1549,23 @@ function copySkillOptions(
   const seen = new Set<string>();
   return values.map((option, index) => {
     const path = `${label}[${String(index)}]`;
-    assertExactProjectionKeys(option, path, ['levelOptions', 'skillId', 'skillLabel']);
+    assertExactProjectionKeys(option, path, [
+      'bonusDomainScope',
+      'levelOptions',
+      'missingSkillPenalty',
+      'skillId',
+      'skillLabel',
+    ]);
     const skillId = playerSkillId(option.skillId, `${path}.skillId`);
     if (seen.has(skillId)) throw new Error(`${label} contains duplicate skillId ${skillId}`);
     seen.add(skillId);
     return {
+      bonusDomainScope: playerLabel(option.bonusDomainScope, `${path}.bonusDomainScope`),
       levelOptions: copySkillLevelOptions(option.levelOptions, `${path}.levelOptions`),
+      missingSkillPenalty: copyMissingSkillPenalty(
+        option.missingSkillPenalty,
+        `${path}.missingSkillPenalty`,
+      ),
       skillId,
       skillLabel: playerLabel(option.skillLabel, `${path}.skillLabel`),
     };

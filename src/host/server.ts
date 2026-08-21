@@ -2897,10 +2897,12 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     loadSkillStageCatalog(projectRoot),
     loadProtocolVocabulary(projectRoot),
   ]);
-  const [creationDecisionConsequenceCatalog, creationSkillCatalog] = await Promise.all([
-    loadCreationDecisionConsequenceCatalog(projectRoot, skillStageCatalog),
-    loadCreationSkillCatalog(projectRoot, skillStageCatalog),
-  ]);
+  const creationSkillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
+  const creationDecisionConsequenceCatalog = await loadCreationDecisionConsequenceCatalog(
+    projectRoot,
+    skillStageCatalog,
+    creationSkillCatalog,
+  );
 
   const app = Fastify({ logger: false });
   const commandJournal: CommandJournal = new Map();
