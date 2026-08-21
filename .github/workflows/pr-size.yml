@@ -99,11 +99,38 @@ permissions:
 # review findings would still fit. A size guard must not be in the room when
 # someone decides whether a correctness fix ships.
 #
-# The ceilings below therefore go to 5500 code additions against an observed
-# 3866, and 1500 code deletions against an observed 614. The multiplier is
-# smaller than the third round's 2.7x on purpose: the binding constraint is no
-# longer how much can be written but how much can be read closely in one
-# review, and ~6000 hand-written lines is the measured edge of that.
+# That round set 5500 code additions against an observed 3866, and 1500 code
+# deletions against an observed 614. The multiplier was smaller than the third
+# round's 2.7x on purpose: the binding constraint had become how much can be
+# read closely in one review rather than how much can be written, and ~6000
+# hand-written lines is the measured edge of that. Code additions were raised
+# again on 2026-08-21; every other number from that round still stands.
+#
+# Fifth round, issue #136, is the first change made in advance of the evidence
+# rather than after it, and is recorded as a decision rather than a finding.
+#
+# Nothing had pressed against the ceiling. The largest PR since the fourth round
+# was #130 at 4284 code additions, 78% of 5500, and the next slice was estimated
+# at 2800-4100. Every other axis stayed far from its limit: 614 deletions of
+# 1500, 18 code files of 40, 30 total files of 60.
+#
+# The owner raised the ceiling to 7000 on a cost argument instead. A stop on a
+# large feature costs a full agent pass over a slice that carries new domain
+# work; if the estimate is low, that pass is lost and the ceiling has to be
+# raised anyway. Headroom bought in advance removes the branch. The reviewer
+# recommended waiting for a real data point; the owner weighed the risk and
+# decided otherwise.
+#
+# The obligation from the fourth round is not relaxed by this and matters more
+# now, because 7000 code additions plus unlimited test additions exceed the
+# measured reading edge: a review that could not read the whole change closely
+# must say so in the verdict instead of issuing a verdict of the usual shape.
+#
+# Revisit when there is evidence either way. If the next slices land well under
+# 5500, the headroom was not needed and the sixth round should return to
+# measuring. If PRs start arriving past 6000 code additions and reviews start
+# missing findings, the answer is not a larger number but splitting on a
+# contract boundary.
 #
 # MAX_TEST_ADDED is removed rather than raised. Tests earned a separate budget
 # so they would stop crowding out code, and the separation alone achieves that.
@@ -135,7 +162,7 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          MAX_CODE_ADDED: 5500
+          MAX_CODE_ADDED: 7000
           MAX_CODE_DELETED: 1500
           MAX_CODE_FILES: 40
           MAX_TEST_DELETED: 400
