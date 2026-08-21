@@ -7,6 +7,7 @@ import {
   analyzeSource,
   buildCoverage,
   loadCatalog,
+  readPublishedFormIds,
   renderReport,
   scanRepository,
   transitionKey,
@@ -209,6 +210,47 @@ describe('reference semantics', () => {
   });
 });
 
+describe('published form roster', () => {
+  const temporaryRoot = (declaration: string): string => {
+    const root = mkdtempSync(join(tmpdir(), 'symbiosis-traceability-published-'));
+    temporaryRoots.push(root);
+    write(root, 'src/host/protocol-vocabulary.ts', declaration);
+    return root;
+  };
+
+  it('reads the exact roster the host publishes', () => {
+    const root = temporaryRoot(
+      "const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set(['APP-001', 'CHR-013']);",
+    );
+    expect(readPublishedFormIds(root)).toEqual(new Set(['APP-001', 'CHR-013']));
+  });
+
+  it('reads the real repository roster and keeps it a strict subset of the atlas', () => {
+    const published = readPublishedFormIds(REPO_ROOT);
+    const catalog = loadCatalog(join(REPO_ROOT, 'generated', 'spec'));
+    const known = new Set(catalog.forms.map((form) => form.id));
+    expect(published.size).toBeGreaterThan(0);
+    expect([...published].filter((id) => !known.has(id))).toEqual([]);
+    expect(published.size).toBeLessThan(known.size);
+  });
+
+  it.each([
+    ['declaration is gone', 'export const OTHER = new Set();'],
+    ['roster is empty', 'const PRESENTED_FORM_IDS = new Set([]);'],
+    ['an entry is not a literal', 'const PRESENTED_FORM_IDS = new Set([formId]);'],
+    ['an entry repeats', "const PRESENTED_FORM_IDS = new Set(['APP-001', 'APP-001']);"],
+    ['the initializer is not a set literal', 'const PRESENTED_FORM_IDS = buildRoster();'],
+  ])('fails closed when %s', (_name, declaration) => {
+    expect(() => readPublishedFormIds(temporaryRoot(declaration))).toThrow(/PRESENTED_FORM_IDS/u);
+  });
+
+  it('fails closed when the source file is missing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'symbiosis-traceability-published-'));
+    temporaryRoots.push(root);
+    expect(() => readPublishedFormIds(root)).toThrow(/source file not found/u);
+  });
+});
+
 describe('coverage and discrepancies', () => {
   const transition = { from: 'ZZZ-901', to: 'ZZZ-902', kind: 'journey', trigger: 'open' };
   const catalog = fixtureCatalog(transition);
@@ -219,11 +261,29 @@ describe('coverage and discrepancies', () => {
       'src/app.ts',
     );
     const tests = analyzeSource("expect('ZZZ-901').toBeDefined();", 'src/app.test.ts');
-    const model = buildCoverage(catalog, implementation, tests);
+    const model = buildCoverage(
+      catalog,
+      implementation,
+      tests,
+      implementation,
+      new Set(['ZZZ-901']),
+    );
     expect(model.categories.map((row) => [row.key, row.implemented, row.tested])).toEqual([
       ['forms', 1, 1],
       ['transitions', 1, 0],
     ]);
+  });
+
+  it('does not count a form that is mentioned in src but not published', () => {
+    const implementation = analyzeSource("const destination = 'ZZZ-901';", 'src/app.ts');
+    const tests = analyzeSource("expect('ZZZ-901').toBeDefined();", 'src/app.test.ts');
+    const model = buildCoverage(catalog, implementation, tests, implementation, new Set());
+    expect(model.categories.find((row) => row.key === 'forms')).toMatchObject({
+      implemented: 0,
+      tested: 1,
+    });
+    expect(model.domains.reduce((sum, row) => sum + row.implemented, 0)).toBe(0);
+    expect(model.types.reduce((sum, row) => sum + row.implemented, 0)).toBe(0);
   });
 
   it('reports unknown source IDs and transition tuples with stable locations', () => {

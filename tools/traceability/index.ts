@@ -1,7 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildCoverage, loadCatalog, renderReport, scanRepository } from './traceability.js';
+import {
+  buildCoverage,
+  loadCatalog,
+  readPublishedFormIds,
+  renderReport,
+  scanRepository,
+} from './traceability.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OUTPUT = join(REPO_ROOT, 'docs', 'TRACEABILITY.md');
@@ -14,7 +20,13 @@ async function main(): Promise<void> {
 
   const catalog = loadCatalog(join(REPO_ROOT, 'generated', 'spec'));
   const scans = scanRepository(REPO_ROOT);
-  const model = buildCoverage(catalog, scans.implementation, scans.tests, scans.source);
+  const model = buildCoverage(
+    catalog,
+    scans.implementation,
+    scans.tests,
+    scans.source,
+    readPublishedFormIds(REPO_ROOT),
+  );
   const report = await renderReport(model);
 
   if (args[0] === '--check') {
