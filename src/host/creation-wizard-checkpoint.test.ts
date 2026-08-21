@@ -1016,8 +1016,10 @@ describe('SKILLS wizard checkpoint', () => {
       expect(chr013.skillCardSummaries).toHaveLength(41);
       expect(chr013.selectedSkillIdOrNull).toBeNull();
       expect(chr013.skillCardSummaries.find(({ skillId }) => skillId === 'ACROBATICS')).toEqual({
+        bonusDomainScope: 'Лазание, прыжки, кувырки, сложные маршруты, паркур',
         eligibility: derived.skillStageStats.D >= 14 ? 'ELIGIBLE' : 'REQUIREMENTS_NOT_MET',
         levelOptions: chr013.skillCardSummaries[0]!.levelOptions,
+        missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
         requirements: [
           {
             currentValue: derived.skillStageStats.D,
@@ -1029,6 +1031,10 @@ describe('SKILLS wizard checkpoint', () => {
         ],
         skillId: 'ACROBATICS',
         skillLabel: 'Акробатика',
+      });
+      expect(chr013.skillCardSummaries.find(({ skillId }) => skillId === 'UNARMED')).toMatchObject({
+        bonusDomainScope: 'Удары руками/ногами, блок без щита',
+        missingSkillPenalty: { kind: 'MISSING_SKILL_PENALTY', value: -5 },
       });
       expect(chr013.slotSources).toEqual({
         mandatoryClassSkillOrNull:

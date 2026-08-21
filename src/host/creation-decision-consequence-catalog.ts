@@ -16,6 +16,7 @@ import {
   type RaceChoice,
   type SymbiontAcquisitionMode,
 } from './creation-set-decide.js';
+import type { CreationSkillCatalog } from './creation-skill-catalog.js';
 import { readJsonFile } from './json-source.js';
 
 export type SymbiontXpPolicy = 'STANDARD_XP_AWARD' | 'XP_AWARD_X2';
@@ -52,11 +53,24 @@ export type ConditionalRaceStatModifiers =
       readonly kind: 'DEPENDS_ON_SYMBIONT_ACQUISITION_MODE';
     }>;
 
+export interface GrantedSkillPreview extends JsonObject {
+  readonly skillId: CreationSkillCatalog['skillLabels'][number]['skillId'];
+  readonly skillLabel: string;
+}
+
+export type GrantedSkillsPreview =
+  | Readonly<{ readonly kind: 'NO_GRANTED_SKILLS' }>
+  | Readonly<{
+      readonly entries: readonly GrantedSkillPreview[];
+      readonly kind: 'GRANTED_SKILLS';
+    }>;
+
 export interface RaceConsequencesPreview extends JsonObject {
   readonly allocationXpMultiplier: number;
   readonly baseSymbiontSlots: number;
   readonly classPolicy: 'NO_CLASS' | 'REQUIRED_PURE_CLASS';
   readonly directXpMultiplier: number;
+  readonly grantedSkills: GrantedSkillsPreview;
   readonly raceLabel: string;
   readonly raceStatModifiersByAcquisitionMode: ConditionalRaceStatModifiers;
   readonly symbiontXpPolicy: SymbiontXpPolicy;
@@ -189,6 +203,18 @@ function uniqueBy<T>(values: readonly T[], path: string, key: (value: T) => stri
   }
 }
 
+function optionalTextReferences(row: Row, key: string, path: string): readonly string[] {
+  if (!Object.hasOwn(row, key)) return Object.freeze([]);
+  const references = text(row, key, path)
+    .split(';')
+    .map((value) => value.trim());
+  if (references.some((value) => value.length === 0)) {
+    fail(`${path}.${key}`, 'expected non-empty semicolon-delimited references');
+  }
+  uniqueBy(references, `${path}.${key}`, (value) => value);
+  return Object.freeze(references);
+}
+
 function freezeModifierEffect(entries: readonly DecisionStatDelta[]): DecisionStatModifierEffect {
   return entries.length === 0
     ? Object.freeze({ kind: 'NO_STAT_MODIFIERS' })
@@ -199,12 +225,14 @@ function freezeModifierEffect(entries: readonly DecisionStatDelta[]): DecisionSt
 }
 
 /**
- * Builds only the issue #127 player preview allowlist. The validated domain
- * catalog remains the authority for modifier joins and intentional empty rows.
+ * Builds the issue #127 preview plus the exact issue #131 GrantedSkillRefs
+ * extension. Validated catalogs remain authoritative for joins and intentional
+ * empty rows; other race facts stay outside the player allowlist.
  */
 export function createCreationDecisionConsequenceCatalog(
   sources: CreationDecisionConsequenceSources,
   skillStageCatalog: SkillStageCatalog,
+  creationSkillCatalog: CreationSkillCatalog,
 ): CreationDecisionConsequenceCatalog {
   // Source-owned cardinalities: stats.json has seven rows and races.json has three.
   const statRows = rows(sources.stats, 'decision consequences stats', 7);
@@ -240,6 +268,30 @@ export function createCreationDecisionConsequenceCatalog(
   const statByCode = new Map(stats.map((stat) => [stat.statCode, stat]));
   const statOrder = new Map(stats.map((stat, index) => [stat.statCode, index]));
 
+  if (creationSkillCatalog.skillLabels.length !== skillStageCatalog.skills.length) {
+    fail('decision consequences skill labels', 'row count disagrees with validated catalog');
+  }
+  const skillLabelById = new Map(
+    creationSkillCatalog.skillLabels.map((skill, index) => {
+      const validated = skillStageCatalog.skills[index];
+      if (
+        validated === undefined ||
+        skill.skillId !== validated.skillKey ||
+        typeof skill.skillLabel !== 'string' ||
+        skill.skillLabel.trim().length === 0
+      ) {
+        fail(
+          `decision consequences skill labels[${String(index)}]`,
+          'identity/order/label disagrees with validated catalog',
+        );
+      }
+      return [skill.skillId, skill.skillLabel] as const;
+    }),
+  );
+  if (skillLabelById.size !== creationSkillCatalog.skillLabels.length) {
+    fail('decision consequences skill labels.SkillKey', 'contains duplicates');
+  }
+
   const races = raceRows.map((row, index) => {
     const path = `decision consequences races[${String(index)}]`;
     const raceCode = literal(row, 'RaceCode', RACE_CHOICES, path);
@@ -258,11 +310,43 @@ export function createCreationDecisionConsequenceCatalog(
     ) {
       fail(path, 'race facts disagree with the validated skill-stage catalog');
     }
+    const sourceGrantedSkillRefs = optionalTextReferences(row, 'GrantedSkillRefs', path);
+    const validatedGrantedSkillRefs = validated.grantedSkillRefs.map((skillKey) => skillKey);
+    if (JSON.stringify(sourceGrantedSkillRefs) !== JSON.stringify(validatedGrantedSkillRefs)) {
+      fail(
+        `${path}.GrantedSkillRefs`,
+        'references/order disagree with the validated skill-stage catalog',
+      );
+    }
+    const grantedSkillEntries = sourceGrantedSkillRefs.map((skillId): GrantedSkillPreview => {
+      const skill = skillStageCatalog.skills.find((candidate) => candidate.skillKey === skillId);
+      if (
+        skill === undefined ||
+        skill.category !== 'FIXED_RACE_PASSIVE' ||
+        skill.slotCostMode !== 'FIXED_0' ||
+        typeof skill.maxBonus !== 'number'
+      ) {
+        fail(`${path}.GrantedSkillRefs`, `invalid race-granted skill ${JSON.stringify(skillId)}`);
+      }
+      const skillLabel = skillLabelById.get(skill.skillKey);
+      if (skillLabel === undefined) {
+        fail(`${path}.GrantedSkillRefs`, `missing player label for ${JSON.stringify(skillId)}`);
+      }
+      return Object.freeze({ skillId: skill.skillKey, skillLabel });
+    });
+    const grantedSkills: GrantedSkillsPreview =
+      grantedSkillEntries.length === 0
+        ? Object.freeze({ kind: 'NO_GRANTED_SKILLS' })
+        : Object.freeze({
+            entries: Object.freeze(grantedSkillEntries),
+            kind: 'GRANTED_SKILLS',
+          });
     return Object.freeze({
       allocationXpMultiplier: positiveInteger(row, 'AllocationXPMultiplier', path),
       baseSymbiontSlots,
       classPolicy,
       directXpMultiplier: positiveInteger(row, 'DirectXPMultiplier', path),
+      grantedSkills,
       raceChoice: raceCode,
       raceLabel: text(row, 'Название', path),
       symbiontXpPolicy: literal(
@@ -352,6 +436,7 @@ export function createCreationDecisionConsequenceCatalog(
           baseSymbiontSlots: race.baseSymbiontSlots,
           classPolicy: race.classPolicy,
           directXpMultiplier: race.directXpMultiplier,
+          grantedSkills: race.grantedSkills,
           raceLabel: race.raceLabel,
           raceStatModifiersByAcquisitionMode,
           symbiontXpPolicy: race.symbiontXpPolicy,
@@ -437,11 +522,16 @@ export function createCreationDecisionConsequenceCatalog(
 export async function loadCreationDecisionConsequenceCatalog(
   projectRoot: string,
   skillStageCatalog: SkillStageCatalog,
+  creationSkillCatalog: CreationSkillCatalog,
 ): Promise<CreationDecisionConsequenceCatalog> {
   const root = join(resolve(projectRoot), 'generated', 'spec', 'character');
   const [races, stats] = await Promise.all([
     readJsonFile(join(root, 'races.json'), 'creation decision consequence catalog'),
     readJsonFile(join(root, 'stats.json'), 'creation decision consequence catalog'),
   ]);
-  return createCreationDecisionConsequenceCatalog({ races, stats }, skillStageCatalog);
+  return createCreationDecisionConsequenceCatalog(
+    { races, stats },
+    skillStageCatalog,
+    creationSkillCatalog,
+  );
 }

@@ -38,6 +38,7 @@ import { openPersistenceDatabase } from '../persistence/database.js';
 import { bootstrapDeviceIdentity, resetDeviceIdentity } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
 import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
+import { loadCreationSkillCatalog } from './creation-skill-catalog.js';
 import {
   CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID,
   loadCreationWizardCheckpoint,
@@ -875,7 +876,12 @@ describe('durable character creation decisions', () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-set-decide-host-'));
     await writeFile(join(staticRoot, 'index.html'), '<main>set decide</main>', 'utf8');
     skillCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
-    consequenceCatalog = await loadCreationDecisionConsequenceCatalog(PROJECT_ROOT, skillCatalog);
+    const creationSkillCatalog = await loadCreationSkillCatalog(PROJECT_ROOT, skillCatalog);
+    consequenceCatalog = await loadCreationDecisionConsequenceCatalog(
+      PROJECT_ROOT,
+      skillCatalog,
+      creationSkillCatalog,
+    );
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
 

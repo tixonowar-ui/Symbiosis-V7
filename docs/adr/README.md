@@ -78,6 +78,7 @@
 | [0044](0044-character-stat-assignment-and-pure-class.md)  | Распределение и класс Чистого        | принято                                     |
 | [0045](0045-character-decision-consequences.md)           | Последствия первых решений           | принято                                     |
 | [0046](0046-character-starting-skills.md)                 | Каталог и стартовый выбор навыков    | принято; CHR-012 часть заменяет 0044 §8     |
+| [0047](0047-delivered-character-facts.md)                 | Поставленные факты выбора            | принято                                     |
 
 ## Перенос решений аудита
 

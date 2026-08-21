@@ -37,6 +37,7 @@ import { openPersistenceDatabase } from '../persistence/database.js';
 import { bootstrapDeviceIdentity } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
 import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
+import { loadCreationSkillCatalog } from './creation-skill-catalog.js';
 import {
   IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
   loadIdentityCheckpoint,
@@ -213,9 +214,11 @@ describe('first durable identity checkpoint server path', () => {
     staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-checkpoint-host-'));
     await writeFile(join(staticRoot, 'index.html'), '<main>checkpoint</main>', 'utf8');
     const skillStageCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
+    const creationSkillCatalog = await loadCreationSkillCatalog(PROJECT_ROOT, skillStageCatalog);
     consequenceCatalog = await loadCreationDecisionConsequenceCatalog(
       PROJECT_ROOT,
       skillStageCatalog,
+      creationSkillCatalog,
     );
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
