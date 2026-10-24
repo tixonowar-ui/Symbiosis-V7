@@ -121,14 +121,35 @@ function calculateGrade(
   return Math.min(consecutiveConfirmations, MAX_CONFIRMED_GRADE) as ConfirmedGrade;
 }
 
-/** Resolves only the CHR-004 consequence; roll generation, receipts, XP and stat binding stay outside. */
-export function resolveCreationCritical(input: CreationCriticalInput): CreationCriticalOutcome {
+export interface CriticalConfirmationOutcome {
+  readonly originFace: CreationCriticalFace;
+  readonly criticalGrade: ConfirmedGrade;
+  readonly criticalPolarity: CriticalPolarity;
+  readonly terminal: boolean;
+}
+
+/** Source-neutral D20 confirmation facts; stat value and creation penalty stay in the CHR-004 adapter. */
+export function resolveCriticalConfirmation(
+  input: CreationCriticalInput,
+): CriticalConfirmationOutcome {
   const rawInput = requireRecord(input, 'input', 'a creation-critical input object');
   const originRoll = requireD20Roll(rawInput.originRoll, 'originRoll');
   const confirmationRolls = requireConfirmationRolls(rawInput.confirmationRolls);
   const originFace = requireOriginFace(originRoll.rawFace);
   const criticalGrade = calculateGrade(originFace, confirmationRolls);
+  const range = CONFIRMATION_RANGES[originFace];
+  const firstMiss = confirmationRolls.some(
+    (roll) => roll.rawFace < range.minimum || roll.rawFace > range.maximum,
+  );
+  const terminal = firstMiss || confirmationRolls.length >= MAX_CONFIRMED_GRADE;
+  const criticalPolarity: CriticalPolarity =
+    criticalGrade === 0 ? 'NONE' : originFace === 20 ? 'SUCCESS' : 'FAILURE';
+  return Object.freeze({ originFace, criticalGrade, criticalPolarity, terminal });
+}
 
+/** Resolves only the CHR-004 consequence; roll generation, receipts, XP and stat binding stay outside. */
+export function resolveCreationCritical(input: CreationCriticalInput): CreationCriticalOutcome {
+  const { originFace, criticalGrade } = resolveCriticalConfirmation(input);
   if (criticalGrade === 0) {
     return Object.freeze({ criticalGrade, criticalPolarity: 'NONE', value: originFace });
   }
