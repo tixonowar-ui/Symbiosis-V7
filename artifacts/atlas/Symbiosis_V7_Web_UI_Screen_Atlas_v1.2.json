@@ -1,10 +1,10 @@
 {
   "$schema": "urn:symbiosis:v7:web-ui-screen-atlas:1.2",
   "schemaVersion": "1.2.0",
-  "atlasVersion": "1.3",
+  "atlasVersion": "1.4",
   "title": "Symbiosis V7 Web UI Screen Atlas",
   "language": "ru-RU",
-  "releaseDate": "2026-08-18",
+  "releaseDate": "2026-08-21",
   "normativeStatus": "APPROVED_BASELINE_DERIVATIVE_NO_OPEN_UX_QUESTIONS",
   "sourceRefs": [
     {
@@ -12125,6 +12125,8 @@
         {
           "formId": "CHR-020",
           "primaryActions": [
+            "Выбрать допустимую сторону Совы или Угря",
+            "Выбрать вид симбиотического чудовища",
             "Зафиксировать случайное определение симбионтов",
             "Вернуться к выбору ветви до показа результата"
           ],
@@ -12136,10 +12138,15 @@
         {
           "formId": "CHR-041",
           "primaryActions": [
-            "Подтвердить просмотр сохранённой карточки Советника"
+            "Зафиксировать броски I и W Советника",
+            "Добавить или удалить допустимый навык Советника",
+            "Подтвердить навыки Советника"
           ],
           "executableOperationIds": [],
-          "workflowCommandIds": []
+          "workflowCommandIds": [
+            "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+            "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+          ]
         },
         {
           "formId": "CHR-042",
@@ -12441,10 +12448,12 @@
           "CHR-020": [
             "NOT_STARTED",
             "PENDING_INPUT",
+            "BINDING",
             "COMMITTED",
             "ADVISOR_ACK_REQUIRED"
           ],
           "CHR-041": [
+            "IW_ROLLS_REQUIRED",
             "CARD_REQUIRED",
             "ACKNOWLEDGED"
           ],
@@ -22395,6 +22404,8 @@
         {
           "formId": "CHR-020",
           "primaryActions": [
+            "Выбрать допустимую сторону Совы или Угря",
+            "Выбрать вид симбиотического чудовища",
             "Зафиксировать случайное определение симбионтов",
             "Вернуться к выбору ветви до показа результата"
           ],
@@ -22406,10 +22417,15 @@
         {
           "formId": "CHR-041",
           "primaryActions": [
-            "Подтвердить просмотр сохранённой карточки Советника"
+            "Зафиксировать броски I и W Советника",
+            "Добавить или удалить допустимый навык Советника",
+            "Подтвердить навыки Советника"
           ],
           "executableOperationIds": [],
-          "workflowCommandIds": []
+          "workflowCommandIds": [
+            "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+            "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+          ]
         },
         {
           "formId": "CHR-042",
@@ -22715,10 +22731,12 @@
           "CHR-020": [
             "NOT_STARTED",
             "PENDING_INPUT",
+            "BINDING",
             "COMMITTED",
             "ADVISOR_ACK_REQUIRED"
           ],
           "CHR-041": [
+            "IW_ROLLS_REQUIRED",
             "CARD_REQUIRED",
             "ACKNOWLEDGED"
           ],
@@ -57650,7 +57668,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -58032,7 +58050,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -61732,6 +61750,12 @@
           "kind": "normative"
         },
         {
+          "to": "CHR-014",
+          "trigger": "Адресуемый route либо server/system event текущей роли",
+          "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog",
+          "kind": "role-state-reachability"
+        },
+        {
           "to": "CHR-015",
           "trigger": "Перейти к выбору навыков",
           "guard": "skill-stage revision current",
@@ -61820,7 +61844,7 @@
       ],
       "type": "screen",
       "domain": "Создание локального персонажа",
-      "route": "/player/characters/:localCharacterId/create/chr-014",
+      "route": "/player/characters/:localCharacterId/create/chr-014/:skillId",
       "contexts": [
         "character-creation"
       ],
@@ -62107,6 +62131,12 @@
           "trigger": "Открыть карточку выбранного навыка",
           "guard": "selectedSkillId exists in current eligible or inspectable catalog",
           "kind": "normative"
+        },
+        {
+          "from": "CHR-013",
+          "trigger": "Адресуемый route либо server/system event текущей роли",
+          "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog",
+          "kind": "role-state-reachability"
         }
       ],
       "transitionsOut": [
@@ -63239,6 +63269,12 @@
           "kind": "normative"
         },
         {
+          "to": "CHR-018",
+          "trigger": "Адресуемый route либо server/system event текущей роли",
+          "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition",
+          "kind": "role-state-reachability"
+        },
+        {
           "to": "CHR-019",
           "trigger": "Открыть ручной состав",
           "guard": "symbiontAcquisitionMode=MANUAL; composition draft exists",
@@ -63353,7 +63389,7 @@
       ],
       "type": "screen",
       "domain": "Создание локального персонажа",
-      "route": "/player/characters/:localCharacterId/create/chr-018",
+      "route": "/player/characters/:localCharacterId/create/chr-018/:speciesKey",
       "contexts": [
         "character-creation"
       ],
@@ -63461,8 +63497,8 @@
         "ctaAvailabilityByAction": [
           {
             "label": "Добавить симбионта в ручной состав",
-            "targetFormId": "CHR-019",
-            "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid",
+            "targetFormId": "CHR-018",
+            "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor",
             "kind": "workflow-command",
             "actionKey": "CHR-018::CTA::001",
             "availabilityInputs": [
@@ -63716,6 +63752,18 @@
           "kind": "normative"
         },
         {
+          "from": "CHR-017",
+          "trigger": "Адресуемый route либо server/system event текущей роли",
+          "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition",
+          "kind": "role-state-reachability"
+        },
+        {
+          "from": "CHR-018",
+          "trigger": "Добавить симбионта в ручной состав",
+          "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor",
+          "kind": "workflow-command"
+        },
+        {
           "from": "CHR-018",
           "trigger": "Выбрать допустимую сторону Совы или Угря",
           "guard": "bindingKind=OWL_EYE|EEL_ARM and selected side eligible",
@@ -63724,10 +63772,22 @@
       ],
       "transitionsOut": [
         {
-          "to": "CHR-019",
+          "to": "CHR-018",
           "trigger": "Добавить симбионта в ручной состав",
-          "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid",
+          "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor",
           "kind": "workflow-command"
+        },
+        {
+          "to": "CHR-041",
+          "trigger": "Dispatch persisted manual Advisor branch",
+          "guard": "manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created",
+          "kind": "system-event"
+        },
+        {
+          "to": "CHR-019",
+          "trigger": "Dispatch persisted manual non-Advisor composition",
+          "guard": "manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created",
+          "kind": "system-event"
         },
         {
           "to": "CHR-017",
@@ -64289,7 +64349,7 @@
         {
           "from": "CHR-020",
           "trigger": "Dispatch persisted non-Advisor random composition",
-          "guard": "random sequence committed; advisorBranch=false; full species/binding/random provenance attached to composition",
+          "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition",
           "kind": "system-event"
         },
         {
@@ -64312,15 +64372,15 @@
         },
         {
           "from": "CHR-018",
-          "trigger": "Добавить симбионта в ручной состав",
-          "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid",
-          "kind": "workflow-command"
+          "trigger": "Dispatch persisted manual non-Advisor composition",
+          "guard": "manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created",
+          "kind": "system-event"
         },
         {
           "from": "CHR-041",
-          "trigger": "Подтвердить просмотр сохранённой карточки Советника",
-          "guard": "Advisor card and both I/W receipts persisted; acknowledgement only; no cancel/reroll",
-          "kind": "normative"
+          "trigger": "Подтвердить навыки Советника",
+          "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",
+          "kind": "workflow-command"
         },
         {
           "from": "CHR-042",
@@ -64501,7 +64561,7 @@
         "drawnSpeciesAndBindings[]",
         "duplicateRerollReceipts[]",
         "advisorBranch",
-        "randomStatus=NOT_STARTED|PENDING|COMMITTED",
+        "randomStatus=NOT_STARTED|PENDING|BINDING|COMMITTED",
         "wizardCheckpointId",
         "draftRevision",
         "commandId"
@@ -64516,6 +64576,8 @@
       ],
       "actions": {
         "visible": [
+          "Выбрать допустимую сторону Совы или Угря",
+          "Выбрать вид симбиотического чудовища",
           "Зафиксировать случайное определение симбионтов",
           "Вернуться к выбору ветви до показа результата"
         ],
@@ -64525,7 +64587,7 @@
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Разрешённые atlas workflow commands этой формы: UI-CMD-CHAR-CREATION-ROLL-COMMIT.",
           "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-          "Разрешённые видимые действия/CTA именно этой формы: Зафиксировать случайное определение симбионтов; Вернуться к выбору ветви до показа результата."
+          "Разрешённые видимые действия/CTA именно этой формы: Выбрать допустимую сторону Совы или Угря; Выбрать вид симбиотического чудовища; Зафиксировать случайное определение симбионтов; Вернуться к выбору ветви до показа результата."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -64644,9 +64706,129 @@
           {
             "label": "Зафиксировать случайное определение симбионтов",
             "targetFormId": "CHR-020",
-            "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT one persisted sequence; server dispatches CHR-041 for Advisor or CHR-019",
+            "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019",
             "kind": "workflow-command",
             "actionKey": "CHR-020::CTA::002",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [
+                "AQA-007",
+                "CORE-171",
+                "SYM-001"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Выбрать допустимую сторону Совы или Угря",
+            "targetFormId": "CHR-020",
+            "guard": "randomStatus=NOT_STARTED|PENDING|BINDING and bindingKind=OWL_EYE|EEL_ARM and selected side eligible",
+            "kind": "local-draft-command",
+            "actionKey": "CHR-020::CTA::003",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [
+                "AQA-007",
+                "CORE-171",
+                "SYM-001"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Выбрать вид симбиотического чудовища",
+            "targetFormId": "CHR-020",
+            "guard": "saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft",
+            "kind": "local-draft-command",
+            "actionKey": "CHR-020::CTA::004",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -64706,7 +64888,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -64765,8 +64947,9 @@
         "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода.",
         "NOT_STARTED": "One random sequence can be created.",
         "PENDING_INPUT": "Only the snapshot-matching roll/input is accepted.",
+        "BINDING": "Displayed rolls are immutable; exact side snapshot awaits binding-only commit before dispatch.",
         "COMMITTED": "Species, bindings, rerolls and seed/manual receipts are immutable.",
-        "ADVISOR_ACK_REQUIRED": "CHR-041 must be acknowledged before composition."
+        "ADVISOR_ACK_REQUIRED": "CHR-041 skills must be confirmed before composition."
       },
       "transitionsIn": [
         {
@@ -64784,21 +64967,33 @@
         {
           "from": "CHR-020",
           "trigger": "Зафиксировать случайное определение симбионтов",
-          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT one persisted sequence; server dispatches CHR-041 for Advisor or CHR-019",
+          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019",
           "kind": "workflow-command"
+        },
+        {
+          "from": "CHR-020",
+          "trigger": "Выбрать допустимую сторону Совы или Угря",
+          "guard": "randomStatus=NOT_STARTED|PENDING|BINDING and bindingKind=OWL_EYE|EEL_ARM and selected side eligible",
+          "kind": "local-draft-command"
+        },
+        {
+          "from": "CHR-020",
+          "trigger": "Выбрать вид симбиотического чудовища",
+          "guard": "saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft",
+          "kind": "local-draft-command"
         }
       ],
       "transitionsOut": [
         {
           "to": "CHR-041",
           "trigger": "Dispatch persisted Advisor branch",
-          "guard": "random sequence committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
+          "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
           "kind": "system-event"
         },
         {
           "to": "CHR-019",
           "trigger": "Dispatch persisted non-Advisor random composition",
-          "guard": "random sequence committed; advisorBranch=false; full species/binding/random provenance attached to composition",
+          "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition",
           "kind": "system-event"
         },
         {
@@ -64810,8 +65005,20 @@
         {
           "to": "CHR-020",
           "trigger": "Зафиксировать случайное определение симбионтов",
-          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT one persisted sequence; server dispatches CHR-041 for Advisor or CHR-019",
+          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019",
           "kind": "workflow-command"
+        },
+        {
+          "to": "CHR-020",
+          "trigger": "Выбрать допустимую сторону Совы или Угря",
+          "guard": "randomStatus=NOT_STARTED|PENDING|BINDING and bindingKind=OWL_EYE|EEL_ARM and selected side eligible",
+          "kind": "local-draft-command"
+        },
+        {
+          "to": "CHR-020",
+          "trigger": "Выбрать вид симбиотического чудовища",
+          "guard": "saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft",
+          "kind": "local-draft-command"
         }
       ],
       "references": {
@@ -64828,8 +65035,11 @@
         "effectTypeIds": [],
         "qnaIds": [
           "Q-CHAR-002",
+          "Q-CHAR-004",
           "Q-CHAR-007",
           "Q-CHAR-008",
+          "Q-CHAR-010",
+          "Q-CORE-054",
           "Q-SYM-003"
         ],
         "sourcePages": [
@@ -64921,33 +65131,38 @@
         "characterDraftId",
         "advisorInstanceDraftId",
         "advisorCard",
-        "iwRollReceiptIds[2]",
-        "advisorIPlus8",
-        "advisorWPlus8",
+        "iwRollRequestIds[2]",
+        "iwRollReceiptIds[2]OrNull",
+        "advisorIPlus8OrNull",
+        "advisorWPlus8OrNull",
         "advisorSlotsAndSkills",
         "trogrSuppressionState",
         "acknowledged",
         "wizardCheckpointId",
-        "draftRevision"
+        "draftRevision",
+        "commandId"
       ],
       "components": [
         "Persisted Advisor card",
         "Two immutable I/W receipts",
         "Slots/skills",
         "Trogr suppression",
-        "Acknowledge only",
+        "Skills checkpoint",
         "No reroll/cancel"
       ],
       "actions": {
         "visible": [
-          "Подтвердить просмотр сохранённой карточки Советника"
+          "Зафиксировать броски I и W Советника",
+          "Добавить или удалить допустимый навык Советника",
+          "Подтвердить навыки Советника"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-          "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Подтвердить просмотр сохранённой карточки Советника."
+          "Разрешённые atlas workflow commands этой формы: UI-CMD-CHAR-CREATION-ROLL-COMMIT, UI-CMD-CHAR-WIZARD-CHECKPOINT.",
+          "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
+          "Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -64979,7 +65194,10 @@
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
             "ruleIds": [],
             "operationIds": [],
-            "workflowCommandIds": [],
+            "workflowCommandIds": [
+              "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+              "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+            ],
             "abilityIds": []
           },
           "recomputeTriggers": [
@@ -64998,10 +65216,67 @@
         },
         "ctaAvailabilityByAction": [
           {
-            "label": "Подтвердить просмотр сохранённой карточки Советника",
+            "label": "Зафиксировать броски I и W Советника",
+            "targetFormId": "CHR-041",
+            "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP",
+            "kind": "workflow-command",
+            "actionKey": "CHR-041::CTA::003",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+                "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Подтвердить навыки Советника",
             "targetFormId": "CHR-019",
-            "guard": "Advisor card and both I/W receipts persisted; acknowledgement only; no cancel/reroll",
-            "kind": "normative",
+            "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",
+            "kind": "workflow-command",
             "actionKey": "CHR-041::CTA::001",
             "availabilityInputs": [
               "actorId",
@@ -65023,7 +65298,67 @@
               "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
               "ruleIds": [],
               "operationIds": [],
-              "workflowCommandIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+                "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Добавить или удалить допустимый навык Советника",
+            "targetFormId": "CHR-041",
+            "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
+            "kind": "local-draft-command",
+            "actionKey": "CHR-041::CTA::002",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+                "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+              ],
               "abilityIds": []
             },
             "recomputeTriggers": [
@@ -65053,7 +65388,94 @@
           }
         ],
         "operationAvailability": [],
-        "workflowCommandAvailability": []
+        "workflowCommandAvailability": [
+          {
+            "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+                "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
+          },
+          {
+            "commandId": "UI-CMD-CHAR-WIZARD-CHECKPOINT",
+            "guard": "Player owns the characterDraftId; stage-specific fields validate; draftRevision and wizardCheckpointId are current; every referenced random/decision receipt belongs to this draft and branch; a locked result is never replaceable.",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+                "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
+          }
+        ]
       },
       "states": {
         "loading": "Данные ещё не готовы; mutation CTA отсутствуют.",
@@ -65066,14 +65488,21 @@
         "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
         "reconnecting": "Восстанавливаются server-authoritative seat, projection и pending command.",
         "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода.",
-        "CARD_REQUIRED": "Persisted Advisor data is shown; no cancel/reroll exists.",
-        "ACKNOWLEDGED": "The same Advisor draft continues to CHR-019."
+        "IW_ROLLS_REQUIRED": "Two addressed I/W requests are pending; commit them in I,W order without replacement or reroll.",
+        "CARD_REQUIRED": "Persisted Advisor data and both I/W receipts are shown; no cancel/reroll exists.",
+        "ACKNOWLEDGED": "The same Advisor draft with confirmed skills continues to CHR-019."
       },
       "transitionsIn": [
         {
+          "from": "CHR-018",
+          "trigger": "Dispatch persisted manual Advisor branch",
+          "guard": "manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created",
+          "kind": "system-event"
+        },
+        {
           "from": "CHR-020",
           "trigger": "Dispatch persisted Advisor branch",
-          "guard": "random sequence committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
+          "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
           "kind": "system-event"
         },
         {
@@ -65081,20 +65510,47 @@
           "trigger": "Dispatch restored character checkpoint",
           "guard": "otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; UI-CMD-LOCAL-CHECKPOINT-RESTORE receipt committed; checkpointEntityKind=CHARACTER_DRAFT; resumeFormId(server-signed)=CHR-041; draft/branch-cache hashes match; no client history/URL route and no reroll",
           "kind": "system-event"
+        },
+        {
+          "from": "CHR-041",
+          "trigger": "Зафиксировать броски I и W Советника",
+          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP",
+          "kind": "workflow-command"
+        },
+        {
+          "from": "CHR-041",
+          "trigger": "Добавить или удалить допустимый навык Советника",
+          "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
+          "kind": "local-draft-command"
         }
       ],
       "transitionsOut": [
         {
+          "to": "CHR-041",
+          "trigger": "Зафиксировать броски I и W Советника",
+          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP",
+          "kind": "workflow-command"
+        },
+        {
           "to": "CHR-019",
-          "trigger": "Подтвердить просмотр сохранённой карточки Советника",
-          "guard": "Advisor card and both I/W receipts persisted; acknowledgement only; no cancel/reroll",
-          "kind": "normative"
+          "trigger": "Подтвердить навыки Советника",
+          "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "CHR-041",
+          "trigger": "Добавить или удалить допустимый навык Советника",
+          "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
+          "kind": "local-draft-command"
         }
       ],
       "references": {
         "ruleIds": [],
         "operationIds": [],
-        "workflowCommandIds": [],
+        "workflowCommandIds": [
+          "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+          "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+        ],
         "abilityIds": [],
         "effectTypeIds": [],
         "qnaIds": [
@@ -65869,7 +66325,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -66484,7 +66940,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -67906,7 +68362,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -68503,7 +68959,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-            "guard": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+            "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -220384,14 +220840,14 @@
       "from": "CHR-020",
       "to": "CHR-041",
       "trigger": "Dispatch persisted Advisor branch",
-      "guard": "random sequence committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
+      "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
       "kind": "system-event"
     },
     {
       "from": "CHR-020",
       "to": "CHR-019",
       "trigger": "Dispatch persisted non-Advisor random composition",
-      "guard": "random sequence committed; advisorBranch=false; full species/binding/random provenance attached to composition",
+      "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition",
       "kind": "system-event"
     },
     {
@@ -224988,6 +225444,13 @@
     },
     {
       "from": "CHR-013",
+      "to": "CHR-014",
+      "trigger": "Адресуемый route либо server/system event текущей роли",
+      "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog",
+      "kind": "role-state-reachability"
+    },
+    {
+      "from": "CHR-013",
       "to": "CHR-015",
       "trigger": "Перейти к выбору навыков",
       "guard": "skill-stage revision current",
@@ -225037,6 +225500,13 @@
     },
     {
       "from": "CHR-017",
+      "to": "CHR-018",
+      "trigger": "Адресуемый route либо server/system event текущей роли",
+      "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition",
+      "kind": "role-state-reachability"
+    },
+    {
+      "from": "CHR-017",
       "to": "CHR-019",
       "trigger": "Открыть ручной состав",
       "guard": "symbiontAcquisitionMode=MANUAL; composition draft exists",
@@ -225072,10 +225542,24 @@
     },
     {
       "from": "CHR-018",
-      "to": "CHR-019",
+      "to": "CHR-018",
       "trigger": "Добавить симбионта в ручной состав",
-      "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid",
+      "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor",
       "kind": "workflow-command"
+    },
+    {
+      "from": "CHR-018",
+      "to": "CHR-041",
+      "trigger": "Dispatch persisted manual Advisor branch",
+      "guard": "manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created",
+      "kind": "system-event"
+    },
+    {
+      "from": "CHR-018",
+      "to": "CHR-019",
+      "trigger": "Dispatch persisted manual non-Advisor composition",
+      "guard": "manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created",
+      "kind": "system-event"
     },
     {
       "from": "CHR-018",
@@ -225122,9 +225606,9 @@
     {
       "from": "CHR-041",
       "to": "CHR-019",
-      "trigger": "Подтвердить просмотр сохранённой карточки Советника",
-      "guard": "Advisor card and both I/W receipts persisted; acknowledgement only; no cancel/reroll",
-      "kind": "normative"
+      "trigger": "Подтвердить навыки Советника",
+      "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",
+      "kind": "workflow-command"
     },
     {
       "from": "CHR-042",
@@ -227048,8 +227532,36 @@
       "from": "CHR-020",
       "to": "CHR-020",
       "trigger": "Зафиксировать случайное определение симбионтов",
-      "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT one persisted sequence; server dispatches CHR-041 for Advisor or CHR-019",
+      "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019",
       "kind": "workflow-command"
+    },
+    {
+      "from": "CHR-020",
+      "to": "CHR-020",
+      "trigger": "Выбрать допустимую сторону Совы или Угря",
+      "guard": "randomStatus=NOT_STARTED|PENDING|BINDING and bindingKind=OWL_EYE|EEL_ARM and selected side eligible",
+      "kind": "local-draft-command"
+    },
+    {
+      "from": "CHR-020",
+      "to": "CHR-020",
+      "trigger": "Выбрать вид симбиотического чудовища",
+      "guard": "saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft",
+      "kind": "local-draft-command"
+    },
+    {
+      "from": "CHR-041",
+      "to": "CHR-041",
+      "trigger": "Зафиксировать броски I и W Советника",
+      "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "CHR-041",
+      "to": "CHR-041",
+      "trigger": "Добавить или удалить допустимый навык Советника",
+      "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
+      "kind": "local-draft-command"
     },
     {
       "from": "CHR-021",
@@ -228270,7 +228782,7 @@
     {
       "qaId": "QA-FORM-CHR-020",
       "scope": "CHR-020",
-      "scenario": "Проверить буквальное назначение CHR-020: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, raceChoice=UNITED|FREE, symbiontAcquisitionMode=RANDOM, randomSequenceId, pendingRollRequestIdOrNull, diceInputModeSnapshot, seedOrManualFaces, drawnSpeciesAndBindings[], duplicateRerollReceipts[], advisorBranch, randomStatus=NOT_STARTED|PENDING|COMMITTED, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать случайное определение симбионтов, Вернуться к выбору ветви до показа результата.",
+      "scenario": "Проверить буквальное назначение CHR-020: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, raceChoice=UNITED|FREE, symbiontAcquisitionMode=RANDOM, randomSequenceId, pendingRollRequestIdOrNull, diceInputModeSnapshot, seedOrManualFaces, drawnSpeciesAndBindings[], duplicateRerollReceipts[], advisorBranch, randomStatus=NOT_STARTED|PENDING|BINDING|COMMITTED, wizardCheckpointId, draftRevision, commandId. CTA: Выбрать допустимую сторону Совы или Угря, Выбрать вид симбиотического чудовища, Зафиксировать случайное определение симбионтов, Вернуться к выбору ветви до показа результата.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -228282,7 +228794,7 @@
     {
       "qaId": "QA-FORM-CHR-041",
       "scope": "CHR-041",
-      "scenario": "Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollReceiptIds[2], advisorIPlus8, advisorWPlus8, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision. CTA: Подтвердить просмотр сохранённой карточки Советника.",
+      "scenario": "Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -231487,7 +231999,7 @@
       "qaId": "QA-REQ-002",
       "scope": "REQ-002",
       "scenario": "Требование «Полный исполнимый player character wizard». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-CHAR-CREATE через формы CHR-001, CHR-010, CHR-016, CHR-036, CHR-002, CHR-003, CHR-004, CHR-005, CHR-006, CHR-007, CHR-008, CHR-028, CHR-009, CHR-011, CHR-012, CHR-013, CHR-014, CHR-015, CHR-017, CHR-018, CHR-019, CHR-020, CHR-041, CHR-042, CHR-029, CHR-030, CHR-021, CHR-022, CHR-023, CHR-024, CHR-031, CHR-038, CHR-037, CHR-032, CHR-025, CHR-026, CHR-039, CHR-040; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CHAR-CREATION-ROLL-COMMIT, UI-CMD-CHAR-CREATION-SET-DECIDE, UI-CMD-CHAR-LOCAL-METADATA-PATCH, UI-CMD-CHAR-WIZARD-CHECKPOINT, UI-CMD-LOCAL-CHECKPOINT-RESTORE, UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CHR-001, CHR-010, CHR-016, CHR-036, CHR-002, CHR-003, CHR-004, CHR-005, CHR-006, CHR-007, CHR-008, CHR-028, CHR-009, CHR-011, CHR-012, CHR-013, CHR-014, CHR-015, CHR-017, CHR-018, CHR-019, CHR-020, CHR-041, CHR-042, CHR-029, CHR-030, CHR-021, CHR-022, CHR-023, CHR-024, CHR-031, CHR-038, CHR-037, CHR-032, CHR-025, CHR-026, CHR-039, CHR-040 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
-      "expected": "Terminal states/deltas: {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-001\": [\"IDENTITY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-002\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-003\": [\"REQUEST_READY\", \"RESULT_COMMITTED\", \"CRITICALS_PENDING\", \"DECISION_READY\"], \"CHR-004\": [\"CONFIRMATION_PENDING\", \"CONFIRMATION_COMMITTED\", \"CHAIN_COMPLETE\"], \"CHR-005\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-006\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"SECOND_ATTEMPT_WARNING\"], \"CHR-007\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-008\": [\"ATTEMPT_1_TO_4_PENDING\", \"ATTEMPT_5_MANDATORY\", \"SET_ACCEPTED\"], \"CHR-009\": [\"ASSIGNMENT_INVALID\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-010\": [\"UNSELECTED\", \"SELECTED_UNLOCKED\", \"CHECKPOINTED\"], \"CHR-011\": [\"UNSELECTED\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-012\": [\"CALCULATING\", \"READY\", \"CHECKPOINTED\"], \"CHR-013\": [\"CATALOG_READY\", \"CARD_SELECTED\", \"SELECTION_READY\"], \"CHR-014\": [\"INELIGIBLE_READ_ONLY\", \"ELIGIBLE\", \"ADDED\"], \"CHR-015\": [\"SLOTS_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-016\": [\"NOT_APPLICABLE\", \"UNSELECTED\", \"CHECKPOINTED\"], \"CHR-017\": [\"CATALOG_READY\", \"MANUAL_DRAFT\", \"RANDOM_READY\", \"PURE_NO_SYMBIONT\"], \"CHR-018\": [\"READ_ONLY_INELIGIBLE\", \"BINDING_REQUIRED\", \"READY_TO_ADD\", \"ADDED_TO_DRAFT\"], \"CHR-019\": [\"COMPOSITION_INVALID\", \"INTERACTIONS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-020\": [\"NOT_STARTED\", \"PENDING_INPUT\", \"COMMITTED\", \"ADVISOR_ACK_REQUIRED\"], \"CHR-021\": [\"BUNDLE_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-022\": [\"WEAPON_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_BRANCH\"], \"CHR-023\": [\"FORMULA_INCOMPLETE\", \"VALID\", \"INVALID\", \"CHECKPOINTED\"], \"CHR-024\": [\"READ_ONLY\", \"ACKNOWLEDGED\"], \"CHR-025\": [\"BLOCKED_INVALID\", \"READY_TO_COMMIT\", \"COMMITTED\", \"IDEMPOTENT_REPLAY\"], \"CHR-026\": [\"READY\", \"CORRUPT\", \"RESTORED\"], \"CHR-028\": [\"WARNING\", \"CANCELLED\", \"COMMITTED\"], \"CHR-029\": [\"PREVIEW\", \"RESTORED\", \"CANCELLED\"], \"CHR-030\": [\"BLOCKED\", \"RETURN_READY\"], \"CHR-031\": [\"INVALID\", \"RETURN_READY\"], \"CHR-032\": [\"PROPERTY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-036\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-037\": [\"POSITIONS_INCOMPLETE\", \"ROLLS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-038\": [\"ROLL_PENDING\", \"RECOMMENDATION_COMMITTED\", \"CHECKPOINTED\"], \"CHR-039\": [\"READ_ONLY\", \"INTEGRITY_FAILURE\"], \"CHR-040\": [\"FINAL_READ_ONLY\", \"METADATA_EDITING\", \"METADATA_VERSIONED\"], \"CHR-041\": [\"CARD_REQUIRED\", \"ACKNOWLEDGED\"], \"CHR-042\": [\"PREVIEW\", \"CONFIRMED\", \"LOCKED_AFTER_RESULT\"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "expected": "Terminal states/deltas: {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-001\": [\"IDENTITY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-002\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-003\": [\"REQUEST_READY\", \"RESULT_COMMITTED\", \"CRITICALS_PENDING\", \"DECISION_READY\"], \"CHR-004\": [\"CONFIRMATION_PENDING\", \"CONFIRMATION_COMMITTED\", \"CHAIN_COMPLETE\"], \"CHR-005\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-006\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"SECOND_ATTEMPT_WARNING\"], \"CHR-007\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-008\": [\"ATTEMPT_1_TO_4_PENDING\", \"ATTEMPT_5_MANDATORY\", \"SET_ACCEPTED\"], \"CHR-009\": [\"ASSIGNMENT_INVALID\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-010\": [\"UNSELECTED\", \"SELECTED_UNLOCKED\", \"CHECKPOINTED\"], \"CHR-011\": [\"UNSELECTED\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-012\": [\"CALCULATING\", \"READY\", \"CHECKPOINTED\"], \"CHR-013\": [\"CATALOG_READY\", \"CARD_SELECTED\", \"SELECTION_READY\"], \"CHR-014\": [\"INELIGIBLE_READ_ONLY\", \"ELIGIBLE\", \"ADDED\"], \"CHR-015\": [\"SLOTS_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-016\": [\"NOT_APPLICABLE\", \"UNSELECTED\", \"CHECKPOINTED\"], \"CHR-017\": [\"CATALOG_READY\", \"MANUAL_DRAFT\", \"RANDOM_READY\", \"PURE_NO_SYMBIONT\"], \"CHR-018\": [\"READ_ONLY_INELIGIBLE\", \"BINDING_REQUIRED\", \"READY_TO_ADD\", \"ADDED_TO_DRAFT\"], \"CHR-019\": [\"COMPOSITION_INVALID\", \"INTERACTIONS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-020\": [\"NOT_STARTED\", \"PENDING_INPUT\", \"BINDING\", \"COMMITTED\", \"ADVISOR_ACK_REQUIRED\"], \"CHR-021\": [\"BUNDLE_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-022\": [\"WEAPON_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_BRANCH\"], \"CHR-023\": [\"FORMULA_INCOMPLETE\", \"VALID\", \"INVALID\", \"CHECKPOINTED\"], \"CHR-024\": [\"READ_ONLY\", \"ACKNOWLEDGED\"], \"CHR-025\": [\"BLOCKED_INVALID\", \"READY_TO_COMMIT\", \"COMMITTED\", \"IDEMPOTENT_REPLAY\"], \"CHR-026\": [\"READY\", \"CORRUPT\", \"RESTORED\"], \"CHR-028\": [\"WARNING\", \"CANCELLED\", \"COMMITTED\"], \"CHR-029\": [\"PREVIEW\", \"RESTORED\", \"CANCELLED\"], \"CHR-030\": [\"BLOCKED\", \"RETURN_READY\"], \"CHR-031\": [\"INVALID\", \"RETURN_READY\"], \"CHR-032\": [\"PROPERTY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-036\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-037\": [\"POSITIONS_INCOMPLETE\", \"ROLLS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-038\": [\"ROLL_PENDING\", \"RECOMMENDATION_COMMITTED\", \"CHECKPOINTED\"], \"CHR-039\": [\"READ_ONLY\", \"INTEGRITY_FAILURE\"], \"CHR-040\": [\"FINAL_READ_ONLY\", \"METADATA_EDITING\", \"METADATA_VERSIONED\"], \"CHR-041\": [\"IW_ROLLS_REQUIRED\", \"CARD_REQUIRED\", \"ACKNOWLEDGED\"], \"CHR-042\": [\"PREVIEW\", \"CONFIRMED\", \"LOCKED_AFTER_RESULT\"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
     },
     {
       "qaId": "QA-REQ-003",
@@ -231853,7 +232365,7 @@
       "qaId": "QA-REQ-063",
       "scope": "REQ-063",
       "scenario": "Требование «Самостоятельная обязательная ветвь: Новый герой после смерти и предупреждение об окне возвращения». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-POSTDEATH-NEW-HERO через формы CMB-056, SYS-027, CHR-034, APP-004, CHR-001, CHR-010, CHR-016, CHR-036, CHR-002, CHR-003, CHR-004, CHR-005, CHR-006, CHR-007, CHR-008, CHR-028, CHR-009, CHR-011, CHR-012, CHR-013, CHR-014, CHR-015, CHR-017, CHR-018, CHR-019, CHR-020, CHR-041, CHR-042, CHR-029, CHR-030, CHR-021, CHR-022, CHR-023, CHR-024, CHR-031, CHR-038, CHR-037, CHR-032, CHR-025, CHR-026, CHR-039, CHR-040; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CHAR-CREATION-ROLL-COMMIT, UI-CMD-CHAR-CREATION-SET-DECIDE, UI-CMD-CHAR-LOCAL-METADATA-PATCH, UI-CMD-CHAR-WIZARD-CHECKPOINT, UI-CMD-LOCAL-CHECKPOINT-RESTORE, UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT, UI-CMD-POSTDEATH-RETURN-WINDOW-DECIDE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMB-056, SYS-027, CHR-034, APP-004, CHR-001, CHR-010, CHR-016, CHR-036, CHR-002, CHR-003, CHR-004, CHR-005, CHR-006, CHR-007, CHR-008, CHR-028, CHR-009, CHR-011, CHR-012, CHR-013, CHR-014, CHR-015, CHR-017, CHR-018, CHR-019, CHR-020, CHR-041, CHR-042, CHR-029, CHR-030, CHR-021, CHR-022, CHR-023, CHR-024, CHR-031, CHR-038, CHR-037, CHR-032, CHR-025, CHR-026, CHR-039, CHR-040 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
-      "expected": "Terminal states/deltas: {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-001\": [\"IDENTITY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-002\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-003\": [\"REQUEST_READY\", \"RESULT_COMMITTED\", \"CRITICALS_PENDING\", \"DECISION_READY\"], \"CHR-004\": [\"CONFIRMATION_PENDING\", \"CONFIRMATION_COMMITTED\", \"CHAIN_COMPLETE\"], \"CHR-005\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-006\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"SECOND_ATTEMPT_WARNING\"], \"CHR-007\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-008\": [\"ATTEMPT_1_TO_4_PENDING\", \"ATTEMPT_5_MANDATORY\", \"SET_ACCEPTED\"], \"CHR-009\": [\"ASSIGNMENT_INVALID\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-010\": [\"UNSELECTED\", \"SELECTED_UNLOCKED\", \"CHECKPOINTED\"], \"CHR-011\": [\"UNSELECTED\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-012\": [\"CALCULATING\", \"READY\", \"CHECKPOINTED\"], \"CHR-013\": [\"CATALOG_READY\", \"CARD_SELECTED\", \"SELECTION_READY\"], \"CHR-014\": [\"INELIGIBLE_READ_ONLY\", \"ELIGIBLE\", \"ADDED\"], \"CHR-015\": [\"SLOTS_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-016\": [\"NOT_APPLICABLE\", \"UNSELECTED\", \"CHECKPOINTED\"], \"CHR-017\": [\"CATALOG_READY\", \"MANUAL_DRAFT\", \"RANDOM_READY\", \"PURE_NO_SYMBIONT\"], \"CHR-018\": [\"READ_ONLY_INELIGIBLE\", \"BINDING_REQUIRED\", \"READY_TO_ADD\", \"ADDED_TO_DRAFT\"], \"CHR-019\": [\"COMPOSITION_INVALID\", \"INTERACTIONS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-020\": [\"NOT_STARTED\", \"PENDING_INPUT\", \"COMMITTED\", \"ADVISOR_ACK_REQUIRED\"], \"CHR-021\": [\"BUNDLE_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-022\": [\"WEAPON_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_BRANCH\"], \"CHR-023\": [\"FORMULA_INCOMPLETE\", \"VALID\", \"INVALID\", \"CHECKPOINTED\"], \"CHR-024\": [\"READ_ONLY\", \"ACKNOWLEDGED\"], \"CHR-025\": [\"BLOCKED_INVALID\", \"READY_TO_COMMIT\", \"COMMITTED\", \"IDEMPOTENT_REPLAY\"], \"CHR-026\": [\"READY\", \"CORRUPT\", \"RESTORED\"], \"CHR-028\": [\"WARNING\", \"CANCELLED\", \"COMMITTED\"], \"CHR-029\": [\"PREVIEW\", \"RESTORED\", \"CANCELLED\"], \"CHR-030\": [\"BLOCKED\", \"RETURN_READY\"], \"CHR-031\": [\"INVALID\", \"RETURN_READY\"], \"CHR-032\": [\"PROPERTY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-036\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-037\": [\"POSITIONS_INCOMPLETE\", \"ROLLS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-038\": [\"ROLL_PENDING\", \"RECOMMENDATION_COMMITTED\", \"CHECKPOINTED\"], \"CHR-039\": [\"READ_ONLY\", \"INTEGRITY_FAILURE\"], \"CHR-040\": [\"FINAL_READ_ONLY\", \"METADATA_EDITING\", \"METADATA_VERSIONED\"], \"CHR-041\": [\"CARD_REQUIRED\", \"ACKNOWLEDGED\"], \"CHR-042\": [\"PREVIEW\", \"CONFIRMED\", \"LOCKED_AFTER_RESULT\"], \"SYS-027\": [\"hidden\", \"visible\"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "expected": "Terminal states/deltas: {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-001\": [\"IDENTITY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-002\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-003\": [\"REQUEST_READY\", \"RESULT_COMMITTED\", \"CRITICALS_PENDING\", \"DECISION_READY\"], \"CHR-004\": [\"CONFIRMATION_PENDING\", \"CONFIRMATION_COMMITTED\", \"CHAIN_COMPLETE\"], \"CHR-005\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-006\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"SECOND_ATTEMPT_WARNING\"], \"CHR-007\": [\"DECISION_PENDING\", \"SET_ACCEPTED\", \"POINT_BUY_WARNING\"], \"CHR-008\": [\"ATTEMPT_1_TO_4_PENDING\", \"ATTEMPT_5_MANDATORY\", \"SET_ACCEPTED\"], \"CHR-009\": [\"ASSIGNMENT_INVALID\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-010\": [\"UNSELECTED\", \"SELECTED_UNLOCKED\", \"CHECKPOINTED\"], \"CHR-011\": [\"UNSELECTED\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-012\": [\"CALCULATING\", \"READY\", \"CHECKPOINTED\"], \"CHR-013\": [\"CATALOG_READY\", \"CARD_SELECTED\", \"SELECTION_READY\"], \"CHR-014\": [\"INELIGIBLE_READ_ONLY\", \"ELIGIBLE\", \"ADDED\"], \"CHR-015\": [\"SLOTS_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-016\": [\"NOT_APPLICABLE\", \"UNSELECTED\", \"CHECKPOINTED\"], \"CHR-017\": [\"CATALOG_READY\", \"MANUAL_DRAFT\", \"RANDOM_READY\", \"PURE_NO_SYMBIONT\"], \"CHR-018\": [\"READ_ONLY_INELIGIBLE\", \"BINDING_REQUIRED\", \"READY_TO_ADD\", \"ADDED_TO_DRAFT\"], \"CHR-019\": [\"COMPOSITION_INVALID\", \"INTERACTIONS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-020\": [\"NOT_STARTED\", \"PENDING_INPUT\", \"BINDING\", \"COMMITTED\", \"ADVISOR_ACK_REQUIRED\"], \"CHR-021\": [\"BUNDLE_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-022\": [\"WEAPON_INCOMPLETE\", \"QUALITY_PENDING\", \"READY_TO_BRANCH\"], \"CHR-023\": [\"FORMULA_INCOMPLETE\", \"VALID\", \"INVALID\", \"CHECKPOINTED\"], \"CHR-024\": [\"READ_ONLY\", \"ACKNOWLEDGED\"], \"CHR-025\": [\"BLOCKED_INVALID\", \"READY_TO_COMMIT\", \"COMMITTED\", \"IDEMPOTENT_REPLAY\"], \"CHR-026\": [\"READY\", \"CORRUPT\", \"RESTORED\"], \"CHR-028\": [\"WARNING\", \"CANCELLED\", \"COMMITTED\"], \"CHR-029\": [\"PREVIEW\", \"RESTORED\", \"CANCELLED\"], \"CHR-030\": [\"BLOCKED\", \"RETURN_READY\"], \"CHR-031\": [\"INVALID\", \"RETURN_READY\"], \"CHR-032\": [\"PROPERTY_INCOMPLETE\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-036\": [\"UNSELECTED\", \"CHECKPOINTED\", \"LOCKED_AFTER_RESULT\"], \"CHR-037\": [\"POSITIONS_INCOMPLETE\", \"ROLLS_PENDING\", \"READY_TO_CHECKPOINT\", \"CHECKPOINTED\"], \"CHR-038\": [\"ROLL_PENDING\", \"RECOMMENDATION_COMMITTED\", \"CHECKPOINTED\"], \"CHR-039\": [\"READ_ONLY\", \"INTEGRITY_FAILURE\"], \"CHR-040\": [\"FINAL_READ_ONLY\", \"METADATA_EDITING\", \"METADATA_VERSIONED\"], \"CHR-041\": [\"IW_ROLLS_REQUIRED\", \"CARD_REQUIRED\", \"ACKNOWLEDGED\"], \"CHR-042\": [\"PREVIEW\", \"CONFIRMED\", \"LOCKED_AFTER_RESULT\"], \"SYS-027\": [\"hidden\", \"visible\"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
     },
     {
       "qaId": "QA-REQ-064",
@@ -234156,7 +234668,7 @@
     {
       "qaId": "QA-RULE-AQA-004",
       "scope": "AQA-004",
-      "scenario": "Проверить rule handler и проекцию «Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?» через CHR-010, CHR-011, CHR-017, CHR-029.",
+      "scenario": "Проверить rule handler и проекцию «Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?» через CHR-010, CHR-011, CHR-017, CHR-020, CHR-029.",
       "expected": "Rule handler выполняется ровно один раз; command существует только при commandExposed=true и актуальном action envelope."
     },
     {
@@ -237372,14 +237884,14 @@
     {
       "qaId": "QA-WORKFLOW-UI-CMD-CHAR-WIZARD-CHECKPOINT",
       "scope": "UI-CMD-CHAR-WIZARD-CHECKPOINT",
-      "scenario": "Выполнить UI-CMD-CHAR-WIZARD-CHECKPOINT через CHR-001, CHR-009, CHR-012, CHR-014, CHR-015, CHR-018, CHR-019, CHR-021, CHR-022, CHR-024, CHR-025, CHR-032, CHR-037, CHR-038, затем replay, stale, reconnect и противоположный повторный ответ.",
+      "scenario": "Выполнить UI-CMD-CHAR-WIZARD-CHECKPOINT через CHR-001, CHR-009, CHR-012, CHR-014, CHR-015, CHR-018, CHR-041, CHR-019, CHR-021, CHR-022, CHR-024, CHR-025, CHR-032, CHR-037, CHR-038, затем replay, stale, reconnect и противоположный повторный ответ.",
       "expected": "Persist one whole stage snapshot, the next signed stage, branch-cache hash and receipt together; never create a final character, runtime authority or partial stage; previously displayed random results remain byte-stable. Same command returns the same checkpoint; refresh restores the last complete stage and immutable branch receipts, while an incomplete tail is ignored."
     },
     {
       "qaId": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT",
       "scope": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-      "scenario": "Выполнить UI-CMD-CHAR-CREATION-ROLL-COMMIT через CHR-003, CHR-004, CHR-020, CHR-021, CHR-022, CHR-037, CHR-038, затем replay, stale, reconnect и противоположный повторный ответ.",
-      "expected": "Persist exactly one face/result, receipt and resulting next-state pointer; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay. Same request/command returns the stored result; a changed payload rejects and no replacement request is created."
+      "scenario": "Выполнить UI-CMD-CHAR-CREATION-ROLL-COMMIT через CHR-003, CHR-004, CHR-020, CHR-041, CHR-021, CHR-022, CHR-037, CHR-038, затем replay, stale, reconnect и противоположный повторный ответ.",
+      "expected": "Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay. Same request/command returns the stored result; a changed payload rejects and no replacement request is created."
     },
     {
       "qaId": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-SET-DECIDE",
@@ -237834,7 +238346,7 @@
     {
       "qaId": "QA-QNA-Q-CORE-054-ROW-054",
       "scope": "Q-CORE-054#row-54",
-      "scenario": "Подтвердить материализацию строки Q&A в CHR-016, CHR-017, CHR-019: Нужно ли при ручном выборе заполнить все слоты и доступно ли чудовище?",
+      "scenario": "Подтвердить материализацию строки Q&A в CHR-016, CHR-017, CHR-020, CHR-019: Нужно ли при ручном выборе заполнить все слоты и доступно ли чудовище?",
       "expected": "Поздний ответ не накладывается повторно поверх senior registry; UI/handler соответствует уже собранному правилу."
     },
     {
@@ -239310,7 +239822,7 @@
     {
       "qaId": "QA-QNA-Q-CHAR-004-ROW-300",
       "scope": "Q-CHAR-004#row-300",
-      "scenario": "Подтвердить материализацию строки Q&A в CHR-010, CHR-011, CHR-017, CHR-029: Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?",
+      "scenario": "Подтвердить материализацию строки Q&A в CHR-010, CHR-011, CHR-017, CHR-020, CHR-029: Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?",
       "expected": "Поздний ответ не накладывается повторно поверх senior registry; UI/handler соответствует уже собранному правилу."
     },
     {
@@ -239346,7 +239858,7 @@
     {
       "qaId": "QA-QNA-Q-CHAR-010-ROW-306",
       "scope": "Q-CHAR-010#row-306",
-      "scenario": "Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?",
+      "scenario": "Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?",
       "expected": "Поздний ответ не накладывается повторно поверх senior registry; UI/handler соответствует уже собранному правилу."
     },
     {
@@ -247807,6 +248319,7 @@
           "CHR-010",
           "CHR-011",
           "CHR-017",
+          "CHR-020",
           "CHR-029"
         ],
         "handlerId": "RULE_ENGINE::AQA-004",
@@ -258121,6 +258634,7 @@
           "CHR-014",
           "CHR-015",
           "CHR-018",
+          "CHR-041",
           "CHR-019",
           "CHR-021",
           "CHR-022",
@@ -258142,13 +258656,14 @@
           "CHR-003",
           "CHR-004",
           "CHR-020",
+          "CHR-041",
           "CHR-021",
           "CHR-022",
           "CHR-037",
           "CHR-038"
         ],
-        "guards": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
-        "atomicity": "Persist exactly one face/result, receipt and resulting next-state pointer; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.",
+        "guards": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+        "atomicity": "Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.",
         "reconnect": "Same request/command returns the stored result; a changed payload rejects and no replacement request is created.",
         "qa": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT"
       },
@@ -259394,6 +259909,7 @@
         "formIds": [
           "CHR-016",
           "CHR-017",
+          "CHR-020",
           "CHR-019"
         ],
         "mappingBasis": "SENIOR_RULE_DERIVATION",
@@ -264146,6 +264662,7 @@
           "CHR-010",
           "CHR-011",
           "CHR-017",
+          "CHR-020",
           "CHR-029"
         ],
         "mappingBasis": "SENIOR_RULE_DERIVATION",
@@ -264257,6 +264774,7 @@
         "formIds": [
           "CHR-001",
           "CHR-018",
+          "CHR-020",
           "CHR-025",
           "CHR-033",
           "NET-019",
@@ -264269,7 +264787,7 @@
         "question": "Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?",
         "answer": "До финальной проверки масса обязательна как положительное число килограммов с точностью 0,1. Приложение показывает справочные средние значения расы из рулбука, но не вводит выдуманных автоматических минимумов/максимумов; значение становится pendingMasterApproval. Персонажа с неподтверждённой массой можно отправить в запрос и добавить в лобби, но он не может стать активным, получить статус «Готов», войти в сцену или участвовать в запуске сессии до подтверждения массы мастером. Игровые расы получают стандартную гуманоидную анатомию и зоны попадания из V7; произвольная анатомия доступна только отдельному редактору существа у мастера (для НПС так же доступна только гуманоидная анатомия). Произвольная анатомия задается чек-боксом, если он заполнен, атака в любую часть существа считается атакой по корпусу. Никаких других особенностей произвольной анатомии приложение не учитывает. При выборе Совы игрок выбирает правый или левый глаз, по умолчанию правый; при выборе Угря — правую или левую руку, по умолчанию правую. Клещ всегда привязан к правой руке, Паук — к обоим запястьям, Богомол — к обоим предплечьям. Эти привязки сохраняются в листе и используются при потере/отключении соответствующей части тела.",
         "qa": "QA-QNA-Q-CHAR-010-ROW-306",
-        "laterAuthorOverride": "Later author decision 2026-08-18 applies only to local character creation: CHR-001 requires sex=MALE|FEMALE, mutable until the IDENTITY checkpoint and immutable after it, while its massKg input remains any positive value at the existing exact 0.1kg step. CHR-025 validates inclusive creation massKg bounds by race/sex: PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg; massApprovalStatus=PENDING_GM remains after range validation. These bounds are not reference race averages. For CHR-025 this override replaces only the conflicting no-minimum/maximum statement; the original approval and anatomy semantics remain effective. The original answer remains effective for CHR-018, CHR-033, NET-019, NET-021, NPC-011 and ENM-013."
+        "laterAuthorOverride": "Later author decision 2026-08-18 applies only to local character creation: CHR-001 requires sex=MALE|FEMALE, mutable until the IDENTITY checkpoint and immutable after it, while its massKg input remains any positive value at the existing exact 0.1kg step. CHR-025 validates inclusive creation massKg bounds by race/sex: PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg; massApprovalStatus=PENDING_GM remains after range validation. These bounds are not reference race averages. For CHR-025 this override replaces only the conflicting no-minimum/maximum statement; the original approval and anatomy semantics remain effective. The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019, NET-021, NPC-011 and ENM-013."
       },
       {
         "qnaId": "Q-CHAR-011",
@@ -274867,7 +275385,7 @@
     "forms": 376,
     "legacyFormsPreserved": 355,
     "newForms": 21,
-    "transitions": 1672,
+    "transitions": 1680,
     "journeys": 66,
     "requirements": 91,
     "qaScenarios": 2440,

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import type { ActionKey } from '@generated/types/atlas.js';
 import { describe, expect, it } from 'vitest';
 import {
+  assertAdr0049MissingChannels,
   assertAtlasCounts,
   auditAtlasSections,
   buildRendererQueryIndexes,
@@ -190,7 +191,7 @@ describe('generated atlas spec', () => {
   });
 
   it('matches the counts the audit states about the atlas', () => {
-    expect(spec('transitions.json')).toHaveLength(1672);
+    expect(spec('transitions.json')).toHaveLength(1680);
     expect(spec('journeys.json')).toHaveLength(66);
     expect(spec('requirements.json')).toHaveLength(91);
     expect(spec('qa-scenarios.json')).toHaveLength(2440);
@@ -251,7 +252,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.3', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.4', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',
@@ -417,7 +418,7 @@ describe('generated atlas types', () => {
     const known: ActionKey = 'APP-002::CTA::007';
     // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
     const absent: ActionKey = 'APP-002::CTA::999';
-    expect(members).toHaveLength(1_242);
+    expect(members).toHaveLength(1_246);
     expect(members).toEqual(extractActionKeys(clonedForms()));
     expect(members).toContain(known);
     expect(members).not.toContain(absent);
@@ -436,8 +437,8 @@ describe('action key export guards', () => {
     [rows[0], rows[1]] = [rows[1]!, rows[0]!];
     const actionKeys = extractActionKeys(forms);
 
-    expect(actionKeys).toHaveLength(1_242);
-    expect(new Set(actionKeys).size).toBe(1_242);
+    expect(actionKeys).toHaveLength(1_246);
+    expect(new Set(actionKeys).size).toBe(1_246);
     expect(actionKeys.slice(0, 4)).toEqual([
       'APP-001::CTA::002',
       'APP-001::CTA::001',
@@ -485,7 +486,7 @@ describe('action key export guards', () => {
     const forms = clonedForms();
     firstFormActionRows(forms).pop();
 
-    expect(() => extractActionKeys(forms)).toThrow(/expected 1242 action keys, got 1241/u);
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1246 action keys, got 1245/u);
   });
 });
 
@@ -614,5 +615,449 @@ describe('workflow command export guards', () => {
         [workflowQa({ expected: 'Different text.' })],
       ),
     ).toThrow(/expected differs from .*atomicity \+ reconnect/u);
+  });
+});
+
+describe('ADR 0049 missing decision channels', () => {
+  const form = (root: ImportJsonObject, formId: string): ImportJsonObject => {
+    const forms = root['forms'] as ImportJsonObject[];
+    const match = forms.find((row) => row['id'] === formId);
+    if (match === undefined) throw new Error(`missing test form ${formId}`);
+    return match;
+  };
+
+  const actions = (root: ImportJsonObject, formId: string): ImportJsonObject[] => {
+    const owner = form(root, formId);
+    return atlasObject(owner['actions'])['ctaAvailabilityByAction'] as ImportJsonObject[];
+  };
+
+  const coverageStep = (
+    root: ImportJsonObject,
+    requirementId: string,
+    formId: string,
+  ): ImportJsonObject => {
+    const requirements = root['coverageRequirements'] as ImportJsonObject[];
+    const requirement = requirements.find((row) => row['requirementId'] === requirementId);
+    if (requirement === undefined) throw new Error(`missing test requirement ${requirementId}`);
+    const steps = requirement['actionSteps'] as ImportJsonObject[];
+    const step = steps.find((row) => row['formId'] === formId);
+    if (step === undefined) throw new Error(`missing test coverage step ${formId}`);
+    return step;
+  };
+
+  const qa = (root: ImportJsonObject, qaId: string): ImportJsonObject => {
+    const scenarios = root['qaScenarios'] as ImportJsonObject[];
+    const scenario = scenarios.find((row) => row['qaId'] === qaId);
+    if (scenario === undefined) throw new Error(`missing test QA ${qaId}`);
+    return scenario;
+  };
+
+  const expectRejected = (root: ImportJsonObject): void => {
+    expect(() => assertAdr0049MissingChannels(root)).toThrow();
+  };
+
+  it('accepts the exact v1.4 delivery', () => {
+    expect(() => assertAdr0049MissingChannels(clonedAtlas())).not.toThrow();
+  });
+
+  const routeCases = [
+    ['CHR-014', '/player/characters/:localCharacterId/create/chr-014'],
+    ['CHR-018', '/player/characters/:localCharacterId/create/chr-018'],
+  ] as const;
+  for (const [formId, retiredRoute] of routeCases) {
+    it(`rejects the retired ${formId} route`, () => {
+      const root = clonedAtlas();
+      form(root, formId)['route'] = retiredRoute;
+      expectRejected(root);
+    });
+  }
+
+  const actionCases = [
+    ['CHR-018', 'CHR-018::CTA::001'],
+    ['CHR-041', 'CHR-041::CTA::003'],
+    ['CHR-041', 'CHR-041::CTA::001'],
+    ['CHR-041', 'CHR-041::CTA::002'],
+    ['CHR-020', 'CHR-020::CTA::002'],
+    ['CHR-020', 'CHR-020::CTA::003'],
+    ['CHR-020', 'CHR-020::CTA::004'],
+  ] as const;
+  for (const [formId, actionKey] of actionCases) {
+    it(`rejects disappearance of ${actionKey}`, () => {
+      const root = clonedAtlas();
+      const rows = actions(root, formId);
+      const owner = form(root, formId);
+      atlasObject(owner['actions'])['ctaAvailabilityByAction'] = rows.filter(
+        (row) => row['actionKey'] !== actionKey,
+      );
+      expectRejected(root);
+    });
+
+    it(`rejects noncanonical guard drift of ${actionKey}`, () => {
+      const root = clonedAtlas();
+      const row = actions(root, formId).find((action) => action['actionKey'] === actionKey);
+      if (row === undefined) throw new Error(`missing test action ${actionKey}`);
+      row['guard'] = 'synchronized-looking but noncanonical guard';
+      expectRejected(root);
+    });
+  }
+
+  const transitionCases = [
+    [
+      'skill route',
+      'CHR-013',
+      'CHR-014',
+      'Адресуемый route либо server/system event текущей роли',
+      'role-state-reachability',
+    ],
+    [
+      'species route',
+      'CHR-017',
+      'CHR-018',
+      'Адресуемый route либо server/system event текущей роли',
+      'role-state-reachability',
+    ],
+    ['Advisor confirm', 'CHR-041', 'CHR-019', 'Подтвердить навыки Советника', 'workflow-command'],
+    [
+      'Advisor edit',
+      'CHR-041',
+      'CHR-041',
+      'Добавить или удалить допустимый навык Советника',
+      'local-draft-command',
+    ],
+    [
+      'random commit',
+      'CHR-020',
+      'CHR-020',
+      'Зафиксировать случайное определение симбионтов',
+      'workflow-command',
+    ],
+    [
+      'binding side',
+      'CHR-020',
+      'CHR-020',
+      'Выбрать допустимую сторону Совы или Угря',
+      'local-draft-command',
+    ],
+    [
+      'monster species',
+      'CHR-020',
+      'CHR-020',
+      'Выбрать вид симбиотического чудовища',
+      'local-draft-command',
+    ],
+    ['manual add', 'CHR-018', 'CHR-018', 'Добавить симбионта в ручной состав', 'workflow-command'],
+    [
+      'manual Advisor dispatch',
+      'CHR-018',
+      'CHR-041',
+      'Dispatch persisted manual Advisor branch',
+      'system-event',
+    ],
+    [
+      'manual non-Advisor dispatch',
+      'CHR-018',
+      'CHR-019',
+      'Dispatch persisted manual non-Advisor composition',
+      'system-event',
+    ],
+    [
+      'Advisor I/W',
+      'CHR-041',
+      'CHR-041',
+      'Зафиксировать броски I и W Советника',
+      'workflow-command',
+    ],
+    [
+      'random Advisor dispatch',
+      'CHR-020',
+      'CHR-041',
+      'Dispatch persisted Advisor branch',
+      'system-event',
+    ],
+    [
+      'random non-Advisor dispatch',
+      'CHR-020',
+      'CHR-019',
+      'Dispatch persisted non-Advisor random composition',
+      'system-event',
+    ],
+  ] as const;
+  const mirrors = ['transitionsOut', 'transitionsIn', 'top-level'] as const;
+  for (const [name, from, to, trigger, kind] of transitionCases) {
+    for (const mirror of mirrors) {
+      it(`rejects ${name} guard drift in ${mirror}`, () => {
+        const root = clonedAtlas();
+        let rows: ImportJsonObject[];
+        if (mirror === 'top-level') {
+          rows = root['transitions'] as ImportJsonObject[];
+        } else {
+          const owner = form(root, mirror === 'transitionsOut' ? from : to);
+          rows = owner[mirror] as ImportJsonObject[];
+        }
+        const row = rows.find(
+          (transition) =>
+            (mirror === 'transitionsOut'
+              ? transition['to'] === to
+              : mirror === 'transitionsIn'
+                ? transition['from'] === from
+                : transition['from'] === from && transition['to'] === to) &&
+            transition['trigger'] === trigger &&
+            transition['kind'] === kind,
+        );
+        if (row === undefined) throw new Error(`missing test transition ${name} ${mirror}`);
+        row['guard'] = 'independent mirror drift';
+        expectRejected(root);
+      });
+    }
+  }
+
+  for (const requirementId of ['REQ-002', 'REQ-063'] as const) {
+    for (const formId of ['CHR-020', 'CHR-041'] as const) {
+      it(`rejects ${requirementId} ${formId} primaryActions drift`, () => {
+        const root = clonedAtlas();
+        coverageStep(root, requirementId, formId)['primaryActions'] = [];
+        expectRejected(root);
+      });
+    }
+    it(`rejects ${requirementId} CHR-041 workflow binding drift`, () => {
+      const root = clonedAtlas();
+      coverageStep(root, requirementId, 'CHR-041')['workflowCommandIds'] = [];
+      expectRejected(root);
+    });
+  }
+
+  for (const formId of ['CHR-020', 'CHR-041'] as const) {
+    it(`rejects QA-FORM-${formId} CTA drift`, () => {
+      const root = clonedAtlas();
+      qa(root, `QA-FORM-${formId}`)['scenario'] = 'CTA: noncanonical.';
+      expectRejected(root);
+    });
+  }
+
+  it('rejects removal of CHR-041 from the workflow command registry', () => {
+    const root = clonedAtlas();
+    const registry = atlasObject(root['registryCoverage']);
+    const commands = registry['workflowCommands'] as ImportJsonObject[];
+    const command = commands.find((row) => row['commandId'] === 'UI-CMD-CHAR-WIZARD-CHECKPOINT');
+    if (command === undefined) throw new Error('missing test workflow command');
+    command['formIds'] = (command['formIds'] as string[]).filter((id) => id !== 'CHR-041');
+    expectRejected(root);
+  });
+
+  it('rejects removal of CHR-041 from the workflow QA mirror', () => {
+    const root = clonedAtlas();
+    qa(root, 'QA-WORKFLOW-UI-CMD-CHAR-WIZARD-CHECKPOINT')['scenario'] =
+      'Выполнить UI-CMD-CHAR-WIZARD-CHECKPOINT через CHR-018, CHR-019.';
+    expectRejected(root);
+  });
+
+  it('rejects disappearance of CHR-041 workflow availability', () => {
+    const root = clonedAtlas();
+    const owner = form(root, 'CHR-041');
+    atlasObject(owner['actions'])['workflowCommandAvailability'] = [];
+    expectRejected(root);
+  });
+
+  it('rejects retired Advisor component and state prose', () => {
+    const root = clonedAtlas();
+    const advisor = form(root, 'CHR-041');
+    advisor['components'] = ['Acknowledge only'];
+    atlasObject(advisor['states'])['ACKNOWLEDGED'] = 'The same Advisor draft continues to CHR-019.';
+    expectRejected(root);
+  });
+
+  it('rejects retired CHR-020 Advisor acknowledgement prose', () => {
+    const root = clonedAtlas();
+    const random = form(root, 'CHR-020');
+    atlasObject(random['states'])['ADVISOR_ACK_REQUIRED'] =
+      'CHR-041 must be acknowledged before composition.';
+    expectRejected(root);
+  });
+
+  const terminalStates = (
+    root: ImportJsonObject,
+    requirementId: string,
+    formId: string,
+  ): string[] => {
+    const requirements = root['coverageRequirements'] as ImportJsonObject[];
+    const requirement = requirements.find((row) => row['requirementId'] === requirementId);
+    if (requirement === undefined) throw new Error(`missing test requirement ${requirementId}`);
+    const deltas = atlasObject(requirement['expectedStateDeltas']);
+    return atlasObject(deltas['terminalStatesByForm'])[formId] as string[];
+  };
+
+  const workflowCommand = (root: ImportJsonObject, commandId: string): ImportJsonObject => {
+    const registry = atlasObject(root['registryCoverage']);
+    const commands = registry['workflowCommands'] as ImportJsonObject[];
+    const command = commands.find((row) => row['commandId'] === commandId);
+    if (command === undefined) throw new Error(`missing test command ${commandId}`);
+    return command;
+  };
+
+  const qnaRow = (root: ImportJsonObject, qnaId: string): ImportJsonObject => {
+    const registry = atlasObject(root['registryCoverage']);
+    const rows = registry['qna'] as ImportJsonObject[];
+    const row = rows.find((candidate) => candidate['qnaId'] === qnaId);
+    if (row === undefined) throw new Error(`missing test Q&A ${qnaId}`);
+    return row;
+  };
+
+  it('rejects a retired Advisor label added to allowed beside the current literal', () => {
+    const root = clonedAtlas();
+    const actions = atlasObject(form(root, 'CHR-041')['actions']);
+    (actions['allowed'] as string[]).push(
+      'Разрешённые видимые действия/CTA именно этой формы: Подтвердить просмотр сохранённой карточки Советника.',
+    );
+    expectRejected(root);
+  });
+
+  it('rejects a retired Advisor label appended to the QA scenario', () => {
+    const root = clonedAtlas();
+    qa(root, 'QA-FORM-CHR-041')['scenario'] =
+      `${qa(root, 'QA-FORM-CHR-041')['scenario'] as string} Подтвердить просмотр сохранённой карточки Советника.`;
+    expectRejected(root);
+  });
+
+  for (const formId of ['CHR-020', 'CHR-041'] as const) {
+    it(`rejects loss of ${formId} visible action`, () => {
+      const root = clonedAtlas();
+      const actions = atlasObject(form(root, formId)['actions']);
+      (actions['visible'] as string[]).shift();
+      expectRejected(root);
+    });
+
+    it(`rejects loss of ${formId} allowed visible literal`, () => {
+      const root = clonedAtlas();
+      const actions = atlasObject(form(root, formId)['actions']);
+      actions['allowed'] = (actions['allowed'] as string[]).filter(
+        (value) => !value.startsWith('Разрешённые видимые действия/CTA'),
+      );
+      expectRejected(root);
+    });
+
+    it(`rejects loss of ${formId} required fields`, () => {
+      const root = clonedAtlas();
+      const owner = form(root, formId);
+      owner['requiredFields'] = (owner['requiredFields'] as string[]).filter(
+        (field) => !field.includes(formId === 'CHR-020' ? 'BINDING' : 'iwRoll'),
+      );
+      expectRejected(root);
+    });
+  }
+
+  it('rejects loss of CHR-020 BINDING form state', () => {
+    const root = clonedAtlas();
+    delete atlasObject(form(root, 'CHR-020')['states'])['BINDING'];
+    expectRejected(root);
+  });
+
+  it('rejects loss of CHR-041 IW_ROLLS_REQUIRED form state', () => {
+    const root = clonedAtlas();
+    delete atlasObject(form(root, 'CHR-041')['states'])['IW_ROLLS_REQUIRED'];
+    expectRejected(root);
+  });
+
+  for (const requirementId of ['REQ-002', 'REQ-063'] as const) {
+    for (const formId of ['CHR-020', 'CHR-041'] as const) {
+      it(`rejects ${requirementId} ${formId} terminal-state drift`, () => {
+        const root = clonedAtlas();
+        const states = terminalStates(root, requirementId, formId);
+        states.splice(formId === 'CHR-020' ? 2 : 0, 1);
+        expectRejected(root);
+      });
+    }
+  }
+
+  for (const commandId of ['UI-CMD-CHAR-CREATION-ROLL-COMMIT', 'UI-CMD-CHAR-WIZARD-CHECKPOINT']) {
+    it(`rejects removal of CHR-041 ${commandId} availability`, () => {
+      const root = clonedAtlas();
+      const actions = atlasObject(form(root, 'CHR-041')['actions']);
+      actions['workflowCommandAvailability'] = (
+        actions['workflowCommandAvailability'] as ImportJsonObject[]
+      ).filter((row) => row['commandId'] !== commandId);
+      expectRejected(root);
+    });
+  }
+
+  it('rejects removal of CHR-041 from ROLL-COMMIT registry forms', () => {
+    const root = clonedAtlas();
+    const command = workflowCommand(root, 'UI-CMD-CHAR-CREATION-ROLL-COMMIT');
+    command['formIds'] = (command['formIds'] as string[]).filter((id) => id !== 'CHR-041');
+    expectRejected(root);
+  });
+
+  it('rejects retired ROLL-COMMIT guards and atomicity', () => {
+    const root = clonedAtlas();
+    const command = workflowCommand(root, 'UI-CMD-CHAR-CREATION-ROLL-COMMIT');
+    command['guards'] = 'Pending creationRollRequestId belongs to the draft.';
+    command['atomicity'] = 'Persist exactly one face/result.';
+    expectRejected(root);
+  });
+
+  it('rejects drift in ROLL-COMMIT workflow availability', () => {
+    const root = clonedAtlas();
+    const actions = atlasObject(form(root, 'CHR-020')['actions']);
+    const rows = actions['workflowCommandAvailability'] as ImportJsonObject[];
+    rows[0]!['guard'] = 'Pending creationRollRequestId belongs to the draft.';
+    expectRejected(root);
+  });
+
+  it('rejects removal of CHR-041 from ROLL-COMMIT QA scenario and expected', () => {
+    const root = clonedAtlas();
+    const workflowQa = qa(root, 'QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT');
+    workflowQa['scenario'] = (workflowQa['scenario'] as string).replace('CHR-041, ', '');
+    workflowQa['expected'] = 'Persist exactly one face/result.';
+    expectRejected(root);
+  });
+
+  const qnaCases = [
+    ['Q-CORE-054', 'QA-QNA-Q-CORE-054-ROW-054'],
+    ['Q-CHAR-004', 'QA-QNA-Q-CHAR-004-ROW-300'],
+    ['Q-CHAR-010', 'QA-QNA-Q-CHAR-010-ROW-306'],
+  ] as const;
+  for (const [qnaId, qaId] of qnaCases) {
+    it(`rejects removal of CHR-020 from ${qnaId} formIds`, () => {
+      const root = clonedAtlas();
+      const row = qnaRow(root, qnaId);
+      row['formIds'] = (row['formIds'] as string[]).filter((id) => id !== 'CHR-020');
+      expectRejected(root);
+    });
+
+    it(`rejects removal of CHR-020 from ${qaId} scenario`, () => {
+      const root = clonedAtlas();
+      const scenario = qa(root, qaId);
+      scenario['scenario'] = (scenario['scenario'] as string).replace('CHR-020, ', '');
+      expectRejected(root);
+    });
+  }
+
+  for (const qnaId of ['Q-CHAR-004', 'Q-CHAR-010', 'Q-CORE-054'] as const) {
+    it(`rejects removal of ${qnaId} from CHR-020 references`, () => {
+      const root = clonedAtlas();
+      const references = atlasObject(form(root, 'CHR-020')['references']);
+      references['qnaIds'] = (references['qnaIds'] as string[]).filter((id) => id !== qnaId);
+      expectRejected(root);
+    });
+  }
+
+  it('rejects removal of CHR-020 from AQA-004 and its QA mirror', () => {
+    const root = clonedAtlas();
+    const registry = atlasObject(root['registryCoverage']);
+    const rules = registry['activeRules'] as ImportJsonObject[];
+    const rule = rules.find((row) => row['ruleId'] === 'AQA-004');
+    if (rule === undefined) throw new Error('missing test AQA-004');
+    rule['formIds'] = (rule['formIds'] as string[]).filter((id) => id !== 'CHR-020');
+    qa(root, 'QA-RULE-AQA-004')['scenario'] = 'Проверить rule handler и проекцию без CHR-020.';
+    expectRejected(root);
+  });
+
+  it('rejects retired Q-CHAR-010 original-answer-effective list', () => {
+    const root = clonedAtlas();
+    const row = qnaRow(root, 'Q-CHAR-010');
+    row['laterAuthorOverride'] = (row['laterAuthorOverride'] as string).replace(
+      'CHR-018, CHR-020, CHR-033',
+      'CHR-018, CHR-033',
+    );
+    expectRejected(root);
   });
 });

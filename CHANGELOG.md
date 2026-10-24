@@ -105,6 +105,15 @@
 
 ### Добавлено
 
+- Поставка Atlas v1.4 добавляет пять недостающих каналов решений: адресуемые
+  карточки навыка и симбионта с `:skillId`/`:speciesKey`, manual/random путь
+  `CHR-018 → CHR-041 → CHR-019` с двумя addressed I/W requests и отдельным
+  `ROLL-COMMIT`, local-draft навыки Советника, выбор стороны Совы/Угря и вида
+  симбиотического чудовища. `CHR-020` получает pre-COMMITTED `BINDING`: fresh
+  commandId фиксирует сторону после display без нового request, face, sampler
+  или random receipt. ADR 0049 и fail-closed guards закрепляют exact
+  transition/coverage/QA/Q&A-зеркала и Markdown-литералы без нового outer
+  protocol. Runtime-реализация в эту поставку не входит.
 - `CHR-010` теперь показывает разрешённый `GrantedSkillRefs` как именованный
   бесплатный расовый навык и положительное отсутствие у двух остальных рас.
   `CHR-013` и eligible options `CHR-015` передают дословный

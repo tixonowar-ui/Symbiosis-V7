@@ -2287,7 +2287,7 @@
     "roles": [
       "player"
     ],
-    "route": "/player/characters/:localCharacterId/create/chr-014",
+    "route": "/player/characters/:localCharacterId/create/chr-014/:skillId",
     "states": {
       "ADDED": "Selection revision is checkpointed before returning.",
       "ELIGIBLE": "The skill can be added to the current draft.",
@@ -2573,7 +2573,7 @@
     "roles": [
       "player"
     ],
-    "route": "/player/characters/:localCharacterId/create/chr-018",
+    "route": "/player/characters/:localCharacterId/create/chr-018/:speciesKey",
     "states": {
       "ADDED_TO_DRAFT": "Composition draft changed; no runtime instance exists.",
       "BINDING_REQUIRED": "Owl eye or Eel arm must be chosen.",
@@ -2681,6 +2681,14 @@
         {
           "actionKey": "CHR-020::CTA::002",
           "label": "Зафиксировать случайное определение симбионтов"
+        },
+        {
+          "actionKey": "CHR-020::CTA::003",
+          "label": "Выбрать допустимую сторону Совы или Угря"
+        },
+        {
+          "actionKey": "CHR-020::CTA::004",
+          "label": "Выбрать вид симбиотического чудовища"
         }
       ]
     },
@@ -2712,7 +2720,7 @@
       "drawnSpeciesAndBindings[]",
       "duplicateRerollReceipts[]",
       "advisorBranch",
-      "randomStatus=NOT_STARTED|PENDING|COMMITTED",
+      "randomStatus=NOT_STARTED|PENDING|BINDING|COMMITTED",
       "wizardCheckpointId",
       "draftRevision",
       "commandId"
@@ -2722,7 +2730,8 @@
     ],
     "route": "/player/characters/:localCharacterId/create/chr-020",
     "states": {
-      "ADVISOR_ACK_REQUIRED": "CHR-041 must be acknowledged before composition.",
+      "ADVISOR_ACK_REQUIRED": "CHR-041 skills must be confirmed before composition.",
+      "BINDING": "Displayed rolls are immutable; exact side snapshot awaits binding-only commit before dispatch.",
       "COMMITTED": "Species, bindings, rerolls and seed/manual receipts are immutable.",
       "NOT_STARTED": "One random sequence can be created.",
       "PENDING_INPUT": "Only the snapshot-matching roll/input is accepted.",
@@ -4031,8 +4040,16 @@
     "actions": {
       "ctaAvailabilityByAction": [
         {
+          "actionKey": "CHR-041::CTA::003",
+          "label": "Зафиксировать броски I и W Советника"
+        },
+        {
           "actionKey": "CHR-041::CTA::001",
-          "label": "Подтвердить просмотр сохранённой карточки Советника"
+          "label": "Подтвердить навыки Советника"
+        },
+        {
+          "actionKey": "CHR-041::CTA::002",
+          "label": "Добавить или удалить допустимый навык Советника"
         }
       ]
     },
@@ -4041,7 +4058,7 @@
       "Two immutable I/W receipts",
       "Slots/skills",
       "Trogr suppression",
-      "Acknowledge only",
+      "Skills checkpoint",
       "No reroll/cancel"
     ],
     "contexts": [
@@ -4057,22 +4074,25 @@
       "characterDraftId",
       "advisorInstanceDraftId",
       "advisorCard",
-      "iwRollReceiptIds[2]",
-      "advisorIPlus8",
-      "advisorWPlus8",
+      "iwRollRequestIds[2]",
+      "iwRollReceiptIds[2]OrNull",
+      "advisorIPlus8OrNull",
+      "advisorWPlus8OrNull",
       "advisorSlotsAndSkills",
       "trogrSuppressionState",
       "acknowledged",
       "wizardCheckpointId",
-      "draftRevision"
+      "draftRevision",
+      "commandId"
     ],
     "roles": [
       "player"
     ],
     "route": "/player/characters/:localCharacterId/create/chr-041",
     "states": {
-      "ACKNOWLEDGED": "The same Advisor draft continues to CHR-019.",
-      "CARD_REQUIRED": "Persisted Advisor data is shown; no cancel/reroll exists.",
+      "ACKNOWLEDGED": "The same Advisor draft with confirmed skills continues to CHR-019.",
+      "CARD_REQUIRED": "Persisted Advisor data and both I/W receipts are shown; no cancel/reroll exists.",
+      "IW_ROLLS_REQUIRED": "Two addressed I/W requests are pending; commit them in I,W order without replacement or reroll.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",

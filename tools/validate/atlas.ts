@@ -51,6 +51,539 @@ const MARKDOWN_IDENTITY_LITERALS = [
   },
 ] as const;
 
+const CHR_014_SECTION = ['### CHR-014 —', '### CHR-015 —'] as const;
+const CHR_018_SECTION = ['### CHR-018 —', '### CHR-019 —'] as const;
+const CHR_020_SECTION = ['### CHR-020 —', '### CHR-021 —'] as const;
+const CHR_041_SECTION = ['### CHR-041 —', '### CHR-042 —'] as const;
+const NO_SECTION = ['', ''] as const;
+
+/** ADR 0049 names every checked companion literal and its render cardinality. */
+export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
+  {
+    id: 'atlas-heading',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.4',
+    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.3',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'atlas-version',
+    current: '| Версия атласа | 1.4 |',
+    retired: '| Версия атласа | 1.3 |',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'atlas-date',
+    current: '| Дата | 2026-08-21 |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'atlas-transition-count',
+    current: '1680',
+    retired: '1677',
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'skill-route',
+    current: '/player/characters/:localCharacterId/create/chr-014/:skillId',
+    retired: '',
+    expected: 1,
+    section: CHR_014_SECTION,
+  },
+  {
+    id: 'species-route',
+    current: '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
+    retired: '',
+    expected: 1,
+    section: CHR_018_SECTION,
+  },
+  {
+    id: 'skill-reachability-out',
+    current:
+      '| CHR-014 | Адресуемый route либо server/system event текущей роли | role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog [role-state-reachability] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'skill-reachability-in',
+    current:
+      '| CHR-013 | Адресуемый route либо server/system event текущей роли | role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog [role-state-reachability] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'species-reachability-out',
+    current:
+      '| CHR-018 | Адресуемый route либо server/system event текущей роли | role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition [role-state-reachability] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'species-reachability-in',
+    current:
+      '| CHR-017 | Адресуемый route либо server/system event текущей роли | role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition [role-state-reachability] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-confirm-label',
+    current: 'Подтвердить навыки Советника',
+    retired: 'Подтвердить просмотр сохранённой карточки Советника',
+    expected: 8,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-confirm-guard',
+    current:
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll',
+    retired: 'Advisor card and both I/W receipts persisted; acknowledgement only; no cancel/reroll',
+    expected: 3,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-confirm-action',
+    current:
+      '| CHR-041::CTA::001 | Подтвердить навыки Советника | CHR-019 | UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll | workflow-command |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-confirm-transition-out',
+    current:
+      '| CHR-019 | Подтвердить навыки Советника | UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll [workflow-command] |',
+    retired:
+      '| CHR-019 | Подтвердить навыки Советника | UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll [normative] |',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-confirm-transition-in',
+    current:
+      '| CHR-041 | Подтвердить навыки Советника | UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll [workflow-command] |',
+    retired:
+      '| CHR-041 | Подтвердить навыки Советника | UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll [normative] |',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-edit-action',
+    current:
+      '| CHR-041::CTA::002 | Добавить или удалить допустимый навык Советника | CHR-041 | iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft | local-draft-command |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-edit-transitions',
+    current:
+      '| CHR-041 | Добавить или удалить допустимый навык Советника | iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft [local-draft-command] |',
+    retired: '',
+    expected: 2,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-visible-allowed',
+    current:
+      'Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника.',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-command-allowed',
+    current:
+      '- Разрешённые atlas workflow commands этой формы: UI-CMD-CHAR-CREATION-ROLL-COMMIT, UI-CMD-CHAR-WIZARD-CHECKPOINT.',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-availability-source',
+    current:
+      '| authoritativeSource | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-CHAR-CREATION-ROLL-COMMIT", "UI-CMD-CHAR-WIZARD-CHECKPOINT"]} |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-roll-availability',
+    current:
+      '| UI-CMD-CHAR-CREATION-ROLL-COMMIT | Roll variants require pending creationRollRequestId',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-workflow-availability',
+    current: '| UI-CMD-CHAR-WIZARD-CHECKPOINT | Player owns the characterDraftId;',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-reference-command',
+    current:
+      '| Atlas workflow command | UI-CMD-CHAR-CREATION-ROLL-COMMIT, UI-CMD-CHAR-WIZARD-CHECKPOINT |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-coverage',
+    current:
+      "{'formId': 'CHR-041', 'primaryActions': ['Зафиксировать броски I и W Советника', 'Добавить или удалить допустимый навык Советника', 'Подтвердить навыки Советника'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-CREATION-ROLL-COMMIT', 'UI-CMD-CHAR-WIZARD-CHECKPOINT']}",
+    retired: '',
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-form-qa',
+    current:
+      'Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-component',
+    current: '- Skills checkpoint',
+    retired: '- Acknowledge only',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-state',
+    current:
+      '| ACKNOWLEDGED | The same Advisor draft with confirmed skills continues to CHR-019. |',
+    retired: '| ACKNOWLEDGED | The same Advisor draft continues to CHR-019. |',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'random-advisor-state',
+    current: '| ADVISOR_ACK_REQUIRED | CHR-041 skills must be confirmed before composition. |',
+    retired: '| ADVISOR_ACK_REQUIRED | CHR-041 must be acknowledged before composition. |',
+    expected: 1,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'roll-guard',
+    current:
+      'UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019',
+    retired:
+      'UI-CMD-CHAR-CREATION-ROLL-COMMIT one persisted sequence; binding and critical-monster local-draft snapshots validate at their commit boundary; server dispatches CHR-041 for Advisor or CHR-019',
+    expected: 3,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'side-action',
+    current: String.raw`| CHR-020::CTA::003 | Выбрать допустимую сторону Совы или Угря | CHR-020 | randomStatus=NOT_STARTED\|PENDING\|BINDING and bindingKind=OWL_EYE\|EEL_ARM and selected side eligible | local-draft-command |`,
+    retired: '',
+    expected: 1,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'side-transitions',
+    current: String.raw`| CHR-020 | Выбрать допустимую сторону Совы или Угря | randomStatus=NOT_STARTED\|PENDING\|BINDING and bindingKind=OWL_EYE\|EEL_ARM and selected side eligible [local-draft-command] |`,
+    retired: '',
+    expected: 2,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'monster-action',
+    current:
+      '| CHR-020::CTA::004 | Выбрать вид симбиотического чудовища | CHR-020 | saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft | local-draft-command |',
+    retired: '',
+    expected: 1,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'monster-transitions',
+    current:
+      '| CHR-020 | Выбрать вид симбиотического чудовища | saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft [local-draft-command] |',
+    retired: '',
+    expected: 2,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'random-visible-allowed',
+    current:
+      'Разрешённые видимые действия/CTA именно этой формы: Выбрать допустимую сторону Совы или Угря; Выбрать вид симбиотического чудовища; Зафиксировать случайное определение симбионтов; Вернуться к выбору ветви до показа результата.',
+    retired: '',
+    expected: 1,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'random-coverage',
+    current:
+      "{'formId': 'CHR-020', 'primaryActions': ['Выбрать допустимую сторону Совы или Угря', 'Выбрать вид симбиотического чудовища', 'Зафиксировать случайное определение симбионтов', 'Вернуться к выбору ветви до показа результата'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-CREATION-ROLL-COMMIT']}",
+    retired: '',
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'random-form-qa',
+    current: String.raw`Проверить буквальное назначение CHR-020: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, raceChoice=UNITED\|FREE, symbiontAcquisitionMode=RANDOM, randomSequenceId, pendingRollRequestIdOrNull, diceInputModeSnapshot, seedOrManualFaces, drawnSpeciesAndBindings[], duplicateRerollReceipts[], advisorBranch, randomStatus=NOT_STARTED\|PENDING\|BINDING\|COMMITTED, wizardCheckpointId, draftRevision, commandId. CTA: Выбрать допустимую сторону Совы или Угря, Выбрать вид симбиотического чудовища, Зафиксировать случайное определение симбионтов, Вернуться к выбору ветви до показа результата.`,
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-iw-action',
+    current:
+      '| CHR-041::CTA::003 | Зафиксировать броски I и W Советника | CHR-041 | UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP | workflow-command |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-iw-transitions',
+    current:
+      '| CHR-041 | Зафиксировать броски I и W Советника | UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP [workflow-command] |',
+    retired: '',
+    expected: 2,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-iw-state',
+    current:
+      '| IW_ROLLS_REQUIRED | Two addressed I/W requests are pending; commit them in I,W order without replacement or reroll. |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-card-state',
+    current:
+      '| CARD_REQUIRED | Persisted Advisor data and both I/W receipts are shown; no cancel/reroll exists. |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'random-binding-state',
+    current:
+      '| BINDING | Displayed rolls are immutable; exact side snapshot awaits binding-only commit before dispatch. |',
+    retired: '',
+    expected: 1,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'random-terminal-states',
+    current:
+      '"CHR-020": ["NOT_STARTED", "PENDING_INPUT", "BINDING", "COMMITTED", "ADVISOR_ACK_REQUIRED"]',
+    retired: '',
+    expected: 4,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-terminal-states',
+    current: '"CHR-041": ["IW_ROLLS_REQUIRED", "CARD_REQUIRED", "ACKNOWLEDGED"]',
+    retired: '',
+    expected: 4,
+    section: NO_SECTION,
+  },
+  {
+    id: 'roll-form-list',
+    current: 'CHR-003, CHR-004, CHR-020, CHR-041, CHR-021, CHR-022, CHR-037, CHR-038',
+    retired: '',
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'roll-command-guards',
+    current:
+      'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.',
+    retired: '',
+    expected: 9,
+    section: NO_SECTION,
+  },
+  {
+    id: 'roll-atomicity',
+    current:
+      'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.',
+    retired: '',
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'manual-add-action',
+    current:
+      '| CHR-018::CTA::001 | Добавить симбионта в ручной состав | CHR-018 | UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor | workflow-command |',
+    retired: '',
+    expected: 1,
+    section: CHR_018_SECTION,
+  },
+  {
+    id: 'manual-add-transitions',
+    current:
+      '| CHR-018 | Добавить симбионта в ручной состав | UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor [workflow-command] |',
+    retired: '',
+    expected: 2,
+    section: CHR_018_SECTION,
+  },
+  {
+    id: 'manual-advisor-dispatch-out',
+    current:
+      '| CHR-041 | Dispatch persisted manual Advisor branch | manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'manual-advisor-dispatch-in',
+    current:
+      '| CHR-018 | Dispatch persisted manual Advisor branch | manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'manual-non-advisor-dispatch-out',
+    current:
+      '| CHR-019 | Dispatch persisted manual non-Advisor composition | manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'manual-non-advisor-dispatch-in',
+    current:
+      '| CHR-018 | Dispatch persisted manual non-Advisor composition | manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'random-advisor-dispatch-out',
+    current:
+      '| CHR-041 | Dispatch persisted Advisor branch | randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'random-advisor-dispatch-in',
+    current:
+      '| CHR-020 | Dispatch persisted Advisor branch | randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'random-non-advisor-dispatch-out',
+    current:
+      '| CHR-019 | Dispatch persisted non-Advisor random composition | randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'random-non-advisor-dispatch-in',
+    current:
+      '| CHR-020 | Dispatch persisted non-Advisor random composition | randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition [system-event] |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'random-qna-reference',
+    current:
+      '| Q&A | Q-CHAR-002, Q-CHAR-004, Q-CHAR-007, Q-CHAR-008, Q-CHAR-010, Q-CORE-054, Q-SYM-003 |',
+    retired: '',
+    expected: 1,
+    section: CHR_020_SECTION,
+  },
+  {
+    id: 'aqa004-active-rules-registry',
+    current: '| CHR-010, CHR-011, CHR-017, CHR-020, CHR-029 | RULE_ENGINE::AQA-004 |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qcore054-qna-registry',
+    current:
+      '| 54 | Q-CORE-054 | Закрыт | CHR-016, CHR-017, CHR-020, CHR-019 | SENIOR_RULE_DERIVATION |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qchar004-qna-registry',
+    current:
+      '| 300 | Q-CHAR-004 | Закрыт | CHR-010, CHR-011, CHR-017, CHR-020, CHR-029 | SENIOR_RULE_DERIVATION |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qchar010-qna-registry',
+    current:
+      '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013 | CURATED_QNA_FORM_OVERRIDE |',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qcore054-scenario',
+    current:
+      'Подтвердить материализацию строки Q&A в CHR-016, CHR-017, CHR-020, CHR-019: Нужно ли при ручном выборе заполнить все слоты и доступно ли чудовище?',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qchar004-scenario',
+    current:
+      'Подтвердить материализацию строки Q&A в CHR-010, CHR-011, CHR-017, CHR-020, CHR-029: Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'aqa004-scenario',
+    current:
+      'Проверить rule handler и проекцию «Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?» через CHR-010, CHR-011, CHR-017, CHR-020, CHR-029.',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qchar010-scenario',
+    current:
+      'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'qchar010-effective-suffix',
+    current:
+      'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019, NET-021, NPC-011 and ENM-013.',
+    retired: '',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'workflow-form-list',
+    current:
+      'CHR-001, CHR-009, CHR-012, CHR-014, CHR-015, CHR-018, CHR-041, CHR-019, CHR-021, CHR-022, CHR-024, CHR-025, CHR-032, CHR-037, CHR-038',
+    retired: '',
+    expected: 2,
+    section: NO_SECTION,
+  },
+] as const;
+
 type JsonRecord = Readonly<Record<string, unknown>>;
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -187,6 +720,58 @@ export function validateAtlasMarkdownIdentityTextMirrors(
         message:
           `current ADR 0037 literal count is ${String(currentCount)}, ` +
           `expected ${String(literal.expected)} by ADR 0039`,
+      });
+    }
+  }
+
+  return problems;
+}
+
+function markdownAdr0049Source(markdown: string, section: readonly [string, string]): string {
+  const [startMarker, endMarker] = section;
+  if (startMarker === '') return markdown;
+  const start = markdown.indexOf(startMarker);
+  if (start === -1) return '';
+  const end = markdown.indexOf(endMarker, start + startMarker.length);
+  return end === -1 ? '' : markdown.slice(start, end);
+}
+
+/** ADR 0049 adds a finite companion registry, not a general Markdown parser. */
+export function validateAtlasMarkdownAdr0049TextMirrors(
+  markdown: string,
+): readonly AtlasValidationProblem[] {
+  const problems: AtlasValidationProblem[] = [];
+
+  for (const literal of ATLAS_MARKDOWN_ADR0049_LITERALS) {
+    const source = markdownAdr0049Source(markdown, literal.section);
+    if (source === '') {
+      problems.push({
+        file: ATLAS_MARKDOWN_FILE,
+        id: literal.id,
+        message: `ADR 0049 Markdown section ${JSON.stringify(literal.section)} is missing`,
+      });
+      continue;
+    }
+
+    if (literal.retired !== '') {
+      const retiredCount = countLiteral(source, literal.retired);
+      if (retiredCount !== 0) {
+        problems.push({
+          file: ATLAS_MARKDOWN_FILE,
+          id: literal.id,
+          message: `retired ADR 0049 literal count is ${String(retiredCount)}, expected 0`,
+        });
+      }
+    }
+
+    const currentCount = countLiteral(source, literal.current);
+    if (currentCount !== literal.expected) {
+      problems.push({
+        file: ATLAS_MARKDOWN_FILE,
+        id: literal.id,
+        message:
+          `current ADR 0049 literal count is ${String(currentCount)}, ` +
+          `expected ${String(literal.expected)}`,
       });
     }
   }

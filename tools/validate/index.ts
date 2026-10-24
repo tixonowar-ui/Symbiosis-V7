@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { ARTIFACT, SPEC_DIR } from '../import/lib/paths.js';
 import {
   ATLAS_MARKDOWN_FILE,
+  validateAtlasMarkdownAdr0049TextMirrors,
   validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
@@ -325,8 +326,12 @@ validateChr001IdentityTextMirrors(formRows, rows('atlas/journeys.json'), transit
 );
 
 try {
-  validateAtlasMarkdownIdentityTextMirrors(readFileSync(ARTIFACT.atlasMd, 'utf8')).forEach(
-    (problem) => report(problem.file, problem.id, problem.message),
+  const atlasMarkdown = readFileSync(ARTIFACT.atlasMd, 'utf8');
+  validateAtlasMarkdownIdentityTextMirrors(atlasMarkdown).forEach((problem) =>
+    report(problem.file, problem.id, problem.message),
+  );
+  validateAtlasMarkdownAdr0049TextMirrors(atlasMarkdown).forEach((problem) =>
+    report(problem.file, problem.id, problem.message),
   );
 } catch (cause) {
   report(
