@@ -50,7 +50,7 @@ export const SKIPPED_INDEX_PATHS = [
 const EXPECTED = {
   files: 128,
   arrayFiles: 114,
-  rows: 20_279,
+  rows: 20_287,
   metadataFiles: 9,
   skippedIndexes: 5,
 } as const;

@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { ARTIFACT } from '../import/lib/paths.js';
 import {
+  ATLAS_MARKDOWN_ADR0049_LITERALS,
   ATLAS_MARKDOWN_FILE,
+  validateAtlasMarkdownAdr0049TextMirrors,
   validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
@@ -477,5 +481,128 @@ describe('renderer form graph validation', () => {
       id: 'APP-003',
       message: 'form is defined but never referenced',
     });
+  });
+});
+
+describe('ADR 0049 Atlas Markdown decision channels', () => {
+  const actualMarkdown = (): string => readFileSync(ARTIFACT.atlasMd, 'utf8');
+
+  it('accepts the exact v1.4 companion', () => {
+    expect(validateAtlasMarkdownAdr0049TextMirrors(actualMarkdown())).toEqual([]);
+  });
+
+  for (const literal of ATLAS_MARKDOWN_ADR0049_LITERALS) {
+    it(`rejects a lost current rendering of ${literal.id}`, () => {
+      const actual = actualMarkdown();
+      let markdown: string;
+      if (literal.section[0]) {
+        const start = actual.indexOf(literal.section[0]);
+        const end = actual.indexOf(literal.section[1], start + literal.section[0].length);
+        if (start === -1 || end === -1) throw new Error(`missing test section ${literal.id}`);
+        const section = actual
+          .slice(start, end)
+          .replace(literal.current, '__ADR0049_NONCANONICAL__');
+        markdown = actual.slice(0, start) + section + actual.slice(end);
+      } else {
+        markdown = actual.replace(literal.current, '__ADR0049_NONCANONICAL__');
+      }
+      const problems = validateAtlasMarkdownAdr0049TextMirrors(markdown);
+
+      expect(
+        problems.some(
+          (problem) =>
+            problem.id === literal.id && problem.message.startsWith('current ADR 0049 literal'),
+        ),
+      ).toBe(true);
+    });
+
+    if (literal.retired !== '') {
+      it(`rejects a retired rendering of ${literal.id}`, () => {
+        const actual = actualMarkdown();
+        const markdown = literal.section[0]
+          ? actual.replace(literal.section[1], `${literal.retired}\n\n${literal.section[1]}`)
+          : `${actual}\n${literal.retired}`;
+        const problems = validateAtlasMarkdownAdr0049TextMirrors(markdown);
+
+        expect(problems).toContainEqual({
+          file: ATLAS_MARKDOWN_FILE,
+          id: literal.id,
+          message: 'retired ADR 0049 literal count is 1, expected 0',
+        });
+      });
+    }
+  }
+
+  const registryFormCases = [
+    {
+      name: 'registryCoverage.activeRules AQA-004',
+      id: 'aqa004-active-rules-registry',
+      current: '| CHR-010, CHR-011, CHR-017, CHR-020, CHR-029 | RULE_ENGINE::AQA-004 |',
+      withoutRandom: '| CHR-010, CHR-011, CHR-017, CHR-029 | RULE_ENGINE::AQA-004 |',
+      qaScenario:
+        'Проверить rule handler и проекцию «Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?» через CHR-010, CHR-011, CHR-017, CHR-020, CHR-029.',
+    },
+    {
+      name: 'registryCoverage.qna Q-CORE-054',
+      id: 'qcore054-qna-registry',
+      current:
+        '| 54 | Q-CORE-054 | Закрыт | CHR-016, CHR-017, CHR-020, CHR-019 | SENIOR_RULE_DERIVATION |',
+      withoutRandom:
+        '| 54 | Q-CORE-054 | Закрыт | CHR-016, CHR-017, CHR-019 | SENIOR_RULE_DERIVATION |',
+      qaScenario:
+        'Подтвердить материализацию строки Q&A в CHR-016, CHR-017, CHR-020, CHR-019: Нужно ли при ручном выборе заполнить все слоты и доступно ли чудовище?',
+    },
+    {
+      name: 'registryCoverage.qna Q-CHAR-004',
+      id: 'qchar004-qna-registry',
+      current:
+        '| 300 | Q-CHAR-004 | Закрыт | CHR-010, CHR-011, CHR-017, CHR-020, CHR-029 | SENIOR_RULE_DERIVATION |',
+      withoutRandom:
+        '| 300 | Q-CHAR-004 | Закрыт | CHR-010, CHR-011, CHR-017, CHR-029 | SENIOR_RULE_DERIVATION |',
+      qaScenario:
+        'Подтвердить материализацию строки Q&A в CHR-010, CHR-011, CHR-017, CHR-020, CHR-029: Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?',
+    },
+    {
+      name: 'registryCoverage.qna Q-CHAR-010',
+      id: 'qchar010-qna-registry',
+      current:
+        '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013 | CURATED_QNA_FORM_OVERRIDE |',
+      withoutRandom:
+        '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013 | CURATED_QNA_FORM_OVERRIDE |',
+      qaScenario:
+        'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
+    },
+  ] as const;
+
+  for (const testCase of registryFormCases) {
+    it(`rejects CHR-020 removal only from ${testCase.name}`, () => {
+      const actual = actualMarkdown();
+      expect(actual).toContain(testCase.current);
+
+      const markdown = actual.replace(testCase.current, testCase.withoutRandom);
+
+      expect(markdown).toContain(testCase.qaScenario);
+      expect(validateAtlasMarkdownAdr0049TextMirrors(markdown)).toEqual([
+        {
+          file: ATLAS_MARKDOWN_FILE,
+          id: testCase.id,
+          message: 'current ADR 0049 literal count is 0, expected 1',
+        },
+      ]);
+    });
+  }
+
+  it('fails closed when a registered form section disappears', () => {
+    const markdown = actualMarkdown().replace('### CHR-041 —', '### CHR-041-removed —');
+    const problems = validateAtlasMarkdownAdr0049TextMirrors(markdown);
+
+    expect(
+      problems.some(
+        (problem) =>
+          problem.id === 'advisor-edit-action' &&
+          problem.message.includes('section') &&
+          problem.message.includes('missing'),
+      ),
+    ).toBe(true);
   });
 });

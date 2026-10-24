@@ -943,6 +943,7 @@
       "CHR-014",
       "CHR-015",
       "CHR-018",
+      "CHR-041",
       "CHR-019",
       "CHR-021",
       "CHR-022",
@@ -958,18 +959,19 @@
     "title": "Атомарно сохранить валидный этап создания персонажа"
   },
   {
-    "atomicity": "Persist exactly one face/result, receipt and resulting next-state pointer; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.",
+    "atomicity": "Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.",
     "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
     "formIds": [
       "CHR-003",
       "CHR-004",
       "CHR-020",
+      "CHR-041",
       "CHR-021",
       "CHR-022",
       "CHR-037",
       "CHR-038"
     ],
-    "guards": "Pending creationRollRequestId belongs to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for this request.",
+    "guards": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
     "qa": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT",
     "reconnect": "Same request/command returns the stored result; a changed payload rejects and no replacement request is created.",
     "title": "Зафиксировать адресуемый бросок или ручной ввод создания персонажа"

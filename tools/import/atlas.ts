@@ -1,7 +1,7 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1672
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1680
  * transitions, 66 journeys, 91 requirements, 2440 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
@@ -25,11 +25,11 @@ import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.3';
+const ATLAS_VERSION = '1.4';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.3 preserves 1,242 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_242;
+/** Atlas v1.4 has 1,246 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_246;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -880,6 +880,897 @@ export function buildRendererQueryIndexes(
   };
 }
 
+const ADR0049_WIZARD_CHECKPOINT = 'UI-CMD-CHAR-WIZARD-CHECKPOINT';
+const ADR0049_ROLL_COMMIT = 'UI-CMD-CHAR-CREATION-ROLL-COMMIT';
+const ADR0049_ROUTE_TRIGGER = 'Адресуемый route либо server/system event текущей роли';
+const ADR0049_ADVISOR_CONFIRM = 'Подтвердить навыки Советника';
+const ADR0049_ADVISOR_EDIT = 'Добавить или удалить допустимый навык Советника';
+const ADR0049_SIDE = 'Выбрать допустимую сторону Совы или Угря';
+const ADR0049_MONSTER = 'Выбрать вид симбиотического чудовища';
+const ADR0049_ROLL = 'Зафиксировать случайное определение симбионтов';
+const ADR0049_RETURN = 'Вернуться к выбору ветви до показа результата';
+const ADR0049_ADVISOR_CONFIRM_GUARD =
+  'UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll';
+const ADR0049_ADVISOR_EDIT_GUARD =
+  'iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft';
+const ADR0049_SIDE_GUARD =
+  'randomStatus=NOT_STARTED|PENDING|BINDING and bindingKind=OWL_EYE|EEL_ARM and selected side eligible';
+const ADR0049_MONSTER_GUARD =
+  'saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft';
+const ADR0049_ROLL_GUARD =
+  'UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019';
+const ADR0049_ADVISOR_IW_ROLL = 'Зафиксировать броски I и W Советника';
+const ADR0049_ADVISOR_IW_GUARD =
+  'UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP';
+const ADR0049_ADVISOR_ADD = 'Добавить симбионта в ручной состав';
+const ADR0049_ADVISOR_ADD_GUARD =
+  'UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor';
+const ADR0049_MANUAL_ADVISOR_DISPATCH = 'Dispatch persisted manual Advisor branch';
+const ADR0049_MANUAL_ADVISOR_GUARD =
+  'manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created';
+const ADR0049_MANUAL_NON_ADVISOR_DISPATCH = 'Dispatch persisted manual non-Advisor composition';
+const ADR0049_MANUAL_NON_ADVISOR_GUARD =
+  'manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created';
+const ADR0049_RANDOM_ADVISOR_DISPATCH = 'Dispatch persisted Advisor branch';
+const ADR0049_RANDOM_ADVISOR_GUARD =
+  'randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll';
+const ADR0049_RANDOM_NON_ADVISOR_DISPATCH = 'Dispatch persisted non-Advisor random composition';
+const ADR0049_RANDOM_NON_ADVISOR_GUARD =
+  'randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition';
+const ADR0049_ROLL_COMMAND_GUARDS =
+  'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.';
+const ADR0049_ROLL_ATOMICITY =
+  'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.';
+const ADR0049_ROLL_RECONNECT =
+  'Same request/command returns the stored result; a changed payload rejects and no replacement request is created.';
+const ADR0049_ROLL_FORMS = [
+  'CHR-003',
+  'CHR-004',
+  'CHR-020',
+  'CHR-041',
+  'CHR-021',
+  'CHR-022',
+  'CHR-037',
+  'CHR-038',
+] as const;
+const ADR0049_WORKFLOW_GUARD =
+  'Player owns the characterDraftId; stage-specific fields validate; draftRevision and wizardCheckpointId are current; every referenced random/decision receipt belongs to this draft and branch; a locked result is never replaceable.';
+const ADR0049_WORKFLOW_FORMS = [
+  'CHR-001',
+  'CHR-009',
+  'CHR-012',
+  'CHR-014',
+  'CHR-015',
+  'CHR-018',
+  'CHR-041',
+  'CHR-019',
+  'CHR-021',
+  'CHR-022',
+  'CHR-024',
+  'CHR-025',
+  'CHR-032',
+  'CHR-037',
+  'CHR-038',
+] as const;
+
+const ADR0049_FORM_CHANNELS = [
+  {
+    formId: 'CHR-020',
+    visible: [ADR0049_SIDE, ADR0049_MONSTER, ADR0049_ROLL, ADR0049_RETURN],
+    workflowCommandIds: [ADR0049_ROLL_COMMIT],
+  },
+  {
+    formId: 'CHR-041',
+    visible: [ADR0049_ADVISOR_IW_ROLL, ADR0049_ADVISOR_EDIT, ADR0049_ADVISOR_CONFIRM],
+    workflowCommandIds: [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
+  },
+] as const;
+
+const ADR0049_ROUTES = [
+  {
+    formId: 'CHR-014',
+    route: '/player/characters/:localCharacterId/create/chr-014/:skillId',
+  },
+  {
+    formId: 'CHR-018',
+    route: '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
+  },
+] as const;
+
+const ADR0049_ACTIONS = [
+  {
+    formId: 'CHR-018',
+    actionKey: 'CHR-018::CTA::001',
+    label: ADR0049_ADVISOR_ADD,
+    targetFormId: 'CHR-018',
+    kind: 'workflow-command',
+    guard: ADR0049_ADVISOR_ADD_GUARD,
+    workflowCommandIds: [ADR0049_WIZARD_CHECKPOINT],
+  },
+  {
+    formId: 'CHR-041',
+    actionKey: 'CHR-041::CTA::003',
+    label: ADR0049_ADVISOR_IW_ROLL,
+    targetFormId: 'CHR-041',
+    kind: 'workflow-command',
+    guard: ADR0049_ADVISOR_IW_GUARD,
+    workflowCommandIds: [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
+  },
+  {
+    formId: 'CHR-041',
+    actionKey: 'CHR-041::CTA::001',
+    label: ADR0049_ADVISOR_CONFIRM,
+    targetFormId: 'CHR-019',
+    kind: 'workflow-command',
+    guard: ADR0049_ADVISOR_CONFIRM_GUARD,
+    workflowCommandIds: [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
+  },
+  {
+    formId: 'CHR-041',
+    actionKey: 'CHR-041::CTA::002',
+    label: ADR0049_ADVISOR_EDIT,
+    targetFormId: 'CHR-041',
+    kind: 'local-draft-command',
+    guard: ADR0049_ADVISOR_EDIT_GUARD,
+    workflowCommandIds: [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
+  },
+  {
+    formId: 'CHR-020',
+    actionKey: 'CHR-020::CTA::002',
+    label: ADR0049_ROLL,
+    targetFormId: 'CHR-020',
+    kind: 'workflow-command',
+    guard: ADR0049_ROLL_GUARD,
+    workflowCommandIds: [ADR0049_ROLL_COMMIT],
+  },
+  {
+    formId: 'CHR-020',
+    actionKey: 'CHR-020::CTA::003',
+    label: ADR0049_SIDE,
+    targetFormId: 'CHR-020',
+    kind: 'local-draft-command',
+    guard: ADR0049_SIDE_GUARD,
+    workflowCommandIds: [ADR0049_ROLL_COMMIT],
+  },
+  {
+    formId: 'CHR-020',
+    actionKey: 'CHR-020::CTA::004',
+    label: ADR0049_MONSTER,
+    targetFormId: 'CHR-020',
+    kind: 'local-draft-command',
+    guard: ADR0049_MONSTER_GUARD,
+    workflowCommandIds: [ADR0049_ROLL_COMMIT],
+  },
+] as const;
+
+const ADR0049_TRANSITIONS = [
+  {
+    from: 'CHR-013',
+    to: 'CHR-014',
+    trigger: ADR0049_ROUTE_TRIGGER,
+    kind: 'role-state-reachability',
+    guard:
+      'role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog',
+  },
+  {
+    from: 'CHR-017',
+    to: 'CHR-018',
+    trigger: ADR0049_ROUTE_TRIGGER,
+    kind: 'role-state-reachability',
+    guard:
+      'role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition',
+  },
+  {
+    from: 'CHR-041',
+    to: 'CHR-019',
+    trigger: ADR0049_ADVISOR_CONFIRM,
+    kind: 'workflow-command',
+    guard: ADR0049_ADVISOR_CONFIRM_GUARD,
+  },
+  {
+    from: 'CHR-041',
+    to: 'CHR-041',
+    trigger: ADR0049_ADVISOR_EDIT,
+    kind: 'local-draft-command',
+    guard: ADR0049_ADVISOR_EDIT_GUARD,
+  },
+  {
+    from: 'CHR-020',
+    to: 'CHR-020',
+    trigger: ADR0049_ROLL,
+    kind: 'workflow-command',
+    guard: ADR0049_ROLL_GUARD,
+  },
+  {
+    from: 'CHR-020',
+    to: 'CHR-020',
+    trigger: ADR0049_SIDE,
+    kind: 'local-draft-command',
+    guard: ADR0049_SIDE_GUARD,
+  },
+  {
+    from: 'CHR-020',
+    to: 'CHR-020',
+    trigger: ADR0049_MONSTER,
+    kind: 'local-draft-command',
+    guard: ADR0049_MONSTER_GUARD,
+  },
+  {
+    from: 'CHR-018',
+    to: 'CHR-018',
+    trigger: ADR0049_ADVISOR_ADD,
+    kind: 'workflow-command',
+    guard: ADR0049_ADVISOR_ADD_GUARD,
+  },
+  {
+    from: 'CHR-018',
+    to: 'CHR-041',
+    trigger: ADR0049_MANUAL_ADVISOR_DISPATCH,
+    kind: 'system-event',
+    guard: ADR0049_MANUAL_ADVISOR_GUARD,
+  },
+  {
+    from: 'CHR-018',
+    to: 'CHR-019',
+    trigger: ADR0049_MANUAL_NON_ADVISOR_DISPATCH,
+    kind: 'system-event',
+    guard: ADR0049_MANUAL_NON_ADVISOR_GUARD,
+  },
+  {
+    from: 'CHR-041',
+    to: 'CHR-041',
+    trigger: ADR0049_ADVISOR_IW_ROLL,
+    kind: 'workflow-command',
+    guard: ADR0049_ADVISOR_IW_GUARD,
+  },
+  {
+    from: 'CHR-020',
+    to: 'CHR-041',
+    trigger: ADR0049_RANDOM_ADVISOR_DISPATCH,
+    kind: 'system-event',
+    guard: ADR0049_RANDOM_ADVISOR_GUARD,
+  },
+  {
+    from: 'CHR-020',
+    to: 'CHR-019',
+    trigger: ADR0049_RANDOM_NON_ADVISOR_DISPATCH,
+    kind: 'system-event',
+    guard: ADR0049_RANDOM_NON_ADVISOR_GUARD,
+  },
+] as const;
+
+const ADR0049_REQUIRED_FIELDS = {
+  'CHR-020': [
+    'characterDraftId',
+    'raceChoice=UNITED|FREE',
+    'symbiontAcquisitionMode=RANDOM',
+    'randomSequenceId',
+    'pendingRollRequestIdOrNull',
+    'diceInputModeSnapshot',
+    'seedOrManualFaces',
+    'drawnSpeciesAndBindings[]',
+    'duplicateRerollReceipts[]',
+    'advisorBranch',
+    'randomStatus=NOT_STARTED|PENDING|BINDING|COMMITTED',
+    'wizardCheckpointId',
+    'draftRevision',
+    'commandId',
+  ],
+  'CHR-041': [
+    'characterDraftId',
+    'advisorInstanceDraftId',
+    'advisorCard',
+    'iwRollRequestIds[2]',
+    'iwRollReceiptIds[2]OrNull',
+    'advisorIPlus8OrNull',
+    'advisorWPlus8OrNull',
+    'advisorSlotsAndSkills',
+    'trogrSuppressionState',
+    'acknowledged',
+    'wizardCheckpointId',
+    'draftRevision',
+    'commandId',
+  ],
+} as const;
+
+const ADR0049_TERMINAL_STATES = {
+  'CHR-020': ['NOT_STARTED', 'PENDING_INPUT', 'BINDING', 'COMMITTED', 'ADVISOR_ACK_REQUIRED'],
+  'CHR-041': ['IW_ROLLS_REQUIRED', 'CARD_REQUIRED', 'ACKNOWLEDGED'],
+} as const;
+
+const ADR0049_RANDOM_QNA_IDS = [
+  'Q-CHAR-002',
+  'Q-CHAR-004',
+  'Q-CHAR-007',
+  'Q-CHAR-008',
+  'Q-CHAR-010',
+  'Q-CORE-054',
+  'Q-SYM-003',
+] as const;
+
+const ADR0049_QNA_CHANNELS = [
+  {
+    qnaId: 'Q-CORE-054',
+    qaId: 'QA-QNA-Q-CORE-054-ROW-054',
+    formIds: ['CHR-016', 'CHR-017', 'CHR-020', 'CHR-019'],
+    scenario:
+      'Подтвердить материализацию строки Q&A в CHR-016, CHR-017, CHR-020, CHR-019: Нужно ли при ручном выборе заполнить все слоты и доступно ли чудовище?',
+  },
+  {
+    qnaId: 'Q-CHAR-004',
+    qaId: 'QA-QNA-Q-CHAR-004-ROW-300',
+    formIds: ['CHR-010', 'CHR-011', 'CHR-017', 'CHR-020', 'CHR-029'],
+    scenario:
+      'Подтвердить материализацию строки Q&A в CHR-010, CHR-011, CHR-017, CHR-020, CHR-029: Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?',
+  },
+  {
+    qnaId: 'Q-CHAR-010',
+    qaId: 'QA-QNA-Q-CHAR-010-ROW-306',
+    formIds: [
+      'CHR-001',
+      'CHR-018',
+      'CHR-020',
+      'CHR-025',
+      'CHR-033',
+      'NET-019',
+      'NET-021',
+      'NPC-011',
+      'ENM-013',
+    ],
+    scenario:
+      'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
+  },
+] as const;
+
+const ADR0049_AQA004 = {
+  ruleId: 'AQA-004',
+  qaId: 'QA-RULE-AQA-004',
+  formIds: ['CHR-010', 'CHR-011', 'CHR-017', 'CHR-020', 'CHR-029'],
+  scenario:
+    'Проверить rule handler и проекцию «Какие данные сохраняются, пересчитываются или удаляются при смене расы, класса, ручного симбионта и возврате на предыдущий этап?» через CHR-010, CHR-011, CHR-017, CHR-020, CHR-029.',
+} as const;
+
+const ADR0049_QCHAR010_EFFECTIVE_SUFFIX =
+  'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019, NET-021, NPC-011 and ENM-013.';
+
+type Adr0049Action = (typeof ADR0049_ACTIONS)[number];
+type Adr0049Transition = (typeof ADR0049_TRANSITIONS)[number];
+
+function adr0049Expect(actual: unknown, expected: unknown, path: string): void {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    fail(
+      WHERE,
+      `${path} differs from ADR 0049: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+    );
+  }
+}
+
+function adr0049Rows(value: JsonValue | undefined, path: string): JsonObject[] {
+  return asArray(value, WHERE, path).map((row, index) =>
+    asObject(row, WHERE, `${path}[${String(index)}]`),
+  );
+}
+
+function adr0049Single(
+  rows: readonly JsonObject[],
+  predicate: (row: JsonObject) => boolean,
+  path: string,
+  description: string,
+): JsonObject {
+  const matches = rows.filter(predicate);
+  if (matches.length !== 1) {
+    fail(WHERE, `${path}: expected exactly one ${description}, got ${String(matches.length)}`);
+  }
+  return matches[0]!;
+}
+
+function adr0049Form(forms: readonly JsonObject[], formId: string): JsonObject {
+  return adr0049Single(forms, (form) => form['id'] === formId, 'forms', `form ${formId}`);
+}
+
+function adr0049ActionRows(form: JsonObject): JsonObject[] {
+  const formId = nonEmptyString(form['id'], 'forms[].id');
+  const actions = asObject(form['actions'], WHERE, `${formId}.actions`);
+  return adr0049Rows(
+    actions['ctaAvailabilityByAction'],
+    `${formId}.actions.ctaAvailabilityByAction`,
+  );
+}
+
+function adr0049CheckAction(form: JsonObject, expected: Adr0049Action): void {
+  const formId = expected.formId;
+  const rows = adr0049ActionRows(form);
+  const action = adr0049Single(
+    rows,
+    (row) => row['actionKey'] === expected.actionKey,
+    `${formId}.actions.ctaAvailabilityByAction`,
+    expected.actionKey,
+  );
+  assertExactFields(action, `${formId}.${expected.actionKey}`, [
+    'label',
+    'targetFormId',
+    'guard',
+    'kind',
+    'actionKey',
+    'availabilityInputs',
+    'authoritativeSource',
+    'recomputeTriggers',
+    'whenGuardFalse',
+    'hiddenReasonDiagnostic',
+  ]);
+  for (const field of ['label', 'targetFormId', 'guard', 'kind', 'actionKey'] as const) {
+    adr0049Expect(action[field], expected[field], `${formId}.${expected.actionKey}.${field}`);
+  }
+
+  const baseline = adr0049Single(
+    rows,
+    (row) => row['actionKey'] === `${formId}::CTA::001`,
+    `${formId}.actions.ctaAvailabilityByAction`,
+    `${formId}::CTA::001 metadata baseline`,
+  );
+  if (expected.actionKey !== `${formId}::CTA::001`) {
+    for (const field of [
+      'availabilityInputs',
+      'recomputeTriggers',
+      'whenGuardFalse',
+      'hiddenReasonDiagnostic',
+    ] as const) {
+      adr0049Expect(action[field], baseline[field], `${formId}.${expected.actionKey}.${field}`);
+    }
+  }
+
+  const actions = asObject(form['actions'], WHERE, `${formId}.actions`);
+  const contract = asObject(
+    actions['availabilityContract'],
+    WHERE,
+    `${formId}.actions.availabilityContract`,
+  );
+  const contractSource = asObject(
+    contract['authoritativeSource'],
+    WHERE,
+    `${formId}.actions.availabilityContract.authoritativeSource`,
+  );
+  const actionSource = assertExactFields(
+    action['authoritativeSource'],
+    `${formId}.${expected.actionKey}.authoritativeSource`,
+    ['service', 'ruleIds', 'operationIds', 'workflowCommandIds', 'abilityIds'],
+  );
+  adr0049Expect(
+    actionSource,
+    contractSource,
+    `${formId}.${expected.actionKey}.authoritativeSource`,
+  );
+  adr0049Expect(
+    actionSource['workflowCommandIds'],
+    expected.workflowCommandIds,
+    `${formId}.${expected.actionKey}.authoritativeSource.workflowCommandIds`,
+  );
+  adr0049Expect(
+    contractSource['workflowCommandIds'],
+    expected.workflowCommandIds,
+    `${formId}.actions.availabilityContract.authoritativeSource.workflowCommandIds`,
+  );
+  const references = asObject(form['references'], WHERE, `${formId}.references`);
+  adr0049Expect(
+    references['workflowCommandIds'],
+    expected.workflowCommandIds,
+    `${formId}.references.workflowCommandIds`,
+  );
+}
+
+function adr0049CheckTransition(
+  forms: readonly JsonObject[],
+  transitions: readonly JsonObject[],
+  expected: Adr0049Transition,
+): void {
+  const id = `${expected.from}→${expected.to} (${expected.trigger})`;
+  const source = adr0049Form(forms, expected.from);
+  const target = adr0049Form(forms, expected.to);
+  const outgoing = adr0049Single(
+    adr0049Rows(source['transitionsOut'], `${expected.from}.transitionsOut`),
+    (row) =>
+      row['to'] === expected.to &&
+      row['trigger'] === expected.trigger &&
+      row['kind'] === expected.kind,
+    `${expected.from}.transitionsOut`,
+    id,
+  );
+  const incoming = adr0049Single(
+    adr0049Rows(target['transitionsIn'], `${expected.to}.transitionsIn`),
+    (row) =>
+      row['from'] === expected.from &&
+      row['trigger'] === expected.trigger &&
+      row['kind'] === expected.kind,
+    `${expected.to}.transitionsIn`,
+    id,
+  );
+  const topLevel = adr0049Single(
+    transitions,
+    (row) =>
+      row['from'] === expected.from &&
+      row['to'] === expected.to &&
+      row['trigger'] === expected.trigger &&
+      row['kind'] === expected.kind,
+    'transitions',
+    id,
+  );
+  assertExactFields(outgoing, `${expected.from}.transitionsOut ${id}`, [
+    'to',
+    'trigger',
+    'guard',
+    'kind',
+  ]);
+  assertExactFields(incoming, `${expected.to}.transitionsIn ${id}`, [
+    'from',
+    'trigger',
+    'guard',
+    'kind',
+  ]);
+  assertExactFields(topLevel, `transitions ${id}`, ['from', 'to', 'trigger', 'guard', 'kind']);
+  for (const [path, row] of [
+    [`${expected.from}.transitionsOut`, outgoing],
+    [`${expected.to}.transitionsIn`, incoming],
+    ['transitions', topLevel],
+  ] as const) {
+    adr0049Expect(row['guard'], expected.guard, `${path} ${id}.guard`);
+  }
+}
+
+type Adr0049FormChannel = (typeof ADR0049_FORM_CHANNELS)[number];
+
+function adr0049Allowed(channel: Adr0049FormChannel): string[] {
+  return [
+    'Только операции, перечисленные в references.operationIds либо соответствующей journey.',
+    'Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.',
+    `Разрешённые atlas workflow commands этой формы: ${channel.workflowCommandIds.join(', ')}.`,
+    'Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.',
+    `Разрешённые видимые действия/CTA именно этой формы: ${channel.visible.join('; ')}.`,
+  ];
+}
+
+function adr0049FormScenario(form: JsonObject, channel: Adr0049FormChannel): string {
+  const purpose = nonEmptyString(form['purpose'], `${channel.formId}.purpose`);
+  const requiredFields = asStringArray(
+    form['requiredFields'],
+    WHERE,
+    `${channel.formId}.requiredFields`,
+  );
+  return `Проверить буквальное назначение ${channel.formId}: ${purpose} Поля: ${requiredFields.join(', ')}. CTA: ${channel.visible.join(', ')}.`;
+}
+
+function adr0049InlineStates(formId: string, states: readonly string[]): string {
+  return `${JSON.stringify(formId)}: ${JSON.stringify(states).replaceAll(',', ', ')}`;
+}
+
+function adr0049WorkflowRow(form: JsonObject, commandId: string): JsonObject {
+  const formId = nonEmptyString(form['id'], 'forms[].id');
+  const actions = asObject(form['actions'], WHERE, `${formId}.actions`);
+  return adr0049Single(
+    adr0049Rows(
+      actions['workflowCommandAvailability'],
+      `${formId}.actions.workflowCommandAvailability`,
+    ),
+    (row) => row['commandId'] === commandId,
+    `${formId}.actions.workflowCommandAvailability`,
+    commandId,
+  );
+}
+
+function adr0049CheckRollCommands(
+  forms: readonly JsonObject[],
+  registryCoverage: JsonObject,
+  qaScenarios: readonly JsonObject[],
+): void {
+  for (const formId of ADR0049_ROLL_FORMS) {
+    const row = adr0049WorkflowRow(adr0049Form(forms, formId), ADR0049_ROLL_COMMIT);
+    adr0049Expect(row['guard'], ADR0049_ROLL_COMMAND_GUARDS, `${formId}.ROLL-COMMIT.guard`);
+  }
+
+  const command = adr0049Single(
+    adr0049Rows(registryCoverage['workflowCommands'], 'registryCoverage.workflowCommands'),
+    (row) => row['commandId'] === ADR0049_ROLL_COMMIT,
+    'registryCoverage.workflowCommands',
+    ADR0049_ROLL_COMMIT,
+  );
+  adr0049Expect(command['formIds'], ADR0049_ROLL_FORMS, 'ROLL-COMMIT.formIds');
+  adr0049Expect(command['guards'], ADR0049_ROLL_COMMAND_GUARDS, 'ROLL-COMMIT.guards');
+  adr0049Expect(command['atomicity'], ADR0049_ROLL_ATOMICITY, 'ROLL-COMMIT.atomicity');
+  adr0049Expect(command['reconnect'], ADR0049_ROLL_RECONNECT, 'ROLL-COMMIT.reconnect');
+
+  const qa = adr0049Single(
+    qaScenarios,
+    (row) => row['qaId'] === 'QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+    'qaScenarios',
+    'QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  );
+  adr0049Expect(
+    qa['scenario'],
+    `Выполнить UI-CMD-CHAR-CREATION-ROLL-COMMIT через ${ADR0049_ROLL_FORMS.join(', ')}, затем replay, stale, reconnect и противоположный повторный ответ.`,
+    'QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT.scenario',
+  );
+  adr0049Expect(
+    qa['expected'],
+    `${ADR0049_ROLL_ATOMICITY} ${ADR0049_ROLL_RECONNECT}`,
+    'QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT.expected',
+  );
+}
+
+function adr0049CheckQnaChannels(
+  forms: readonly JsonObject[],
+  registryCoverage: JsonObject,
+  qaScenarios: readonly JsonObject[],
+): void {
+  const randomReferences = asObject(
+    adr0049Form(forms, 'CHR-020')['references'],
+    WHERE,
+    'CHR-020.references',
+  );
+  adr0049Expect(randomReferences['qnaIds'], ADR0049_RANDOM_QNA_IDS, 'CHR-020.references.qnaIds');
+  const qnaRows = adr0049Rows(registryCoverage['qna'], 'registryCoverage.qna');
+
+  for (const channel of ADR0049_QNA_CHANNELS) {
+    const row = adr0049Single(
+      qnaRows,
+      (candidate) => candidate['qnaId'] === channel.qnaId,
+      'registryCoverage.qna',
+      channel.qnaId,
+    );
+    adr0049Expect(row['formIds'], channel.formIds, `${channel.qnaId}.formIds`);
+    const qa = adr0049Single(
+      qaScenarios,
+      (candidate) => candidate['qaId'] === channel.qaId,
+      'qaScenarios',
+      channel.qaId,
+    );
+    adr0049Expect(qa['scenario'], channel.scenario, `${channel.qaId}.scenario`);
+  }
+
+  const aqa = adr0049Single(
+    adr0049Rows(registryCoverage['activeRules'], 'registryCoverage.activeRules'),
+    (row) => row['ruleId'] === ADR0049_AQA004.ruleId,
+    'registryCoverage.activeRules',
+    ADR0049_AQA004.ruleId,
+  );
+  adr0049Expect(aqa['formIds'], ADR0049_AQA004.formIds, 'AQA-004.formIds');
+  const aqaQa = adr0049Single(
+    qaScenarios,
+    (row) => row['qaId'] === ADR0049_AQA004.qaId,
+    'qaScenarios',
+    ADR0049_AQA004.qaId,
+  );
+  adr0049Expect(aqaQa['scenario'], ADR0049_AQA004.scenario, 'AQA-004.scenario');
+
+  const qchar010 = adr0049Single(
+    qnaRows,
+    (row) => row['qnaId'] === 'Q-CHAR-010',
+    'registryCoverage.qna',
+    'Q-CHAR-010',
+  );
+  const override = nonEmptyString(
+    qchar010['laterAuthorOverride'],
+    'Q-CHAR-010.laterAuthorOverride',
+  );
+  if (!override.endsWith(ADR0049_QCHAR010_EFFECTIVE_SUFFIX)) {
+    fail(
+      WHERE,
+      `Q-CHAR-010.laterAuthorOverride must end with ${JSON.stringify(ADR0049_QCHAR010_EFFECTIVE_SUFFIX)}`,
+    );
+  }
+}
+
+/** ADR 0049 pins every new channel and every independent JSON mirror. */
+export function assertAdr0049MissingChannels(root: JsonObject): void {
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-08-21');
+  const forms = adr0049Rows(root['forms'], 'forms');
+  const transitions = adr0049Rows(root['transitions'], 'transitions');
+  const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
+  const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
+  const counts = asObject(root['counts'], WHERE, 'counts');
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_680);
+  expectCount(
+    WHERE,
+    'ADR 0049 declared transitions',
+    asNumber(counts['transitions'], WHERE, 'counts.transitions'),
+    1_680,
+  );
+
+  for (const expected of ADR0049_ROUTES) {
+    const form = adr0049Form(forms, expected.formId);
+    adr0049Expect(form['route'], expected.route, `${expected.formId}.route`);
+  }
+  for (const expected of ADR0049_ACTIONS) {
+    adr0049CheckAction(adr0049Form(forms, expected.formId), expected);
+  }
+  for (const expected of ADR0049_TRANSITIONS) {
+    adr0049CheckTransition(forms, transitions, expected);
+  }
+
+  for (const channel of ADR0049_FORM_CHANNELS) {
+    const form = adr0049Form(forms, channel.formId);
+    adr0049Expect(
+      form['requiredFields'],
+      ADR0049_REQUIRED_FIELDS[channel.formId],
+      `${channel.formId}.requiredFields`,
+    );
+    const actions = asObject(form['actions'], WHERE, `${channel.formId}.actions`);
+    adr0049Expect(actions['visible'], channel.visible, `${channel.formId}.actions.visible`);
+    adr0049Expect(actions['allowed'], adr0049Allowed(channel), `${channel.formId}.actions.allowed`);
+
+    for (const requirementId of ['REQ-002', 'REQ-063'] as const) {
+      const requirement = adr0049Single(
+        requirements,
+        (row) => row['requirementId'] === requirementId,
+        'coverageRequirements',
+        requirementId,
+      );
+      const step = adr0049Single(
+        adr0049Rows(requirement['actionSteps'], `${requirementId}.actionSteps`),
+        (row) => row['formId'] === channel.formId,
+        `${requirementId}.actionSteps`,
+        channel.formId,
+      );
+      adr0049Expect(
+        step['primaryActions'],
+        channel.visible,
+        `${requirementId}.${channel.formId}.primaryActions`,
+      );
+      adr0049Expect(
+        step['workflowCommandIds'],
+        channel.workflowCommandIds,
+        `${requirementId}.${channel.formId}.workflowCommandIds`,
+      );
+    }
+
+    const formQa = adr0049Single(
+      qaScenarios,
+      (row) => row['qaId'] === `QA-FORM-${channel.formId}`,
+      'qaScenarios',
+      `QA-FORM-${channel.formId}`,
+    );
+    adr0049Expect(
+      formQa['scenario'],
+      adr0049FormScenario(form, channel),
+      `QA-FORM-${channel.formId}.scenario`,
+    );
+  }
+
+  for (const requirementId of ['REQ-002', 'REQ-063'] as const) {
+    const requirement = adr0049Single(
+      requirements,
+      (row) => row['requirementId'] === requirementId,
+      'coverageRequirements',
+      requirementId,
+    );
+    const deltas = asObject(
+      requirement['expectedStateDeltas'],
+      WHERE,
+      `${requirementId}.expectedStateDeltas`,
+    );
+    const terminalStates = asObject(
+      deltas['terminalStatesByForm'],
+      WHERE,
+      `${requirementId}.expectedStateDeltas.terminalStatesByForm`,
+    );
+    for (const [formId, states] of Object.entries(ADR0049_TERMINAL_STATES)) {
+      adr0049Expect(
+        terminalStates[formId],
+        states,
+        `${requirementId}.terminalStatesByForm.${formId}`,
+      );
+    }
+
+    const requirementQa = adr0049Single(
+      qaScenarios,
+      (row) => row['qaId'] === `QA-${requirementId}`,
+      'qaScenarios',
+      `QA-${requirementId}`,
+    );
+    const expected = nonEmptyString(requirementQa['expected'], `QA-${requirementId}.expected`);
+    for (const [formId, states] of Object.entries(ADR0049_TERMINAL_STATES)) {
+      const literal = adr0049InlineStates(formId, states);
+      if (!expected.includes(literal)) {
+        fail(WHERE, `QA-${requirementId}.expected is missing ${JSON.stringify(literal)}`);
+      }
+    }
+  }
+
+  const advisor = adr0049Form(forms, 'CHR-041');
+  const components = asStringArray(advisor['components'], WHERE, 'CHR-041.components');
+  if (!components.includes('Skills checkpoint') || components.includes('Acknowledge only')) {
+    fail(
+      WHERE,
+      'CHR-041.components must contain "Skills checkpoint" and retire "Acknowledge only"',
+    );
+  }
+  const advisorStates = asObject(advisor['states'], WHERE, 'CHR-041.states');
+  adr0049Expect(
+    advisorStates['IW_ROLLS_REQUIRED'],
+    'Two addressed I/W requests are pending; commit them in I,W order without replacement or reroll.',
+    'CHR-041.states.IW_ROLLS_REQUIRED',
+  );
+  adr0049Expect(
+    advisorStates['CARD_REQUIRED'],
+    'Persisted Advisor data and both I/W receipts are shown; no cancel/reroll exists.',
+    'CHR-041.states.CARD_REQUIRED',
+  );
+  adr0049Expect(
+    advisorStates['ACKNOWLEDGED'],
+    'The same Advisor draft with confirmed skills continues to CHR-019.',
+    'CHR-041.states.ACKNOWLEDGED',
+  );
+  const advisorActions = asObject(advisor['actions'], WHERE, 'CHR-041.actions');
+  const workflowAvailability = adr0049Rows(
+    advisorActions['workflowCommandAvailability'],
+    'CHR-041.actions.workflowCommandAvailability',
+  );
+  expectCount(WHERE, 'CHR-041 workflow availability rows', workflowAvailability.length, 2);
+  for (const commandId of [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT] as const) {
+    const workflow = adr0049WorkflowRow(advisor, commandId);
+    assertExactFields(workflow, `CHR-041.workflow.${commandId}`, [
+      'commandId',
+      'guard',
+      'availabilityInputs',
+      'authoritativeSource',
+      'recomputeTriggers',
+      'hiddenReasonDiagnosticAudience',
+    ]);
+    adr0049Expect(
+      workflow['guard'],
+      commandId === ADR0049_ROLL_COMMIT ? ADR0049_ROLL_COMMAND_GUARDS : ADR0049_WORKFLOW_GUARD,
+      `CHR-041.workflow.${commandId}.guard`,
+    );
+    const source = asObject(
+      workflow['authoritativeSource'],
+      WHERE,
+      `CHR-041.workflow.${commandId}.authoritativeSource`,
+    );
+    adr0049Expect(
+      source['workflowCommandIds'],
+      [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
+      `CHR-041.workflow.${commandId}.authoritativeSource.workflowCommandIds`,
+    );
+    adr0049Expect(
+      workflow['hiddenReasonDiagnosticAudience'],
+      'GM_QA_ONLY',
+      `CHR-041.workflow.${commandId}.hiddenReasonDiagnosticAudience`,
+    );
+  }
+  const random = adr0049Form(forms, 'CHR-020');
+  const randomStates = asObject(random['states'], WHERE, 'CHR-020.states');
+  adr0049Expect(
+    randomStates['BINDING'],
+    'Displayed rolls are immutable; exact side snapshot awaits binding-only commit before dispatch.',
+    'CHR-020.states.BINDING',
+  );
+  adr0049Expect(
+    randomStates['ADVISOR_ACK_REQUIRED'],
+    'CHR-041 skills must be confirmed before composition.',
+    'CHR-020.states.ADVISOR_ACK_REQUIRED',
+  );
+
+  const registryCoverage = asObject(root['registryCoverage'], WHERE, 'registryCoverage');
+  const command = adr0049Single(
+    adr0049Rows(registryCoverage['workflowCommands'], 'registryCoverage.workflowCommands'),
+    (row) => row['commandId'] === ADR0049_WIZARD_CHECKPOINT,
+    'registryCoverage.workflowCommands',
+    ADR0049_WIZARD_CHECKPOINT,
+  );
+  adr0049Expect(command['formIds'], ADR0049_WORKFLOW_FORMS, 'WIZARD-CHECKPOINT.formIds');
+  const workflowQa = adr0049Single(
+    qaScenarios,
+    (row) => row['qaId'] === 'QA-WORKFLOW-UI-CMD-CHAR-WIZARD-CHECKPOINT',
+    'qaScenarios',
+    'QA-WORKFLOW-UI-CMD-CHAR-WIZARD-CHECKPOINT',
+  );
+  adr0049Expect(
+    workflowQa['scenario'],
+    `Выполнить UI-CMD-CHAR-WIZARD-CHECKPOINT через ${ADR0049_WORKFLOW_FORMS.join(', ')}, затем replay, stale, reconnect и противоположный повторный ответ.`,
+    'QA-WORKFLOW-UI-CMD-CHAR-WIZARD-CHECKPOINT.scenario',
+  );
+  adr0049CheckRollCommands(forms, registryCoverage, qaScenarios);
+  adr0049CheckQnaChannels(forms, registryCoverage, qaScenarios);
+}
+
 export async function importAtlas(): Promise<AtlasImport> {
   const root = asObject(
     JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as JsonValue,
@@ -940,6 +1831,7 @@ export async function importAtlas(): Promise<AtlasImport> {
     qaScenarios,
     asNumber(counts['workflowCommands'], WHERE, 'counts.workflowCommands'),
   );
+  assertAdr0049MissingChannels(root);
 
   // --- forms --------------------------------------------------------------
   const formIds: string[] = [];

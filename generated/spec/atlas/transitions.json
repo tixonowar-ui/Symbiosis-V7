@@ -4936,14 +4936,14 @@
   },
   {
     "from": "CHR-020",
-    "guard": "random sequence committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
+    "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=true; Advisor draft and two addressed I/W results preserved; no reroll",
     "kind": "system-event",
     "to": "CHR-041",
     "trigger": "Dispatch persisted Advisor branch"
   },
   {
     "from": "CHR-020",
-    "guard": "random sequence committed; advisorBranch=false; full species/binding/random provenance attached to composition",
+    "guard": "randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition",
     "kind": "system-event",
     "to": "CHR-019",
     "trigger": "Dispatch persisted non-Advisor random composition"
@@ -9542,6 +9542,13 @@
   },
   {
     "from": "CHR-013",
+    "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; skillId exists in current eligible or inspectable catalog",
+    "kind": "role-state-reachability",
+    "to": "CHR-014",
+    "trigger": "Адресуемый route либо server/system event текущей роли"
+  },
+  {
+    "from": "CHR-013",
     "guard": "skill-stage revision current",
     "kind": "normative",
     "to": "CHR-015",
@@ -9591,6 +9598,13 @@
   },
   {
     "from": "CHR-017",
+    "guard": "role=player; все entryConditions и guardStates целевой формы выполнены; speciesKey is compatible with race/manual composition",
+    "kind": "role-state-reachability",
+    "to": "CHR-018",
+    "trigger": "Адресуемый route либо server/system event текущей роли"
+  },
+  {
+    "from": "CHR-017",
     "guard": "symbiontAcquisitionMode=MANUAL; composition draft exists",
     "kind": "normative",
     "to": "CHR-019",
@@ -9626,10 +9640,24 @@
   },
   {
     "from": "CHR-018",
-    "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid",
+    "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor",
     "kind": "workflow-command",
-    "to": "CHR-019",
+    "to": "CHR-018",
     "trigger": "Добавить симбионта в ручной состав"
+  },
+  {
+    "from": "CHR-018",
+    "guard": "manual composition committed; advisorBranch=true; Advisor draft and two addressed pending I/W requests preserved; no face/result or replacement request created",
+    "kind": "system-event",
+    "to": "CHR-041",
+    "trigger": "Dispatch persisted manual Advisor branch"
+  },
+  {
+    "from": "CHR-018",
+    "guard": "manual composition committed; advisorBranch=false; full species/binding provenance attached to composition; no Advisor I/W request created",
+    "kind": "system-event",
+    "to": "CHR-019",
+    "trigger": "Dispatch persisted manual non-Advisor composition"
   },
   {
     "from": "CHR-018",
@@ -9675,10 +9703,10 @@
   },
   {
     "from": "CHR-041",
-    "guard": "Advisor card and both I/W receipts persisted; acknowledgement only; no cancel/reroll",
-    "kind": "normative",
+    "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",
+    "kind": "workflow-command",
     "to": "CHR-019",
-    "trigger": "Подтвердить просмотр сохранённой карточки Советника"
+    "trigger": "Подтвердить навыки Советника"
   },
   {
     "from": "CHR-042",
@@ -11600,10 +11628,38 @@
   },
   {
     "from": "CHR-020",
-    "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT one persisted sequence; server dispatches CHR-041 for Advisor or CHR-019",
+    "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT current roll or binding-only phase; roll variant preserves the persisted sequence and critical-monster snapshot; binding-only requires randomStatus=BINDING and exact side snapshot with a fresh commandId; server dispatches CHR-041 for Advisor or CHR-019",
     "kind": "workflow-command",
     "to": "CHR-020",
     "trigger": "Зафиксировать случайное определение симбионтов"
+  },
+  {
+    "from": "CHR-020",
+    "guard": "randomStatus=NOT_STARTED|PENDING|BINDING and bindingKind=OWL_EYE|EEL_ARM and selected side eligible",
+    "kind": "local-draft-command",
+    "to": "CHR-020",
+    "trigger": "Выбрать допустимую сторону Совы или Угря"
+  },
+  {
+    "from": "CHR-020",
+    "guard": "saved UNITED critical unlocks symbiotic monster choice; selection remains within eligible monster species and mutable draft",
+    "kind": "local-draft-command",
+    "to": "CHR-020",
+    "trigger": "Выбрать вид симбиотического чудовища"
+  },
+  {
+    "from": "CHR-041",
+    "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP",
+    "kind": "workflow-command",
+    "to": "CHR-041",
+    "trigger": "Зафиксировать броски I и W Советника"
+  },
+  {
+    "from": "CHR-041",
+    "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
+    "kind": "local-draft-command",
+    "to": "CHR-041",
+    "trigger": "Добавить или удалить допустимый навык Советника"
   },
   {
     "from": "CHR-021",

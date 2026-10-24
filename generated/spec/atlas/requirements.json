@@ -349,6 +349,8 @@
         "executableOperationIds": [],
         "formId": "CHR-020",
         "primaryActions": [
+          "Выбрать допустимую сторону Совы или Угря",
+          "Выбрать вид симбиотического чудовища",
           "Зафиксировать случайное определение симбионтов",
           "Вернуться к выбору ветви до показа результата"
         ],
@@ -360,9 +362,14 @@
         "executableOperationIds": [],
         "formId": "CHR-041",
         "primaryActions": [
-          "Подтвердить просмотр сохранённой карточки Советника"
+          "Зафиксировать броски I и W Советника",
+          "Добавить или удалить допустимый навык Советника",
+          "Подтвердить навыки Советника"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+          "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -658,6 +665,7 @@
         "CHR-020": [
           "NOT_STARTED",
           "PENDING_INPUT",
+          "BINDING",
           "COMMITTED",
           "ADVISOR_ACK_REQUIRED"
         ],
@@ -742,6 +750,7 @@
           "METADATA_VERSIONED"
         ],
         "CHR-041": [
+          "IW_ROLLS_REQUIRED",
           "CARD_REQUIRED",
           "ACKNOWLEDGED"
         ],
@@ -10574,6 +10583,8 @@
         "executableOperationIds": [],
         "formId": "CHR-020",
         "primaryActions": [
+          "Выбрать допустимую сторону Совы или Угря",
+          "Выбрать вид симбиотического чудовища",
           "Зафиксировать случайное определение симбионтов",
           "Вернуться к выбору ветви до показа результата"
         ],
@@ -10585,9 +10596,14 @@
         "executableOperationIds": [],
         "formId": "CHR-041",
         "primaryActions": [
-          "Подтвердить просмотр сохранённой карточки Советника"
+          "Зафиксировать броски I и W Советника",
+          "Добавить или удалить допустимый навык Советника",
+          "Подтвердить навыки Советника"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+          "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -10883,6 +10899,7 @@
         "CHR-020": [
           "NOT_STARTED",
           "PENDING_INPUT",
+          "BINDING",
           "COMMITTED",
           "ADVISOR_ACK_REQUIRED"
         ],
@@ -10967,6 +10984,7 @@
           "METADATA_VERSIONED"
         ],
         "CHR-041": [
+          "IW_ROLLS_REQUIRED",
           "CARD_REQUIRED",
           "ACKNOWLEDGED"
         ],
