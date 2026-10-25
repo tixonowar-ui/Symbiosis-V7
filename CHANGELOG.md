@@ -105,6 +105,17 @@
 
 ### Добавлено
 
+- **2026-10-25, issue #139, поставка исходных материалов:**
+  `artifacts/symbiont-media/` получил
+  `Symbiosis_V7_Symbiont_Art_Mapping_v1.0.xlsx` и
+  `Symbiosis_V7_Symbiont_Development_Tree_Mapping_v1.0.xlsx`. В них 23 арта и
+  23 изображения деревьев с явными SpeciesKey, source variant и PDF page.
+  Обычные виды поставлены исходным ZIP, чудовища и деревья извлечены из PDF;
+  41 исходный PNG уменьшен до UI-копии не более 1600 px без изменения архива.
+  Оба XLSX прошли проверку строк, embedded media и formula/static gate. Импорт,
+  ADR и закрытие #139 остаются отдельной работой. `artifacts/CHECKSUMS.sha256`
+  покрывает 22 файла; изображения не становятся источником правил или структуры
+  деревьев.
 - **2026-10-25, issue #135:** добавлен random symbiont slice
   `CHR-017 → CHR-020 → CHR-041 → CHR-019`: sanitized catalog, append-only
   physical records, duplicates, critical/monster outcomes, binding-only commit,
