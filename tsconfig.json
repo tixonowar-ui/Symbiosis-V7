@@ -15,6 +15,7 @@
     "tools/**/*.ts",
     "tests/integration/**/*.ts",
     "tests/fixtures/**/*.ts",
+    "tests/e2e/**/*.ts",
     "generated/types/**/*.ts",
     "*.config.ts"
   ],

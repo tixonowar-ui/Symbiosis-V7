@@ -303,6 +303,12 @@ describe('configured Fastify and ws host shell', () => {
     const script = await app.inject({ method: 'GET', url: '/app.js' });
     expect(script.statusCode).toBe(200);
     expect(script.headers['content-type']).toContain('text/javascript');
+    const clientRoute = await app.inject({
+      method: 'GET',
+      url: '/player/characters/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/create/chr-019',
+    });
+    expect(clientRoute.statusCode).toBe(200);
+    expect(clientRoute.body).toContain('data-form="APP-001"');
     const missing = await app.inject({ method: 'GET', url: '/not-built.js' });
     expect(missing.statusCode).toBe(404);
   });

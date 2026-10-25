@@ -3156,6 +3156,7 @@ async function sendStaticFile(
   staticRoot: string,
   requestedPath: string,
   reply: FastifyReply,
+  fallbackToIndex = false,
 ): Promise<void> {
   if (requestedPath.includes('\\') || requestedPath.includes('\0')) {
     await reply.code(400).send({ error: 'invalid static path' });
@@ -3173,6 +3174,10 @@ async function sendStaticFile(
     realPath = await realpath(path);
   } catch (error: unknown) {
     if (!notFound(error)) throw error;
+    if (fallbackToIndex && extname(requestedPath) === '') {
+      await sendStaticFile(staticRoot, 'index.html', reply);
+      return;
+    }
     await reply.code(404).send({ error: `static file ${JSON.stringify(requestedPath)} not found` });
     return;
   }
@@ -3295,7 +3300,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     await sendStaticFile(staticRoot, 'index.html', reply);
   });
   app.get<{ Params: { '*': string } }>('/*', async (request, reply) => {
-    await sendStaticFile(staticRoot, request.params['*'], reply);
+    await sendStaticFile(staticRoot, request.params['*'], reply, true);
   });
   return app;
 }

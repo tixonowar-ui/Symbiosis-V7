@@ -70,18 +70,21 @@ receipt и не получает повторный roll CTA. Manual Advisor, ma
 `randomSequenceId`. Её project-owned serialization:
 
 ```text
-{randomSequenceId,raceChoice:"FREE"|"UNITED",
- symbiontAcquisitionMode:"RANDOM",diceInputModeSnapshot:"AUTO"|"MANUAL",
+{randomSequenceId,raceCode:"FREE"|"UNITED",
+ diceInputModeSnapshot:"AUTO"|"MANUAL",
  pendingRollRequestOrNull:null|{
    rollRequestId,kind,originRollRequestIdOrNull,advisorAcceptedIndexOrNull},
- physicalRolls:[...append-only...],
- bindingRecordOrNull:null|{bindings,request,receipt,nextStageEnvelope}}
+ rollRecords:[{physicalRoll,request,receipt,nextStageEnvelope},...append-only...],
+ bindingRecordOrNull:null|{bindings,request,receipt,nextStageEnvelope},
+ advisorInstanceDraftIdOrNull:null|string,
+ advisorSkillRecordOrNull:null|{selectedSkills,request,receipt,nextStageEnvelope}}
 ```
 
 `randomStatus`, `pendingRollRequestIdOrNull`, `drawnSpeciesAndBindings[]`,
 `duplicateRerollReceipts[]`, accepted composition и modifier breakdown являются
-validated derived views, а не второй изменяемой копией тех же фактов. Persisted
-`physicalRolls[]` содержит пять closed kinds:
+validated derived views, а не второй изменяемой копией тех же фактов. Вложенные
+`physicalRoll` в `rollRecords[]` и экспонируемый host-адаптером domain
+`physicalRolls[]` содержат пять closed kinds:
 
 ```text
 SPECIES_ORIGIN

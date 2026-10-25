@@ -105,6 +105,17 @@
 
 ### Добавлено
 
+- **2026-10-25, issue #135:** добавлен random symbiont slice
+  `CHR-017 → CHR-020 → CHR-041 → CHR-019`: sanitized catalog, append-only
+  physical records, duplicates, critical/monster outcomes, binding-only commit,
+  Advisor I/W и exact-fill, read-only composition/interactions/modifier
+  breakdown. Durable replay, refresh, reconnect, restart и historic recovery
+  сохраняют sequence и receipts без нового seed или sampler; player projections
+  не раскрывают внутренние catalog/rule/RNG данные. Web получил реальные экраны
+  и local drafts для MANUAL, Owl/Eel side, monster и Advisor skills. Два реальных
+  Playwright-сценария — FREE EEL с LEFT binding и UNITED ADVISER с exact-fill —
+  проходят через production dist, Fastify+WS и изолированную SQLite. Ручная
+  `CHR-018`, `CHR-021+`, весь V1 и готовность продукта этим срезом не заявляются.
 - Поставка Atlas v1.4 добавляет пять недостающих каналов решений: адресуемые
   карточки навыка и симбионта с `:skillId`/`:speciesKey`, manual/random путь
   `CHR-018 → CHR-041 → CHR-019` с двумя addressed I/W requests и отдельным

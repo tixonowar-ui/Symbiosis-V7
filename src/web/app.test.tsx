@@ -19,6 +19,7 @@ import type {
   HostToClientMessage,
   HostToClientV2Message,
   HostToClientV3Message,
+  JsonObject,
   ProjectionSnapshotV2Message,
   SessionReconnectCapabilitiesV2Message,
 } from '@shared/index.js';
@@ -995,6 +996,255 @@ function chr015Base(
   };
 }
 
+const RANDOM_SEQUENCE_ID = 'free-auto-random-sequence';
+const ADVISOR_SEQUENCE_ID = 'free-advisor-random-sequence';
+const EEL_SPECIES = {
+  bindingPolicy: 'EEL_ARM',
+  kind: 'ORDINARY',
+  linkedStatCodes: ['D', 'I'],
+  slotCost: 1,
+  speciesKey: 'EEL',
+  speciesLabel: 'Угорь',
+  statModifiers: noStatModifiers,
+} as const;
+const EEL_ORIGIN = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 15 },
+  rollReceiptId: 'free-auto-eel-receipt',
+  rollRequestId: 'free-auto-eel-request',
+} as const;
+const EEL_BINDING_RIGHT = {
+  acceptedIndex: 0,
+  binding: { kind: 'EEL_ARM', side: 'RIGHT' },
+  speciesKey: 'EEL',
+} as const;
+const TAIPAN_FIRST_ROLL = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 2 },
+  rollReceiptId: 'united-critical-first-receipt',
+  rollRequestId: 'united-critical-first-request',
+} as const;
+const TAIPAN_DUPLICATE_ROLL = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 2 },
+  rollReceiptId: 'united-critical-duplicate-receipt',
+  rollRequestId: 'united-critical-duplicate-request',
+} as const;
+const CRITICAL_ORIGIN_ROLL = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 20 },
+  rollReceiptId: 'united-critical-origin-receipt',
+  rollRequestId: 'united-critical-origin-request',
+} as const;
+const CRITICAL_CONFIRM_ROLL = {
+  kind: 'CRITICAL_CONFIRMATION',
+  mechanical: { dieSides: 20, rawFace: 15 },
+  originRollRequestId: CRITICAL_ORIGIN_ROLL.rollRequestId,
+  rollReceiptId: 'united-critical-confirm-receipt',
+  rollRequestId: 'united-critical-confirm-request',
+  selectedMonsterSpeciesKeyOrNull: null,
+} as const;
+const TAIPAN_BINDING = {
+  acceptedIndex: 0,
+  binding: { kind: 'NONE' },
+  speciesKey: 'TAIPAN',
+} as const;
+const SKUNK_BINDING = {
+  acceptedIndex: 1,
+  binding: { kind: 'NONE' },
+  speciesKey: 'SKUNK',
+} as const;
+const CRITICAL_DUPLICATE = {
+  duplicateOfAcceptedIndex: 0,
+  rollReceiptId: TAIPAN_DUPLICATE_ROLL.rollReceiptId,
+  rollRequestId: TAIPAN_DUPLICATE_ROLL.rollRequestId,
+  speciesKey: 'TAIPAN',
+} as const;
+const MONSTER_ORIGIN_ROLL = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 20 },
+  rollReceiptId: 'united-monster-origin-receipt',
+  rollRequestId: 'united-monster-origin-request',
+} as const;
+
+function chr017Projection(pure = false): JsonObject {
+  return {
+    characterDraftId: CHARACTER_DRAFT_ID,
+    draftRevision: 9,
+    eligibleSymbiontSpecies: pure ? [] : [EEL_SPECIES],
+    manualCompositionDraft: [],
+    pureNoSymbiontRoute: pure,
+    raceChoice: pure ? 'PURE' : 'FREE',
+    selectedSpeciesOrNull: null,
+    slotCapacity: pure ? 0 : 1,
+    symbiontAcquisitionModeOrNull: pure ? null : 'RANDOM',
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+interface Chr020FixtureOptions {
+  readonly commandId?: string | null;
+  readonly diceInputModeSnapshot?: 'AUTO' | 'MANUAL';
+  readonly draftRevision?: number;
+  readonly drawnSpeciesAndBindings?: readonly JsonObject[];
+  readonly duplicateRerollReceipts?: readonly JsonObject[];
+  readonly pendingRollRequestIdOrNull?: string | null;
+  readonly physicalRolls?: readonly JsonObject[];
+  readonly raceChoice?: 'FREE' | 'UNITED';
+  readonly randomSequenceId?: string;
+  readonly randomStatus?: 'NOT_STARTED' | 'PENDING' | 'BINDING' | 'COMMITTED';
+}
+
+function chr020Projection(options: Chr020FixtureOptions = {}): JsonObject {
+  const randomStatus = options.randomStatus ?? 'NOT_STARTED';
+  return {
+    advisorBranch: false,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId: options.commandId ?? null,
+    diceInputModeSnapshot: options.diceInputModeSnapshot ?? 'AUTO',
+    draftRevision: options.draftRevision ?? 9,
+    drawnSpeciesAndBindings:
+      options.drawnSpeciesAndBindings ?? (randomStatus === 'BINDING' ? [EEL_BINDING_RIGHT] : []),
+    duplicateRerollReceipts: options.duplicateRerollReceipts ?? [],
+    pendingRollRequestIdOrNull:
+      options.pendingRollRequestIdOrNull === undefined
+        ? randomStatus === 'PENDING'
+          ? 'pending-roll-request'
+          : null
+        : options.pendingRollRequestIdOrNull,
+    raceChoice: options.raceChoice ?? 'FREE',
+    randomSequenceId: options.randomSequenceId ?? RANDOM_SEQUENCE_ID,
+    randomStatus,
+    seedOrManualFaces: {
+      entries: options.physicalRolls ?? (randomStatus === 'BINDING' ? [EEL_ORIGIN] : []),
+      kind: 'D20_RESULTS',
+    },
+    symbiontAcquisitionMode: 'RANDOM',
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function advisorAcrobaticsOption(suppressed: boolean): JsonObject {
+  const levels = [
+    { slotCost: 1, targetBonus: 1 },
+    { slotCost: 2, targetBonus: 2 },
+    { slotCost: 3, targetBonus: 3 },
+    { slotCost: 4, targetBonus: 4 },
+    { slotCost: 5, targetBonus: 5 },
+    { slotCost: 7, targetBonus: 6 },
+  ];
+  return {
+    bonusDomainScope: 'Лазание, прыжки, кувырки, сложные маршруты, паркур',
+    levelOptions: suppressed ? levels : levels.slice(0, 5),
+    missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
+    requirements: [
+      {
+        currentValue: 14,
+        minValue: 14,
+        satisfied: true,
+        statCode: 'D',
+        statLabel: 'Ловкость',
+      },
+    ],
+    skillId: 'ACROBATICS',
+    skillLabel: 'Акробатика',
+  };
+}
+
+function chr041Projection(suppressed = false): JsonObject {
+  const requiredSlotCount = suppressed ? 8 : 5;
+  const advisorIPlus8 = suppressed ? 16 : 12;
+  const advisorWPlus8 = suppressed ? 16 : 10;
+  return {
+    acknowledged: false,
+    advisorCard: {
+      advisorIPlus8,
+      advisorWPlus8,
+      effectsActive: !suppressed,
+      speciesKey: 'ADVISER',
+    },
+    advisorIPlus8OrNull: advisorIPlus8,
+    advisorInstanceDraftId: suppressed ? 'united-suppression-instance' : 'free-advisor-instance',
+    advisorSlotsAndSkills: {
+      requiredSlotCount,
+      selectedSkills: [],
+      selectionValidation: fixtureSkillSelectionValidation(requiredSlotCount, 0),
+      skillOptions: [advisorAcrobaticsOption(suppressed)],
+    },
+    advisorWPlus8OrNull: advisorWPlus8,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId: null,
+    draftRevision: 9,
+    iwRollReceiptIds: ['advisor-i-receipt', 'advisor-w-receipt'],
+    iwRollRequestIds: ['advisor-i-request', 'advisor-w-request'],
+    randomSequenceId: suppressed ? 'united-suppression-sequence' : ADVISOR_SEQUENCE_ID,
+    trogrSuppressionState: suppressed
+      ? { kind: 'SUPPRESSED', minimumIOrNull: 2, suppressionBOrNull: 1 }
+      : { kind: 'NOT_SUPPRESSED' },
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function chr019Projection(): JsonObject {
+  const modifiers = additiveModifiers([{ delta: -5, statCode: 'Z' }]);
+  return {
+    bindings: [{ acceptedIndex: 0, binding: { kind: 'NONE' }, speciesKey: 'TAIPAN' }],
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId: 'free-taipan-binding-command',
+    compositionValidation: 'VALID',
+    draftRevision: 10,
+    duplicatePolicy: { kind: 'REROLL_WITH_SEPARATE_RECEIPTS', receipts: [] },
+    interactionGraph: { kind: 'NO_INTERACTIONS' },
+    irreversibleBoundaryStatus: 'CROSSED',
+    raceChoice: 'FREE',
+    randomReceiptIds: ['free-taipan-origin-receipt'],
+    slotUsageAndCapacity: { capacity: 1, used: 1 },
+    speciesKeys: ['TAIPAN'],
+    suppressionDestructionAbsorptionPreview: { kind: 'NONE' },
+    symbiontInstancesDraft: [
+      {
+        absorbedSpeciesKeys: [],
+        acceptedIndex: 0,
+        currentOe: 50,
+        slotCost: 1,
+        speciesKey: 'TAIPAN',
+        speciesLabel: 'Тайпан',
+        status: 'ACTIVE',
+      },
+    ],
+    symbiontModifierBreakdown: {
+      bySpecies: [
+        {
+          acceptedIndex: 0,
+          effect: modifiers,
+          speciesKey: 'TAIPAN',
+          speciesLabel: 'Тайпан',
+          status: 'ACTIVE',
+        },
+      ],
+      total: modifiers,
+    },
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+type SymbiontUiFormId = 'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041';
+
+function symbiontBase(
+  formId: SymbiontUiFormId,
+  roleFilteredPayload: JsonObject,
+  availableActionKeys: ProjectionSnapshotV2Message['presentation']['base']['availableActionKeys'],
+): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys,
+    formId,
+    formType: 'screen',
+    roleFilteredPayload,
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeTemplate: `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`,
+  };
+}
+
 type DecisionFormId = 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
 const SET_DECISION_RULES = {
   'CHR-005': {
@@ -1401,6 +1651,37 @@ async function connectToWizardBase(
     reconnectWizardSnapshot(REQUEST_ID, base, revision),
   );
   return connection;
+}
+
+function reconnectToWizardBase(
+  container: HTMLDivElement,
+  socket: FakeWebSocket,
+  base: ProjectionSnapshotV2Message['presentation']['base'],
+  revision: number,
+): FakeWebSocket {
+  act(() => socket.serverClose(1006, 'UI durable snapshot reconnect'));
+  act(() => {
+    const button = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent === 'Переподключиться',
+    );
+    requiredElement(button ?? null, 'UI reconnect action').click();
+  });
+  const resumed = FakeWebSocket.instances.at(-1);
+  if (resumed === undefined) throw new Error('test setup: missing UI reconnect socket');
+  open(resumed);
+  const reconnect = decodedClientMessageV2(resumed, 0);
+  if (reconnect.messageType !== 'session.reconnect') {
+    throw new Error('test setup: missing UI session reconnect');
+  }
+  deliverPair(
+    resumed,
+    capabilities({
+      reconnectRequestId: reconnect.reconnectRequestId,
+      revisions: entityRevisions(revision),
+    }),
+    reconnectWizardSnapshot(reconnect.reconnectRequestId, base, revision),
+  );
+  return resumed;
 }
 
 async function connectToValidChr001(
@@ -5346,5 +5627,457 @@ describe('APP-001 web entry', () => {
     const request = decodedClientMessageV1(classSocket, classSocket.sent.length - 1);
     if (request.messageType !== 'command.request') throw new Error('missing class-only checkpoint');
     expect(request.payload).toMatchObject({ selectedSkills: [] });
+  });
+});
+
+describe('CHR-017 and CHR-020 symbiont UI', () => {
+  it('renders the sanitized catalog and host RANDOM CTA, while PURE has no symbiont actions', async () => {
+    const { container } = await connectToWizardBase(
+      symbiontBase('CHR-017', chr017Projection(), ['CHR-017::CTA::003']),
+      9,
+    );
+    expect(container.querySelector('[data-atlas-form-id="CHR-017"] h1')?.textContent).toBe(
+      'Каталог симбионтов',
+    );
+    expect(container.querySelector('[data-symbiont-slot-capacity]')?.textContent).toBe('1');
+    expect(container.querySelector('[data-symbiont-species="EEL"]')?.textContent).toContain(
+      'Угорь',
+    );
+    expect(container.querySelector('[data-symbiont-species-slot-cost]')?.textContent).toBe('1');
+    expect(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-017::CTA::003"]')
+        ?.textContent,
+    ).toBe('Начать сохранённую случайную ветвь');
+    expect(container.querySelector('[data-atlas-action-key="CHR-017::CTA::001"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-017::CTA::002"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-017::CTA::004"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/availabilityTrace|SourceType|SourceID|ruleId/u);
+
+    const pure = await connectToWizardBase(symbiontBase('CHR-017', chr017Projection(true), []), 9);
+    expect(pure.container.querySelector('[data-pure-no-symbiont-route]')).not.toBeNull();
+    expect(pure.container.querySelector('[data-symbiont-slot-capacity]')?.textContent).toBe('0');
+    expect(pure.container.querySelector('[data-eligible-symbionts="empty"]')).not.toBeNull();
+    expect(pure.container.querySelector('[data-atlas-actions="available-empty"]')).not.toBeNull();
+    expect(pure.container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+  });
+
+  it('keeps the MANUAL face local and exposes submit only after valid input', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-020', chr020Projection({ diceInputModeSnapshot: 'MANUAL' }), [
+        'CHR-020::CTA::002',
+      ]),
+      9,
+    );
+    const screen = requiredElement(
+      container.querySelector('[data-chr-020-random]'),
+      'CHR-020 MANUAL screen',
+    );
+    const revisions = [
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ];
+    const wireCount = socket.sent.length;
+    expect(container.querySelector('[data-random-input-mode="MANUAL"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-020::CTA::002"]')).toBeNull();
+
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-random-manual-face]'),
+        'CHR-020 MANUAL face',
+      ),
+      15,
+    );
+    expect(socket.sent).toHaveLength(wireCount);
+    expect([
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ]).toEqual(revisions);
+    expect(container.querySelector('[data-atlas-action-key="CHR-020::CTA::002"]')).not.toBeNull();
+  });
+
+  it('changes Eel side locally and sends a binding-only payload without a new roll', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-020', chr020Projection({ randomStatus: 'BINDING' }), [
+        'CHR-020::CTA::002',
+        'CHR-020::CTA::003',
+      ]),
+      9,
+    );
+    const screen = requiredElement(
+      container.querySelector('[data-chr-020-random]'),
+      'CHR-020 BINDING screen',
+    );
+    const revisions = [
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ];
+    const wireCount = socket.sent.length;
+    expect(container.querySelector('[data-random-binding-only]')?.textContent).toContain(
+      'без нового',
+    );
+    expect(container.querySelector('[data-random-accepted-species="EEL"]')).not.toBeNull();
+    expect(container.querySelector('[data-random-duplicates="empty"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-random-side-value]')?.getAttribute('data-random-side-value'),
+    ).toBe('RIGHT');
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-random-side]'),
+        'CHR-020 Eel side selector',
+      ),
+      'LEFT',
+    );
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(
+      container.querySelector('[data-random-side-value]')?.getAttribute('data-random-side-value'),
+    ).toBe('LEFT');
+    expect([
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ]).toEqual(revisions);
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-020::CTA::002"]'),
+        'CHR-020 binding action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing CHR-020 binding');
+    expect(request.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      physicalRollReceiptIds: [EEL_ORIGIN.rollReceiptId],
+      randomSequenceId: RANDOM_SEQUENCE_ID,
+      selectedBindings: [{ side: 'LEFT', speciesKey: 'EEL' }],
+      sourceFormId: 'CHR-020',
+      stage: 'SYMBIONTS',
+      variant: 'BINDING',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(request.payload).not.toHaveProperty('manualFaceOrNull');
+    expect(request.payload).not.toHaveProperty('pendingRollRequestIdOrNull');
+    expect(socket.sent).toHaveLength(wireCount + 1);
+  });
+
+  it('selects a monster locally without changing revisions or exposing early submit', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase(
+        'CHR-020',
+        chr020Projection({
+          pendingRollRequestIdOrNull: 'united-monster-confirm-request',
+          physicalRolls: [MONSTER_ORIGIN_ROLL],
+          raceChoice: 'UNITED',
+          randomSequenceId: 'united-monster-sequence',
+          randomStatus: 'PENDING',
+        }),
+        ['CHR-020::CTA::002', 'CHR-020::CTA::004'],
+      ),
+      9,
+    );
+    const screen = requiredElement(
+      container.querySelector('[data-chr-020-random]'),
+      'CHR-020 monster screen',
+    );
+    const revisions = [
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ];
+    const wireCount = socket.sent.length;
+    expect(container.querySelector('[data-random-input-mode="AUTO"]')).not.toBeNull();
+    expect(container.querySelector('[data-random-pending-request]')?.textContent).toBe(
+      'united-monster-confirm-request',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-020::CTA::002"]')).toBeNull();
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-random-monster]'),
+        'CHR-020 monster selector',
+      ),
+      'PUPPETEER',
+    );
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(container.querySelector('[data-random-monster-selection]')?.textContent).toContain(
+      'PUPPETEER',
+    );
+    expect([
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ]).toEqual(revisions);
+    expect(container.querySelector('[data-atlas-action-key="CHR-020::CTA::002"]')).not.toBeNull();
+  });
+
+  it('renders accepted, duplicates and critical history from the newer durable snapshot', async () => {
+    const initial = chr020Projection({
+      drawnSpeciesAndBindings: [TAIPAN_BINDING],
+      duplicateRerollReceipts: [CRITICAL_DUPLICATE],
+      pendingRollRequestIdOrNull: CRITICAL_CONFIRM_ROLL.rollRequestId,
+      physicalRolls: [TAIPAN_FIRST_ROLL, TAIPAN_DUPLICATE_ROLL, CRITICAL_ORIGIN_ROLL],
+      raceChoice: 'UNITED',
+      randomSequenceId: 'united-critical-sequence',
+      randomStatus: 'PENDING',
+    });
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-020', initial, ['CHR-020::CTA::002']),
+      9,
+    );
+    expect(container.querySelectorAll('[data-random-physical-roll]')).toHaveLength(3);
+    expect(container.querySelector('[data-random-accepted-species="TAIPAN"]')).not.toBeNull();
+    expect(
+      container.querySelector(`[data-random-duplicate="${TAIPAN_DUPLICATE_ROLL.rollReceiptId}"]`),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-current-roll="true"]')?.textContent).toContain('20');
+
+    const durable = chr020Projection({
+      commandId: 'united-critical-confirm-command',
+      draftRevision: 10,
+      drawnSpeciesAndBindings: [TAIPAN_BINDING, SKUNK_BINDING],
+      duplicateRerollReceipts: [CRITICAL_DUPLICATE],
+      pendingRollRequestIdOrNull: null,
+      physicalRolls: [
+        TAIPAN_FIRST_ROLL,
+        TAIPAN_DUPLICATE_ROLL,
+        CRITICAL_ORIGIN_ROLL,
+        CRITICAL_CONFIRM_ROLL,
+      ],
+      raceChoice: 'UNITED',
+      randomSequenceId: 'united-critical-sequence',
+      randomStatus: 'BINDING',
+    });
+    reconnectToWizardBase(
+      container,
+      socket,
+      symbiontBase('CHR-020', durable, ['CHR-020::CTA::002']),
+      10,
+    );
+    expect(container.querySelectorAll('[data-random-physical-roll]')).toHaveLength(4);
+    expect(container.querySelector('[data-random-critical-outcome]')?.textContent).toBe(
+      'Чудовище не выбрано',
+    );
+    expect(container.querySelector('[data-random-accepted-species="SKUNK"]')).not.toBeNull();
+    expect(
+      container.querySelector(`[data-random-duplicate="${TAIPAN_DUPLICATE_ROLL.rollReceiptId}"]`),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-chr-020-random]')?.getAttribute('data-draft-revision'),
+    ).toBe('10');
+  });
+});
+
+describe('CHR-041 and CHR-019 symbiont UI', () => {
+  it('supports Advisor add/remove and exact-fill locally, resets on reconnect, then checkpoints', async () => {
+    const base = symbiontBase('CHR-041', chr041Projection(), [
+      'CHR-041::CTA::001',
+      'CHR-041::CTA::002',
+    ]);
+    const { container, socket } = await connectToWizardBase(base, 9);
+    const screen = requiredElement(
+      container.querySelector('[data-chr-041-advisor]'),
+      'CHR-041 Advisor screen',
+    );
+    const revisions = [
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ];
+    const wireCount = socket.sent.length;
+    expect(container.querySelector('[data-atlas-form-id="CHR-041"] h1')?.textContent).toBe(
+      'Карточка Советника при создании',
+    );
+    expect(container.querySelector('[data-advisor-i-value]')?.textContent).toBe('12');
+    expect(container.querySelector('[data-advisor-w-value]')?.textContent).toBe('10');
+    expect(container.querySelector('[data-advisor-iw-roll="0"]')?.textContent).toContain(
+      'advisor-i-receipt',
+    );
+    expect(container.querySelector('[data-advisor-suppression="NOT_SUPPRESSED"]')).not.toBeNull();
+    expect(container.querySelector('[data-advisor-requirement="D"]')?.textContent).toContain('14');
+    expect(container.querySelector('[data-advisor-level-cost="5"]')?.textContent).toContain(
+      '5 сл.',
+    );
+    expect(
+      container.querySelector('[data-advisor-selection-validation="UNDERFILLED"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::001"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::002"]')).toBeNull();
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-skill-candidate]'),
+        'Advisor candidate',
+      ),
+      'ACROBATICS',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-target-bonus]'),
+        'Advisor target bonus',
+      ),
+      '5',
+    );
+    expect(socket.sent).toHaveLength(wireCount);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::002"]'),
+        'Advisor local add',
+      ).click();
+    });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(container.querySelector('[data-advisor-slot-usage]')?.textContent).toContain('5 / 5');
+    expect(container.querySelector('[data-advisor-selection-validation="EXACT"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::001"]')).not.toBeNull();
+    expect([
+      screen.getAttribute('data-state-revision'),
+      screen.getAttribute('data-projection-revision'),
+      screen.getAttribute('data-draft-revision'),
+    ]).toEqual(revisions);
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-skill-candidate]'),
+        'Advisor removal candidate',
+      ),
+      'ACROBATICS',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::002"]'),
+        'Advisor local remove',
+      ).click();
+    });
+    expect(container.querySelector('[data-advisor-selected-skills="empty"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-advisor-selection-validation="UNDERFILLED"]'),
+    ).not.toBeNull();
+    expect(socket.sent).toHaveLength(wireCount);
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-skill-candidate]'),
+        'Advisor reconnect candidate',
+      ),
+      'ACROBATICS',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-target-bonus]'),
+        'Advisor reconnect target',
+      ),
+      '5',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::002"]'),
+        'Advisor reconnect local add',
+      ).click();
+    });
+    const resumed = reconnectToWizardBase(container, socket, base, 9);
+    expect(container.querySelector('[data-advisor-selected-skills="empty"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-advisor-selection-validation="UNDERFILLED"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::001"]')).toBeNull();
+
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-skill-candidate]'),
+        'Advisor checkpoint candidate',
+      ),
+      'ACROBATICS',
+    );
+    select(
+      requiredElement(
+        container.querySelector<HTMLSelectElement>('[data-advisor-target-bonus]'),
+        'Advisor checkpoint target',
+      ),
+      '5',
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::002"]'),
+        'Advisor checkpoint local add',
+      ).click();
+    });
+    expect(resumed.sent).toHaveLength(1);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::001"]'),
+        'Advisor host checkpoint',
+      ).click();
+    });
+    const request = decodedClientMessageV1(resumed, resumed.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing Advisor checkpoint');
+    expect(request.payload).toMatchObject({
+      selectedSkills: [{ skillId: 'ACROBATICS', targetBonus: 5 }],
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+    });
+    expect(JSON.stringify(request.payload)).not.toMatch(/slotCost|skillLabel|requirements/u);
+    expect(resumed.sent).toHaveLength(2);
+  });
+
+  it('renders suppressed Advisor values and inactive status without unavailable roll actions', async () => {
+    const { container } = await connectToWizardBase(
+      symbiontBase('CHR-041', chr041Projection(true), ['CHR-041::CTA::001', 'CHR-041::CTA::002']),
+      9,
+    );
+    expect(container.querySelector('[data-advisor-i-value]')?.textContent).toBe('16');
+    expect(container.querySelector('[data-advisor-w-value]')?.textContent).toBe('16');
+    expect(
+      container
+        .querySelector('[data-chr-041-advisor]')
+        ?.getAttribute('data-advisor-effects-active'),
+    ).toBe('false');
+    expect(container.querySelector('[data-advisor-effects-status]')?.textContent).toContain(
+      'неактивны',
+    );
+    expect(container.querySelector('[data-advisor-suppression="SUPPRESSED"]')).not.toBeNull();
+    expect(container.querySelector('[data-advisor-suppression-minimum-i]')?.textContent).toBe('2');
+    expect(container.querySelector('[data-advisor-suppression-b]')?.textContent).toBe('1');
+    expect(container.querySelector('[data-advisor-level-cost="6"]')?.textContent).toContain(
+      '7 сл.',
+    );
+    expect(container.querySelector('[data-advisor-slot-usage]')?.textContent).toContain('0 / 8');
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::003"]')).toBeNull();
+  });
+
+  it('renders actionless CHR-019 composition, positive empty states and modifier breakdown', async () => {
+    const { container } = await connectToWizardBase(
+      symbiontBase('CHR-019', chr019Projection(), []),
+      10,
+    );
+    expect(container.querySelector('[data-atlas-form-id="CHR-019"] h1')?.textContent).toBe(
+      'Состав симбионтов и взаимодействия',
+    );
+    expect(
+      container.querySelector('[data-chr-019-composition]')?.getAttribute('data-read-only'),
+    ).toBe('true');
+    expect(container.querySelector('[data-symbiont-instance="TAIPAN"]')?.textContent).toContain(
+      '50',
+    );
+    expect(container.querySelector('[data-composition-slot-usage]')?.textContent).toBe('1 / 1');
+    expect(container.querySelector('[data-composition-binding="TAIPAN"]')).not.toBeNull();
+    expect(container.querySelector('[data-symbiont-interactions="empty"]')).not.toBeNull();
+    expect(container.querySelector('[data-composition-duplicates="empty"]')).not.toBeNull();
+    expect(container.querySelector('[data-composition-random-receipts="ready"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-symbiont-modifier-species="TAIPAN"] [data-stat-modifier="Z"]')
+        ?.textContent,
+    ).toContain('−5');
+    expect(
+      container.querySelector('[data-symbiont-modifier-total] [data-stat-modifier="Z"]')
+        ?.textContent,
+    ).toContain('−5');
+    expect(container.querySelector('[data-atlas-actions="available-empty"]')).not.toBeNull();
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+    expect(container.querySelectorAll('button')).toHaveLength(0);
+    expect(container.textContent).not.toContain('CHR-021');
   });
 });

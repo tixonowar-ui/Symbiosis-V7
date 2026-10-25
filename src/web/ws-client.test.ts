@@ -3,20 +3,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   decodeClientMessage,
   decodeClientMessageV2,
+  encodeHostMessage,
   encodeHostMessageV2,
   WIRE_PROTOCOL_V2_VERSION,
+  WIRE_PROTOCOL_VERSION,
 } from '@shared/index.js';
 import type {
+  ClientToHostMessage,
+  CommandReceipt,
+  HostToClientMessage,
   HostToClientV2Message,
   JsonObject,
+  JsonValue,
   ProjectionSnapshotV2Message,
   SessionReconnectCapabilitiesV2Message,
 } from '@shared/index.js';
 
 import { connectProjection, WEB_PROTOCOL_VOCABULARY } from './ws-client.js';
 import type {
+  AdvisorSkillSelectionDraft,
   CharacterSkillSelectionDraft,
   ProjectionConnection,
+  RandomSymbiontDraft,
   WebClientState,
 } from './ws-client.js';
 
@@ -246,6 +254,48 @@ function checkedHostTextV2(message: HostToClientV2Message): string {
   return encoded.text;
 }
 
+function checkedHostText(message: HostToClientMessage): string {
+  const encoded = encodeHostMessage(message, WEB_PROTOCOL_VOCABULARY);
+  if (!encoded.ok) throw new Error(`invalid host fixture: ${JSON.stringify(encoded.refusal)}`);
+  return encoded.text;
+}
+
+type DecoderWorkflowCommand = Extract<
+  ClientToHostMessage,
+  { readonly commandKind: 'workflow-command'; readonly messageType: 'command.request' }
+>;
+
+function decoderCommand(socket: DecoderFakeWebSocket): DecoderWorkflowCommand {
+  const text = socket.sent.at(-1);
+  if (text === undefined) throw new Error('missing decoder command');
+  const decoded = decodeClientMessage(text, WEB_PROTOCOL_VOCABULARY);
+  if (
+    !decoded.ok ||
+    decoded.value.messageType !== 'command.request' ||
+    decoded.value.commandKind !== 'workflow-command'
+  ) {
+    throw new Error('invalid decoder workflow command');
+  }
+  return decoded.value;
+}
+
+function decoderTerminalText(receipt: CommandReceipt, replay = false): string {
+  const message: HostToClientMessage = replay
+    ? {
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        messageType: 'command.replay',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      }
+    : {
+        lifecycleState: 'COMMITTED',
+        messageType: 'command.result',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        receipt,
+      };
+  return checkedHostText(message);
+}
+
 // skills.json owns the 41-card cardinality. The remaining values below are a synthetic,
 // internally signed protocol fixture; host tests separately assert CORE-081/165/167 values.
 const DECODER_SKILL_STATS = { C: 8, D: 8, I: 8, M: 8, S: 8, W: 4, Z: 8 } as const;
@@ -362,26 +412,398 @@ function decoderChr015Projection(
   } as const;
 }
 
-type DecoderFormId = 'CHR-002' | 'CHR-010' | 'CHR-013' | 'CHR-015' | 'CHR-016';
+// Source-backed values from creation-symbiont-server.test.ts, symbiont-stage catalog,
+// and advisor.test.ts. Opaque ids only correlate this internally signed protocol fixture.
+const DECODER_EMPTY_BRANCH_CACHE_HASH =
+  '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945';
+const DECODER_RANDOM_SEQUENCE_ID = 'free-auto-random-sequence';
+const DECODER_ADVISOR_SEQUENCE_ID = 'free-advisor-random-sequence';
+const DECODER_BRANCH_UUID = 'free-auto-selection-command-live-branch';
+const DECODER_EEL_SPECIES = {
+  bindingPolicy: 'EEL_ARM',
+  kind: 'ORDINARY',
+  linkedStatCodes: ['D', 'I'],
+  slotCost: 1,
+  speciesKey: 'EEL',
+  speciesLabel: 'Угорь',
+  statModifiers: { kind: 'NO_STAT_MODIFIERS' },
+} as const;
+const DECODER_EEL_ORIGIN = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 15 },
+  rollReceiptId: 'free-auto-selection-command-live-receipt-1',
+  rollRequestId: 'free-auto-selection-command-live-roll-request-1',
+} as const;
+const DECODER_EEL_BINDING_RIGHT = {
+  acceptedIndex: 0,
+  binding: { kind: 'EEL_ARM', side: 'RIGHT' },
+  speciesKey: 'EEL',
+} as const;
+const DECODER_EEL_BINDING_LEFT = {
+  acceptedIndex: 0,
+  binding: { kind: 'EEL_ARM', side: 'LEFT' },
+  speciesKey: 'EEL',
+} as const;
+const DECODER_MONSTER_ORIGIN = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 20 },
+  rollReceiptId: 'united-monster-selection-live-receipt-1',
+  rollRequestId: 'united-monster-selection-live-roll-request-1',
+} as const;
+const DECODER_MONSTER_CONFIRM = {
+  kind: 'CRITICAL_CONFIRMATION',
+  mechanical: { dieSides: 20, rawFace: 14 },
+  originRollRequestId: DECODER_MONSTER_ORIGIN.rollRequestId,
+  rollReceiptId: 'united-monster-selection-live-receipt-2',
+  rollRequestId: 'united-monster-selection-live-roll-request-2',
+  selectedMonsterSpeciesKeyOrNull: 'CHIMERA',
+} as const;
+const DECODER_CHIMERA_BINDING = {
+  acceptedIndex: 0,
+  binding: { kind: 'NONE' },
+  speciesKey: 'CHIMERA',
+} as const;
+const DECODER_ADVISOR_ORIGIN = {
+  kind: 'SPECIES_ORIGIN',
+  mechanical: { dieSides: 20, rawFace: 9 },
+  rollReceiptId: 'free-advisor-origin-receipt',
+  rollRequestId: 'free-advisor-origin-request',
+} as const;
+const DECODER_ADVISOR_I_ROLL = {
+  advisorAcceptedIndex: 0,
+  kind: 'ADVISOR_I',
+  mechanical: { dieSides: 20, rawFace: 4 },
+  rollReceiptId: 'free-advisor-i-receipt',
+  rollRequestId: 'free-advisor-i-request',
+} as const;
+const DECODER_ADVISOR_W_ROLL = {
+  advisorAcceptedIndex: 0,
+  kind: 'ADVISOR_W',
+  mechanical: { dieSides: 20, rawFace: 2 },
+  rollReceiptId: 'free-advisor-w-receipt',
+  rollRequestId: 'free-advisor-w-request',
+} as const;
+const DECODER_ADVISOR_BINDING = {
+  acceptedIndex: 0,
+  binding: { kind: 'NONE' },
+  speciesKey: 'ADVISER',
+} as const;
+const DECODER_ACROBATICS_OPTION = {
+  bonusDomainScope: 'Лазание, прыжки, кувырки, сложные маршруты, паркур',
+  levelOptions: [
+    { slotCost: 1, targetBonus: 1 },
+    { slotCost: 2, targetBonus: 2 },
+    { slotCost: 3, targetBonus: 3 },
+    { slotCost: 4, targetBonus: 4 },
+    { slotCost: 5, targetBonus: 5 },
+  ],
+  missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
+  requirements: [
+    {
+      currentValue: 14,
+      minValue: 14,
+      satisfied: true,
+      statCode: 'D',
+      statLabel: 'Ловкость',
+    },
+  ],
+  skillId: 'ACROBATICS',
+  skillLabel: 'Акробатика',
+} as const;
+
+function decoderChr017Projection(): JsonObject {
+  return {
+    characterDraftId: CHARACTER_DRAFT_ID,
+    draftRevision: 9,
+    eligibleSymbiontSpecies: [DECODER_EEL_SPECIES],
+    manualCompositionDraft: [],
+    pureNoSymbiontRoute: false,
+    raceChoice: 'FREE',
+    selectedSpeciesOrNull: null,
+    slotCapacity: 1,
+    symbiontAcquisitionModeOrNull: 'RANDOM',
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+interface DecoderChr020Options {
+  readonly advisorBranch?: boolean;
+  readonly commandId?: string | null;
+  readonly diceInputModeSnapshot?: 'AUTO' | 'MANUAL';
+  readonly draftRevision?: number;
+  readonly drawnSpeciesAndBindings?: readonly JsonObject[];
+  readonly pendingRollRequestIdOrNull?: string | null;
+  readonly physicalRolls?: readonly JsonObject[];
+  readonly raceChoice?: 'FREE' | 'UNITED';
+  readonly randomSequenceId?: string;
+  readonly randomStatus?: 'NOT_STARTED' | 'PENDING' | 'BINDING' | 'COMMITTED';
+}
+
+function decoderChr020Projection(options: DecoderChr020Options = {}): JsonObject {
+  const randomStatus = options.randomStatus ?? 'NOT_STARTED';
+  return {
+    advisorBranch: options.advisorBranch ?? false,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId: options.commandId ?? null,
+    diceInputModeSnapshot: options.diceInputModeSnapshot ?? 'AUTO',
+    draftRevision: options.draftRevision ?? 9,
+    drawnSpeciesAndBindings:
+      options.drawnSpeciesAndBindings ??
+      (randomStatus === 'BINDING' ? [DECODER_EEL_BINDING_RIGHT] : []),
+    duplicateRerollReceipts: [],
+    pendingRollRequestIdOrNull:
+      options.pendingRollRequestIdOrNull === undefined
+        ? randomStatus === 'PENDING'
+          ? 'pending-roll-request'
+          : null
+        : options.pendingRollRequestIdOrNull,
+    raceChoice: options.raceChoice ?? 'FREE',
+    randomSequenceId: options.randomSequenceId ?? DECODER_RANDOM_SEQUENCE_ID,
+    randomStatus,
+    seedOrManualFaces: {
+      entries: options.physicalRolls ?? (randomStatus === 'BINDING' ? [DECODER_EEL_ORIGIN] : []),
+      kind: 'D20_RESULTS',
+    },
+    symbiontAcquisitionMode: 'RANDOM',
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function decoderChr041Projection(
+  selectedSkills: readonly {
+    readonly skillId: string;
+    readonly slotCost: number;
+    readonly targetBonus: number;
+  }[] = [],
+): JsonObject {
+  const usedSlotCount = selectedSkills.reduce((sum, selected) => sum + selected.slotCost, 0);
+  return {
+    acknowledged: false,
+    advisorCard: {
+      advisorIPlus8: 12,
+      advisorWPlus8: 10,
+      effectsActive: true,
+      speciesKey: 'ADVISER',
+    },
+    advisorIPlus8OrNull: 12,
+    advisorInstanceDraftId: 'free-advisor-instance',
+    advisorSlotsAndSkills: {
+      requiredSlotCount: 5,
+      selectedSkills,
+      selectionValidation: decoderSelectionValidation(5, usedSlotCount),
+      skillOptions: [DECODER_ACROBATICS_OPTION],
+    },
+    advisorWPlus8OrNull: 10,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId: null,
+    draftRevision: 9,
+    iwRollReceiptIds: ['free-advisor-i-receipt', 'free-advisor-w-receipt'],
+    iwRollRequestIds: ['free-advisor-i-request', 'free-advisor-w-request'],
+    randomSequenceId: DECODER_ADVISOR_SEQUENCE_ID,
+    trogrSuppressionState: { kind: 'NOT_SUPPRESSED' },
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function decoderChr019Projection(
+  species: 'EEL' | 'ADVISER' = 'EEL',
+  commandId = 'free-auto-eel-binding-command',
+): JsonObject {
+  const advisor = species === 'ADVISER';
+  return {
+    bindings: [
+      advisor
+        ? { acceptedIndex: 0, binding: { kind: 'NONE' }, speciesKey: 'ADVISER' }
+        : DECODER_EEL_BINDING_LEFT,
+    ],
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId,
+    compositionValidation: 'VALID',
+    draftRevision: 10,
+    duplicatePolicy: { kind: 'REROLL_WITH_SEPARATE_RECEIPTS', receipts: [] },
+    interactionGraph: { kind: 'NO_INTERACTIONS' },
+    irreversibleBoundaryStatus: 'CROSSED',
+    raceChoice: 'FREE',
+    randomReceiptIds: advisor ? [] : [DECODER_EEL_ORIGIN.rollReceiptId],
+    slotUsageAndCapacity: { capacity: 1, used: 1 },
+    speciesKeys: [species],
+    suppressionDestructionAbsorptionPreview: { kind: 'NONE' },
+    symbiontInstancesDraft: [
+      {
+        absorbedSpeciesKeys: [],
+        acceptedIndex: 0,
+        currentOe: advisor ? 20 : 60,
+        slotCost: 1,
+        speciesKey: species,
+        speciesLabel: advisor ? 'Советник' : 'Угорь',
+        status: 'ACTIVE',
+      },
+    ],
+    symbiontModifierBreakdown: {
+      bySpecies: [
+        {
+          acceptedIndex: 0,
+          effect: { kind: 'NO_STAT_MODIFIERS' },
+          speciesKey: species,
+          speciesLabel: advisor ? 'Советник' : 'Угорь',
+          status: 'ACTIVE',
+        },
+      ],
+      total: { kind: 'NO_STAT_MODIFIERS' },
+    },
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function decoderChimeraChr019Projection(
+  commandId = 'united-monster-binding-command',
+  draftRevision = 12,
+): JsonObject {
+  const effect = {
+    entries: [
+      { delta: 5, statCode: 'S', statLabel: 'Сила' },
+      { delta: 10, statCode: 'M', statLabel: 'Метаболизм' },
+    ],
+    kind: 'ADDITIVE_STAT_MODIFIERS',
+  } as const;
+  return {
+    bindings: [DECODER_CHIMERA_BINDING],
+    characterDraftId: CHARACTER_DRAFT_ID,
+    commandId,
+    compositionValidation: 'VALID',
+    draftRevision,
+    duplicatePolicy: { kind: 'REROLL_WITH_SEPARATE_RECEIPTS', receipts: [] },
+    interactionGraph: { kind: 'NO_INTERACTIONS' },
+    irreversibleBoundaryStatus: 'CROSSED',
+    raceChoice: 'UNITED',
+    randomReceiptIds: [DECODER_MONSTER_ORIGIN.rollReceiptId, DECODER_MONSTER_CONFIRM.rollReceiptId],
+    slotUsageAndCapacity: { capacity: 4, used: 4 },
+    speciesKeys: ['CHIMERA'],
+    suppressionDestructionAbsorptionPreview: { kind: 'NONE' },
+    symbiontInstancesDraft: [
+      {
+        absorbedSpeciesKeys: [],
+        acceptedIndex: 0,
+        currentOe: 400,
+        slotCost: 4,
+        speciesKey: 'CHIMERA',
+        speciesLabel: 'Химера',
+        status: 'ACTIVE',
+      },
+    ],
+    symbiontModifierBreakdown: {
+      bySpecies: [
+        {
+          acceptedIndex: 0,
+          effect,
+          speciesKey: 'CHIMERA',
+          speciesLabel: 'Химера',
+          status: 'ACTIVE',
+        },
+      ],
+      total: effect,
+    },
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+function decoderSymbiontReceipt(
+  command: DecoderWorkflowCommand,
+  receiptId: string,
+  result: JsonObject,
+): CommandReceipt {
+  const payload = command.payload as JsonObject;
+  const characterDraftId = payload['characterDraftId'];
+  const wizardCheckpointId = payload['wizardCheckpointId'];
+  const randomSequenceId = payload['randomSequenceId'];
+  const draftRevision = payload['draftRevision'];
+  if (
+    typeof characterDraftId !== 'string' ||
+    typeof wizardCheckpointId !== 'string' ||
+    typeof randomSequenceId !== 'string' ||
+    typeof draftRevision !== 'number'
+  ) {
+    throw new Error('invalid symbiont command fixture');
+  }
+  return {
+    commandId: command.commandId,
+    receiptId,
+    result: {
+      branchCacheHash: DECODER_EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: DECODER_BRANCH_UUID,
+      characterDraftId,
+      checkpointId: wizardCheckpointId,
+      checkpointOwnerId: characterDraftId,
+      checkpointRevision: 1,
+      draftRevision: draftRevision + 1,
+      randomSequenceId,
+      stage: 'SYMBIONTS',
+      ...result,
+    },
+    revisions: {
+      actorVisibilityRevision: command.expectedRevisions.actorVisibilityRevision,
+      projectionRevision: command.expectedRevisions.projectionRevision + 1,
+      stateRevision: command.expectedRevisions.stateRevision + 1,
+    },
+  };
+}
+
+type DecoderFormId =
+  | 'CHR-002'
+  | 'CHR-010'
+  | 'CHR-013'
+  | 'CHR-015'
+  | 'CHR-016'
+  | 'CHR-017'
+  | 'CHR-019'
+  | 'CHR-020'
+  | 'CHR-041';
+type DecoderActionKeys = ProjectionSnapshotV2Message['presentation']['base']['availableActionKeys'];
+
+function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): DecoderActionKeys {
+  switch (formId) {
+    case 'CHR-010':
+      return ['CHR-010::CTA::004', 'CHR-010::CTA::005', 'CHR-010::CTA::006'];
+    case 'CHR-016':
+      return ['CHR-016::CTA::003', 'CHR-016::CTA::004'];
+    case 'CHR-013':
+      return ['CHR-013::CTA::002'];
+    case 'CHR-015':
+      return projection['commandId'] === null ? ['CHR-015::CTA::003'] : [];
+    case 'CHR-002':
+      return ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'];
+    case 'CHR-017':
+      return projection['symbiontAcquisitionModeOrNull'] === 'RANDOM' ? ['CHR-017::CTA::003'] : [];
+    case 'CHR-019':
+      return [];
+    case 'CHR-020': {
+      if (projection['randomStatus'] === 'COMMITTED') return [];
+      const actions: string[] = ['CHR-020::CTA::002'];
+      const drawn = projection['drawnSpeciesAndBindings'];
+      if (
+        Array.isArray(drawn) &&
+        (drawn as readonly JsonValue[]).some((entry) => {
+          if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return false;
+          const speciesKey = (entry as JsonObject)['speciesKey'];
+          return speciesKey === 'OWL' || speciesKey === 'EEL';
+        })
+      ) {
+        actions.push('CHR-020::CTA::003');
+      }
+      return actions as DecoderActionKeys;
+    }
+    case 'CHR-041':
+      return projection['acknowledged'] === true ? [] : ['CHR-041::CTA::001', 'CHR-041::CTA::002'];
+  }
+}
 
 function projectionBase(
   formId: DecoderFormId,
   projection: JsonObject,
+  availableActionKeys?: DecoderActionKeys,
 ): ProjectionSnapshotV2Message['presentation']['base'] {
-  const actions =
-    formId === 'CHR-010'
-      ? (['CHR-010::CTA::004', 'CHR-010::CTA::005', 'CHR-010::CTA::006'] as const)
-      : formId === 'CHR-016'
-        ? (['CHR-016::CTA::003', 'CHR-016::CTA::004'] as const)
-        : formId === 'CHR-013'
-          ? (['CHR-013::CTA::002'] as const)
-          : formId === 'CHR-015'
-            ? projection['commandId'] === null
-              ? (['CHR-015::CTA::003'] as const)
-              : ([] as const)
-            : (['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'] as const);
   return {
-    availableActionKeys: actions,
+    availableActionKeys: availableActionKeys ?? defaultDecoderActions(formId, projection),
     formId,
     formType: 'screen',
     roleFilteredPayload: projection,
@@ -390,8 +812,30 @@ function projectionBase(
   };
 }
 
+function decoderSnapshotText(
+  formId: DecoderFormId,
+  projection: JsonObject,
+  assignment: ProjectionSnapshotV2Message['presentation']['assignment'],
+  revisions: ProjectionSnapshotV2Message['revisions'],
+  availableActionKeys?: DecoderActionKeys,
+): string {
+  return checkedHostTextV2({
+    messageType: 'projection.snapshot',
+    presentation: {
+      assignment,
+      base: projectionBase(formId, projection, availableActionKeys),
+      layers: [],
+    },
+    projectionRole: 'player',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    revisions,
+  });
+}
+
 interface DecoderHarness {
+  readonly advisorDrafts: readonly (AdvisorSkillSelectionDraft | null)[];
   readonly connection: ProjectionConnection;
+  readonly randomDrafts: readonly (RandomSymbiontDraft | null)[];
   readonly skillDrafts: readonly (CharacterSkillSelectionDraft | null)[];
   readonly socket: DecoderFakeWebSocket;
   readonly states: readonly WebClientState[];
@@ -400,6 +844,7 @@ interface DecoderHarness {
 async function connectDecoderFixture(
   formId: DecoderFormId,
   projection: JsonObject,
+  availableActionKeys?: DecoderActionKeys,
 ): Promise<DecoderHarness> {
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
@@ -421,6 +866,8 @@ async function connectDecoderFixture(
   vi.stubGlobal('WebSocket', DecoderFakeWebSocket);
   const states: WebClientState[] = [];
   const skillDrafts: (CharacterSkillSelectionDraft | null)[] = [];
+  const randomDrafts: (RandomSymbiontDraft | null)[] = [];
+  const advisorDrafts: (AdvisorSkillSelectionDraft | null)[] = [];
   const connection = connectProjection(
     (state) => states.push(state),
     undefined,
@@ -428,6 +875,8 @@ async function connectDecoderFixture(
     undefined,
     undefined,
     (draft) => skillDrafts.push(draft),
+    (draft) => randomDrafts.push(draft),
+    (draft) => advisorDrafts.push(draft),
   );
   decoderConnections.push(connection);
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -455,7 +904,7 @@ async function connectDecoderFixture(
     messageType: 'projection.snapshot',
     presentation: {
       assignment: { correlationId: reconnect.value.reconnectRequestId, reason: 'RECONNECT' },
-      base: projectionBase(formId, projection),
+      base: projectionBase(formId, projection, availableActionKeys),
       layers: [],
     },
     projectionRole: 'player',
@@ -464,17 +913,65 @@ async function connectDecoderFixture(
   };
   socket.message(checkedHostTextV2(capabilities));
   socket.message(checkedHostTextV2(snapshot));
-  return { connection, skillDrafts, socket, states };
+  return { advisorDrafts, connection, randomDrafts, skillDrafts, socket, states };
 }
 
 async function decodeProjectionFixture(
   formId: DecoderFormId,
   projection: JsonObject,
+  availableActionKeys?: DecoderActionKeys,
 ): Promise<WebClientState> {
-  const { states } = await connectDecoderFixture(formId, projection);
+  const { states } = await connectDecoderFixture(formId, projection, availableActionKeys);
   const finalState = states.at(-1);
   if (finalState === undefined) throw new Error('decoder test emitted no state');
   return finalState;
+}
+
+function reconnectDecoderFixture(
+  harness: DecoderHarness,
+  formId: DecoderFormId,
+  projection: JsonObject,
+  revisions: ProjectionSnapshotV2Message['revisions'],
+  receipt?: CommandReceipt,
+  availableActionKeys?: DecoderActionKeys,
+): DecoderFakeWebSocket {
+  harness.socket.serverClose(1006, 'decoder reconnect');
+  expect(harness.connection.reconnect()).toEqual({ ok: true });
+  const resumed = DecoderFakeWebSocket.instances.at(-1);
+  if (resumed === undefined) throw new Error('missing resumed decoder socket');
+  resumed.open();
+  const reconnectText = resumed.sent[0];
+  if (reconnectText === undefined) throw new Error('missing decoder reconnect');
+  const reconnect = decodeClientMessageV2(reconnectText, WEB_PROTOCOL_VOCABULARY);
+  if (!reconnect.ok || reconnect.value.messageType !== 'session.reconnect') {
+    throw new Error('invalid decoder reconnect');
+  }
+  expect(reconnect.value.unacknowledgedCommandIds).toEqual(
+    receipt === undefined ? [] : [receipt.commandId],
+  );
+  if (receipt !== undefined) resumed.message(decoderTerminalText(receipt, true));
+  const capabilities: SessionReconnectCapabilitiesV2Message = {
+    executableWorkflowCommandIds: [
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+      'UI-CMD-CHAR-CREATION-SET-DECIDE',
+      'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+    ],
+    messageType: 'session.reconnect.capabilities',
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    reconnectRequestId: reconnect.value.reconnectRequestId,
+    revisions,
+  };
+  resumed.message(checkedHostTextV2(capabilities));
+  resumed.message(
+    decoderSnapshotText(
+      formId,
+      projection,
+      { correlationId: reconnect.value.reconnectRequestId, reason: 'RECONNECT' },
+      revisions,
+      availableActionKeys,
+    ),
+  );
+  return resumed;
 }
 
 function mutableProjection(source: JsonObject): Record<string, unknown> {
@@ -1101,6 +1598,612 @@ describe('SKILLS projection decoder and local draft', () => {
 
     expect(skillDrafts.at(-1)?.selectedSkillIds).toEqual([]);
     expect(skillDrafts.at(-1)?.selectionValidation.kind).toBe('UNDERFILLED');
+  });
+});
+
+describe('RANDOM projection decoders and action keys', () => {
+  const cases: readonly (readonly [DecoderFormId, JsonObject])[] = [
+    ['CHR-017', decoderChr017Projection()],
+    ['CHR-020', decoderChr020Projection()],
+    ['CHR-041', decoderChr041Projection()],
+    ['CHR-019', decoderChr019Projection()],
+  ];
+
+  it.each(cases)('accepts the exact %s player projection', async (formId, projection) => {
+    expect(await decodeProjectionFixture(formId, projection)).toMatchObject({ kind: 'ready' });
+  });
+
+  it.each(cases)('rejects a missing required field in %s', async (formId, projection) => {
+    const malformed = mutableProjection(projection);
+    delete malformed['characterDraftId'];
+    expect(await decodeProjectionFixture(formId, malformed as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.characterDraftId' },
+    });
+  });
+
+  it.each(cases)('rejects an extra private field in %s', async (formId, projection) => {
+    const malformed = mutableProjection(projection);
+    malformed['ruleId'] = 'private provenance';
+    expect(await decodeProjectionFixture(formId, malformed as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.ruleId' },
+    });
+  });
+
+  it.each(cases)('rejects a malformed required value in %s', async (formId, projection) => {
+    const malformed = mutableProjection(projection);
+    malformed['draftRevision'] = -1;
+    expect(await decodeProjectionFixture(formId, malformed as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.draftRevision' },
+    });
+  });
+
+  it.each([
+    ['CHR-017', decoderChr017Projection(), ['CHR-017::CTA::001']],
+    ['CHR-020', decoderChr020Projection(), ['CHR-020::CTA::001', 'CHR-020::CTA::002']],
+    ['CHR-041', decoderChr041Projection(), ['CHR-041::CTA::001']],
+    ['CHR-019', decoderChr019Projection(), ['CHR-019::CTA::001']],
+  ] as const)(
+    'fails closed on unsupported or incomplete actions for %s',
+    async (formId, projection, actions) => {
+      expect(await decodeProjectionFixture(formId, projection, actions)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: '$.presentation.base.availableActionKeys' },
+      });
+    },
+  );
+
+  it('navigates CHR-017 through navigation.form-action into a fresh CHR-020 sequence', async () => {
+    const { connection, socket, states } = await connectDecoderFixture(
+      'CHR-017',
+      decoderChr017Projection(),
+    );
+    const wireCount = socket.sent.length;
+    expect(connection.requestFormAction('CHR-017::CTA::003')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount + 1);
+    const navigationText = socket.sent.at(-1);
+    if (navigationText === undefined) throw new Error('missing CHR-017 navigation');
+    const navigation = decodeClientMessageV2(navigationText, WEB_PROTOCOL_VOCABULARY);
+    if (!navigation.ok || navigation.value.messageType !== 'navigation.form-action') {
+      throw new Error('invalid CHR-017 navigation');
+    }
+    expect(navigation.value).toMatchObject({
+      actionKey: 'CHR-017::CTA::003',
+      expectedProjectionRevision: 0,
+      sourceFormId: 'CHR-017',
+    });
+    socket.message(
+      decoderSnapshotText(
+        'CHR-020',
+        decoderChr020Projection(),
+        {
+          correlationId: navigation.value.navigationRequestId,
+          reason: 'FORM_ACTION',
+        },
+        { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+      ),
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-020',
+        projection: { randomSequenceId: DECODER_RANDOM_SEQUENCE_ID, randomStatus: 'NOT_STARTED' },
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+      },
+    });
+    expect(socket.sent).toHaveLength(wireCount + 1);
+  });
+});
+
+describe('RANDOM local drafts, commands, and replay', () => {
+  it('sends the exact AUTO payload and resumes an exact roll replay without rerolling', async () => {
+    const harness = await connectDecoderFixture('CHR-020', decoderChr020Projection());
+    const { connection, randomDrafts, socket, states } = harness;
+    expect(connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    expect(command.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      manualFaceOrNull: null,
+      pendingRollRequestIdOrNull: null,
+      randomSequenceId: DECODER_RANDOM_SEQUENCE_ID,
+      selectedMonsterSpeciesKeyOrNull: null,
+      sourceFormId: 'CHR-020',
+      stage: 'SYMBIONTS',
+      variant: 'ROLL',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const receipt = decoderSymbiontReceipt(command, DECODER_EEL_ORIGIN.rollReceiptId, {
+      advisorBranch: false,
+      diceInputModeSnapshot: 'AUTO',
+      nextFormId: 'CHR-020',
+      nextPendingRollRequestIdOrNull: null,
+      physicalRoll: DECODER_EEL_ORIGIN,
+      randomReceiptIdOrNull: DECODER_EEL_ORIGIN.rollReceiptId,
+      randomStatus: 'BINDING',
+      sourceFormId: 'CHR-020',
+      variant: 'ROLL',
+    });
+    const destination = decoderChr020Projection({
+      commandId: command.commandId,
+      draftRevision: 10,
+      randomStatus: 'BINDING',
+    });
+    const resumed = reconnectDecoderFixture(
+      harness,
+      'CHR-020',
+      destination,
+      receipt.revisions,
+      receipt,
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-020',
+        projection: { commandId: command.commandId, randomStatus: 'BINDING' },
+        revisions: receipt.revisions,
+      },
+    });
+    expect(randomDrafts.at(-1)).toMatchObject({
+      manualFaceOrNull: null,
+      selectedMonsterSpeciesKeyOrNull: null,
+      sideBySpecies: { EEL: 'RIGHT' },
+    });
+    expect(resumed.sent).toHaveLength(1);
+  });
+
+  it('rejects a changed pending roll replay instead of accepting a reroll', async () => {
+    const { connection, socket, states } = await connectDecoderFixture(
+      'CHR-020',
+      decoderChr020Projection(),
+    );
+    expect(connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    const receipt = decoderSymbiontReceipt(command, DECODER_EEL_ORIGIN.rollReceiptId, {
+      advisorBranch: false,
+      diceInputModeSnapshot: 'AUTO',
+      nextFormId: 'CHR-020',
+      nextPendingRollRequestIdOrNull: null,
+      physicalRoll: DECODER_EEL_ORIGIN,
+      randomReceiptIdOrNull: DECODER_EEL_ORIGIN.rollReceiptId,
+      randomStatus: 'BINDING',
+      sourceFormId: 'CHR-020',
+      variant: 'ROLL',
+    });
+    socket.message(decoderTerminalText(receipt));
+    expect(states.at(-1)?.kind).toBe('ready');
+    const changed = structuredClone(receipt);
+    const physical = objectValue(changed.result['physicalRoll'], 'physicalRoll');
+    objectValue(physical['mechanical'], 'mechanical')['rawFace'] = 14;
+    const wireCount = socket.sent.length;
+    socket.message(decoderTerminalText(changed, true));
+    expect(states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.receipt.receiptId' },
+    });
+    expect(socket.sent).toHaveLength(wireCount + 1);
+  });
+
+  it('gates MANUAL locally, resets the uncommitted face on refresh, then sends one face', async () => {
+    const projection = decoderChr020Projection({ diceInputModeSnapshot: 'MANUAL' });
+    const harness = await connectDecoderFixture('CHR-020', projection);
+    const { connection, randomDrafts, socket, states } = harness;
+    const wireCount = socket.sent.length;
+    expect(connection.requestFormAction('CHR-020::CTA::002').ok).toBe(false);
+    expect(connection.replaceRandomManualFace(9)).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(randomDrafts.at(-1)?.manualFaceOrNull).toBe(9);
+    expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { revisions: REVISIONS } });
+
+    const resumed = reconnectDecoderFixture(harness, 'CHR-020', projection, REVISIONS);
+    expect(randomDrafts.at(-1)?.manualFaceOrNull).toBeNull();
+    expect(connection.requestFormAction('CHR-020::CTA::002').ok).toBe(false);
+    expect(connection.replaceRandomManualFace(9)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(resumed);
+    expect(command.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      manualFaceOrNull: 9,
+      pendingRollRequestIdOrNull: null,
+      randomSequenceId: DECODER_RANDOM_SEQUENCE_ID,
+      selectedMonsterSpeciesKeyOrNull: null,
+      sourceFormId: 'CHR-020',
+      stage: 'SYMBIONTS',
+      variant: 'ROLL',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(resumed.sent).toHaveLength(2);
+  });
+
+  it('keeps SIDE wire-free and sends BINDING without another roll or revision overlay', async () => {
+    const { connection, randomDrafts, socket, states } = await connectDecoderFixture(
+      'CHR-020',
+      decoderChr020Projection({
+        commandId: 'free-auto-eel-roll-command',
+        randomStatus: 'BINDING',
+      }),
+    );
+    const wireCount = socket.sent.length;
+    expect(randomDrafts.at(-1)?.sideBySpecies.EEL).toBe('RIGHT');
+    expect(connection.requestFormAction('CHR-020::CTA::003')).toEqual({ ok: true });
+    expect(connection.replaceRandomSideSpecies('OWL').ok).toBe(false);
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(randomDrafts.at(-1)?.sideBySpecies.EEL).toBe('LEFT');
+    expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { revisions: REVISIONS } });
+
+    expect(connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    expect(command.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      physicalRollReceiptIds: [DECODER_EEL_ORIGIN.rollReceiptId],
+      randomSequenceId: DECODER_RANDOM_SEQUENCE_ID,
+      selectedBindings: [{ side: 'LEFT', speciesKey: 'EEL' }],
+      sourceFormId: 'CHR-020',
+      stage: 'SYMBIONTS',
+      variant: 'BINDING',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const receipt = decoderSymbiontReceipt(command, 'free-auto-eel-binding-receipt', {
+      advisorBranch: false,
+      bindings: [DECODER_EEL_BINDING_LEFT],
+      nextFormId: 'CHR-019',
+      randomStatus: 'COMMITTED',
+      sourceFormId: 'CHR-020',
+      variant: 'BINDING',
+    });
+    socket.message(decoderTerminalText(receipt));
+    socket.message(
+      decoderSnapshotText(
+        'CHR-019',
+        decoderChr019Projection('EEL', command.commandId),
+        { correlationId: command.commandId, reason: 'COMMAND_DESTINATION' },
+        receipt.revisions,
+      ),
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-019',
+        projection: { bindings: [DECODER_EEL_BINDING_LEFT] },
+        revisions: receipt.revisions,
+      },
+    });
+    expect(randomDrafts.at(-1)).toBeNull();
+    expect(socket.sent).toHaveLength(wireCount + 1);
+  });
+
+  it('requires a local monster choice but only projects it from the host terminal snapshot', async () => {
+    const projection = decoderChr020Projection({
+      pendingRollRequestIdOrNull: DECODER_MONSTER_CONFIRM.rollRequestId,
+      physicalRolls: [DECODER_MONSTER_ORIGIN],
+      raceChoice: 'UNITED',
+      randomSequenceId: 'united-monster-random-sequence',
+      randomStatus: 'PENDING',
+    });
+    const { connection, randomDrafts, socket, states } = await connectDecoderFixture(
+      'CHR-020',
+      projection,
+      ['CHR-020::CTA::002', 'CHR-020::CTA::004'],
+    );
+    const wireCount = socket.sent.length;
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { availableActionKeys: ['CHR-020::CTA::004'] },
+    });
+    expect(connection.requestFormAction('CHR-020::CTA::002').ok).toBe(false);
+    expect(connection.requestFormAction('CHR-020::CTA::004')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(randomDrafts.at(-1)?.selectedMonsterSpeciesKeyOrNull).toBe('CHIMERA');
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        projection: { seedOrManualFaces: { entries: [DECODER_MONSTER_ORIGIN] } },
+        revisions: REVISIONS,
+      },
+    });
+
+    expect(connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    expect(command.payload).toMatchObject({
+      manualFaceOrNull: null,
+      pendingRollRequestIdOrNull: DECODER_MONSTER_CONFIRM.rollRequestId,
+      selectedMonsterSpeciesKeyOrNull: 'CHIMERA',
+      variant: 'ROLL',
+    });
+    const receipt = decoderSymbiontReceipt(command, DECODER_MONSTER_CONFIRM.rollReceiptId, {
+      advisorBranch: false,
+      diceInputModeSnapshot: 'AUTO',
+      nextFormId: 'CHR-020',
+      nextPendingRollRequestIdOrNull: null,
+      physicalRoll: DECODER_MONSTER_CONFIRM,
+      randomReceiptIdOrNull: DECODER_MONSTER_CONFIRM.rollReceiptId,
+      randomStatus: 'BINDING',
+      sourceFormId: 'CHR-020',
+      variant: 'ROLL',
+    });
+    socket.message(decoderTerminalText(receipt));
+    socket.message(
+      decoderSnapshotText(
+        'CHR-020',
+        decoderChr020Projection({
+          commandId: command.commandId,
+          draftRevision: 10,
+          drawnSpeciesAndBindings: [DECODER_CHIMERA_BINDING],
+          physicalRolls: [DECODER_MONSTER_ORIGIN, DECODER_MONSTER_CONFIRM],
+          raceChoice: 'UNITED',
+          randomSequenceId: 'united-monster-random-sequence',
+          randomStatus: 'BINDING',
+        }),
+        { correlationId: command.commandId, reason: 'COMMAND_DESTINATION' },
+        receipt.revisions,
+      ),
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-020',
+        projection: {
+          drawnSpeciesAndBindings: [DECODER_CHIMERA_BINDING],
+          seedOrManualFaces: { entries: [DECODER_MONSTER_ORIGIN, DECODER_MONSTER_CONFIRM] },
+        },
+      },
+    });
+    expect(randomDrafts.at(-1)?.selectedMonsterSpeciesKeyOrNull).toBeNull();
+    expect(socket.sent).toHaveLength(wireCount + 1);
+  });
+});
+
+describe('RANDOM historic replay recovery', () => {
+  async function beginMonsterOriginRoll() {
+    const harness = await connectDecoderFixture(
+      'CHR-020',
+      decoderChr020Projection({
+        raceChoice: 'UNITED',
+        randomSequenceId: 'united-monster-random-sequence',
+      }),
+    );
+    expect(harness.connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(harness.socket);
+    const receipt = decoderSymbiontReceipt(command, DECODER_MONSTER_ORIGIN.rollReceiptId, {
+      advisorBranch: false,
+      diceInputModeSnapshot: 'AUTO',
+      nextFormId: 'CHR-020',
+      nextPendingRollRequestIdOrNull: DECODER_MONSTER_CONFIRM.rollRequestId,
+      physicalRoll: DECODER_MONSTER_ORIGIN,
+      randomReceiptIdOrNull: DECODER_MONSTER_ORIGIN.rollReceiptId,
+      randomStatus: 'PENDING',
+      sourceFormId: 'CHR-020',
+      variant: 'ROLL',
+    });
+    return { harness, receipt };
+  }
+
+  async function beginAdvisorBinding() {
+    const harness = await connectDecoderFixture(
+      'CHR-020',
+      decoderChr020Projection({
+        advisorBranch: true,
+        diceInputModeSnapshot: 'MANUAL',
+        drawnSpeciesAndBindings: [DECODER_ADVISOR_BINDING],
+        physicalRolls: [DECODER_ADVISOR_ORIGIN, DECODER_ADVISOR_I_ROLL, DECODER_ADVISOR_W_ROLL],
+        randomSequenceId: DECODER_ADVISOR_SEQUENCE_ID,
+        randomStatus: 'BINDING',
+      }),
+    );
+    expect(harness.connection.requestFormAction('CHR-020::CTA::002')).toEqual({ ok: true });
+    const command = decoderCommand(harness.socket);
+    expect(command.payload).toMatchObject({
+      physicalRollReceiptIds: [
+        DECODER_ADVISOR_ORIGIN.rollReceiptId,
+        DECODER_ADVISOR_I_ROLL.rollReceiptId,
+        DECODER_ADVISOR_W_ROLL.rollReceiptId,
+      ],
+      selectedBindings: [],
+      variant: 'BINDING',
+    });
+    const receipt = decoderSymbiontReceipt(command, 'free-advisor-binding-receipt', {
+      advisorBranch: true,
+      bindings: [DECODER_ADVISOR_BINDING],
+      nextFormId: 'CHR-041',
+      randomStatus: 'COMMITTED',
+      sourceFormId: 'CHR-020',
+      variant: 'BINDING',
+    });
+    return { harness, receipt };
+  }
+
+  it('recovers roll A into newer B and C projections without requiring the old current state', async () => {
+    const laterRollProjection = decoderChr020Projection({
+      commandId: 'united-monster-confirm-command',
+      draftRevision: 11,
+      drawnSpeciesAndBindings: [DECODER_CHIMERA_BINDING],
+      physicalRolls: [DECODER_MONSTER_ORIGIN, DECODER_MONSTER_CONFIRM],
+      raceChoice: 'UNITED',
+      randomSequenceId: 'united-monster-random-sequence',
+      randomStatus: 'BINDING',
+    });
+    const destinations = [
+      {
+        formId: 'CHR-020' as const,
+        projection: laterRollProjection,
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 2, stateRevision: 2 },
+      },
+      {
+        formId: 'CHR-019' as const,
+        projection: decoderChimeraChr019Projection(),
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 3, stateRevision: 3 },
+      },
+    ];
+    for (const destination of destinations) {
+      const { harness, receipt } = await beginMonsterOriginRoll();
+      const resumed = reconnectDecoderFixture(
+        harness,
+        destination.formId,
+        destination.projection,
+        destination.revisions,
+        receipt,
+      );
+      expect(harness.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: {
+          formId: destination.formId,
+          projection: { draftRevision: destination.projection['draftRevision'] },
+          revisions: destination.revisions,
+        },
+      });
+      expect(resumed.sent).toHaveLength(1);
+    }
+
+    const malformedDestinations = [
+      {
+        path: '$.presentation.base.roleFilteredPayload.seedOrManualFaces.entries',
+        projection: {
+          ...laterRollProjection,
+          seedOrManualFaces: { entries: [DECODER_MONSTER_CONFIRM], kind: 'D20_RESULTS' },
+        } as JsonObject,
+      },
+      {
+        path: '$.presentation.base.roleFilteredPayload.randomSequenceId',
+        projection: {
+          ...laterRollProjection,
+          randomSequenceId: 'different-random-sequence',
+        } as JsonObject,
+      },
+      {
+        path: '$.revisions',
+        projection: { ...laterRollProjection, draftRevision: 9 } as JsonObject,
+      },
+    ];
+    for (const destination of malformedDestinations) {
+      const { harness, receipt } = await beginMonsterOriginRoll();
+      reconnectDecoderFixture(
+        harness,
+        'CHR-020',
+        destination.projection,
+        { actorVisibilityRevision: 0, projectionRevision: 2, stateRevision: 2 },
+        receipt,
+      );
+      expect(harness.states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: destination.path },
+      });
+    }
+  });
+
+  it('recovers a binding replay after the later Advisor checkpoint and keeps bindings strict', async () => {
+    const latest = {
+      ...decoderChr019Projection('ADVISER', 'free-advisor-checkpoint-command'),
+      draftRevision: 11,
+    } as JsonObject;
+    const { harness, receipt } = await beginAdvisorBinding();
+    const resumed = reconnectDecoderFixture(
+      harness,
+      'CHR-019',
+      latest,
+      { actorVisibilityRevision: 0, projectionRevision: 2, stateRevision: 2 },
+      receipt,
+    );
+    expect(harness.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-019',
+        projection: {
+          commandId: 'free-advisor-checkpoint-command',
+          draftRevision: 11,
+        },
+      },
+    });
+    expect(resumed.sent).toHaveLength(1);
+
+    const forged = { ...latest, bindings: [DECODER_EEL_BINDING_LEFT] } as JsonObject;
+    const mismatch = await beginAdvisorBinding();
+    reconnectDecoderFixture(
+      mismatch.harness,
+      'CHR-019',
+      forged,
+      { actorVisibilityRevision: 0, projectionRevision: 2, stateRevision: 2 },
+      mismatch.receipt,
+    );
+    expect(mismatch.harness.states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.bindings' },
+    });
+  });
+});
+
+describe('CHR-041 Advisor local selection and checkpoint replay', () => {
+  it('adds and removes exact skills wire-free, checkpoints once, and resumes the host snapshot', async () => {
+    const harness = await connectDecoderFixture('CHR-041', decoderChr041Projection());
+    const { advisorDrafts, connection, socket, states } = harness;
+    const wireCount = socket.sent.length;
+    expect(connection.requestFormAction('CHR-041::CTA::001').ok).toBe(false);
+    expect(connection.replaceAdvisorSkillCandidate('ACROBATICS', 6).ok).toBe(false);
+    expect(connection.replaceAdvisorSkillCandidate('ACROBATICS', 5)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-041::CTA::002')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(advisorDrafts.at(-1)).toMatchObject({
+      selectedSkills: [{ skillId: 'ACROBATICS', slotCost: 5, targetBonus: 5 }],
+      selectionValidation: { kind: 'EXACT', requiredSlotCount: 5, usedSlotCount: 5 },
+    });
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { availableActionKeys: ['CHR-041::CTA::001'], revisions: REVISIONS },
+    });
+
+    expect(connection.replaceAdvisorSkillCandidate('ACROBATICS', 5)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-041::CTA::002')).toEqual({ ok: true });
+    expect(advisorDrafts.at(-1)).toMatchObject({
+      selectedSkills: [],
+      selectionValidation: { kind: 'UNDERFILLED', missingSlotCount: 5 },
+    });
+    expect(connection.requestFormAction('CHR-041::CTA::001').ok).toBe(false);
+    expect(connection.replaceAdvisorSkillCandidate('ACROBATICS', 5)).toEqual({ ok: true });
+    expect(connection.requestFormAction('CHR-041::CTA::002')).toEqual({ ok: true });
+    expect(socket.sent).toHaveLength(wireCount);
+
+    expect(connection.requestFormAction('CHR-041::CTA::001')).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    expect(command.payload).toEqual({
+      advisorInstanceDraftId: 'free-advisor-instance',
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      randomSequenceId: DECODER_ADVISOR_SEQUENCE_ID,
+      selectedSkills: [{ skillId: 'ACROBATICS', targetBonus: 5 }],
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    const receipt = decoderSymbiontReceipt(command, 'free-advisor-checkpoint-receipt', {
+      advisorInstanceDraftId: 'free-advisor-instance',
+      effectsActive: true,
+      learnedSkills: [{ bonus: 5, skillKey: 'ACROBATICS', slotCost: 5 }],
+      nextFormId: 'CHR-019',
+      requiredSlotCount: 5,
+      selectedSkills: [{ skillId: 'ACROBATICS', targetBonus: 5 }],
+      sourceFormId: 'CHR-041',
+      usedSlotCount: 5,
+    });
+    const resumed = reconnectDecoderFixture(
+      harness,
+      'CHR-019',
+      decoderChr019Projection('ADVISER', command.commandId),
+      receipt.revisions,
+      receipt,
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-019',
+        projection: { commandId: command.commandId, speciesKeys: ['ADVISER'] },
+        revisions: receipt.revisions,
+      },
+    });
+    expect(advisorDrafts.at(-1)).toBeNull();
+    expect(resumed.sent).toHaveLength(1);
   });
 });
 

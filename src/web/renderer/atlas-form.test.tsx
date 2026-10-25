@@ -51,6 +51,10 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CHR-012',
   'CHR-013',
   'CHR-015',
+  'CHR-017',
+  'CHR-019',
+  'CHR-020',
+  'CHR-041',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -180,8 +184,8 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // Issue #33 fixes APP at nine screens/two dialogs; the CHR slice adds sixteen screens/one dialog.
-    expect(screens).toBe(25);
+    // Issue #33 fixes APP at nine screens/two dialogs; the CHR slice adds twenty screens/one dialog.
+    expect(screens).toBe(29);
     expect(dialogs).toBe(3);
   });
 
