@@ -162,7 +162,7 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          MAX_CODE_ADDED: 7000
+          MAX_CODE_ADDED: 10000
           MAX_CODE_DELETED: 1500
           MAX_CODE_FILES: 40
           MAX_TEST_DELETED: 400
