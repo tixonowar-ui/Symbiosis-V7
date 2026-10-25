@@ -7,6 +7,7 @@ import { CHARACTER_ART_ACCEPT, characterArtFromFile } from './character-art.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
+  AdvisorSkillSelectionDraft,
   App001Projection,
   CharacterCreationChoiceDraft,
   CharacterCreationRollDraft,
@@ -14,6 +15,7 @@ import type {
   CharacterStatAssignmentDraft,
   CharacterSetDecisionProjection,
   Chr002Projection,
+  Chr019Projection,
   Chr003Projection,
   Chr004Projection,
   Chr009Projection,
@@ -33,8 +35,11 @@ import type {
   ModeConsequencesProjection,
   RaceConsequencesPreviewProjection,
   ProjectionConnection,
+  RandomSymbiontDraft,
   StatCode,
   StatModifierEffectProjection,
+  SymbiontSide,
+  SymbioticMonsterSpeciesKey,
   WebClientState,
 } from './ws-client.js';
 
@@ -44,6 +49,13 @@ const LOCAL_CHARACTER_PORTRAIT_ASSET_KEY_SET: ReadonlySet<string> = new Set(
   LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS,
 );
 const CHR_001_CHECKPOINT_ACTION_KEY = 'CHR-001::CTA::001';
+const CHR_020_SIDE_DRAFT_ACTION_KEY = 'CHR-020::CTA::003' as const;
+const CHR_020_MONSTER_DRAFT_ACTION_KEY = 'CHR-020::CTA::004' as const;
+const SYMBIOTIC_MONSTER_SPECIES = [
+  'CHIMERA',
+  'PUPPETEER',
+  'PLAGUE_DOCTOR',
+] as const satisfies readonly SymbioticMonsterSpeciesKey[];
 
 const ART_REFUSAL_MESSAGES = {
   ASSET_NOT_FOUND: 'Выбранная заглушка отсутствует в каталоге хоста.',
@@ -1165,6 +1177,725 @@ function SkillSelectionFields({
   );
 }
 
+const RANDOM_PHYSICAL_ROLL_LABELS = {
+  ADVISOR_I: 'Бросок I Советника',
+  ADVISOR_W: 'Бросок W Советника',
+  CRITICAL_CONFIRMATION: 'Подтверждение критической грани',
+  SPECIES_ORIGIN: 'Исходный бросок вида',
+  TROGR_SUPPRESSION_B: 'Бросок подавления Трогра',
+} as const;
+
+function SymbiontCatalogFields({
+  snapshot,
+}: {
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-017') return null;
+  const projection = snapshot.projection;
+  return (
+    <section
+      aria-labelledby="chr-017-catalog-title"
+      data-chr-017-catalog
+      data-draft-revision={projection.draftRevision}
+      data-projection-revision={snapshot.revisions.projectionRevision}
+      data-race-choice={projection.raceChoice}
+      data-state-revision={snapshot.revisions.stateRevision}
+    >
+      <h2 id="chr-017-catalog-title">Допустимые симбионты</h2>
+      <dl>
+        <dt>Раса</dt>
+        <dd data-symbiont-race-choice>{projection.raceChoice}</dd>
+        <dt>Способ получения</dt>
+        <dd data-symbiont-acquisition-mode>{projection.symbiontAcquisitionModeOrNull ?? 'PURE'}</dd>
+        <dt>Вместимость состава</dt>
+        <dd data-symbiont-slot-capacity>{projection.slotCapacity}</dd>
+      </dl>
+      {projection.pureNoSymbiontRoute ? (
+        <p data-pure-no-symbiont-route>
+          Маршрут Чистого: симбионты и действия с ними не используются.
+        </p>
+      ) : null}
+      {projection.eligibleSymbiontSpecies.length === 0 ? (
+        <p data-eligible-symbionts="empty">Допустимых для этой ветви симбионтов нет.</p>
+      ) : (
+        <div data-eligible-symbionts="ready">
+          {projection.eligibleSymbiontSpecies.map((species) => (
+            <article key={species.speciesKey} data-symbiont-species={species.speciesKey}>
+              <h3>{species.speciesLabel}</h3>
+              <dl>
+                <dt>Ключ вида</dt>
+                <dd>{species.speciesKey}</dd>
+                <dt>Тип</dt>
+                <dd>{species.kind}</dd>
+                <dt>Стоимость слотов</dt>
+                <dd data-symbiont-species-slot-cost>{species.slotCost}</dd>
+                <dt>Связанные характеристики</dt>
+                <dd>{species.linkedStatCodes.join(', ')}</dd>
+                <dt>Привязка</dt>
+                <dd>{species.bindingPolicy}</dd>
+              </dl>
+              <StatModifierEffectFields effect={species.statModifiers} />
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function nextSymbioticMonster(
+  current: SymbioticMonsterSpeciesKey | null,
+): SymbioticMonsterSpeciesKey {
+  if (current === null) return SYMBIOTIC_MONSTER_SPECIES[0];
+  const index = SYMBIOTIC_MONSTER_SPECIES.indexOf(current);
+  return SYMBIOTIC_MONSTER_SPECIES[(index + 1) % SYMBIOTIC_MONSTER_SPECIES.length]!;
+}
+
+function RandomSymbiontFields({
+  draft,
+  onLocalAction,
+  onManualFaceChange,
+  onSideSpeciesChange,
+  snapshot,
+}: {
+  readonly draft: RandomSymbiontDraft | null;
+  readonly onLocalAction: (
+    actionKey: typeof CHR_020_SIDE_DRAFT_ACTION_KEY | typeof CHR_020_MONSTER_DRAFT_ACTION_KEY,
+  ) => FormActionRequestResult;
+  readonly onManualFaceChange: (value: number | null) => void;
+  readonly onSideSpeciesChange: (species: 'OWL' | 'EEL') => void;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-020') return null;
+  const projection = snapshot.projection;
+  const entries = projection.seedOrManualFaces.entries;
+  const sideSpecies = projection.drawnSpeciesAndBindings.flatMap((entry) =>
+    entry.speciesKey === 'OWL' || entry.speciesKey === 'EEL' ? [entry.speciesKey] : [],
+  );
+  const selectedSideSpecies = draft?.sideSpeciesKeyOrNull ?? null;
+  const selectedSide =
+    selectedSideSpecies === null ? null : draft?.sideBySpecies[selectedSideSpecies];
+  const sideControlsAvailable =
+    draft !== null && snapshot.availableActionKeys.includes(CHR_020_SIDE_DRAFT_ACTION_KEY);
+  const monsterControlsAvailable =
+    draft !== null && snapshot.availableActionKeys.includes(CHR_020_MONSTER_DRAFT_ACTION_KEY);
+  return (
+    <section
+      aria-labelledby="chr-020-random-title"
+      data-chr-020-random
+      data-draft-revision={projection.draftRevision}
+      data-projection-revision={snapshot.revisions.projectionRevision}
+      data-random-commit-kind={projection.randomStatus}
+      data-random-status={projection.randomStatus}
+      data-state-revision={snapshot.revisions.stateRevision}
+    >
+      <h2 id="chr-020-random-title">Сохранённая случайная последовательность</h2>
+      <dl>
+        <dt>Последовательность</dt>
+        <dd data-random-sequence-id>{projection.randomSequenceId}</dd>
+        <dt>Раса</dt>
+        <dd>{projection.raceChoice}</dd>
+        <dt>Статус</dt>
+        <dd data-random-current-status>{projection.randomStatus}</dd>
+        <dt>Ветвь Советника</dt>
+        <dd data-random-advisor-branch={projection.advisorBranch}>
+          {projection.advisorBranch ? 'Да' : 'Нет'}
+        </dd>
+        <dt>Ожидаемый roll request</dt>
+        <dd data-random-pending-request>
+          {projection.pendingRollRequestIdOrNull ?? 'Нет ожидаемого запроса'}
+        </dd>
+      </dl>
+      <p data-random-input-mode={projection.diceInputModeSnapshot}>
+        {projection.diceInputModeSnapshot === 'AUTO'
+          ? 'Режим AUTO: физические грани предоставляет хост.'
+          : 'Режим MANUAL: до фиксации нужна одна грань D20 от игрока.'}
+      </p>
+      {projection.diceInputModeSnapshot === 'MANUAL' &&
+      draft !== null &&
+      (projection.randomStatus === 'NOT_STARTED' || projection.randomStatus === 'PENDING') ? (
+        <label>
+          Текущая грань D20{' '}
+          <input
+            data-random-manual-face
+            max={20}
+            min={1}
+            step={1}
+            type="number"
+            value={draft.manualFaceOrNull ?? ''}
+            onChange={(event) =>
+              onManualFaceChange(event.target.value === '' ? null : Number(event.target.value))
+            }
+          />
+        </label>
+      ) : null}
+      {projection.randomStatus === 'BINDING' ? (
+        <p data-random-binding-only>
+          Броски завершены и неизменны. Следующая команда выполняет только привязку, без нового
+          броска.
+        </p>
+      ) : null}
+      {projection.randomStatus === 'COMMITTED' ? (
+        <p data-random-committed>Виды, броски и привязки зафиксированы хостом.</p>
+      ) : null}
+
+      <section aria-label="История физических бросков">
+        <h3>Физические броски</h3>
+        {entries.length === 0 ? (
+          <p data-random-physical-history="empty">Физических бросков ещё нет.</p>
+        ) : (
+          <ol data-random-physical-history="ready">
+            {entries.map((roll, index) => (
+              <li
+                key={roll.rollReceiptId}
+                data-current-roll={index === entries.length - 1 ? 'true' : 'false'}
+                data-random-physical-kind={roll.kind}
+                data-random-physical-roll={roll.rollReceiptId}
+              >
+                <strong>{RANDOM_PHYSICAL_ROLL_LABELS[roll.kind]}</strong>
+                <dl>
+                  <dt>Грань</dt>
+                  <dd data-random-raw-face>D20: {roll.mechanical.rawFace}</dd>
+                  <dt>Roll request</dt>
+                  <dd>{roll.rollRequestId}</dd>
+                  <dt>Receipt</dt>
+                  <dd>{roll.rollReceiptId}</dd>
+                  {roll.kind === 'CRITICAL_CONFIRMATION' ? (
+                    <>
+                      <dt>Исходный roll request</dt>
+                      <dd>{roll.originRollRequestId}</dd>
+                      <dt>Выбор чудовища в snapshot</dt>
+                      <dd data-random-critical-outcome>
+                        {roll.selectedMonsterSpeciesKeyOrNull ?? 'Чудовище не выбрано'}
+                      </dd>
+                    </>
+                  ) : null}
+                  {'advisorAcceptedIndex' in roll ? (
+                    <>
+                      <dt>Accepted index Советника</dt>
+                      <dd>{roll.advisorAcceptedIndex}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <section aria-label="Принятые виды и привязки">
+        <h3>Принятые виды</h3>
+        {projection.drawnSpeciesAndBindings.length === 0 ? (
+          <p data-random-accepted="empty">Принятых видов пока нет.</p>
+        ) : (
+          <ul data-random-accepted="ready">
+            {projection.drawnSpeciesAndBindings.map((entry) => (
+              <li
+                key={entry.acceptedIndex}
+                data-random-accepted-index={entry.acceptedIndex}
+                data-random-accepted-species={entry.speciesKey}
+              >
+                #{entry.acceptedIndex}: {entry.speciesKey}; {entry.binding.kind}
+                {'side' in entry.binding ? `; ${entry.binding.side}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label="Дубликаты и повторные броски">
+        <h3>Дубликаты</h3>
+        {projection.duplicateRerollReceipts.length === 0 ? (
+          <p data-random-duplicates="empty">Дубликатов и повторных бросков нет.</p>
+        ) : (
+          <ul data-random-duplicates="ready">
+            {projection.duplicateRerollReceipts.map((duplicate) => (
+              <li key={duplicate.rollReceiptId} data-random-duplicate={duplicate.rollReceiptId}>
+                {duplicate.speciesKey}; дубликат #{duplicate.duplicateOfAcceptedIndex}; request{' '}
+                {duplicate.rollRequestId}; receipt {duplicate.rollReceiptId}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {sideControlsAvailable ? (
+        <fieldset data-random-side-controls data-random-side-value={selectedSide ?? 'RIGHT'}>
+          <legend>Привязка Совы или Угря</legend>
+          <label>
+            Вид{' '}
+            <select
+              data-random-side-species
+              value={selectedSideSpecies ?? ''}
+              onChange={(event) => {
+                const species = event.target.value;
+                if (species !== 'OWL' && species !== 'EEL') {
+                  throw new Error(`unrecognized CHR-020 side species ${JSON.stringify(species)}`);
+                }
+                onSideSpeciesChange(species);
+              }}
+            >
+              {selectedSideSpecies === null ? <option value="">—</option> : null}
+              {sideSpecies.map((species) => (
+                <option key={species} value={species}>
+                  {species}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Сторона{' '}
+            <select
+              data-random-side
+              value={selectedSide ?? 'RIGHT'}
+              onChange={(event) => {
+                const side = event.target.value as SymbiontSide;
+                if (side !== 'LEFT' && side !== 'RIGHT') {
+                  throw new Error(`unrecognized CHR-020 side ${JSON.stringify(side)}`);
+                }
+                if (side !== selectedSide) onLocalAction(CHR_020_SIDE_DRAFT_ACTION_KEY);
+              }}
+            >
+              <option value="RIGHT">Правая</option>
+              <option value="LEFT">Левая</option>
+            </select>
+          </label>
+        </fieldset>
+      ) : null}
+
+      {monsterControlsAvailable ? (
+        <fieldset data-random-monster-controls>
+          <legend>Симбиотическое чудовище</legend>
+          <label>
+            Вид для критического подтверждения{' '}
+            <select
+              data-random-monster
+              value={draft.selectedMonsterSpeciesKeyOrNull ?? ''}
+              onChange={(event) => {
+                const target = event.target.value as SymbioticMonsterSpeciesKey;
+                if (!SYMBIOTIC_MONSTER_SPECIES.includes(target)) {
+                  throw new Error(`unrecognized CHR-020 monster ${JSON.stringify(target)}`);
+                }
+                let current = draft.selectedMonsterSpeciesKeyOrNull;
+                for (
+                  let attempts = 0;
+                  attempts < SYMBIOTIC_MONSTER_SPECIES.length && current !== target;
+                  attempts += 1
+                ) {
+                  const result = onLocalAction(CHR_020_MONSTER_DRAFT_ACTION_KEY);
+                  if (!result.ok) break;
+                  current = nextSymbioticMonster(current);
+                }
+              }}
+            >
+              <option value="">—</option>
+              {SYMBIOTIC_MONSTER_SPECIES.map((species) => (
+                <option key={species} value={species}>
+                  {species}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p data-random-monster-selection>
+            {draft.selectedMonsterSpeciesKeyOrNull === null
+              ? 'Вид ещё не выбран.'
+              : `Локально выбран: ${draft.selectedMonsterSpeciesKeyOrNull}`}
+          </p>
+        </fieldset>
+      ) : null}
+    </section>
+  );
+}
+
+function AdvisorSkillSelectionFields({
+  draft,
+  onCandidateChange,
+  snapshot,
+}: {
+  readonly draft: AdvisorSkillSelectionDraft | null;
+  readonly onCandidateChange: (skillId: string | null, targetBonus: number | null) => void;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-041') return null;
+  const projection = snapshot.projection;
+  const slots = projection.advisorSlotsAndSkills;
+  const selectedSkills = draft?.selectedSkills ?? slots.selectedSkills;
+  const validation = draft?.selectionValidation ?? slots.selectionValidation;
+  const candidateSkillId = draft?.candidateSkillIdOrNull ?? null;
+  const candidateTargetBonus = draft?.candidateTargetBonusOrNull ?? null;
+  const candidateOption = slots.skillOptions.find(({ skillId }) => skillId === candidateSkillId);
+  const selectedCandidate = selectedSkills.find(({ skillId }) => skillId === candidateSkillId);
+  const mutable = draft !== null && !projection.acknowledged;
+  return (
+    <section
+      aria-labelledby="chr-041-advisor-title"
+      data-advisor-effects-active={projection.advisorCard.effectsActive}
+      data-chr-041-advisor
+      data-draft-revision={projection.draftRevision}
+      data-projection-revision={snapshot.revisions.projectionRevision}
+      data-state-revision={snapshot.revisions.stateRevision}
+    >
+      <h2 id="chr-041-advisor-title">Карточка Советника</h2>
+      <dl>
+        <dt>Instance draft</dt>
+        <dd>{projection.advisorInstanceDraftId}</dd>
+        <dt>Вид</dt>
+        <dd>{projection.advisorCard.speciesKey}</dd>
+        <dt>I + 8</dt>
+        <dd data-advisor-i-value>{projection.advisorIPlus8OrNull ?? 'Нет значения'}</dd>
+        <dt>W + 8</dt>
+        <dd data-advisor-w-value>{projection.advisorWPlus8OrNull ?? 'Нет значения'}</dd>
+      </dl>
+      <p data-advisor-effects-status>
+        {projection.advisorCard.effectsActive
+          ? 'Эффекты Советника активны.'
+          : 'Эффекты Советника неактивны.'}
+      </p>
+      <section
+        aria-label="Подавление Трогра"
+        data-advisor-suppression={projection.trogrSuppressionState.kind}
+      >
+        <h3>Подавление Трогра</h3>
+        {projection.trogrSuppressionState.kind === 'NOT_SUPPRESSED' ? (
+          <p>Подавление отсутствует.</p>
+        ) : (
+          <dl>
+            <dt>Минимальный I</dt>
+            <dd data-advisor-suppression-minimum-i>
+              {projection.trogrSuppressionState.minimumIOrNull ?? 'Нет значения'}
+            </dd>
+            <dt>Бонус подавления B</dt>
+            <dd data-advisor-suppression-b>
+              {projection.trogrSuppressionState.suppressionBOrNull ?? 'Нет значения'}
+            </dd>
+          </dl>
+        )}
+      </section>
+      <section aria-label="Неизменные броски Советника">
+        <h3>I/W requests и receipts</h3>
+        <ol data-advisor-iw-history>
+          {projection.iwRollRequestIds.map((requestId, index) => (
+            <li key={requestId ?? `missing-${String(index)}`} data-advisor-iw-roll={index}>
+              <strong>{index === 0 ? 'I' : 'W'}</strong>: request {requestId ?? 'Нет значения'};
+              receipt {projection.iwRollReceiptIds[index] ?? 'Нет receipt'}
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section aria-label="Навыки Советника" data-advisor-skill-selection>
+        <h3>Навыки и слоты</h3>
+        <p data-advisor-slot-usage>
+          Использовано слотов: {validation.usedSlotCount} / {validation.requiredSlotCount}
+        </p>
+        <p data-advisor-selection-validation={validation.kind} role="status">
+          {validation.kind === 'EXACT'
+            ? `Точное заполнение: ${String(validation.usedSlotCount)} / ${String(validation.requiredSlotCount)}. Можно запросить подтверждение хоста.`
+            : validation.kind === 'UNDERFILLED'
+              ? `Недозаполнение: не хватает ${String(validation.missingSlotCount)} слотов.`
+              : `Переполнение: лишних ${String(validation.excessSlotCount)} слотов.`}
+        </p>
+        {selectedSkills.length === 0 ? (
+          <p data-advisor-selected-skills="empty">Навыки ещё не выбраны.</p>
+        ) : (
+          <ul data-advisor-selected-skills="ready">
+            {selectedSkills.map((selected) => {
+              const option = slots.skillOptions.find(({ skillId }) => skillId === selected.skillId);
+              return (
+                <li key={selected.skillId} data-advisor-selected-skill={selected.skillId}>
+                  {option?.skillLabel ?? selected.skillId} +{selected.targetBonus} (
+                  {selected.slotCost} сл.)
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {mutable ? (
+          <fieldset data-advisor-selection-controls>
+            <legend>Локальное добавление или удаление</legend>
+            <label>
+              Навык{' '}
+              <select
+                data-advisor-skill-candidate
+                value={candidateSkillId ?? ''}
+                onChange={(event) => {
+                  const skillId = event.target.value || null;
+                  const selected = selectedSkills.find((entry) => entry.skillId === skillId);
+                  onCandidateChange(skillId, selected?.targetBonus ?? null);
+                }}
+              >
+                <option value="">—</option>
+                {slots.skillOptions.map((option) => (
+                  <option key={option.skillId} value={option.skillId}>
+                    {option.skillLabel}
+                    {selectedSkills.some(({ skillId }) => skillId === option.skillId)
+                      ? ' — удалить'
+                      : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Целевой бонус{' '}
+              <select
+                data-advisor-target-bonus
+                disabled={candidateOption === undefined || selectedCandidate !== undefined}
+                value={candidateTargetBonus ?? ''}
+                onChange={(event) =>
+                  onCandidateChange(
+                    candidateSkillId,
+                    event.target.value === '' ? null : Number(event.target.value),
+                  )
+                }
+              >
+                <option value="">—</option>
+                {(candidateOption?.levelOptions ?? []).map((level) => (
+                  <option key={level.targetBonus} value={level.targetBonus}>
+                    +{level.targetBonus} — {level.slotCost} сл.
+                  </option>
+                ))}
+              </select>
+            </label>
+          </fieldset>
+        ) : (
+          <p data-advisor-selection-checkpointed>Выбор Советника зафиксирован хостом.</p>
+        )}
+        <div data-advisor-skill-options>
+          {slots.skillOptions.map((option) => (
+            <article key={option.skillId} data-advisor-skill-option={option.skillId}>
+              <h4>{option.skillLabel}</h4>
+              <SkillContentFields
+                bonusDomainScope={option.bonusDomainScope}
+                missingSkillPenalty={option.missingSkillPenalty}
+              />
+              {option.requirements.length === 0 ? (
+                <p>Требования отсутствуют.</p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Характеристика</th>
+                      <th>Текущее</th>
+                      <th>Требуется</th>
+                      <th>Выполнено</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {option.requirements.map((requirement) => (
+                      <tr
+                        key={requirement.statCode}
+                        data-advisor-requirement={requirement.statCode}
+                        data-advisor-requirement-satisfied={requirement.satisfied}
+                      >
+                        <th>{requirement.statLabel}</th>
+                        <td>{requirement.currentValue}</td>
+                        <td>{requirement.minValue}</td>
+                        <td>{requirement.satisfied ? 'Да' : 'Нет'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <ul data-advisor-level-options>
+                {option.levelOptions.map((level) => (
+                  <li key={level.targetBonus} data-advisor-level-cost={level.targetBonus}>
+                    +{level.targetBonus}: {level.slotCost} сл.
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function SymbiontInteractionFields({
+  emptyText,
+  value,
+}: {
+  readonly emptyText: string;
+  readonly value:
+    | Chr019Projection['interactionGraph']
+    | Chr019Projection['suppressionDestructionAbsorptionPreview'];
+}): ReactElement {
+  if (value.kind === 'NO_INTERACTIONS' || value.kind === 'NONE') {
+    return <p data-symbiont-interactions="empty">{emptyText}</p>;
+  }
+  return (
+    <ul data-symbiont-interactions="ready">
+      {value.entries.map((entry, index) => (
+        <li key={`${entry.kind}:${String(index)}`} data-symbiont-interaction={entry.kind}>
+          <strong>{entry.kind}</strong>
+          <dl>
+            {Object.entries(entry)
+              .filter(([key]) => key !== 'kind')
+              .map(([key, field]) => (
+                <div key={key}>
+                  <dt>{key}</dt>
+                  <dd>{displayValue(key, field)}</dd>
+                </div>
+              ))}
+          </dl>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function SymbiontCompositionFields({
+  snapshot,
+}: {
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-019') return null;
+  const projection = snapshot.projection;
+  return (
+    <section
+      aria-labelledby="chr-019-composition-title"
+      aria-readonly="true"
+      data-chr-019-composition
+      data-draft-revision={projection.draftRevision}
+      data-projection-revision={snapshot.revisions.projectionRevision}
+      data-read-only="true"
+      data-state-revision={snapshot.revisions.stateRevision}
+    >
+      <h2 id="chr-019-composition-title">Состав симбионтов только для чтения</h2>
+      <dl>
+        <dt>Проверка состава</dt>
+        <dd data-composition-validation>{projection.compositionValidation}</dd>
+        <dt>Необратимая граница</dt>
+        <dd>{projection.irreversibleBoundaryStatus}</dd>
+        <dt>Использовано слотов</dt>
+        <dd data-composition-slot-usage>
+          {projection.slotUsageAndCapacity.used} / {projection.slotUsageAndCapacity.capacity}
+        </dd>
+      </dl>
+
+      <section aria-label="Экземпляры симбионтов">
+        <h3>Экземпляры</h3>
+        {projection.symbiontInstancesDraft.length === 0 ? (
+          <p data-symbiont-instances="empty">Экземпляров симбионтов нет.</p>
+        ) : (
+          <ul data-symbiont-instances="ready">
+            {projection.symbiontInstancesDraft.map((instance) => (
+              <li
+                key={instance.acceptedIndex}
+                data-symbiont-instance={instance.speciesKey}
+                data-symbiont-instance-status={instance.status}
+              >
+                <strong>{instance.speciesLabel}</strong> ({instance.speciesKey}) #
+                {instance.acceptedIndex}
+                <dl>
+                  <dt>Статус</dt>
+                  <dd>{instance.status}</dd>
+                  <dt>Текущее OE</dt>
+                  <dd>{instance.currentOe}</dd>
+                  <dt>Стоимость слотов</dt>
+                  <dd>{instance.slotCost}</dd>
+                  <dt>Поглощённые виды</dt>
+                  <dd>
+                    {instance.absorbedSpeciesKeys.length === 0
+                      ? 'Нет'
+                      : instance.absorbedSpeciesKeys.join(', ')}
+                  </dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label="Привязки состава">
+        <h3>Привязки</h3>
+        {projection.bindings.length === 0 ? (
+          <p data-composition-bindings="empty">Привязок нет.</p>
+        ) : (
+          <ul data-composition-bindings="ready">
+            {projection.bindings.map((entry) => (
+              <li key={entry.acceptedIndex} data-composition-binding={entry.speciesKey}>
+                #{entry.acceptedIndex}: {entry.speciesKey}; {entry.binding.kind}
+                {'side' in entry.binding ? `; ${entry.binding.side}` : ''}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label="Взаимодействия состава">
+        <h3>Взаимодействия</h3>
+        <SymbiontInteractionFields
+          emptyText="Взаимодействий между видами нет."
+          value={projection.interactionGraph}
+        />
+      </section>
+      <section aria-label="Последствия подавления, разрушения и поглощения">
+        <h3>Последствия</h3>
+        <SymbiontInteractionFields
+          emptyText="Последствий подавления, разрушения и поглощения нет."
+          value={projection.suppressionDestructionAbsorptionPreview}
+        />
+      </section>
+
+      <section aria-label="Политика дубликатов">
+        <h3>Дубликаты и receipts</h3>
+        <p data-duplicate-policy={projection.duplicatePolicy.kind}>
+          Политика: {projection.duplicatePolicy.kind}
+        </p>
+        {projection.duplicatePolicy.receipts.length === 0 ? (
+          <p data-composition-duplicates="empty">Дубликатов и отдельных reroll receipts нет.</p>
+        ) : (
+          <ul data-composition-duplicates="ready">
+            {projection.duplicatePolicy.receipts.map((receipt) => (
+              <li key={receipt.rollReceiptId} data-composition-duplicate={receipt.rollReceiptId}>
+                {receipt.speciesKey}; дубликат #{receipt.duplicateOfAcceptedIndex}; request{' '}
+                {receipt.rollRequestId}; receipt {receipt.rollReceiptId}
+              </li>
+            ))}
+          </ul>
+        )}
+        {projection.randomReceiptIds.length === 0 ? (
+          <p data-composition-random-receipts="empty">AUTO random receipts отсутствуют.</p>
+        ) : (
+          <ul data-composition-random-receipts="ready">
+            {projection.randomReceiptIds.map((receiptId) => (
+              <li key={receiptId}>{receiptId}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-label="Поправки характеристик симбионтов">
+        <h3>Поправки по видам</h3>
+        {projection.symbiontModifierBreakdown.bySpecies.length === 0 ? (
+          <p data-symbiont-modifiers="empty">Поправок по видам нет.</p>
+        ) : (
+          projection.symbiontModifierBreakdown.bySpecies.map((entry) => (
+            <article
+              key={entry.acceptedIndex}
+              data-symbiont-modifier-species={entry.speciesKey}
+              data-symbiont-modifier-status={entry.status}
+            >
+              <h4>{entry.speciesLabel}</h4>
+              <p>{entry.status}</p>
+              {entry.effect.kind === 'INACTIVE' ? (
+                <p data-symbiont-modifier-effect="INACTIVE">Поправки этого вида неактивны.</p>
+              ) : (
+                <StatModifierEffectFields effect={entry.effect} />
+              )}
+            </article>
+          ))
+        )}
+        <h3>Итоговые поправки</h3>
+        <div data-symbiont-modifier-total>
+          <StatModifierEffectFields effect={projection.symbiontModifierBreakdown.total} />
+        </div>
+      </section>
+    </section>
+  );
+}
+
 function AbandonmentDialogFields({
   layer,
 }: {
@@ -1210,6 +1941,9 @@ export function App(): ReactElement {
     useState<CharacterStatAssignmentDraft | null>(null);
   const [skillSelectionDraft, setSkillSelectionDraft] =
     useState<CharacterSkillSelectionDraft | null>(null);
+  const [randomSymbiontDraft, setRandomSymbiontDraft] = useState<RandomSymbiontDraft | null>(null);
+  const [advisorSkillSelectionDraft, setAdvisorSkillSelectionDraft] =
+    useState<AdvisorSkillSelectionDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -1221,6 +1955,8 @@ export function App(): ReactElement {
       setCreationRollDraft,
       setStatAssignmentDraft,
       setSkillSelectionDraft,
+      setRandomSymbiontDraft,
+      setAdvisorSkillSelectionDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -1353,6 +2089,53 @@ export function App(): ReactElement {
                 );
               }}
             />
+            <SymbiontCatalogFields snapshot={snapshot} />
+            <RandomSymbiontFields
+              draft={randomSymbiontDraft}
+              snapshot={snapshot}
+              onLocalAction={(actionKey) => {
+                const connection = connectionRef.current;
+                if (connection === null) {
+                  const result = {
+                    detail: 'projection connection is not ready',
+                    ok: false,
+                  } as const;
+                  setActionNotice(`Локальное действие не выполнено: ${result.detail}.`);
+                  return result;
+                }
+                const result = connection.requestFormAction(actionKey);
+                setActionNotice(
+                  result.ok ? null : `Локальное действие не выполнено: ${result.detail}.`,
+                );
+                return result;
+              }}
+              onManualFaceChange={(value) => {
+                const result = connectionRef.current?.replaceRandomManualFace(value);
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+              onSideSpeciesChange={(species) => {
+                const result = connectionRef.current?.replaceRandomSideSpecies(species);
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+            />
+            <AdvisorSkillSelectionFields
+              draft={advisorSkillSelectionDraft}
+              snapshot={snapshot}
+              onCandidateChange={(skillId, targetBonus) => {
+                const result = connectionRef.current?.replaceAdvisorSkillCandidate(
+                  skillId,
+                  targetBonus,
+                );
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+            />
+            <SymbiontCompositionFields snapshot={snapshot} />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}

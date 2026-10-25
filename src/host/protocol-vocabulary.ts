@@ -38,7 +38,11 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-015',
   'CHR-016',
   'CHR-028',
+  'CHR-017',
+  'CHR-019',
+  'CHR-020',
   'CHR-036',
+  'CHR-041',
 ]);
 const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-002',
@@ -55,7 +59,11 @@ const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-013',
   'CHR-015',
   'CHR-016',
+  'CHR-017',
+  'CHR-019',
+  'CHR-020',
   'CHR-036',
+  'CHR-041',
 ]);
 
 const jsonFile = (path: string): Promise<unknown> =>

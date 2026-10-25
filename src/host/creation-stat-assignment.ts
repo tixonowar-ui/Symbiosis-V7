@@ -20,6 +20,7 @@ import {
   StatAssignmentRuleError,
   SkillStageRuleError,
   type SkillStageCatalog,
+  type SkillStageResult,
   type StatAssignmentMode,
   type StatBlock,
 } from '../domain/index.js';
@@ -745,14 +746,12 @@ export function preparePureClassDecision(
   };
 }
 
-export function deriveChr012StatsView(
+export function deriveCreationSkillStageResult(
   checkpoint: DurableCreationWizardCheckpoint,
   catalog: SkillStageCatalog,
-): Chr012StatsView {
+): SkillStageResult {
   const assignment = checkpoint.statAssignmentStage;
-  if (checkpoint.nextStageEnvelope.formId !== 'CHR-012' || assignment === null) {
-    return guardRejected();
-  }
+  if (assignment === null) return guardRejected();
   const raceChoice = assignment.derived.raceChoice;
   const race = raceDefinition(catalog, raceChoice);
   const pureClassStage = checkpoint.pureClassStage;
@@ -763,25 +762,37 @@ export function deriveChr012StatsView(
   ) {
     return guardRejected();
   }
-  let result;
   try {
     if (raceChoice === 'PURE') {
       if (pureClass === null) return guardRejected();
-      result = calculateForPure(catalog, assignment.derived.baseStats, pureClass);
-    } else {
-      const creationMode = checkpoint.raceAndMethodStage?.symbiontAcquisition.value;
-      if (creationMode === null || creationMode === undefined) return guardRejected();
-      result = calculateSkillStageStats(catalog, {
-        baseStats: assignment.derived.baseStats,
-        classCode: null,
-        creationMode,
-        raceCode: raceChoice,
-      });
+      return calculateForPure(catalog, assignment.derived.baseStats, pureClass);
     }
+    const creationMode = checkpoint.raceAndMethodStage?.symbiontAcquisition.value;
+    if (creationMode === null || creationMode === undefined) return guardRejected();
+    return calculateSkillStageStats(catalog, {
+      baseStats: assignment.derived.baseStats,
+      classCode: null,
+      creationMode,
+      raceCode: raceChoice,
+    });
   } catch (cause) {
     if (cause instanceof SkillStageRuleError) return guardRejected();
     throw cause;
   }
+}
+
+export function deriveChr012StatsView(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SkillStageCatalog,
+): Chr012StatsView {
+  const assignment = checkpoint.statAssignmentStage;
+  if (checkpoint.nextStageEnvelope.formId !== 'CHR-012' || assignment === null) {
+    return guardRejected();
+  }
+  const raceChoice = assignment.derived.raceChoice;
+  const pureClassStage = checkpoint.pureClassStage;
+  const pureClass = pureClassStage?.derived.pureClass ?? null;
+  const result = deriveCreationSkillStageResult(checkpoint, catalog);
   const modifiers = modifierViews(catalog, result.appliedModifierIds, raceChoice, pureClass);
   return {
     baseStats: assignment.derived.baseStats,

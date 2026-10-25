@@ -13,6 +13,7 @@ import {
   type CreationStatCriticalChainState,
   type CreationStatSetDecisionRule,
   type SkillStageCatalog,
+  type SymbiontCatalog,
 } from '../domain/index.js';
 
 import { decodeClientMessage } from '@shared/wire-codec.js';
@@ -78,6 +79,20 @@ import {
   type SkillSelectionStage,
 } from './creation-skill-selection.js';
 import type {
+  RandomSymbiontStage,
+  SymbiontAdvisorCheckpointCommandRequest,
+  SymbiontAdvisorCheckpointReceipt,
+  SymbiontBindingReceipt,
+  SymbiontPhysicalRollReceipt,
+  SymbiontRollCommitCommandRequest,
+} from './creation-symbiont-contract.js';
+import { randomSymbiontStageIds } from './creation-symbiont-contract.js';
+import {
+  latestRandomSymbiontRecord,
+  parseRandomSymbiontStage,
+  validateRandomSymbiontStageHistory,
+} from './creation-symbiont-validation.js';
+import type {
   DurableIdentityCheckpoint,
   IdentityCheckpointCommandRequest,
   IdentityCheckpointDurablePayload,
@@ -122,7 +137,10 @@ export type CreationNextFormId =
   | 'CHR-013'
   | 'CHR-016'
   | 'CHR-017'
-  | 'CHR-036';
+  | 'CHR-019'
+  | 'CHR-020'
+  | 'CHR-036'
+  | 'CHR-041';
 
 interface CreationSetDecidePayloadCommon extends JsonObject {
   readonly stage: 'RACE_AND_METHOD';
@@ -620,11 +638,27 @@ export interface CreationWizardSkillPayload extends Omit<
   readonly receipt: SkillEligibilityCheckpointReceipt | SkillSelectionCheckpointReceipt;
 }
 
+export interface CreationWizardSymbiontPayload extends Omit<
+  CreationWizardSkillPayload,
+  'nextStageEnvelope' | 'receipt'
+> {
+  readonly randomSymbiontStage: RandomSymbiontStage;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<
+    'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041'
+  >;
+  readonly receipt:
+    | SkillSelectionCheckpointReceipt
+    | SymbiontPhysicalRollReceipt
+    | SymbiontBindingReceipt
+    | SymbiontAdvisorCheckpointReceipt;
+}
+
 export type CreationWizardPostIdentityPayload =
   | CreationWizardPreRollPayload
   | CreationWizardStatRollPayload
   | CreationWizardStatAssignmentPayload
-  | CreationWizardSkillPayload;
+  | CreationWizardSkillPayload
+  | CreationWizardSymbiontPayload;
 
 export type DurableCreationWizardPayload =
   | (IdentityCheckpointDurablePayload & {
@@ -645,6 +679,7 @@ export interface DurableCreationWizardCheckpoint {
   readonly pureClassStage: PureClassStage | null;
   readonly skillEligibilityStage: SkillEligibilityStage | null;
   readonly skillSelectionStage: SkillSelectionStage | null;
+  readonly randomSymbiontStage: RandomSymbiontStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
     | DurableCreationSetDecideReceipt
@@ -652,13 +687,18 @@ export interface DurableCreationWizardCheckpoint {
     | StatAssignmentCheckpointReceipt
     | PureClassDecisionReceipt
     | SkillEligibilityCheckpointReceipt
-    | SkillSelectionCheckpointReceipt;
+    | SkillSelectionCheckpointReceipt
+    | SymbiontPhysicalRollReceipt
+    | SymbiontBindingReceipt
+    | SymbiontAdvisorCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
     | IdentityCheckpointCommandRequest
     | StatAssignmentCheckpointCommandRequest
-    | SkillCheckpointCommandRequest;
+    | SkillCheckpointCommandRequest
+    | SymbiontRollCommitCommandRequest
+    | SymbiontAdvisorCheckpointCommandRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -671,13 +711,18 @@ export interface DurableCreationWizardCommand {
     | StatAssignmentCheckpointReceipt
     | PureClassDecisionReceipt
     | SkillEligibilityCheckpointReceipt
-    | SkillSelectionCheckpointReceipt;
+    | SkillSelectionCheckpointReceipt
+    | SymbiontPhysicalRollReceipt
+    | SymbiontBindingReceipt
+    | SymbiontAdvisorCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
     | IdentityCheckpointCommandRequest
     | StatAssignmentCheckpointCommandRequest
-    | SkillCheckpointCommandRequest;
+    | SkillCheckpointCommandRequest
+    | SymbiontRollCommitCommandRequest
+    | SymbiontAdvisorCheckpointCommandRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -740,6 +785,7 @@ const SKILL_PAYLOAD_KEYS = [
   'skillEligibilityStage',
   'skillSelectionStage',
 ] as const;
+const SYMBIONT_PAYLOAD_KEYS = [...SKILL_PAYLOAD_KEYS, 'randomSymbiontStage'] as const;
 const RECEIPT_RESULT_COMMON_KEYS = [
   'stage',
   'sourceFormId',
@@ -1080,6 +1126,9 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-012',
     'CHR-013',
     'CHR-017',
+    'CHR-019',
+    'CHR-020',
+    'CHR-041',
   ] as const);
   const bindings = object['routeBindings'];
   if (!Array.isArray(bindings)) return invalidShape(`${path}.routeBindings`, 'array', bindings);
@@ -2244,22 +2293,26 @@ const postIdentityPayloadAt = (
   label: string,
   localCharacter: LocalCharacter,
   checkpoint: LocalCharacterCheckpoint,
+  symbiontCatalog?: SymbiontCatalog,
 ): CreationWizardPostIdentityPayload => {
   try {
     const unshaped = objectAt(value, '$');
     const hasStatRollStage = Object.hasOwn(unshaped, 'statRollStage');
     const hasStatAssignmentStage = Object.hasOwn(unshaped, 'statAssignmentStage');
     const hasSkillEligibilityStage = Object.hasOwn(unshaped, 'skillEligibilityStage');
+    const hasRandomSymbiontStage = Object.hasOwn(unshaped, 'randomSymbiontStage');
     const object = exactObject(
       value,
       '$',
-      hasSkillEligibilityStage
-        ? SKILL_PAYLOAD_KEYS
-        : hasStatAssignmentStage
-          ? STAT_ASSIGNMENT_PAYLOAD_KEYS
-          : hasStatRollStage
-            ? STAT_ROLL_PAYLOAD_KEYS
-            : POST_IDENTITY_PAYLOAD_KEYS,
+      hasRandomSymbiontStage
+        ? SYMBIONT_PAYLOAD_KEYS
+        : hasSkillEligibilityStage
+          ? SKILL_PAYLOAD_KEYS
+          : hasStatAssignmentStage
+            ? STAT_ASSIGNMENT_PAYLOAD_KEYS
+            : hasStatRollStage
+              ? STAT_ROLL_PAYLOAD_KEYS
+              : POST_IDENTITY_PAYLOAD_KEYS,
     );
     const branchCacheEntries = emptyArrayAt(object['branchCacheEntries'], '$.branchCacheEntries');
     const branchCacheHash = literal(
@@ -2297,21 +2350,31 @@ const postIdentityPayloadAt = (
     const skillSelectionStage = hasSkillEligibilityStage
       ? parseSkillSelectionStage(object['skillSelectionStage'], label)
       : null;
+    const randomSymbiontStage = hasRandomSymbiontStage
+      ? parseRandomSymbiontStage(object['randomSymbiontStage'], symbiontCatalog)
+      : null;
+    const latestSymbiontRecord =
+      randomSymbiontStage === null ? null : latestRandomSymbiontRecord(randomSymbiontStage);
     const receipt =
-      receiptResult['stage'] === 'SKILLS'
-        ? (skillSelectionStage?.receipt ??
-          skillEligibilityStage?.receipt ??
+      receiptResult['stage'] === 'SYMBIONTS'
+        ? (latestSymbiontRecord?.receipt ??
           (() => {
-            throw new Error(`${label} SKILLS payload lacks a skill stage receipt`);
+            throw new Error(`${label} SYMBIONTS payload lacks a latest symbiont receipt`);
           })())
-        : receiptResult['stage'] === 'STAT_ASSIGNMENT'
-          ? parseStatAssignmentReceipt(object['receipt'], label)
-          : receiptResult['stage'] !== 'STAT_ROLLS'
-            ? raceMethodReceiptAt(object['receipt'], '$.receipt')
-            : receiptResult['sourceFormId'] === 'CHR-003' ||
-                receiptResult['sourceFormId'] === 'CHR-004'
-              ? creationRollReceiptAt(object['receipt'], '$.receipt')
-              : statDecisionReceiptAt(object['receipt'], '$.receipt');
+        : receiptResult['stage'] === 'SKILLS'
+          ? (skillSelectionStage?.receipt ??
+            skillEligibilityStage?.receipt ??
+            (() => {
+              throw new Error(`${label} SKILLS payload lacks a skill stage receipt`);
+            })())
+          : receiptResult['stage'] === 'STAT_ASSIGNMENT'
+            ? parseStatAssignmentReceipt(object['receipt'], label)
+            : receiptResult['stage'] !== 'STAT_ROLLS'
+              ? raceMethodReceiptAt(object['receipt'], '$.receipt')
+              : receiptResult['sourceFormId'] === 'CHR-003' ||
+                  receiptResult['sourceFormId'] === 'CHR-004'
+                ? creationRollReceiptAt(object['receipt'], '$.receipt')
+                : statDecisionReceiptAt(object['receipt'], '$.receipt');
     const common = {
       branchCacheEntries,
       branchCacheHash,
@@ -2327,6 +2390,30 @@ const postIdentityPayloadAt = (
         throw new Error(`${label} pre-roll payload cannot carry a STAT_ROLLS receipt`);
       }
       return common as CreationWizardPreRollPayload;
+    }
+    if (hasRandomSymbiontStage) {
+      if (
+        randomSymbiontStage === null ||
+        (latestSymbiontRecord === null
+          ? receipt.result.stage !== 'SKILLS'
+          : receipt.result.stage !== 'SYMBIONTS' ||
+            !isDeepStrictEqual(receipt, latestSymbiontRecord.receipt))
+      ) {
+        throw new Error(`${label} symbiont payload must carry its latest stage receipt`);
+      }
+      return {
+        ...common,
+        nextStageEnvelope: common.nextStageEnvelope as CreationNextStageEnvelope<
+          'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041'
+        >,
+        pureClassStage: parsePureClassStage(object['pureClassStage'], label),
+        receipt,
+        randomSymbiontStage,
+        skillEligibilityStage,
+        skillSelectionStage,
+        statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
+        statRollStage: statRollStageAt(object['statRollStage'], label),
+      } as CreationWizardSymbiontPayload;
     }
     if (hasSkillEligibilityStage) {
       if (
@@ -2389,7 +2476,7 @@ const mismatchError = (label: string, mismatches: readonly string[]): never => {
   );
 };
 
-interface RollValidationCursor {
+export interface RollValidationCursor {
   readonly checkpointRevision: number;
   readonly draftRevision: number;
   readonly latestEnvelope: CreationNextStageEnvelope;
@@ -2399,12 +2486,17 @@ interface RollValidationCursor {
     | StatAssignmentCheckpointReceipt
     | PureClassDecisionReceipt
     | SkillEligibilityCheckpointReceipt
-    | SkillSelectionCheckpointReceipt;
+    | SkillSelectionCheckpointReceipt
+    | SymbiontPhysicalRollReceipt
+    | SymbiontBindingReceipt
+    | SymbiontAdvisorCheckpointReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
     | StatAssignmentCheckpointCommandRequest
-    | SkillCheckpointCommandRequest;
+    | SkillCheckpointCommandRequest
+    | SymbiontRollCommitCommandRequest
+    | SymbiontAdvisorCheckpointCommandRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3008,7 +3100,23 @@ const validateStatRollHistory = (
     statMethod: methodRequest.payload.statMethod,
   };
   if (!isDeepStrictEqual(stage, expectedStage)) mismatches.push('statRollStage aggregate');
-  if (!isDeepStrictEqual(durablePayload.randomReceiptIds, expectedRandomReceiptIds)) {
+  const symbiontPayload =
+    'randomSymbiontStage' in durablePayload
+      ? (durablePayload as unknown as CreationWizardSymbiontPayload)
+      : null;
+  const symbiontRandomReceiptIds =
+    symbiontPayload === null
+      ? []
+      : symbiontPayload.randomSymbiontStage.rollRecords
+          .filter((record) => record.request.payload.variant === 'ROLL')
+          .filter(() => durablePayload.raceAndMethodStage.diceInput?.value === 'AUTO')
+          .map((record) => record.receipt.receiptId);
+  if (
+    !isDeepStrictEqual(durablePayload.randomReceiptIds, [
+      ...expectedRandomReceiptIds,
+      ...symbiontRandomReceiptIds,
+    ])
+  ) {
     mismatches.push('randomReceiptIds roll provenance');
   }
   return cursor;
@@ -3036,6 +3144,7 @@ const assignmentCheckpointAtCursor = (
   request: cursor.latestRequest,
   skillEligibilityStage: null,
   skillSelectionStage: null,
+  randomSymbiontStage: null,
   statAssignmentStage,
   statRollStage,
 });
@@ -3235,7 +3344,7 @@ const validateStatAssignmentHistory = (
 };
 
 const skillCheckpointAtCursor = (
-  durablePayload: CreationWizardSkillPayload,
+  durablePayload: CreationWizardSkillPayload | CreationWizardSymbiontPayload,
   localCharacter: LocalCharacter,
   checkpoint: LocalCharacterCheckpoint,
   identityStage: CreationIdentityStage,
@@ -3258,12 +3367,14 @@ const skillCheckpointAtCursor = (
   request: cursor.latestRequest,
   skillEligibilityStage,
   skillSelectionStage,
+  randomSymbiontStage:
+    'randomSymbiontStage' in durablePayload ? durablePayload.randomSymbiontStage : null,
   statAssignmentStage,
   statRollStage,
 });
 
 const validateSkillHistory = (
-  durablePayload: CreationWizardSkillPayload,
+  durablePayload: CreationWizardSkillPayload | CreationWizardSymbiontPayload,
   localCharacter: LocalCharacter,
   checkpoint: LocalCharacterCheckpoint,
   identityStage: CreationIdentityStage,
@@ -3450,6 +3561,7 @@ const validatePostIdentityPayload = (
   checkpoint: LocalCharacterCheckpoint,
   durablePayload: CreationWizardPostIdentityPayload,
   catalog?: SkillStageCatalog,
+  symbiontCatalog?: SymbiontCatalog,
 ): DurableCreationWizardCheckpoint => {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   const mismatches: string[] = [];
@@ -3704,8 +3816,50 @@ const validatePostIdentityPayload = (
       mismatches,
     );
   }
+  const randomSymbiontStage =
+    'randomSymbiontStage' in durablePayload ? durablePayload.randomSymbiontStage : null;
+  if (randomSymbiontStage !== null) {
+    if (symbiontCatalog === undefined) {
+      throw new Error(`${label} random symbiont stage requires a validated symbiont catalog`);
+    }
+    if (skillEligibilityStage === null || statAssignmentStage === null) {
+      throw new Error(`${label} random symbiont stage lacks its creation prerequisites`);
+    }
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateRandomSymbiontStageHistory(randomSymbiontStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
+  const randomStartPending =
+    randomSymbiontStage !== null &&
+    randomSymbiontStage.pendingRollRequestOrNull === null &&
+    randomSymbiontStage.rollRecords.length === 0 &&
+    randomSymbiontStage.bindingRecordOrNull === null &&
+    randomSymbiontStage.advisorInstanceDraftIdOrNull === null &&
+    randomSymbiontStage.advisorSkillRecordOrNull === null &&
+    cursor.latestEnvelope.formId === 'CHR-017' &&
+    durablePayload.nextStageEnvelope.formId === 'CHR-017';
   if (!isDeepStrictEqual(durablePayload.receipt, cursor.latestReceipt)) {
     mismatches.push('top-level receipt/latest record');
   }
@@ -3735,13 +3889,18 @@ const validatePostIdentityPayload = (
     stateRevision: checkpoint.stateRevision,
   };
   const projectionRevisionMatches =
-    skillEligibilityStage !== null && skillSelectionStage === null
+    randomSymbiontStage !== null
       ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
-        (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
+        (randomStartPending &&
+          previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
           currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
-      : statAssignmentStage !== null
-        ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
-        : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
+      : skillEligibilityStage !== null && skillSelectionStage === null
+        ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
+          (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
+            currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
+        : statAssignmentStage !== null
+          ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
+          : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
   if (
     currentRevisions.actorVisibilityRevision !== previousRevisions.actorVisibilityRevision ||
     currentRevisions.stateRevision !== previousRevisions.stateRevision ||
@@ -3764,6 +3923,8 @@ const validatePostIdentityPayload = (
     pureClassStage,
     skillEligibilityStage,
     skillSelectionStage,
+    randomSymbiontStage:
+      'randomSymbiontStage' in durablePayload ? durablePayload.randomSymbiontStage : null,
     statRollStage,
     statAssignmentStage,
     receipt: durablePayload.receipt,
@@ -3785,6 +3946,7 @@ const identityOnlyCheckpoint = (
     raceAndMethodStage: null,
     skillEligibilityStage: null,
     skillSelectionStage: null,
+    randomSymbiontStage: null,
     statAssignmentStage: null,
     statRollStage: null,
     receipt: durable.receipt,
@@ -3796,6 +3958,7 @@ export function validateDurableCreationWizardCheckpoint(
   localCharacter: LocalCharacter,
   checkpoint: LocalCharacterCheckpoint,
   catalog?: SkillStageCatalog,
+  symbiontCatalog?: SymbiontCatalog,
 ): DurableCreationWizardCheckpoint {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   let value: unknown;
@@ -3812,8 +3975,9 @@ export function validateDurableCreationWizardCheckpoint(
     return validatePostIdentityPayload(
       localCharacter,
       checkpoint,
-      postIdentityPayloadAt(value, label, localCharacter, checkpoint),
+      postIdentityPayloadAt(value, label, localCharacter, checkpoint, symbiontCatalog),
       catalog,
+      symbiontCatalog,
     );
   }
   if (Object.hasOwn(object, 'lastCompleteStage')) {
@@ -3826,11 +3990,13 @@ export function loadCreationWizardCheckpoint(
   database: Database.Database,
   localCharacterId: string,
   catalog?: SkillStageCatalog,
+  symbiontCatalog?: SymbiontCatalog,
 ): DurableCreationWizardCheckpoint {
   return validateDurableCreationWizardCheckpoint(
     readLocalCharacter(database, localCharacterId),
     loadLocalCharacterCheckpoint(database, localCharacterId),
     catalog,
+    symbiontCatalog,
   );
 }
 
@@ -4037,6 +4203,28 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
       addRequestId((stage as Record<string, unknown>)['request']);
     }
   }
+  const randomSymbiontStage = object['randomSymbiontStage'];
+  if (
+    randomSymbiontStage !== null &&
+    typeof randomSymbiontStage === 'object' &&
+    !Array.isArray(randomSymbiontStage)
+  ) {
+    const stage = randomSymbiontStage as Record<string, unknown>;
+    const rollRecords = stage['rollRecords'];
+    if (Array.isArray(rollRecords)) {
+      for (const record of rollRecords) {
+        if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+          addRequestId((record as Record<string, unknown>)['request']);
+        }
+      }
+    }
+    for (const key of ['bindingRecordOrNull', 'advisorSkillRecordOrNull'] as const) {
+      const record = stage[key];
+      if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+        addRequestId((record as Record<string, unknown>)['request']);
+      }
+    }
+  }
   return ids;
 };
 
@@ -4044,6 +4232,7 @@ export function loadCreationWizardCommandByCommandId(
   database: Database.Database,
   commandId: string,
   catalog?: SkillStageCatalog,
+  symbiontCatalog?: SymbiontCatalog,
 ): DurableCreationWizardCommand | null {
   const matches = listLocalCharacters(database).filter((localCharacter) =>
     rawCommandIds(localCharacter.payloadJson).includes(commandId),
@@ -4058,6 +4247,7 @@ export function loadCreationWizardCommandByCommandId(
     database,
     matches[0]!.localCharacterId,
     catalog,
+    symbiontCatalog,
   );
   if (durableCheckpoint.identityStage.request.commandId === commandId) {
     return {
@@ -4099,6 +4289,25 @@ export function loadCreationWizardCommandByCommandId(
       ...attempt.confirmationRecords,
       ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
     ]) ?? [];
+  const randomStage = durableCheckpoint.randomSymbiontStage;
+  const symbiontRecord =
+    randomStage === null
+      ? undefined
+      : [
+          ...randomStage.rollRecords,
+          ...(randomStage.bindingRecordOrNull === null ? [] : [randomStage.bindingRecordOrNull]),
+          ...(randomStage.advisorSkillRecordOrNull === null
+            ? []
+            : [randomStage.advisorSkillRecordOrNull]),
+        ].find(({ request }) => request.commandId === commandId);
+  if (symbiontRecord !== undefined) {
+    return {
+      durableCheckpoint,
+      nextStageEnvelope: symbiontRecord.nextStageEnvelope,
+      receipt: symbiontRecord.receipt,
+      request: symbiontRecord.request,
+    };
+  }
   const rollRecord = rollRecords.find(({ request }) => request.commandId === commandId);
   if (rollRecord === undefined) {
     throw new Error(
@@ -4132,6 +4341,15 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   ...(checkpoint.pureClassStage === null ? [] : [checkpoint.pureClassStage]),
   ...(checkpoint.skillEligibilityStage === null ? [] : [checkpoint.skillEligibilityStage]),
   ...(checkpoint.skillSelectionStage === null ? [] : [checkpoint.skillSelectionStage]),
+  ...(checkpoint.randomSymbiontStage?.rollRecords ?? []),
+  ...(checkpoint.randomSymbiontStage === null ||
+  checkpoint.randomSymbiontStage.bindingRecordOrNull === null
+    ? []
+    : [checkpoint.randomSymbiontStage.bindingRecordOrNull]),
+  ...(checkpoint.randomSymbiontStage === null ||
+  checkpoint.randomSymbiontStage.advisorSkillRecordOrNull === null
+    ? []
+    : [checkpoint.randomSymbiontStage.advisorSkillRecordOrNull]),
 ];
 
 const guardRejected = (): never => {
@@ -4632,6 +4850,9 @@ export const creationWizardDurableIds = (
           receipt.result.nextConfirmationRollRequestIdOrNull,
         ]),
       ]) ?? []),
+      ...(checkpoint.randomSymbiontStage === null
+        ? []
+        : [...randomSymbiontStageIds(checkpoint.randomSymbiontStage)]),
     ].filter((value): value is string => typeof value === 'string'),
   );
 

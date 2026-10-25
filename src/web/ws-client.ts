@@ -37,12 +37,66 @@ import type {
 import { isImplementedFormActionKey, presentedFormDefinition } from './forms/index.js';
 import type { SupportedPresentationFormId } from './forms/index.js';
 import {
+  advisorCheckpointPayload,
+  advisorCheckpointSnapshotMatchesReceipt,
+  advisorSkillSelectionDraftFromSnapshot,
+  CHR_020_MONSTER_DRAFT_ACTION_KEY,
+  CHR_020_ROLL_COMMIT_ACTION_KEY,
+  CHR_020_SIDE_DRAFT_ACTION_KEY,
+  CHR_041_CHECKPOINT_ACTION_KEY,
+  CHR_041_SKILL_DRAFT_ACTION_KEY,
+  cycleRandomMonster,
+  decodeChr017Projection,
+  decodeChr019Projection,
+  decodeChr020Projection,
+  decodeChr041Projection,
+  decodeSymbiontAdvisorCheckpointTerminal,
+  decodeSymbiontRollCommitTerminal,
+  exactSymbiontActionKeys,
+  expectedChr017ActionKeys,
+  expectedChr020ActionKeys,
+  expectedChr041ActionKeys,
+  randomRollCommitPayload,
+  randomSymbiontDraftFromSnapshot,
+  replaceAdvisorSkillCandidate,
+  replaceRandomManualFace,
+  replaceRandomSideSpecies,
+  symbiontRollSnapshotMatchesReceipt,
+  toggleAdvisorSkillSelection,
+  toggleRandomSide,
+} from './forms/chr/random-symbionts.js';
+import type {
+  AdvisorSkillSelectionDraft,
+  Chr017Projection,
+  Chr019Projection,
+  Chr020Projection,
+  Chr041Projection,
+  RandomSymbiontDraft,
+  SymbiontAdvisorCheckpointRequest,
+  SymbiontAdvisorCheckpointResult,
+  SymbiontRollCommitPayload,
+  SymbiontRollCommitRequest,
+  SymbiontRollCommitResult,
+  SymbiontSide,
+  SymbioticMonsterSpeciesKey,
+} from './forms/chr/random-symbionts.js';
+import {
   IdentityDraftClient,
   type IdentityDraftClientState,
   type IdentityDraftSnapshot,
 } from './identity-draft-client.js';
 
 export type { IdentityDraftClientState, IdentityDraftValues };
+export type {
+  AdvisorSkillSelectionDraft,
+  Chr017Projection,
+  Chr019Projection,
+  Chr020Projection,
+  Chr041Projection,
+  RandomSymbiontDraft,
+  SymbiontSide,
+  SymbioticMonsterSpeciesKey,
+};
 
 const FORM_ID_SET: ReadonlySet<string> = new Set(FORM_IDS);
 
@@ -59,6 +113,10 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-012',
   'CHR-013',
   'CHR-015',
+  'CHR-017',
+  'CHR-019',
+  'CHR-020',
+  'CHR-041',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -967,7 +1025,10 @@ type SkillSelectionCheckpointRequest = WorkflowCommandRequestMessage<
   SkillSelectionCheckpointPayload
 >;
 type CheckpointRequest =
-  IdentityCheckpointRequest | SkillSelectionCheckpointRequest | StatAssignmentCheckpointRequest;
+  | IdentityCheckpointRequest
+  | SkillSelectionCheckpointRequest
+  | StatAssignmentCheckpointRequest
+  | SymbiontAdvisorCheckpointRequest;
 
 interface RolledStatAssignmentResultEntry extends RolledAssignmentSourceEntry {
   readonly statCode: StatCode;
@@ -1021,7 +1082,10 @@ interface SkillSelectionCheckpointResult extends JsonObject {
 }
 
 type CheckpointResult =
-  IdentityCheckpointResult | SkillSelectionCheckpointResult | StatAssignmentCheckpointResult;
+  | IdentityCheckpointResult
+  | SkillSelectionCheckpointResult
+  | StatAssignmentCheckpointResult
+  | SymbiontAdvisorCheckpointResult;
 
 interface PendingCheckpoint {
   readonly assignmentDraft: CharacterStatAssignmentDraft | null;
@@ -1239,7 +1303,8 @@ interface ConfirmationRollCommitPayload extends RollCommitCommonPayload {
   readonly sourceFormId: 'CHR-004';
 }
 
-type RollCommitPayload = ConfirmationRollCommitPayload | SetRollCommitPayload;
+type RollCommitPayload =
+  ConfirmationRollCommitPayload | SetRollCommitPayload | SymbiontRollCommitPayload;
 type RollCommitRequest = WorkflowCommandRequestMessage<
   typeof ROLL_COMMIT_WORKFLOW_COMMAND_ID,
   RollCommitPayload
@@ -1283,23 +1348,45 @@ interface ConfirmationRollCommitResult extends RollCommitResultCommon {
   readonly sourceFormId: 'CHR-004';
 }
 
-type RollCommitResult = ConfirmationRollCommitResult | SetRollCommitResult;
+type RollCommitResult =
+  ConfirmationRollCommitResult | SetRollCommitResult | SymbiontRollCommitResult;
 
 interface PendingRollCommit {
   readonly receipt: CommandReceipt<RollCommitResult> | null;
   readonly request: RollCommitRequest;
-  readonly sourceProjection: Chr003Projection | Chr004Projection;
+  readonly sourceProjection: Chr003Projection | Chr004Projection | Chr020Projection;
+  readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
-export interface ConfirmedProjectionSnapshot {
+type SymbiontPresentationFormId = 'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041';
+
+interface ConfirmedProjectionSnapshotBase {
   readonly availableActionKeys: readonly ActionKey[];
   readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
-  readonly formId: SupportedPresentationFormId;
+  readonly formId: Exclude<SupportedPresentationFormId, SymbiontPresentationFormId>;
   readonly layers: readonly ConfirmedPresentationLayer[];
   readonly path: string;
   readonly projection: JsonObject;
   readonly revisions: RevisionVector;
 }
+
+type ConfirmedSymbiontProjectionSnapshot<
+  FormId extends SymbiontPresentationFormId = SymbiontPresentationFormId,
+> = FormId extends SymbiontPresentationFormId
+  ? Omit<ConfirmedProjectionSnapshotBase, 'formId' | 'projection'> & {
+      readonly formId: FormId;
+      readonly projection: FormId extends 'CHR-017'
+        ? Chr017Projection
+        : FormId extends 'CHR-019'
+          ? Chr019Projection
+          : FormId extends 'CHR-020'
+            ? Chr020Projection
+            : Chr041Projection;
+    }
+  : never;
+
+export type ConfirmedProjectionSnapshot =
+  ConfirmedProjectionSnapshotBase | ConfirmedSymbiontProjectionSnapshot<SymbiontPresentationFormId>;
 
 export interface ConfirmedPresentationLayer {
   readonly availableActionKeys: readonly ActionKey[];
@@ -1347,7 +1434,13 @@ export type FormActionRequestResult =
 export interface ProjectionConnection {
   disconnect(): void;
   reconnect(): FormActionRequestResult;
+  replaceAdvisorSkillCandidate(
+    skillId: string | null,
+    targetBonus: number | null,
+  ): FormActionRequestResult;
   replaceConfirmationManualFace(value: number | null): FormActionRequestResult;
+  replaceRandomManualFace(value: number | null): FormActionRequestResult;
+  replaceRandomSideSpecies(species: 'OWL' | 'EEL' | null): FormActionRequestResult;
   replaceSetManualFace(index: number, value: number | null): FormActionRequestResult;
   replaceIdentityDraft(values: IdentityDraftValues): FormActionRequestResult;
   replaceSkillSelectionCandidate(
@@ -3537,6 +3630,74 @@ function decodeConfirmedSnapshot(
         if (!actions.ok) return actions;
       }
       break;
+    case 'CHR-017': {
+      const decoded = decodeChr017Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr017ActionKeys(decoded.value),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-019': {
+      const decoded = decodeChr019Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-020': {
+      const decoded = decodeChr020Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr020ActionKeys(
+            decoded.value,
+            executableWorkflowCommandIds,
+            base.availableActionKeys,
+          ),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-041': {
+      const decoded = decodeChr041Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr041ActionKeys(decoded.value, executableWorkflowCommandIds),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
     default:
       return unrecognized('$.presentation.base.formId', base.formId);
   }
@@ -3585,7 +3746,7 @@ function decodeConfirmedSnapshot(
       formId: base.formId,
       layers: layers.value,
       projection: projection.value,
-    },
+    } as ConfirmedProjectionSnapshot,
   };
 }
 
@@ -3772,7 +3933,7 @@ function completeManualRollDraft(draft: CharacterCreationRollDraft | null): bool
     : draft.face !== null && isFace(draft.face);
 }
 
-function visibleSnapshot(
+function visibleSnapshotCore(
   snapshot: ConfirmedProjectionSnapshot,
   identity: IdentityDraftClient | null,
   commandPending = false,
@@ -3780,6 +3941,8 @@ function visibleSnapshot(
   creationRollDraft: CharacterCreationRollDraft | null = null,
   statAssignmentDraft: CharacterStatAssignmentDraft | null = null,
   skillSelectionDraft: CharacterSkillSelectionDraft | null = null,
+  randomSymbiontDraft: RandomSymbiontDraft | null = null,
+  advisorSkillSelectionDraft: AdvisorSkillSelectionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
@@ -3853,6 +4016,52 @@ function visibleSnapshot(
       snapshot.executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
     ) {
       availableActionKeys.push(CHR_015_CONFIRM_ACTION_KEY);
+    }
+  } else if (snapshot.formId === 'CHR-020') {
+    const projection = snapshot.projection;
+    const monsterRequired = snapshot.availableActionKeys.includes(CHR_020_MONSTER_DRAFT_ACTION_KEY);
+    const manualFace = randomSymbiontDraft?.manualFaceOrNull;
+    const manualReady =
+      projection.diceInputModeSnapshot === 'AUTO' ||
+      (manualFace !== null && manualFace !== undefined && isFace(manualFace));
+    const monsterReady =
+      !monsterRequired || randomSymbiontDraft?.selectedMonsterSpeciesKeyOrNull != null;
+    const executable =
+      !commandPending &&
+      randomSymbiontDraft !== null &&
+      snapshot.executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID) &&
+      projection.randomStatus !== 'COMMITTED' &&
+      (projection.randomStatus === 'BINDING' || (manualReady && monsterReady));
+    if (!executable) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_020_ROLL_COMMIT_ACTION_KEY,
+      );
+    }
+    if (commandPending || randomSymbiontDraft === null) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_020_SIDE_DRAFT_ACTION_KEY && key !== CHR_020_MONSTER_DRAFT_ACTION_KEY,
+      );
+    }
+  } else if (snapshot.formId === 'CHR-041') {
+    const candidateOption = snapshot.projection.advisorSlotsAndSkills.skillOptions.find(
+      ({ skillId }) => skillId === advisorSkillSelectionDraft?.candidateSkillIdOrNull,
+    );
+    const signedLevel = candidateOption?.levelOptions.some(
+      ({ targetBonus }) => targetBonus === advisorSkillSelectionDraft?.candidateTargetBonusOrNull,
+    );
+    if (commandPending || advisorSkillSelectionDraft === null || signedLevel !== true) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_041_SKILL_DRAFT_ACTION_KEY,
+      );
+    }
+    if (
+      commandPending ||
+      advisorSkillSelectionDraft?.selectionValidation.kind !== 'EXACT' ||
+      !snapshot.executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
+    ) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_041_CHECKPOINT_ACTION_KEY,
+      );
     }
   }
   const visible =
@@ -4006,6 +4215,13 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
+  if (pending.request.payload.stage === 'SYMBIONTS') {
+    return decodeSymbiontAdvisorCheckpointTerminal(
+      message,
+      pending.request as SymbiontAdvisorCheckpointRequest,
+      pending.sourceSnapshot,
+    );
+  }
   const receipt = message.receipt;
   if (receipt.commandId !== pending.request.commandId) {
     return unrecognized('$.receipt.commandId', receipt.commandId);
@@ -4496,6 +4712,13 @@ function decodeRollCommitTerminal(
   >,
   pending: PendingRollCommit,
 ): DecodeResult<CommandReceipt<RollCommitResult>> {
+  if (pending.request.payload.stage === 'SYMBIONTS') {
+    return decodeSymbiontRollCommitTerminal(
+      message,
+      pending.request as SymbiontRollCommitRequest,
+      pending.sourceSnapshot,
+    );
+  }
   const receipt = message.receipt;
   if (receipt.commandId !== pending.request.commandId) {
     return unrecognized('$.receipt.commandId', receipt.commandId);
@@ -4632,6 +4855,12 @@ function checkpointSnapshotMatchesReceipt(
   sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (result.stage === 'SYMBIONTS') {
+    return advisorCheckpointSnapshotMatchesReceipt(
+      snapshot,
+      receipt as CommandReceipt<SymbiontAdvisorCheckpointResult>,
+    );
+  }
   if (result.stage === 'SKILLS') {
     if (snapshot.formId !== 'CHR-015') {
       return unrecognized('$.presentation.base.formId', snapshot.formId);
@@ -4766,7 +4995,7 @@ function setDecisionSnapshotMatchesReceipt(
     ) {
       return unrecognized(
         '$.presentation.base.roleFilteredPayload.draftRevision',
-        projection['draftRevision']!,
+        projection['draftRevision'],
       );
     }
     if (result.decision === 'ACCEPT_SET') {
@@ -4872,7 +5101,7 @@ function setDecisionSnapshotMatchesReceipt(
     ['draftRevision', receipt.result.draftRevision + advance],
   ] as const) {
     if (projection[key] !== expected) {
-      return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]!);
+      return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, projection[key]);
     }
   }
   if (
@@ -4889,7 +5118,7 @@ function setDecisionSnapshotMatchesReceipt(
   ) {
     return unrecognized(
       '$.presentation.base.roleFilteredPayload.raceChoice',
-      projection['raceChoice']!,
+      projection['raceChoice'],
     );
   }
   if (receipt.result.sourceFormId === 'CHR-002') {
@@ -4945,6 +5174,12 @@ function rollCommitSnapshotMatchesReceipt(
   receipt: CommandReceipt<RollCommitResult>,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (result.stage === 'SYMBIONTS') {
+    return symbiontRollSnapshotMatchesReceipt(
+      snapshot,
+      receipt as CommandReceipt<SymbiontRollCommitResult>,
+    );
+  }
   if (snapshot.formId !== 'CHR-003' && snapshot.formId !== 'CHR-004') {
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   }
@@ -5378,6 +5613,8 @@ export function connectProjection(
   onCreationRollDraft: (value: CharacterCreationRollDraft | null) => void = () => {},
   onStatAssignmentDraft: (value: CharacterStatAssignmentDraft | null) => void = () => {},
   onSkillSelectionDraft: (value: CharacterSkillSelectionDraft | null) => void = () => {},
+  onRandomSymbiontDraft: (value: RandomSymbiontDraft | null) => void = () => {},
+  onAdvisorSkillSelectionDraft: (value: AdvisorSkillSelectionDraft | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -5393,14 +5630,36 @@ export function connectProjection(
   let creationRollDraft: CharacterCreationRollDraft | null = null;
   let statAssignmentDraft: CharacterStatAssignmentDraft | null = null;
   let skillSelectionDraft: CharacterSkillSelectionDraft | null = null;
+  let randomSymbiontDraft: RandomSymbiontDraft | null = null;
+  let advisorSkillSelectionDraft: AdvisorSkillSelectionDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
     pendingCheckpoint !== null || pendingSetDecision !== null || pendingRollCommit !== null;
+  const visibleSnapshotBase = (
+    snapshot: ConfirmedProjectionSnapshot,
+    identityValue: IdentityDraftClient | null,
+    pending = false,
+    choice: CharacterCreationChoiceDraft | null = null,
+    roll: CharacterCreationRollDraft | null = null,
+    assignment: CharacterStatAssignmentDraft | null = null,
+    skills: CharacterSkillSelectionDraft | null = null,
+  ): ConfirmedProjectionSnapshot =>
+    visibleSnapshotCore(
+      snapshot,
+      identityValue,
+      pending,
+      choice,
+      roll,
+      assignment,
+      skills,
+      randomSymbiontDraft,
+      advisorSkillSelectionDraft,
+    );
   const visibleLast = () =>
     lastSnapshot === null
       ? null
-      : visibleSnapshot(
+      : visibleSnapshotBase(
           lastSnapshot,
           identity,
           commandPending(),
@@ -5479,6 +5738,10 @@ export function connectProjection(
     onStatAssignmentDraft(statAssignmentDraft);
     skillSelectionDraft = creationSkillSelectionDraftFromSnapshot(next);
     onSkillSelectionDraft(skillSelectionDraft);
+    randomSymbiontDraft = randomSymbiontDraftFromSnapshot(next);
+    onRandomSymbiontDraft(randomSymbiontDraft);
+    advisorSkillSelectionDraft = advisorSkillSelectionDraftFromSnapshot(next);
+    onAdvisorSkillSelectionDraft(advisorSkillSelectionDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -5490,7 +5753,7 @@ export function connectProjection(
     onIdentityDraft(identity?.state ?? null);
     onState({
       kind: 'ready',
-      snapshot: visibleSnapshot(
+      snapshot: visibleSnapshotBase(
         next,
         identity,
         commandPending(),
@@ -5649,7 +5912,7 @@ export function connectProjection(
           if (lastSnapshot !== null && !expectingCapabilities) {
             onState({
               kind: 'ready',
-              snapshot: visibleSnapshot(
+              snapshot: visibleSnapshotBase(
                 lastSnapshot,
                 identity,
                 true,
@@ -5693,7 +5956,7 @@ export function connectProjection(
             onState({
               kind: 'command-refusal',
               refusal: message.refusal,
-              snapshot: visibleSnapshot(
+              snapshot: visibleSnapshotBase(
                 lastSnapshot,
                 identity,
                 commandPending(),
@@ -5776,7 +6039,7 @@ export function connectProjection(
           onIdentityDraft(identity.state);
           onState({
             kind: 'ready',
-            snapshot: visibleSnapshot(
+            snapshot: visibleSnapshotBase(
               lastSnapshot,
               identity,
               commandPending(),
@@ -5794,7 +6057,7 @@ export function connectProjection(
         onIdentityDraft(identity.state);
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             commandPending(),
@@ -5958,7 +6221,7 @@ export function connectProjection(
         onState({
           kind: 'navigation-refusal',
           refusal: message.refusal,
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             commandPending(),
@@ -6114,7 +6377,7 @@ export function connectProjection(
       onCreationRollDraft(creationRollDraft);
       onState({
         kind: 'ready',
-        snapshot: visibleSnapshot(
+        snapshot: visibleSnapshotBase(
           lastSnapshot,
           identity,
           false,
@@ -6151,7 +6414,7 @@ export function connectProjection(
       onCreationRollDraft(creationRollDraft);
       onState({
         kind: 'ready',
-        snapshot: visibleSnapshot(
+        snapshot: visibleSnapshotBase(
           lastSnapshot,
           identity,
           false,
@@ -6178,7 +6441,7 @@ export function connectProjection(
       if (lastSnapshot !== null)
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             commandPending(),
@@ -6220,7 +6483,118 @@ export function connectProjection(
       onStatAssignmentDraft(statAssignmentDraft);
       onState({
         kind: 'ready',
-        snapshot: visibleSnapshot(
+        snapshot: visibleSnapshotBase(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+          statAssignmentDraft,
+          skillSelectionDraft,
+        ),
+      });
+      return { ok: true };
+    },
+    replaceRandomManualFace: (value) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-020' ||
+        randomSymbiontDraft === null ||
+        lastSnapshot.projection.diceInputModeSnapshot !== 'MANUAL' ||
+        (lastSnapshot.projection.randomStatus !== 'NOT_STARTED' &&
+          lastSnapshot.projection.randomStatus !== 'PENDING')
+      ) {
+        return { ok: false, detail: 'no active CHR-020 MANUAL input scope' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'random input is frozen while delivery is pending' };
+      }
+      try {
+        randomSymbiontDraft = replaceRandomManualFace(randomSymbiontDraft, value);
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      onRandomSymbiontDraft(randomSymbiontDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshotBase(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+          statAssignmentDraft,
+          skillSelectionDraft,
+        ),
+      });
+      return { ok: true };
+    },
+    replaceRandomSideSpecies: (species) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-020' ||
+        randomSymbiontDraft === null ||
+        !lastSnapshot.availableActionKeys.includes(CHR_020_SIDE_DRAFT_ACTION_KEY)
+      ) {
+        return { ok: false, detail: 'no active CHR-020 side selection scope' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'side selection is frozen while delivery is pending' };
+      }
+      if (
+        species !== null &&
+        !lastSnapshot.projection.drawnSpeciesAndBindings.some(
+          (entry) => entry.speciesKey === species,
+        )
+      ) {
+        return { ok: false, detail: 'side species is absent from the signed bindings' };
+      }
+      try {
+        randomSymbiontDraft = replaceRandomSideSpecies(randomSymbiontDraft, species);
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      onRandomSymbiontDraft(randomSymbiontDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshotBase(
+          lastSnapshot,
+          identity,
+          false,
+          creationChoiceDraft,
+          creationRollDraft,
+          statAssignmentDraft,
+          skillSelectionDraft,
+        ),
+      });
+      return { ok: true };
+    },
+    replaceAdvisorSkillCandidate: (skillId, targetBonus) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-041' ||
+        lastSnapshot.projection.acknowledged ||
+        advisorSkillSelectionDraft === null
+      ) {
+        return { ok: false, detail: 'no active CHR-041 skill selection scope' };
+      }
+      if (commandPending()) {
+        return { ok: false, detail: 'Advisor skill selection is frozen while delivery is pending' };
+      }
+      try {
+        advisorSkillSelectionDraft = replaceAdvisorSkillCandidate(
+          lastSnapshot.projection,
+          advisorSkillSelectionDraft,
+          skillId,
+          targetBonus,
+        );
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      onAdvisorSkillSelectionDraft(advisorSkillSelectionDraft);
+      onState({
+        kind: 'ready',
+        snapshot: visibleSnapshotBase(
           lastSnapshot,
           identity,
           false,
@@ -6273,7 +6647,7 @@ export function connectProjection(
       onSkillSelectionDraft(skillSelectionDraft);
       onState({
         kind: 'ready',
-        snapshot: visibleSnapshot(
+        snapshot: visibleSnapshotBase(
           lastSnapshot,
           identity,
           false,
@@ -6295,7 +6669,7 @@ export function connectProjection(
       if (commandPending()) {
         return { ok: false, detail: 'a wizard command is awaiting host delivery' };
       }
-      const visible = visibleSnapshot(
+      const visible = visibleSnapshotBase(
         lastSnapshot,
         identity,
         false,
@@ -6329,7 +6703,90 @@ export function connectProjection(
         onSkillSelectionDraft(skillSelectionDraft);
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
+            lastSnapshot,
+            identity,
+            false,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (
+        activeForm.formId === 'CHR-020' &&
+        lastSnapshot.formId === 'CHR-020' &&
+        actionKey === CHR_020_SIDE_DRAFT_ACTION_KEY
+      ) {
+        if (randomSymbiontDraft === null) {
+          return { ok: false, detail: 'no active CHR-020 side draft' };
+        }
+        try {
+          randomSymbiontDraft = toggleRandomSide(randomSymbiontDraft);
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        onRandomSymbiontDraft(randomSymbiontDraft);
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshotBase(
+            lastSnapshot,
+            identity,
+            false,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (
+        activeForm.formId === 'CHR-020' &&
+        lastSnapshot.formId === 'CHR-020' &&
+        actionKey === CHR_020_MONSTER_DRAFT_ACTION_KEY
+      ) {
+        if (randomSymbiontDraft === null) {
+          return { ok: false, detail: 'no active CHR-020 monster draft' };
+        }
+        randomSymbiontDraft = cycleRandomMonster(randomSymbiontDraft);
+        onRandomSymbiontDraft(randomSymbiontDraft);
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshotBase(
+            lastSnapshot,
+            identity,
+            false,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (
+        activeForm.formId === 'CHR-041' &&
+        lastSnapshot.formId === 'CHR-041' &&
+        actionKey === CHR_041_SKILL_DRAFT_ACTION_KEY
+      ) {
+        if (advisorSkillSelectionDraft === null) {
+          return { ok: false, detail: 'no active CHR-041 skill selection draft' };
+        }
+        try {
+          advisorSkillSelectionDraft = toggleAdvisorSkillSelection(
+            lastSnapshot.projection,
+            advisorSkillSelectionDraft,
+          );
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        onAdvisorSkillSelectionDraft(advisorSkillSelectionDraft);
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             false,
@@ -6347,7 +6804,7 @@ export function connectProjection(
         onCreationChoiceDraft(creationChoiceDraft);
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             false,
@@ -6395,7 +6852,7 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             true,
@@ -6449,7 +6906,65 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
+            lastSnapshot,
+            identity,
+            true,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        });
+        return { ok: true };
+      }
+      if (
+        activeForm.formId === 'CHR-041' &&
+        lastSnapshot.formId === 'CHR-041' &&
+        actionKey === CHR_041_CHECKPOINT_ACTION_KEY
+      ) {
+        let payload: SymbiontAdvisorCheckpointRequest['payload'];
+        try {
+          payload = advisorCheckpointPayload(lastSnapshot, advisorSkillSelectionDraft);
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload,
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        } as const satisfies SymbiontAdvisorCheckpointRequest;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `Advisor checkpoint failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request,
+          skillSelectionDraft: null,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return {
+            ok: false,
+            detail: `Advisor checkpoint could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        onState({
+          kind: 'ready',
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             true,
@@ -6503,7 +7018,7 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             true,
@@ -6554,7 +7069,7 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             true,
@@ -6602,7 +7117,7 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             true,
@@ -6616,7 +7131,8 @@ export function connectProjection(
       }
       if (
         (activeForm.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
-        (activeForm.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY)
+        (activeForm.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY) ||
+        (activeForm.formId === 'CHR-020' && actionKey === CHR_020_ROLL_COMMIT_ACTION_KEY)
       ) {
         let request: RollCommitRequest;
         try {
@@ -6625,7 +7141,10 @@ export function connectProjection(
             commandKind: 'workflow-command',
             expectedRevisions: { ...lastSnapshot.revisions },
             messageType: 'command.request',
-            payload: rollCommitPayload(lastSnapshot, creationRollDraft),
+            payload:
+              activeForm.formId === 'CHR-020'
+                ? randomRollCommitPayload(lastSnapshot, randomSymbiontDraft)
+                : rollCommitPayload(lastSnapshot, creationRollDraft),
             protocolVersion: WIRE_PROTOCOL_VERSION,
             role: 'player',
             workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
@@ -6644,7 +7163,8 @@ export function connectProjection(
           receipt: null,
           request,
           sourceProjection: lastSnapshot.projection as unknown as
-            Chr003Projection | Chr004Projection,
+            Chr003Projection | Chr004Projection | Chr020Projection,
+          sourceSnapshot: lastSnapshot,
         };
         try {
           socket.send(encoded.text);
@@ -6654,7 +7174,7 @@ export function connectProjection(
         }
         onState({
           kind: 'ready',
-          snapshot: visibleSnapshot(
+          snapshot: visibleSnapshotBase(
             lastSnapshot,
             identity,
             true,

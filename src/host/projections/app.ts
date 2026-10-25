@@ -62,6 +62,11 @@ import {
   CREATION_SET_DECISION_FORMS,
   type CreationSetDecisionFormId,
 } from './chr.js';
+import {
+  assertSymbiontScreenContracts,
+  CHR_017_FORM_ID,
+  CHR_017_RANDOM_START_ACTION_KEY,
+} from './chr-symbionts.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -220,7 +225,11 @@ export interface AppFormContract {
 
 export interface AppNavigationAction {
   readonly from:
-    AppFormId | CreationSetDecisionFormId | typeof CHR_001_FORM_ID | typeof CHR_013_FORM_ID;
+    | AppFormId
+    | CreationSetDecisionFormId
+    | typeof CHR_001_FORM_ID
+    | typeof CHR_013_FORM_ID
+    | typeof CHR_017_FORM_ID;
   readonly guard: string;
   readonly kind: string;
   readonly to: string;
@@ -254,6 +263,11 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       'draft has no irreversible displayed result; deleting this draft requires explicit confirmation elsewhere and any later draft receives a new UUID',
     ],
     [CHR_013_FORM_ID, CHR_013_CONTINUE_ACTION_KEY, 'skill-stage revision current'],
+    [
+      CHR_017_FORM_ID,
+      CHR_017_RANDOM_START_ACTION_KEY,
+      'symbiontAcquisitionMode=RANDOM; randomStatus=NOT_STARTED|PENDING; replay restores same sequence',
+    ],
     [
       'APP-004',
       APP_004_CREATE_CHARACTER_ACTION_KEY,
@@ -423,6 +437,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertScreenContract(forms, CHR_016_FORM_ID, CHR_016_REQUIRED_FIELDS, CHR_016_ROUTE);
   assertScreenContract(forms, CHR_028_FORM_ID, CHR_028_REQUIRED_FIELDS, CHR_028_ROUTE, 'dialog');
   assertScreenContract(forms, CHR_036_FORM_ID, CHR_036_REQUIRED_FIELDS, CHR_036_ROUTE);
+  assertSymbiontScreenContracts(forms, assertScreenContract);
   return result;
 }
 
