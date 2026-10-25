@@ -34,7 +34,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
-    "test:e2e": "playwright test --pass-with-no-tests",
+    "test:e2e": "npm run build && playwright test --pass-with-no-tests",
     "import": "tsx tools/import/index.ts",
     "validate": "tsx tools/validate/index.ts",
     "checksums": "tsx tools/checksums/index.ts write",
