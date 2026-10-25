@@ -17,8 +17,10 @@ const SOURCE_FILES = Object.freeze({
   stats: 'stats.json',
 } as const satisfies Record<keyof SkillStageCatalogSources, string>);
 
-/** Loads the seven generated character tables validated by the pure domain catalog. */
-export async function loadSkillStageCatalog(projectRoot: string): Promise<SkillStageCatalog> {
+/** Loads the seven generated character tables before domain validation. */
+export async function loadSkillStageCatalogSources(
+  projectRoot: string,
+): Promise<SkillStageCatalogSources> {
   const root = join(resolve(projectRoot), 'generated', 'spec', 'character');
   const entries = await Promise.all(
     Object.entries(SOURCE_FILES).map(async ([key, file]) => [
@@ -26,5 +28,10 @@ export async function loadSkillStageCatalog(projectRoot: string): Promise<SkillS
       await readJsonFile(join(root, file), 'skill-stage catalog source'),
     ]),
   );
-  return createSkillStageCatalog(Object.fromEntries(entries) as SkillStageCatalogSources);
+  return Object.fromEntries(entries) as SkillStageCatalogSources;
+}
+
+/** Loads the seven generated character tables validated by the pure domain catalog. */
+export async function loadSkillStageCatalog(projectRoot: string): Promise<SkillStageCatalog> {
+  return createSkillStageCatalog(await loadSkillStageCatalogSources(projectRoot));
 }

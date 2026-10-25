@@ -66,6 +66,20 @@ import {
   CHR_036_REQUIRED_FIELDS,
   CHR_036_ROUTE,
 } from './chr.js';
+import {
+  CHR_017_FORM_ID,
+  CHR_017_REQUIRED_FIELDS,
+  CHR_017_ROUTE,
+  CHR_019_FORM_ID,
+  CHR_019_REQUIRED_FIELDS,
+  CHR_019_ROUTE,
+  CHR_020_FORM_ID,
+  CHR_020_REQUIRED_FIELDS,
+  CHR_020_ROUTE,
+  CHR_041_FORM_ID,
+  CHR_041_REQUIRED_FIELDS,
+  CHR_041_ROUTE,
+} from './chr-symbionts.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 
@@ -122,10 +136,10 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the eleven slice actions with their exact source-owned guards', () => {
+  it('loads the twelve slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(11);
+    expect(catalog.actions.size).toBe(12);
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:
@@ -162,6 +176,14 @@ describe('APP host projection', () => {
       kind: 'normative',
       to: 'CHR-015',
       trigger: 'Перейти к выбору навыков',
+    });
+    expect(catalog.actions.get('CHR-017::CTA::003')).toEqual({
+      from: 'CHR-017',
+      guard:
+        'symbiontAcquisitionMode=RANDOM; randomStatus=NOT_STARTED|PENDING; replay restores same sequence',
+      kind: 'normative',
+      to: 'CHR-020',
+      trigger: 'Начать сохранённую случайную ветвь',
     });
     const createCharacterTrigger = 'Открыть «Создание персонажа: идентичность»';
     expect(catalog.actions.get('APP-004::CTA::001')).toEqual({
@@ -225,8 +247,12 @@ describe('APP host projection', () => {
     [CHR_013_FORM_ID, CHR_013_ROUTE, CHR_013_REQUIRED_FIELDS, 'screen'],
     [CHR_015_FORM_ID, CHR_015_ROUTE, CHR_015_REQUIRED_FIELDS, 'screen'],
     [CHR_016_FORM_ID, CHR_016_ROUTE, CHR_016_REQUIRED_FIELDS, 'screen'],
+    [CHR_017_FORM_ID, CHR_017_ROUTE, CHR_017_REQUIRED_FIELDS, 'screen'],
+    [CHR_019_FORM_ID, CHR_019_ROUTE, CHR_019_REQUIRED_FIELDS, 'screen'],
+    [CHR_020_FORM_ID, CHR_020_ROUTE, CHR_020_REQUIRED_FIELDS, 'screen'],
     [CHR_028_FORM_ID, CHR_028_ROUTE, CHR_028_REQUIRED_FIELDS, 'dialog'],
     [CHR_036_FORM_ID, CHR_036_ROUTE, CHR_036_REQUIRED_FIELDS, 'screen'],
+    [CHR_041_FORM_ID, CHR_041_ROUTE, CHR_041_REQUIRED_FIELDS, 'screen'],
   ] as const)(
     'rejects a one-literal requiredFields drift for %s',
     (formId, route, requiredFields, formType) => {

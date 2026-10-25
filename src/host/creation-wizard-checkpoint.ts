@@ -1,10 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 import type Database from 'better-sqlite3';
 
 import type { ClientToHostMessage, CommandRefusal, RevisionVector } from '@shared/wire-protocol.js';
 
-import type { SkillStageCatalog } from '../domain/index.js';
+import type { SkillStageCatalog, SymbiontCatalog } from '../domain/index.js';
 import { commitLocalCharacterCheckpoint } from '../persistence/index.js';
 import {
   creationWizardDurableIds,
@@ -12,9 +13,20 @@ import {
   loadCreationWizardCheckpoint,
   type CreationNextStageEnvelope,
   type CreationWizardSkillPayload,
+  type CreationWizardSymbiontPayload,
   type CreationWizardStatAssignmentPayload,
   type DurableCreationWizardCheckpoint,
 } from './creation-set-decide.js';
+import {
+  commitCreationSymbiontAdvisor,
+  initialSymbiontStageForWizard,
+  preflightCreationSymbiontAdvisor,
+} from './creation-symbiont-commands.js';
+import {
+  CreationSymbiontApplicationError,
+  normalizeSymbiontAdvisorCheckpointRequest,
+  type SymbiontAdvisorCheckpointCommandRequest,
+} from './creation-symbiont-contract.js';
 import {
   CreationStatAssignmentApplicationError,
   normalizeStatAssignmentCheckpointRequest,
@@ -52,17 +64,28 @@ type DecodedCommandRequest = Extract<
   ClientToHostMessage,
   { readonly messageType: 'command.request' }
 >;
+type CreationCatalog = SkillStageCatalog | SymbiontCatalog;
+function baseCatalog(catalog: CreationCatalog): SkillStageCatalog;
+function baseCatalog(catalog: undefined): undefined;
+function baseCatalog(catalog: CreationCatalog | undefined): SkillStageCatalog | undefined;
+function baseCatalog(catalog: CreationCatalog | undefined): SkillStageCatalog | undefined {
+  return catalog === undefined ? undefined : 'skillStage' in catalog ? catalog.skillStage : catalog;
+}
+const fullSymbiontCatalog = (catalog: CreationCatalog | undefined): SymbiontCatalog | undefined =>
+  catalog !== undefined && 'skillStage' in catalog ? catalog : undefined;
 
 export const CREATION_WIZARD_CHECKPOINT_STAGES = Object.freeze([
   'IDENTITY',
   'STAT_ASSIGNMENT',
   'SKILLS',
+  'SYMBIONTS',
 ] as const);
 
 export type CreationWizardCheckpointCommandRequest =
   | IdentityCheckpointCommandRequest
   | StatAssignmentCheckpointCommandRequest
-  | SkillCheckpointCommandRequest;
+  | SkillCheckpointCommandRequest
+  | SymbiontAdvisorCheckpointCommandRequest;
 
 export type CreationWizardCheckpointPreflight =
   | {
@@ -80,6 +103,11 @@ export type CreationWizardCheckpointPreflight =
       readonly request: SkillCheckpointCommandRequest;
       readonly checkpoint: DurableCreationWizardCheckpoint;
       readonly plan: SkillEligibilityPlan | SkillSelectionPlan;
+    }
+  | {
+      readonly stage: 'SYMBIONTS';
+      readonly request: SymbiontAdvisorCheckpointCommandRequest;
+      readonly checkpoint: DurableCreationWizardCheckpoint;
     };
 
 export class CreationWizardCheckpointApplicationError extends Error {
@@ -96,7 +124,8 @@ const translate = (cause: unknown): never => {
   if (
     cause instanceof IdentityCheckpointApplicationError ||
     cause instanceof CreationStatAssignmentApplicationError ||
-    cause instanceof CreationSkillSelectionApplicationError
+    cause instanceof CreationSkillSelectionApplicationError ||
+    cause instanceof CreationSymbiontApplicationError
   ) {
     throw new CreationWizardCheckpointApplicationError(cause.refusal);
   }
@@ -107,6 +136,7 @@ const CHECKPOINT_STAGE_NORMALIZERS = {
   IDENTITY: normalizeIdentityCheckpointRequest,
   STAT_ASSIGNMENT: normalizeStatAssignmentCheckpointRequest,
   SKILLS: normalizeSkillCheckpointRequest,
+  SYMBIONTS: normalizeSymbiontAdvisorCheckpointRequest,
 } as const satisfies Record<
   (typeof CREATION_WIZARD_CHECKPOINT_STAGES)[number],
   (request: DecodedCommandRequest) => CreationWizardCheckpointCommandRequest
@@ -214,7 +244,7 @@ function assertCurrentSkillRequest(
 export function preflightCreationWizardCheckpoint(
   database: Database.Database,
   request: DecodedCommandRequest,
-  catalog?: SkillStageCatalog,
+  catalog?: CreationCatalog,
 ): CreationWizardCheckpointPreflight {
   const normalized = normalizeCreationWizardCheckpointRequest(request);
   if (normalized.payload.stage === 'IDENTITY') {
@@ -222,6 +252,22 @@ export function preflightCreationWizardCheckpoint(
       return {
         request: validateIdentityCheckpointRequest(normalized as IdentityCheckpointCommandRequest),
         stage: 'IDENTITY',
+      };
+    } catch (cause) {
+      return translate(cause);
+    }
+  }
+  if (normalized.payload.stage === 'SYMBIONTS') {
+    const symbiontCatalog = fullSymbiontCatalog(catalog);
+    if (symbiontCatalog === undefined) {
+      throw new Error('SYMBIONTS checkpoint requires a validated symbiont catalog');
+    }
+    try {
+      const preflight = preflightCreationSymbiontAdvisor(database, normalized, symbiontCatalog);
+      return {
+        checkpoint: preflight.checkpoint,
+        request: preflight.request,
+        stage: 'SYMBIONTS',
       };
     } catch (cause) {
       return translate(cause);
@@ -235,7 +281,8 @@ export function preflightCreationWizardCheckpoint(
     const checkpoint = loadCreationWizardCheckpoint(
       database,
       skillRequest.payload.characterDraftId,
-      catalog,
+      baseCatalog(catalog),
+      fullSymbiontCatalog(catalog),
     );
     assertCurrentSkillRequest(checkpoint, skillRequest);
     try {
@@ -248,14 +295,14 @@ export function preflightCreationWizardCheckpoint(
                 skillRequest as SkillCheckpointCommandRequest & {
                   readonly payload: SkillEligibilityCheckpointPayload;
                 },
-                catalog,
+                baseCatalog(catalog),
               )
             : prepareSkillSelection(
                 checkpoint,
                 skillRequest as SkillCheckpointCommandRequest & {
                   readonly payload: SkillSelectionCheckpointPayload;
                 },
-                catalog,
+                baseCatalog(catalog),
               ),
         request: skillRequest,
         stage: 'SKILLS',
@@ -271,13 +318,14 @@ export function preflightCreationWizardCheckpoint(
   const checkpoint = loadCreationWizardCheckpoint(
     database,
     assignmentRequest.payload.characterDraftId,
-    catalog,
+    baseCatalog(catalog),
+    fullSymbiontCatalog(catalog),
   );
   assertCurrentAssignmentRequest(checkpoint, assignmentRequest);
   try {
     return {
       checkpoint,
-      plan: prepareStatAssignment(checkpoint, assignmentRequest, catalog),
+      plan: prepareStatAssignment(checkpoint, assignmentRequest, baseCatalog(catalog)),
       request: assignmentRequest,
       stage: 'STAT_ASSIGNMENT',
     };
@@ -355,7 +403,9 @@ function skillPayload(
   request: SkillCheckpointCommandRequest,
   plan: SkillEligibilityPlan | SkillSelectionPlan,
   receiptId: string,
-): CreationWizardSkillPayload {
+  symbiontCatalog: SymbiontCatalog | undefined,
+  allocateRandomSequenceId: () => string,
+): CreationWizardSkillPayload | CreationWizardSymbiontPayload {
   const statRollStage = checkpoint.statRollStage;
   if (statRollStage === null) return guardRejected();
   const revisions = incrementedRevisions(request.expectedRevisions);
@@ -430,19 +480,48 @@ function skillPayload(
     receipt,
     request: normalized,
   };
+  const raceStage = checkpoint.raceAndMethodStage;
+  if (symbiontCatalog === undefined || raceStage?.symbiontAcquisition.value !== 'RANDOM') {
+    return {
+      ...(checkpoint.durablePayload as CreationWizardSkillPayload),
+      nextStageEnvelope,
+      receipt,
+      skillSelectionStage,
+    };
+  }
+  const raceChoice = raceStage.race?.value;
+  const diceInputModeSnapshot = raceStage.diceInput?.value;
+  if (raceChoice === undefined || raceChoice === 'PURE' || diceInputModeSnapshot === undefined) {
+    return guardRejected();
+  }
+  const randomSequenceId = allocateRandomSequenceId();
+  if (
+    randomSequenceId.length === 0 ||
+    randomSequenceId === request.commandId ||
+    randomSequenceId === receiptId ||
+    creationWizardDurableIds(checkpoint).has(randomSequenceId)
+  ) {
+    return guardRejected();
+  }
   return {
-    ...(checkpoint.durablePayload as CreationWizardSkillPayload),
+    ...checkpoint.durablePayload,
     nextStageEnvelope,
     receipt,
     skillSelectionStage,
-  };
+    randomSymbiontStage: initialSymbiontStageForWizard(
+      randomSequenceId,
+      raceChoice,
+      diceInputModeSnapshot,
+    ),
+  } as CreationWizardSymbiontPayload;
 }
 
 export function commitCreationWizardCheckpoint(
   database: Database.Database,
   request: DecodedCommandRequest,
   receiptId: string,
-  catalog?: SkillStageCatalog,
+  catalog?: CreationCatalog,
+  allocateRandomSequenceId: () => string = randomUUID,
 ): DurableCreationWizardCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
     throw new TypeError(
@@ -456,7 +535,20 @@ export function commitCreationWizardCheckpoint(
       return loadCreationWizardCheckpoint(
         database,
         durable.localCharacter.localCharacterId,
-        catalog,
+        baseCatalog(catalog),
+        fullSymbiontCatalog(catalog),
+      );
+    } catch (cause) {
+      return translate(cause);
+    }
+  }
+  if (preflight.stage === 'SYMBIONTS') {
+    try {
+      return commitCreationSymbiontAdvisor(
+        database,
+        preflight.request,
+        receiptId,
+        fullSymbiontCatalog(catalog)!,
       );
     } catch (cause) {
       return translate(cause);
@@ -474,7 +566,8 @@ export function commitCreationWizardCheckpoint(
       const current = loadCreationWizardCheckpoint(
         database,
         normalized.payload.characterDraftId,
-        catalog,
+        baseCatalog(catalog),
+        fullSymbiontCatalog(catalog),
       );
       if (creationWizardDurableIds(current).has(receiptId)) guardRejected();
       if (preflight.stage === 'STAT_ASSIGNMENT') {
@@ -482,7 +575,7 @@ export function commitCreationWizardCheckpoint(
         assertCurrentAssignmentRequest(current, assignmentRequest);
         let plan: StatAssignmentPlan;
         try {
-          plan = prepareStatAssignment(current, assignmentRequest, catalog!);
+          plan = prepareStatAssignment(current, assignmentRequest, baseCatalog(catalog)!);
         } catch (cause) {
           return translate(cause);
         }
@@ -506,23 +599,39 @@ export function commitCreationWizardCheckpoint(
                 skillRequest as SkillCheckpointCommandRequest & {
                   readonly payload: SkillEligibilityCheckpointPayload;
                 },
-                catalog!,
+                baseCatalog(catalog)!,
               )
             : prepareSkillSelection(
                 current,
                 skillRequest as SkillCheckpointCommandRequest & {
                   readonly payload: SkillSelectionCheckpointPayload;
                 },
-                catalog!,
+                baseCatalog(catalog)!,
               );
       } catch (cause) {
         return translate(cause);
       }
       return update(
-        { payloadJson: JSON.stringify(skillPayload(current, skillRequest, plan, receiptId)) },
+        {
+          payloadJson: JSON.stringify(
+            skillPayload(
+              current,
+              skillRequest,
+              plan,
+              receiptId,
+              fullSymbiontCatalog(catalog),
+              allocateRandomSequenceId,
+            ),
+          ),
+        },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
     },
   );
-  return loadCreationWizardCheckpoint(database, committed.result.localCharacterId, catalog);
+  return loadCreationWizardCheckpoint(
+    database,
+    committed.result.localCharacterId,
+    baseCatalog(catalog),
+    fullSymbiontCatalog(catalog),
+  );
 }
