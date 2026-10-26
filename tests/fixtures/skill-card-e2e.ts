@@ -272,6 +272,7 @@ function setupSkillCatalog(
 export interface SkillCardBrowserHost {
   readonly baseURL: string;
   readonly eligibleSkillId: string;
+  readonly otherEligibleSkillId: string;
   readonly ineligibleSkillId: string;
   readonly checkpoint: () => DurableCreationWizardCheckpoint;
   readonly close: () => Promise<void>;
@@ -300,11 +301,16 @@ export async function createSkillCardBrowserHost(prefix: string): Promise<SkillC
     );
     const eligibleIds = initial.skillEligibilityStage?.derived.eligibleSkillIds;
     const eligibleSkillId = eligibleIds?.[0];
+    const otherEligibleSkillId = eligibleIds?.[1];
     const ineligibleSkillId = skillCatalog.selectableSkills.find(
       (skill) => !(eligibleIds ?? []).includes(skill.skillId),
     )?.skillId;
-    if (eligibleSkillId === undefined || ineligibleSkillId === undefined) {
-      throw new Error('E2E source catalog lacks eligible and ineligible public skill IDs');
+    if (
+      eligibleSkillId === undefined ||
+      otherEligibleSkillId === undefined ||
+      ineligibleSkillId === undefined
+    ) {
+      throw new Error('E2E source catalog lacks two eligible skills and one ineligible skill');
     }
     const openHost = async (): Promise<FastifyInstance> => {
       if (database === null) throw new Error('E2E host cannot open without SQLite');
@@ -335,6 +341,7 @@ export async function createSkillCardBrowserHost(prefix: string): Promise<SkillC
         return baseURL;
       },
       eligibleSkillId,
+      otherEligibleSkillId,
       ineligibleSkillId,
       checkpoint: () => {
         if (database === null) throw new Error('E2E checkpoint is unavailable after cleanup');

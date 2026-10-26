@@ -11,6 +11,7 @@ import {
   WIRE_PROTOCOL_V2_VERSION,
   WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
+import { calculateSkillSlotCost } from '../domain/rules/skill-stage/skills.js';
 import type {
   AddressableRouteIntentV2Message,
   AddressableRouteRefusalV2Message,
@@ -41,13 +42,17 @@ import type { SupportedPresentationFormId } from './forms/index.js';
 import {
   advisorCheckpointPayload,
   advisorCheckpointSnapshotMatchesReceipt,
+  advisorIntelligenceFloorRollPayload,
+  advisorIntelligenceFloorSnapshotMatchesReceipt,
   advisorSkillSelectionDraftFromSnapshot,
   CHR_020_MONSTER_DRAFT_ACTION_KEY,
   CHR_020_ROLL_COMMIT_ACTION_KEY,
   CHR_020_SIDE_DRAFT_ACTION_KEY,
   CHR_041_CHECKPOINT_ACTION_KEY,
+  CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
   CHR_041_SKILL_DRAFT_ACTION_KEY,
   cycleRandomMonster,
+  decodeAdvisorIntelligenceFloorRollTerminal,
   decodeChr017Projection,
   decodeChr019Projection,
   decodeChr020Projection,
@@ -68,6 +73,9 @@ import {
   toggleRandomSide,
 } from './forms/chr/random-symbionts.js';
 import type {
+  AdvisorIntelligenceFloorRollPayload,
+  AdvisorIntelligenceFloorRollRequest,
+  AdvisorIntelligenceFloorRollResult,
   AdvisorSkillSelectionDraft,
   Chr017Projection,
   Chr019Projection,
@@ -242,7 +250,11 @@ const CHR_014_ACTION_KEYS = [
 const CHR_014_READ_ONLY_ACTION_KEYS = [
   CHR_014_RETURN_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
-const CHR_015_MUTABLE_ACTION_KEYS = ['CHR-015::CTA::003'] as const satisfies readonly ActionKey[];
+const CHR_015_INITIAL_ACTION_KEYS = ['CHR-015::CTA::003'] as const satisfies readonly ActionKey[];
+const CHR_015_MUTABLE_ACTION_KEYS = [
+  'CHR-015::CTA::003',
+  'CHR-015::CTA::002',
+] as const satisfies readonly ActionKey[];
 const CHR_015_CONFIRM_ACTION_KEY = 'CHR-015::CTA::001' as const;
 const CHR_015_TOGGLE_ACTION_KEY = 'CHR-015::CTA::003' as const;
 const PURE_CLASS_BY_SELECTOR = new Map<ActionKey, PureClass>([
@@ -1361,7 +1373,10 @@ interface ConfirmationRollCommitPayload extends RollCommitCommonPayload {
 }
 
 type RollCommitPayload =
-  ConfirmationRollCommitPayload | SetRollCommitPayload | SymbiontRollCommitPayload;
+  | AdvisorIntelligenceFloorRollPayload
+  | ConfirmationRollCommitPayload
+  | SetRollCommitPayload
+  | SymbiontRollCommitPayload;
 type RollCommitRequest = WorkflowCommandRequestMessage<
   typeof ROLL_COMMIT_WORKFLOW_COMMAND_ID,
   RollCommitPayload
@@ -1406,12 +1421,16 @@ interface ConfirmationRollCommitResult extends RollCommitResultCommon {
 }
 
 type RollCommitResult =
-  ConfirmationRollCommitResult | SetRollCommitResult | SymbiontRollCommitResult;
+  | AdvisorIntelligenceFloorRollResult
+  | ConfirmationRollCommitResult
+  | SetRollCommitResult
+  | SymbiontRollCommitResult;
 
 interface PendingRollCommit {
   readonly receipt: CommandReceipt<RollCommitResult> | null;
   readonly request: RollCommitRequest;
-  readonly sourceProjection: Chr003Projection | Chr004Projection | Chr020Projection;
+  readonly sourceProjection:
+    Chr003Projection | Chr004Projection | Chr020Projection | Chr041Projection;
   readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
@@ -1506,7 +1525,10 @@ export interface ProjectionConnection {
     skillId: string | null,
     targetBonus: number | null,
   ): FormActionRequestResult;
-  requestFormAction(actionKey: ActionKey): FormActionRequestResult;
+  requestFormAction(
+    actionKey: ActionKey,
+    advisorIntelligenceFloorManualFaceOrNull?: number | null,
+  ): FormActionRequestResult;
   requestSkillCard(skillId: string): FormActionRequestResult;
   replaceStatAssignmentValue(statCode: StatCode, value: number | null): FormActionRequestResult;
 }
@@ -2911,6 +2933,15 @@ function decodeChr014Projection(
   }
   const levels = decodeSkillLevelOptions(value['levelsAndBonuses']!, `${path}.levelsAndBonuses`);
   if (!levels.ok) return levels;
+  const slotSources = decodeChr014SlotSources(
+    value['slotSources']!,
+    `${path}.slotSources`,
+    eligibleSkillIds,
+  );
+  if (!slotSources.ok) return slotSources;
+  const availableSlotCount =
+    slotSources.value.requiredSlotCount -
+    (slotSources.value.mandatoryClassSkillOrNull?.slotCost ?? 0);
   const selectedValue = value['selectedSkills'];
   if (!Array.isArray(selectedValue)) return unrecognized(`${path}.selectedSkills`, selectedValue!);
   const selectedSkills: SelectedSkillProjection[] = [];
@@ -2920,28 +2951,24 @@ function decodeChr014Projection(
     if (!isJsonObject(selected)) return unrecognized(selectedPath, selected);
     const selectedId = selected['skillId'];
     const optionIndex = typeof selectedId === 'string' ? eligibleSkillIds.indexOf(selectedId) : -1;
-    const level = levels.value.find(
-      ({ slotCost, targetBonus }) =>
-        slotCost === selected['slotCost'] && targetBonus === selected['targetBonus'],
-    );
-    if (optionIndex <= previousOptionIndex || level === undefined) {
+    const targetBonus = selected['targetBonus'];
+    if (
+      optionIndex <= previousOptionIndex ||
+      typeof targetBonus !== 'number' ||
+      !isSafeIntegerAtLeast(targetBonus, 1) ||
+      calculateSkillSlotCost(targetBonus) > availableSlotCount
+    ) {
       return unrecognized(selectedPath, selected);
     }
     const decoded = decodeProjection(selected, selectedPath, {
       skillId: (field) => field === selectedId,
-      slotCost: (field) => field === level.slotCost,
-      targetBonus: (field) => field === level.targetBonus,
+      slotCost: (field) => field === calculateSkillSlotCost(targetBonus),
+      targetBonus: (field) => field === targetBonus,
     });
     if (!decoded.ok) return decoded;
     selectedSkills.push(selected as unknown as SelectedSkillProjection);
     previousOptionIndex = optionIndex;
   }
-  const slotSources = decodeChr014SlotSources(
-    value['slotSources']!,
-    `${path}.slotSources`,
-    eligibleSkillIds,
-  );
-  if (!slotSources.ok) return slotSources;
   const fixedIds = [
     ...(slotSources.value.mandatoryClassSkillOrNull === null
       ? []
@@ -3879,7 +3906,9 @@ function decodeConfirmedSnapshot(
           base.availableActionKeys,
           projection.value['selectionCheckpoint'] === 'EXACT'
             ? NO_ACTION_KEYS
-            : CHR_015_MUTABLE_ACTION_KEYS,
+            : projection.value['selectionCheckpoint'] === 'PARTIAL'
+              ? CHR_015_MUTABLE_ACTION_KEYS
+              : CHR_015_INITIAL_ACTION_KEYS,
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4313,6 +4342,20 @@ function visibleSnapshotCore(
       );
     }
   } else if (snapshot.formId === 'CHR-041') {
+    const pendingIntelligenceFloor =
+      'compositionDraftRevision' in snapshot.projection &&
+      snapshot.projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
+      snapshot.projection.trogrSuppressionState.rollReceiptIdOrNull === null;
+    if (commandPending || pendingIntelligenceFloor) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_041_CHECKPOINT_ACTION_KEY && key !== CHR_041_SKILL_DRAFT_ACTION_KEY,
+      );
+    }
+    if (commandPending) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
+      );
+    }
     const candidateOption = snapshot.projection.advisorSlotsAndSkills.skillOptions.find(
       ({ skillId }) => skillId === advisorSkillSelectionDraft?.candidateSkillIdOrNull,
     );
@@ -4431,18 +4474,37 @@ function decodeAddressableRouteSnapshot(
   const destination = decoded.value.projection as Chr014Projection;
   const skillId = pending.bindings[0]?.value;
   const summary = source.skillCardSummaries.find((card) => card.skillId === skillId);
+  if (summary === undefined) {
+    return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+  }
+  const remainingSlots =
+    source.slotSources.requiredSlotCount -
+    (source.slotSources.mandatoryClassSkillOrNull?.slotCost ?? 0) -
+    destination.selectedSkills.reduce((total, selected) => total + selected.slotCost, 0);
+  const expectedLevels = summary.levelOptions.filter(({ slotCost }) => slotCost <= remainingSlots);
   if (
-    summary === undefined ||
+    remainingSlots < 0 ||
     destination.skillId !== skillId ||
     destination.characterDraftId !== source.characterDraftId ||
     destination.wizardCheckpointId !== source.wizardCheckpointId ||
     destination.selectionRevision !== source.draftRevision ||
-    destination.selectedSkills.length !== 0 ||
+    destination.selectedSkills.some((selected) => {
+      const previousCard = source.skillCardSummaries.find(
+        (candidate) => candidate.skillId === selected.skillId,
+      );
+      return (
+        previousCard === undefined ||
+        !previousCard.levelOptions.some(
+          (level) =>
+            level.slotCost === selected.slotCost && level.targetBonus === selected.targetBonus,
+        )
+      );
+    }) ||
     !sameJson(destination.skillStageValues, source.skillStageStats) ||
     !sameJson(destination.eligibleSkillIds, source.eligibleSkillIds) ||
     !sameJson(destination.slotSources, source.slotSources) ||
     !sameJson(destination.requirements, summary.requirements) ||
-    !sameJson(destination.levelsAndBonuses, summary.levelOptions) ||
+    !sameJson(destination.levelsAndBonuses, expectedLevels) ||
     destination.bonusDomainScope !== summary.bonusDomainScope ||
     destination.skillLabel !== summary.skillLabel ||
     !sameJson(destination.missingSkillPenalty, summary.missingSkillPenalty)
@@ -4483,7 +4545,6 @@ function decodeFormActionSnapshot(
     const destination = decoded.value.projection as Chr013Projection;
     if (
       decoded.value.layers.length !== 0 ||
-      source.selectedSkills.length !== 0 ||
       destination.characterDraftId !== source.characterDraftId ||
       destination.wizardCheckpointId !== source.wizardCheckpointId ||
       destination.draftRevision !== source.selectionRevision ||
@@ -5131,6 +5192,16 @@ function decodeRollCommitTerminal(
   >,
   pending: PendingRollCommit,
 ): DecodeResult<CommandReceipt<RollCommitResult>> {
+  if (
+    pending.request.payload.stage === 'SYMBIONTS' &&
+    pending.request.payload.variant === 'TROGR_SUPPRESSION_B'
+  ) {
+    return decodeAdvisorIntelligenceFloorRollTerminal(
+      message,
+      pending.request as AdvisorIntelligenceFloorRollRequest,
+      pending.sourceSnapshot,
+    );
+  }
   if (pending.request.payload.stage === 'SYMBIONTS') {
     return decodeSymbiontRollCommitTerminal(
       message,
@@ -5605,8 +5676,16 @@ function reconnectSnapshotMatchesUnjournaledCancel(
 function rollCommitSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<RollCommitResult>,
+  source: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (result.stage === 'SYMBIONTS' && result.variant === 'TROGR_SUPPRESSION_B') {
+    return advisorIntelligenceFloorSnapshotMatchesReceipt(
+      snapshot,
+      receipt as CommandReceipt<AdvisorIntelligenceFloorRollResult>,
+      source,
+    );
+  }
   if (result.stage === 'SYMBIONTS') {
     return symbiontRollSnapshotMatchesReceipt(
       snapshot,
@@ -5772,7 +5851,9 @@ function decodeRollCommitDestinationSnapshot(
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
-  return decoded.ok ? rollCommitSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
+  return decoded.ok
+    ? rollCommitSnapshotMatchesReceipt(decoded.value, pending.receipt, pending.sourceSnapshot)
+    : decoded;
 }
 
 function decodeDeviceIdentity(value: unknown): DecodeResult<string> {
@@ -6623,6 +6704,7 @@ export function connectProjection(
               snapshot = rollCommitSnapshotMatchesReceipt(
                 snapshot.value,
                 pendingRollCommit.receipt,
+                pendingRollCommit.sourceSnapshot,
               );
             }
           }
@@ -7250,7 +7332,7 @@ export function connectProjection(
       }
       return { ok: true };
     },
-    requestFormAction: (actionKey) => {
+    requestFormAction: (actionKey, advisorIntelligenceFloorManualFaceOrNull) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (lastSnapshot === null)
         return { ok: false, detail: 'no confirmed projection is available' };
@@ -7780,7 +7862,10 @@ export function connectProjection(
       if (
         (activeForm.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
         (activeForm.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY) ||
-        (activeForm.formId === 'CHR-020' && actionKey === CHR_020_ROLL_COMMIT_ACTION_KEY)
+        (activeForm.formId === 'CHR-020' && actionKey === CHR_020_ROLL_COMMIT_ACTION_KEY) ||
+        (activeForm.formId === 'CHR-041' &&
+          lastSnapshot.formId === 'CHR-041' &&
+          actionKey === CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY)
       ) {
         let request: RollCommitRequest;
         try {
@@ -7792,7 +7877,12 @@ export function connectProjection(
             payload:
               activeForm.formId === 'CHR-020'
                 ? randomRollCommitPayload(lastSnapshot, randomSymbiontDraft)
-                : rollCommitPayload(lastSnapshot, creationRollDraft),
+                : activeForm.formId === 'CHR-041'
+                  ? advisorIntelligenceFloorRollPayload(
+                      lastSnapshot,
+                      advisorIntelligenceFloorManualFaceOrNull ?? null,
+                    )
+                  : rollCommitPayload(lastSnapshot, creationRollDraft),
             protocolVersion: WIRE_PROTOCOL_VERSION,
             role: 'player',
             workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
@@ -7811,7 +7901,7 @@ export function connectProjection(
           receipt: null,
           request,
           sourceProjection: lastSnapshot.projection as unknown as
-            Chr003Projection | Chr004Projection | Chr020Projection,
+            Chr003Projection | Chr004Projection | Chr020Projection | Chr041Projection,
           sourceSnapshot: lastSnapshot,
         };
         try {

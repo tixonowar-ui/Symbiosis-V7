@@ -3,8 +3,8 @@
 Читать вместе с корневым [CLAUDE.md](../../CLAUDE.md).
 
 Рендерер на React + Vite. Источник по UI — JSON-поправка Web UI Screen Atlas
-v1.3 в `artifacts/atlas/`; legacy filename и исторический Markdown остаются
-v1.2. Атлас содержит **376 форм**, **1672 перехода**, **66 journeys**,
+v1.5 в `artifacts/atlas/`; legacy filename и исторический Markdown остаются
+v1.2. Атлас содержит **376 форм**, **1681 переход**, **66 journeys**,
 **91 requirement**, **2440 QA-сценариев**.
 
 ## Трассируемость

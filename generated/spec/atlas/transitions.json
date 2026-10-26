@@ -11656,6 +11656,13 @@
   },
   {
     "from": "CHR-041",
+    "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request",
+    "kind": "workflow-command",
+    "to": "CHR-041",
+    "trigger": "Зафиксировать бросок неснижаемого остатка интеллекта"
+  },
+  {
+    "from": "CHR-041",
     "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
     "kind": "local-draft-command",
     "to": "CHR-041",

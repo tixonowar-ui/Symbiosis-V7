@@ -139,10 +139,10 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the thirteen slice actions with their exact source-owned guards', () => {
+  it('loads the fourteen slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(13);
+    expect(catalog.actions.size).toBe(14);
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:
@@ -179,6 +179,13 @@ describe('APP host projection', () => {
       kind: 'normative',
       to: 'CHR-015',
       trigger: 'Перейти к выбору навыков',
+    });
+    expect(catalog.actions.get('CHR-015::CTA::002')).toEqual({
+      from: 'CHR-015',
+      guard: 'selection draft checkpointed',
+      kind: 'safe-return',
+      to: 'CHR-013',
+      trigger: 'Вернуться в каталог навыков',
     });
     expect(catalog.actions.get('CHR-014::CTA::002')).toEqual({
       from: 'CHR-014',

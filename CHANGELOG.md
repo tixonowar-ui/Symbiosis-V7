@@ -105,6 +105,32 @@
 
 ### Добавлено
 
+- **2026-10-27, issue #144, ADR 0053:** исправлено повторное открытие
+  `CHR-014` после `open A → add A → open B`. Существующий
+  `CHR-015::CTA::002` теперь разрешён только для `PARTIAL`; `NONE` и `EXACT`
+  сохраняют прежние ограничения. Последовательные `add A → add B` сохраняют
+  полный canonical набор и обе card-add записи, восстанавливаемые после
+  replay/restart. Проверка исторических уровней отделена от вариантов на
+  оставшуюся paid capacity; read-only ineligible B не очищает выбор. Пятый
+  production Playwright-сценарий проходит этот маршрут через Fastify+WS/SQLite
+  без изменения outer protocol, Atlas sources или SQL migrations.
+- **2026-10-26, issue #147, ADR 0052:** `TROGR + ADVISER` получает отдельный
+  durable `TROGR_SUPPRESSION_B` и в RANDOM, и в MANUAL. `B=floor(R20/4+0,5)`
+  определяет будущий неснижаемый остаток интеллекта: `1+B`, либо `4+B` после
+  поглощения Учителя. Это не текущий I, не третий I/W и не общий
+  `EFFECTIVE_STATS` или финальный clamp. Два I/W и exact-fill навыков
+  сохраняются; pending B блокирует подтверждение навыков, после receipt оно
+  снова не предлагается. Replay/refresh/reconnect/restart/SQLite reopen
+  восстанавливают те же addressed request/receipt без replacement request или
+  нового sampler.
+- **Atlas content release 1.5:** добавлен `CHR-041::CTA::004` с existing
+  `UI-CMD-CHAR-CREATION-ROLL-COMMIT`, синхронизированы JSON, Markdown,
+  transitions, coverage и QA. Итоговые счётчики — 376 форм, 1681 transitions,
+  1247 action keys. RANDOM records не переписывались; MANUAL получил отдельный
+  B-specific checkpoint stage, strict decoder и accessible presentation с
+  native `<dl>`/headings и без лишних ARIA/live regions. `src/shared`, outer
+  protocol и SQL migrations не менялись. Полный manual composition, `CHR-018`,
+  `CHR-042`, I/W transport и equipment остаются задачами #145 → #146.
 - **2026-10-26, issue #139, импорт поставки:** mapping-книги из #143 теперь
   проходят через `tools/import/symbiont-media`. Importer связывает по точному
   `SpeciesKey` 23 арта и 23 изображения деревьев с 20 ordinary и 3 monster

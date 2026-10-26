@@ -93,10 +93,10 @@ npm run verify
 **Портативной сборки пока нет.** `tools/package` — пустой каталог. Не пытайся
 её запускать и не выдумывай команду.
 
-**E2E состоит из четырёх реальных сценариев.** Они используют системный Chrome
+**E2E состоит из пяти реальных сценариев.** Они используют системный Chrome
 (`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную SQLite,
 без mocked projection. `npm run test:e2e` сначала собирает веб-клиент, затем
-запускает все четыре сценария.
+запускает все пять сценариев.
 
 ---
 
@@ -105,7 +105,7 @@ npm run verify
 ```
 artifacts/          READ-ONLY. Поставленные артефакты. Менять запрещено
   registries/       10 xlsx — реестры, манифест, отчёт аудита
-  atlas/            Atlas UI: JSON и Markdown amendment v1.3 в legacy-файлах v1.2
+  atlas/            Atlas UI: JSON и Markdown amendment v1.5 в legacy-файлах v1.2
   packs/            Runtime Pack v1.2 (zip) — заморожен побайтово
   symbiont-media/   2 xlsx — 23 арта и 23 дерева; импорт по SpeciesKey работает
   CHECKSUMS.sha256  единственный файл, который туда пишет инструмент
@@ -132,11 +132,11 @@ tools/
 
 tests/
   integration/      кросс-слойные тесты. ПУСТО
-  e2e/              Playwright, четыре production-сценария
+  e2e/              Playwright, пять production-сценариев
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              51 решение + README. Высший источник правды
+  adr/              53 решения + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

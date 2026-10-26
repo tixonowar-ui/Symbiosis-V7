@@ -11091,7 +11091,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -11472,7 +11472,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -19594,7 +19594,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -20105,7 +20105,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -20722,7 +20722,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -27081,7 +27081,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -27617,7 +27617,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -28885,7 +28885,7 @@
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Разрешённые atlas workflow commands этой формы: UI-CMD-CHAR-CREATION-ROLL-COMMIT, UI-CMD-CHAR-WIZARD-CHECKPOINT.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-        "Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника."
+        "Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Зафиксировать бросок неснижаемого остатка интеллекта; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -28973,6 +28973,63 @@
           },
           "kind": "workflow-command",
           "label": "Зафиксировать броски I и W Советника",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "CHR-041",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "CHR-041::CTA::004",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
+              "UI-CMD-CHAR-WIZARD-CHECKPOINT"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Зафиксировать бросок неснижаемого остатка интеллекта",
           "recomputeTriggers": [
             "action budget",
             "HP/OE/effects/death or incapacity",
@@ -29114,6 +29171,7 @@
       ],
       "visible": [
         "Зафиксировать броски I и W Советника",
+        "Зафиксировать бросок неснижаемого остатка интеллекта",
         "Добавить или удалить допустимый навык Советника",
         "Подтвердить навыки Советника"
       ],
@@ -29146,7 +29204,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CHAR-CREATION-ROLL-COMMIT",
-          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
+          "guard": "Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -29354,6 +29412,12 @@
       },
       {
         "from": "CHR-041",
+        "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request",
+        "kind": "workflow-command",
+        "trigger": "Зафиксировать бросок неснижаемого остатка интеллекта"
+      },
+      {
+        "from": "CHR-041",
         "guard": "iwRollReceiptIds present; selection remains within Advisor-eligible skills and mutable Advisor slot draft",
         "kind": "local-draft-command",
         "trigger": "Добавить или удалить допустимый навык Советника"
@@ -29365,6 +29429,12 @@
         "kind": "workflow-command",
         "to": "CHR-041",
         "trigger": "Зафиксировать броски I и W Советника"
+      },
+      {
+        "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request",
+        "kind": "workflow-command",
+        "to": "CHR-041",
+        "trigger": "Зафиксировать бросок неснижаемого остатка интеллекта"
       },
       {
         "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",

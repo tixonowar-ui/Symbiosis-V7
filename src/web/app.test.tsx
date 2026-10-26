@@ -936,7 +936,7 @@ function chr014Base(
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
     availableActionKeys:
-      projection.eligibility === 'ELIGIBLE'
+      projection.eligibility === 'ELIGIBLE' && projection.levelsAndBonuses.length > 0
         ? ['CHR-014::CTA::001', 'CHR-014::CTA::002']
         : ['CHR-014::CTA::002'],
     formId: 'CHR-014',
@@ -1044,7 +1044,12 @@ function chr015Base(
   projection: ReturnType<typeof chr015Projection> = chr015Projection(),
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
-    availableActionKeys: projection.selectionCheckpoint === 'EXACT' ? [] : ['CHR-015::CTA::003'],
+    availableActionKeys:
+      projection.selectionCheckpoint === 'EXACT'
+        ? []
+        : projection.selectionCheckpoint === 'PARTIAL'
+          ? ['CHR-015::CTA::003', 'CHR-015::CTA::002']
+          : ['CHR-015::CTA::003'],
     formId: 'CHR-015',
     formType: 'screen',
     roleFilteredPayload: projection,
@@ -1236,9 +1241,85 @@ function chr041Projection(suppressed = false): JsonObject {
     iwRollRequestIds: ['advisor-i-request', 'advisor-w-request'],
     randomSequenceId: suppressed ? 'united-suppression-sequence' : ADVISOR_SEQUENCE_ID,
     trogrSuppressionState: suppressed
-      ? { kind: 'SUPPRESSED', minimumIOrNull: 2, suppressionBOrNull: 1 }
+      ? {
+          kind: 'SUPPRESSED',
+          minimumIOrNull: 2,
+          suppressionBOrNull: 1,
+          rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+          rollRequestIdOrNull: 'suppression-b-request',
+          rollReceiptIdOrNull: 'suppression-b-receipt',
+        }
       : { kind: 'NOT_SUPPRESSED' },
     wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  };
+}
+
+const ADVISOR_THIEVERY_OPTION = {
+  bonusDomainScope: 'Кражи, замки, обыск, городская маскировка; разрешение исключено',
+  levelOptions: [{ slotCost: 1, targetBonus: 1 }],
+  missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
+  requirements: [],
+  skillId: 'THIEVERY',
+  skillLabel: 'Вор',
+} as const;
+
+function manualAdvisorFloorProjection(
+  options: {
+    readonly acknowledged?: boolean;
+    readonly committed?: boolean;
+    readonly commandId?: string | null;
+    readonly diceInputModeSnapshot?: 'AUTO' | 'MANUAL';
+    readonly suppressed?: boolean;
+  } = {},
+): JsonObject {
+  const suppressed = options.suppressed ?? true;
+  const committed = options.committed ?? false;
+  const acknowledged = options.acknowledged ?? false;
+  const selectedSkills = acknowledged
+    ? suppressed
+      ? [
+          { skillId: 'ACROBATICS', slotCost: 7, targetBonus: 6 },
+          { skillId: 'THIEVERY', slotCost: 1, targetBonus: 1 },
+        ]
+      : [{ skillId: 'ACROBATICS', slotCost: 5, targetBonus: 5 }]
+    : [];
+  const requiredSlotCount = suppressed ? 8 : 5;
+  const usedSlotCount = selectedSkills.reduce((sum, selected) => sum + selected.slotCost, 0);
+  const base = structuredClone<Record<string, unknown>>(chr041Projection(suppressed));
+  delete base['randomSequenceId'];
+  const slots = base['advisorSlotsAndSkills'] as JsonObject;
+  const skillOptions = slots['skillOptions'] as JsonObject[];
+  return {
+    ...base,
+    acknowledged,
+    advisorSlotsAndSkills: {
+      ...slots,
+      selectedSkills,
+      selectionValidation: fixtureSkillSelectionValidation(requiredSlotCount, usedSlotCount),
+      skillOptions: [
+        ...skillOptions,
+        ...(acknowledged && suppressed ? [ADVISOR_THIEVERY_OPTION] : []),
+      ],
+    },
+    commandId:
+      options.commandId === undefined
+        ? committed
+          ? 'manual-floor-b-command'
+          : null
+        : options.commandId,
+    compositionDraftRevision: 1,
+    diceInputModeSnapshot: options.diceInputModeSnapshot ?? 'MANUAL',
+    draftRevision: committed ? 10 : 9,
+    trogrSuppressionState: suppressed
+      ? {
+          kind: 'SUPPRESSED',
+          minimumIOrNull: committed ? 2 : null,
+          rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+          rollReceiptIdOrNull: committed ? 'manual-floor-b-receipt' : null,
+          rollRequestIdOrNull: 'manual-floor-pending-b-request',
+          suppressionBOrNull: committed ? 1 : null,
+        }
+      : { kind: 'NOT_SUPPRESSED' },
   };
 }
 
@@ -5737,6 +5818,62 @@ describe('CHR-014 addressable skill card UI', () => {
     expect(container.querySelector('[data-atlas-action-key="CHR-014::CTA::001"]')).toBeNull();
   });
 
+  it('reopens a card with prior selection and safely returns to the catalog', async () => {
+    const { container, socket } = await connectToWizardBase(chr013Base(), 9);
+    const open = requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-skill-card-open="SKILL_03"]'),
+      'CHR-013 next skill action',
+    );
+    act(() => open.click());
+    const route = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (route.messageType !== 'navigation.addressable-route') {
+      throw new Error('missing repeated CHR-014 addressable route');
+    }
+    const card = {
+      ...chr014Projection('SKILL_03', [{ skillId: 'SKILL_01', slotCost: 2, targetBonus: 2 }], 2),
+      levelsAndBonuses: [],
+    };
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          route.navigationRequestId,
+          'ADDRESSABLE_ROUTE',
+          chr014Base(card),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 10, stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-skill-card="SKILL_03"]')).not.toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-014::CTA::002"]'),
+        'CHR-014 partial safe return',
+      ).click();
+    });
+    const request = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (request.messageType !== 'navigation.form-action') {
+      throw new Error('missing CHR-014 safe return');
+    }
+    expect(request).toMatchObject({ actionKey: 'CHR-014::CTA::002', sourceFormId: 'CHR-014' });
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.navigationRequestId,
+          'FORM_ACTION',
+          chr013Base(),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 11, stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-013"]')).not.toBeNull();
+  });
+
   it('requires a signed level and commits the full canonical current+new selection', async () => {
     const card = chr014Projection(
       'SKILL_03',
@@ -6465,11 +6602,189 @@ describe('CHR-041 and CHR-019 symbiont UI', () => {
     expect(container.querySelector('[data-advisor-suppression="SUPPRESSED"]')).not.toBeNull();
     expect(container.querySelector('[data-advisor-suppression-minimum-i]')?.textContent).toBe('2');
     expect(container.querySelector('[data-advisor-suppression-b]')?.textContent).toBe('1');
+    expect(container.querySelector('[data-advisor-suppression-purpose]')?.textContent).toContain(
+      'Будущий неснижаемый остаток интеллекта носителя',
+    );
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'suppression-b-request',
+    );
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'suppression-b-receipt',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::004"]')).toBeNull();
     expect(container.querySelector('[data-advisor-level-cost="6"]')?.textContent).toContain(
       '7 сл.',
     );
     expect(container.querySelector('[data-advisor-slot-usage]')?.textContent).toContain('0 / 8');
     expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::003"]')).toBeNull();
+  });
+
+  it('commits MANUAL future intelligence floor with the exact addressed payload', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-041', manualAdvisorFloorProjection(), ['CHR-041::CTA::004']),
+      9,
+    );
+    expect(container.querySelector('[data-advisor-suppression-purpose]')?.textContent).toContain(
+      'Будущий неснижаемый остаток интеллекта носителя',
+    );
+    expect(container.querySelector('[data-advisor-suppression-minimum-i]')?.textContent).toBe(
+      'Нет значения',
+    );
+    expect(container.querySelector('[data-advisor-suppression-b]')?.textContent).toBe(
+      'Нет значения',
+    );
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'manual-floor-pending-b-request',
+    );
+    expect(container.querySelector('[data-advisor-iw-roll="0"]')?.textContent).toContain(
+      'advisor-i-receipt',
+    );
+    expect(container.querySelector('[data-advisor-iw-roll="1"]')?.textContent).toContain(
+      'advisor-w-receipt',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::001"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::002"]')).toBeNull();
+    const face = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-advisor-suppression-manual-face]'),
+      'MANUAL future intelligence floor face',
+    );
+    expect(face.required).toBe(true);
+    expect(face.min).toBe('1');
+    expect(face.max).toBe('20');
+    const wireCount = socket.sent.length;
+    inputNumber(face, 2);
+    expect(socket.sent).toHaveLength(wireCount);
+    const action = requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::004"]'),
+      'MANUAL future intelligence floor action',
+    );
+    expect(action.textContent).toBe('Зафиксировать бросок неснижаемого остатка интеллекта');
+    act(() => action.click());
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request' || request.commandKind !== 'workflow-command') {
+      throw new Error('missing MANUAL B command');
+    }
+    expect(request.workflowCommandId).toBe('UI-CMD-CHAR-CREATION-ROLL-COMMIT');
+    expect(request.payload).toEqual({
+      advisorInstanceDraftId: 'united-suppression-instance',
+      characterDraftId: CHARACTER_DRAFT_ID,
+      compositionDraftRevision: 1,
+      draftRevision: 9,
+      manualFaceOrNull: 2,
+      pendingRollRequestId: 'manual-floor-pending-b-request',
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      variant: 'TROGR_SUPPRESSION_B',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(request.payload).not.toHaveProperty('randomSequenceId');
+  });
+
+  it('does not reuse a manual B face after the pending request changes', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-041', manualAdvisorFloorProjection(), ['CHR-041::CTA::004']),
+      9,
+    );
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-advisor-suppression-manual-face]'),
+        'initial MANUAL B face',
+      ),
+      2,
+    );
+    const initialProjection = manualAdvisorFloorProjection();
+    const nextProjection = {
+      ...initialProjection,
+      trogrSuppressionState: {
+        ...(initialProjection['trogrSuppressionState'] as JsonObject),
+        rollRequestIdOrNull: 'manual-floor-other-pending-b-request',
+      },
+    };
+    const resumed = reconnectToWizardBase(
+      container,
+      socket,
+      symbiontBase('CHR-041', nextProjection, ['CHR-041::CTA::004']),
+      9,
+    );
+    const nextFace = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-advisor-suppression-manual-face]'),
+      'restored MANUAL B face',
+    );
+    expect(nextFace.value).toBe('');
+    expect(resumed.sent).toHaveLength(1);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::004"]'),
+        'restored MANUAL B action',
+      ).click();
+    });
+    expect(resumed.sent).toHaveLength(1);
+    expect(container.textContent).toContain(
+      'CHR-041 requires one complete MANUAL intelligence floor face',
+    );
+  });
+
+  it('restores committed MANUAL B, I/W and exact skills without another roll action', async () => {
+    const { container } = await connectToWizardBase(
+      symbiontBase(
+        'CHR-041',
+        manualAdvisorFloorProjection({ acknowledged: true, committed: true }),
+        [],
+      ),
+      10,
+    );
+    expect(container.querySelector('[data-advisor-suppression-minimum-i]')?.textContent).toBe('2');
+    expect(container.querySelector('[data-advisor-suppression-b]')?.textContent).toBe('1');
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'manual-floor-pending-b-request',
+    );
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'manual-floor-b-receipt',
+    );
+    expect(
+      container.querySelector('[data-advisor-selected-skill="ACROBATICS"]')?.textContent,
+    ).toContain('+6');
+    expect(
+      container.querySelector('[data-advisor-selected-skill="THIEVERY"]')?.textContent,
+    ).toContain('Вор');
+    expect(container.querySelector('[data-advisor-iw-roll="0"]')?.textContent).toContain(
+      'advisor-i-receipt',
+    );
+    expect(container.querySelector('[data-advisor-iw-roll="1"]')?.textContent).toContain(
+      'advisor-w-receipt',
+    );
+    expect(container.querySelector('[data-advisor-suppression] dl')).not.toBeNull();
+    expect(container.querySelector('[data-advisor-suppression] [role="status"]')).toBeNull();
+    expect(container.querySelector('[data-advisor-suppression-manual-face]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::004"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::001"]')).toBeNull();
+  });
+
+  it('commits AUTO future intelligence floor without a client-supplied face', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-041', manualAdvisorFloorProjection({ diceInputModeSnapshot: 'AUTO' }), [
+        'CHR-041::CTA::004',
+      ]),
+      9,
+    );
+    expect(container.querySelector('[data-advisor-suppression-manual-face]')).toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::004"]'),
+        'AUTO future intelligence floor action',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request' || request.commandKind !== 'workflow-command') {
+      throw new Error('missing AUTO B command');
+    }
+    expect(request.payload).toMatchObject({
+      manualFaceOrNull: null,
+      pendingRollRequestId: 'manual-floor-pending-b-request',
+      sourceFormId: 'CHR-041',
+      variant: 'TROGR_SUPPRESSION_B',
+    });
+    expect(request.payload).not.toHaveProperty('randomSequenceId');
   });
 
   it('renders actionless CHR-019 composition, positive empty states and modifier breakdown', async () => {

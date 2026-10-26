@@ -190,6 +190,50 @@ test('UNITED ADVISER completes I/W, local exact skills, checkpoint, and durable 
     await expect(page.locator('[data-advisor-iw-roll="0"]')).toContainText('receipt');
     await expect(page.locator('[data-advisor-iw-roll="1"]')).toContainText('receipt');
     await expect(page.locator('[data-atlas-action-key="CHR-041::CTA::003"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key="CHR-041::CTA::004"]')).toHaveCount(0);
+    await expect(page.locator('[data-advisor-suppression-purpose]')).toContainText(
+      'Будущий неснижаемый остаток интеллекта носителя',
+    );
+    const suppressionRollText = await page.locator('[data-advisor-suppression-roll]').textContent();
+    const suppressionRollMatch = /request\s+([^;]+);\s*receipt\s+(.+)/u.exec(
+      suppressionRollText ?? '',
+    );
+    if (
+      suppressionRollMatch === null ||
+      suppressionRollMatch[1] === undefined ||
+      suppressionRollMatch[2] === undefined
+    ) {
+      throw new Error('missing separate future intelligence floor request/receipt');
+    }
+    const suppressionRequestId = suppressionRollMatch[1].trim();
+    const suppressionReceiptId = suppressionRollMatch[2].trim();
+    expect(suppressionRequestId).toMatch(
+      /^browser-united-advisor-selection-command-browser-roll-request-\d+$/u,
+    );
+    expect(suppressionReceiptId).toMatch(
+      /^browser-united-advisor-selection-command-browser-receipt-\d+$/u,
+    );
+    expect(suppressionRequestId).not.toBe(suppressionReceiptId);
+
+    const beforeAdvisorRefresh = {
+      receipts: host.receiptAllocations(),
+      rollRequests: host.rollRequestAllocations(),
+      samples: host.sampleCalls(),
+    };
+    await page.reload();
+    await expect(
+      page.getByRole('heading', { name: 'Карточка Советника при создании', exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('[data-advisor-suppression-roll]')).toHaveText(
+      suppressionRollText ?? '',
+    );
+    await expect(page.locator('[data-advisor-suppression-purpose]')).toContainText(
+      'Будущий неснижаемый остаток интеллекта носителя',
+    );
+    await expect(page.locator('[data-atlas-action-key="CHR-041::CTA::004"]')).toHaveCount(0);
+    expect(host.receiptAllocations()).toBe(beforeAdvisorRefresh.receipts);
+    expect(host.rollRequestAllocations()).toBe(beforeAdvisorRefresh.rollRequests);
+    expect(host.sampleCalls()).toBe(beforeAdvisorRefresh.samples);
 
     const beforeSkills = {
       draftRevision: await page

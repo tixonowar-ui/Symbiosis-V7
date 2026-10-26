@@ -70,6 +70,7 @@ import {
   type StatAssignmentStage,
 } from './creation-stat-assignment.js';
 import {
+  hasSkillCardNavigationState,
   parseSkillEligibilityStage,
   parseSkillSelectionStage,
   prepareSkillEligibility,
@@ -99,6 +100,16 @@ import {
   parseRandomSymbiontStage,
   validateRandomSymbiontStageHistory,
 } from './creation-symbiont-validation.js';
+import {
+  advisorIntelligenceFloorStageIds,
+  parseAdvisorIntelligenceFloorStage,
+  validateAdvisorIntelligenceFloorStageHistory,
+} from './creation-advisor-intelligence-floor-contract.js';
+import type {
+  AdvisorIntelligenceFloorRollCommandRequest,
+  AdvisorIntelligenceFloorRollReceipt,
+  AdvisorIntelligenceFloorStage,
+} from './creation-advisor-intelligence-floor-contract.js';
 import type {
   DurableIdentityCheckpoint,
   IdentityCheckpointCommandRequest,
@@ -650,7 +661,8 @@ export interface CreationWizardSymbiontPayload extends Omit<
   CreationWizardSkillPayload,
   'nextStageEnvelope' | 'receipt'
 > {
-  readonly randomSymbiontStage: RandomSymbiontStage;
+  readonly randomSymbiontStage: RandomSymbiontStage | null;
+  readonly advisorIntelligenceFloorStage?: AdvisorIntelligenceFloorStage;
   readonly nextStageEnvelope: CreationNextStageEnvelope<
     'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041'
   >;
@@ -658,7 +670,8 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
-    | SymbiontAdvisorCheckpointReceipt;
+    | SymbiontAdvisorCheckpointReceipt
+    | AdvisorIntelligenceFloorRollReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -689,6 +702,7 @@ export interface DurableCreationWizardCheckpoint {
   readonly skillSelectionStage: SkillSelectionStage | null;
   readonly skillPresentationStage?: SkillPresentationStage | null;
   readonly randomSymbiontStage: RandomSymbiontStage | null;
+  readonly advisorIntelligenceFloorStage?: AdvisorIntelligenceFloorStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
     | DurableCreationSetDecideReceipt
@@ -699,7 +713,8 @@ export interface DurableCreationWizardCheckpoint {
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
-    | SymbiontAdvisorCheckpointReceipt;
+    | SymbiontAdvisorCheckpointReceipt
+    | AdvisorIntelligenceFloorRollReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -707,7 +722,8 @@ export interface DurableCreationWizardCheckpoint {
     | StatAssignmentCheckpointCommandRequest
     | SkillCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
-    | SymbiontAdvisorCheckpointCommandRequest;
+    | SymbiontAdvisorCheckpointCommandRequest
+    | AdvisorIntelligenceFloorRollCommandRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -723,7 +739,8 @@ export interface DurableCreationWizardCommand {
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
-    | SymbiontAdvisorCheckpointReceipt;
+    | SymbiontAdvisorCheckpointReceipt
+    | AdvisorIntelligenceFloorRollReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -731,7 +748,8 @@ export interface DurableCreationWizardCommand {
     | StatAssignmentCheckpointCommandRequest
     | SkillCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
-    | SymbiontAdvisorCheckpointCommandRequest;
+    | SymbiontAdvisorCheckpointCommandRequest
+    | AdvisorIntelligenceFloorRollCommandRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -2311,11 +2329,20 @@ const postIdentityPayloadAt = (
     const hasStatAssignmentStage = Object.hasOwn(unshaped, 'statAssignmentStage');
     const hasSkillEligibilityStage = Object.hasOwn(unshaped, 'skillEligibilityStage');
     const hasRandomSymbiontStage = Object.hasOwn(unshaped, 'randomSymbiontStage');
+    const hasAdvisorIntelligenceFloorStage = Object.hasOwn(
+      unshaped,
+      'advisorIntelligenceFloorStage',
+    );
+    if (hasAdvisorIntelligenceFloorStage && !hasRandomSymbiontStage) {
+      throw new Error(`${label} advisorIntelligenceFloorStage requires randomSymbiontStage:null`);
+    }
     const object = exactObject(
       value,
       '$',
       hasRandomSymbiontStage
-        ? SYMBIONT_PAYLOAD_KEYS
+        ? hasAdvisorIntelligenceFloorStage
+          ? [...SYMBIONT_PAYLOAD_KEYS, 'advisorIntelligenceFloorStage']
+          : SYMBIONT_PAYLOAD_KEYS
         : hasSkillEligibilityStage
           ? SKILL_PAYLOAD_KEYS
           : hasStatAssignmentStage
@@ -2360,11 +2387,48 @@ const postIdentityPayloadAt = (
     const skillSelectionStage = hasSkillEligibilityStage
       ? parseSkillSelectionStage(object['skillSelectionStage'], label)
       : null;
-    const randomSymbiontStage = hasRandomSymbiontStage
-      ? parseRandomSymbiontStage(object['randomSymbiontStage'], symbiontCatalog)
+    const randomSymbiontStage =
+      hasRandomSymbiontStage && object['randomSymbiontStage'] !== null
+        ? parseRandomSymbiontStage(object['randomSymbiontStage'], symbiontCatalog)
+        : null;
+    if (hasAdvisorIntelligenceFloorStage && symbiontCatalog === undefined) {
+      throw new Error(`${label} advisor intelligence floor stage requires a symbiont catalog`);
+    }
+    const checkpointView = {
+      checkpoint,
+      durablePayload: value as DurableCreationWizardPayload,
+      identityStage,
+      localCharacter,
+      nextStageEnvelope: nextStageEnvelopeAt(object['nextStageEnvelope'], '$.nextStageEnvelope'),
+      pureClassStage: hasRandomSymbiontStage
+        ? parsePureClassStage(object['pureClassStage'], label)
+        : null,
+      raceAndMethodStage: raceAndMethodStageAt(object['raceAndMethodStage'], label),
+      receipt: object['receipt'] as DurableCreationWizardCheckpoint['receipt'],
+      request: object['request'] as DurableCreationWizardCheckpoint['request'],
+      skillEligibilityStage,
+      skillSelectionStage,
+      randomSymbiontStage,
+      statAssignmentStage: hasRandomSymbiontStage
+        ? parseStatAssignmentStage(object['statAssignmentStage'], label)
+        : null,
+      statRollStage: hasRandomSymbiontStage
+        ? statRollStageAt(object['statRollStage'], label)
+        : null,
+    } as DurableCreationWizardCheckpoint;
+    const advisorIntelligenceFloorStage = hasAdvisorIntelligenceFloorStage
+      ? parseAdvisorIntelligenceFloorStage(
+          object['advisorIntelligenceFloorStage'],
+          symbiontCatalog!,
+          checkpointView,
+        )
       : null;
+    if (randomSymbiontStage !== null && advisorIntelligenceFloorStage !== null) {
+      throw new Error(`${label} random and manual symbiont stages cannot coexist`);
+    }
     const latestSymbiontRecord =
-      randomSymbiontStage === null ? null : latestRandomSymbiontRecord(randomSymbiontStage);
+      advisorIntelligenceFloorStage?.rollRecordOrNull ??
+      (randomSymbiontStage === null ? null : latestRandomSymbiontRecord(randomSymbiontStage));
     const receipt =
       receiptResult['stage'] === 'SYMBIONTS'
         ? (latestSymbiontRecord?.receipt ??
@@ -2403,7 +2467,7 @@ const postIdentityPayloadAt = (
     }
     if (hasRandomSymbiontStage) {
       if (
-        randomSymbiontStage === null ||
+        (randomSymbiontStage !== null || advisorIntelligenceFloorStage !== null) &&
         (latestSymbiontRecord === null
           ? receipt.result.stage !== 'SKILLS'
           : receipt.result.stage !== 'SYMBIONTS' ||
@@ -2419,6 +2483,7 @@ const postIdentityPayloadAt = (
         pureClassStage: parsePureClassStage(object['pureClassStage'], label),
         receipt,
         randomSymbiontStage,
+        ...(hasAdvisorIntelligenceFloorStage ? { advisorIntelligenceFloorStage } : {}),
         skillEligibilityStage,
         skillSelectionStage,
         statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
@@ -2499,14 +2564,16 @@ export interface RollValidationCursor {
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
-    | SymbiontAdvisorCheckpointReceipt;
+    | SymbiontAdvisorCheckpointReceipt
+    | AdvisorIntelligenceFloorRollReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
     | StatAssignmentCheckpointCommandRequest
     | SkillCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
-    | SymbiontAdvisorCheckpointCommandRequest;
+    | SymbiontAdvisorCheckpointCommandRequest
+    | AdvisorIntelligenceFloorRollCommandRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3117,17 +3184,20 @@ const validateStatRollHistory = (
     'randomSymbiontStage' in durablePayload
       ? (durablePayload as unknown as CreationWizardSymbiontPayload)
       : null;
-  const symbiontRandomReceiptIds =
-    symbiontPayload === null
-      ? []
-      : symbiontPayload.randomSymbiontStage.rollRecords
-          .filter((record) => record.request.payload.variant === 'ROLL')
-          .filter(() => durablePayload.raceAndMethodStage.diceInput?.value === 'AUTO')
-          .map((record) => record.receipt.receiptId);
+  const symbiontRandomReceiptIds = (symbiontPayload?.randomSymbiontStage?.rollRecords ?? [])
+    .filter((record) => record.request.payload.variant === 'ROLL')
+    .filter(() => durablePayload.raceAndMethodStage.diceInput?.value === 'AUTO')
+    .map((record) => record.receipt.receiptId);
+  const floorRandomReceiptIds =
+    symbiontPayload?.advisorIntelligenceFloorStage?.rollRecordOrNull &&
+    durablePayload.raceAndMethodStage.diceInput?.value === 'AUTO'
+      ? [symbiontPayload.advisorIntelligenceFloorStage.rollRecordOrNull.receipt.receiptId]
+      : [];
   if (
     !isDeepStrictEqual(durablePayload.randomReceiptIds, [
       ...expectedRandomReceiptIds,
       ...symbiontRandomReceiptIds,
+      ...floorRandomReceiptIds,
     ])
   ) {
     mismatches.push('randomReceiptIds roll provenance');
@@ -3892,6 +3962,41 @@ const validatePostIdentityPayload = (
       occupiedIds,
     }).cursor;
   }
+  const advisorIntelligenceFloorStage =
+    'advisorIntelligenceFloorStage' in durablePayload
+      ? durablePayload.advisorIntelligenceFloorStage
+      : null;
+  if (advisorIntelligenceFloorStage !== null) {
+    if (symbiontCatalog === undefined) {
+      throw new Error(`${label} advisor intelligence floor stage requires a symbiont catalog`);
+    }
+    if (skillEligibilityStage === null || statAssignmentStage === null) {
+      throw new Error(`${label} advisor intelligence floor stage lacks creation prerequisites`);
+    }
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateAdvisorIntelligenceFloorStageHistory(advisorIntelligenceFloorStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
   const randomStartPending =
@@ -3903,6 +4008,9 @@ const validatePostIdentityPayload = (
     randomSymbiontStage.advisorSkillRecordOrNull === null &&
     cursor.latestEnvelope.formId === 'CHR-017' &&
     durablePayload.nextStageEnvelope.formId === 'CHR-017';
+  const advisorFloorNavigation =
+    advisorIntelligenceFloorStage !== null &&
+    advisorIntelligenceFloorStage.rollRecordOrNull === null;
   if (!isDeepStrictEqual(durablePayload.receipt, cursor.latestReceipt)) {
     mismatches.push('top-level receipt/latest record');
   }
@@ -3912,7 +4020,10 @@ const validatePostIdentityPayload = (
   if (durablePayload.branchCacheHash !== durablePayload.receipt.result.branchCacheHash) {
     mismatches.push('branchCacheHash');
   }
-  if (durablePayload.nextStageEnvelope.formId !== durablePayload.receipt.result.nextFormId) {
+  if (
+    durablePayload.nextStageEnvelope.formId !== durablePayload.receipt.result.nextFormId &&
+    !advisorFloorNavigation
+  ) {
     mismatches.push('top-level receipt/destination form');
   }
   if (durablePayload.nextStageEnvelope.routeBindings[0].value !== localCharacter.localCharacterId) {
@@ -3932,9 +4043,9 @@ const validatePostIdentityPayload = (
     stateRevision: checkpoint.stateRevision,
   };
   const projectionRevisionMatches =
-    randomSymbiontStage !== null
+    randomSymbiontStage !== null || advisorFloorNavigation
       ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
-        (randomStartPending &&
+        ((randomStartPending || advisorFloorNavigation) &&
           previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
           currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
       : skillPresentationStage !== undefined &&
@@ -3974,6 +4085,10 @@ const validatePostIdentityPayload = (
     skillSelectionStage,
     randomSymbiontStage:
       'randomSymbiontStage' in durablePayload ? durablePayload.randomSymbiontStage : null,
+    advisorIntelligenceFloorStage:
+      'advisorIntelligenceFloorStage' in durablePayload
+        ? durablePayload.advisorIntelligenceFloorStage
+        : null,
     statRollStage,
     statAssignmentStage,
     receipt: durablePayload.receipt,
@@ -4072,13 +4187,11 @@ export function loadCreationWizardCheckpoint(
   const formId = skillPresentationStage.formId;
   const selectionSource = selection?.request.payload.sourceFormId;
   const formMatches =
-    formId === 'CHR-014'
-      ? durableFormId === 'CHR-013' && selection === null
-      : formId === 'CHR-013'
-        ? durableFormId === 'CHR-013' && selection === null
-        : (durableFormId === 'CHR-013' && selection === null) ||
-          (durableFormId === 'CHR-015' && selectionSource === 'CHR-014') ||
-          (durableFormId === 'CHR-017' && selectionSource === 'CHR-015');
+    formId === 'CHR-014' || formId === 'CHR-013'
+      ? hasSkillCardNavigationState(checkpoint)
+      : (durableFormId === 'CHR-013' && selection === null) ||
+        (durableFormId === 'CHR-015' && selectionSource === 'CHR-014') ||
+        (durableFormId === 'CHR-017' && selectionSource === 'CHR-015');
   if (!formMatches) {
     throw new Error(
       `localCharacter ${JSON.stringify(localCharacterId)} has inconsistent skill presentation form`,
@@ -4183,15 +4296,16 @@ function assertSkillCardNavigation(
   catalog: SkillStageCatalog,
 ): void {
   const currentFormId = checkpoint.skillPresentationStage?.formId;
+  const fromPartialSelection =
+    currentFormId === 'CHR-015' && checkpoint.skillSelectionStage !== null;
   if (
     checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
-    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
+    !hasSkillCardNavigationState(checkpoint) ||
     checkpoint.skillEligibilityStage === null ||
-    checkpoint.skillSelectionStage !== null ||
     checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER ||
     (formId === 'CHR-014'
-      ? currentFormId !== undefined && currentFormId !== 'CHR-013'
-      : currentFormId !== 'CHR-014') ||
+      ? currentFormId !== undefined && currentFormId !== 'CHR-013' && !fromPartialSelection
+      : currentFormId !== 'CHR-014' && !fromPartialSelection) ||
     (formId === 'CHR-014' &&
       (skillId === null ||
         !catalog.skills.some(
@@ -4281,12 +4395,26 @@ function assertSkillSelectionPresentationAdvance(
   wizardCheckpointId: string,
 ): void {
   const eligibility = checkpoint.skillEligibilityStage;
+  const selectionAuthority = checkpoint.skillSelectionStage ?? eligibility;
+  const presentation = checkpoint.skillPresentationStage;
+  const revisions = currentCreationWizardRevisions(checkpoint);
+  const sourceIsCurrent =
+    selectionAuthority === null
+      ? false
+      : presentation == null
+        ? isDeepStrictEqual(revisions, selectionAuthority.receipt.revisions)
+        : presentation.formId === 'CHR-013' &&
+          presentation.selectionRevision === checkpoint.receipt.result.draftRevision &&
+          presentation.projectionRevision === revisions.projectionRevision &&
+          selectionAuthority.receipt.revisions.actorVisibilityRevision ===
+            revisions.actorVisibilityRevision &&
+          selectionAuthority.receipt.revisions.stateRevision === revisions.stateRevision &&
+          revisions.projectionRevision >= selectionAuthority.receipt.revisions.projectionRevision;
   if (
     checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
-    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
     eligibility === null ||
-    checkpoint.skillSelectionStage !== null ||
-    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), eligibility.receipt.revisions) ||
+    !hasSkillCardNavigationState(checkpoint) ||
+    !sourceIsCurrent ||
     checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
   ) {
     throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
@@ -4304,6 +4432,7 @@ export function advanceCreationSkillSelectionProjection(
     loadCreationWizardCheckpoint(database, characterDraftId, catalog),
     wizardCheckpointId,
   );
+  let nextPresentation: SkillPresentationStage | undefined;
   const committed = commitLocalCharacterCheckpoint(
     database,
     characterDraftId,
@@ -4311,13 +4440,33 @@ export function advanceCreationSkillSelectionProjection(
     (update) => {
       const current = loadCreationWizardCheckpoint(database, characterDraftId, catalog);
       assertSkillSelectionPresentationAdvance(current, wizardCheckpointId);
-      return update(
+      nextPresentation =
+        current.skillPresentationStage === undefined
+          ? undefined
+          : createSkillPresentationStage(
+              'CHR-015',
+              characterDraftId,
+              null,
+              current.receipt.result.draftRevision,
+              current.localCharacter.projectionRevision + 1,
+            );
+      const result = update(
         { payloadJson: current.localCharacter.payloadJson },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
       );
+      if (nextPresentation !== undefined) {
+        writeLocalCharacterSkillPresentation(database, nextPresentation);
+      }
+      return result;
     },
   );
-  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint, catalog);
+  return validateDurableCreationWizardCheckpoint(
+    committed.result,
+    committed.checkpoint,
+    catalog,
+    undefined,
+    nextPresentation,
+  );
 }
 
 const rawCommandIds = (payloadJson: string): readonly string[] => {
@@ -4436,6 +4585,17 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
       }
     }
   }
+  const advisorIntelligenceFloorStage = object['advisorIntelligenceFloorStage'];
+  if (
+    advisorIntelligenceFloorStage !== null &&
+    typeof advisorIntelligenceFloorStage === 'object' &&
+    !Array.isArray(advisorIntelligenceFloorStage)
+  ) {
+    const record = (advisorIntelligenceFloorStage as Record<string, unknown>)['rollRecordOrNull'];
+    if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+      addRequestId((record as Record<string, unknown>)['request']);
+    }
+  }
   return ids;
 };
 
@@ -4512,16 +4672,19 @@ export function loadCreationWizardCommandByCommandId(
       ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
     ]) ?? [];
   const randomStage = durableCheckpoint.randomSymbiontStage;
+  const floorRecord = durableCheckpoint.advisorIntelligenceFloorStage?.rollRecordOrNull;
   const symbiontRecord =
-    randomStage === null
-      ? undefined
-      : [
-          ...randomStage.rollRecords,
-          ...(randomStage.bindingRecordOrNull === null ? [] : [randomStage.bindingRecordOrNull]),
-          ...(randomStage.advisorSkillRecordOrNull === null
-            ? []
-            : [randomStage.advisorSkillRecordOrNull]),
-        ].find(({ request }) => request.commandId === commandId);
+    floorRecord?.request.commandId === commandId
+      ? floorRecord
+      : randomStage === null
+        ? undefined
+        : [
+            ...randomStage.rollRecords,
+            ...(randomStage.bindingRecordOrNull === null ? [] : [randomStage.bindingRecordOrNull]),
+            ...(randomStage.advisorSkillRecordOrNull === null
+              ? []
+              : [randomStage.advisorSkillRecordOrNull]),
+          ].find(({ request }) => request.commandId === commandId);
   if (symbiontRecord !== undefined) {
     return {
       durableCheckpoint,
@@ -4573,6 +4736,11 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   checkpoint.randomSymbiontStage.advisorSkillRecordOrNull === null
     ? []
     : [checkpoint.randomSymbiontStage.advisorSkillRecordOrNull]),
+  ...(checkpoint.advisorIntelligenceFloorStage === null ||
+  checkpoint.advisorIntelligenceFloorStage === undefined ||
+  checkpoint.advisorIntelligenceFloorStage.rollRecordOrNull === null
+    ? []
+    : [checkpoint.advisorIntelligenceFloorStage.rollRecordOrNull]),
 ];
 
 const guardRejected = (): never => {
@@ -5076,6 +5244,10 @@ export const creationWizardDurableIds = (
       ...(checkpoint.randomSymbiontStage === null
         ? []
         : [...randomSymbiontStageIds(checkpoint.randomSymbiontStage)]),
+      ...(checkpoint.advisorIntelligenceFloorStage === null ||
+      checkpoint.advisorIntelligenceFloorStage === undefined
+        ? []
+        : [...advisorIntelligenceFloorStageIds(checkpoint.advisorIntelligenceFloorStage)]),
     ].filter((value): value is string => typeof value === 'string'),
   );
 

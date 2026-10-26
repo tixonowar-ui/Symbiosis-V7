@@ -1043,16 +1043,21 @@ const cardSummaries = (
   });
 };
 
+export function hasSkillCardNavigationState(checkpoint: DurableCreationWizardCheckpoint): boolean {
+  return (
+    (checkpoint.nextStageEnvelope.formId === 'CHR-013' &&
+      checkpoint.skillSelectionStage === null) ||
+    (checkpoint.nextStageEnvelope.formId === 'CHR-015' &&
+      checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-014')
+  );
+}
+
 export function deriveChr013SkillCatalogView(
   checkpoint: DurableCreationWizardCheckpoint,
   presentationCatalog: CreationSkillCatalog,
 ): Chr013SkillCatalogView {
   const stage = checkpoint.skillEligibilityStage;
-  if (
-    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
-    stage === null ||
-    checkpoint.skillSelectionStage !== null
-  ) {
+  if (stage === null || !hasSkillCardNavigationState(checkpoint)) {
     return guardRejected();
   }
   const derived = stage.derived;

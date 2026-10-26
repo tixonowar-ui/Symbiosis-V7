@@ -606,6 +606,147 @@ function decoderChr041Projection(
   };
 }
 
+const DECODER_THIEVERY_OPTION = {
+  bonusDomainScope: 'Кражи, замки, обыск, городская маскировка; разрешение исключено',
+  levelOptions: [{ slotCost: 1, targetBonus: 1 }],
+  missingSkillPenalty: { kind: 'NO_MISSING_SKILL_PENALTY' },
+  requirements: [],
+  skillId: 'THIEVERY',
+  skillLabel: 'Вор',
+} as const;
+
+function decoderManualFloorProjection(
+  options: {
+    readonly acknowledged?: boolean;
+    readonly commandId?: string | null;
+    readonly committed?: boolean;
+    readonly diceInputModeSnapshot?: 'AUTO' | 'MANUAL';
+    readonly suppressed?: boolean;
+  } = {},
+): JsonObject {
+  const suppressed = options.suppressed ?? true;
+  const committed = options.committed ?? false;
+  const acknowledged = options.acknowledged ?? false;
+  const selectedSkills = acknowledged
+    ? suppressed
+      ? [
+          { skillId: 'ACROBATICS', slotCost: 7, targetBonus: 6 },
+          { skillId: 'THIEVERY', slotCost: 1, targetBonus: 1 },
+        ]
+      : [{ skillId: 'ACROBATICS', slotCost: 5, targetBonus: 5 }]
+    : [];
+  const requiredSlotCount = suppressed ? 8 : 5;
+  const usedSlotCount = selectedSkills.reduce((sum, selected) => sum + selected.slotCost, 0);
+  const base = mutableProjection(decoderChr041Projection(selectedSkills));
+  delete base['randomSequenceId'];
+  const advisorCard = base['advisorCard'] as JsonObject;
+  const slots = base['advisorSlotsAndSkills'] as JsonObject;
+  return {
+    ...base,
+    acknowledged,
+    advisorCard: {
+      ...advisorCard,
+      advisorIPlus8: suppressed ? 16 : 12,
+      advisorWPlus8: suppressed ? 16 : 10,
+      effectsActive: !suppressed,
+    },
+    advisorIPlus8OrNull: suppressed ? 16 : 12,
+    advisorSlotsAndSkills: {
+      ...slots,
+      requiredSlotCount,
+      selectedSkills,
+      selectionValidation: decoderSelectionValidation(requiredSlotCount, usedSlotCount),
+      skillOptions: suppressed
+        ? [
+            {
+              ...DECODER_ACROBATICS_OPTION,
+              levelOptions: [
+                ...DECODER_ACROBATICS_OPTION.levelOptions,
+                { slotCost: 7, targetBonus: 6 },
+              ],
+            },
+            DECODER_THIEVERY_OPTION,
+          ]
+        : [DECODER_ACROBATICS_OPTION],
+    },
+    advisorWPlus8OrNull: suppressed ? 16 : 10,
+    commandId:
+      options.commandId === undefined
+        ? committed
+          ? 'manual-floor-b-command'
+          : null
+        : options.commandId,
+    compositionDraftRevision: 1,
+    diceInputModeSnapshot: options.diceInputModeSnapshot ?? 'MANUAL',
+    draftRevision: committed ? 10 : 9,
+    trogrSuppressionState: suppressed
+      ? {
+          kind: 'SUPPRESSED',
+          minimumIOrNull: committed ? 2 : null,
+          rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+          rollReceiptIdOrNull: committed ? 'manual-floor-b-receipt' : null,
+          rollRequestIdOrNull: 'manual-floor-pending-b-request',
+          suppressionBOrNull: committed ? 1 : null,
+        }
+      : { kind: 'NOT_SUPPRESSED' },
+  };
+}
+
+function decoderManualFloorReceipt(command: DecoderWorkflowCommand): CommandReceipt {
+  const payload = command.payload as JsonObject;
+  const characterDraftId = payload['characterDraftId'];
+  const wizardCheckpointId = payload['wizardCheckpointId'];
+  const advisorInstanceDraftId = payload['advisorInstanceDraftId'];
+  const compositionDraftRevision = payload['compositionDraftRevision'];
+  const draftRevision = payload['draftRevision'];
+  const pendingRollRequestId = payload['pendingRollRequestId'];
+  if (
+    typeof characterDraftId !== 'string' ||
+    typeof wizardCheckpointId !== 'string' ||
+    typeof advisorInstanceDraftId !== 'string' ||
+    typeof compositionDraftRevision !== 'number' ||
+    typeof draftRevision !== 'number' ||
+    typeof pendingRollRequestId !== 'string' ||
+    payload['manualFaceOrNull'] !== 2
+  ) {
+    throw new Error('invalid MANUAL intelligence floor command fixture');
+  }
+  return {
+    commandId: command.commandId,
+    receiptId: 'manual-floor-b-receipt',
+    result: {
+      advisorInstanceDraftId,
+      branchCacheHash: DECODER_EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: DECODER_BRANCH_UUID,
+      characterDraftId,
+      checkpointId: wizardCheckpointId,
+      checkpointOwnerId: characterDraftId,
+      checkpointRevision: 1,
+      compositionDraftRevision,
+      draftRevision: draftRevision + 1,
+      minimumI: 2,
+      nextFormId: 'CHR-041',
+      physicalRoll: {
+        kind: 'TROGR_SUPPRESSION_B',
+        mechanical: { dieSides: 20, rawFace: 2 },
+        rollReceiptId: 'manual-floor-b-receipt',
+        rollRequestId: pendingRollRequestId,
+      },
+      rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      suppressionB: 1,
+      teacherAbsorbed: false,
+      variant: 'TROGR_SUPPRESSION_B',
+    },
+    revisions: {
+      actorVisibilityRevision: command.expectedRevisions.actorVisibilityRevision,
+      projectionRevision: command.expectedRevisions.projectionRevision + 1,
+      stateRevision: command.expectedRevisions.stateRevision + 1,
+    },
+  };
+}
+
 function decoderChr019Projection(
   species: 'EEL' | 'ADVISER' = 'EEL',
   commandId = 'free-auto-eel-binding-command',
@@ -770,7 +911,11 @@ function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): D
     case 'CHR-013':
       return ['CHR-013::CTA::001', 'CHR-013::CTA::002'];
     case 'CHR-015':
-      return projection['selectionCheckpoint'] === 'EXACT' ? [] : ['CHR-015::CTA::003'];
+      return projection['selectionCheckpoint'] === 'EXACT'
+        ? []
+        : projection['selectionCheckpoint'] === 'PARTIAL'
+          ? ['CHR-015::CTA::003', 'CHR-015::CTA::002']
+          : ['CHR-015::CTA::003'];
     case 'CHR-002':
       return ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'];
     case 'CHR-017':
@@ -1487,6 +1632,65 @@ describe('SKILLS projection decoder and local draft', () => {
     },
   );
 
+  it('allows catalog return only for PARTIAL CHR-015 selections', async () => {
+    const partial = {
+      ...decoderChr015Projection(
+        [{ skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 }],
+        'card-add',
+      ),
+      selectionCheckpoint: 'PARTIAL',
+    };
+    const { connection, socket, states } = await connectDecoderFixture('CHR-015', partial, [
+      'CHR-015::CTA::003',
+      'CHR-015::CTA::002',
+    ]);
+    expect(connection.requestFormAction('CHR-015::CTA::002')).toEqual({ ok: true });
+    const requestText = socket.sent.at(-1);
+    if (requestText === undefined) throw new Error('missing partial catalog return');
+    const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
+    if (!request.ok || request.value.messageType !== 'navigation.form-action') {
+      throw new Error('partial catalog return must use navigation.form-action');
+    }
+    expect(request.value).toMatchObject({
+      actionKey: 'CHR-015::CTA::002',
+      sourceFormId: 'CHR-015',
+    });
+    socket.message(
+      checkedHostTextV2({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: request.value.navigationRequestId, reason: 'FORM_ACTION' },
+          base: projectionBase('CHR-013', DECODER_CHR_013_PROJECTION),
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        revisions: { ...REVISIONS, projectionRevision: REVISIONS.projectionRevision + 1 },
+      }),
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'CHR-013' },
+    });
+    for (const projection of [
+      decoderChr015Projection(),
+      decoderChr015Projection(
+        [
+          { skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 },
+          { skillId: 'SKILL_03', slotCost: 1, targetBonus: 1 },
+        ],
+        'final',
+      ),
+    ]) {
+      expect(
+        await decodeProjectionFixture('CHR-015', projection, ['CHR-015::CTA::002']),
+      ).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: '$.presentation.base.availableActionKeys' },
+      });
+    }
+  });
+
   it('keeps toggles wire-free and canonical, rejects unsigned candidates, and checkpoints only EXACT', async () => {
     const { connection, skillDrafts, socket, states } = await connectDecoderFixture(
       'CHR-015',
@@ -1612,6 +1816,33 @@ describe('RANDOM projection decoders and action keys', () => {
 
   it.each(cases)('accepts the exact %s player projection', async (formId, projection) => {
     expect(await decodeProjectionFixture(formId, projection)).toMatchObject({ kind: 'ready' });
+  });
+
+  it('accepts the future intelligence floor and rejects a substituted purpose', async () => {
+    const projection = mutableProjection(decoderChr041Projection()) as Record<string, JsonValue>;
+    projection['trogrSuppressionState'] = {
+      kind: 'SUPPRESSED',
+      minimumIOrNull: 2,
+      suppressionBOrNull: 1,
+      rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+      rollRequestIdOrNull: 'suppression-b-request',
+      rollReceiptIdOrNull: 'suppression-b-receipt',
+    };
+    expect(await decodeProjectionFixture('CHR-041', projection)).toMatchObject({ kind: 'ready' });
+    projection['trogrSuppressionState'] = {
+      kind: 'SUPPRESSED',
+      minimumIOrNull: 2,
+      suppressionBOrNull: 1,
+      rollPurpose: 'CURRENT_ADVISOR_I',
+      rollRequestIdOrNull: 'suppression-b-request',
+      rollReceiptIdOrNull: 'suppression-b-receipt',
+    };
+    expect(await decodeProjectionFixture('CHR-041', projection)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.trogrSuppressionState.rollPurpose',
+      },
+    });
   });
 
   it.each(cases)('rejects a missing required field in %s', async (formId, projection) => {
@@ -2132,6 +2363,276 @@ describe('RANDOM historic replay recovery', () => {
     expect(mismatch.harness.states.at(-1)).toMatchObject({
       kind: 'protocol-error',
       refusal: { path: '$.presentation.base.roleFilteredPayload.bindings' },
+    });
+  });
+});
+
+describe('MANUAL Advisor intelligence floor projection and transport', () => {
+  it('accepts pending and committed projections without a RANDOM identity', async () => {
+    expect(
+      await decodeProjectionFixture('CHR-041', decoderManualFloorProjection(), [
+        'CHR-041::CTA::004',
+      ]),
+    ).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        projection: {
+          compositionDraftRevision: 1,
+          diceInputModeSnapshot: 'MANUAL',
+          trogrSuppressionState: {
+            minimumIOrNull: null,
+            rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+            rollReceiptIdOrNull: null,
+            rollRequestIdOrNull: 'manual-floor-pending-b-request',
+            suppressionBOrNull: null,
+          },
+        },
+      },
+    });
+    expect(
+      await decodeProjectionFixture(
+        'CHR-041',
+        decoderManualFloorProjection({ acknowledged: true, committed: true }),
+      ),
+    ).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        availableActionKeys: [],
+        projection: {
+          acknowledged: true,
+          advisorSlotsAndSkills: {
+            selectedSkills: [
+              { skillId: 'ACROBATICS', slotCost: 7, targetBonus: 6 },
+              { skillId: 'THIEVERY', slotCost: 1, targetBonus: 1 },
+            ],
+          },
+          trogrSuppressionState: {
+            minimumIOrNull: 2,
+            rollReceiptIdOrNull: 'manual-floor-b-receipt',
+            suppressionBOrNull: 1,
+          },
+        },
+      },
+    });
+    expect(
+      await decodeProjectionFixture(
+        'CHR-041',
+        decoderManualFloorProjection({ suppressed: false }),
+        ['CHR-041::CTA::004'],
+      ),
+    ).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.availableActionKeys' },
+    });
+  });
+
+  it('sends one MANUAL face and restores its B receipt without another roll', async () => {
+    const harness = await connectDecoderFixture('CHR-041', decoderManualFloorProjection(), [
+      'CHR-041::CTA::004',
+    ]);
+    const { advisorDrafts, connection, socket, states } = harness;
+    expect(states.at(-1)).toMatchObject({ kind: 'ready' });
+    expect(advisorDrafts.at(-1)).toBeNull();
+    const wireCount = socket.sent.length;
+    expect(connection.requestFormAction('CHR-041::CTA::004', null).ok).toBe(false);
+    expect(socket.sent).toHaveLength(wireCount);
+    expect(connection.requestFormAction('CHR-041::CTA::004', 2)).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    expect(command.workflowCommandId).toBe('UI-CMD-CHAR-CREATION-ROLL-COMMIT');
+    expect(command.payload).toEqual({
+      advisorInstanceDraftId: 'free-advisor-instance',
+      characterDraftId: CHARACTER_DRAFT_ID,
+      compositionDraftRevision: 1,
+      draftRevision: 9,
+      manualFaceOrNull: 2,
+      pendingRollRequestId: 'manual-floor-pending-b-request',
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      variant: 'TROGR_SUPPRESSION_B',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(command.payload).not.toHaveProperty('randomSequenceId');
+
+    const receipt = decoderManualFloorReceipt(command);
+    const destination = decoderManualFloorProjection({
+      commandId: command.commandId,
+      committed: true,
+    });
+    const resumed = reconnectDecoderFixture(
+      harness,
+      'CHR-041',
+      destination,
+      receipt.revisions,
+      receipt,
+      ['CHR-041::CTA::001', 'CHR-041::CTA::002'],
+    );
+    const restored = states.at(-1);
+    if (restored?.kind !== 'ready') throw new Error('MANUAL B destination was not restored');
+    expect(restored.snapshot.projection).not.toHaveProperty('randomSequenceId');
+    expect(restored.snapshot).toMatchObject({
+      formId: 'CHR-041',
+      projection: {
+        commandId: command.commandId,
+        compositionDraftRevision: 1,
+        draftRevision: 10,
+        trogrSuppressionState: {
+          minimumIOrNull: 2,
+          rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+          rollReceiptIdOrNull: 'manual-floor-b-receipt',
+          rollRequestIdOrNull: 'manual-floor-pending-b-request',
+          suppressionBOrNull: 1,
+        },
+      },
+      revisions: receipt.revisions,
+    });
+    expect(restored.snapshot.availableActionKeys).not.toContain('CHR-041::CTA::004');
+    expect(resumed.sent).toHaveLength(1);
+  });
+
+  it('rejects a forged RANDOM identity in the B receipt', async () => {
+    const { connection, socket, states } = await connectDecoderFixture(
+      'CHR-041',
+      decoderManualFloorProjection(),
+      ['CHR-041::CTA::004'],
+    );
+    expect(connection.requestFormAction('CHR-041::CTA::004', 2)).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    const receipt = decoderManualFloorReceipt(command);
+    const forged = {
+      ...receipt,
+      result: { ...receipt.result, randomSequenceId: 'forged-random-sequence' },
+    };
+    socket.message(decoderTerminalText(forged));
+    expect(states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.receipt.result.randomSequenceId' },
+    });
+  });
+
+  it('rejects a changed B replay instead of replacing the durable result', async () => {
+    const { connection, socket, states } = await connectDecoderFixture(
+      'CHR-041',
+      decoderManualFloorProjection(),
+      ['CHR-041::CTA::004'],
+    );
+    expect(connection.requestFormAction('CHR-041::CTA::004', 2)).toEqual({ ok: true });
+    const command = decoderCommand(socket);
+    const receipt = decoderManualFloorReceipt(command);
+    socket.message(decoderTerminalText(receipt));
+    expect(states.at(-1)?.kind).toBe('ready');
+    const changed = {
+      ...structuredClone(receipt),
+      result: { ...receipt.result, minimumI: 16 },
+    };
+    const wireCount = socket.sent.length;
+    socket.message(decoderTerminalText(changed, true));
+    expect(states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.receipt.receiptId' },
+    });
+    expect(socket.sent).toHaveLength(wireCount + 1);
+  });
+
+  it('rejects mixed identities and malformed suppression fields', async () => {
+    const cases: readonly (readonly [string, (projection: Record<string, unknown>) => void])[] = [
+      [
+        'randomSequenceId',
+        (projection) => {
+          projection['randomSequenceId'] = 'forged-random-sequence';
+        },
+      ],
+      [
+        'compositionDraftRevision',
+        (projection) => {
+          delete projection['compositionDraftRevision'];
+        },
+      ],
+      [
+        'trogrSuppressionState.rollPurpose',
+        (projection) => {
+          delete objectValue(projection['trogrSuppressionState'], 'suppression')['rollPurpose'];
+        },
+      ],
+      [
+        'trogrSuppressionState.availabilityTrace',
+        (projection) => {
+          objectValue(projection['trogrSuppressionState'], 'suppression')['availabilityTrace'] = [];
+        },
+      ],
+      [
+        'trogrSuppressionState.rollRequestIdOrNull',
+        (projection) => {
+          objectValue(projection['trogrSuppressionState'], 'suppression')['rollRequestIdOrNull'] =
+            null;
+        },
+      ],
+      [
+        'trogrSuppressionState.suppressionBOrNull',
+        (projection) => {
+          objectValue(projection['trogrSuppressionState'], 'suppression')['rollReceiptIdOrNull'] =
+            'early-receipt';
+        },
+      ],
+      [
+        'iwRollReceiptIds',
+        (projection) => {
+          const ids = projection['iwRollReceiptIds'];
+          if (!Array.isArray(ids)) throw new Error('missing MANUAL I/W receipt IDs');
+          ids[0] = null;
+        },
+      ],
+    ];
+    for (const [path, mutate] of cases) {
+      const projection = mutableProjection(decoderManualFloorProjection());
+      mutate(projection);
+      expect(
+        await decodeProjectionFixture('CHR-041', projection as JsonObject, ['CHR-041::CTA::004']),
+        path,
+      ).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: `$.presentation.base.roleFilteredPayload.${path}` },
+      });
+    }
+    const random = mutableProjection(decoderChr041Projection());
+    random['compositionDraftRevision'] = 1;
+    expect(await decodeProjectionFixture('CHR-041', random as JsonObject)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.compositionDraftRevision',
+      },
+    });
+  });
+
+  it('rejects an I/W request that reuses its receipt ID', async () => {
+    const projection = mutableProjection(decoderManualFloorProjection());
+    const requests = projection['iwRollRequestIds'] as JsonValue[] | undefined;
+    const receipts = projection['iwRollReceiptIds'] as JsonValue[] | undefined;
+    if (!Array.isArray(requests) || !Array.isArray(receipts)) {
+      throw new Error('missing MANUAL I/W identities');
+    }
+    const requestId = requests[0];
+    if (typeof requestId !== 'string') throw new Error('missing first MANUAL I/W request ID');
+    receipts[0] = requestId;
+    expect(
+      await decodeProjectionFixture('CHR-041', projection as JsonObject, ['CHR-041::CTA::004']),
+    ).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.iwRollReceiptIds' },
+    });
+  });
+
+  it('rejects duplicated MANUAL I/W receipt identities', async () => {
+    const projection = mutableProjection(decoderManualFloorProjection());
+    const ids = projection['iwRollReceiptIds'];
+    if (!Array.isArray(ids) || typeof ids[0] !== 'string') {
+      throw new Error('missing MANUAL I/W receipt IDs');
+    }
+    ids[1] = ids[0];
+    expect(
+      await decodeProjectionFixture('CHR-041', projection as JsonObject, ['CHR-041::CTA::004']),
+    ).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.iwRollReceiptIds' },
     });
   });
 });

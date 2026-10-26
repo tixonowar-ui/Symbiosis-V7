@@ -61,29 +61,29 @@ const NO_SECTION = ['', ''] as const;
 export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.4',
-    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.3',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
+    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.4',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.4 |',
-    retired: '| Версия атласа | 1.3 |',
+    current: '| Версия атласа | 1.5 |',
+    retired: '| Версия атласа | 1.4 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-08-21 |',
-    retired: '',
+    current: '| Дата | 2026-10-26 |',
+    retired: '| Дата | 2026-08-21 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-transition-count',
-    current: '1680',
-    retired: '1677',
+    current: '1681',
+    retired: '1680',
     expected: 2,
     section: NO_SECTION,
   },
@@ -193,8 +193,9 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'advisor-visible-allowed',
     current:
+      'Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Зафиксировать бросок неснижаемого остатка интеллекта; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника.',
+    retired:
       'Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника.',
-    retired: '',
     expected: 1,
     section: CHR_041_SECTION,
   },
@@ -240,16 +241,18 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'advisor-coverage',
     current:
+      "{'formId': 'CHR-041', 'primaryActions': ['Зафиксировать броски I и W Советника', 'Зафиксировать бросок неснижаемого остатка интеллекта', 'Добавить или удалить допустимый навык Советника', 'Подтвердить навыки Советника'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-CREATION-ROLL-COMMIT', 'UI-CMD-CHAR-WIZARD-CHECKPOINT']}",
+    retired:
       "{'formId': 'CHR-041', 'primaryActions': ['Зафиксировать броски I и W Советника', 'Добавить или удалить допустимый навык Советника', 'Подтвердить навыки Советника'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-CREATION-ROLL-COMMIT', 'UI-CMD-CHAR-WIZARD-CHECKPOINT']}",
-    retired: '',
     expected: 2,
     section: NO_SECTION,
   },
   {
     id: 'advisor-form-qa',
     current:
+      'Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Зафиксировать бросок неснижаемого остатка интеллекта, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.',
+    retired:
       'Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.',
-    retired: '',
     expected: 1,
     section: NO_SECTION,
   },
@@ -402,16 +405,18 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'roll-command-guards',
     current:
+      'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.',
+    retired:
       'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.',
-    retired: '',
     expected: 9,
     section: NO_SECTION,
   },
   {
     id: 'roll-atomicity',
     current:
+      'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-041 TROGR_SUPPRESSION_B is one separate D20 with its own request/receipt and future minimum host intelligence, preserving both I/W and Advisor skills; CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.',
+    retired:
       'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.',
-    retired: '',
     expected: 2,
     section: NO_SECTION,
   },
@@ -584,6 +589,99 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   },
 ] as const;
 
+/** ADR 0052 pins the v1.5 companion and the separate future-minimum B-roll. */
+export const ATLAS_MARKDOWN_ADR0052_LITERALS = [
+  {
+    id: 'atlas-heading',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
+    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.4',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'atlas-version',
+    current: '| Версия атласа | 1.5 |',
+    retired: '| Версия атласа | 1.4 |',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'atlas-date',
+    current: '| Дата | 2026-10-26 |',
+    retired: '| Дата | 2026-08-21 |',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'atlas-transition-count',
+    current: '1681',
+    retired: '1680',
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-intelligence-floor-action',
+    current:
+      '| CHR-041::CTA::004 | Зафиксировать бросок неснижаемого остатка интеллекта | CHR-041 | UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request | workflow-command |',
+    retired: '',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-intelligence-floor-transitions',
+    current:
+      '| CHR-041 | Зафиксировать бросок неснижаемого остатка интеллекта | UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request [workflow-command] |',
+    retired: '',
+    expected: 2,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-visible-allowed',
+    current:
+      'Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Зафиксировать бросок неснижаемого остатка интеллекта; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника.',
+    retired:
+      'Разрешённые видимые действия/CTA именно этой формы: Зафиксировать броски I и W Советника; Добавить или удалить допустимый навык Советника; Подтвердить навыки Советника.',
+    expected: 1,
+    section: CHR_041_SECTION,
+  },
+  {
+    id: 'advisor-coverage',
+    current:
+      "{'formId': 'CHR-041', 'primaryActions': ['Зафиксировать броски I и W Советника', 'Зафиксировать бросок неснижаемого остатка интеллекта', 'Добавить или удалить допустимый навык Советника', 'Подтвердить навыки Советника'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-CREATION-ROLL-COMMIT', 'UI-CMD-CHAR-WIZARD-CHECKPOINT']}",
+    retired:
+      "{'formId': 'CHR-041', 'primaryActions': ['Зафиксировать броски I и W Советника', 'Добавить или удалить допустимый навык Советника', 'Подтвердить навыки Советника'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-CREATION-ROLL-COMMIT', 'UI-CMD-CHAR-WIZARD-CHECKPOINT']}",
+    expected: 2,
+    section: NO_SECTION,
+  },
+  {
+    id: 'advisor-form-qa',
+    current:
+      'Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Зафиксировать бросок неснижаемого остатка интеллекта, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.',
+    retired:
+      'Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.',
+    expected: 1,
+    section: NO_SECTION,
+  },
+  {
+    id: 'roll-command-guards',
+    current:
+      'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.',
+    retired:
+      'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.',
+    expected: 9,
+    section: NO_SECTION,
+  },
+  {
+    id: 'roll-atomicity',
+    current:
+      'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-041 TROGR_SUPPRESSION_B is one separate D20 with its own request/receipt and future minimum host intelligence, preserving both I/W and Advisor skills; CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.',
+    retired:
+      'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.',
+    expected: 2,
+    section: NO_SECTION,
+  },
+] as const;
+
 type JsonRecord = Readonly<Record<string, unknown>>;
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -727,7 +825,7 @@ export function validateAtlasMarkdownIdentityTextMirrors(
   return problems;
 }
 
-function markdownAdr0049Source(markdown: string, section: readonly [string, string]): string {
+function markdownAdrSource(markdown: string, section: readonly [string, string]): string {
   const [startMarker, endMarker] = section;
   if (startMarker === '') return markdown;
   const start = markdown.indexOf(startMarker);
@@ -736,19 +834,28 @@ function markdownAdr0049Source(markdown: string, section: readonly [string, stri
   return end === -1 ? '' : markdown.slice(start, end);
 }
 
-/** ADR 0049 adds a finite companion registry, not a general Markdown parser. */
-export function validateAtlasMarkdownAdr0049TextMirrors(
+interface MarkdownAdrLiteral {
+  readonly id: string;
+  readonly current: string;
+  readonly retired: string;
+  readonly expected: number;
+  readonly section: readonly [string, string];
+}
+
+function validateAtlasMarkdownTextMirrors(
   markdown: string,
+  literals: readonly MarkdownAdrLiteral[],
+  adr: 'ADR 0049' | 'ADR 0052',
 ): readonly AtlasValidationProblem[] {
   const problems: AtlasValidationProblem[] = [];
 
-  for (const literal of ATLAS_MARKDOWN_ADR0049_LITERALS) {
-    const source = markdownAdr0049Source(markdown, literal.section);
+  for (const literal of literals) {
+    const source = markdownAdrSource(markdown, literal.section);
     if (source === '') {
       problems.push({
         file: ATLAS_MARKDOWN_FILE,
         id: literal.id,
-        message: `ADR 0049 Markdown section ${JSON.stringify(literal.section)} is missing`,
+        message: `${adr} Markdown section ${JSON.stringify(literal.section)} is missing`,
       });
       continue;
     }
@@ -759,7 +866,7 @@ export function validateAtlasMarkdownAdr0049TextMirrors(
         problems.push({
           file: ATLAS_MARKDOWN_FILE,
           id: literal.id,
-          message: `retired ADR 0049 literal count is ${String(retiredCount)}, expected 0`,
+          message: `retired ${adr} literal count is ${String(retiredCount)}, expected 0`,
         });
       }
     }
@@ -770,13 +877,26 @@ export function validateAtlasMarkdownAdr0049TextMirrors(
         file: ATLAS_MARKDOWN_FILE,
         id: literal.id,
         message:
-          `current ADR 0049 literal count is ${String(currentCount)}, ` +
+          `current ${adr} literal count is ${String(currentCount)}, ` +
           `expected ${String(literal.expected)}`,
       });
     }
   }
 
   return problems;
+}
+
+/** ADR 0049 and ADR 0052 use finite companion registries, not a Markdown parser. */
+export function validateAtlasMarkdownAdr0049TextMirrors(
+  markdown: string,
+): readonly AtlasValidationProblem[] {
+  return validateAtlasMarkdownTextMirrors(markdown, ATLAS_MARKDOWN_ADR0049_LITERALS, 'ADR 0049');
+}
+
+export function validateAtlasMarkdownAdr0052TextMirrors(
+  markdown: string,
+): readonly AtlasValidationProblem[] {
+  return validateAtlasMarkdownTextMirrors(markdown, ATLAS_MARKDOWN_ADR0052_LITERALS, 'ADR 0052');
 }
 
 /**

@@ -4,8 +4,10 @@ import type { JsonObject } from '@shared/wire-protocol.js';
 
 import {
   calculateSkillSlotCost,
+  calculateTrogrSuppressionBonus,
   createSymbiontInteractionProjection,
   createSymbiontPlayerCatalog,
+  deriveAdvisorSuppressionMinimumI,
   deriveSymbiontModifierBreakdown,
   type RandomSymbiontStatus,
   type SymbiontCatalog,
@@ -21,6 +23,12 @@ import {
   symbiontPhysicalRollJson,
   type RandomSymbiontStage,
 } from '../creation-symbiont-contract.js';
+import {
+  advisorSuppressedByTrogr,
+  advisorTeacherAbsorbed,
+  ADVISOR_INTELLIGENCE_FLOOR_PURPOSE,
+} from '../creation-advisor-intelligence-floor-contract.js';
+import type { AdvisorIntelligenceFloorStage } from '../creation-advisor-intelligence-floor-contract.js';
 export { CHR_020_FORM_ID, CHR_041_FORM_ID } from '../creation-symbiont-contract.js';
 import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js';
 import type { CreationSkillCatalog } from '../creation-skill-catalog.js';
@@ -103,6 +111,7 @@ const SIDE_ACTION = 'CHR-020::CTA::003' as const satisfies ActionKey;
 const MONSTER_ACTION = 'CHR-020::CTA::004' as const satisfies ActionKey;
 const ADVISOR_CONFIRM_ACTION = 'CHR-041::CTA::001' as const satisfies ActionKey;
 const ADVISOR_DRAFT_ACTION = 'CHR-041::CTA::002' as const satisfies ActionKey;
+const ADVISOR_B_ROLL_ACTION = 'CHR-041::CTA::004' as const satisfies ActionKey;
 
 function stage(checkpoint: DurableCreationWizardCheckpoint): RandomSymbiontStage {
   const value = checkpoint.randomSymbiontStage;
@@ -312,7 +321,19 @@ export function projectChr041(
   catalog: SymbiontCatalog,
   presentationCatalog: CreationSkillCatalog,
   checkpointCapable: boolean,
+  rollCommitCapable = false,
 ): PresentedBaseForm {
+  const floor = checkpoint.advisorIntelligenceFloorStage;
+  if (floor !== null && floor !== undefined) {
+    return projectManualChr041(
+      floor,
+      checkpoint,
+      catalog,
+      presentationCatalog,
+      checkpointCapable,
+      rollCommitCapable,
+    );
+  }
   const current = stage(checkpoint);
   const resolved = resolveSymbiontStage(catalog, current);
   const advisor = resolved.advisorOrNull;
@@ -366,12 +387,98 @@ export function projectChr041(
               kind: 'SUPPRESSED',
               suppressionBOrNull: advisor.suppressionOrNull.suppressionBOrNull,
               minimumIOrNull: advisor.suppressionOrNull.minimumIOrNull,
+              rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+              rollRequestIdOrNull: advisor.suppressionOrNull.rollRequestIdOrNull,
+              rollReceiptIdOrNull: advisor.suppressionOrNull.rollReceiptIdOrNull,
             },
       acknowledged,
       randomSequenceId: current.randomSequenceId,
       wizardCheckpointId: checkpoint.checkpoint.checkpointId,
       draftRevision: checkpoint.receipt.result.draftRevision,
       commandId: current.advisorSkillRecordOrNull?.request.commandId ?? null,
+    },
+    checkpoint,
+  );
+}
+
+function projectManualChr041(
+  stage: AdvisorIntelligenceFloorStage,
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+  presentationCatalog: CreationSkillCatalog,
+  checkpointCapable: boolean,
+  rollCommitCapable: boolean,
+): PresentedBaseForm {
+  const stats = deriveCreationSkillStageResult(checkpoint, catalog.skillStage).skillStageStats;
+  const options = createAdvisorSkillOptions(catalog, presentationCatalog, stage.advisorIw, {
+    S: stats.S,
+    D: stats.D,
+    M: stats.M,
+    Z: stats.Z,
+    C: stats.C,
+  });
+  const selected = stage.advisorSkillRecordOrNull?.selectedSkills ?? [];
+  const acknowledged = stage.advisorSkillRecordOrNull !== null;
+  const pending = stage.pendingRollRequestIdOrNull !== null;
+  const record = stage.rollRecordOrNull;
+  const actions: ActionKey[] = [];
+  if (pending && rollCommitCapable) actions.push(ADVISOR_B_ROLL_ACTION);
+  if (!acknowledged && !pending) {
+    if (checkpointCapable) actions.push(ADVISOR_CONFIRM_ACTION);
+    actions.push(ADVISOR_DRAFT_ACTION);
+  }
+  const suppressed = advisorSuppressedByTrogr(stage.composition);
+  const teacherAbsorbed = advisorTeacherAbsorbed(stage.composition);
+  const suppressionB =
+    record === null ? null : calculateTrogrSuppressionBonus(record.physicalRoll.mechanical);
+  const minimumI =
+    suppressionB === null
+      ? null
+      : deriveAdvisorSuppressionMinimumI({ suppressionB, teacherAbsorbed });
+  return presentation(
+    CHR_041_FORM_ID,
+    CHR_041_ROUTE,
+    actions,
+    {
+      characterDraftId: checkpoint.localCharacter.localCharacterId,
+      advisorInstanceDraftId: stage.advisorInstanceDraftId,
+      advisorCard: {
+        speciesKey: 'ADVISER',
+        effectsActive: !suppressed,
+        advisorIPlus8: stage.advisorIw.I.value,
+        advisorWPlus8: stage.advisorIw.W.value,
+      },
+      iwRollRequestIds: stage.iwRollRequestIds,
+      iwRollReceiptIds: stage.iwRollReceiptIds,
+      advisorIPlus8OrNull: stage.advisorIw.I.value,
+      advisorWPlus8OrNull: stage.advisorIw.W.value,
+      advisorSlotsAndSkills: {
+        requiredSlotCount: options.requiredSlotCount,
+        skillOptions: advisorSkillOptionsJson(options),
+        selectedSkills: selected.map((selection) => ({
+          skillId: selection.skillId,
+          targetBonus: selection.targetBonus,
+          slotCost: calculateSkillSlotCost(selection.targetBonus),
+        })),
+        selectionValidation: advisorSelectionValidation(selected, options.requiredSlotCount),
+      },
+      trogrSuppressionState: suppressed
+        ? {
+            kind: 'SUPPRESSED',
+            rollPurpose: ADVISOR_INTELLIGENCE_FLOOR_PURPOSE,
+            rollRequestIdOrNull:
+              record?.physicalRoll.rollRequestId ?? stage.pendingRollRequestIdOrNull,
+            rollReceiptIdOrNull: record?.physicalRoll.rollReceiptId ?? null,
+            suppressionBOrNull: suppressionB,
+            minimumIOrNull: minimumI,
+          }
+        : { kind: 'NOT_SUPPRESSED' },
+      acknowledged,
+      compositionDraftRevision: stage.compositionDraftRevision,
+      diceInputModeSnapshot: stage.diceInputModeSnapshot,
+      wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+      draftRevision: checkpoint.receipt.result.draftRevision,
+      commandId: record?.request.commandId ?? null,
     },
     checkpoint,
   );
