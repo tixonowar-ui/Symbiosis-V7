@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-26`
-- Тестов: 1392 Vitest + 4 Playwright, все зелёные
+- Тестов: 1464 Vitest + 4 Playwright, все зелёные
 - `npm run verify` — проходит; `npm run build && npm run test:e2e` — 4/4
 
 ## Легенда
@@ -24,7 +24,7 @@
 | ----------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------- |
 | `tools/checksums`             | **готов**    | косвенно | SHA-256 манифест, гейт перед импортом. Проверен на срабатывание                           |
 | `tools/import/lib`            | **готов**    | 18       | чтение xlsx и zip, fail-closed JSON, детерминированная запись, медиа по якорям OOXML      |
-| `tools/import/atlas`          | **готов**    | 47       | Atlas v1.3; единственный полный `forms-by-id`; 1 242 actionKey/label, 3 renderer-индекса  |
+| `tools/import/atlas`          | **готов**    | 164      | Atlas v1.5; единственный полный `forms-by-id`; 1 247 actionKey/label, 3 renderer-индекса  |
 | `tools/import/rules`          | **готов**    | 11       | 739 карточек, 699 активных, 40 tombstone                                                  |
 | `tools/import/character`      | **готов**    | 12       | 1144 payload-сущности, 9 секций XP-контракта                                              |
 | `tools/import/items`          | **готов**    | 11       | 64 типа предметов, 64 иконки в `generated/media`                                          |
@@ -34,8 +34,8 @@
 | `tools/import/portraits`      | **готов**    | 9        | exact пакет из 6 портретов локального персонажа по ADR 0036                               |
 | `tools/import/symbiont-media` | **готов**    | 16       | 23 SpeciesKey, 23 арта и 23 изображения деревьев; exact anchors и PNG bytes               |
 | `tools/import/qna`            | **готов**    | 11       | 444 вопроса, 411 адресуемых кодов, алиас `Q-MON-089` по ADR 0017                          |
-| `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 287 строк, 9 паспортов; детерминизм на SQLite 3.53.4                       |
-| `tools/validate`              | **готов**    | 32       | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
+| `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 288 строк, 9 паспортов; детерминизм на SQLite 3.53.4                       |
+| `tools/validate`              | **готов**    | 130      | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
 | `tools/traceability`          | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм            |
 | `tools/package`               | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                  |
 
@@ -93,22 +93,28 @@ Replay/refresh/reconnect/restart и historic recovery сохраняют
 sequence/receipts без нового seed или sampler. Web рисует все четыре формы
 random slice и local drafts; четыре реальных Playwright-сценария подтверждают
 FREE EEL, UNITED ADVISER и eligible/ineligible `CHR-014` через production dist и
-Fastify+WS. Ручная `CHR-018` и следующие journey states остаются за пределами
-среза.
+Fastify+WS. #147 добавляет отдельный будущий минимум интеллекта: RANDOM records
+не изменились, MANUAL получил B-specific stage с host-signed composition, двумя
+I/W и exact-fill навыков. Один addressed B request/receipt восстанавливается
+после replay/refresh/reconnect/restart/SQLite reopen без нового sampler;
+подтверждение навыков до B блокируется. Web строго различает RANDOM/MANUAL и
+показывает назначение и результат без seed/RNG state. Host+SQLite fixture не
+является playable manual composition: editor, `CHR-018`, `CHR-042`, I/W transport
+и exact-fill skill transport остаются в #145, equipment — в #146.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                     | Веха |
-| ---------------------------- | ------------ | --------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                 | M4   |
-| `src/domain/rules`           | **частично** | rolls, stats, skills, random sequence/composition/Advisor                   | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет               | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random checkpoint, library, identity               | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0004`: checkpoint, device identity, skill presentation | M2   |
-| `src/host`                   | **частично** | identity и creation journey до actionless CHR-019 random slice              | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–017/019/020/028/036/041 exact slice                | M4   |
-| `src/web`                    | **частично** | recovery, stats, skills, random symbiont UI и 4 Playwright-сценария         | M5   |
-| `src/web/renderer`           | **частично** | 33 формы: 11 APP и 22 CHR; остальные fail-closed                            | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати двух CHR                  | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                                 | Веха |
+| ---------------------------- | ------------ | ------------------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                             | M4   |
+| `src/domain/rules`           | **частично** | rolls, stats, skills, random sequence/composition/Advisor                                               | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                           | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random checkpoint, library, identity                                           | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0004`: checkpoint, device identity, skill presentation                             | M2   |
+| `src/host`                   | **частично** | identity и creation journey до actionless CHR-019 random slice; MANUAL B fixture, не composition editor | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–017/019/020/028/036/041 exact slice                                            | M4   |
+| `src/web`                    | **частично** | recovery, stats, skills, random symbiont UI, MANUAL B decoder/presentation и 4 Playwright-сценария      | M5   |
+| `src/web/renderer`           | **частично** | 33 формы: 11 APP и 22 CHR; остальные fail-closed                                                        | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати двух CHR                                              | M6   |
 
 ## generated/ — вывод конвейера
 
