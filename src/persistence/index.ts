@@ -3,6 +3,11 @@ export type { DeviceBindingsInvalidator, DeviceId } from './device-identity.js';
 export { openPersistenceDatabase } from './database.js';
 export { applyMigrations } from './migrations/index.js';
 export {
+  readLocalCharacterSkillPresentation,
+  writeLocalCharacterSkillPresentation,
+} from './skill-presentation.js';
+export type { SkillPresentationStage } from './skill-presentation.js';
+export {
   advanceRevisions,
   commitLocalCharacterCheckpoint,
   commitNewLocalCharacterCheckpoint,

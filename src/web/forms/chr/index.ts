@@ -1,6 +1,6 @@
 import type { FormId } from '@generated/types/atlas.js';
 
-/** Issues #62, #97, #110, #111, #120, #122 and #126 implement the wizard through skills. */
+/** Issues #62, #97, #110, #111, #120, #122, #126 and #144 implement the wizard through skills. */
 export const CHR_FORM_IDS = [
   'CHR-001',
   'CHR-010',
@@ -18,6 +18,7 @@ export const CHR_FORM_IDS = [
   'CHR-011',
   'CHR-012',
   'CHR-013',
+  'CHR-014',
   'CHR-015',
   'CHR-017',
   'CHR-019',

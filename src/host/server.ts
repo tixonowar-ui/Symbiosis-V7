@@ -20,6 +20,8 @@ import {
   WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
 import type {
+  AddressableRouteIntentV2Message,
+  AddressableRouteRefusalV2Message,
   ClientToHostMessage,
   ClientToHostV2Message,
   CommandRefusalMessage,
@@ -52,6 +54,7 @@ import { createIdentityDraftRuntime } from './identity-draft.js';
 import type { IdentityDraftRuntime } from './identity-draft.js';
 import { loadCreationDecisionConsequenceCatalog } from './creation-decision-consequence-catalog.js';
 import { loadCreationSkillCatalog } from './creation-skill-catalog.js';
+import { deriveChr014SkillCardView } from './creation-skill-card.js';
 import {
   deriveChr013SkillCatalogView,
   deriveChr015SkillSelectionView,
@@ -80,6 +83,8 @@ import {
 } from './creation-symbiont-contract.js';
 import type { CreationRollCommitCommandRequest } from './creation-set-decide.js';
 import {
+  advanceCreationSkillCardPresentation,
+  advanceCreationSkillCatalogPresentation,
   advanceCreationSkillSelectionProjection,
   advanceCreationWizardProjection,
   commitCreationSetDecide,
@@ -167,6 +172,11 @@ import {
   CHR_013_CONTINUE_ACTION_KEY,
   CHR_013_FORM_ID,
   CHR_013_ROUTE,
+  CHR_014_ACTION_KEYS,
+  CHR_014_FORM_ID,
+  CHR_014_READ_ONLY_ACTION_KEYS,
+  CHR_014_RETURN_ACTION_KEY,
+  CHR_014_ROUTE,
   CHR_015_CHECKPOINTED_ACTION_KEYS,
   CHR_015_FORM_ID,
   CHR_015_INITIAL_ACTION_KEYS,
@@ -195,6 +205,7 @@ import {
   projectInitialChr036,
   projectChr012,
   projectChr013,
+  projectChr014,
   projectChr015,
 } from './projections/chr.js';
 import {
@@ -270,6 +281,7 @@ interface ConfirmedNavigationContext {
     | typeof CHR_011_FORM_ID
     | typeof CHR_012_FORM_ID
     | typeof CHR_013_FORM_ID
+    | typeof CHR_014_FORM_ID
     | typeof CHR_015_FORM_ID
     | typeof CHR_001_FORM_ID
     | typeof CHR_010_FORM_ID
@@ -289,6 +301,15 @@ type NavigationJournal = Map<
     readonly nextLayer: ActiveCreationLayer | undefined;
     readonly request: FormActionIntentV2Message;
     readonly terminal: FormActionTerminal;
+  }
+>;
+type AddressableRouteTerminal = AddressableRouteRefusalV2Message | ProjectionSnapshotV2Message;
+type AddressableNavigationJournal = Map<
+  string,
+  {
+    readonly nextContext: ConfirmedNavigationContext | undefined;
+    readonly request: AddressableRouteIntentV2Message;
+    readonly terminal: AddressableRouteTerminal;
   }
 >;
 interface ConnectionNavigation {
@@ -316,6 +337,7 @@ interface NavigationDependencies {
   >;
   readonly creationSkillCatalog: Awaited<ReturnType<typeof loadCreationSkillCatalog>>;
   readonly database: HostServerConfig['database'];
+  readonly addressableJournal: AddressableNavigationJournal;
   readonly journal: NavigationJournal;
   readonly identityDraft: IdentityDraftRuntime;
   readonly identitySessions: Map<string, ConfirmedNavigationContext>;
@@ -1149,6 +1171,72 @@ function creationSkillSelectionNavigation(
   };
 }
 
+function creationSkillCatalogNavigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): NavigationSuccess | undefined {
+  if (
+    message.actionKey !== CHR_014_RETURN_ACTION_KEY ||
+    current.formId !== CHR_014_FORM_ID ||
+    current.entityLocalCharacterId === null ||
+    connection.activeLayer !== null
+  ) {
+    return undefined;
+  }
+  let checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    current.entityLocalCharacterId,
+    dependencies.skillStageCatalog,
+    dependencies.symbiontCatalog,
+  );
+  if (
+    checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID ||
+    checkpoint.skillEligibilityStage === null ||
+    checkpoint.skillSelectionStage !== null ||
+    checkpoint.skillPresentationStage?.formId !== CHR_014_FORM_ID ||
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
+    connection.current !== current ||
+    !confirmedPlayerContext(current, dependencies)
+  ) {
+    return undefined;
+  }
+  const draftRevision = checkpoint.receipt.result.draftRevision;
+  checkpoint = advanceCreationSkillCatalogPresentation(
+    dependencies.database,
+    current.entityLocalCharacterId,
+    checkpoint.checkpoint.checkpointId,
+    dependencies.skillStageCatalog,
+  );
+  const after = currentCreationWizardRevisions(checkpoint);
+  if (
+    after.actorVisibilityRevision !== before.actorVisibilityRevision ||
+    after.stateRevision !== before.stateRevision ||
+    after.projectionRevision !== before.projectionRevision + 1 ||
+    checkpoint.receipt.result.draftRevision !== draftRevision
+  ) {
+    throw new Error('CHR-014 safe return changed selection or non-projection revisions');
+  }
+  return {
+    nextContext: creationWizardContext(connection, dependencies, checkpoint),
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        checkpoint,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+      ),
+      'player',
+      after,
+    ),
+  };
+}
+
 function creationSymbiontRollNavigation(
   message: FormActionIntentV2Message,
   current: ConfirmedPlayerContext,
@@ -1225,7 +1313,16 @@ function creationSymbiontRollNavigation(
 
 function inferredCreationSkillPresentationFormId(
   checkpoint: DurableCreationWizardCheckpoint,
-): typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID | typeof CHR_020_FORM_ID | undefined {
+):
+  | typeof CHR_013_FORM_ID
+  | typeof CHR_014_FORM_ID
+  | typeof CHR_015_FORM_ID
+  | typeof CHR_020_FORM_ID
+  | undefined {
+  const signedPresentation = checkpoint.skillPresentationStage;
+  if (signedPresentation !== undefined && signedPresentation !== null) {
+    return signedPresentation.formId;
+  }
   if (checkpoint.nextStageEnvelope.formId === CHR_017_FORM_ID) {
     const stage = checkpoint.randomSymbiontStage;
     if (stage === null) return CHR_015_FORM_ID;
@@ -1279,6 +1376,7 @@ function creationWizardBase(
 ): PresentedBaseForm {
   const { characterDraftId, wizardCheckpointId } = checkpoint.identityStage.request.payload;
   const draftRevision = checkpoint.receipt.result.draftRevision;
+  const signedPresentation = checkpoint.skillPresentationStage;
   const routeBindings = checkpoint.nextStageEnvelope.routeBindings;
   const durableFormId = checkpoint.nextStageEnvelope.formId;
   const presentationFormId =
@@ -1287,8 +1385,10 @@ function creationWizardBase(
     durableFormId;
   if (
     (presentationFormId === CHR_013_FORM_ID && durableFormId !== CHR_013_FORM_ID) ||
+    (presentationFormId === CHR_014_FORM_ID && durableFormId !== CHR_013_FORM_ID) ||
     (presentationFormId === CHR_015_FORM_ID &&
       durableFormId !== CHR_013_FORM_ID &&
+      durableFormId !== 'CHR-015' &&
       durableFormId !== 'CHR-017')
   ) {
     throw new Error(`durable ${durableFormId} cannot present requested ${presentationFormId}`);
@@ -1447,12 +1547,39 @@ function creationWizardBase(
         routeBindings,
         routeTemplate: CHR_013_ROUTE,
       };
+    case CHR_014_FORM_ID: {
+      if (signedPresentation === undefined || signedPresentation === null) {
+        throw new Error('durable CHR-014 lacks its host-signed presentation');
+      }
+      const skillId = signedPresentation.routeBindings[1]?.value;
+      if (typeof skillId !== 'string') throw new Error('durable CHR-014 lacks its skillId binding');
+      const card = deriveChr014SkillCardView(
+        deriveChr013SkillCatalogView(checkpoint, creationSkillCatalog),
+        (checkpoint.skillSelectionStage?.derived.selectedSkills ?? []).map(
+          ({ skillKey, targetBonus }) => ({ skillId: skillKey, targetBonus }),
+        ),
+        skillId,
+      );
+      return {
+        availableActionKeys:
+          card.eligibility === 'ELIGIBLE' &&
+          card.levelsAndBonuses.length > 0 &&
+          capabilities.checkpoint
+            ? CHR_014_ACTION_KEYS
+            : CHR_014_READ_ONLY_ACTION_KEYS,
+        formId: CHR_014_FORM_ID,
+        formType: 'screen',
+        roleFilteredPayload: projectChr014(card),
+        routeBindings: signedPresentation.routeBindings,
+        routeTemplate: signedPresentation.routeTemplate,
+      };
+    }
     case CHR_015_FORM_ID:
       return {
         availableActionKeys:
-          checkpoint.skillSelectionStage === null
-            ? CHR_015_INITIAL_ACTION_KEYS
-            : CHR_015_CHECKPOINTED_ACTION_KEYS,
+          checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-015'
+            ? CHR_015_CHECKPOINTED_ACTION_KEYS
+            : CHR_015_INITIAL_ACTION_KEYS,
         formId: CHR_015_FORM_ID,
         formType: 'screen',
         roleFilteredPayload: projectChr015(
@@ -1538,6 +1665,191 @@ function handleIdentityDraftReplace(
     };
   }
   sendCheckedV3(socket, terminal, dependencies.vocabulary);
+}
+
+function addressableRouteRefusal(
+  message: AddressableRouteIntentV2Message,
+  refusal: AddressableRouteRefusalV2Message['refusal'],
+  revisions: RevisionVector,
+): AddressableRouteRefusalV2Message {
+  return {
+    messageType: 'navigation.addressable-route.refusal',
+    navigationRequestId: message.navigationRequestId,
+    presentationUnchanged: true,
+    protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+    refusal,
+    revisions,
+  };
+}
+
+function handleAddressableRoute(
+  socket: WebSocket,
+  message: AddressableRouteIntentV2Message,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): void {
+  const known = dependencies.addressableJournal.get(message.navigationRequestId);
+  if (known !== undefined) {
+    if (isDeepStrictEqual(known.request, message)) {
+      if (!connection.sessionEstablished) {
+        sendCheckedV2(
+          socket,
+          addressableRouteRefusal(
+            message,
+            { code: 'NAVIGATION_UNAVAILABLE' },
+            checkedRevisions(dependencies.readRevisions()),
+          ),
+          dependencies.vocabulary,
+        );
+        return;
+      }
+      if (
+        known.nextContext !== undefined &&
+        !deviceIdentityMatches(dependencies, known.nextContext.deviceId)
+      ) {
+        sendCheckedV2(
+          socket,
+          addressableRouteRefusal(
+            message,
+            { code: 'NAVIGATION_UNAVAILABLE' },
+            checkedRevisions(dependencies.readRevisions()),
+          ),
+          dependencies.vocabulary,
+        );
+        return;
+      }
+      const actual = currentNavigationRevisions(connection, dependencies);
+      if (known.nextContext !== undefined && isDeepStrictEqual(known.terminal.revisions, actual)) {
+        adoptNavigationContext(connection, dependencies, known.nextContext);
+      }
+      sendCheckedV2(socket, known.terminal, dependencies.vocabulary);
+    } else {
+      sendCheckedV2(
+        socket,
+        addressableRouteRefusal(
+          message,
+          { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' },
+          currentNavigationRevisions(connection, dependencies),
+        ),
+        dependencies.vocabulary,
+      );
+    }
+    return;
+  }
+
+  const finish = (
+    terminal: AddressableRouteTerminal,
+    nextContext?: ConfirmedNavigationContext,
+  ): void => {
+    dependencies.addressableJournal.set(message.navigationRequestId, {
+      nextContext,
+      request: message,
+      terminal,
+    });
+    if (nextContext !== undefined) adoptNavigationContext(connection, dependencies, nextContext);
+    sendCheckedV2(socket, terminal, dependencies.vocabulary);
+  };
+  const revisions = currentNavigationRevisions(connection, dependencies);
+  if (message.expectedProjectionRevision !== revisions.projectionRevision) {
+    finish(
+      addressableRouteRefusal(
+        message,
+        {
+          actualProjectionRevision: revisions.projectionRevision,
+          code: 'STALE_PROJECTION',
+          expectedProjectionRevision: message.expectedProjectionRevision,
+        },
+        revisions,
+      ),
+    );
+    return;
+  }
+  const current = connection.current;
+  const binding = message.bindings[0];
+  if (
+    current === null ||
+    !connection.sessionEstablished ||
+    current.formId !== CHR_013_FORM_ID ||
+    current.entityLocalCharacterId === null ||
+    connection.activeLayer !== null ||
+    !confirmedPlayerContext(current, dependencies)
+  ) {
+    finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    return;
+  }
+  if (
+    message.routeTemplate !== CHR_014_ROUTE ||
+    message.bindings.length !== 1 ||
+    binding?.parameterIndex !== 1 ||
+    binding.source !== 'client-selected' ||
+    binding.value.length === 0
+  ) {
+    finish(addressableRouteRefusal(message, { code: 'INVALID_BINDINGS' }, revisions));
+    return;
+  }
+  const skillId = binding.value;
+  const checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    current.entityLocalCharacterId,
+    dependencies.skillStageCatalog,
+    dependencies.symbiontCatalog,
+  );
+  if (
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), revisions) ||
+    checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID ||
+    checkpoint.skillEligibilityStage === null ||
+    checkpoint.skillSelectionStage !== null
+  ) {
+    finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    return;
+  }
+  if (
+    !dependencies.creationSkillCatalog.selectableSkills.some((skill) => skill.skillId === skillId)
+  ) {
+    finish(addressableRouteRefusal(message, { code: 'INVALID_BINDINGS' }, revisions));
+    return;
+  }
+  let committed: DurableCreationWizardCheckpoint;
+  try {
+    committed = advanceCreationSkillCardPresentation(
+      dependencies.database,
+      current.entityLocalCharacterId,
+      checkpoint.checkpoint.checkpointId,
+      skillId,
+      dependencies.skillStageCatalog,
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof CreationSetDecideApplicationError)) throw error;
+    finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    return;
+  }
+  const after = currentCreationWizardRevisions(committed);
+  if (
+    after.actorVisibilityRevision !== revisions.actorVisibilityRevision ||
+    after.stateRevision !== revisions.stateRevision ||
+    after.projectionRevision !== revisions.projectionRevision + 1 ||
+    committed.receipt.result.draftRevision !== checkpoint.receipt.result.draftRevision
+  ) {
+    throw new Error('CHR-014 route-open changed more than the projection revision');
+  }
+  const nextContext = creationWizardContext(connection, dependencies, committed);
+  finish(
+    projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        committed,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+      ),
+      'player',
+      after,
+      'ADDRESSABLE_ROUTE',
+    ),
+    nextContext,
+  );
 }
 
 function handleFormAction(
@@ -1741,6 +2053,21 @@ function handleFormAction(
         confirmedPlayerContext(current, dependencies)
       ) {
         success = app002Navigation(message, current, revisions, dependencies);
+      }
+      break;
+    case CHR_014_RETURN_ACTION_KEY:
+      if (
+        action.to === CHR_013_FORM_ID &&
+        current.formId === CHR_014_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = creationSkillCatalogNavigation(
+          message,
+          current,
+          revisions,
+          connection,
+          dependencies,
+        );
       }
       break;
     case CHR_013_CONTINUE_ACTION_KEY:
@@ -2497,7 +2824,9 @@ function handleCommandRequest(
           ? CHR_041_FORM_ID
           : request.payload.sourceFormId === 'CHR-012'
             ? CHR_012_FORM_ID
-            : CHR_015_FORM_ID;
+            : request.payload.sourceFormId === 'CHR-014'
+              ? CHR_014_FORM_ID
+              : CHR_015_FORM_ID;
     if (
       current === null ||
       current.identityDraftScope !== null ||
@@ -2535,6 +2864,7 @@ function handleCommandRequest(
     if (
       !isDeepStrictEqual(finalRevisions, revisions) ||
       connection.current !== current ||
+      connection.current.formId !== expectedFormId ||
       !confirmedPlayerContext(current, dependencies) ||
       !connection.executableWorkflowCommandIds.has(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
     ) {
@@ -2808,6 +3138,30 @@ function loadAcknowledgedRandomDestination(
   return candidates[0];
 }
 
+function loadAcknowledgedSkillDestination(
+  dependencies: NavigationDependencies,
+): DurableCreationWizardCheckpoint | undefined {
+  const candidates = listLocalCharacters(dependencies.database)
+    .filter(
+      (entry) =>
+        entry.lifecycleState === 'DRAFT' && entry.payloadJson.includes('"skillEligibilityStage"'),
+    )
+    .map((entry) =>
+      loadCreationWizardCheckpoint(
+        dependencies.database,
+        entry.localCharacterId,
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+      ),
+    )
+    .filter(
+      (checkpoint) =>
+        checkpoint.skillEligibilityStage !== null && checkpoint.randomSymbiontStage === null,
+    );
+  if (candidates.length > 1) return undefined;
+  return candidates[0];
+}
+
 function handleReconnectV2(
   socket: WebSocket,
   message: Extract<ClientToHostV2Message, { readonly messageType: 'session.reconnect' }>,
@@ -2875,6 +3229,12 @@ function handleReconnectV2(
     replayDestination === undefined && restored === undefined
       ? loadAcknowledgedRandomDestination(dependencies)
       : undefined;
+  const acknowledgedSkillDestination =
+    replayDestination === undefined &&
+    restored === undefined &&
+    acknowledgedRandomDestination === undefined
+      ? loadAcknowledgedSkillDestination(dependencies)
+      : undefined;
   let base: PresentedBaseForm;
   let nextContext: ConfirmedNavigationContext;
   let projectionRole: 'player' | null;
@@ -2903,6 +3263,18 @@ function handleReconnectV2(
     nextContext = creationWizardContext(connection, dependencies, acknowledgedRandomDestination);
     projectionRole = 'player';
     revisions = currentCreationWizardRevisions(acknowledgedRandomDestination);
+  } else if (acknowledgedSkillDestination !== undefined) {
+    base = creationWizardBase(
+      acknowledgedSkillDestination,
+      creationCapabilities,
+      dependencies.skillStageCatalog,
+      dependencies.symbiontCatalog,
+      dependencies.creationDecisionConsequenceCatalog,
+      dependencies.creationSkillCatalog,
+    );
+    nextContext = creationWizardContext(connection, dependencies, acknowledgedSkillDestination);
+    projectionRole = 'player';
+    revisions = currentCreationWizardRevisions(acknowledgedSkillDestination);
   } else if (
     restored?.entityLocalCharacterId !== null &&
     restored?.entityLocalCharacterId !== undefined &&
@@ -2920,6 +3292,7 @@ function handleReconnectV2(
       restored.formId === CHR_011_FORM_ID ||
       restored.formId === CHR_012_FORM_ID ||
       restored.formId === CHR_013_FORM_ID ||
+      restored.formId === CHR_014_FORM_ID ||
       restored.formId === CHR_015_FORM_ID ||
       restored.formId === CHR_017_FORM_ID ||
       restored.formId === CHR_019_FORM_ID ||
@@ -3063,9 +3436,8 @@ function handleClientMessageV2(
       handleFormAction(socket, message, connection, dependencies);
       return;
     case 'navigation.addressable-route':
-      throw new Error(
-        `wire v2 ${message.messageType} is unavailable in the implemented navigation slice`,
-      );
+      handleAddressableRoute(socket, message, connection, dependencies);
+      return;
   }
 }
 
@@ -3250,6 +3622,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     creationDecisionConsequenceCatalog,
     creationSkillCatalog,
     database: config.database,
+    addressableJournal: new Map(),
     identityDraft: createIdentityDraftRuntime(new Set(LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS)),
     identitySessions: new Map(),
     journal: new Map(),

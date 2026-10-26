@@ -4,6 +4,7 @@ import type { ReactElement } from 'react';
 import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-character-portraits.js';
 
 import { CHARACTER_ART_ACCEPT, characterArtFromFile } from './character-art.js';
+import { availableFormActions } from './forms/index.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
@@ -11,6 +12,7 @@ import type {
   App001Projection,
   CharacterCreationChoiceDraft,
   CharacterCreationRollDraft,
+  CharacterSkillCardDraft,
   CharacterSkillSelectionDraft,
   CharacterStatAssignmentDraft,
   CharacterSetDecisionProjection,
@@ -23,6 +25,7 @@ import type {
   Chr011Projection,
   Chr012Projection,
   Chr013Projection,
+  Chr014Projection,
   Chr015Projection,
   Chr016Projection,
   ConfirmedPresentationLayer,
@@ -954,12 +957,15 @@ function StatBreakdownFields({
 }
 
 function SkillCatalogFields({
+  onOpenSkill,
   snapshot,
 }: {
+  readonly onOpenSkill: (skillId: string) => void;
   readonly snapshot: ConfirmedProjectionSnapshot;
 }): ReactElement | null {
   if (snapshot.formId !== 'CHR-013') return null;
   const projection = snapshot.projection as Chr013Projection;
+  const openLabel = availableFormActions('CHR-013', ['CHR-013::CTA::001'])[0]!.label;
   return (
     <section aria-labelledby="chr-013-catalog-title" data-skill-catalog>
       <h2 id="chr-013-catalog-title">Каталог стартовых навыков</h2>
@@ -1025,9 +1031,144 @@ function SkillCatalogFields({
                 </li>
               ))}
             </ul>
+            <button
+              type="button"
+              data-skill-card-open={card.skillId}
+              onClick={() => onOpenSkill(card.skillId)}
+            >
+              {openLabel}
+            </button>
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+function SkillCardFields({
+  draft,
+  onLevelChange,
+  snapshot,
+}: {
+  readonly draft: CharacterSkillCardDraft | null;
+  readonly onLevelChange: (targetBonus: number | null) => void;
+  readonly snapshot: ConfirmedProjectionSnapshot;
+}): ReactElement | null {
+  if (snapshot.formId !== 'CHR-014') return null;
+  const projection = snapshot.projection as Chr014Projection;
+  const signedLevel = projection.levelsAndBonuses.find(
+    ({ targetBonus }) => targetBonus === draft?.targetBonus,
+  );
+  const selectable =
+    projection.eligibility === 'ELIGIBLE' && projection.levelsAndBonuses.length > 0;
+  return (
+    <section
+      aria-labelledby="chr-014-card-title"
+      data-skill-card={projection.skillId}
+      data-skill-card-eligibility={projection.eligibility}
+    >
+      <h2 id="chr-014-card-title">Карточка навыка</h2>
+      <h3>{projection.skillLabel}</h3>
+      <p data-skill-card-eligibility={projection.eligibility}>{projection.eligibility}</p>
+      <p data-skill-card-selection-revision>selectionRevision: {projection.selectionRevision}</p>
+      <SkillContentFields
+        bonusDomainScope={projection.bonusDomainScope}
+        missingSkillPenalty={projection.missingSkillPenalty}
+      />
+      <table>
+        <caption>Требования навыка</caption>
+        <thead>
+          <tr>
+            <th>Характеристика</th>
+            <th>Текущее</th>
+            <th>Требуется</th>
+            <th>Выполнено</th>
+          </tr>
+        </thead>
+        <tbody>
+          {projection.requirements.map((requirement) => (
+            <tr
+              key={requirement.statCode}
+              data-skill-card-requirement={requirement.statCode}
+              data-skill-card-requirement-satisfied={requirement.satisfied}
+            >
+              <th>{requirement.statLabel}</th>
+              <td>{requirement.currentValue}</td>
+              <td>{requirement.minValue}</td>
+              <td>{requirement.satisfied ? 'Да' : 'Нет'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <dl data-skill-card-stage-values>
+        {STAT_CODES.map((statCode) => (
+          <div key={statCode}>
+            <dt>{statCode}</dt>
+            <dd>{projection.skillStageValues[statCode]}</dd>
+          </div>
+        ))}
+      </dl>
+      <p data-skill-card-required-slots>
+        Требуется платных слотов: {projection.slotSources.requiredSlotCount}
+      </p>
+      {projection.slotSources.mandatoryClassSkillOrNull === null ? null : (
+        <p>
+          Классовый навык: {projection.slotSources.mandatoryClassSkillOrNull.skillLabel} +
+          {projection.slotSources.mandatoryClassSkillOrNull.bonus}
+        </p>
+      )}
+      {projection.slotSources.racialFreeSkills.map((skill) => (
+        <p key={skill.skillId}>
+          Бесплатный расовый навык: {skill.skillLabel} +{skill.bonus}
+        </p>
+      ))}
+      <p data-skill-card-free-sources={projection.freeSources.kind}>
+        Бесплатный источник для этого навыка отсутствует.
+      </p>
+      {projection.selectedSkills.length === 0 ? null : (
+        <ul data-skill-card-selected-skills>
+          {projection.selectedSkills.map((skill) => (
+            <li key={skill.skillId} data-skill-card-selected-skill={skill.skillId}>
+              {skill.skillId} +{skill.targetBonus} ({skill.slotCost} сл.)
+            </li>
+          ))}
+        </ul>
+      )}
+      {selectable ? (
+        <fieldset data-skill-card-level-controls>
+          <legend>Явный выбор уровня</legend>
+          <label htmlFor="chr-014-target-bonus">Целевой бонус</label>
+          <select
+            id="chr-014-target-bonus"
+            name="targetBonus"
+            required
+            value={draft?.targetBonus ?? ''}
+            onChange={(event) =>
+              onLevelChange(event.target.value === '' ? null : Number(event.target.value))
+            }
+          >
+            <option value="" disabled>
+              Выберите уровень
+            </option>
+            {projection.levelsAndBonuses.map((level) => (
+              <option key={level.targetBonus} value={level.targetBonus}>
+                +{level.targetBonus} — {level.slotCost} сл.
+              </option>
+            ))}
+          </select>
+          {signedLevel === undefined ? (
+            <p data-skill-card-slot-cost-pending>Стоимость будет показана после выбора уровня.</p>
+          ) : (
+            <p>
+              Стоимость: <output data-skill-card-slot-cost>{signedLevel.slotCost}</output> сл.
+            </p>
+          )}
+        </fieldset>
+      ) : (
+        <p data-skill-card-read-only>
+          Навык доступен только для просмотра: требования не выполнены.
+        </p>
+      )}
     </section>
   );
 }
@@ -1073,9 +1214,13 @@ function SkillSelectionFields({
     ({ skillId }) => skillId === candidateSkillId,
   );
   const selectedCandidate = selectedSkills.find(({ skillId }) => skillId === candidateSkillId);
-  const mutable = draft !== null && projection.commandId === null;
+  const mutable = draft !== null && projection.selectionCheckpoint !== 'EXACT';
   return (
-    <section aria-labelledby="chr-015-selection-title" data-skill-selection>
+    <section
+      aria-labelledby="chr-015-selection-title"
+      data-skill-selection
+      data-selection-checkpoint={projection.selectionCheckpoint}
+    >
       <h2 id="chr-015-selection-title">Стартовые навыки</h2>
       <p data-skill-slot-usage>
         Платные слоты: {paidSlotUsage.usedSlotCount} / {projection.requiredSlotCount}
@@ -1944,6 +2089,7 @@ export function App(): ReactElement {
   const [randomSymbiontDraft, setRandomSymbiontDraft] = useState<RandomSymbiontDraft | null>(null);
   const [advisorSkillSelectionDraft, setAdvisorSkillSelectionDraft] =
     useState<AdvisorSkillSelectionDraft | null>(null);
+  const [skillCardDraft, setSkillCardDraft] = useState<CharacterSkillCardDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -1957,6 +2103,7 @@ export function App(): ReactElement {
       setSkillSelectionDraft,
       setRandomSymbiontDraft,
       setAdvisorSkillSelectionDraft,
+      setSkillCardDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2075,7 +2222,27 @@ export function App(): ReactElement {
             />
             <PureClassFields choice={activeCreationChoice} snapshot={snapshot} />
             <StatBreakdownFields snapshot={snapshot} />
-            <SkillCatalogFields snapshot={snapshot} />
+            <SkillCatalogFields
+              snapshot={snapshot}
+              onOpenSkill={(skillId) => {
+                const result = connectionRef.current?.requestSkillCard(skillId);
+                setActionNotice(
+                  result === undefined || result.ok
+                    ? null
+                    : `Переход не отправлен: ${result.detail}.`,
+                );
+              }}
+            />
+            <SkillCardFields
+              draft={skillCardDraft}
+              snapshot={snapshot}
+              onLevelChange={(targetBonus) => {
+                const result = connectionRef.current?.replaceSkillCardLevel(targetBonus);
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
+                );
+              }}
+            />
             <SkillSelectionFields
               draft={skillSelectionDraft}
               snapshot={snapshot}

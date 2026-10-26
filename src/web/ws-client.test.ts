@@ -406,6 +406,7 @@ function decoderChr015Projection(
     requiredSlotCount: 2,
     selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
     selectedSkills,
+    selectionCheckpoint: commandId === null ? 'NONE' : 'EXACT',
     selectionValidation: decoderSelectionValidation(2, usedSlotCount),
     skillOptions: DECODER_SKILL_OPTIONS,
     wizardCheckpointId: WIZARD_CHECKPOINT_ID,
@@ -767,9 +768,9 @@ function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): D
     case 'CHR-016':
       return ['CHR-016::CTA::003', 'CHR-016::CTA::004'];
     case 'CHR-013':
-      return ['CHR-013::CTA::002'];
+      return ['CHR-013::CTA::001', 'CHR-013::CTA::002'];
     case 'CHR-015':
-      return projection['commandId'] === null ? ['CHR-015::CTA::003'] : [];
+      return projection['selectionCheckpoint'] === 'EXACT' ? [] : ['CHR-015::CTA::003'];
     case 'CHR-002':
       return ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'];
     case 'CHR-017':

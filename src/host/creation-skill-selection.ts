@@ -63,8 +63,13 @@ export interface SelectedSkillCommandInput extends JsonObject {
   readonly targetBonus: number;
 }
 
+export interface SkillCardAdditionCheckpointPayload extends SkillCheckpointPayloadCommon {
+  readonly sourceFormId: 'CHR-014';
+  readonly selectedSkills: readonly SelectedSkillCommandInput[];
+}
+
 export interface SkillSelectionCheckpointPayload extends SkillCheckpointPayloadCommon {
-  readonly sourceFormId: 'CHR-015';
+  readonly sourceFormId: 'CHR-014' | 'CHR-015';
   readonly selectedSkills: readonly SelectedSkillCommandInput[];
 }
 
@@ -130,8 +135,8 @@ export interface SkillEligibilityCheckpointReceiptResult
 
 export interface SkillSelectionCheckpointReceiptResult
   extends SkillReceiptResultCommon, SkillSelectionDerived {
-  readonly sourceFormId: 'CHR-015';
-  readonly nextFormId: 'CHR-017';
+  readonly sourceFormId: 'CHR-014' | 'CHR-015';
+  readonly nextFormId: 'CHR-015' | 'CHR-017';
 }
 
 export type SkillEligibilityCheckpointReceipt =
@@ -149,14 +154,28 @@ export interface SkillEligibilityStage {
   readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-013'>;
 }
 
+export interface SkillCardAdditionRecord {
+  readonly request: SkillCheckpointCommandRequest & {
+    readonly payload: SkillCardAdditionCheckpointPayload;
+  };
+  readonly derived: SkillSelectionDerived;
+  readonly receipt: SkillSelectionCheckpointReceipt;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-015'>;
+}
+
 export interface SkillSelectionStage {
   readonly request: SkillCheckpointCommandRequest & {
     readonly payload: SkillSelectionCheckpointPayload;
   };
   readonly derived: SkillSelectionDerived;
   readonly receipt: SkillSelectionCheckpointReceipt;
-  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-017'>;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-015' | 'CHR-017'>;
+  readonly cardAdditionRecords?: readonly SkillCardAdditionRecord[];
 }
+
+export type SkillCardAdditionStage = SkillCardAdditionRecord & {
+  readonly cardAdditionRecords: readonly SkillCardAdditionRecord[];
+};
 
 export interface SkillEligibilityPlan {
   readonly derived: SkillEligibilityDerived;
@@ -165,7 +184,7 @@ export interface SkillEligibilityPlan {
 
 export interface SkillSelectionPlan {
   readonly derived: SkillSelectionDerived;
-  readonly nextFormId: 'CHR-017';
+  readonly nextFormId: 'CHR-015' | 'CHR-017';
 }
 
 export class CreationSkillSelectionApplicationError extends Error {
@@ -289,22 +308,22 @@ export function normalizeSkillCheckpointRequest(
   const unshaped = objectAt(request.payload, '$.payload');
   literal(unshaped['stage'], 'SKILLS', '$.payload.stage');
   const sourceFormId = unshaped['sourceFormId'];
-  if (sourceFormId !== 'CHR-012' && sourceFormId !== 'CHR-015') {
+  if (sourceFormId !== 'CHR-012' && sourceFormId !== 'CHR-014' && sourceFormId !== 'CHR-015') {
     return unrecognized('$.payload.sourceFormId', sourceFormId as JsonValue);
   }
   const payload = exactObject(
     request.payload,
     '$.payload',
-    sourceFormId === 'CHR-015'
-      ? [
+    sourceFormId === 'CHR-012'
+      ? ['stage', 'sourceFormId', 'characterDraftId', 'wizardCheckpointId', 'draftRevision']
+      : [
           'stage',
           'sourceFormId',
           'characterDraftId',
           'wizardCheckpointId',
           'draftRevision',
           'selectedSkills',
-        ]
-      : ['stage', 'sourceFormId', 'characterDraftId', 'wizardCheckpointId', 'draftRevision'],
+        ],
   );
   const common = {
     characterDraftId: nonEmptyStringAt(payload['characterDraftId'], '$.payload.characterDraftId'),
@@ -318,13 +337,13 @@ export function normalizeSkillCheckpointRequest(
   return {
     ...normalizedCommon(request),
     payload:
-      sourceFormId === 'CHR-015'
-        ? {
+      sourceFormId === 'CHR-012'
+        ? { ...common, sourceFormId }
+        : {
             ...common,
             selectedSkills: selectedSkillsAt(payload['selectedSkills'], '$.payload.selectedSkills'),
             sourceFormId,
-          }
-        : { ...common, sourceFormId },
+          },
     workflowCommandId: WIZARD_CHECKPOINT_WORKFLOW_COMMAND_ID,
   };
 }
@@ -409,11 +428,15 @@ export function prepareSkillSelection(
   catalog: SkillStageCatalog,
 ): SkillSelectionPlan {
   const eligibility = checkpoint.skillEligibilityStage;
+  const existingSelection = checkpoint.skillSelectionStage;
+  const durableFormId = checkpoint.nextStageEnvelope.formId;
   if (
-    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
     eligibility === null ||
-    checkpoint.skillSelectionStage !== null ||
-    request.payload.sourceFormId !== 'CHR-015'
+    request.payload.sourceFormId !== 'CHR-015' ||
+    (durableFormId === 'CHR-013' && existingSelection !== null) ||
+    (durableFormId === 'CHR-015' &&
+      existingSelection?.request.payload.sourceFormId !== 'CHR-014') ||
+    (durableFormId !== 'CHR-013' && durableFormId !== 'CHR-015')
   ) {
     return guardRejected();
   }
@@ -608,7 +631,7 @@ const selectionDerivedAt = (value: unknown, path: string): SkillSelectionDerived
   };
 };
 
-const envelopeAt = <T extends 'CHR-013' | 'CHR-017'>(
+const envelopeAt = <T extends 'CHR-013' | 'CHR-015' | 'CHR-017'>(
   value: unknown,
   path: string,
   formId: T,
@@ -649,7 +672,7 @@ const receiptAt = (value: unknown, label: string): SkillCheckpointReceipt => {
   ]);
   const unshapedResult = objectAt(object['result'], `${label}.receipt.result`);
   const sourceFormId = unshapedResult['sourceFormId'];
-  if (sourceFormId !== 'CHR-012' && sourceFormId !== 'CHR-015') {
+  if (sourceFormId !== 'CHR-012' && sourceFormId !== 'CHR-014' && sourceFormId !== 'CHR-015') {
     return unrecognized(`${label}.receipt.result.sourceFormId`, sourceFormId as JsonValue);
   }
   const derivedKeys =
@@ -739,7 +762,7 @@ const receiptAt = (value: unknown, label: string): SkillCheckpointReceipt => {
             ),
             nextFormId: literal(
               result['nextFormId'],
-              'CHR-017',
+              sourceFormId === 'CHR-014' ? 'CHR-015' : 'CHR-017',
               `${label}.receipt.result.nextFormId`,
             ),
             sourceFormId,
@@ -771,31 +794,78 @@ export function parseSkillEligibilityStage(value: unknown, label: string): Skill
   };
 }
 
-export function parseSkillSelectionStage(
+const selectionRecordAt = (
   value: unknown,
-  label: string,
-): SkillSelectionStage | null {
-  if (value === null) return null;
-  const path = `${label}.skillSelectionStage`;
+  path: string,
+  sourceFormId: 'CHR-014' | 'CHR-015',
+): SkillSelectionStage => {
   const object = exactObject(value, path, ['request', 'derived', 'receipt', 'nextStageEnvelope']);
   const request = storedRequestAt(object['request'], path);
-  if (request.payload.sourceFormId !== 'CHR-015') {
-    throw new Error(`${path} request must originate from CHR-015`);
+  if (request.payload.sourceFormId !== sourceFormId) {
+    throw new Error(`${path} request must originate from ${sourceFormId}`);
   }
   const receipt = receiptAt(object['receipt'], path);
-  if (receipt.result.sourceFormId !== 'CHR-015') {
-    throw new Error(`${path} receipt must originate from CHR-015`);
+  if (receipt.result.sourceFormId !== sourceFormId) {
+    throw new Error(`${path} receipt must originate from ${sourceFormId}`);
   }
   return {
     derived: selectionDerivedAt(object['derived'], `${path}.derived`),
     nextStageEnvelope: envelopeAt(
       object['nextStageEnvelope'],
       `${path}.nextStageEnvelope`,
-      'CHR-017',
+      sourceFormId === 'CHR-014' ? 'CHR-015' : 'CHR-017',
     ),
     receipt: receipt as SkillSelectionCheckpointReceipt,
     request: request as SkillSelectionStage['request'],
   };
+};
+
+export function parseSkillSelectionStage(
+  value: unknown,
+  label: string,
+): SkillSelectionStage | null {
+  if (value === null) return null;
+  const path = `${label}.skillSelectionStage`;
+  const unshaped = objectAt(value, path);
+  const hasHistory = Object.hasOwn(unshaped, 'cardAdditionRecords');
+  const object = exactObject(
+    unshaped,
+    path,
+    hasHistory
+      ? ['request', 'derived', 'receipt', 'nextStageEnvelope', 'cardAdditionRecords']
+      : ['request', 'derived', 'receipt', 'nextStageEnvelope'],
+  );
+  const sourceFormId = objectAt(
+    objectAt(object['request'], `${path}.request`)['payload'],
+    `${path}.request.payload`,
+  )['sourceFormId'];
+  if (sourceFormId !== 'CHR-014' && sourceFormId !== 'CHR-015') {
+    throw new Error(`${path} request has an unrecognized sourceFormId`);
+  }
+  const stage = selectionRecordAt(
+    {
+      derived: object['derived'],
+      nextStageEnvelope: object['nextStageEnvelope'],
+      receipt: object['receipt'],
+      request: object['request'],
+    },
+    path,
+    sourceFormId,
+  );
+  const rawHistory = object['cardAdditionRecords'] ?? [];
+  if (!Array.isArray(rawHistory))
+    return invalidShape(`${path}.cardAdditionRecords`, 'array', rawHistory);
+  const cardAdditionRecords = rawHistory.map((record, index) => {
+    const recordPath = `${path}.cardAdditionRecords[${String(index)}]`;
+    return selectionRecordAt(record, recordPath, 'CHR-014') as SkillCardAdditionRecord;
+  });
+  if (sourceFormId === 'CHR-014') {
+    const latest = cardAdditionRecords.at(-1);
+    if (latest === undefined || !isDeepStrictEqual(latest, stage)) {
+      throw new Error(`${path} partial selection must equal its latest card addition record`);
+    }
+  }
+  return hasHistory ? { ...stage, cardAdditionRecords } : stage;
 }
 
 export function slotCostOptions(maximumPaidSlots: number): readonly {
@@ -910,6 +980,7 @@ export interface Chr015SkillSelectionView {
   readonly requiredSlotCount: number;
   readonly eligibleSkillIds: readonly string[];
   readonly skillOptions: readonly SkillOptionView[];
+  readonly selectionCheckpoint: 'NONE' | 'PARTIAL' | 'EXACT';
   readonly selectionValidation: SkillSelectionValidationView;
   readonly wizardCheckpointId: string;
   readonly draftRevision: number;
@@ -1035,12 +1106,14 @@ export function deriveChr015SkillSelectionView(
 ): Chr015SkillSelectionView {
   const eligibility = checkpoint.skillEligibilityStage;
   const selection = checkpoint.skillSelectionStage;
+  const durableFormId = checkpoint.nextStageEnvelope.formId;
+  const sourceFormId = selection?.request.payload.sourceFormId;
   if (
     eligibility === null ||
-    (checkpoint.nextStageEnvelope.formId !== 'CHR-013' &&
-      checkpoint.nextStageEnvelope.formId !== 'CHR-017') ||
-    (checkpoint.nextStageEnvelope.formId === 'CHR-013' && selection !== null) ||
-    (checkpoint.nextStageEnvelope.formId === 'CHR-017' && selection === null)
+    (durableFormId !== 'CHR-013' && durableFormId !== 'CHR-015' && durableFormId !== 'CHR-017') ||
+    (durableFormId === 'CHR-013' && selection !== null) ||
+    (durableFormId === 'CHR-015' && sourceFormId !== 'CHR-014') ||
+    (durableFormId === 'CHR-017' && sourceFormId !== 'CHR-015')
   ) {
     return guardRejected();
   }
@@ -1092,6 +1165,8 @@ export function deriveChr015SkillSelectionView(
     requiredSlotCount: derived.requiredSlotCount,
     selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
     selectedSkills,
+    selectionCheckpoint:
+      selection === null ? 'NONE' : sourceFormId === 'CHR-014' ? 'PARTIAL' : 'EXACT',
     selectionValidation: selectionValidation(usedSlotCount, derived.requiredSlotCount),
     skillOptions: summaries
       .filter(({ skillId }) => eligible.has(skillId))

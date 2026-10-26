@@ -10,6 +10,7 @@ import {
   createSkillStageCatalog,
   validateSkillRequirements,
   validateSkillSelection,
+  validateSkillSelectionDraft,
 } from './index.js';
 import type { SkillStageCatalogSources, StatBlock } from './index.js';
 
@@ -647,6 +648,100 @@ describe('skill requirements and starting slots', () => {
       ]);
     },
   );
+
+  it('allows an underfilled CHR-014 draft while CORE-081 final selection stays exact', () => {
+    const acrobatics = requirementsFor('ACROBATICS')[0];
+    if (acrobatics === undefined) throw new Error('ACROBATICS requirement not found');
+    const input = {
+      raceCode: 'FREE',
+      classCode: null,
+      skillStageStats: {
+        ...statBlock(),
+        D: numberField(acrobatics, 'MinValue'),
+        W: numberField(rawStat('W'), 'BaseMin') + 2,
+      },
+      selectedSkills: [{ skillKey: 'ACROBATICS', targetBonus: 1 }],
+    } as const;
+
+    expect(validateSkillSelectionDraft(CATALOG, input)).toMatchObject({
+      capacity: 2,
+      used: 1,
+      remaining: 1,
+      learnedSkills: [{ source: 'SELECTED', skillKey: 'ACROBATICS', bonus: 1, slotCost: 1 }],
+    });
+    expect(() => validateSkillSelection(CATALOG, input)).toThrow(
+      'skill slots underfilled: used 1, capacity 2',
+    );
+  });
+
+  it('returns zero remaining when a CHR-014 draft fills CORE-081 exactly', () => {
+    const acrobatics = requirementsFor('ACROBATICS')[0];
+    if (acrobatics === undefined) throw new Error('ACROBATICS requirement not found');
+    expect(
+      validateSkillSelectionDraft(CATALOG, {
+        raceCode: 'FREE',
+        classCode: null,
+        skillStageStats: {
+          ...statBlock(),
+          D: numberField(acrobatics, 'MinValue'),
+        },
+        selectedSkills: [{ skillKey: 'ACROBATICS', targetBonus: 1 }],
+      }),
+    ).toMatchObject({ capacity: 1, used: 1, remaining: 0 });
+  });
+
+  it('applies CORE-165 and CORE-167 plus fixed and duplicate guards to CHR-014 drafts', () => {
+    const passing = statsMeeting('ACROBATICS');
+    const base = {
+      raceCode: 'FREE',
+      classCode: null,
+      skillStageStats: passing,
+    } as const;
+    expect(() =>
+      validateSkillSelectionDraft(CATALOG, {
+        ...base,
+        selectedSkills: [{ skillKey: 'UNKNOWN', targetBonus: 1 }],
+      }),
+    ).toThrow('unknown SkillKey "UNKNOWN"');
+    expect(() =>
+      validateSkillSelectionDraft(CATALOG, {
+        ...base,
+        selectedSkills: [{ skillKey: 'FOLLOWING_PAIN', targetBonus: 1 }],
+      }),
+    ).toThrow('cannot be selected');
+    expect(() =>
+      validateSkillSelectionDraft(CATALOG, {
+        ...base,
+        selectedSkills: [
+          { skillKey: 'ACROBATICS', targetBonus: 1 },
+          { skillKey: 'ACROBATICS', targetBonus: 1 },
+        ],
+      }),
+    ).toThrow('selected more than once');
+    expect(() =>
+      validateSkillSelectionDraft(CATALOG, {
+        ...base,
+        selectedSkills: [{ skillKey: 'ACROBATICS', targetBonus: 2 }],
+      }),
+    ).toThrow('skill slots exceeded: used 2, capacity 1');
+    expect(() =>
+      validateSkillSelectionDraft(CATALOG, {
+        ...base,
+        selectedSkills: [{ skillKey: 'ACROBATICS', targetBonus: 0 }],
+      }),
+    ).toThrow('positive integer by CORE-165');
+
+    const failed = requirementsFor('ACROBATICS')[0];
+    if (failed === undefined) throw new Error('ACROBATICS requirement not found');
+    const actual = numberField(failed, 'MinValue') - 1;
+    expect(() =>
+      validateSkillSelectionDraft(CATALOG, {
+        ...base,
+        skillStageStats: { ...passing, D: actual },
+        selectedSkills: [{ skillKey: 'ACROBATICS', targetBonus: 1 }],
+      }),
+    ).toThrow(`RequirementID ${JSON.stringify(stringField(failed, 'RequirementID'))}`);
+  });
 
   it('rejects underfilled and exceeded starting-slot selections', () => {
     const create = OPERATIONS.find((entry) => entry.OperationID === 'OP-CHAR-CREATE');
