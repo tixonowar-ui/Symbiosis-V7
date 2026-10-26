@@ -4575,7 +4575,8 @@ function decodeFormActionSnapshot(
       destination.characterDraftId !== source.characterDraftId ||
       destination.wizardCheckpointId !== source.wizardCheckpointId ||
       destination.draftRevision !== source.draftRevision ||
-      destination.selectionCheckpoint !== 'NONE' ||
+      (destination.selectionCheckpoint !== 'NONE' &&
+        destination.selectionCheckpoint !== 'PARTIAL') ||
       !sameJson(destination.eligibleSkillIds, source.eligibleSkillIds) ||
       !sameJson(destination.skillOptions, expectedOptions) ||
       !sameJson(
@@ -4584,7 +4585,9 @@ function decodeFormActionSnapshot(
       ) ||
       !sameJson(destination.racialFreeSkills, source.slotSources.racialFreeSkills) ||
       destination.requiredSlotCount !== source.slotSources.requiredSlotCount ||
-      destination.selectedSkills.length !== 0
+      (destination.selectionCheckpoint === 'NONE'
+        ? destination.selectedSkills.length !== 0
+        : destination.selectedSkills.length === 0)
     ) {
       return unrecognized(
         '$.presentation.base.roleFilteredPayload.skillOptions',

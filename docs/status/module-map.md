@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-27`
-- Тестов: 1472 Vitest + 5 Playwright, все зелёные
+- Тестов: 1474 Vitest + 5 Playwright, все зелёные
 - `npm run verify` — проходит; `npm run build && npm run test:e2e` — 5/5
 
 ## Легенда
@@ -82,11 +82,14 @@ checkpoint фиксирует eligibility baseline и открывает очи�
 failed requirements без internal IDs и добавляет навык только после явного
 signed level. После partial add карточку следующего навыка можно открыть через
 safe-return из `CHR-015/PARTIAL`, включая read-only ineligible навык; `NONE` и
-`EXACT` этого safe-return не получают. `CHR-015` различает
-`NONE|PARTIAL|EXACT`: card add сохраняет полный canonical набор и возвращает
-mutable partial presentation, а финальный durable checkpoint по-прежнему требует
-exact-fill и остаётся actionless. Последовательные добавления сохраняют обе
-card-add записи и восстанавливаются после replay/restart. Классовый навык
+`EXACT` этого safe-return не получают. Повторный `CHR-013::CTA::002` возвращает
+в существующий `CHR-015/PARTIAL` без protocol-error и новых receipts; начальный
+`NONE` требует пустой набор, а `EXACT` и пустой `PARTIAL` отклоняются.
+`CHR-015` различает `NONE|PARTIAL|EXACT`: card add сохраняет полный canonical
+набор и возвращает mutable partial presentation, а финальный durable checkpoint
+по-прежнему требует exact-fill и остаётся actionless. Последовательные
+добавления сохраняют обе card-add записи и восстанавливаются после
+replay/restart. Классовый навык
 учитывается один раз, бесплатный навык `UNITED` не занимает слот. Random slice
 #135 продолжает путь: `CHR-017` публикует sanitized catalog и открывает `CHR-020`
 с append-only physical records, duplicates, critical/monster outcomes и

@@ -202,6 +202,14 @@ test('CHR-014 reopens after card add and preserves two additions through replay 
 
     await page.getByRole('button', { name: 'Вернуться в каталог навыков', exact: true }).click();
     await expect(page.locator('[data-atlas-form-id="CHR-013"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Перейти к выбору навыков', exact: true }).click();
+    await expect(page.locator('[data-selection-checkpoint="PARTIAL"]')).toBeVisible();
+    await expect(page.locator('[data-client-state="protocol-error"]')).toHaveCount(0);
+    await expect(page.locator(`[data-selected-skill="${host.eligibleSkillId}"]`)).toBeVisible();
+    expect(host.receiptAllocations()).toBe(1);
+    await page.getByRole('button', { name: 'Вернуться в каталог навыков', exact: true }).click();
+    await expect(page.locator('[data-atlas-form-id="CHR-013"]')).toBeVisible();
+    expect(host.receiptAllocations()).toBe(1);
     await page.locator(`[data-skill-card-open="${host.otherEligibleSkillId}"]`).click();
     await expect(page.locator(`[data-skill-card="${host.otherEligibleSkillId}"]`)).toBeVisible();
     await addFirstLevel();
