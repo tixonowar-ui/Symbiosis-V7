@@ -23,15 +23,22 @@ import type {
   FormActionIntentV2Message,
   HostToClientMessage,
   HostToClientV2Message,
+  JsonValue,
   ProtocolVocabulary,
   RevisionVector,
   SessionReconnectV2Message,
   WireV2Vocabulary,
 } from '@shared/index.js';
 
-import type { SymbiontCatalog } from '../domain/index.js';
+import {
+  resolveAdvisorIwRolls,
+  resolveSymbiontComposition,
+  type AdvisorIwResult,
+  type SymbiontCatalog,
+  type SymbiontSpeciesKey,
+} from '../domain/index.js';
 import { openPersistenceDatabase } from '../persistence/database.js';
-import { bootstrapDeviceIdentity } from '../persistence/index.js';
+import { bootstrapDeviceIdentity, commitLocalCharacterCheckpoint } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
 import {
   commitCreationRoll,
@@ -51,11 +58,15 @@ import {
   type DurableCreationWizardCheckpoint,
 } from './creation-set-decide.js';
 import type { SelectedSkillCommandInput } from './creation-skill-selection.js';
+import { loadCreationSkillCatalog } from './creation-skill-catalog.js';
+import type { CreationSkillCatalog } from './creation-skill-catalog.js';
+import { deriveCreationSkillStageResult } from './creation-stat-assignment.js';
+import { nextSymbiontEnvelope } from './creation-symbiont-contract.js';
 import { IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID } from './identity-checkpoint.js';
 import { commitIdentityCheckpoint } from './identity-checkpoint.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
-import { loadSymbiontCatalog } from './symbiont-stage-catalog.js';
+import { createAdvisorSkillOptions, loadSymbiontCatalog } from './symbiont-stage-catalog.js';
 import { commitCreationWizardCheckpoint } from './creation-wizard-checkpoint.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -122,6 +133,7 @@ const apps: FastifyInstance[] = [];
 const sockets: WebSocket[] = [];
 const temporaryDirectories: string[] = [];
 let catalog: SymbiontCatalog;
+let presentationCatalog: CreationSkillCatalog;
 let staticRoot: string;
 let vocabulary: ProtocolVocabulary & WireV2Vocabulary;
 
@@ -363,6 +375,7 @@ function setupCommittedRandom(
   raceChoice: 'FREE' | 'UNITED',
   diceInputMode: 'AUTO' | 'MANUAL',
   databasePath = ':memory:',
+  symbiontAcquisitionMode: 'MANUAL' | 'RANDOM' = 'RANDOM',
 ): CommittedRandomSetup {
   const database = openPersistenceDatabase(databasePath);
   databases.push(database);
@@ -419,7 +432,7 @@ function setupCommittedRandom(
       draftRevision: current.receipt.result.draftRevision,
       sourceFormId: 'CHR-016',
       stage: 'RACE_AND_METHOD',
-      symbiontAcquisitionMode: 'RANDOM',
+      symbiontAcquisitionMode,
       wizardCheckpointId,
     }),
     `${prefix}-acquisition-receipt`,
@@ -562,7 +575,11 @@ function setupCommittedRandom(
     () => `${prefix}-random-sequence`,
   );
   expect(current.nextStageEnvelope.formId).toBe('CHR-017');
-  expect(current.randomSymbiontStage?.rollRecords).toEqual([]);
+  if (symbiontAcquisitionMode === 'MANUAL') {
+    expect(current.randomSymbiontStage).toBeNull();
+  } else {
+    expect(current.randomSymbiontStage?.rollRecords).toEqual([]);
+  }
   return {
     characterDraftId,
     checkpoint: current,
@@ -894,6 +911,7 @@ beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'symbiosis-random-host-'));
   await writeFile(join(staticRoot, 'index.html'), '<main>random symbionts</main>', 'utf8');
   catalog = await loadSymbiontCatalog(PROJECT_ROOT);
+  presentationCatalog = await loadCreationSkillCatalog(PROJECT_ROOT, catalog.skillStage);
   vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
 });
 
@@ -1516,6 +1534,9 @@ describe('RANDOM Advisor host journey', () => {
       { speciesKey: 'OWL', side: 'RIGHT' },
     ]);
     expectPlayerSafe(bound.destination, 'CHR-041');
+    expect(bound.destination.presentation.base.availableActionKeys).not.toContain(
+      'CHR-041::CTA::004',
+    );
     const suppressionRoll =
       suppression.checkpoint.randomSymbiontStage?.rollRecords[4]?.physicalRoll;
     expect(bound.destination.presentation.base.roleFilteredPayload).toMatchObject({
@@ -1607,6 +1628,669 @@ describe('RANDOM Advisor host journey', () => {
     });
     expect(restarted.rollRequestAllocations()).toBe(0);
     expect(restarted.sampleCalls()).toBe(0);
+  });
+});
+
+interface AdvisorIntelligenceFloorFixtureOptions {
+  readonly prefix: string;
+  readonly diceInputMode: 'AUTO' | 'MANUAL';
+  readonly sampleFaces: readonly number[];
+  readonly teacherAbsorbed?: boolean;
+  readonly suppressed?: boolean;
+  readonly skillsCommitted?: boolean;
+}
+
+function exactFloorSkills(
+  checkpoint: DurableCreationWizardCheckpoint,
+  advisorIw: AdvisorIwResult,
+): readonly SelectedSkillCommandInput[] {
+  const stats = deriveCreationSkillStageResult(checkpoint, catalog.skillStage).skillStageStats;
+  const options = createAdvisorSkillOptions(catalog, presentationCatalog, advisorIw, {
+    S: stats.S,
+    D: stats.D,
+    M: stats.M,
+    Z: stats.Z,
+    C: stats.C,
+  });
+  let remaining = options.requiredSlotCount;
+  const selected: SelectedSkillCommandInput[] = [];
+  for (const candidate of options.skillOptions) {
+    let level;
+    for (const option of candidate.levelOptions) {
+      if (option.slotCost <= remaining) level = option;
+    }
+    if (level === undefined) continue;
+    selected.push({ skillId: candidate.skillId, targetBonus: level.targetBonus });
+    remaining -= level.slotCost;
+    if (remaining === 0) break;
+  }
+  if (remaining !== 0) throw new Error('manual Advisor fixture could not fill exact slots');
+  return selected;
+}
+
+function floorStagePayload(
+  checkpoint: DurableCreationWizardCheckpoint,
+  options: AdvisorIntelligenceFloorFixtureOptions,
+): Record<string, unknown> {
+  const speciesKeys: readonly SymbiontSpeciesKey[] =
+    options.suppressed === false
+      ? ['ADVISER', 'TAIPAN', 'OWL', 'EEL']
+      : options.teacherAbsorbed === true
+        ? ['TROGR', 'TEACHER', 'ADVISER', 'TAIPAN']
+        : ['TROGR', 'ADVISER', 'TAIPAN', 'OWL'];
+  const composition = resolveSymbiontComposition(catalog, {
+    raceCode: 'UNITED',
+    acceptedSpecies: speciesKeys.map((speciesKey, acceptedIndex) => ({
+      acceptedIndex,
+      speciesKey,
+    })),
+  });
+  const advisorIw = resolveAdvisorIwRolls([
+    { dieSides: 20, rawFace: 8 },
+    { dieSides: 20, rawFace: 8 },
+  ]);
+  return {
+    advisorInstanceDraftId: `${options.prefix}-advisor-instance`,
+    composition,
+    compositionDraftRevision: 1,
+    diceInputModeSnapshot: options.diceInputMode,
+    advisorIw,
+    iwRollRequestIds: [`${options.prefix}-i-request`, `${options.prefix}-w-request`],
+    iwRollReceiptIds: [`${options.prefix}-i-receipt`, `${options.prefix}-w-receipt`],
+    advisorSkillRecordOrNull:
+      options.skillsCommitted === false
+        ? null
+        : {
+            receiptId: `${options.prefix}-skills-receipt`,
+            selectedSkills: exactFloorSkills(checkpoint, advisorIw),
+          },
+    pendingRollRequestIdOrNull:
+      options.suppressed === false ? null : `${options.prefix}-pending-b-request`,
+    rollRecordOrNull: null,
+  };
+}
+
+async function createFloorHost(
+  setup: CommittedRandomSetup,
+  options: AdvisorIntelligenceFloorFixtureOptions,
+): Promise<RandomHost> {
+  const advisorIntelligenceFloorStage = floorStagePayload(setup.checkpoint, options);
+  const committed = commitLocalCharacterCheckpoint(
+    setup.database,
+    setup.characterDraftId,
+    setup.wizardCheckpointId,
+    (update) => {
+      const payload = structuredClone(setup.checkpoint.durablePayload) as unknown as Record<
+        string,
+        unknown
+      >;
+      payload['randomSymbiontStage'] = null;
+      payload['advisorIntelligenceFloorStage'] = advisorIntelligenceFloorStage;
+      payload['nextStageEnvelope'] = nextSymbiontEnvelope('CHR-041', setup.characterDraftId);
+      return update(
+        { payloadJson: JSON.stringify(payload) },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
+      );
+    },
+  );
+  return createRandomHost(
+    {
+      ...setup,
+      checkpoint: validateDurableCreationWizardCheckpoint(
+        committed.result,
+        committed.checkpoint,
+        catalog.skillStage,
+        catalog,
+      ),
+    },
+    options.sampleFaces,
+  );
+}
+
+function floorStage(
+  checkpoint: DurableCreationWizardCheckpoint | Record<string, unknown>,
+): Record<string, JsonValue> {
+  const payload = recordValue(
+    'durablePayload' in checkpoint ? checkpoint.durablePayload : checkpoint,
+  ) as Record<string, JsonValue> | null;
+  const stage = recordValue(payload?.['advisorIntelligenceFloorStage']) as Record<
+    string,
+    JsonValue
+  > | null;
+  if (stage === null) throw new Error('manual intelligence floor stage is missing');
+  return stage;
+}
+
+function floorString(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`manual intelligence floor expected a non-empty string, got ${String(value)}`);
+  }
+  return value;
+}
+
+function floorNumber(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(
+      `manual intelligence floor expected a non-negative integer, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
+function floorRollRequest(
+  host: RandomHost,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+  manualFaceOrNull: number | null,
+  overrides: {
+    readonly pendingRollRequestId?: string;
+    readonly compositionDraftRevision?: number;
+    readonly extra?: Record<string, JsonValue>;
+  } = {},
+): WorkflowRequest {
+  const stage = floorStage(current);
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(current),
+    messageType: 'command.request',
+    payload: {
+      advisorInstanceDraftId: floorString(stage['advisorInstanceDraftId']),
+      characterDraftId: host.characterDraftId,
+      compositionDraftRevision:
+        overrides.compositionDraftRevision ?? floorNumber(stage['compositionDraftRevision']),
+      draftRevision: current.receipt.result.draftRevision,
+      manualFaceOrNull,
+      pendingRollRequestId:
+        overrides.pendingRollRequestId ?? floorString(stage['pendingRollRequestIdOrNull']),
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      variant: 'TROGR_SUPPRESSION_B',
+      wizardCheckpointId: host.wizardCheckpointId,
+      ...overrides.extra,
+    },
+    protocolVersion: WIRE_PROTOCOL_VERSION,
+    role: 'player',
+    workflowCommandId: CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+  };
+}
+
+async function commitFloorRoll(
+  host: RandomHost,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+  manualFaceOrNull: number | null,
+): Promise<RandomCommandOutcome> {
+  const request = floorRollRequest(host, current, commandId, manualFaceOrNull);
+  const [terminal, destination] = await sendCommand(host.socket, request);
+  return {
+    checkpoint: loadCurrent(host),
+    destination,
+    request,
+    result: committedResult(terminal),
+  };
+}
+
+describe('MANUAL Advisor intelligence floor host journey', () => {
+  it('commits one B without changing I/W or exact skills, then replays and recovers', async () => {
+    const options: AdvisorIntelligenceFloorFixtureOptions = {
+      prefix: 'manual-floor',
+      diceInputMode: 'MANUAL',
+      sampleFaces: [],
+    };
+    const root = await mkdtemp(join(tmpdir(), 'symbiosis-manual-floor-reopen-'));
+    temporaryDirectories.push(root);
+    const databasePath = join(root, 'manual-floor.sqlite');
+    const setup = setupCommittedRandom(
+      options.prefix,
+      'UNITED',
+      options.diceInputMode,
+      databasePath,
+      'MANUAL',
+    );
+    const host = await createFloorHost(setup, options);
+    const initialFrames = await reconnectOn(host.socket, host, 'manual-floor-initial');
+    const initial = snapshot(hostMessageV2(initialFrames[1] ?? ''));
+    expect(initial.presentation.base).toMatchObject({
+      formId: 'CHR-041',
+      availableActionKeys: ['CHR-041::CTA::004'],
+      roleFilteredPayload: {
+        advisorIPlus8OrNull: 16,
+        advisorWPlus8OrNull: 16,
+        trogrSuppressionState: {
+          kind: 'SUPPRESSED',
+          rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+          rollRequestIdOrNull: 'manual-floor-pending-b-request',
+          rollReceiptIdOrNull: null,
+          suppressionBOrNull: null,
+          minimumIOrNull: null,
+        },
+      },
+    });
+    expect(initial.presentation.base.availableActionKeys).not.toContain('CHR-041::CTA::001');
+    expect(host.sampleCalls()).toBe(0);
+    const before = structuredClone(floorStage(loadCurrent(host)));
+
+    const rolled = await commitFloorRoll(host, loadCurrent(host), 'manual-floor-b', 2);
+    expect(rolled.result.receipt.result).toMatchObject({
+      sourceFormId: 'CHR-041',
+      variant: 'TROGR_SUPPRESSION_B',
+      rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+      suppressionB: 1,
+      minimumI: 2,
+      nextFormId: 'CHR-041',
+      physicalRoll: { kind: 'TROGR_SUPPRESSION_B', mechanical: { rawFace: 2 } },
+    });
+    const rolledStage = floorStage(rolled.checkpoint);
+    expect(rolledStage).toMatchObject({
+      iwRollRequestIds: before['iwRollRequestIds'],
+      iwRollReceiptIds: before['iwRollReceiptIds'],
+      advisorIw: before['advisorIw'],
+      advisorSkillRecordOrNull: before['advisorSkillRecordOrNull'],
+      pendingRollRequestIdOrNull: null,
+    });
+    const bRecord = recordValue(rolledStage['rollRecordOrNull']);
+    const physical = recordValue(bRecord?.['physicalRoll']);
+    expect(physical?.['rollRequestId']).toBe('manual-floor-pending-b-request');
+    const durableIds = [
+      ...(before['iwRollRequestIds'] as string[]),
+      ...(before['iwRollReceiptIds'] as string[]),
+      floorString(recordValue(before['advisorSkillRecordOrNull'])?.['receiptId']),
+      floorString(physical?.['rollRequestId']),
+      floorString(physical?.['rollReceiptId']),
+      rolled.request.commandId,
+    ];
+    expect(durableIds).toHaveLength(8);
+    expect(new Set(durableIds).size).toBe(8);
+    expectPlayerSafe(rolled.destination, 'CHR-041');
+    expect(rolled.destination.presentation.base.availableActionKeys).not.toContain(
+      'CHR-041::CTA::004',
+    );
+    expect(host.sampleCalls()).toBe(0);
+
+    const replay = await sendCommand(host.socket, rolled.request);
+    expect(replay[0]).toMatchObject({
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+      receipt: rolled.result.receipt,
+    });
+    expect(host.rollRequestAllocations()).toBe(0);
+    expect(host.sampleCalls()).toBe(0);
+
+    const changed = floorRollRequest(host, rolled.checkpoint, rolled.request.commandId, 3, {
+      pendingRollRequestId: 'manual-floor-pending-b-request',
+    });
+    const conflict = await sendCommandRefusal(host.socket, changed);
+    expect(conflict).toMatchObject({
+      refusal: { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' },
+    });
+    expect(loadCurrent(host)).toEqual(rolled.checkpoint);
+    expect(host.sampleCalls()).toBe(0);
+
+    const refreshedSocket = await openSocket(host.app);
+    const refreshedFrames = await reconnectOn(refreshedSocket, host, 'manual-floor-refresh');
+    const refreshed = snapshot(hostMessageV2(refreshedFrames[1] ?? ''));
+    expect(refreshed.presentation.base.roleFilteredPayload).toMatchObject({
+      trogrSuppressionState: {
+        suppressionBOrNull: 1,
+        minimumIOrNull: 2,
+        rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+        rollRequestIdOrNull: physical?.['rollRequestId'],
+        rollReceiptIdOrNull: physical?.['rollReceiptId'],
+      },
+    });
+    expect(host.sampleCalls()).toBe(0);
+
+    await stopRandomHost(host);
+    setup.database.close();
+    const closedIndex = databases.indexOf(setup.database);
+    if (closedIndex >= 0) databases.splice(closedIndex, 1);
+    const reopened = openPersistenceDatabase(databasePath);
+    databases.push(reopened);
+    const reopenedSetup: CommittedRandomSetup = {
+      ...setup,
+      checkpoint: loadCreationWizardCheckpoint(
+        reopened,
+        setup.characterDraftId,
+        catalog.skillStage,
+        catalog,
+      ),
+      database: reopened,
+    };
+    expect(reopenedSetup.checkpoint).toEqual(rolled.checkpoint);
+    const restarted = await createRandomHost(reopenedSetup, [], 'manual-restart');
+    const recoveredFrames = await reconnectOn(restarted.socket, restarted, 'manual-floor-restart');
+    const recovered = snapshot(hostMessageV2(recoveredFrames[1] ?? ''));
+    expect(recovered.presentation.base.roleFilteredPayload).toMatchObject({
+      trogrSuppressionState: {
+        suppressionBOrNull: 1,
+        minimumIOrNull: 2,
+        rollRequestIdOrNull: physical?.['rollRequestId'],
+        rollReceiptIdOrNull: physical?.['rollReceiptId'],
+      },
+    });
+    expect(floorStage(loadCurrent(restarted))).toEqual(rolledStage);
+    const durableReplay = await sendCommand(restarted.socket, rolled.request);
+    expect(durableReplay[0]).toMatchObject({
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+      receipt: rolled.result.receipt,
+    });
+    expect(restarted.rollRequestAllocations()).toBe(0);
+    expect(restarted.sampleCalls()).toBe(0);
+  });
+
+  it('uses one AUTO B for future minimum 4+B after TEACHER absorption', async () => {
+    const options: AdvisorIntelligenceFloorFixtureOptions = {
+      prefix: 'auto-floor',
+      diceInputMode: 'AUTO',
+      sampleFaces: [2],
+      teacherAbsorbed: true,
+    };
+    const setup = setupCommittedRandom(
+      options.prefix,
+      'UNITED',
+      options.diceInputMode,
+      ':memory:',
+      'MANUAL',
+    );
+    const host = await createFloorHost(setup, options);
+    await reconnectOn(host.socket, host, 'auto-floor-initial');
+    const rolled = await commitFloorRoll(host, loadCurrent(host), 'auto-floor-b', null);
+    expect(rolled.result.receipt.result).toMatchObject({
+      suppressionB: 1,
+      minimumI: 5,
+      physicalRoll: { kind: 'TROGR_SUPPRESSION_B', mechanical: { rawFace: 2 } },
+    });
+    expect(host.sampleCalls()).toBe(1);
+    const physical = recordValue(
+      recordValue(floorStage(rolled.checkpoint)['rollRecordOrNull'])?.['physicalRoll'],
+    );
+    expect(rolled.checkpoint.durablePayload.randomReceiptIds).toContain(
+      floorString(physical?.['rollReceiptId']),
+    );
+    const replay = await sendCommand(host.socket, rolled.request);
+    expect(replay[0]).toMatchObject({ lifecycleState: 'IDEMPOTENT_REPLAY' });
+    expect(host.sampleCalls()).toBe(1);
+  });
+
+  it('rejects wrong identity, stale composition, a second B, and a non-suppressed composition without sampling', async () => {
+    const options: AdvisorIntelligenceFloorFixtureOptions = {
+      prefix: 'refusal-floor',
+      diceInputMode: 'AUTO',
+      sampleFaces: [2, 3, 4],
+    };
+    const setup = setupCommittedRandom(
+      options.prefix,
+      'UNITED',
+      options.diceInputMode,
+      ':memory:',
+      'MANUAL',
+    );
+    const host = await createFloorHost(setup, options);
+    await reconnectOn(host.socket, host, 'refusal-floor-initial');
+    const before = loadCurrent(host);
+
+    const wrongAdvisor = floorRollRequest(host, before, 'refusal-wrong-advisor', null, {
+      extra: { advisorInstanceDraftId: 'forged-advisor-instance' },
+    });
+    expect(await sendCommandRefusal(host.socket, wrongAdvisor)).toMatchObject({
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    expect(loadCurrent(host)).toEqual(before);
+    expect(host.sampleCalls()).toBe(0);
+
+    const wrong = floorRollRequest(host, before, 'refusal-wrong-pending', null, {
+      pendingRollRequestId: 'forged-pending-request',
+    });
+    expect(await sendCommandRefusal(host.socket, wrong)).toMatchObject({
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    expect(loadCurrent(host)).toEqual(before);
+    expect(host.sampleCalls()).toBe(0);
+
+    const stale = floorRollRequest(host, before, 'refusal-stale-composition', null, {
+      compositionDraftRevision: 99,
+    });
+    expect(await sendCommandRefusal(host.socket, stale)).toMatchObject({
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    expect(loadCurrent(host)).toEqual(before);
+    expect(host.sampleCalls()).toBe(0);
+
+    const rolled = await commitFloorRoll(host, before, 'refusal-valid-b', null);
+    expect(host.sampleCalls()).toBe(1);
+    const second = floorRollRequest(host, rolled.checkpoint, 'refusal-second-b', null, {
+      pendingRollRequestId: 'refusal-floor-pending-b-request',
+    });
+    expect(await sendCommandRefusal(host.socket, second)).toMatchObject({
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    expect(loadCurrent(host)).toEqual(rolled.checkpoint);
+    expect(host.sampleCalls()).toBe(1);
+
+    const extra = floorRollRequest(host, rolled.checkpoint, 'refusal-extra-seed', null, {
+      pendingRollRequestId: 'refusal-floor-pending-b-request',
+      extra: { seed: 'forbidden-rng-state' },
+    });
+    expect(await sendCommandRefusal(host.socket, extra)).toMatchObject({
+      refusal: { code: 'INVALID_SHAPE' },
+    });
+    expect(loadCurrent(host)).toEqual(rolled.checkpoint);
+    expect(host.sampleCalls()).toBe(1);
+
+    const noSuppression = setupCommittedRandom('no-floor', 'UNITED', 'AUTO', ':memory:', 'MANUAL');
+    const noHost = await createFloorHost(noSuppression, {
+      prefix: 'no-floor',
+      diceInputMode: 'AUTO',
+      sampleFaces: [2],
+      suppressed: false,
+    });
+    const noInitialFrames = await reconnectOn(noHost.socket, noHost, 'no-floor-initial');
+    const noInitial = snapshot(hostMessageV2(noInitialFrames[1] ?? ''));
+    expect(noInitial.presentation.base.availableActionKeys).not.toContain('CHR-041::CTA::004');
+    const forged = floorRollRequest(noHost, loadCurrent(noHost), 'no-floor-forged-b', null, {
+      pendingRollRequestId: 'no-floor-forged-pending-request',
+    });
+    expect(await sendCommandRefusal(noHost.socket, forged)).toMatchObject({
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    expect(noHost.sampleCalls()).toBe(0);
+  });
+
+  it('rejects acquisition and dice snapshots that contradict the durable history', async () => {
+    const wrongAcquisition = setupCommittedRandom('forged-acquisition', 'UNITED', 'MANUAL');
+    await expect(
+      createFloorHost(wrongAcquisition, {
+        prefix: 'forged-acquisition',
+        diceInputMode: 'MANUAL',
+        sampleFaces: [],
+      }),
+    ).rejects.toThrow();
+
+    const wrongDice = setupCommittedRandom('forged-dice', 'UNITED', 'AUTO', ':memory:', 'MANUAL');
+    await expect(
+      createFloorHost(wrongDice, {
+        prefix: 'forged-dice',
+        diceInputMode: 'MANUAL',
+        sampleFaces: [],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('fails closed on malformed durable history', async () => {
+    const options: AdvisorIntelligenceFloorFixtureOptions = {
+      prefix: 'corrupt-floor',
+      diceInputMode: 'MANUAL',
+      sampleFaces: [],
+    };
+    const setup = setupCommittedRandom(
+      options.prefix,
+      'UNITED',
+      options.diceInputMode,
+      ':memory:',
+      'MANUAL',
+    );
+    const host = await createFloorHost(setup, options);
+    await reconnectOn(host.socket, host, 'corrupt-floor-initial');
+    const valid = loadCurrent(host);
+    const cases: readonly (readonly [string, (payload: Record<string, unknown>) => void])[] = [
+      [
+        'forbidden random identity',
+        (payload) => {
+          floorStage(payload)['randomSequenceId'] = 'forged-random-sequence';
+          void payload;
+        },
+      ],
+      [
+        'missing required pending B',
+        (payload) => {
+          floorStage(payload)['pendingRollRequestIdOrNull'] = null;
+        },
+      ],
+      [
+        'unknown composition species',
+        (payload) => {
+          const composition = recordValue(floorStage(payload)['composition']);
+          const accepted = composition?.['acceptedSpecies'];
+          if (!Array.isArray(accepted)) throw new Error('missing acceptedSpecies');
+          recordValue(accepted[0])!['speciesKey'] = 'UNKNOWN_SPECIES';
+          void payload;
+        },
+      ],
+      [
+        'pending request identity collision',
+        (payload) => {
+          floorStage(payload)['pendingRollRequestIdOrNull'] = floorString(
+            floorStage(payload)['advisorInstanceDraftId'],
+          );
+          void payload;
+        },
+      ],
+      [
+        'I/W value substitution',
+        (payload) => {
+          const advisorIw = recordValue(floorStage(payload)['advisorIw']);
+          recordValue(advisorIw?.['I'])!['value'] = 0;
+          void payload;
+        },
+      ],
+      [
+        'lost exact skill set',
+        (payload) => {
+          recordValue(floorStage(payload)['advisorSkillRecordOrNull'])!['selectedSkills'] = [];
+          void payload;
+        },
+      ],
+    ];
+    for (const [label, mutate] of cases) {
+      const payload = structuredClone(valid.durablePayload) as unknown as Record<string, unknown>;
+      mutate(payload);
+      expect(
+        () =>
+          validateDurableCreationWizardCheckpoint(
+            { ...valid.localCharacter, payloadJson: JSON.stringify(payload) },
+            valid.checkpoint,
+            catalog.skillStage,
+            catalog,
+          ),
+        label,
+      ).toThrow();
+    }
+
+    const committed = await commitFloorRoll(host, valid, 'corrupt-floor-b', 2);
+    const committedCases: typeof cases = [
+      [
+        'replacement pending B after commit',
+        (payload) => {
+          floorStage(payload)['pendingRollRequestIdOrNull'] = 'corrupt-floor-pending-b-request';
+        },
+      ],
+      [
+        'altered future minimum',
+        (payload) => {
+          const record = recordValue(floorStage(payload)['rollRecordOrNull']);
+          const result = recordValue(recordValue(record?.['receipt'])?.['result']);
+          result!['minimumI'] = 999;
+        },
+      ],
+      [
+        'broken B state continuity',
+        (payload) => {
+          const record = recordValue(floorStage(payload)['rollRecordOrNull']);
+          const revisions = recordValue(recordValue(record?.['request'])?.['expectedRevisions']);
+          revisions!['stateRevision'] = floorNumber(revisions?.['stateRevision']) - 1;
+        },
+      ],
+    ];
+    for (const [label, mutate] of committedCases) {
+      const payload = structuredClone(committed.checkpoint.durablePayload) as unknown as Record<
+        string,
+        unknown
+      >;
+      mutate(payload);
+      expect(
+        () =>
+          validateDurableCreationWizardCheckpoint(
+            { ...committed.checkpoint.localCharacter, payloadJson: JSON.stringify(payload) },
+            committed.checkpoint.checkpoint,
+            catalog.skillStage,
+            catalog,
+          ),
+        label,
+      ).toThrow();
+    }
+  });
+
+  it('blocks skill confirmation until B is committed and does not create a third I/W roll', async () => {
+    const options: AdvisorIntelligenceFloorFixtureOptions = {
+      prefix: 'skills-floor',
+      diceInputMode: 'MANUAL',
+      sampleFaces: [],
+      skillsCommitted: false,
+    };
+    const setup = setupCommittedRandom(
+      options.prefix,
+      'UNITED',
+      options.diceInputMode,
+      ':memory:',
+      'MANUAL',
+    );
+    const host = await createFloorHost(setup, options);
+    const initialFrames = await reconnectOn(host.socket, host, 'skills-floor-initial');
+    const initial = snapshot(hostMessageV2(initialFrames[1] ?? ''));
+    expect(initial.presentation.base.availableActionKeys).toContain('CHR-041::CTA::004');
+    expect(initial.presentation.base.availableActionKeys).not.toContain('CHR-041::CTA::001');
+    expect(host.sampleCalls()).toBe(0);
+
+    const before = loadCurrent(host);
+    const limitedSocket = await openSocket(host.app);
+    const limitedFrames = await reconnectOn(
+      limitedSocket,
+      host,
+      'skills-floor-no-roll-capability',
+      [],
+      WITHOUT_ROLL_COMMIT,
+    );
+    const limited = snapshot(hostMessageV2(limitedFrames[1] ?? ''));
+    expect(limited.presentation.base.availableActionKeys).not.toContain('CHR-041::CTA::004');
+    const forbidden = floorRollRequest(host, before, 'skills-floor-no-capability', 2);
+    expect(await sendCommandRefusal(limitedSocket, forbidden)).toMatchObject({
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    expect(loadCurrent(host)).toEqual(before);
+    expect(host.sampleCalls()).toBe(0);
+
+    const rolled = await commitFloorRoll(host, loadCurrent(host), 'skills-floor-b', 2);
+    expect(rolled.destination.presentation.base.availableActionKeys).toContain('CHR-041::CTA::001');
+    expect(rolled.destination.presentation.base.availableActionKeys).toContain('CHR-041::CTA::002');
+    expect(rolled.destination.presentation.base.availableActionKeys).not.toContain(
+      'CHR-041::CTA::003',
+    );
+    expect(floorStage(rolled.checkpoint)).toMatchObject({
+      iwRollRequestIds: ['skills-floor-i-request', 'skills-floor-w-request'],
+      iwRollReceiptIds: ['skills-floor-i-receipt', 'skills-floor-w-receipt'],
+      pendingRollRequestIdOrNull: null,
+    });
+    expect(host.sampleCalls()).toBe(0);
   });
 });
 

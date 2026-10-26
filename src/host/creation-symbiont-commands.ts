@@ -797,3 +797,9 @@ export function initialSymbiontStageForWizard(
 ): RandomSymbiontStage {
   return createInitialRandomSymbiontStage(randomSequenceId, raceCode, diceInputModeSnapshot);
 }
+
+export {
+  assertNoPreviousCommand as assertNoPreviousSymbiontCommand,
+  assertCommon as assertCommonSymbiont,
+  sampledFace as sampledSymbiontFace,
+};
