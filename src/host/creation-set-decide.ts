@@ -34,6 +34,8 @@ import {
   listLocalCharacters,
   loadLocalCharacterCheckpoint,
   readLocalCharacter,
+  readLocalCharacterSkillPresentation,
+  writeLocalCharacterSkillPresentation,
 } from '../persistence/index.js';
 import type { LocalCharacter, LocalCharacterCheckpoint } from '../persistence/index.js';
 import {
@@ -78,6 +80,11 @@ import {
   type SkillSelectionCheckpointReceipt,
   type SkillSelectionStage,
 } from './creation-skill-selection.js';
+import {
+  createSkillPresentationStage,
+  prepareSkillCardAddition,
+  type SkillPresentationStage,
+} from './creation-skill-card.js';
 import type {
   RandomSymbiontStage,
   SymbiontAdvisorCheckpointCommandRequest,
@@ -135,6 +142,7 @@ export type CreationNextFormId =
   | 'CHR-011'
   | 'CHR-012'
   | 'CHR-013'
+  | 'CHR-015'
   | 'CHR-016'
   | 'CHR-017'
   | 'CHR-019'
@@ -634,7 +642,7 @@ export interface CreationWizardSkillPayload extends Omit<
 > {
   readonly skillEligibilityStage: SkillEligibilityStage;
   readonly skillSelectionStage: SkillSelectionStage | null;
-  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-013' | 'CHR-017'>;
+  readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-013' | 'CHR-015' | 'CHR-017'>;
   readonly receipt: SkillEligibilityCheckpointReceipt | SkillSelectionCheckpointReceipt;
 }
 
@@ -679,6 +687,7 @@ export interface DurableCreationWizardCheckpoint {
   readonly pureClassStage: PureClassStage | null;
   readonly skillEligibilityStage: SkillEligibilityStage | null;
   readonly skillSelectionStage: SkillSelectionStage | null;
+  readonly skillPresentationStage?: SkillPresentationStage | null;
   readonly randomSymbiontStage: RandomSymbiontStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
@@ -1125,6 +1134,7 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-011',
     'CHR-012',
     'CHR-013',
+    'CHR-015',
     'CHR-017',
     'CHR-019',
     'CHR-020',
@@ -2426,7 +2436,7 @@ const postIdentityPayloadAt = (
       return {
         ...common,
         nextStageEnvelope: common.nextStageEnvelope as CreationNextStageEnvelope<
-          'CHR-013' | 'CHR-017'
+          'CHR-013' | 'CHR-015' | 'CHR-017'
         >,
         pureClassStage: parsePureClassStage(object['pureClassStage'], label),
         receipt,
@@ -2550,13 +2560,16 @@ const presentationAdvancedDurablePostRevisions = (
   request: { readonly expectedRevisions: RevisionVector },
   label: string,
   mismatches: string[],
+  allowMultipleProjectionAdvance = false,
 ): RevisionVector => {
   const expected = request.expectedRevisions;
   if (
     expected.actorVisibilityRevision !== previous.actorVisibilityRevision ||
     expected.stateRevision !== previous.stateRevision ||
     previous.projectionRevision === Number.MAX_SAFE_INTEGER ||
-    expected.projectionRevision !== previous.projectionRevision + 1
+    (allowMultipleProjectionAdvance
+      ? expected.projectionRevision <= previous.projectionRevision
+      : expected.projectionRevision !== previous.projectionRevision + 1)
   ) {
     mismatches.push(`${label} pre-commit revisions`);
   }
@@ -3469,90 +3482,119 @@ const validateSkillHistory = (
 
   const selection = durablePayload.skillSelectionStage;
   if (selection === null) return cursor;
-  const selectionRequest = selection.request;
-  const selectionReceipt = selection.receipt;
-  const selectionLabel = 'skillSelectionStage';
-  if (
-    selectionRequest.payload.characterDraftId !== localCharacter.localCharacterId ||
-    selectionRequest.payload.wizardCheckpointId !== checkpoint.checkpointId ||
-    selectionRequest.payload.draftRevision !== cursor.draftRevision ||
-    selectionRequest.payload.sourceFormId !== 'CHR-015'
-  ) {
-    mismatches.push(`${selectionLabel} addressed request`);
+  const sourceFormId = selection.request.payload.sourceFormId;
+  const history = selection.cardAdditionRecords ?? [];
+  const records = sourceFormId === 'CHR-014' ? history : [...history, selection];
+  let previousSelected: readonly { readonly skillId: string; readonly targetBonus: number }[] = [];
+  let previousStage: SkillSelectionStage | null = null;
+  for (const [index, record] of records.entries()) {
+    const recordRequest = record.request;
+    const recordReceipt = record.receipt;
+    const recordSource = recordRequest.payload.sourceFormId;
+    const cardAddition = recordSource === 'CHR-014';
+    const label = cardAddition
+      ? `skillSelectionStage.cardAdditionRecords[${String(index)}]`
+      : 'skillSelectionStage';
+    if (
+      recordRequest.payload.characterDraftId !== localCharacter.localCharacterId ||
+      recordRequest.payload.wizardCheckpointId !== checkpoint.checkpointId ||
+      recordRequest.payload.draftRevision !== cursor.draftRevision ||
+      (!cardAddition && recordSource !== 'CHR-015')
+    ) {
+      mismatches.push(`${label} addressed request`);
+    }
+    if (occupied.has(recordRequest.commandId)) mismatches.push(`${label} command ID collision`);
+    occupied.add(recordRequest.commandId);
+    commandIds.add(recordRequest.commandId);
+    if (occupied.has(recordReceipt.receiptId)) mismatches.push(`${label} receipt ID collision`);
+    occupied.add(recordReceipt.receiptId);
+    receiptIds.add(recordReceipt.receiptId);
+    const postRevisions =
+      cardAddition || previousStage === null
+        ? presentationAdvancedDurablePostRevisions(
+            cursor.revisions,
+            recordRequest,
+            label,
+            mismatches,
+            cardAddition,
+          )
+        : exactDurablePostRevisions(cursor.revisions, recordRequest, label, mismatches);
+    const preSelection = skillCheckpointAtCursor(
+      durablePayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      eligibility,
+      previousStage,
+    );
+    const addedSkillId = cardAddition
+      ? recordRequest.payload.selectedSkills.find(
+          ({ skillId }) => !previousSelected.some((selected) => selected.skillId === skillId),
+        )?.skillId
+      : undefined;
+    let plan;
+    try {
+      plan = cardAddition
+        ? prepareSkillCardAddition(
+            {
+              eligibility: eligibility.derived,
+              request: recordRequest,
+              selectedSkills: previousSelected,
+              selectionRevision: recordRequest.payload.draftRevision,
+              skillId: addedSkillId ?? '',
+            },
+            catalog,
+          )
+        : prepareSkillSelection(preSelection, recordRequest, catalog);
+    } catch {
+      mismatches.push(`${label} source/domain derivation`);
+      return cursor;
+    }
+    const nextFormId = cardAddition ? 'CHR-015' : 'CHR-017';
+    const envelope = nextStageEnvelope(nextFormId, localCharacter.localCharacterId);
+    const expectedResult: SkillSelectionCheckpointReceipt['result'] = {
+      ...plan.derived,
+      branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
+      branchUuid: statRollStage.branchUuid,
+      characterDraftId: localCharacter.localCharacterId,
+      checkpointId: checkpoint.checkpointId,
+      checkpointOwnerId: localCharacter.localCharacterId,
+      checkpointRevision: cursor.checkpointRevision + 1,
+      draftRevision: cursor.draftRevision + 1,
+      nextFormId,
+      sourceFormId: recordSource,
+      stage: 'SKILLS',
+    };
+    if (recordReceipt.commandId !== recordRequest.commandId) {
+      mismatches.push(`${label} request/receipt commandId`);
+    }
+    if (!isDeepStrictEqual(recordReceipt.result, expectedResult)) {
+      mismatches.push(`${label} receipt result`);
+    }
+    if (!isDeepStrictEqual(recordReceipt.revisions, postRevisions)) {
+      mismatches.push(`${label} receipt revisions`);
+    }
+    if (!isDeepStrictEqual(record.derived, plan.derived)) mismatches.push(`${label} derived`);
+    if (!isDeepStrictEqual(record.nextStageEnvelope, envelope)) {
+      mismatches.push(`${label} signed destination`);
+    }
+    previousSelected = recordRequest.payload.selectedSkills;
+    previousStage = record;
+    cursor = {
+      checkpointRevision: cursor.checkpointRevision + 1,
+      draftRevision: cursor.draftRevision + 1,
+      latestEnvelope: record.nextStageEnvelope,
+      latestReceipt: recordReceipt,
+      latestRequest: recordRequest,
+      revisions: postRevisions,
+    };
   }
-  if (occupied.has(selectionRequest.commandId)) {
-    mismatches.push(`${selectionLabel} command ID collision`);
-  }
-  occupied.add(selectionRequest.commandId);
-  commandIds.add(selectionRequest.commandId);
-  if (occupied.has(selectionReceipt.receiptId)) {
-    mismatches.push(`${selectionLabel} receipt ID collision`);
-  }
-  occupied.add(selectionReceipt.receiptId);
-  receiptIds.add(selectionReceipt.receiptId);
-  const selectionPostRevisions = presentationAdvancedDurablePostRevisions(
-    cursor.revisions,
-    selectionRequest,
-    selectionLabel,
-    mismatches,
-  );
-  const preSelection = skillCheckpointAtCursor(
-    durablePayload,
-    localCharacter,
-    checkpoint,
-    identityStage,
-    raceAndMethodStage,
-    statRollStage,
-    statAssignmentStage,
-    pureClassStage,
-    cursor,
-    eligibility,
-    null,
-  );
-  let selectionPlan;
-  try {
-    selectionPlan = prepareSkillSelection(preSelection, selectionRequest, catalog);
-  } catch {
-    mismatches.push(`${selectionLabel} source/domain derivation`);
-    return cursor;
-  }
-  const selectionEnvelope = nextStageEnvelope('CHR-017', localCharacter.localCharacterId);
-  const expectedSelectionResult: SkillSelectionCheckpointReceipt['result'] = {
-    ...selectionPlan.derived,
-    branchCacheHash: EMPTY_IDENTITY_BRANCH_CACHE_HASH,
-    branchUuid: statRollStage.branchUuid,
-    characterDraftId: localCharacter.localCharacterId,
-    checkpointId: checkpoint.checkpointId,
-    checkpointOwnerId: localCharacter.localCharacterId,
-    checkpointRevision: cursor.checkpointRevision + 1,
-    draftRevision: cursor.draftRevision + 1,
-    nextFormId: 'CHR-017',
-    sourceFormId: 'CHR-015',
-    stage: 'SKILLS',
-  };
-  if (selectionReceipt.commandId !== selectionRequest.commandId) {
-    mismatches.push(`${selectionLabel} request/receipt commandId`);
-  }
-  if (!isDeepStrictEqual(selectionReceipt.result, expectedSelectionResult)) {
-    mismatches.push(`${selectionLabel} receipt result`);
-  }
-  if (!isDeepStrictEqual(selectionReceipt.revisions, selectionPostRevisions)) {
-    mismatches.push(`${selectionLabel} receipt revisions`);
-  }
-  if (!isDeepStrictEqual(selection.derived, selectionPlan.derived)) {
-    mismatches.push(`${selectionLabel} derived`);
-  }
-  if (!isDeepStrictEqual(selection.nextStageEnvelope, selectionEnvelope)) {
-    mismatches.push(`${selectionLabel} signed destination`);
-  }
-  cursor = {
-    checkpointRevision: cursor.checkpointRevision + 1,
-    draftRevision: cursor.draftRevision + 1,
-    latestEnvelope: selection.nextStageEnvelope,
-    latestReceipt: selectionReceipt,
-    latestRequest: selectionRequest,
-    revisions: selectionPostRevisions,
-  };
+  if (records.length === 0) mismatches.push('skillSelectionStage history is empty');
   return cursor;
 };
 
@@ -3562,6 +3604,7 @@ const validatePostIdentityPayload = (
   durablePayload: CreationWizardPostIdentityPayload,
   catalog?: SkillStageCatalog,
   symbiontCatalog?: SymbiontCatalog,
+  skillPresentationStage?: SkillPresentationStage,
 ): DurableCreationWizardCheckpoint => {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   const mismatches: string[] = [];
@@ -3894,13 +3937,19 @@ const validatePostIdentityPayload = (
         (randomStartPending &&
           previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
           currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
-      : skillEligibilityStage !== null && skillSelectionStage === null
-        ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
-          (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
-            currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
-        : statAssignmentStage !== null
-          ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
-          : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
+      : skillPresentationStage !== undefined &&
+          (randomSymbiontStage === null || durablePayload.nextStageEnvelope.formId === 'CHR-017')
+        ? currentRevisions.projectionRevision === skillPresentationStage.projectionRevision &&
+          skillPresentationStage.selectionRevision ===
+            durablePayload.receipt.result.draftRevision &&
+          skillPresentationStage.projectionRevision >= previousRevisions.projectionRevision
+        : skillEligibilityStage !== null && skillSelectionStage === null
+          ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
+            (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
+              currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
+          : statAssignmentStage !== null
+            ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
+            : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
   if (
     currentRevisions.actorVisibilityRevision !== previousRevisions.actorVisibilityRevision ||
     currentRevisions.stateRevision !== previousRevisions.stateRevision ||
@@ -3959,6 +4008,7 @@ export function validateDurableCreationWizardCheckpoint(
   checkpoint: LocalCharacterCheckpoint,
   catalog?: SkillStageCatalog,
   symbiontCatalog?: SymbiontCatalog,
+  skillPresentationStage?: SkillPresentationStage,
 ): DurableCreationWizardCheckpoint {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   let value: unknown;
@@ -3978,6 +4028,7 @@ export function validateDurableCreationWizardCheckpoint(
       postIdentityPayloadAt(value, label, localCharacter, checkpoint, symbiontCatalog),
       catalog,
       symbiontCatalog,
+      skillPresentationStage,
     );
   }
   if (Object.hasOwn(object, 'lastCompleteStage')) {
@@ -3992,12 +4043,61 @@ export function loadCreationWizardCheckpoint(
   catalog?: SkillStageCatalog,
   symbiontCatalog?: SymbiontCatalog,
 ): DurableCreationWizardCheckpoint {
-  return validateDurableCreationWizardCheckpoint(
+  const skillPresentationStage = readLocalCharacterSkillPresentation(database, localCharacterId);
+  const checkpoint = validateDurableCreationWizardCheckpoint(
     readLocalCharacter(database, localCharacterId),
     loadLocalCharacterCheckpoint(database, localCharacterId),
     catalog,
     symbiontCatalog,
+    skillPresentationStage ?? undefined,
   );
+  if (
+    skillPresentationStage === null ||
+    (checkpoint.randomSymbiontStage !== null && checkpoint.nextStageEnvelope.formId !== 'CHR-017')
+  ) {
+    return checkpoint;
+  }
+  const durableFormId = checkpoint.nextStageEnvelope.formId;
+  const selection = checkpoint.skillSelectionStage;
+  if (
+    catalog === undefined ||
+    checkpoint.skillEligibilityStage === null ||
+    skillPresentationStage.selectionRevision !== checkpoint.receipt.result.draftRevision ||
+    skillPresentationStage.projectionRevision !== checkpoint.localCharacter.projectionRevision
+  ) {
+    throw new Error(
+      `localCharacter ${JSON.stringify(localCharacterId)} has stale skill presentation`,
+    );
+  }
+  const formId = skillPresentationStage.formId;
+  const selectionSource = selection?.request.payload.sourceFormId;
+  const formMatches =
+    formId === 'CHR-014'
+      ? durableFormId === 'CHR-013' && selection === null
+      : formId === 'CHR-013'
+        ? durableFormId === 'CHR-013' && selection === null
+        : (durableFormId === 'CHR-013' && selection === null) ||
+          (durableFormId === 'CHR-015' && selectionSource === 'CHR-014') ||
+          (durableFormId === 'CHR-017' && selectionSource === 'CHR-015');
+  if (!formMatches) {
+    throw new Error(
+      `localCharacter ${JSON.stringify(localCharacterId)} has inconsistent skill presentation form`,
+    );
+  }
+  if (formId === 'CHR-014') {
+    const skillId = skillPresentationStage.routeBindings[1]?.value;
+    if (
+      skillId === undefined ||
+      !catalog.skills.some(
+        (skill) => skill.skillKey === skillId && skill.category === 'SELECTABLE_GENERAL',
+      )
+    ) {
+      throw new Error(
+        `localCharacter ${JSON.stringify(localCharacterId)} has an unknown skill card binding`,
+      );
+    }
+  }
+  return { ...checkpoint, skillPresentationStage };
 }
 
 export function currentCreationWizardRevisions(
@@ -4073,6 +4173,107 @@ export function advanceCreationWizardProjection(
     },
   );
   return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint, catalog);
+}
+
+function assertSkillCardNavigation(
+  checkpoint: DurableCreationWizardCheckpoint,
+  wizardCheckpointId: string,
+  formId: 'CHR-013' | 'CHR-014',
+  skillId: string | null,
+  catalog: SkillStageCatalog,
+): void {
+  const currentFormId = checkpoint.skillPresentationStage?.formId;
+  if (
+    checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
+    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
+    checkpoint.skillEligibilityStage === null ||
+    checkpoint.skillSelectionStage !== null ||
+    checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER ||
+    (formId === 'CHR-014'
+      ? currentFormId !== undefined && currentFormId !== 'CHR-013'
+      : currentFormId !== 'CHR-014') ||
+    (formId === 'CHR-014' &&
+      (skillId === null ||
+        !catalog.skills.some(
+          (skill) => skill.skillKey === skillId && skill.category === 'SELECTABLE_GENERAL',
+        ))) ||
+    (formId === 'CHR-013' && skillId !== null)
+  ) {
+    throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
+  }
+}
+
+function commitSkillCardNavigation(
+  database: Database.Database,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  formId: 'CHR-013' | 'CHR-014',
+  skillId: string | null,
+  catalog: SkillStageCatalog,
+): DurableCreationWizardCheckpoint {
+  assertSkillCardNavigation(
+    loadCreationWizardCheckpoint(database, characterDraftId, catalog),
+    wizardCheckpointId,
+    formId,
+    skillId,
+    catalog,
+  );
+  const committed = commitLocalCharacterCheckpoint(
+    database,
+    characterDraftId,
+    wizardCheckpointId,
+    (update) => {
+      const current = loadCreationWizardCheckpoint(database, characterDraftId, catalog);
+      assertSkillCardNavigation(current, wizardCheckpointId, formId, skillId, catalog);
+      const skillPresentationStage = createSkillPresentationStage(
+        formId,
+        characterDraftId,
+        skillId,
+        current.receipt.result.draftRevision,
+        current.localCharacter.projectionRevision + 1,
+      );
+      const result = update(
+        { payloadJson: current.localCharacter.payloadJson },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      );
+      writeLocalCharacterSkillPresentation(database, skillPresentationStage);
+      return result;
+    },
+  );
+  return loadCreationWizardCheckpoint(database, committed.result.localCharacterId, catalog);
+}
+
+export function advanceCreationSkillCardPresentation(
+  database: Database.Database,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  skillId: string,
+  catalog: SkillStageCatalog,
+): DurableCreationWizardCheckpoint {
+  return commitSkillCardNavigation(
+    database,
+    characterDraftId,
+    wizardCheckpointId,
+    'CHR-014',
+    skillId,
+    catalog,
+  );
+}
+
+export function advanceCreationSkillCatalogPresentation(
+  database: Database.Database,
+  characterDraftId: string,
+  wizardCheckpointId: string,
+  catalog: SkillStageCatalog,
+): DurableCreationWizardCheckpoint {
+  return commitSkillCardNavigation(
+    database,
+    characterDraftId,
+    wizardCheckpointId,
+    'CHR-013',
+    null,
+    catalog,
+  );
 }
 
 function assertSkillSelectionPresentationAdvance(
@@ -4201,6 +4402,16 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
     const stage = object[stageKey];
     if (stage !== null && typeof stage === 'object' && !Array.isArray(stage)) {
       addRequestId((stage as Record<string, unknown>)['request']);
+      if (stageKey === 'skillSelectionStage') {
+        const history = (stage as Record<string, unknown>)['cardAdditionRecords'];
+        if (Array.isArray(history)) {
+          for (const record of history) {
+            if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+              addRequestId((record as Record<string, unknown>)['request']);
+            }
+          }
+        }
+      }
     }
   }
   const randomSymbiontStage = object['randomSymbiontStage'];
@@ -4283,6 +4494,17 @@ export function loadCreationWizardCommandByCommandId(
       };
     }
   }
+  const cardAdditionRecord = durableCheckpoint.skillSelectionStage?.cardAdditionRecords?.find(
+    ({ request }) => request.commandId === commandId,
+  );
+  if (cardAdditionRecord !== undefined) {
+    return {
+      durableCheckpoint,
+      nextStageEnvelope: cardAdditionRecord.nextStageEnvelope,
+      receipt: cardAdditionRecord.receipt,
+      request: cardAdditionRecord.request,
+    };
+  }
   const rollRecords =
     durableCheckpoint.statRollStage?.attempts.flatMap((attempt) => [
       ...(attempt.setRecord === null ? [] : [attempt.setRecord]),
@@ -4340,6 +4562,7 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   ...(checkpoint.statAssignmentStage === null ? [] : [checkpoint.statAssignmentStage]),
   ...(checkpoint.pureClassStage === null ? [] : [checkpoint.pureClassStage]),
   ...(checkpoint.skillEligibilityStage === null ? [] : [checkpoint.skillEligibilityStage]),
+  ...(checkpoint.skillSelectionStage?.cardAdditionRecords ?? []),
   ...(checkpoint.skillSelectionStage === null ? [] : [checkpoint.skillSelectionStage]),
   ...(checkpoint.randomSymbiontStage?.rollRecords ?? []),
   ...(checkpoint.randomSymbiontStage === null ||

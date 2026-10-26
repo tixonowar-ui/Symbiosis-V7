@@ -47,6 +47,10 @@ import {
   CHR_013_FORM_ID,
   CHR_013_REQUIRED_FIELDS,
   CHR_013_ROUTE,
+  CHR_014_FORM_ID,
+  CHR_014_REQUIRED_FIELDS,
+  CHR_014_RETURN_ACTION_KEY,
+  CHR_014_ROUTE,
   CHR_015_FORM_ID,
   CHR_015_REQUIRED_FIELDS,
   CHR_015_ROUTE,
@@ -229,6 +233,7 @@ export interface AppNavigationAction {
     | CreationSetDecisionFormId
     | typeof CHR_001_FORM_ID
     | typeof CHR_013_FORM_ID
+    | typeof CHR_014_FORM_ID
     | typeof CHR_017_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -263,6 +268,7 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       'draft has no irreversible displayed result; deleting this draft requires explicit confirmation elsewhere and any later draft receives a new UUID',
     ],
     [CHR_013_FORM_ID, CHR_013_CONTINUE_ACTION_KEY, 'skill-stage revision current'],
+    [CHR_014_FORM_ID, CHR_014_RETURN_ACTION_KEY, 'no selection mutation'],
     [
       CHR_017_FORM_ID,
       CHR_017_RANDOM_START_ACTION_KEY,
@@ -433,6 +439,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertScreenContract(forms, CHR_011_FORM_ID, CHR_011_REQUIRED_FIELDS, CHR_011_ROUTE);
   assertScreenContract(forms, CHR_012_FORM_ID, CHR_012_REQUIRED_FIELDS, CHR_012_ROUTE);
   assertScreenContract(forms, CHR_013_FORM_ID, CHR_013_REQUIRED_FIELDS, CHR_013_ROUTE);
+  assertScreenContract(forms, CHR_014_FORM_ID, CHR_014_REQUIRED_FIELDS, CHR_014_ROUTE);
   assertScreenContract(forms, CHR_015_FORM_ID, CHR_015_REQUIRED_FIELDS, CHR_015_ROUTE);
   assertScreenContract(forms, CHR_016_FORM_ID, CHR_016_REQUIRED_FIELDS, CHR_016_ROUTE);
   assertScreenContract(forms, CHR_028_FORM_ID, CHR_028_REQUIRED_FIELDS, CHR_028_ROUTE, 'dialog');

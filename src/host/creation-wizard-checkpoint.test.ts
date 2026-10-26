@@ -12,6 +12,8 @@ import {
   CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID,
 } from './creation-roll-commit.js';
 import {
+  advanceCreationSkillCardPresentation,
+  advanceCreationSkillCatalogPresentation,
   advanceCreationSkillSelectionProjection,
   advanceCreationWizardProjection,
   commitCreationSetDecide,
@@ -373,7 +375,7 @@ const assignmentRequest = (
 
 const skillRequest = (
   previous: DurableCreationWizardCheckpoint,
-  sourceFormId: 'CHR-012' | 'CHR-015',
+  sourceFormId: 'CHR-012' | 'CHR-014' | 'CHR-015',
   commandId: string,
   selectedSkills?: readonly SelectedSkillCommandInput[],
 ): SkillCheckpointCommandRequest => ({
@@ -1290,6 +1292,180 @@ describe('SKILLS wizard checkpoint', () => {
         .prepare('SELECT * FROM local_character_checkpoint WHERE local_character_id = ?')
         .get('character-draft'),
     ).toEqual(beforeCheckpoint);
+  });
+
+  it('opens and safely returns from CHR-014 without selection or state mutation', () => {
+    const store = database();
+    const eligible = skillEligibility(store, 'FREE');
+    const skillId = eligible.skillEligibilityStage?.derived.eligibleSkillIds[0];
+    if (skillId === undefined) throw new Error('test expected an eligible skill');
+    const stateRevision = eligible.localCharacter.stateRevision;
+    const draftRevision = eligible.receipt.result.draftRevision;
+
+    const opened = advanceCreationSkillCardPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      skillId,
+      catalog,
+    );
+    expect(opened.skillPresentationStage).toMatchObject({
+      formId: 'CHR-014',
+      projectionRevision: eligible.localCharacter.projectionRevision + 1,
+      routeBindings: [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft' },
+        { parameterIndex: 1, source: 'client-selected', value: skillId },
+      ],
+      selectionRevision: draftRevision,
+    });
+    expect(opened.skillSelectionStage).toBeNull();
+    expect(opened.localCharacter.stateRevision).toBe(stateRevision);
+    expect(opened.receipt.result.draftRevision).toBe(draftRevision);
+    expect(opened.receipt).toEqual(eligible.receipt);
+
+    const returned = advanceCreationSkillCatalogPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    expect(returned.skillPresentationStage).toMatchObject({
+      formId: 'CHR-013',
+      projectionRevision: opened.localCharacter.projectionRevision + 1,
+      routeBindings: [{ parameterIndex: 0, source: 'inherited', value: 'character-draft' }],
+      selectionRevision: draftRevision,
+    });
+    expect(returned.skillSelectionStage).toBeNull();
+    expect(returned.localCharacter.stateRevision).toBe(stateRevision);
+    expect(returned.receipt).toEqual(eligible.receipt);
+  });
+
+  it('rejects stale, missing, wrong-route, and overfilled CHR-014 additions without a write', () => {
+    const store = database();
+    const eligible = skillEligibility(store, 'FREE');
+    const derived = eligible.skillEligibilityStage?.derived;
+    const skillId = derived?.eligibleSkillIds[0];
+    const otherSkillId = derived?.eligibleSkillIds.find((candidate) => candidate !== skillId);
+    if (derived === undefined || skillId === undefined || otherSkillId === undefined) {
+      throw new Error('test expected two eligible skills');
+    }
+    const opened = advanceCreationSkillCardPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      skillId,
+      catalog,
+    );
+    const beforeCharacter = store
+      .prepare('SELECT * FROM local_character WHERE local_character_id = ?')
+      .get('character-draft');
+    const beforeCheckpoint = store
+      .prepare('SELECT * FROM local_character_checkpoint WHERE local_character_id = ?')
+      .get('character-draft');
+    const selected = [{ skillId, targetBonus: 1 }] as const;
+    const stale = skillRequest(opened, 'CHR-014', 'stale-card-command', selected);
+    const invalidRequests = [
+      {
+        ...stale,
+        payload: { ...stale.payload, draftRevision: stale.payload.draftRevision + 1 },
+      },
+      skillRequest(opened, 'CHR-014', 'missing-card-command', []),
+      skillRequest(opened, 'CHR-014', 'wrong-route-card-command', [
+        { skillId: otherSkillId, targetBonus: 1 },
+      ]),
+      skillRequest(opened, 'CHR-014', 'overfilled-card-command', [
+        { skillId, targetBonus: derived.requiredSlotCount + 1 },
+      ]),
+    ];
+    for (const request of invalidRequests) {
+      expect(
+        refusal(() =>
+          commitCreationWizardCheckpoint(store, request, `${request.commandId}-receipt`, catalog),
+        ),
+      ).toEqual({ code: 'GUARD_REJECTED' });
+      expect(
+        store
+          .prepare('SELECT * FROM local_character WHERE local_character_id = ?')
+          .get('character-draft'),
+      ).toEqual(beforeCharacter);
+      expect(
+        store
+          .prepare('SELECT * FROM local_character_checkpoint WHERE local_character_id = ?')
+          .get('character-draft'),
+      ).toEqual(beforeCheckpoint);
+    }
+  });
+
+  it('keeps exact CHR-014 addition partial, preserves history, and replays it after final checkpoint and reopen', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'symbiosis-skill-card-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'host.sqlite');
+    let store = database(path);
+    const eligible = skillEligibility(store, 'FREE', [19, 19, 19, 19, 19, 4, 19]);
+    const derived = eligible.skillEligibilityStage?.derived;
+    const skillId = derived?.eligibleSkillIds[0];
+    if (derived === undefined || skillId === undefined) {
+      throw new Error('test expected skill eligibility');
+    }
+    const opened = advanceCreationSkillCardPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      skillId,
+      catalog,
+    );
+    const selectedSkills = exactSelectedSkills(opened);
+    const partial = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(opened, 'CHR-014', 'skill-card-command', selectedSkills),
+      'skill-card-receipt',
+      catalog,
+    );
+    expect(partial.nextStageEnvelope.formId).toBe('CHR-015');
+    expect(partial.randomSymbiontStage).toBeNull();
+    expect(partial.skillSelectionStage?.request.payload.sourceFormId).toBe('CHR-014');
+    expect(partial.skillSelectionStage?.receipt.result.nextFormId).toBe('CHR-015');
+    expect(partial.skillSelectionStage?.derived.usedSlotCount).toBe(derived.requiredSlotCount);
+    expect(partial.skillSelectionStage?.cardAdditionRecords).toHaveLength(1);
+    expect(deriveChr015SkillSelectionView(partial, presentationCatalog)).toMatchObject({
+      commandId: 'skill-card-command',
+      selectionCheckpoint: 'PARTIAL',
+      selectionValidation: { kind: 'EXACT' },
+    });
+
+    const final = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(partial, 'CHR-015', 'skill-selection-command', selectedSkills),
+      'skill-selection-receipt',
+      catalog,
+    );
+    const cardReceipt = final.skillSelectionStage?.cardAdditionRecords?.[0]?.receipt;
+    expect(cardReceipt?.result.nextFormId).toBe('CHR-015');
+    expect(final.nextStageEnvelope.formId).toBe('CHR-017');
+    expect(final.skillSelectionStage?.cardAdditionRecords).toHaveLength(1);
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'skill-card-command', catalog)?.receipt,
+    ).toEqual(cardReceipt);
+    expect(deriveChr015SkillSelectionView(final, presentationCatalog)).toMatchObject({
+      commandId: 'skill-selection-command',
+      selectionCheckpoint: 'EXACT',
+    });
+    store.close();
+    databases.splice(databases.indexOf(store), 1);
+
+    const reloadedCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
+    const reloadedPresentation = await loadCreationSkillCatalog(PROJECT_ROOT, reloadedCatalog);
+    store = database(path);
+    const restored = loadCreationWizardCheckpoint(store, 'character-draft', reloadedCatalog);
+    expect(restored.skillSelectionStage?.cardAdditionRecords).toHaveLength(1);
+    expect(restored.skillSelectionStage?.receipt.result.nextFormId).toBe('CHR-017');
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'skill-card-command', reloadedCatalog)?.receipt,
+    ).toEqual(cardReceipt);
+    expect(deriveChr015SkillSelectionView(restored, reloadedPresentation)).toMatchObject({
+      commandId: 'skill-selection-command',
+      selectionCheckpoint: 'EXACT',
+    });
   });
 
   it('restores both skill checkpoints and their replay records after restart', async () => {

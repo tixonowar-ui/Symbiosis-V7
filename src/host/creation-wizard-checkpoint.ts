@@ -6,7 +6,10 @@ import type Database from 'better-sqlite3';
 import type { ClientToHostMessage, CommandRefusal, RevisionVector } from '@shared/wire-protocol.js';
 
 import type { SkillStageCatalog, SymbiontCatalog } from '../domain/index.js';
-import { commitLocalCharacterCheckpoint } from '../persistence/index.js';
+import {
+  commitLocalCharacterCheckpoint,
+  writeLocalCharacterSkillPresentation,
+} from '../persistence/index.js';
 import {
   creationWizardDurableIds,
   currentCreationWizardRevisions,
@@ -37,10 +40,16 @@ import {
   type StatAssignmentStage,
 } from './creation-stat-assignment.js';
 import {
+  createSkillPresentationStage,
+  prepareSkillCardAdditionFromCheckpoint,
+} from './creation-skill-card.js';
+import {
   CreationSkillSelectionApplicationError,
   normalizeSkillCheckpointRequest,
   prepareSkillEligibility,
   prepareSkillSelection,
+  type SkillCardAdditionCheckpointPayload,
+  type SkillCardAdditionRecord,
   type SkillCheckpointCommandRequest,
   type SkillEligibilityCheckpointPayload,
   type SkillEligibilityCheckpointReceipt,
@@ -210,27 +219,57 @@ function assertCurrentSkillRequest(
       expected: request.expectedRevisions,
     });
   }
-  const eligibilityRequest = request.payload.sourceFormId === 'CHR-012';
-  const eligibilityRevisions = checkpoint.skillEligibilityStage?.receipt.revisions ?? null;
-  const selectionPresentationAdvanced =
-    eligibilityRequest ||
-    (eligibilityRevisions !== null &&
-      eligibilityRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
-      revisions.actorVisibilityRevision === eligibilityRevisions.actorVisibilityRevision &&
-      revisions.stateRevision === eligibilityRevisions.stateRevision &&
-      revisions.projectionRevision === eligibilityRevisions.projectionRevision + 1);
+  const sourceFormId = request.payload.sourceFormId;
+  const eligibility = checkpoint.skillEligibilityStage;
+  const selection = checkpoint.skillSelectionStage;
+  const latest = selection?.receipt ?? eligibility?.receipt;
+  const presentationAdvanced =
+    latest !== undefined &&
+    latest.revisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
+    revisions.actorVisibilityRevision === latest.revisions.actorVisibilityRevision &&
+    revisions.stateRevision === latest.revisions.stateRevision &&
+    (sourceFormId === 'CHR-014'
+      ? revisions.projectionRevision > latest.revisions.projectionRevision
+      : revisions.projectionRevision === latest.revisions.projectionRevision + 1);
+  const selectionIsFinal = selection?.request.payload.sourceFormId === 'CHR-015';
+  const presentation = checkpoint.skillPresentationStage;
+  const cardRequestMatches =
+    sourceFormId !== 'CHR-014' ||
+    (presentation?.formId === 'CHR-014' &&
+      presentation.selectionRevision === request.payload.draftRevision &&
+      presentation.projectionRevision === revisions.projectionRevision);
+  const finalRequestMatches =
+    sourceFormId !== 'CHR-015' ||
+    presentation === undefined ||
+    presentation === null ||
+    (presentation.formId === 'CHR-015' &&
+      presentation.selectionRevision === request.payload.draftRevision &&
+      presentation.projectionRevision === revisions.projectionRevision);
+  const stageMatches =
+    sourceFormId === 'CHR-012'
+      ? checkpoint.nextStageEnvelope.formId === 'CHR-012' &&
+        eligibility === null &&
+        selection === null
+      : eligibility !== null &&
+        !selectionIsFinal &&
+        (sourceFormId === 'CHR-014'
+          ? ((checkpoint.nextStageEnvelope.formId === 'CHR-013' && selection === null) ||
+              (checkpoint.nextStageEnvelope.formId === 'CHR-015' &&
+                selection?.request.payload.sourceFormId === 'CHR-014')) &&
+            presentationAdvanced
+          : (checkpoint.nextStageEnvelope.formId === 'CHR-013' &&
+              selection === null &&
+              presentationAdvanced) ||
+            (checkpoint.nextStageEnvelope.formId === 'CHR-015' &&
+              selection?.request.payload.sourceFormId === 'CHR-014' &&
+              isDeepStrictEqual(revisions, selection.receipt.revisions)));
   if (
     request.payload.characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     request.payload.wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
     request.payload.draftRevision !== checkpoint.receipt.result.draftRevision ||
-    (eligibilityRequest
-      ? checkpoint.nextStageEnvelope.formId !== 'CHR-012' ||
-        checkpoint.skillEligibilityStage !== null ||
-        checkpoint.skillSelectionStage !== null
-      : checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
-        checkpoint.skillEligibilityStage === null ||
-        checkpoint.skillSelectionStage !== null ||
-        !selectionPresentationAdvanced) ||
+    !stageMatches ||
+    !cardRequestMatches ||
+    !finalRequestMatches ||
     creationWizardDurableIds(checkpoint).has(request.commandId) ||
     checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||
     checkpoint.receipt.result.draftRevision === Number.MAX_SAFE_INTEGER ||
@@ -297,13 +336,21 @@ export function preflightCreationWizardCheckpoint(
                 },
                 baseCatalog(catalog),
               )
-            : prepareSkillSelection(
-                checkpoint,
-                skillRequest as SkillCheckpointCommandRequest & {
-                  readonly payload: SkillSelectionCheckpointPayload;
-                },
-                baseCatalog(catalog),
-              ),
+            : skillRequest.payload.sourceFormId === 'CHR-014'
+              ? prepareSkillCardAdditionFromCheckpoint(
+                  checkpoint,
+                  skillRequest as SkillCheckpointCommandRequest & {
+                    readonly payload: SkillSelectionCheckpointPayload;
+                  },
+                  baseCatalog(catalog),
+                )
+              : prepareSkillSelection(
+                  checkpoint,
+                  skillRequest as SkillCheckpointCommandRequest & {
+                    readonly payload: SkillSelectionCheckpointPayload;
+                  },
+                  baseCatalog(catalog),
+                ),
         request: skillRequest,
         stage: 'SKILLS',
       };
@@ -348,7 +395,7 @@ const incrementedRevisions = (revisions: RevisionVector): RevisionVector => {
   };
 };
 
-const destination = <TFormId extends 'CHR-011' | 'CHR-012' | 'CHR-013' | 'CHR-017'>(
+const destination = <TFormId extends 'CHR-011' | 'CHR-012' | 'CHR-013' | 'CHR-015' | 'CHR-017'>(
   formId: TFormId,
   characterDraftId: string,
 ): CreationNextStageEnvelope<TFormId> => ({
@@ -448,14 +495,15 @@ function skillPayload(
       skillSelectionStage: null,
     };
   }
-  if (plan.nextFormId !== 'CHR-017' || checkpoint.skillEligibilityStage === null) {
-    return guardRejected();
-  }
+  if (checkpoint.skillEligibilityStage === null) return guardRejected();
+  const sourceFormId = request.payload.sourceFormId;
+  const nextFormId = sourceFormId === 'CHR-014' ? 'CHR-015' : 'CHR-017';
+  if (plan.nextFormId !== nextFormId) return guardRejected();
   const normalized = request as SkillCheckpointCommandRequest & {
     readonly payload: SkillSelectionCheckpointPayload;
   };
   const selectionPlan = plan;
-  const nextStageEnvelope = destination('CHR-017', request.payload.characterDraftId);
+  const nextStageEnvelope = destination(nextFormId, request.payload.characterDraftId);
   const receipt: SkillSelectionCheckpointReceipt = {
     commandId: request.commandId,
     receiptId,
@@ -468,26 +516,48 @@ function skillPayload(
       checkpointOwnerId: request.payload.characterDraftId,
       checkpointRevision: checkpoint.checkpoint.checkpointRevision + 1,
       draftRevision: checkpoint.receipt.result.draftRevision + 1,
-      nextFormId: 'CHR-017',
-      sourceFormId: 'CHR-015',
+      nextFormId,
+      sourceFormId,
       stage: 'SKILLS',
     },
     revisions,
   };
-  const skillSelectionStage: SkillSelectionStage = {
+  const previousRecords = checkpoint.skillSelectionStage?.cardAdditionRecords ?? [];
+  const selectionRecord = {
     derived: selectionPlan.derived,
     nextStageEnvelope,
     receipt,
     request: normalized,
   };
+  let skillSelectionStage: SkillSelectionStage;
+  if (sourceFormId === 'CHR-014') {
+    const cardAdditionRecord: SkillCardAdditionRecord = {
+      ...selectionRecord,
+      nextStageEnvelope: nextStageEnvelope as CreationNextStageEnvelope<'CHR-015'>,
+      request: normalized as SkillCheckpointCommandRequest & {
+        readonly payload: SkillCardAdditionCheckpointPayload;
+      },
+    };
+    skillSelectionStage = {
+      ...selectionRecord,
+      cardAdditionRecords: [...previousRecords, cardAdditionRecord],
+    };
+  } else {
+    skillSelectionStage = {
+      ...selectionRecord,
+      ...(previousRecords.length === 0 ? {} : { cardAdditionRecords: previousRecords }),
+    };
+  }
+  const resultPayload = {
+    ...(checkpoint.durablePayload as CreationWizardSkillPayload),
+    nextStageEnvelope,
+    receipt,
+    skillSelectionStage,
+  } as CreationWizardSkillPayload;
+  if (sourceFormId === 'CHR-014') return resultPayload;
   const raceStage = checkpoint.raceAndMethodStage;
   if (symbiontCatalog === undefined || raceStage?.symbiontAcquisition.value !== 'RANDOM') {
-    return {
-      ...(checkpoint.durablePayload as CreationWizardSkillPayload),
-      nextStageEnvelope,
-      receipt,
-      skillSelectionStage,
-    };
+    return resultPayload;
   }
   const raceChoice = raceStage.race?.value;
   const diceInputModeSnapshot = raceStage.diceInput?.value;
@@ -504,16 +574,13 @@ function skillPayload(
     return guardRejected();
   }
   return {
-    ...checkpoint.durablePayload,
-    nextStageEnvelope,
-    receipt,
-    skillSelectionStage,
+    ...resultPayload,
     randomSymbiontStage: initialSymbiontStageForWizard(
       randomSequenceId,
       raceChoice,
       diceInputModeSnapshot,
     ),
-  } as CreationWizardSymbiontPayload;
+  };
 }
 
 export function commitCreationWizardCheckpoint(
@@ -601,31 +668,52 @@ export function commitCreationWizardCheckpoint(
                 },
                 baseCatalog(catalog)!,
               )
-            : prepareSkillSelection(
-                current,
-                skillRequest as SkillCheckpointCommandRequest & {
-                  readonly payload: SkillSelectionCheckpointPayload;
-                },
-                baseCatalog(catalog)!,
-              );
+            : skillRequest.payload.sourceFormId === 'CHR-014'
+              ? prepareSkillCardAdditionFromCheckpoint(
+                  current,
+                  skillRequest as SkillCheckpointCommandRequest & {
+                    readonly payload: SkillSelectionCheckpointPayload;
+                  },
+                  baseCatalog(catalog)!,
+                )
+              : prepareSkillSelection(
+                  current,
+                  skillRequest as SkillCheckpointCommandRequest & {
+                    readonly payload: SkillSelectionCheckpointPayload;
+                  },
+                  baseCatalog(catalog)!,
+                );
       } catch (cause) {
         return translate(cause);
       }
-      return update(
-        {
-          payloadJson: JSON.stringify(
-            skillPayload(
-              current,
-              skillRequest,
-              plan,
-              receiptId,
-              fullSymbiontCatalog(catalog),
-              allocateRandomSequenceId,
-            ),
-          ),
-        },
+      const nextPayload = skillPayload(
+        current,
+        skillRequest,
+        plan,
+        receiptId,
+        fullSymbiontCatalog(catalog),
+        allocateRandomSequenceId,
+      );
+      const result = update(
+        { payloadJson: JSON.stringify(nextPayload) },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
+      if (
+        skillRequest.payload.sourceFormId === 'CHR-014' ||
+        (current.skillPresentationStage ?? null) !== null
+      ) {
+        writeLocalCharacterSkillPresentation(
+          database,
+          createSkillPresentationStage(
+            'CHR-015',
+            nextPayload.receipt.result.characterDraftId,
+            null,
+            nextPayload.receipt.result.draftRevision,
+            nextPayload.receipt.revisions.projectionRevision,
+          ),
+        );
+      }
+      return result;
     },
   );
   return loadCreationWizardCheckpoint(

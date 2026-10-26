@@ -50,6 +50,7 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CHR-011',
   'CHR-012',
   'CHR-013',
+  'CHR-014',
   'CHR-015',
   'CHR-017',
   'CHR-019',
@@ -184,8 +185,8 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // Issue #33 fixes APP at nine screens/two dialogs; the CHR slice adds twenty screens/one dialog.
-    expect(screens).toBe(29);
+    // Issue #33 fixes APP at nine screens/two dialogs; the CHR slice adds 21 screens/one dialog.
+    expect(screens).toBe(30);
     expect(dialogs).toBe(3);
   });
 
@@ -352,8 +353,8 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
-    expect(() => getAtlasFormModel('CHR-014')).toThrow(
-      `form "CHR-014" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
+    expect(() => getAtlasFormModel('CHR-018')).toThrow(
+      `form "CHR-018" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 

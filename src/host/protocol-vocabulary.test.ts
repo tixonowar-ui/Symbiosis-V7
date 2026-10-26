@@ -9,7 +9,7 @@ import {
   CHR_011_SET_DECIDE_ACTION_KEYS,
 } from './projections/chr.js';
 import type { ProtocolVocabulary } from '@shared/wire-protocol.js';
-import type { WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
+import type { AddressableRouteTemplate, WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -108,6 +108,46 @@ describe('host protocol vocabulary implemented presentation support', () => {
       vocabulary.isPresentedForm('CHR-016', 'screen', route, [
         { parameterIndex: 0, source: 'inherited', value: 'character-draft-id' },
         { parameterIndex: 1, source: 'inherited', value: 'extra' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('accepts only the exact CHR-014 addressable route and both assigned bindings', () => {
+    const route =
+      '/player/characters/:localCharacterId/create/chr-014/:skillId' as AddressableRouteTemplate;
+    const clientBinding = {
+      parameterIndex: 1,
+      source: 'client-selected',
+      value: 'ACROBATICS',
+    } as const;
+    expect(vocabulary.isAddressableRouteTemplate(route)).toBe(true);
+    expect(
+      vocabulary.isAddressableRouteTemplate(
+        '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
+      ),
+    ).toBe(false);
+    expect(vocabulary.isClientRouteBindings(route, [clientBinding])).toBe(true);
+    expect(vocabulary.isClientRouteBindings(route, [])).toBe(false);
+    expect(vocabulary.isClientRouteBindings(route, [clientBinding, clientBinding])).toBe(false);
+    expect(vocabulary.isClientRouteBindings(route, [{ ...clientBinding, parameterIndex: 0 }])).toBe(
+      false,
+    );
+    expect(
+      vocabulary.isClientRouteBindings(route, [{ ...clientBinding, source: 'inherited' as never }]),
+    ).toBe(false);
+    expect(vocabulary.isClientRouteBindings(route, [{ ...clientBinding, value: 'SKL-016' }])).toBe(
+      false,
+    );
+    expect(
+      vocabulary.isPresentedForm('CHR-014', 'screen', route, [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft' },
+        clientBinding,
+      ]),
+    ).toBe(true);
+    expect(
+      vocabulary.isPresentedForm('CHR-014', 'screen', route, [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft' },
+        { ...clientBinding, source: 'inherited' },
       ]),
     ).toBe(false);
   });

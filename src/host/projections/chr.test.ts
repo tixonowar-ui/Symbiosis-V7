@@ -29,6 +29,8 @@ import {
   CHR_012_EXCLUDED_ACTION_KEYS,
   CHR_013_ACTION_KEYS,
   CHR_013_EXCLUDED_ACTION_KEYS,
+  CHR_014_ACTION_KEYS,
+  CHR_014_READ_ONLY_ACTION_KEYS,
   CHR_015_CHECKPOINTED_ACTION_KEYS,
   CHR_015_HOST_EXCLUDED_ACTION_KEYS,
   CHR_015_INITIAL_ACTION_KEYS,
@@ -57,12 +59,14 @@ import {
   projectChr004,
   projectChr012,
   projectChr013,
+  projectChr014,
   projectChr015,
   projectChr028,
   projectCreationSetDecision,
   creationSetDecisionPendingActionKeys,
   chr009CheckpointActionKeys,
   type Chr013ProjectionValues,
+  type Chr014ProjectionValues,
   type Chr015ProjectionValues,
 } from './chr.js';
 
@@ -161,6 +165,7 @@ function skillProjectionValues(catalog: SkillPresentationCatalog): {
       },
       selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
       selectedSkills,
+      selectionCheckpoint: 'EXACT',
       selectionValidation: { kind: 'EXACT', requiredSlotCount: 3, usedSlotCount: 3 },
     },
     initialChr015: {
@@ -172,6 +177,7 @@ function skillProjectionValues(catalog: SkillPresentationCatalog): {
       },
       selectedSkillIds: [],
       selectedSkills: [],
+      selectionCheckpoint: 'NONE',
       selectionValidation: {
         kind: 'UNDERFILLED',
         missingSlotCount: 2,
@@ -179,6 +185,33 @@ function skillProjectionValues(catalog: SkillPresentationCatalog): {
         usedSlotCount: 1,
       },
     },
+  };
+}
+
+function chr014ProjectionValues(
+  catalog: SkillPresentationCatalog,
+  skillId: string,
+): Chr014ProjectionValues {
+  const values = skillProjectionValues(catalog);
+  const card = values.chr013.skillCardSummaries.find((candidate) => candidate.skillId === skillId);
+  if (card === undefined) throw new Error(`test catalog lacks ${skillId}`);
+  return {
+    bonusDomainScope: card.bonusDomainScope,
+    characterDraftId: values.chr013.characterDraftId,
+    eligibility: card.eligibility === 'ELIGIBLE' ? 'ELIGIBLE' : 'INELIGIBLE_READ_ONLY',
+    eligibleSkillIds: values.chr013.eligibleSkillIds,
+    freeSources: { kind: 'NO_FREE_SOURCE' },
+    levelsAndBonuses: card.levelOptions,
+    missingSkillPenalty: card.missingSkillPenalty,
+    requirements: card.requirements,
+    selectedSkills: [],
+    selectionRevision: values.chr013.draftRevision,
+    skillId: card.skillId,
+    skillLabel: card.skillLabel,
+    skillStageValues: values.chr013.skillStageStats,
+    slotCost: null,
+    slotSources: values.chr013.slotSources,
+    wizardCheckpointId: values.chr013.wizardCheckpointId,
   };
 }
 
@@ -244,8 +277,8 @@ describe('CHR host projection vocabulary', () => {
     expect(CHR_012_ACTION_KEYS).toEqual([]);
     expect(CHR_012_CHECKPOINT_ACTION_KEYS).toEqual(['CHR-012::CTA::001']);
     expect(CHR_012_EXCLUDED_ACTION_KEYS).toEqual(['CHR-012::CTA::002', 'CHR-012::CTA::003']);
-    expect(CHR_013_ACTION_KEYS).toEqual(['CHR-013::CTA::002']);
-    expect(CHR_013_EXCLUDED_ACTION_KEYS).toEqual(['CHR-013::CTA::001', 'CHR-013::CTA::003']);
+    expect(CHR_013_ACTION_KEYS).toEqual(['CHR-013::CTA::001', 'CHR-013::CTA::002']);
+    expect(CHR_013_EXCLUDED_ACTION_KEYS).toEqual(['CHR-013::CTA::003']);
     expect(CHR_015_INITIAL_ACTION_KEYS).toEqual(['CHR-015::CTA::003']);
     expect(CHR_015_CHECKPOINTED_ACTION_KEYS).toEqual([]);
     expect(CHR_015_HOST_EXCLUDED_ACTION_KEYS).toEqual(['CHR-015::CTA::001', 'CHR-015::CTA::002']);
@@ -931,6 +964,7 @@ describe('CHR host projection vocabulary', () => {
       paidSlotUsage: { usedSlotCount: 1 },
       selectedSkillIds: [],
       selectedSkills: [],
+      selectionCheckpoint: 'NONE',
       selectionValidation: {
         kind: 'UNDERFILLED',
         missingSlotCount: 2,
@@ -952,8 +986,32 @@ describe('CHR host projection vocabulary', () => {
     expect(projectChr015(values.checkpointedChr015)).toMatchObject({
       commandId: 'skill-selection-command',
       paidSlotUsage: { usedSlotCount: 3 },
+      selectionCheckpoint: 'EXACT',
       selectionValidation: { kind: 'EXACT', requiredSlotCount: 3, usedSlotCount: 3 },
     });
+  });
+
+  it('projects CHR-014 eligible and ineligible cards without a default slot cost or free ownership', () => {
+    const eligibleId = skillCatalog.selectableSkills[0]?.skillId;
+    const ineligibleId = skillCatalog.selectableSkills.find((skill) =>
+      skill.requirements.some(
+        (requirement) => SKILL_STAGE_STATS[requirement.statCode] < requirement.minValue,
+      ),
+    )?.skillId;
+    if (eligibleId === undefined || ineligibleId === undefined) {
+      throw new Error('test expected eligible and ineligible skills');
+    }
+    const eligibleValues = chr014ProjectionValues(skillCatalog, eligibleId);
+    expect(projectChr014(eligibleValues)).toEqual(eligibleValues);
+    expect(projectChr014(eligibleValues).slotCost).toBeNull();
+    expect(projectChr014(eligibleValues).freeSources).toEqual({ kind: 'NO_FREE_SOURCE' });
+    expect(CHR_014_ACTION_KEYS).toEqual(['CHR-014::CTA::001', 'CHR-014::CTA::002']);
+
+    const ineligibleValues = chr014ProjectionValues(skillCatalog, ineligibleId);
+    expect(ineligibleValues.eligibility).toBe('INELIGIBLE_READ_ONLY');
+    expect(ineligibleValues.requirements.some(({ satisfied }) => !satisfied)).toBe(true);
+    expect(projectChr014(ineligibleValues)).toEqual(ineligibleValues);
+    expect(CHR_014_READ_ONLY_ACTION_KEYS).toEqual(['CHR-014::CTA::002']);
   });
 
   it('carries source-substituted skill content through both player projections', () => {
@@ -999,10 +1057,18 @@ describe('CHR host projection vocabulary', () => {
     });
   });
 
-  it('keeps internal skill registry IDs and traces out of CHR-013 and CHR-015 payloads', () => {
+  it('keeps internal skill registry IDs and traces out of CHR-013, CHR-014 and CHR-015 payloads', () => {
     const values = skillProjectionValues(skillCatalog);
+    const ineligibleId = values.chr013.skillCardSummaries.find(
+      ({ eligibility }) => eligibility === 'REQUIREMENTS_NOT_MET',
+    )?.skillId;
+    if (ineligibleId === undefined) throw new Error('test expected an ineligible skill');
     const serialized = JSON.stringify([
       projectChr013(values.chr013),
+      projectChr014(
+        chr014ProjectionValues(skillCatalog, values.chr013.skillCardSummaries[0]!.skillId),
+      ),
+      projectChr014(chr014ProjectionValues(skillCatalog, ineligibleId)),
       projectChr015(values.initialChr015),
       projectChr015(values.checkpointedChr015),
     ]);
@@ -1084,6 +1150,7 @@ describe('CHR host projection vocabulary', () => {
         requiredSlotCount: 1,
         selectedSkillIds: [],
         selectedSkills: [],
+        selectionCheckpoint: 'NONE',
         selectionValidation: { kind: 'EXACT', requiredSlotCount: 1, usedSlotCount: 1 },
         skillOptions: chr013.skillCardSummaries
           .filter(({ eligibility }) => eligibility === 'ELIGIBLE')
@@ -1186,6 +1253,26 @@ describe('CHR host projection vocabulary', () => {
       ),
     };
     expect(() => projectChr015(forgedLevel)).toThrow('must match a signed skill level option');
+
+    const cardValues = chr014ProjectionValues(
+      skillCatalog,
+      values.chr013.skillCardSummaries[0]!.skillId,
+    );
+    expect(() => projectChr014({ ...cardValues, slotCost: 1 as never })).toThrow(
+      'CHR-014 slotCost must be null until the player explicitly selects a level',
+    );
+    expect(() =>
+      projectChr014({
+        ...cardValues,
+        freeSources: { kind: 'RACE_GRANTED' } as never,
+      }),
+    ).toThrow('CHR-014 freeSources must be exactly {kind:"NO_FREE_SOURCE"}');
+    expect(() =>
+      projectChr014({
+        ...cardValues,
+        eligibility: cardValues.eligibility === 'ELIGIBLE' ? 'INELIGIBLE_READ_ONLY' : 'ELIGIBLE',
+      }),
+    ).toThrow('CHR-014 eligibility disagrees with its requirement rows');
 
     const wrongDiagnostic: Chr015ProjectionValues = {
       ...values.initialChr015,

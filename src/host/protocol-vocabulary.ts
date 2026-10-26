@@ -13,6 +13,8 @@ import { array, readJsonFile, record, string } from './json-source.js';
 
 const WORKFLOW_QA_PREFIX = 'QA-WORKFLOW-';
 const WORKFLOW_COMMAND = /^UI-CMD-[A-Z0-9-]+$/u;
+const isPublicSkillId = (value: string): boolean =>
+  value.length > 0 && !/^(?:CORE|Q|REQ|SKL)-/u.test(value);
 const HOST_TRANSITION_KINDS = new Set([
   'local-or-read-command',
   'operation-command',
@@ -35,6 +37,7 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-011',
   'CHR-012',
   'CHR-013',
+  'CHR-014',
   'CHR-015',
   'CHR-016',
   'CHR-028',
@@ -165,9 +168,20 @@ export async function loadProtocolVocabulary(
     throw new Error('transitions.json: no host transitions found');
   }
 
+  const skillCardRoute = presentedForms.get('CHR-014')?.route;
+  if (skillCardRoute !== '/player/characters/:localCharacterId/create/chr-014/:skillId') {
+    throw new Error('CHR-014 route is missing or drifted from its exact addressable template');
+  }
+
   return {
-    isAddressableRouteTemplate: (_value): _value is AddressableRouteTemplate => false,
-    isClientRouteBindings: () => false,
+    isAddressableRouteTemplate: (value): value is AddressableRouteTemplate =>
+      value === skillCardRoute,
+    isClientRouteBindings: (routeTemplate, bindings) =>
+      routeTemplate === skillCardRoute &&
+      bindings.length === 1 &&
+      bindings[0]?.parameterIndex === 1 &&
+      bindings[0].source === 'client-selected' &&
+      isPublicSkillId(bindings[0].value),
     isFormActionKey: (sourceFormId, value): value is ActionKey =>
       actionKeys.get(sourceFormId)?.has(value) === true,
     isFormId: (value): value is FormId => formIds.has(value),
@@ -178,6 +192,17 @@ export async function loadProtocolVocabulary(
       const form = presentedForms.get(formId);
       if (form === undefined || form.type !== formType || form.route !== routeTemplate)
         return false;
+      if (formId === 'CHR-014') {
+        return (
+          bindings.length === 2 &&
+          bindings[0]?.parameterIndex === 0 &&
+          bindings[0].source === 'inherited' &&
+          bindings[0].value.length > 0 &&
+          bindings[1]?.parameterIndex === 1 &&
+          bindings[1].source === 'client-selected' &&
+          isPublicSkillId(bindings[1].value)
+        );
+      }
       if (formId === 'CHR-001') {
         return (
           bindings.length === 1 &&

@@ -359,14 +359,40 @@ export const CHR_013_REQUIRED_FIELDS = [
   'wizardCheckpointId',
   'draftRevision',
 ] as const;
+export const CHR_013_CARD_ACTION_KEY = 'CHR-013::CTA::001' as const satisfies ActionKey;
 export const CHR_013_CONTINUE_ACTION_KEY = 'CHR-013::CTA::002' as const satisfies ActionKey;
 export const CHR_013_ACTION_KEYS = [
+  CHR_013_CARD_ACTION_KEY,
   CHR_013_CONTINUE_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
-/** CHR-014 is deferred and the safe return lacks a reverse durable contract. */
+/** The reverse durable contract for CHR-013::CTA::003 remains excluded. */
 export const CHR_013_EXCLUDED_ACTION_KEYS = [
-  'CHR-013::CTA::001',
   'CHR-013::CTA::003',
+] as const satisfies readonly ActionKey[];
+
+export const CHR_014_FORM_ID = 'CHR-014' as const;
+export const CHR_014_ROUTE =
+  '/player/characters/:localCharacterId/create/chr-014/:skillId' as const;
+/** Source: forms-by-id.json["CHR-014"].requiredFields. */
+export const CHR_014_REQUIRED_FIELDS = [
+  'characterDraftId',
+  'skillId',
+  'requirements',
+  'skillStageValues',
+  'levelsAndBonuses',
+  'slotCost',
+  'freeSources',
+  'eligibility',
+  'selectionRevision',
+] as const;
+export const CHR_014_ADD_ACTION_KEY = 'CHR-014::CTA::001' as const satisfies ActionKey;
+export const CHR_014_RETURN_ACTION_KEY = 'CHR-014::CTA::002' as const satisfies ActionKey;
+export const CHR_014_ACTION_KEYS = [
+  CHR_014_ADD_ACTION_KEY,
+  CHR_014_RETURN_ACTION_KEY,
+] as const satisfies readonly ActionKey[];
+export const CHR_014_READ_ONLY_ACTION_KEYS = [
+  CHR_014_RETURN_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
 
 export const CHR_015_FORM_ID = 'CHR-015' as const;
@@ -976,6 +1002,27 @@ export interface Chr013Projection extends JsonObject {
   readonly wizardCheckpointId: string;
 }
 
+export interface Chr014ProjectionValues {
+  readonly bonusDomainScope: string;
+  readonly characterDraftId: string;
+  readonly eligibility: 'ELIGIBLE' | 'INELIGIBLE_READ_ONLY';
+  readonly eligibleSkillIds: readonly string[];
+  readonly freeSources: { readonly kind: 'NO_FREE_SOURCE' };
+  readonly levelsAndBonuses: readonly SkillLevelOptionProjection[];
+  readonly missingSkillPenalty: MissingSkillPenaltyProjection;
+  readonly requirements: readonly SkillRequirementProjection[];
+  readonly selectedSkills: readonly SelectedSkillProjection[];
+  readonly selectionRevision: number;
+  readonly skillId: string;
+  readonly skillLabel: string;
+  readonly skillStageValues: StatMapProjection;
+  readonly slotCost: null;
+  readonly slotSources: SkillSlotSourcesProjection;
+  readonly wizardCheckpointId: string;
+}
+
+export interface Chr014Projection extends JsonObject, Chr014ProjectionValues {}
+
 export interface SelectedSkillProjection extends JsonObject {
   readonly skillId: string;
   readonly slotCost: number;
@@ -1040,6 +1087,7 @@ export interface Chr015ProjectionValues {
   readonly requiredSlotCount: number;
   readonly selectedSkillIds: readonly string[];
   readonly selectedSkills: readonly SelectedSkillProjection[];
+  readonly selectionCheckpoint: 'NONE' | 'PARTIAL' | 'EXACT';
   readonly selectionValidation: SkillSelectionValidation;
   readonly skillOptions: readonly SkillOptionProjection[];
   readonly wizardCheckpointId: string;
@@ -1692,6 +1740,103 @@ function paidUsageEntryMatches(
   );
 }
 
+export function projectChr014(values: Chr014ProjectionValues): Chr014Projection {
+  assertProjectionAuthority(
+    CHR_014_FORM_ID,
+    values.characterDraftId,
+    values.wizardCheckpointId,
+    values.selectionRevision,
+  );
+  const skillStageValues = copyStatMap(values.skillStageValues, 'CHR-014 skillStageValues');
+  const requirements = copySkillRequirements(
+    values.requirements,
+    skillStageValues,
+    'CHR-014 requirements',
+  );
+  const eligibility = requirements.every(({ satisfied }) => satisfied)
+    ? 'ELIGIBLE'
+    : 'INELIGIBLE_READ_ONLY';
+  if (values.eligibility !== eligibility) {
+    throw new Error('CHR-014 eligibility disagrees with its requirement rows');
+  }
+  const skillId = playerSkillId(values.skillId, 'CHR-014 skillId');
+  const eligibleSkillIds = copyPlayerSkillIds(values.eligibleSkillIds, 'CHR-014 eligibleSkillIds');
+  const levelsAndBonuses = copySkillLevelOptions(
+    values.levelsAndBonuses,
+    'CHR-014 levelsAndBonuses',
+  );
+  const selectedSkills = copySelectedSkills(values.selectedSkills, 'CHR-014 selectedSkills');
+  let previousIndex = -1;
+  for (const [index, selected] of selectedSkills.entries()) {
+    const optionIndex = eligibleSkillIds.indexOf(selected.skillId);
+    if (optionIndex <= previousIndex) {
+      throw new Error('CHR-014 selectedSkills must be a canonical eligible subset');
+    }
+    const level = levelsAndBonuses.find(
+      (candidate) => candidate.targetBonus === selected.targetBonus,
+    );
+    if (level === undefined || level.slotCost !== selected.slotCost) {
+      throw new Error(`CHR-014 selectedSkills[${String(index)}] must match a signed level option`);
+    }
+    previousIndex = optionIndex;
+  }
+  const slotSources = copySkillSlotSources(values.slotSources, 'CHR-014 slotSources');
+  const fixedIds = [
+    ...(slotSources.mandatoryClassSkillOrNull === null
+      ? []
+      : [slotSources.mandatoryClassSkillOrNull.skillId]),
+    ...slotSources.racialFreeSkills.map((skill) => skill.skillId),
+  ];
+  if (
+    fixedIds.includes(skillId) ||
+    selectedSkills.some((skill) => fixedIds.includes(skill.skillId))
+  ) {
+    throw new Error(
+      'CHR-014 fixed skills cannot appear in the selectable card or current selection',
+    );
+  }
+  const usedSlotCount =
+    (slotSources.mandatoryClassSkillOrNull?.slotCost ?? 0) +
+    selectedSkills.reduce((total, skill) => total + skill.slotCost, 0);
+  const remainingSlots = slotSources.requiredSlotCount - usedSlotCount;
+  if (remainingSlots < 0 || levelsAndBonuses.some(({ slotCost }) => slotCost > remainingSlots)) {
+    throw new Error('CHR-014 levelsAndBonuses exceed the remaining paid slot capacity');
+  }
+  if (values.slotCost !== null) {
+    throw new Error('CHR-014 slotCost must be null until the player explicitly selects a level');
+  }
+  if (
+    values.freeSources === null ||
+    typeof values.freeSources !== 'object' ||
+    Array.isArray(values.freeSources) ||
+    Object.keys(values.freeSources).length !== 1 ||
+    values.freeSources.kind !== 'NO_FREE_SOURCE'
+  ) {
+    throw new Error('CHR-014 freeSources must be exactly {kind:"NO_FREE_SOURCE"}');
+  }
+  return {
+    bonusDomainScope: playerLabel(values.bonusDomainScope, 'CHR-014 bonusDomainScope'),
+    characterDraftId: values.characterDraftId,
+    eligibility,
+    eligibleSkillIds,
+    freeSources: { kind: 'NO_FREE_SOURCE' },
+    levelsAndBonuses,
+    missingSkillPenalty: copyMissingSkillPenalty(
+      values.missingSkillPenalty,
+      'CHR-014 missingSkillPenalty',
+    ),
+    requirements,
+    selectedSkills,
+    selectionRevision: values.selectionRevision,
+    skillId,
+    skillLabel: playerLabel(values.skillLabel, 'CHR-014 skillLabel'),
+    skillStageValues,
+    slotCost: null,
+    slotSources,
+    wizardCheckpointId: values.wizardCheckpointId,
+  };
+}
+
 export function projectChr015(values: Chr015ProjectionValues): Chr015Projection {
   assertProjectionAuthority(
     CHR_015_FORM_ID,
@@ -1822,8 +1967,18 @@ export function projectChr015(values: Chr015ProjectionValues): Chr015Projection 
     paidSlotUsage.usedSlotCount,
     'CHR-015 selectionValidation',
   );
-  if (values.commandId !== null && selectionValidation.kind !== 'EXACT') {
-    throw new Error('CHR-015 checkpointed projection must have EXACT selectionValidation');
+  const selectionCheckpoint = values.selectionCheckpoint;
+  if (
+    (selectionCheckpoint !== 'NONE' &&
+      selectionCheckpoint !== 'PARTIAL' &&
+      selectionCheckpoint !== 'EXACT') ||
+    (selectionCheckpoint === 'NONE' &&
+      (values.commandId !== null || selectedSkills.length !== 0)) ||
+    (selectionCheckpoint !== 'NONE' && values.commandId === null) ||
+    (selectionCheckpoint === 'PARTIAL' && selectionValidation.kind === 'OVERFILLED') ||
+    (selectionCheckpoint === 'EXACT' && selectionValidation.kind !== 'EXACT')
+  ) {
+    throw new Error('CHR-015 selectionCheckpoint disagrees with command and slot state');
   }
   return {
     characterDraftId: values.characterDraftId,
@@ -1837,6 +1992,7 @@ export function projectChr015(values: Chr015ProjectionValues): Chr015Projection 
     requiredSlotCount,
     selectedSkillIds,
     selectedSkills,
+    selectionCheckpoint,
     selectionValidation,
     skillOptions,
     wizardCheckpointId: values.wizardCheckpointId,

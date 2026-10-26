@@ -3,9 +3,9 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-25`
-- Тестов: 1345 Vitest + 2 Playwright, все зелёные
-- `npm run verify` — проходит; `npm run build && npm run test:e2e` — 2/2
+- Снимок: `2026-10-26`
+- Тестов: 1376 Vitest + 4 Playwright, все зелёные
+- `npm run verify` — проходит; `npm run build && npm run test:e2e` — 4/4
 
 ## Легенда
 
@@ -76,33 +76,38 @@ addressed set request и открывает `CHR-003`. Первый показ �
 пересчитывает base + race + class существующим domain-каталогом. Следующий
 checkpoint фиксирует eligibility baseline и открывает очищенный каталог
 `CHR-013`; его карточки и eligible options `CHR-015` дословно несут поставленную
-область действия и явное наличие либо отсутствие штрафа без навыка. `CHR-015`
-ведёт локальный выбор, а затем одним durable checkpoint сохраняет полный
-exact-fill набор. Классовый навык учитывается один раз,
-бесплатный навык `UNITED` не занимает слот. Random slice #135 продолжает путь:
-`CHR-017` публикует sanitized catalog и открывает `CHR-020` с append-only
-physical records, duplicates, critical/monster outcomes и binding-only commit.
-Random Advisor получает durable I/W и exact-fill через `CHR-041`; read-only
-`CHR-019` показывает composition, interactions и modifier-only breakdown без
-generic effective-stat engine. Replay/refresh/reconnect/restart и historic
-recovery сохраняют sequence/receipts без нового seed или sampler. Web рисует все
-четыре формы и local drafts; два реальных Playwright-сценария подтверждают FREE
-EEL и UNITED ADVISER через production dist и Fastify+WS. Ручная `CHR-018` и
-следующие journey states остаются за пределами среза.
+область действия и явное наличие либо отсутствие штрафа без навыка. Addressable
+`CHR-014` восстанавливает host-signed `skillId` после reconnect/restart, объясняет
+failed requirements без internal IDs и добавляет навык только после явного
+signed level. `CHR-015` различает `NONE|PARTIAL|EXACT`: card add сохраняет полный
+canonical набор и возвращает mutable partial presentation, а финальный durable
+checkpoint по-прежнему требует exact-fill и остаётся actionless. Классовый навык
+учитывается один раз, бесплатный навык `UNITED` не занимает слот. Random slice
+#135 продолжает путь: `CHR-017` публикует sanitized catalog и открывает `CHR-020`
+с append-only physical records, duplicates, critical/monster outcomes и
+binding-only commit. Random Advisor получает durable I/W и exact-fill через
+`CHR-041`; read-only `CHR-019` показывает composition, interactions и
+modifier-only breakdown без generic effective-stat engine.
+Replay/refresh/reconnect/restart и historic recovery сохраняют
+sequence/receipts без нового seed или sampler. Web рисует все четыре формы
+random slice и local drafts; четыре реальных Playwright-сценария подтверждают
+FREE EEL, UNITED ADVISER и eligible/ineligible `CHR-014` через production dist и
+Fastify+WS. Ручная `CHR-018` и следующие journey states остаются за пределами
+среза.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                   | Веха |
-| ---------------------------- | ------------ | ------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft               | M4   |
-| `src/domain/rules`           | **частично** | rolls, stats, skills, random sequence/composition/Advisor                 | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет             | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random checkpoint, library, identity             | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0003`: checkpoint черновика и device identity        | M2   |
-| `src/host`                   | **частично** | identity и creation journey до actionless CHR-019 random slice            | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–013, CHR-015–017/019/020/028/036/041 exact slice | M4   |
-| `src/web`                    | **частично** | recovery, stats, skills, random symbiont UI и 2 Playwright-сценария       | M5   |
-| `src/web/renderer`           | **частично** | 32 формы: 11 APP и 21 CHR; остальные fail-closed                          | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати одной CHR               | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                     | Веха |
+| ---------------------------- | ------------ | --------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                 | M4   |
+| `src/domain/rules`           | **частично** | rolls, stats, skills, random sequence/composition/Advisor                   | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет               | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random checkpoint, library, identity               | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0004`: checkpoint, device identity, skill presentation | M2   |
+| `src/host`                   | **частично** | identity и creation journey до actionless CHR-019 random slice              | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–017/019/020/028/036/041 exact slice                | M4   |
+| `src/web`                    | **частично** | recovery, stats, skills, random symbiont UI и 4 Playwright-сценария         | M5   |
+| `src/web/renderer`           | **частично** | 33 формы: 11 APP и 22 CHR; остальные fail-closed                            | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати двух CHR                  | M6   |
 
 ## generated/ — вывод конвейера
 
@@ -115,11 +120,11 @@ EEL и UNITED ADVISER через production dist и Fastify+WS. Ручная `CH
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                   |
-| ------------------- | ------------ | ---------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                           |
-| `tests/e2e`         | **частично** | 2 реальных сценария: FREE EEL и UNITED ADVISER, production dist + Fastify+WS |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness       |
+| Каталог             | Состояние    | Примечание                                                                                       |
+| ------------------- | ------------ | ------------------------------------------------------------------------------------------------ |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                               |
+| `tests/e2e`         | **частично** | 4 сценария: FREE EEL, UNITED ADVISER и eligible/ineligible CHR-014, production dist + Fastify+WS |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                           |
 
 ---
 

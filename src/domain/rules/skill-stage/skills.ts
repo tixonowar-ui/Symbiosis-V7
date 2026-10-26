@@ -36,11 +36,15 @@ export interface SkillSelectionInput {
   readonly selectedSkills: readonly SelectedSkillInput[];
 }
 
-export interface SkillSelectionResult {
+export interface SkillSelectionDraftResult {
   readonly capacity: number;
   readonly used: number;
-  readonly remaining: 0;
+  readonly remaining: number;
   readonly learnedSkills: readonly LearnedSkill[];
+}
+
+export interface SkillSelectionResult extends SkillSelectionDraftResult {
+  readonly remaining: 0;
 }
 
 function fail(message: string): never {
@@ -104,10 +108,10 @@ export function validateSkillRequirements(
   }
 }
 
-export function validateSkillSelection(
+export function validateSkillSelectionDraft(
   catalog: SkillStageCatalog,
   input: SkillSelectionInput,
-): SkillSelectionResult {
+): SkillSelectionDraftResult {
   const race = catalog.races.find((candidate) => candidate.raceCode === input.raceCode);
   if (race === undefined) {
     fail(`unknown RaceCode ${JSON.stringify(input.raceCode)}; expected the RaceCode dictionary`);
@@ -187,16 +191,23 @@ export function validateSkillSelection(
       `skill slots exceeded: used ${String(used)}, capacity ${String(capacity)} (${RULE.slots}; ${RULE.skillCost})`,
     );
   }
-  if (used < capacity) {
-    fail(
-      `skill slots underfilled: used ${String(used)}, capacity ${String(capacity)}; creation must use every start slot (${RULE.exactFill}; ${RULE.slots}; ${RULE.skillCost})`,
-    );
-  }
-
   return Object.freeze({
     capacity,
     used,
-    remaining: 0,
+    remaining: capacity - used,
     learnedSkills: Object.freeze(learnedSkills),
   });
+}
+
+export function validateSkillSelection(
+  catalog: SkillStageCatalog,
+  input: SkillSelectionInput,
+): SkillSelectionResult {
+  const result = validateSkillSelectionDraft(catalog, input);
+  if (result.remaining > 0) {
+    fail(
+      `skill slots underfilled: used ${String(result.used)}, capacity ${String(result.capacity)}; creation must use every start slot (${RULE.exactFill}; ${RULE.slots}; ${RULE.skillCost})`,
+    );
+  }
+  return Object.freeze({ ...result, remaining: 0 });
 }

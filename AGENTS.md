@@ -92,9 +92,10 @@ npm run verify
 **Портативной сборки пока нет.** `tools/package` — пустой каталог. Не пытайся
 её запускать и не выдумывай команду.
 
-**E2E пока нет.** Конфиг Playwright настроен, тестов нет, браузеры не
-установлены. `npm run test:e2e` проходит только потому, что тестов ноль. Первый
-реальный e2e-тест потребует `npx playwright install chromium`.
+**E2E состоит из четырёх реальных сценариев.** Они используют системный Chrome
+(`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную SQLite,
+без mocked projection. `npm run test:e2e` сначала собирает веб-клиент, затем
+запускает все четыре сценария.
 
 ---
 
@@ -130,11 +131,11 @@ tools/
 
 tests/
   integration/      кросс-слойные тесты. ПУСТО
-  e2e/              Playwright. ПУСТО
-  fixtures/         ПУСТО
+  e2e/              Playwright, четыре production-сценария
+  fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              39 решений + README. Высший источник правды
+  adr/              50 решений + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

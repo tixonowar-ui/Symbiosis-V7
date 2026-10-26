@@ -16,7 +16,7 @@ const ZERO_REVISIONS = {
 } as const;
 
 const request = (
-  sourceFormId: 'CHR-012' | 'CHR-015',
+  sourceFormId: 'CHR-012' | 'CHR-014' | 'CHR-015',
   selectedSkills?: readonly SelectedSkillCommandInput[],
 ): SkillCheckpointCommandRequest => ({
   commandId: `skills-${sourceFormId}`,
@@ -56,14 +56,16 @@ const refusal = (run: () => unknown) => {
 };
 
 describe('skill checkpoint request', () => {
-  it('normalizes the exact CHR-012 eligibility and CHR-015 selection variants', () => {
+  it('normalizes exact CHR-012 eligibility and CHR-014/CHR-015 selection variants', () => {
     const eligibility = request('CHR-012');
+    const cardAddition = request('CHR-014', [{ skillId: 'ACROBATICS', targetBonus: 1 }]);
     const selection = request('CHR-015', [
       { skillId: 'ACROBATICS', targetBonus: 2 },
       { skillId: 'COOKING', targetBonus: 1 },
     ]);
 
     expect(normalizeSkillCheckpointRequest(eligibility)).toEqual(eligibility);
+    expect(normalizeSkillCheckpointRequest(cardAddition)).toEqual(cardAddition);
     expect(normalizeSkillCheckpointRequest(selection)).toEqual(selection);
   });
 

@@ -105,6 +105,16 @@
 
 ### Добавлено
 
+- **2026-10-26, issue #144:** `CHR-013` открывает `CHR-014` по exact
+  addressable route с client-selected `skillId`. Карточка показывает требования,
+  текущие значения и host-signed уровни без внутренних registry/rule IDs;
+  недоступный навык остаётся read-only. Добавление требует явного уровня,
+  сохраняет полный canonical набор и возвращает mutable `CHR-015/PARTIAL`, не
+  подписывая `CHR-017`; финальный exact-fill по-прежнему принадлежит только
+  `CHR-015`. Safe-return не меняет selection. Host-signed presentation,
+  forward-only `0004` и flat receipt history восстанавливают карточку и partial
+  набор после reload/reconnect/restart без новых receipts. Два новых production
+  Playwright-сценария проверяют обе карточки и recovery через Fastify+WS/SQLite.
 - **2026-10-25, issue #139, поставка исходных материалов:**
   `artifacts/symbiont-media/` получил
   `Symbiosis_V7_Symbiont_Art_Mapping_v1.0.xlsx` и

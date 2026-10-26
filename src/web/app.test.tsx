@@ -873,7 +873,7 @@ const SKILL_OPTIONS = SKILL_CARD_SUMMARIES.filter(
 
 function chr013Base(): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
-    availableActionKeys: ['CHR-013::CTA::002'],
+    availableActionKeys: ['CHR-013::CTA::001', 'CHR-013::CTA::002'],
     formId: 'CHR-013',
     formType: 'screen',
     roleFilteredPayload: {
@@ -893,6 +893,60 @@ function chr013Base(): ProjectionSnapshotV2Message['presentation']['base'] {
     },
     routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
     routeTemplate: '/player/characters/:localCharacterId/create/chr-013',
+  };
+}
+
+function chr014Projection(
+  skillId = 'SKILL_01',
+  selectedSkills: readonly {
+    readonly skillId: string;
+    readonly slotCost: number;
+    readonly targetBonus: number;
+  }[] = [],
+  requiredSlotCount = 2,
+) {
+  const card = SKILL_CARD_SUMMARIES.find((candidate) => candidate.skillId === skillId);
+  if (card === undefined) throw new Error(`CHR-014 fixture ${skillId} not found`);
+  return {
+    bonusDomainScope: card.bonusDomainScope,
+    characterDraftId: CHARACTER_DRAFT_ID,
+    eligibility: card.eligibility === 'ELIGIBLE' ? 'ELIGIBLE' : 'INELIGIBLE_READ_ONLY',
+    eligibleSkillIds: ELIGIBLE_SKILL_IDS,
+    freeSources: { kind: 'NO_FREE_SOURCE' },
+    levelsAndBonuses: card.levelOptions,
+    missingSkillPenalty: card.missingSkillPenalty,
+    requirements: card.requirements,
+    selectedSkills,
+    selectionRevision: 9,
+    skillId: card.skillId,
+    skillLabel: card.skillLabel,
+    skillStageValues: SKILL_STAGE_STATS,
+    slotCost: null,
+    slotSources: {
+      mandatoryClassSkillOrNull: null,
+      racialFreeSkills: RACIAL_FREE_SKILLS,
+      requiredSlotCount,
+    },
+    wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+  } as const;
+}
+
+function chr014Base(
+  projection: ReturnType<typeof chr014Projection> = chr014Projection(),
+): ProjectionSnapshotV2Message['presentation']['base'] {
+  return {
+    availableActionKeys:
+      projection.eligibility === 'ELIGIBLE'
+        ? ['CHR-014::CTA::001', 'CHR-014::CTA::002']
+        : ['CHR-014::CTA::002'],
+    formId: 'CHR-014',
+    formType: 'screen',
+    roleFilteredPayload: projection,
+    routeBindings: [
+      { parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID },
+      { parameterIndex: 1, source: 'client-selected', value: projection.skillId },
+    ],
+    routeTemplate: '/player/characters/:localCharacterId/create/chr-014/:skillId',
   };
 }
 
@@ -922,6 +976,7 @@ function chr015Projection({
   mandatoryClassSkillOrNull = null,
   racialFreeSkills = RACIAL_FREE_SKILLS,
   requiredSlotCount = 2,
+  selectionCheckpoint = commandId === null ? 'NONE' : 'EXACT',
   selectedSkills = [],
   skillOptions = SKILL_OPTIONS,
 }: {
@@ -940,6 +995,7 @@ function chr015Projection({
     readonly slotCost: 0;
   }[];
   readonly requiredSlotCount?: number;
+  readonly selectionCheckpoint?: 'NONE' | 'PARTIAL' | 'EXACT';
   readonly selectedSkills?: readonly {
     readonly skillId: string;
     readonly slotCost: number;
@@ -977,6 +1033,7 @@ function chr015Projection({
     requiredSlotCount,
     selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
     selectedSkills,
+    selectionCheckpoint,
     selectionValidation: fixtureSkillSelectionValidation(requiredSlotCount, usedSlotCount),
     skillOptions,
     wizardCheckpointId: WIZARD_CHECKPOINT_ID,
@@ -987,7 +1044,7 @@ function chr015Base(
   projection: ReturnType<typeof chr015Projection> = chr015Projection(),
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
-    availableActionKeys: projection.commandId === null ? ['CHR-015::CTA::003'] : [],
+    availableActionKeys: projection.selectionCheckpoint === 'EXACT' ? [] : ['CHR-015::CTA::003'],
     formId: 'CHR-015',
     formType: 'screen',
     roleFilteredPayload: projection,
@@ -1503,7 +1560,7 @@ function setDecisionDestinationSnapshot(
 
 function setDecisionPresentationSnapshot(
   correlationId: string,
-  reason: 'COMMAND_DESTINATION' | 'FORM_ACTION' | 'RECONNECT',
+  reason: 'ADDRESSABLE_ROUTE' | 'COMMAND_DESTINATION' | 'FORM_ACTION' | 'RECONNECT',
   base: ProjectionSnapshotV2Message['presentation']['base'],
   layers: ProjectionSnapshotV2Message['presentation']['layers'],
   revisions: ProjectionSnapshotV2Message['revisions'],
@@ -1642,14 +1699,16 @@ function deliverPair(
 async function connectToWizardBase(
   base: ProjectionSnapshotV2Message['presentation']['base'],
   revision: number,
+  checkedFixture = true,
 ): Promise<ConnectedClient> {
   const connection = await connectClient();
   open(connection.socket);
-  deliverPair(
+  deliver(
     connection.socket,
-    capabilities({ revisions: entityRevisions(revision) }),
-    reconnectWizardSnapshot(REQUEST_ID, base, revision),
+    checkedHostTextV2(capabilities({ revisions: entityRevisions(revision) })),
   );
+  const message = reconnectWizardSnapshot(REQUEST_ID, base, revision);
+  deliver(connection.socket, checkedFixture ? checkedHostTextV2(message) : JSON.stringify(message));
   return connection;
 }
 
@@ -5627,6 +5686,371 @@ describe('APP-001 web entry', () => {
     const request = decodedClientMessageV1(classSocket, classSocket.sent.length - 1);
     if (request.messageType !== 'command.request') throw new Error('missing class-only checkpoint');
     expect(request.payload).toMatchObject({ selectedSkills: [] });
+  });
+});
+
+describe('CHR-014 addressable skill card UI', () => {
+  it('opens only the explicitly selected addressable card', async () => {
+    const { container, socket } = await connectToWizardBase(chr013Base(), 9);
+    const open = requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-skill-card-open="SKILL_03"]'),
+      'CHR-013 per-card action',
+    );
+    expect(open.textContent).toBe('Открыть карточку выбранного навыка');
+    expect(container.querySelector('[data-atlas-action-key="CHR-013::CTA::001"]')).toBeNull();
+    window.history.replaceState(null, '', '/player/characters/forged/create/chr-014/SKILL_41');
+
+    act(() => open.click());
+    const route = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (route.messageType !== 'navigation.addressable-route') {
+      throw new Error('missing CHR-014 addressable route');
+    }
+    expect(route).toEqual({
+      bindings: [{ parameterIndex: 1, source: 'client-selected', value: 'SKILL_03' }],
+      expectedProjectionRevision: 9,
+      messageType: 'navigation.addressable-route',
+      navigationRequestId: route.navigationRequestId,
+      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      routeTemplate: '/player/characters/:localCharacterId/create/chr-014/:skillId',
+    });
+    const sentRouteCount = socket.sent.length;
+    act(() => open.click());
+    expect(socket.sent).toHaveLength(sentRouteCount);
+
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          route.navigationRequestId,
+          'ADDRESSABLE_ROUTE',
+          chr014Base(chr014Projection('SKILL_03')),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 10, stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-014"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-014/SKILL_03`,
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-014::CTA::001"]')).toBeNull();
+  });
+
+  it('requires a signed level and commits the full canonical current+new selection', async () => {
+    const card = chr014Projection(
+      'SKILL_03',
+      [{ skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 }],
+      3,
+    );
+    const { container, socket } = await connectToWizardBase(chr014Base(card), 9);
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-014"]')).not.toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-014/SKILL_03`,
+    );
+    expect(container.querySelector('[data-skill-card-slot-cost]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-014::CTA::001"]')).toBeNull();
+
+    const level = requiredElement(
+      container.querySelector<HTMLSelectElement>('#chr-014-target-bonus'),
+      'CHR-014 explicit level selector',
+    );
+    expect(container.querySelector('label[for="chr-014-target-bonus"]')).not.toBeNull();
+    expect(level.required).toBe(true);
+    select(level, '2');
+    expect(container.querySelector('[data-skill-card-slot-cost]')?.textContent).toBe('2');
+    const add = requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-014::CTA::001"]'),
+      'CHR-014 signed level add',
+    );
+    expect(add.textContent).toBe('Добавить доступный навык');
+    act(() => add.click());
+
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('missing CHR-014 checkpoint');
+    expect(request.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      draftRevision: 9,
+      selectedSkills: [
+        { skillId: 'SKILL_01', targetBonus: 1 },
+        { skillId: 'SKILL_03', targetBonus: 2 },
+      ],
+      sourceFormId: 'CHR-014',
+      stage: 'SKILLS',
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    });
+    expect(JSON.stringify(request.payload)).not.toContain('slotCost');
+    const revisions = { actorVisibilityRevision: 0, projectionRevision: 10, stateRevision: 10 };
+    const result = {
+      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: BRANCH_UUID,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      checkpointId: WIZARD_CHECKPOINT_ID,
+      checkpointOwnerId: CHARACTER_DRAFT_ID,
+      checkpointRevision: 10,
+      draftRevision: 10,
+      learnedSkills: [
+        { bonus: 15, skillKey: 'FOLLOWING_PAIN', slotCost: 0, source: 'RACE_GRANTED' },
+        { bonus: 1, skillKey: 'SKILL_01', slotCost: 1, source: 'SELECTED' },
+        { bonus: 2, skillKey: 'SKILL_03', slotCost: 2, source: 'SELECTED' },
+      ],
+      nextFormId: 'CHR-015',
+      requiredSlotCount: 3,
+      selectedSkills: [
+        { skillKey: 'SKILL_01', targetBonus: 1 },
+        { skillKey: 'SKILL_03', targetBonus: 2 },
+      ],
+      sourceFormId: 'CHR-014',
+      stage: 'SKILLS',
+      usedSlotCount: 3,
+    } as const;
+    deliver(
+      socket,
+      checkedHostTextV1(
+        statSetDecisionTerminal(request.commandId, 'skill-card-receipt', result, revisions),
+      ),
+    );
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.commandId,
+          'COMMAND_DESTINATION',
+          chr015Base(
+            chr015Projection({
+              commandId: request.commandId,
+              draftRevision: 10,
+              requiredSlotCount: 3,
+              selectionCheckpoint: 'PARTIAL',
+              selectedSkills: [
+                { skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 },
+                { skillId: 'SKILL_03', slotCost: 2, targetBonus: 2 },
+              ],
+            }),
+          ),
+          [],
+          revisions,
+        ),
+      ),
+    );
+
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-015"]')).not.toBeNull();
+    expect(container.querySelector('[data-selection-checkpoint="PARTIAL"]')).not.toBeNull();
+    expect(container.querySelector('[data-skill-selection-controls]')).not.toBeNull();
+    expect(container.querySelector('[data-selected-skill="SKILL_01"]')).not.toBeNull();
+    expect(container.querySelector('[data-selected-skill="SKILL_03"]')).not.toBeNull();
+    expect(container.querySelector('[data-skill-selection-checkpointed]')).toBeNull();
+    expect(container.textContent).not.toContain('CHR-017');
+  });
+
+  it('keeps an ineligible card read-only, restores its signed identity, and safely returns', async () => {
+    const { container, socket } = await connectToWizardBase(
+      chr014Base(chr014Projection('SKILL_02')),
+      10,
+    );
+    expect(
+      container.querySelector('[data-skill-card-eligibility="INELIGIBLE_READ_ONLY"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-skill-card-requirement="W"]')?.textContent).toContain(
+      '20',
+    );
+    expect(container.querySelector('[data-skill-card-requirement="W"]')?.textContent).toContain(
+      'Нет',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-014::CTA::001"]')).toBeNull();
+    expect(container.textContent).not.toContain('Добавить доступный навык');
+
+    act(() => socket.serverClose(1006, 'recover CHR-014'));
+    act(() => {
+      const reconnectButton = [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Переподключиться',
+      );
+      requiredElement(reconnectButton ?? null, 'CHR-014 reconnect').click();
+    });
+    const resumed = FakeWebSocket.instances.at(-1)!;
+    open(resumed);
+    const reconnect = decodedClientMessageV2(resumed, 0);
+    if (reconnect.messageType !== 'session.reconnect') throw new Error('missing CHR-014 reconnect');
+    expect(reconnect.unacknowledgedCommandIds).toEqual([]);
+    deliverPair(
+      resumed,
+      capabilities({
+        reconnectRequestId: reconnect.reconnectRequestId,
+        revisions: entityRevisions(10),
+      }),
+      reconnectWizardSnapshot(
+        reconnect.reconnectRequestId,
+        chr014Base(chr014Projection('SKILL_02')),
+        10,
+      ),
+    );
+    expect(container.querySelector('[data-skill-card="SKILL_02"]')).not.toBeNull();
+    expect(window.location.pathname).toContain('/create/chr-014/SKILL_02');
+
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-014::CTA::002"]'),
+        'CHR-014 safe return',
+      ).click();
+    });
+    const request = decodedClientMessageV2(resumed, resumed.sent.length - 1);
+    if (request.messageType !== 'navigation.form-action') {
+      throw new Error('CHR-014 safe return must not be a checkpoint');
+    }
+    expect(request).toMatchObject({
+      actionKey: 'CHR-014::CTA::002',
+      expectedProjectionRevision: 10,
+      sourceFormId: 'CHR-014',
+    });
+    deliver(
+      resumed,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.navigationRequestId,
+          'FORM_ACTION',
+          chr013Base(),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 11, stateRevision: 10 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-atlas-form-id="CHR-013"]')).not.toBeNull();
+    expect(resumed.sent.some((text) => text.includes('"command.request"'))).toBe(false);
+  });
+
+  it('preserves the confirmed catalog after an addressable-route refusal', async () => {
+    const { container, socket } = await connectToWizardBase(chr013Base(), 9);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-skill-card-open="SKILL_02"]'),
+        'ineligible catalog action',
+      ).click();
+    });
+    const route = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (route.messageType !== 'navigation.addressable-route') throw new Error('missing route');
+    deliver(
+      socket,
+      checkedHostTextV2({
+        messageType: 'navigation.addressable-route.refusal',
+        navigationRequestId: route.navigationRequestId,
+        presentationUnchanged: true,
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        refusal: { code: 'INVALID_BINDINGS' },
+        revisions: entityRevisions(9),
+      }),
+    );
+    expect(container.querySelector('[data-client-state="navigation-refusal"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-013"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-014"]')).toBeNull();
+  });
+
+  it.each([
+    {
+      base: () => {
+        const card = chr014Projection();
+        return chr014Base({ ...card, skillId: 'SKL-001' });
+      },
+      name: 'an internal skill id',
+    },
+    {
+      base: () => {
+        const base = chr014Base();
+        return {
+          ...base,
+          roleFilteredPayload: { ...base.roleFilteredPayload, internalRuleTrace: 'CORE-167' },
+        };
+      },
+      name: 'an extra authority field',
+    },
+    {
+      base: () => {
+        const card = chr014Projection();
+        const roleFilteredPayload: JsonObject = {
+          ...card,
+          requirements: [{ ...card.requirements[0]!, requirementId: 'REQ-UNARMED-S' }],
+        };
+        return { ...chr014Base(), roleFilteredPayload };
+      },
+      name: 'requirement provenance',
+    },
+    {
+      base: () => {
+        const base = chr014Base();
+        return {
+          ...base,
+          routeBindings: base.routeBindings.map((binding) =>
+            binding.parameterIndex === 1 ? { ...binding, value: 'SKILL_02' } : binding,
+          ),
+        };
+      },
+      name: 'a foreign skill binding',
+    },
+    {
+      base: () => ({ ...chr014Base(), routeBindings: chr014Base().routeBindings.slice(0, 1) }),
+      name: 'a missing skill binding',
+    },
+  ])('refuses CHR-014 with $name', async ({ base }) => {
+    const { container } = await connectToWizardBase(base(), 10, false);
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-014"]')).toBeNull();
+    expect(container.querySelector('[data-host-field="internalRuleTrace"]')).toBeNull();
+    expect(container.querySelector('[data-host-field="requirementId"]')).toBeNull();
+  });
+
+  it.each([
+    { checkpoint: 'NONE', mutable: true, projection: chr015Projection() },
+    {
+      checkpoint: 'PARTIAL',
+      mutable: true,
+      projection: chr015Projection({
+        commandId: 'partial-card-add',
+        selectionCheckpoint: 'PARTIAL',
+        selectedSkills: [{ skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 }],
+      }),
+    },
+    {
+      checkpoint: 'EXACT',
+      mutable: false,
+      projection: chr015Projection({
+        commandId: 'final-selection',
+        selectionCheckpoint: 'EXACT',
+        selectedSkills: [{ skillId: 'SKILL_01', slotCost: 2, targetBonus: 2 }],
+      }),
+    },
+  ] as const)(
+    'applies the $checkpoint CHR-015 checkpoint boundary',
+    async ({ checkpoint, mutable, projection }) => {
+      const { container } = await connectToWizardBase(chr015Base(projection), 9);
+      expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+      expect(container.querySelector(`[data-selection-checkpoint="${checkpoint}"]`)).not.toBeNull();
+      expect(container.querySelector('[data-skill-selection-controls]') !== null).toBe(mutable);
+      expect(container.querySelector('[data-skill-selection-checkpointed]') !== null).toBe(
+        !mutable,
+      );
+    },
+  );
+
+  it('refuses a CHR-015 projection whose checkpoint contradicts its selection', async () => {
+    const { container } = await connectToWizardBase(
+      chr015Base(chr015Projection({ selectionCheckpoint: 'PARTIAL' })),
+      9,
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-015"]')).toBeNull();
+  });
+
+  it('substitutes and encodes every signed route binding in the confirmed path', async () => {
+    const skillId = 'skill / Ü?';
+    const { container } = await connectToWizardBase(
+      chr014Base({ ...chr014Projection(), eligibleSkillIds: [skillId], skillId }),
+      10,
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(window.location.pathname).toBe(
+      `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-014/${encodeURIComponent(skillId)}`,
+    );
   });
 });
 
