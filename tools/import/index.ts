@@ -13,6 +13,7 @@ import { importCharacter } from './character.js';
 import { importBestiary } from './bestiary.js';
 import { importEffects } from './effects.js';
 import { importItems } from './items.js';
+import { importSymbiontMedia } from './symbiont-media.js';
 import { ImportError } from './lib/fail.js';
 import { importLocalCharacterPortraits } from './local-character-portraits.js';
 import { importQna } from './qna.js';
@@ -47,6 +48,13 @@ async function main(): Promise<number> {
   console.log(
     `character: ${String(character.payloads)} payload entities, ` +
       `${String(character.xpSections)} XP contract sections`,
+  );
+
+  const symbiontMedia = await importSymbiontMedia();
+  console.log(
+    `symbiont media: ${String(symbiontMedia.species.length)} species, ` +
+      `${String(symbiontMedia.artImages)} arts + ${String(symbiontMedia.treeImages)} trees ` +
+      `(${(symbiontMedia.mediaBytes / 1024 / 1024).toFixed(1)} MiB)`,
   );
 
   const items = await importItems(rules.catalogue);
@@ -94,6 +102,7 @@ async function main(): Promise<number> {
   const files = [
     ...rules.files,
     ...character.files,
+    ...symbiontMedia.files,
     ...items.files,
     ...effects.files,
     ...bestiary.files,
@@ -106,6 +115,7 @@ async function main(): Promise<number> {
   const bytes =
     rules.bytesWritten +
     character.bytesWritten +
+    symbiontMedia.bytesWritten +
     items.bytesWritten +
     effects.bytesWritten +
     bestiary.bytesWritten +

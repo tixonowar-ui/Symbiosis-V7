@@ -105,6 +105,16 @@
 
 ### Добавлено
 
+- **2026-10-26, issue #139, импорт поставки:** mapping-книги из #143 теперь
+  проходят через `tools/import/symbiont-media`. Importer связывает по точному
+  `SpeciesKey` 23 арта и 23 изображения деревьев с 20 ordinary и 3 monster
+  видами, проверяет полноту anchors/media, безопасные имена и PNG-сигнатуры.
+  `generated/spec/symbiont-media/manifest.json` фиксирует соответствие, а
+  `generated/media/symbionts` и `generated/media/development-trees` получают
+  исходные PNG-байты и пересобираются детерминированно. ADR 0051 сохраняет
+  изображения presentation-only и не меняет sealed Delivery Manifest v1.2,
+  `development-nodes.json` или runtime. `CHR-018`, #147, #145 и #146 остаются
+  отдельными задачами.
 - **2026-10-26, issue #144:** `CHR-013` открывает `CHR-014` по exact
   addressable route с client-selected `skillId`. Карточка показывает требования,
   текущие значения и host-signed уровни без внутренних registry/rule IDs;

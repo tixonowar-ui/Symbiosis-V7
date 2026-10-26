@@ -18,8 +18,9 @@ Offline-first LAN-приложение с **единственным автор�
 Soundtrack, Q&A, манифест поставки, отчёт аудита и два mapping-файла #139),
 атлас UI в json+md, замороженный Runtime Pack, manifest и шесть портретов
 локального персонажа. Mapping-файлы содержат 23 арта и 23 изображения деревьев
-с явным SpeciesKey; импорт и закрытие #139 не заявляются. Всё игровое
-содержимое — формулы, пороги, названия, ограничения — берётся оттуда.
+с явным SpeciesKey; `tools/import/symbiont-media` детерминированно извлекает их
+в `generated/media`. Всё игровое содержимое — формулы, пороги, названия,
+ограничения — берётся оттуда.
 Изображения не являются источником правил или структуры деревьев.
 
 Ключевое следствие: **игровые данные не придумываются**. Нет значения в
@@ -106,7 +107,7 @@ artifacts/          READ-ONLY. Поставленные артефакты. Ме
   registries/       10 xlsx — реестры, манифест, отчёт аудита
   atlas/            Atlas UI: JSON и Markdown amendment v1.3 в legacy-файлах v1.2
   packs/            Runtime Pack v1.2 (zip) — заморожен побайтово
-  symbiont-media/   2 xlsx — 23 арта и 23 дерева с SpeciesKey; импорт в #139
+  symbiont-media/   2 xlsx — 23 арта и 23 дерева; импорт по SpeciesKey работает
   CHECKSUMS.sha256  единственный файл, который туда пишет инструмент
 
 generated/          ТОЛЬКО вывод tools/import. Руками не править
@@ -123,7 +124,7 @@ src/                приложение. Сквозной срез APP-001 ес
   web/              React-рендерер по атласу, 16 доменов форм; Vite-точка входа
 
 tools/
-  import/           artifacts → generated. РАБОТАЕТ, 10 модулей
+  import/           artifacts → generated. РАБОТАЕТ, 11 модулей
   checksums/        SHA-256 манифест артефактов. РАБОТАЕТ
   validate/         кросс-реестровая валидация generated/spec + literal guard md. РАБОТАЕТ
   traceability/     генератор матрицы покрытия. РАБОТАЕТ, гейт в verify
@@ -135,7 +136,7 @@ tests/
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              50 решений + README. Высший источник правды
+  adr/              51 решение + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия
