@@ -6619,6 +6619,50 @@ describe('CHR-041 and CHR-019 symbiont UI', () => {
     expect(request.payload).not.toHaveProperty('randomSequenceId');
   });
 
+  it('does not reuse a manual B face after the pending request changes', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-041', manualAdvisorFloorProjection(), ['CHR-041::CTA::004']),
+      9,
+    );
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-advisor-suppression-manual-face]'),
+        'initial MANUAL B face',
+      ),
+      2,
+    );
+    const initialProjection = manualAdvisorFloorProjection();
+    const nextProjection = {
+      ...initialProjection,
+      trogrSuppressionState: {
+        ...(initialProjection['trogrSuppressionState'] as JsonObject),
+        rollRequestIdOrNull: 'manual-floor-other-pending-b-request',
+      },
+    };
+    const resumed = reconnectToWizardBase(
+      container,
+      socket,
+      symbiontBase('CHR-041', nextProjection, ['CHR-041::CTA::004']),
+      9,
+    );
+    const nextFace = requiredElement(
+      container.querySelector<HTMLInputElement>('[data-advisor-suppression-manual-face]'),
+      'restored MANUAL B face',
+    );
+    expect(nextFace.value).toBe('');
+    expect(resumed.sent).toHaveLength(1);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-041::CTA::004"]'),
+        'restored MANUAL B action',
+      ).click();
+    });
+    expect(resumed.sent).toHaveLength(1);
+    expect(container.textContent).toContain(
+      'CHR-041 requires one complete MANUAL intelligence floor face',
+    );
+  });
+
   it('restores committed MANUAL B, I/W and exact skills without another roll action', async () => {
     const { container } = await connectToWizardBase(
       symbiontBase(

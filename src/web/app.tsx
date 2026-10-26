@@ -2150,7 +2150,10 @@ export function App(): ReactElement {
   const [randomSymbiontDraft, setRandomSymbiontDraft] = useState<RandomSymbiontDraft | null>(null);
   const [advisorSkillSelectionDraft, setAdvisorSkillSelectionDraft] =
     useState<AdvisorSkillSelectionDraft | null>(null);
-  const intelligenceFloorManualFaceRef = useRef<number | null>(null);
+  const intelligenceFloorManualFaceRef = useRef<{
+    readonly rollScope: string | null;
+    readonly face: number | null;
+  } | null>(null);
   const [skillCardDraft, setSkillCardDraft] = useState<CharacterSkillCardDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
@@ -2361,7 +2364,10 @@ export function App(): ReactElement {
               key={intelligenceFloorRollScope ?? 'no-advisor-floor'}
               draft={advisorSkillSelectionDraft}
               onIntelligenceFloorManualFaceChange={(value) => {
-                intelligenceFloorManualFaceRef.current = value;
+                intelligenceFloorManualFaceRef.current = {
+                  rollScope: intelligenceFloorRollScope,
+                  face: value,
+                };
               }}
               snapshot={snapshot}
               onCandidateChange={(skillId, targetBonus) => {
@@ -2394,7 +2400,10 @@ export function App(): ReactElement {
                 const result = connection.requestFormAction(
                   selection.actionKey,
                   selection.actionKey === CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY
-                    ? intelligenceFloorManualFaceRef.current
+                    ? intelligenceFloorManualFaceRef.current?.rollScope ===
+                      intelligenceFloorRollScope
+                      ? intelligenceFloorManualFaceRef.current.face
+                      : null
                     : undefined,
                 );
                 setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
