@@ -20,6 +20,7 @@ const REGISTRIES = join(ARTIFACTS_DIR, 'registries');
 const ATLAS = join(ARTIFACTS_DIR, 'atlas');
 const PACKS = join(ARTIFACTS_DIR, 'packs');
 const LOCAL_CHARACTER_PORTRAITS = join(ARTIFACTS_DIR, 'local-character-portraits');
+const SYMBIONT_MEDIA = join(ARTIFACTS_DIR, 'symbiont-media');
 
 export const ARTIFACT = {
   atlasJson: join(ATLAS, 'Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json'),
@@ -37,4 +38,9 @@ export const ARTIFACT = {
   runtimePack: join(PACKS, 'Symbiosis_V7_Default_Sentient_Enemy_Runtime_Pack_v1.2.zip'),
   localCharacterPortraitManifest: join(LOCAL_CHARACTER_PORTRAITS, 'manifest.json'),
   localCharacterPortraitMedia: join(LOCAL_CHARACTER_PORTRAITS, 'media'),
+  symbiontArt: join(SYMBIONT_MEDIA, 'Symbiosis_V7_Symbiont_Art_Mapping_v1.0.xlsx'),
+  symbiontDevelopmentTrees: join(
+    SYMBIONT_MEDIA,
+    'Symbiosis_V7_Symbiont_Development_Tree_Mapping_v1.0.xlsx',
+  ),
 } as const;

@@ -132,11 +132,17 @@ export function anchoredImages(
 
   const images: AnchoredImage[] = [];
   for (const anchor of drawing.matchAll(
-    /<xdr:(oneCellAnchor|twoCellAnchor)\b[\s\S]*?<\/xdr:\1>/g,
+    /<(?:[A-Za-z_][\w.-]*:)?(oneCellAnchor|twoCellAnchor)\b[\s\S]*?<\/(?:[A-Za-z_][\w.-]*:)?\1>/g,
   )) {
     const block = anchor[0];
-    const row = /<xdr:from>[\s\S]*?<xdr:row>(\d+)<\/xdr:row>/.exec(block)?.[1];
-    const col = /<xdr:from>[\s\S]*?<xdr:col>(\d+)<\/xdr:col>/.exec(block)?.[1];
+    const row =
+      /<(?:[A-Za-z_][\w.-]*:)?from>[\s\S]*?<(?:[A-Za-z_][\w.-]*:)?row>(\d+)<\/(?:[A-Za-z_][\w.-]*:)?row>/.exec(
+        block,
+      )?.[1];
+    const col =
+      /<(?:[A-Za-z_][\w.-]*:)?from>[\s\S]*?<(?:[A-Za-z_][\w.-]*:)?col>(\d+)<\/(?:[A-Za-z_][\w.-]*:)?col>/.exec(
+        block,
+      )?.[1];
     const rid = /r:embed="([^"]+)"/.exec(block)?.[1];
     if (row === undefined || col === undefined || rid === undefined) {
       fail(label, `${drawingPath}: an anchor is missing its position or image reference`);

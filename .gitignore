@@ -52,3 +52,6 @@ $RECYCLE.BIN/
 .vite/
 .eslintcache
 npm-debug.log*
+
+# --- isolated development worktrees ---
+.worktrees/

@@ -1,0 +1,125 @@
+{
+  "artSource": "artifacts/symbiont-media/Symbiosis_V7_Symbiont_Art_Mapping_v1.0.xlsx",
+  "developmentTreeSource": "artifacts/symbiont-media/Symbiosis_V7_Symbiont_Development_Tree_Mapping_v1.0.xlsx",
+  "mediaDirs": {
+    "art": "generated/media/symbionts",
+    "developmentTrees": "generated/media/development-trees"
+  },
+  "species": [
+    {
+      "artFile": "WEAVER.png",
+      "developmentTreeFile": "WEAVER.png",
+      "speciesKey": "WEAVER"
+    },
+    {
+      "artFile": "TAIPAN.png",
+      "developmentTreeFile": "TAIPAN.png",
+      "speciesKey": "TAIPAN"
+    },
+    {
+      "artFile": "OWL.png",
+      "developmentTreeFile": "OWL.png",
+      "speciesKey": "OWL"
+    },
+    {
+      "artFile": "TEACHER.png",
+      "developmentTreeFile": "TEACHER.png",
+      "speciesKey": "TEACHER"
+    },
+    {
+      "artFile": "ARMADILLO.png",
+      "developmentTreeFile": "ARMADILLO.png",
+      "speciesKey": "ARMADILLO"
+    },
+    {
+      "artFile": "DRAGON.png",
+      "developmentTreeFile": "DRAGON.png",
+      "speciesKey": "DRAGON"
+    },
+    {
+      "artFile": "TROGR.png",
+      "developmentTreeFile": "TROGR.png",
+      "speciesKey": "TROGR"
+    },
+    {
+      "artFile": "KEEPER.png",
+      "developmentTreeFile": "KEEPER.png",
+      "speciesKey": "KEEPER"
+    },
+    {
+      "artFile": "ADVISER.png",
+      "developmentTreeFile": "ADVISER.png",
+      "speciesKey": "ADVISER"
+    },
+    {
+      "artFile": "TICK.png",
+      "developmentTreeFile": "TICK.png",
+      "speciesKey": "TICK"
+    },
+    {
+      "artFile": "CRICKET.png",
+      "developmentTreeFile": "CRICKET.png",
+      "speciesKey": "CRICKET"
+    },
+    {
+      "artFile": "SPIDER.png",
+      "developmentTreeFile": "SPIDER.png",
+      "speciesKey": "SPIDER"
+    },
+    {
+      "artFile": "CHAMELEON.png",
+      "developmentTreeFile": "CHAMELEON.png",
+      "speciesKey": "CHAMELEON"
+    },
+    {
+      "artFile": "PENGUIN.png",
+      "developmentTreeFile": "PENGUIN.png",
+      "speciesKey": "PENGUIN"
+    },
+    {
+      "artFile": "EEL.png",
+      "developmentTreeFile": "EEL.png",
+      "speciesKey": "EEL"
+    },
+    {
+      "artFile": "TOAD.png",
+      "developmentTreeFile": "TOAD.png",
+      "speciesKey": "TOAD"
+    },
+    {
+      "artFile": "RAT.png",
+      "developmentTreeFile": "RAT.png",
+      "speciesKey": "RAT"
+    },
+    {
+      "artFile": "DOLPHIN.png",
+      "developmentTreeFile": "DOLPHIN.png",
+      "speciesKey": "DOLPHIN"
+    },
+    {
+      "artFile": "MANTIS.png",
+      "developmentTreeFile": "MANTIS.png",
+      "speciesKey": "MANTIS"
+    },
+    {
+      "artFile": "SKUNK.png",
+      "developmentTreeFile": "SKUNK.png",
+      "speciesKey": "SKUNK"
+    },
+    {
+      "artFile": "CHIMERA.png",
+      "developmentTreeFile": "CHIMERA.png",
+      "speciesKey": "CHIMERA"
+    },
+    {
+      "artFile": "PUPPETEER.png",
+      "developmentTreeFile": "PUPPETEER.png",
+      "speciesKey": "PUPPETEER"
+    },
+    {
+      "artFile": "PLAGUE_DOCTOR.png",
+      "developmentTreeFile": "PLAGUE_DOCTOR.png",
+      "speciesKey": "PLAGUE_DOCTOR"
+    }
+  ]
+}

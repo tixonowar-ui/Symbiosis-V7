@@ -44,15 +44,16 @@ export const SKIPPED_INDEX_PATHS = [
   'atlas/renderer/primary-actions-by-form-id.json',
   'atlas/renderer/transitions-by-form-and-trigger.json',
   'qna/questions-by-code.json',
+  'symbiont-media/manifest.json',
 ] as const;
 
 /** Input totals; source arrays count as data, while lookup projections stay skipped. */
 const EXPECTED = {
-  files: 128,
+  files: 129,
   arrayFiles: 114,
   rows: 20_287,
   metadataFiles: 9,
-  skippedIndexes: 5,
+  skippedIndexes: 6,
 } as const;
 
 type JsonObject = Record<string, unknown>;

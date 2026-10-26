@@ -34,6 +34,7 @@ const EXPECTED_INDEX_PATHS = [
   'atlas/renderer/primary-actions-by-form-id.json',
   'atlas/renderer/transitions-by-form-and-trigger.json',
   'qna/questions-by-code.json',
+  'symbiont-media/manifest.json',
 ] as const;
 
 type JsonObject = Record<string, unknown>;
@@ -141,7 +142,7 @@ const sidecars = (file: string): string[] =>
 describe('generated SQLite seed', () => {
   it('stores every source array and section passport without duplicating JSON indexes', () => {
     const source = sourceCatalogue();
-    expect(source.files).toBe(128);
+    expect(source.files).toBe(129);
     expect(source.arrays).toHaveLength(114);
     expect(source.rows).toBe(20_287);
     expect(source.arrays.map(({ path }) => path)).toContain('atlas/global-contracts.json');
