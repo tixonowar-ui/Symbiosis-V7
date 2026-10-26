@@ -1632,6 +1632,108 @@ describe('SKILLS projection decoder and local draft', () => {
     },
   );
 
+  it('continues CHR-013 into an existing PARTIAL selection', async () => {
+    const { connection, socket, states } = await connectDecoderFixture(
+      'CHR-013',
+      DECODER_CHR_013_PROJECTION,
+    );
+    expect(connection.requestFormAction('CHR-013::CTA::002')).toEqual({ ok: true });
+    const requestText = socket.sent.at(-1);
+    if (requestText === undefined) throw new Error('missing CHR-013 continuation');
+    const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
+    if (!request.ok || request.value.messageType !== 'navigation.form-action') {
+      throw new Error('invalid CHR-013 continuation');
+    }
+    const destination = {
+      ...decoderChr015Projection(
+        [{ skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 }],
+        'card-add',
+      ),
+      selectionCheckpoint: 'PARTIAL',
+    } as const;
+    socket.message(
+      checkedHostTextV2({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: {
+            correlationId: request.value.navigationRequestId,
+            reason: 'FORM_ACTION',
+          },
+          base: projectionBase('CHR-015', destination),
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+      }),
+    );
+
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'CHR-015',
+        projection: {
+          commandId: 'card-add',
+          draftRevision: 9,
+          selectedSkillIds: ['SKILL_01'],
+          selectedSkills: [{ skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 }],
+          selectionCheckpoint: 'PARTIAL',
+        },
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+      },
+    });
+  });
+
+  it('rejects EXACT or empty PARTIAL after CHR-013 continue', async () => {
+    const destinations = [
+      decoderChr015Projection(
+        [
+          { skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 },
+          { skillId: 'SKILL_03', slotCost: 1, targetBonus: 1 },
+        ],
+        'final',
+      ),
+      {
+        ...decoderChr015Projection([], 'card-add'),
+        selectionCheckpoint: 'PARTIAL',
+      },
+    ] as const;
+    for (const destination of destinations) {
+      const { connection, socket, states } = await connectDecoderFixture(
+        'CHR-013',
+        DECODER_CHR_013_PROJECTION,
+      );
+      expect(connection.requestFormAction('CHR-013::CTA::002')).toEqual({ ok: true });
+      const requestText = socket.sent.at(-1);
+      if (requestText === undefined) throw new Error('missing CHR-013 continuation');
+      const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
+      if (!request.ok || request.value.messageType !== 'navigation.form-action') {
+        throw new Error('invalid CHR-013 continuation');
+      }
+      socket.message(
+        checkedHostTextV2({
+          messageType: 'projection.snapshot',
+          presentation: {
+            assignment: {
+              correlationId: request.value.navigationRequestId,
+              reason: 'FORM_ACTION',
+            },
+            base: projectionBase('CHR-015', destination),
+            layers: [],
+          },
+          projectionRole: 'player',
+          protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+          revisions: { actorVisibilityRevision: 0, projectionRevision: 1, stateRevision: 0 },
+        }),
+      );
+
+      expect(states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: '$.presentation.base.roleFilteredPayload.skillOptions' },
+      });
+    }
+  });
+
   it('allows catalog return only for PARTIAL CHR-015 selections', async () => {
     const partial = {
       ...decoderChr015Projection(

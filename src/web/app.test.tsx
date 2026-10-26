@@ -5872,6 +5872,38 @@ describe('CHR-014 addressable skill card UI', () => {
     );
     expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
     expect(container.querySelector('[data-atlas-form-id="CHR-013"]')).not.toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-013::CTA::002"]'),
+        'CHR-013 partial continuation',
+      ).click();
+    });
+    const continuation = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (continuation.messageType !== 'navigation.form-action') {
+      throw new Error('missing CHR-013 partial continuation');
+    }
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          continuation.navigationRequestId,
+          'FORM_ACTION',
+          chr015Base(
+            chr015Projection({
+              commandId: 'partial-card-add',
+              selectionCheckpoint: 'PARTIAL',
+              selectedSkills: [{ skillId: 'SKILL_01', slotCost: 2, targetBonus: 2 }],
+            }),
+          ),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 12, stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-015"]')).not.toBeNull();
+    expect(container.querySelector('[data-selection-checkpoint="PARTIAL"]')).not.toBeNull();
+    expect(container.querySelector('[data-selected-skill="SKILL_01"]')).not.toBeNull();
   });
 
   it('requires a signed level and commits the full canonical current+new selection', async () => {
