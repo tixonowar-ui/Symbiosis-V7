@@ -1142,11 +1142,10 @@ describe('ADR 0052 advisor intelligence floor channel', () => {
   for (const mirror of ['transitionsOut', 'transitionsIn', 'top-level'] as const) {
     it(`rejects B transition drift in ${mirror}`, () => {
       const root = clonedAtlas();
-      const rows = (
+      const rows =
         mirror === 'top-level'
           ? (root['transitions'] as ImportJsonObject[])
-          : (advisor(root)[mirror] as ImportJsonObject[])
-      ) as ImportJsonObject[];
+          : (advisor(root)[mirror] as ImportJsonObject[]);
       const row = rows.find(
         (transition) =>
           (mirror === 'transitionsOut'

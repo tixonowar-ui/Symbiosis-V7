@@ -1315,7 +1315,7 @@ function manualAdvisorFloorProjection(
           suppressionBOrNull: committed ? 1 : null,
         }
       : { kind: 'NOT_SUPPRESSED' },
-  } as JsonObject;
+  };
 }
 
 function chr019Projection(): JsonObject {

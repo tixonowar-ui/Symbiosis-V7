@@ -1655,17 +1655,18 @@ function RandomSymbiontFields({
 
 function AdvisorSkillSelectionFields({
   draft,
-  intelligenceFloorManualFaceOrNull,
   onCandidateChange,
   onIntelligenceFloorManualFaceChange,
   snapshot,
 }: {
   readonly draft: AdvisorSkillSelectionDraft | null;
-  readonly intelligenceFloorManualFaceOrNull: number | null;
   readonly onCandidateChange: (skillId: string | null, targetBonus: number | null) => void;
   readonly onIntelligenceFloorManualFaceChange: (value: number | null) => void;
   readonly snapshot: ConfirmedProjectionSnapshot;
 }): ReactElement | null {
+  const [intelligenceFloorManualFaceOrNull, setIntelligenceFloorManualFaceOrNull] = useState<
+    number | null
+  >(null);
   if (snapshot.formId !== 'CHR-041') return null;
   const projection = snapshot.projection;
   const pendingIntelligenceFloor =
@@ -1744,13 +1745,14 @@ function AdvisorSkillSelectionFields({
                       max={20}
                       min={1}
                       name="advisorIntelligenceFloorFace"
-                      onChange={(event) =>
-                        onIntelligenceFloorManualFaceChange(
+                      onChange={(event) => {
+                        const nextFace =
                           event.currentTarget.value === ''
                             ? null
-                            : Number(event.currentTarget.value),
-                        )
-                      }
+                            : Number(event.currentTarget.value);
+                        setIntelligenceFloorManualFaceOrNull(nextFace);
+                        onIntelligenceFloorManualFaceChange(nextFace);
+                      }}
                       required
                       step={1}
                       type="number"
@@ -2148,9 +2150,7 @@ export function App(): ReactElement {
   const [randomSymbiontDraft, setRandomSymbiontDraft] = useState<RandomSymbiontDraft | null>(null);
   const [advisorSkillSelectionDraft, setAdvisorSkillSelectionDraft] =
     useState<AdvisorSkillSelectionDraft | null>(null);
-  const [intelligenceFloorManualFaceOrNull, setIntelligenceFloorManualFaceOrNull] = useState<
-    number | null
-  >(null);
+  const intelligenceFloorManualFaceRef = useRef<number | null>(null);
   const [skillCardDraft, setSkillCardDraft] = useState<CharacterSkillCardDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
@@ -2179,11 +2179,8 @@ export function App(): ReactElement {
     snapshot?.formId === 'CHR-041' &&
     'compositionDraftRevision' in snapshot.projection &&
     snapshot.projection.trogrSuppressionState.kind === 'SUPPRESSED'
-      ? `${String(snapshot.projection.compositionDraftRevision)}:${snapshot.projection.trogrSuppressionState.rollRequestIdOrNull ?? ''}:${snapshot.projection.trogrSuppressionState.rollReceiptIdOrNull ?? ''}`
+      ? `${JSON.stringify(snapshot.projection.compositionDraftRevision)}:${snapshot.projection.trogrSuppressionState.rollRequestIdOrNull ?? ''}:${snapshot.projection.trogrSuppressionState.rollReceiptIdOrNull ?? ''}`
       : null;
-  useEffect(() => {
-    setIntelligenceFloorManualFaceOrNull(null);
-  }, [intelligenceFloorRollScope]);
   const interactive =
     state.kind === 'ready' ||
     state.kind === 'command-refusal' ||
@@ -2361,9 +2358,11 @@ export function App(): ReactElement {
               }}
             />
             <AdvisorSkillSelectionFields
+              key={intelligenceFloorRollScope ?? 'no-advisor-floor'}
               draft={advisorSkillSelectionDraft}
-              intelligenceFloorManualFaceOrNull={intelligenceFloorManualFaceOrNull}
-              onIntelligenceFloorManualFaceChange={setIntelligenceFloorManualFaceOrNull}
+              onIntelligenceFloorManualFaceChange={(value) => {
+                intelligenceFloorManualFaceRef.current = value;
+              }}
               snapshot={snapshot}
               onCandidateChange={(skillId, targetBonus) => {
                 const result = connectionRef.current?.replaceAdvisorSkillCandidate(
@@ -2395,7 +2394,7 @@ export function App(): ReactElement {
                 const result = connection.requestFormAction(
                   selection.actionKey,
                   selection.actionKey === CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY
-                    ? intelligenceFloorManualFaceOrNull
+                    ? intelligenceFloorManualFaceRef.current
                     : undefined,
                 );
                 setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);

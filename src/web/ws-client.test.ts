@@ -689,7 +689,7 @@ function decoderManualFloorProjection(
           suppressionBOrNull: committed ? 1 : null,
         }
       : { kind: 'NOT_SUPPRESSED' },
-  } as JsonObject;
+  };
 }
 
 function decoderManualFloorReceipt(command: DecoderWorkflowCommand): CommandReceipt {
@@ -2537,6 +2537,24 @@ describe('MANUAL Advisor intelligence floor projection and transport', () => {
       refusal: {
         path: '$.presentation.base.roleFilteredPayload.compositionDraftRevision',
       },
+    });
+  });
+
+  it('rejects an I/W request that reuses its receipt ID', async () => {
+    const projection = mutableProjection(decoderManualFloorProjection());
+    const requests = projection['iwRollRequestIds'] as JsonValue[] | undefined;
+    const receipts = projection['iwRollReceiptIds'] as JsonValue[] | undefined;
+    if (!Array.isArray(requests) || !Array.isArray(receipts)) {
+      throw new Error('missing MANUAL I/W identities');
+    }
+    const requestId = requests[0];
+    if (typeof requestId !== 'string') throw new Error('missing first MANUAL I/W request ID');
+    receipts[0] = requestId;
+    expect(
+      await decodeProjectionFixture('CHR-041', projection as JsonObject, ['CHR-041::CTA::004']),
+    ).toMatchObject({
+      kind: 'protocol-error',
+      refusal: { path: '$.presentation.base.roleFilteredPayload.iwRollReceiptIds' },
     });
   });
 

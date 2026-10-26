@@ -463,6 +463,9 @@ function refused<T>(path: string, value: JsonValue): DecodeResult<T> {
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+function isJsonArray(value: unknown): value is readonly JsonValue[] {
+  return Array.isArray(value);
+}
 function exactObjectKeys(
   value: JsonObject,
   expected: ReadonlySet<string>,
@@ -1153,16 +1156,25 @@ export function decodeChr041Projection(
   if (!result.ok) return result;
   if (manualComposition) {
     for (const [key, ids] of [
-      ['iwRollRequestIds', value['iwRollRequestIds']],
-      ['iwRollReceiptIds', value['iwRollReceiptIds']],
+      ['iwRollRequestIds', value['iwRollRequestIds'] as readonly JsonValue[] | undefined],
+      ['iwRollReceiptIds', value['iwRollReceiptIds'] as readonly JsonValue[] | undefined],
     ] as const) {
       if (
-        !Array.isArray(ids) ||
+        !isJsonArray(ids) ||
         ids.some((id) => !isNonEmptyString(id)) ||
         new Set(ids).size !== ids.length
       ) {
         return refused(`${path}.${key}`, ids ?? null);
       }
+    }
+    const requestIds = value['iwRollRequestIds'];
+    const receiptIds = value['iwRollReceiptIds'];
+    if (
+      isJsonArray(requestIds) &&
+      isJsonArray(receiptIds) &&
+      new Set([...requestIds, ...receiptIds]).size !== 4
+    ) {
+      return refused(`${path}.iwRollReceiptIds`, receiptIds ?? null);
     }
   }
   const requiredSlotCount = slots['requiredSlotCount'];
