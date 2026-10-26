@@ -1857,6 +1857,8 @@ describe('MANUAL Advisor intelligence floor host journey', () => {
       roleFilteredPayload: {
         advisorIPlus8OrNull: 16,
         advisorWPlus8OrNull: 16,
+        compositionDraftRevision: 1,
+        diceInputModeSnapshot: 'MANUAL',
         trogrSuppressionState: {
           kind: 'SUPPRESSED',
           rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
@@ -2087,6 +2089,10 @@ describe('MANUAL Advisor intelligence floor host journey', () => {
     const noInitialFrames = await reconnectOn(noHost.socket, noHost, 'no-floor-initial');
     const noInitial = snapshot(hostMessageV2(noInitialFrames[1] ?? ''));
     expect(noInitial.presentation.base.availableActionKeys).not.toContain('CHR-041::CTA::004');
+    expect(noInitial.presentation.base.roleFilteredPayload).toMatchObject({
+      commandId: null,
+      diceInputModeSnapshot: 'AUTO',
+    });
     const forged = floorRollRequest(noHost, loadCurrent(noHost), 'no-floor-forged-b', null, {
       pendingRollRequestId: 'no-floor-forged-pending-request',
     });

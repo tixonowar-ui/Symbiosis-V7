@@ -17,6 +17,7 @@ export const CHR_020_SIDE_DRAFT_ACTION_KEY = 'CHR-020::CTA::003' as const;
 export const CHR_020_MONSTER_DRAFT_ACTION_KEY = 'CHR-020::CTA::004' as const;
 export const CHR_041_CHECKPOINT_ACTION_KEY = 'CHR-041::CTA::001' as const;
 export const CHR_041_SKILL_DRAFT_ACTION_KEY = 'CHR-041::CTA::002' as const;
+export const CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY = 'CHR-041::CTA::004' as const;
 
 const ROLL_COMMIT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-CREATION-ROLL-COMMIT' as const;
 const CHECKPOINT_WORKFLOW_COMMAND_ID = 'UI-CMD-CHAR-WIZARD-CHECKPOINT' as const;
@@ -214,7 +215,7 @@ export type SkillSelectionValidation =
       readonly requiredSlotCount: number;
       readonly usedSlotCount: number;
     };
-export interface Chr041Projection extends JsonObject {
+interface Chr041ProjectionCommon extends JsonObject {
   readonly acknowledged: boolean;
   readonly advisorCard: {
     readonly advisorIPlus8: number | null;
@@ -246,9 +247,17 @@ export interface Chr041Projection extends JsonObject {
         readonly rollRequestIdOrNull: string | null;
         readonly rollReceiptIdOrNull: string | null;
       };
-  readonly randomSequenceId: string;
   readonly wizardCheckpointId: string;
 }
+
+export interface Chr041RandomProjection extends Chr041ProjectionCommon {
+  readonly randomSequenceId: string;
+}
+export interface Chr041ManualProjection extends Chr041ProjectionCommon {
+  readonly compositionDraftRevision: number;
+  readonly diceInputModeSnapshot: 'AUTO' | 'MANUAL';
+}
+export type Chr041Projection = Chr041RandomProjection | Chr041ManualProjection;
 
 export interface SymbiontInstanceProjection extends JsonObject {
   readonly absorbedSpeciesKeys: readonly SymbiontSpeciesKey[];
@@ -403,6 +412,49 @@ export interface SymbiontAdvisorCheckpointResult extends SymbiontReceiptResultCo
   }[];
   readonly sourceFormId: 'CHR-041';
   readonly usedSlotCount: number;
+}
+
+export interface AdvisorIntelligenceFloorRollPayload extends JsonObject {
+  readonly advisorInstanceDraftId: string;
+  readonly characterDraftId: string;
+  readonly compositionDraftRevision: number;
+  readonly draftRevision: number;
+  readonly manualFaceOrNull: number | null;
+  readonly pendingRollRequestId: string;
+  readonly sourceFormId: 'CHR-041';
+  readonly stage: 'SYMBIONTS';
+  readonly variant: 'TROGR_SUPPRESSION_B';
+  readonly wizardCheckpointId: string;
+}
+export type AdvisorIntelligenceFloorRollRequest = WorkflowCommandRequestMessage<
+  typeof ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+  AdvisorIntelligenceFloorRollPayload
+>;
+export interface AdvisorIntelligenceFloorPhysicalRoll extends JsonObject {
+  readonly kind: 'TROGR_SUPPRESSION_B';
+  readonly mechanical: { readonly dieSides: 20; readonly rawFace: number };
+  readonly rollReceiptId: string;
+  readonly rollRequestId: string;
+}
+export interface AdvisorIntelligenceFloorRollResult extends JsonObject {
+  readonly advisorInstanceDraftId: string;
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly compositionDraftRevision: number;
+  readonly draftRevision: number;
+  readonly minimumI: number;
+  readonly nextFormId: 'CHR-041';
+  readonly physicalRoll: AdvisorIntelligenceFloorPhysicalRoll;
+  readonly rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE';
+  readonly sourceFormId: 'CHR-041';
+  readonly stage: 'SYMBIONTS';
+  readonly suppressionB: number;
+  readonly teacherAbsorbed: boolean;
+  readonly variant: 'TROGR_SUPPRESSION_B';
 }
 
 function refused<T>(path: string, value: JsonValue): DecodeResult<T> {
@@ -983,6 +1035,16 @@ export function decodeChr041Projection(
   value: JsonObject,
   path: string,
 ): DecodeResult<Chr041Projection> {
+  const hasRandomIdentity = Object.hasOwn(value, 'randomSequenceId');
+  const hasManualRevision = Object.hasOwn(value, 'compositionDraftRevision');
+  const hasManualDiceMode = Object.hasOwn(value, 'diceInputModeSnapshot');
+  if (hasRandomIdentity && hasManualDiceMode) {
+    return refused(`${path}.randomSequenceId`, value['randomSequenceId']!);
+  }
+  if (hasRandomIdentity && hasManualRevision) {
+    return refused(`${path}.compositionDraftRevision`, value['compositionDraftRevision']!);
+  }
+  const manualComposition = hasManualRevision || hasManualDiceMode;
   const advisorCard = value['advisorCard'];
   if (!isJsonObject(advisorCard)) return refused(`${path}.advisorCard`, advisorCard!);
   const cardResult = decodeProjection(advisorCard, `${path}.advisorCard`, {
@@ -1036,6 +1098,33 @@ export function decodeChr041Projection(
           })
         : refused(`${path}.trogrSuppressionState.kind`, suppressionKind!);
   if (!suppressionResult.ok) return suppressionResult;
+  if (manualComposition && suppressionKind === 'SUPPRESSED') {
+    const requestId = suppression['rollRequestIdOrNull'];
+    const receiptId = suppression['rollReceiptIdOrNull'];
+    const suppressionB = suppression['suppressionBOrNull'];
+    const minimumI = suppression['minimumIOrNull'];
+    if (!isNonEmptyString(requestId)) {
+      return refused(`${path}.trogrSuppressionState.rollRequestIdOrNull`, requestId ?? null);
+    }
+    if (receiptId === null) {
+      if (suppressionB !== null) {
+        return refused(`${path}.trogrSuppressionState.suppressionBOrNull`, suppressionB ?? null);
+      }
+      if (minimumI !== null) {
+        return refused(`${path}.trogrSuppressionState.minimumIOrNull`, minimumI ?? null);
+      }
+    } else {
+      if (!isNonEmptyString(receiptId)) {
+        return refused(`${path}.trogrSuppressionState.rollReceiptIdOrNull`, receiptId ?? null);
+      }
+      if (!isSafeIntegerAtLeast(suppressionB, 0)) {
+        return refused(`${path}.trogrSuppressionState.suppressionBOrNull`, suppressionB ?? null);
+      }
+      if (!isSafeIntegerAtLeast(minimumI, 1)) {
+        return refused(`${path}.trogrSuppressionState.minimumIOrNull`, minimumI ?? null);
+      }
+    }
+  }
   const result = decodeProjection(value, path, {
     acknowledged: isBoolean,
     advisorCard: (field) => field === advisorCard,
@@ -1050,11 +1139,32 @@ export function decodeChr041Projection(
       Array.isArray(field) && field.length === 2 && field.every(isNullableString),
     iwRollRequestIds: (field) =>
       Array.isArray(field) && field.length === 2 && field.every(isNullableString),
-    randomSequenceId: isNonEmptyString,
+    ...(manualComposition
+      ? {
+          compositionDraftRevision: (field: JsonValue | undefined) =>
+            isSafeIntegerAtLeast(field, 0),
+          diceInputModeSnapshot: (field: JsonValue | undefined) =>
+            field === 'AUTO' || field === 'MANUAL',
+        }
+      : { randomSequenceId: isNonEmptyString }),
     trogrSuppressionState: (field) => field === suppression,
     wizardCheckpointId: isNonEmptyString,
   });
   if (!result.ok) return result;
+  if (manualComposition) {
+    for (const [key, ids] of [
+      ['iwRollRequestIds', value['iwRollRequestIds']],
+      ['iwRollReceiptIds', value['iwRollReceiptIds']],
+    ] as const) {
+      if (
+        !Array.isArray(ids) ||
+        ids.some((id) => !isNonEmptyString(id)) ||
+        new Set(ids).size !== ids.length
+      ) {
+        return refused(`${path}.${key}`, ids ?? null);
+      }
+    }
+  }
   const requiredSlotCount = slots['requiredSlotCount'];
   if (!isSafeIntegerAtLeast(requiredSlotCount, 0)) {
     return refused(`${path}.advisorSlotsAndSkills.requiredSlotCount`, requiredSlotCount!);
@@ -1091,6 +1201,15 @@ export function expectedChr041ActionKeys(
   projection: Chr041Projection,
   executableWorkflowCommandIds: readonly WorkflowCommandId[],
 ): readonly ActionKey[] {
+  if (
+    'compositionDraftRevision' in projection &&
+    projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
+    projection.trogrSuppressionState.rollReceiptIdOrNull === null
+  ) {
+    return executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+      ? [CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY]
+      : NO_ACTION_KEYS;
+  }
   return projection.acknowledged
     ? NO_ACTION_KEYS
     : [
@@ -1413,7 +1532,14 @@ export function advisorSkillSelectionDraftFromSnapshot(
 ): AdvisorSkillSelectionDraft | null {
   if (snapshot.formId !== 'CHR-041') return null;
   const projection = snapshot.projection;
-  if (projection.acknowledged) return null;
+  if (
+    projection.acknowledged ||
+    ('compositionDraftRevision' in projection &&
+      projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
+      projection.trogrSuppressionState.rollReceiptIdOrNull === null)
+  ) {
+    return null;
+  }
   return {
     candidateSkillIdOrNull: null,
     candidateTargetBonusOrNull: null,
@@ -1548,6 +1674,10 @@ export function advisorCheckpointPayload(
     throw new Error('CHR-041 requires an active Advisor skill draft');
   }
   const projection = snapshot.projection;
+  const randomSequenceId = projection['randomSequenceId'];
+  if (typeof randomSequenceId !== 'string') {
+    throw new Error('CHR-041 skill checkpoint requires the RANDOM Advisor transport');
+  }
   if (projection.acknowledged || draft.selectionValidation.kind !== 'EXACT') {
     throw new Error('CHR-041 requires exact skill slots');
   }
@@ -1576,13 +1706,54 @@ export function advisorCheckpointPayload(
     advisorInstanceDraftId: projection.advisorInstanceDraftId,
     characterDraftId: projection.characterDraftId,
     draftRevision: projection.draftRevision,
-    randomSequenceId: projection.randomSequenceId,
+    randomSequenceId,
     selectedSkills: draft.selectedSkills.map(({ skillId, targetBonus }) => ({
       skillId,
       targetBonus,
     })),
     sourceFormId: 'CHR-041',
     stage: 'SYMBIONTS',
+    wizardCheckpointId: projection.wizardCheckpointId,
+  };
+}
+
+export function advisorIntelligenceFloorRollPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+  manualFaceOrNull: number | null = null,
+): AdvisorIntelligenceFloorRollPayload {
+  if (snapshot.formId !== 'CHR-041' || !('compositionDraftRevision' in snapshot.projection)) {
+    throw new Error('CHR-041 intelligence floor requires a MANUAL composition projection');
+  }
+  const projection = snapshot.projection;
+  const suppression = projection.trogrSuppressionState;
+  if (suppression.kind !== 'SUPPRESSED' || suppression.rollReceiptIdOrNull !== null) {
+    throw new Error('CHR-041 requires one pending intelligence floor request');
+  }
+  const pendingRollRequestId = suppression.rollRequestIdOrNull;
+  if (!isNonEmptyString(pendingRollRequestId)) {
+    throw new Error('CHR-041 requires one pending intelligence floor request');
+  }
+  let manualFace: number | null = null;
+  if (projection.diceInputModeSnapshot === 'MANUAL') {
+    if (!isFace(manualFaceOrNull)) {
+      throw new Error('CHR-041 requires one complete MANUAL intelligence floor face');
+    }
+    manualFace = manualFaceOrNull;
+  }
+  const compositionDraftRevision = projection['compositionDraftRevision'];
+  if (!isSafeIntegerAtLeast(compositionDraftRevision, 0)) {
+    throw new Error('CHR-041 requires a valid composition draft revision');
+  }
+  return {
+    advisorInstanceDraftId: projection.advisorInstanceDraftId,
+    characterDraftId: projection.characterDraftId,
+    compositionDraftRevision,
+    draftRevision: projection.draftRevision,
+    manualFaceOrNull: manualFace,
+    pendingRollRequestId,
+    sourceFormId: 'CHR-041',
+    stage: 'SYMBIONTS',
+    variant: 'TROGR_SUPPRESSION_B',
     wizardCheckpointId: projection.wizardCheckpointId,
   };
 }
@@ -1867,10 +2038,12 @@ export function symbiontRollSnapshotMatchesReceipt(
     }
     if (snapshot.formId === 'CHR-041') {
       const projection = snapshot.projection;
-      if (projection.randomSequenceId !== result.randomSequenceId || projection.acknowledged) {
+      const randomSequenceId =
+        'randomSequenceId' in projection ? projection.randomSequenceId : null;
+      if (randomSequenceId !== result.randomSequenceId || projection.acknowledged) {
         return refused(
           '$.presentation.base.roleFilteredPayload.randomSequenceId',
-          projection.randomSequenceId,
+          randomSequenceId,
         );
       }
       if (result.physicalRoll.kind === 'ADVISOR_I' || result.physicalRoll.kind === 'ADVISOR_W') {
@@ -1905,15 +2078,13 @@ export function symbiontRollSnapshotMatchesReceipt(
   }
   if (snapshot.formId === 'CHR-041') {
     const projection = snapshot.projection;
+    const randomSequenceId = 'randomSequenceId' in projection ? projection.randomSequenceId : null;
     if (
       result.nextFormId !== 'CHR-041' ||
-      projection.randomSequenceId !== result.randomSequenceId ||
+      randomSequenceId !== result.randomSequenceId ||
       projection.acknowledged
     ) {
-      return refused(
-        '$.presentation.base.roleFilteredPayload.randomSequenceId',
-        projection.randomSequenceId,
-      );
+      return refused('$.presentation.base.roleFilteredPayload.randomSequenceId', randomSequenceId);
     }
     return { ok: true, value: snapshot };
   }
@@ -1942,6 +2113,140 @@ export function advisorCheckpointSnapshotMatchesReceipt(
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   if (snapshot.formId !== 'CHR-019' || !snapshotCommonMatches(snapshot, receipt)) {
     return refused('$.presentation.base.formId', snapshot.formId);
+  }
+  return { ok: true, value: snapshot };
+}
+
+function decodeAdvisorIntelligenceFloorPhysicalRoll(
+  value: unknown,
+  path: string,
+): DecodeResult<AdvisorIntelligenceFloorPhysicalRoll> {
+  if (!isJsonObject(value)) return refused(path, value as JsonValue);
+  const mechanical = value['mechanical'];
+  if (!isJsonObject(mechanical)) return refused(`${path}.mechanical`, mechanical!);
+  const mechanicalResult = decodeProjection(mechanical, `${path}.mechanical`, {
+    dieSides: (field) => field === 20,
+    rawFace: isFace,
+  });
+  if (!mechanicalResult.ok) return mechanicalResult;
+  const result = decodeProjection(value, path, {
+    kind: (field) => field === 'TROGR_SUPPRESSION_B',
+    mechanical: (field) => field === mechanical,
+    rollReceiptId: isNonEmptyString,
+    rollRequestId: isNonEmptyString,
+  });
+  return result.ok ? { ok: true, value: value as AdvisorIntelligenceFloorPhysicalRoll } : result;
+}
+
+export function decodeAdvisorIntelligenceFloorRollTerminal(
+  message: Extract<
+    HostToClientMessage,
+    { readonly messageType: 'command.result' | 'command.replay' }
+  >,
+  request: AdvisorIntelligenceFloorRollRequest,
+  source: ConfirmedProjectionSnapshot,
+): DecodeResult<CommandReceipt<AdvisorIntelligenceFloorRollResult>> {
+  if (source.formId !== 'CHR-041' || !('compositionDraftRevision' in source.projection)) {
+    return refused('$.presentation.base.formId', source.formId);
+  }
+  const sourceProjection = source.projection;
+  const receipt = message.receipt;
+  const payload = request.payload;
+  if (receipt.commandId !== request.commandId || !isNonEmptyString(receipt.receiptId)) {
+    return refused('$.receipt.commandId', receipt.commandId);
+  }
+  const physicalRoll = decodeAdvisorIntelligenceFloorPhysicalRoll(
+    receipt.result['physicalRoll'],
+    '$.receipt.result.physicalRoll',
+  );
+  if (!physicalRoll.ok) return physicalRoll;
+  const result = decodeProjection(receipt.result, '$.receipt.result', {
+    advisorInstanceDraftId: (field) => field === payload.advisorInstanceDraftId,
+    branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+    branchUuid: isNonEmptyString,
+    characterDraftId: (field) => field === payload.characterDraftId,
+    checkpointId: (field) => field === payload.wizardCheckpointId,
+    checkpointOwnerId: (field) => field === payload.characterDraftId,
+    checkpointRevision: (field) => isSafeIntegerAtLeast(field, 1),
+    compositionDraftRevision: (field) => field === payload.compositionDraftRevision,
+    draftRevision: (field) => field === payload.draftRevision + 1,
+    minimumI: (field) => isSafeIntegerAtLeast(field, 1),
+    nextFormId: (field) => field === 'CHR-041',
+    physicalRoll: (field) => field === receipt.result['physicalRoll'],
+    rollPurpose: (field) => field === 'FUTURE_MINIMUM_INTELLIGENCE',
+    sourceFormId: (field) => field === 'CHR-041',
+    stage: (field) => field === 'SYMBIONTS',
+    suppressionB: (field) => isSafeIntegerAtLeast(field, 0),
+    teacherAbsorbed: isBoolean,
+    variant: (field) => field === 'TROGR_SUPPRESSION_B',
+  });
+  if (!result.ok) return result;
+  const roll = physicalRoll.value;
+  const uniqueIds = [
+    ...sourceProjection.iwRollRequestIds,
+    ...sourceProjection.iwRollReceiptIds,
+    payload.advisorInstanceDraftId,
+    payload.pendingRollRequestId,
+    receipt.commandId,
+    receipt.receiptId,
+    receipt.result['branchUuid'],
+  ].filter((entry): entry is string => typeof entry === 'string');
+  if (
+    !validReceiptRevisions(receipt, request.expectedRevisions) ||
+    roll.rollRequestId !== payload.pendingRollRequestId ||
+    roll.rollReceiptId !== receipt.receiptId ||
+    new Set(uniqueIds).size !== uniqueIds.length ||
+    (sourceProjection.diceInputModeSnapshot === 'MANUAL' &&
+      roll.mechanical.rawFace !== payload.manualFaceOrNull) ||
+    (sourceProjection.diceInputModeSnapshot === 'AUTO' && payload.manualFaceOrNull !== null)
+  ) {
+    return refused('$.receipt.result.physicalRoll', roll);
+  }
+  return { ok: true, value: receipt as CommandReceipt<AdvisorIntelligenceFloorRollResult> };
+}
+
+export function advisorIntelligenceFloorSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt<AdvisorIntelligenceFloorRollResult>,
+  source: ConfirmedProjectionSnapshot,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (
+    source.formId !== 'CHR-041' ||
+    !('compositionDraftRevision' in source.projection) ||
+    snapshot.formId !== 'CHR-041' ||
+    !('compositionDraftRevision' in snapshot.projection)
+  ) {
+    return refused('$.presentation.base.formId', snapshot.formId);
+  }
+  const sourceProjection = source.projection;
+  const projection = snapshot.projection;
+  const result = receipt.result;
+  const suppression = projection.trogrSuppressionState;
+  const revisionsMatch =
+    snapshot.revisions.actorVisibilityRevision === receipt.revisions.actorVisibilityRevision &&
+    snapshot.revisions.projectionRevision === receipt.revisions.projectionRevision &&
+    snapshot.revisions.stateRevision === receipt.revisions.stateRevision;
+  if (
+    !revisionsMatch ||
+    projection.acknowledged !== sourceProjection.acknowledged ||
+    projection.commandId !== receipt.commandId ||
+    projection.characterDraftId !== result.characterDraftId ||
+    projection.wizardCheckpointId !== result.checkpointId ||
+    projection.draftRevision !== result.draftRevision ||
+    projection.compositionDraftRevision !== result.compositionDraftRevision ||
+    projection.advisorInstanceDraftId !== result.advisorInstanceDraftId ||
+    !sameJson(projection.iwRollRequestIds, sourceProjection.iwRollRequestIds) ||
+    !sameJson(projection.iwRollReceiptIds, sourceProjection.iwRollReceiptIds) ||
+    !sameJson(projection.advisorCard, sourceProjection.advisorCard) ||
+    !sameJson(projection.advisorSlotsAndSkills, sourceProjection.advisorSlotsAndSkills) ||
+    suppression.kind !== 'SUPPRESSED' ||
+    suppression.rollPurpose !== result.rollPurpose ||
+    suppression.rollRequestIdOrNull !== result.physicalRoll.rollRequestId ||
+    suppression.rollReceiptIdOrNull !== receipt.receiptId ||
+    suppression.suppressionBOrNull !== result.suppressionB ||
+    suppression.minimumIOrNull !== result.minimumI
+  ) {
+    return refused('$.presentation.base.roleFilteredPayload', projection);
   }
   return { ok: true, value: snapshot };
 }

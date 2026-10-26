@@ -475,9 +475,10 @@ function projectManualChr041(
         : { kind: 'NOT_SUPPRESSED' },
       acknowledged,
       compositionDraftRevision: stage.compositionDraftRevision,
+      diceInputModeSnapshot: stage.diceInputModeSnapshot,
       wizardCheckpointId: checkpoint.checkpoint.checkpointId,
       draftRevision: checkpoint.receipt.result.draftRevision,
-      commandId: record?.request.commandId ?? stage.advisorSkillRecordOrNull?.receiptId ?? null,
+      commandId: record?.request.commandId ?? null,
     },
     checkpoint,
   );

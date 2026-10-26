@@ -41,13 +41,17 @@ import type { SupportedPresentationFormId } from './forms/index.js';
 import {
   advisorCheckpointPayload,
   advisorCheckpointSnapshotMatchesReceipt,
+  advisorIntelligenceFloorRollPayload,
+  advisorIntelligenceFloorSnapshotMatchesReceipt,
   advisorSkillSelectionDraftFromSnapshot,
   CHR_020_MONSTER_DRAFT_ACTION_KEY,
   CHR_020_ROLL_COMMIT_ACTION_KEY,
   CHR_020_SIDE_DRAFT_ACTION_KEY,
   CHR_041_CHECKPOINT_ACTION_KEY,
+  CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
   CHR_041_SKILL_DRAFT_ACTION_KEY,
   cycleRandomMonster,
+  decodeAdvisorIntelligenceFloorRollTerminal,
   decodeChr017Projection,
   decodeChr019Projection,
   decodeChr020Projection,
@@ -68,6 +72,9 @@ import {
   toggleRandomSide,
 } from './forms/chr/random-symbionts.js';
 import type {
+  AdvisorIntelligenceFloorRollPayload,
+  AdvisorIntelligenceFloorRollRequest,
+  AdvisorIntelligenceFloorRollResult,
   AdvisorSkillSelectionDraft,
   Chr017Projection,
   Chr019Projection,
@@ -1361,7 +1368,10 @@ interface ConfirmationRollCommitPayload extends RollCommitCommonPayload {
 }
 
 type RollCommitPayload =
-  ConfirmationRollCommitPayload | SetRollCommitPayload | SymbiontRollCommitPayload;
+  | AdvisorIntelligenceFloorRollPayload
+  | ConfirmationRollCommitPayload
+  | SetRollCommitPayload
+  | SymbiontRollCommitPayload;
 type RollCommitRequest = WorkflowCommandRequestMessage<
   typeof ROLL_COMMIT_WORKFLOW_COMMAND_ID,
   RollCommitPayload
@@ -1406,12 +1416,16 @@ interface ConfirmationRollCommitResult extends RollCommitResultCommon {
 }
 
 type RollCommitResult =
-  ConfirmationRollCommitResult | SetRollCommitResult | SymbiontRollCommitResult;
+  | AdvisorIntelligenceFloorRollResult
+  | ConfirmationRollCommitResult
+  | SetRollCommitResult
+  | SymbiontRollCommitResult;
 
 interface PendingRollCommit {
   readonly receipt: CommandReceipt<RollCommitResult> | null;
   readonly request: RollCommitRequest;
-  readonly sourceProjection: Chr003Projection | Chr004Projection | Chr020Projection;
+  readonly sourceProjection:
+    Chr003Projection | Chr004Projection | Chr020Projection | Chr041Projection;
   readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
@@ -1506,7 +1520,10 @@ export interface ProjectionConnection {
     skillId: string | null,
     targetBonus: number | null,
   ): FormActionRequestResult;
-  requestFormAction(actionKey: ActionKey): FormActionRequestResult;
+  requestFormAction(
+    actionKey: ActionKey,
+    advisorIntelligenceFloorManualFaceOrNull?: number | null,
+  ): FormActionRequestResult;
   requestSkillCard(skillId: string): FormActionRequestResult;
   replaceStatAssignmentValue(statCode: StatCode, value: number | null): FormActionRequestResult;
 }
@@ -4313,6 +4330,20 @@ function visibleSnapshotCore(
       );
     }
   } else if (snapshot.formId === 'CHR-041') {
+    const pendingIntelligenceFloor =
+      'compositionDraftRevision' in snapshot.projection &&
+      snapshot.projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
+      snapshot.projection.trogrSuppressionState.rollReceiptIdOrNull === null;
+    if (commandPending || pendingIntelligenceFloor) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_041_CHECKPOINT_ACTION_KEY && key !== CHR_041_SKILL_DRAFT_ACTION_KEY,
+      );
+    }
+    if (commandPending) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
+      );
+    }
     const candidateOption = snapshot.projection.advisorSlotsAndSkills.skillOptions.find(
       ({ skillId }) => skillId === advisorSkillSelectionDraft?.candidateSkillIdOrNull,
     );
@@ -5131,6 +5162,16 @@ function decodeRollCommitTerminal(
   >,
   pending: PendingRollCommit,
 ): DecodeResult<CommandReceipt<RollCommitResult>> {
+  if (
+    pending.request.payload.stage === 'SYMBIONTS' &&
+    pending.request.payload.variant === 'TROGR_SUPPRESSION_B'
+  ) {
+    return decodeAdvisorIntelligenceFloorRollTerminal(
+      message,
+      pending.request as AdvisorIntelligenceFloorRollRequest,
+      pending.sourceSnapshot,
+    );
+  }
   if (pending.request.payload.stage === 'SYMBIONTS') {
     return decodeSymbiontRollCommitTerminal(
       message,
@@ -5605,8 +5646,16 @@ function reconnectSnapshotMatchesUnjournaledCancel(
 function rollCommitSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<RollCommitResult>,
+  source: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (result.stage === 'SYMBIONTS' && result.variant === 'TROGR_SUPPRESSION_B') {
+    return advisorIntelligenceFloorSnapshotMatchesReceipt(
+      snapshot,
+      receipt as CommandReceipt<AdvisorIntelligenceFloorRollResult>,
+      source,
+    );
+  }
   if (result.stage === 'SYMBIONTS') {
     return symbiontRollSnapshotMatchesReceipt(
       snapshot,
@@ -5772,7 +5821,9 @@ function decodeRollCommitDestinationSnapshot(
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
-  return decoded.ok ? rollCommitSnapshotMatchesReceipt(decoded.value, pending.receipt) : decoded;
+  return decoded.ok
+    ? rollCommitSnapshotMatchesReceipt(decoded.value, pending.receipt, pending.sourceSnapshot)
+    : decoded;
 }
 
 function decodeDeviceIdentity(value: unknown): DecodeResult<string> {
@@ -6623,6 +6674,7 @@ export function connectProjection(
               snapshot = rollCommitSnapshotMatchesReceipt(
                 snapshot.value,
                 pendingRollCommit.receipt,
+                pendingRollCommit.sourceSnapshot,
               );
             }
           }
@@ -7250,7 +7302,7 @@ export function connectProjection(
       }
       return { ok: true };
     },
-    requestFormAction: (actionKey) => {
+    requestFormAction: (actionKey, advisorIntelligenceFloorManualFaceOrNull) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (lastSnapshot === null)
         return { ok: false, detail: 'no confirmed projection is available' };
@@ -7780,7 +7832,10 @@ export function connectProjection(
       if (
         (activeForm.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
         (activeForm.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY) ||
-        (activeForm.formId === 'CHR-020' && actionKey === CHR_020_ROLL_COMMIT_ACTION_KEY)
+        (activeForm.formId === 'CHR-020' && actionKey === CHR_020_ROLL_COMMIT_ACTION_KEY) ||
+        (activeForm.formId === 'CHR-041' &&
+          lastSnapshot.formId === 'CHR-041' &&
+          actionKey === CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY)
       ) {
         let request: RollCommitRequest;
         try {
@@ -7792,7 +7847,12 @@ export function connectProjection(
             payload:
               activeForm.formId === 'CHR-020'
                 ? randomRollCommitPayload(lastSnapshot, randomSymbiontDraft)
-                : rollCommitPayload(lastSnapshot, creationRollDraft),
+                : activeForm.formId === 'CHR-041'
+                  ? advisorIntelligenceFloorRollPayload(
+                      lastSnapshot,
+                      advisorIntelligenceFloorManualFaceOrNull ?? null,
+                    )
+                  : rollCommitPayload(lastSnapshot, creationRollDraft),
             protocolVersion: WIRE_PROTOCOL_VERSION,
             role: 'player',
             workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
@@ -7811,7 +7871,7 @@ export function connectProjection(
           receipt: null,
           request,
           sourceProjection: lastSnapshot.projection as unknown as
-            Chr003Projection | Chr004Projection | Chr020Projection,
+            Chr003Projection | Chr004Projection | Chr020Projection | Chr041Projection,
           sourceSnapshot: lastSnapshot,
         };
         try {

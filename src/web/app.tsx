@@ -5,6 +5,7 @@ import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-char
 
 import { CHARACTER_ART_ACCEPT, characterArtFromFile } from './character-art.js';
 import { availableFormActions } from './forms/index.js';
+import { CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY } from './forms/chr/random-symbionts.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
@@ -1654,15 +1655,23 @@ function RandomSymbiontFields({
 
 function AdvisorSkillSelectionFields({
   draft,
+  intelligenceFloorManualFaceOrNull,
   onCandidateChange,
+  onIntelligenceFloorManualFaceChange,
   snapshot,
 }: {
   readonly draft: AdvisorSkillSelectionDraft | null;
+  readonly intelligenceFloorManualFaceOrNull: number | null;
   readonly onCandidateChange: (skillId: string | null, targetBonus: number | null) => void;
+  readonly onIntelligenceFloorManualFaceChange: (value: number | null) => void;
   readonly snapshot: ConfirmedProjectionSnapshot;
 }): ReactElement | null {
   if (snapshot.formId !== 'CHR-041') return null;
   const projection = snapshot.projection;
+  const pendingIntelligenceFloor =
+    'compositionDraftRevision' in projection &&
+    projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
+    projection.trogrSuppressionState.rollReceiptIdOrNull === null;
   const slots = projection.advisorSlotsAndSkills;
   const selectedSkills = draft?.selectedSkills ?? slots.selectedSkills;
   const validation = draft?.selectionValidation ?? slots.selectionValidation;
@@ -1719,6 +1728,40 @@ function AdvisorSkillSelectionFields({
                 {projection.trogrSuppressionState.suppressionBOrNull ?? 'Нет значения'}
               </dd>
             </dl>
+            {pendingIntelligenceFloor ? (
+              <fieldset data-advisor-suppression-roll-draft>
+                <legend>Отдельный бросок B</legend>
+                {projection.diceInputModeSnapshot === 'MANUAL' ? (
+                  <>
+                    <label htmlFor="chr-041-intelligence-floor-face">
+                      Грань D20 для неснижаемого остатка интеллекта
+                    </label>
+                    <input
+                      autoComplete="off"
+                      data-advisor-suppression-manual-face
+                      id="chr-041-intelligence-floor-face"
+                      inputMode="numeric"
+                      max={20}
+                      min={1}
+                      name="advisorIntelligenceFloorFace"
+                      onChange={(event) =>
+                        onIntelligenceFloorManualFaceChange(
+                          event.currentTarget.value === ''
+                            ? null
+                            : Number(event.currentTarget.value),
+                        )
+                      }
+                      required
+                      step={1}
+                      type="number"
+                      value={intelligenceFloorManualFaceOrNull ?? ''}
+                    />
+                  </>
+                ) : (
+                  <p>Хост выполнит один бросок D20 автоматически.</p>
+                )}
+              </fieldset>
+            ) : null}
             <ol data-advisor-suppression-roll>
               <li>
                 request {projection.trogrSuppressionState.rollRequestIdOrNull ?? 'Нет значения'};
@@ -1814,6 +1857,10 @@ function AdvisorSkillSelectionFields({
               </select>
             </label>
           </fieldset>
+        ) : pendingIntelligenceFloor && !projection.acknowledged ? (
+          <p data-advisor-skill-awaiting-floor>
+            Сначала зафиксируйте отдельный бросок неснижаемого остатка интеллекта.
+          </p>
         ) : (
           <p data-advisor-selection-checkpointed>Выбор Советника зафиксирован хостом.</p>
         )}
@@ -2101,6 +2148,9 @@ export function App(): ReactElement {
   const [randomSymbiontDraft, setRandomSymbiontDraft] = useState<RandomSymbiontDraft | null>(null);
   const [advisorSkillSelectionDraft, setAdvisorSkillSelectionDraft] =
     useState<AdvisorSkillSelectionDraft | null>(null);
+  const [intelligenceFloorManualFaceOrNull, setIntelligenceFloorManualFaceOrNull] = useState<
+    number | null
+  >(null);
   const [skillCardDraft, setSkillCardDraft] = useState<CharacterSkillCardDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
@@ -2125,6 +2175,15 @@ export function App(): ReactElement {
   }, []);
 
   const snapshot = confirmedSnapshot(state);
+  const intelligenceFloorRollScope =
+    snapshot?.formId === 'CHR-041' &&
+    'compositionDraftRevision' in snapshot.projection &&
+    snapshot.projection.trogrSuppressionState.kind === 'SUPPRESSED'
+      ? `${String(snapshot.projection.compositionDraftRevision)}:${snapshot.projection.trogrSuppressionState.rollRequestIdOrNull ?? ''}:${snapshot.projection.trogrSuppressionState.rollReceiptIdOrNull ?? ''}`
+      : null;
+  useEffect(() => {
+    setIntelligenceFloorManualFaceOrNull(null);
+  }, [intelligenceFloorRollScope]);
   const interactive =
     state.kind === 'ready' ||
     state.kind === 'command-refusal' ||
@@ -2303,6 +2362,8 @@ export function App(): ReactElement {
             />
             <AdvisorSkillSelectionFields
               draft={advisorSkillSelectionDraft}
+              intelligenceFloorManualFaceOrNull={intelligenceFloorManualFaceOrNull}
+              onIntelligenceFloorManualFaceChange={setIntelligenceFloorManualFaceOrNull}
               snapshot={snapshot}
               onCandidateChange={(skillId, targetBonus) => {
                 const result = connectionRef.current?.replaceAdvisorSkillCandidate(
@@ -2331,7 +2392,12 @@ export function App(): ReactElement {
                   setActionNotice('Переход не отправлен: соединение ещё не готово.');
                   return;
                 }
-                const result = connection.requestFormAction(selection.actionKey);
+                const result = connection.requestFormAction(
+                  selection.actionKey,
+                  selection.actionKey === CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY
+                    ? intelligenceFloorManualFaceOrNull
+                    : undefined,
+                );
                 setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
               }}
             />
