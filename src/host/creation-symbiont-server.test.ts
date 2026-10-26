@@ -1516,6 +1516,8 @@ describe('RANDOM Advisor host journey', () => {
       { speciesKey: 'OWL', side: 'RIGHT' },
     ]);
     expectPlayerSafe(bound.destination, 'CHR-041');
+    const suppressionRoll =
+      suppression.checkpoint.randomSymbiontStage?.rollRecords[4]?.physicalRoll;
     expect(bound.destination.presentation.base.roleFilteredPayload).toMatchObject({
       advisorCard: { effectsActive: false },
       advisorIPlus8OrNull: 16,
@@ -1524,8 +1526,46 @@ describe('RANDOM Advisor host journey', () => {
         kind: 'SUPPRESSED',
         suppressionBOrNull: 1,
         minimumIOrNull: 2,
+        rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+        rollRequestIdOrNull: suppressionRoll?.rollRequestId,
+        rollReceiptIdOrNull: suppressionRoll?.rollReceiptId,
       },
     });
+
+    const allocationsBeforeReplay = host.rollRequestAllocations();
+    const replay = await sendCommand(host.socket, suppression.request);
+    expect(replay[0]).toMatchObject({
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+      receipt: suppression.result.receipt,
+    });
+    expect(host.rollRequestAllocations()).toBe(allocationsBeforeReplay);
+    expect(host.sampleCalls()).toBe(0);
+
+    const beforeConflict = loadCurrent(host);
+    const changed = randomRollRequest(host, advisorW.checkpoint, suppression.request.commandId, 3);
+    const conflict = await sendCommandRefusal(host.socket, changed);
+    expect(conflict).toMatchObject({
+      refusal: { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' },
+    });
+    expect(loadCurrent(host)).toEqual(beforeConflict);
+    expect(host.rollRequestAllocations()).toBe(allocationsBeforeReplay);
+    expect(host.sampleCalls()).toBe(0);
+
+    const refreshedSocket = await openSocket(host.app);
+    const refreshedFrames = await reconnectOn(refreshedSocket, host, 'united-suppression-refresh');
+    const refreshed = snapshot(hostMessageV2(refreshedFrames[1] ?? ''));
+    expect(refreshed.presentation.base.roleFilteredPayload).toMatchObject({
+      trogrSuppressionState: {
+        suppressionBOrNull: 1,
+        minimumIOrNull: 2,
+        rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+        rollRequestIdOrNull: suppressionRoll?.rollRequestId,
+        rollReceiptIdOrNull: suppressionRoll?.rollReceiptId,
+      },
+    });
+    expect(host.rollRequestAllocations()).toBe(allocationsBeforeReplay);
+    expect(host.sampleCalls()).toBe(0);
+
     current = bound.checkpoint;
     const advisor = await commitAdvisor(
       host,
@@ -1551,6 +1591,22 @@ describe('RANDOM Advisor host journey', () => {
     });
     expect(advisor.checkpoint.randomSymbiontStage?.rollRecords).toHaveLength(7);
     expect(host.sampleCalls()).toBe(0);
+
+    await stopRandomHost(host);
+    const restarted = await createRandomHost(setup, [], 'suppression-restart');
+    await reconnectOn(restarted.socket, restarted, 'united-suppression-restart');
+    const recovered = loadCurrent(restarted);
+    expect(recovered.randomSymbiontStage?.rollRecords[4]?.physicalRoll).toEqual(suppressionRoll);
+    expect(recovered.randomSymbiontStage?.advisorSkillRecordOrNull).toEqual(
+      advisor.checkpoint.randomSymbiontStage?.advisorSkillRecordOrNull,
+    );
+    const durableReplay = await sendCommand(restarted.socket, suppression.request);
+    expect(durableReplay[0]).toMatchObject({
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+      receipt: suppression.result.receipt,
+    });
+    expect(restarted.rollRequestAllocations()).toBe(0);
+    expect(restarted.sampleCalls()).toBe(0);
   });
 });
 

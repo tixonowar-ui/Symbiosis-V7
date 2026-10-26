@@ -1236,7 +1236,14 @@ function chr041Projection(suppressed = false): JsonObject {
     iwRollRequestIds: ['advisor-i-request', 'advisor-w-request'],
     randomSequenceId: suppressed ? 'united-suppression-sequence' : ADVISOR_SEQUENCE_ID,
     trogrSuppressionState: suppressed
-      ? { kind: 'SUPPRESSED', minimumIOrNull: 2, suppressionBOrNull: 1 }
+      ? {
+          kind: 'SUPPRESSED',
+          minimumIOrNull: 2,
+          suppressionBOrNull: 1,
+          rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+          rollRequestIdOrNull: 'suppression-b-request',
+          rollReceiptIdOrNull: 'suppression-b-receipt',
+        }
       : { kind: 'NOT_SUPPRESSED' },
     wizardCheckpointId: WIZARD_CHECKPOINT_ID,
   };
@@ -6465,6 +6472,16 @@ describe('CHR-041 and CHR-019 symbiont UI', () => {
     expect(container.querySelector('[data-advisor-suppression="SUPPRESSED"]')).not.toBeNull();
     expect(container.querySelector('[data-advisor-suppression-minimum-i]')?.textContent).toBe('2');
     expect(container.querySelector('[data-advisor-suppression-b]')?.textContent).toBe('1');
+    expect(container.querySelector('[data-advisor-suppression-purpose]')?.textContent).toContain(
+      'Будущий неснижаемый остаток интеллекта носителя',
+    );
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'suppression-b-request',
+    );
+    expect(container.querySelector('[data-advisor-suppression-roll]')?.textContent).toContain(
+      'suppression-b-receipt',
+    );
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::004"]')).toBeNull();
     expect(container.querySelector('[data-advisor-level-cost="6"]')?.textContent).toContain(
       '7 сл.',
     );

@@ -1614,6 +1614,33 @@ describe('RANDOM projection decoders and action keys', () => {
     expect(await decodeProjectionFixture(formId, projection)).toMatchObject({ kind: 'ready' });
   });
 
+  it('accepts the future intelligence floor and rejects a substituted purpose', async () => {
+    const projection = mutableProjection(decoderChr041Projection()) as Record<string, JsonValue>;
+    projection['trogrSuppressionState'] = {
+      kind: 'SUPPRESSED',
+      minimumIOrNull: 2,
+      suppressionBOrNull: 1,
+      rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE',
+      rollRequestIdOrNull: 'suppression-b-request',
+      rollReceiptIdOrNull: 'suppression-b-receipt',
+    };
+    expect(await decodeProjectionFixture('CHR-041', projection)).toMatchObject({ kind: 'ready' });
+    projection['trogrSuppressionState'] = {
+      kind: 'SUPPRESSED',
+      minimumIOrNull: 2,
+      suppressionBOrNull: 1,
+      rollPurpose: 'CURRENT_ADVISOR_I',
+      rollRequestIdOrNull: 'suppression-b-request',
+      rollReceiptIdOrNull: 'suppression-b-receipt',
+    };
+    expect(await decodeProjectionFixture('CHR-041', projection)).toMatchObject({
+      kind: 'protocol-error',
+      refusal: {
+        path: '$.presentation.base.roleFilteredPayload.trogrSuppressionState.rollPurpose',
+      },
+    });
+  });
+
   it.each(cases)('rejects a missing required field in %s', async (formId, projection) => {
     const malformed = mutableProjection(projection);
     delete malformed['characterDraftId'];

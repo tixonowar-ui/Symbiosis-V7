@@ -242,6 +242,9 @@ export interface Chr041Projection extends JsonObject {
         readonly kind: 'SUPPRESSED';
         readonly minimumIOrNull: number | null;
         readonly suppressionBOrNull: number | null;
+        readonly rollPurpose: 'FUTURE_MINIMUM_INTELLIGENCE';
+        readonly rollRequestIdOrNull: string | null;
+        readonly rollReceiptIdOrNull: string | null;
       };
   readonly randomSequenceId: string;
   readonly wizardCheckpointId: string;
@@ -1027,6 +1030,9 @@ export function decodeChr041Projection(
             kind: (field) => field === suppressionKind,
             minimumIOrNull: (field) => field === null || isSafeIntegerAtLeast(field, 1),
             suppressionBOrNull: (field) => field === null || isSafeIntegerAtLeast(field, 0),
+            rollPurpose: (field) => field === 'FUTURE_MINIMUM_INTELLIGENCE',
+            rollRequestIdOrNull: isNullableString,
+            rollReceiptIdOrNull: isNullableString,
           })
         : refused(`${path}.trogrSuppressionState.kind`, suppressionKind!);
   if (!suppressionResult.ok) return suppressionResult;

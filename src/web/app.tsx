@@ -1704,16 +1704,28 @@ function AdvisorSkillSelectionFields({
         {projection.trogrSuppressionState.kind === 'NOT_SUPPRESSED' ? (
           <p>Подавление отсутствует.</p>
         ) : (
-          <dl>
-            <dt>Минимальный I</dt>
-            <dd data-advisor-suppression-minimum-i>
-              {projection.trogrSuppressionState.minimumIOrNull ?? 'Нет значения'}
-            </dd>
-            <dt>Бонус подавления B</dt>
-            <dd data-advisor-suppression-b>
-              {projection.trogrSuppressionState.suppressionBOrNull ?? 'Нет значения'}
-            </dd>
-          </dl>
+          <>
+            <p data-advisor-suppression-purpose>
+              Будущий неснижаемый остаток интеллекта носителя определяется отдельным броском
+              B=round(R20/4), а не бросками I/W Советника.
+            </p>
+            <dl>
+              <dt>Будущий минимум I</dt>
+              <dd data-advisor-suppression-minimum-i>
+                {projection.trogrSuppressionState.minimumIOrNull ?? 'Нет значения'}
+              </dd>
+              <dt>Бонус подавления B</dt>
+              <dd data-advisor-suppression-b>
+                {projection.trogrSuppressionState.suppressionBOrNull ?? 'Нет значения'}
+              </dd>
+            </dl>
+            <ol data-advisor-suppression-roll>
+              <li>
+                request {projection.trogrSuppressionState.rollRequestIdOrNull ?? 'Нет значения'};
+                receipt {projection.trogrSuppressionState.rollReceiptIdOrNull ?? 'Нет receipt'}
+              </li>
+            </ol>
+          </>
         )}
       </section>
       <section aria-label="Неизменные броски Советника">
