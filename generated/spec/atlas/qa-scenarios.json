@@ -1130,7 +1130,7 @@
   {
     "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна.",
     "qaId": "QA-FORM-CHR-041",
-    "scenario": "Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.",
+    "scenario": "Проверить буквальное назначение CHR-041: После навыков выполняется ранее зафиксированный manual/random путь; Советник получает собственную карточку, а manual-конфликты показывают необратимый slot/stat/OE diff до commit. Поля: characterDraftId, advisorInstanceDraftId, advisorCard, iwRollRequestIds[2], iwRollReceiptIds[2]OrNull, advisorIPlus8OrNull, advisorWPlus8OrNull, advisorSlotsAndSkills, trogrSuppressionState, acknowledged, wizardCheckpointId, draftRevision, commandId. CTA: Зафиксировать броски I и W Советника, Зафиксировать бросок неснижаемого остатка интеллекта, Добавить или удалить допустимый навык Советника, Подтвердить навыки Советника.",
     "scope": "CHR-041"
   },
   {
@@ -10224,7 +10224,7 @@
     "scope": "UI-CMD-CHAR-WIZARD-CHECKPOINT"
   },
   {
-    "expected": "Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay. Same request/command returns the stored result; a changed payload rejects and no replacement request is created.",
+    "expected": "Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-041 TROGR_SUPPRESSION_B is one separate D20 with its own request/receipt and future minimum host intelligence, preserving both I/W and Advisor skills; CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay. Same request/command returns the stored result; a changed payload rejects and no replacement request is created.",
     "qaId": "QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT",
     "scenario": "Выполнить UI-CMD-CHAR-CREATION-ROLL-COMMIT через CHR-003, CHR-004, CHR-020, CHR-041, CHR-021, CHR-022, CHR-037, CHR-038, затем replay, stale, reconnect и противоположный повторный ответ.",
     "scope": "UI-CMD-CHAR-CREATION-ROLL-COMMIT"

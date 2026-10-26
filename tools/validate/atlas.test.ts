@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { ARTIFACT } from '../import/lib/paths.js';
 import {
   ATLAS_MARKDOWN_ADR0049_LITERALS,
+  ATLAS_MARKDOWN_ADR0052_LITERALS,
   ATLAS_MARKDOWN_FILE,
   validateAtlasMarkdownAdr0049TextMirrors,
+  validateAtlasMarkdownAdr0052TextMirrors,
   validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
@@ -487,7 +489,7 @@ describe('renderer form graph validation', () => {
 describe('ADR 0049 Atlas Markdown decision channels', () => {
   const actualMarkdown = (): string => readFileSync(ARTIFACT.atlasMd, 'utf8');
 
-  it('accepts the exact v1.4 companion', () => {
+  it('accepts the exact v1.5 companion', () => {
     expect(validateAtlasMarkdownAdr0049TextMirrors(actualMarkdown())).toEqual([]);
   });
 
@@ -605,4 +607,54 @@ describe('ADR 0049 Atlas Markdown decision channels', () => {
       ),
     ).toBe(true);
   });
+});
+
+describe('ADR 0052 Atlas Markdown intelligence floor channel', () => {
+  const actualMarkdown = (): string => readFileSync(ARTIFACT.atlasMd, 'utf8');
+
+  it('accepts the exact v1.5 companion', () => {
+    expect(validateAtlasMarkdownAdr0052TextMirrors(actualMarkdown())).toEqual([]);
+  });
+
+  for (const literal of ATLAS_MARKDOWN_ADR0052_LITERALS) {
+    it(`rejects a lost current rendering of ${literal.id}`, () => {
+      const actual = actualMarkdown();
+      let markdown: string;
+      if (literal.section[0]) {
+        const start = actual.indexOf(literal.section[0]);
+        const end = actual.indexOf(literal.section[1], start + literal.section[0].length);
+        if (start === -1 || end === -1) throw new Error(`missing test section ${literal.id}`);
+        const section = actual
+          .slice(start, end)
+          .replace(literal.current, '__ADR0052_NONCANONICAL__');
+        markdown = actual.slice(0, start) + section + actual.slice(end);
+      } else {
+        markdown = actual.replace(literal.current, '__ADR0052_NONCANONICAL__');
+      }
+      const problems = validateAtlasMarkdownAdr0052TextMirrors(markdown);
+
+      expect(
+        problems.some(
+          (problem) =>
+            problem.id === literal.id && problem.message.startsWith('current ADR 0052 literal'),
+        ),
+      ).toBe(true);
+    });
+
+    if (literal.retired !== '') {
+      it(`rejects a retired rendering of ${literal.id}`, () => {
+        const actual = actualMarkdown();
+        const markdown = literal.section[0]
+          ? actual.replace(literal.section[1], `${literal.retired}\n\n${literal.section[1]}`)
+          : `${actual}\n${literal.retired}`;
+        const problems = validateAtlasMarkdownAdr0052TextMirrors(markdown);
+
+        expect(problems).toContainEqual({
+          file: ATLAS_MARKDOWN_FILE,
+          id: literal.id,
+          message: 'retired ADR 0052 literal count is 1, expected 0',
+        });
+      });
+    }
+  }
 });

@@ -18,6 +18,7 @@ import { ARTIFACT, SPEC_DIR } from '../import/lib/paths.js';
 import {
   ATLAS_MARKDOWN_FILE,
   validateAtlasMarkdownAdr0049TextMirrors,
+  validateAtlasMarkdownAdr0052TextMirrors,
   validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
@@ -331,6 +332,9 @@ try {
     report(problem.file, problem.id, problem.message),
   );
   validateAtlasMarkdownAdr0049TextMirrors(atlasMarkdown).forEach((problem) =>
+    report(problem.file, problem.id, problem.message),
+  );
+  validateAtlasMarkdownAdr0052TextMirrors(atlasMarkdown).forEach((problem) =>
     report(problem.file, problem.id, problem.message),
   );
 } catch (cause) {

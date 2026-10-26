@@ -3343,6 +3343,7 @@ export type ActionKey =
   | "CHR-020::CTA::003"
   | "CHR-020::CTA::004"
   | "CHR-041::CTA::003"
+  | "CHR-041::CTA::004"
   | "CHR-041::CTA::001"
   | "CHR-041::CTA::002"
   | "CHR-042::CTA::001"

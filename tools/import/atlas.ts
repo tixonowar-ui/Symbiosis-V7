@@ -1,7 +1,7 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1680
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1681
  * transitions, 66 journeys, 91 requirements, 2440 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
@@ -25,11 +25,11 @@ import { ARTIFACT, SPEC_DIR, TYPES_DIR } from './lib/paths.js';
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.4';
+const ATLAS_VERSION = '1.5';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.4 has 1,246 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_246;
+/** Atlas v1.5 has 1,247 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_247;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -902,6 +902,9 @@ const ADR0049_ROLL_GUARD =
 const ADR0049_ADVISOR_IW_ROLL = 'Зафиксировать броски I и W Советника';
 const ADR0049_ADVISOR_IW_GUARD =
   'UI-CMD-CHAR-CREATION-ROLL-COMMIT exactly two addressed pending Advisor I/W requests in I,W order; no existing I/W receipts; no critical chain, creation penalty or XP';
+const ADR0052_ADVISOR_B_ROLL = 'Зафиксировать бросок неснижаемого остатка интеллекта';
+const ADR0052_ADVISOR_B_GUARD =
+  'UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request';
 const ADR0049_ADVISOR_ADD = 'Добавить симбионта в ручной состав';
 const ADR0049_ADVISOR_ADD_GUARD =
   'UI-CMD-CHAR-WIZARD-CHECKPOINT compatibility/binding/slot preview valid; server dispatches CHR-041 for Advisor with two addressed pending I/W requests or CHR-019 for non-Advisor';
@@ -918,9 +921,9 @@ const ADR0049_RANDOM_NON_ADVISOR_DISPATCH = 'Dispatch persisted non-Advisor rand
 const ADR0049_RANDOM_NON_ADVISOR_GUARD =
   'randomStatus=COMMITTED and binding snapshot committed; advisorBranch=false; full species/binding/random provenance attached to composition';
 const ADR0049_ROLL_COMMAND_GUARDS =
-  'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.';
+  'Roll variants require pending creationRollRequestId to belong to the draft, stage, branch and immutable AUTO/MANUAL diceInputModeSnapshot; manual face is in the exact die range or server RNG receipt is valid; no receipt exists for that request. CHR-041 Advisor I/W requires exactly two pending requests in I,W order. CHR-041 TROGR_SUPPRESSION_B requires persisted TROGR + ADVISER, exactly one addressed pending B request and no existing B receipt; it never substitutes I/W or creates a third I/W roll. CHR-020 binding-only instead requires randomStatus=BINDING, saved roll/result ownership and exact side snapshot; no new roll request is created.';
 const ADR0049_ROLL_ATOMICITY =
-  'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.';
+  'Persist exactly one stage result, one command receipt and the resulting next-state pointer; Advisor I/W is one ordered two-roll result with two immutable roll receipts, while CHR-041 TROGR_SUPPRESSION_B is one separate D20 with its own request/receipt and future minimum host intelligence, preserving both I/W and Advisor skills; CHR-020 binding-only persists only the exact side snapshot without a new face/request/sampler/random receipt; the first display crosses the no-reroll boundary and cannot be undone by Back, refresh, branch switch or replay.';
 const ADR0049_ROLL_RECONNECT =
   'Same request/command returns the stored result; a changed payload rejects and no replacement request is created.';
 const ADR0049_ROLL_FORMS = [
@@ -961,7 +964,12 @@ const ADR0049_FORM_CHANNELS = [
   },
   {
     formId: 'CHR-041',
-    visible: [ADR0049_ADVISOR_IW_ROLL, ADR0049_ADVISOR_EDIT, ADR0049_ADVISOR_CONFIRM],
+    visible: [
+      ADR0049_ADVISOR_IW_ROLL,
+      ADR0052_ADVISOR_B_ROLL,
+      ADR0049_ADVISOR_EDIT,
+      ADR0049_ADVISOR_CONFIRM,
+    ],
     workflowCommandIds: [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
   },
 ] as const;
@@ -1042,6 +1050,16 @@ const ADR0049_ACTIONS = [
     workflowCommandIds: [ADR0049_ROLL_COMMIT],
   },
 ] as const;
+
+const ADR0052_ACTION = {
+  formId: 'CHR-041',
+  actionKey: 'CHR-041::CTA::004',
+  label: ADR0052_ADVISOR_B_ROLL,
+  targetFormId: 'CHR-041',
+  kind: 'workflow-command',
+  guard: ADR0052_ADVISOR_B_GUARD,
+  workflowCommandIds: [ADR0049_ROLL_COMMIT, ADR0049_WIZARD_CHECKPOINT],
+} as const;
 
 const ADR0049_TRANSITIONS = [
   {
@@ -1139,6 +1157,14 @@ const ADR0049_TRANSITIONS = [
   },
 ] as const;
 
+const ADR0052_TRANSITION = {
+  from: 'CHR-041',
+  to: 'CHR-041',
+  trigger: ADR0052_ADVISOR_B_ROLL,
+  kind: 'workflow-command',
+  guard: ADR0052_ADVISOR_B_GUARD,
+} as const;
+
 const ADR0049_REQUIRED_FIELDS = {
   'CHR-020': [
     'characterDraftId',
@@ -1233,8 +1259,8 @@ const ADR0049_AQA004 = {
 const ADR0049_QCHAR010_EFFECTIVE_SUFFIX =
   'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019, NET-021, NPC-011 and ENM-013.';
 
-type Adr0049Action = (typeof ADR0049_ACTIONS)[number];
-type Adr0049Transition = (typeof ADR0049_TRANSITIONS)[number];
+type Adr0049Action = (typeof ADR0049_ACTIONS)[number] | typeof ADR0052_ACTION;
+type Adr0049Transition = (typeof ADR0049_TRANSITIONS)[number] | typeof ADR0052_TRANSITION;
 
 function adr0049Expect(actual: unknown, expected: unknown, path: string): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
@@ -1560,18 +1586,18 @@ function adr0049CheckQnaChannels(
 
 /** ADR 0049 pins every new channel and every independent JSON mirror. */
 export function assertAdr0049MissingChannels(root: JsonObject): void {
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-08-21');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-10-26');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_680);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_681);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_680,
+    1_681,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1771,6 +1797,77 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
   adr0049CheckQnaChannels(forms, registryCoverage, qaScenarios);
 }
 
+/** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
+export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.5');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-10-26');
+  const forms = adr0049Rows(root['forms'], 'forms');
+  const transitions = adr0049Rows(root['transitions'], 'transitions');
+  const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
+  const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
+  const counts = asObject(root['counts'], WHERE, 'counts');
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_681);
+  expectCount(
+    WHERE,
+    'ADR 0052 declared transitions',
+    asNumber(counts['transitions'], WHERE, 'counts.transitions'),
+    1_681,
+  );
+
+  const advisor = adr0049Form(forms, 'CHR-041');
+  adr0049Expect(
+    advisor['requiredFields'],
+    ADR0049_REQUIRED_FIELDS['CHR-041'],
+    'CHR-041.requiredFields',
+  );
+  adr0049CheckAction(advisor, ADR0052_ACTION);
+  adr0049CheckTransition(forms, transitions, ADR0052_TRANSITION);
+
+  const channel = ADR0049_FORM_CHANNELS.find((candidate) => candidate.formId === 'CHR-041');
+  if (channel === undefined) fail(WHERE, 'ADR 0052 has no CHR-041 form channel');
+  const actions = asObject(advisor['actions'], WHERE, 'CHR-041.actions');
+  adr0049Expect(actions['visible'], channel.visible, 'CHR-041.actions.visible');
+  adr0049Expect(actions['allowed'], adr0049Allowed(channel), 'CHR-041.actions.allowed');
+  for (const requirementId of ['REQ-002', 'REQ-063'] as const) {
+    const requirement = adr0049Single(
+      requirements,
+      (row) => row['requirementId'] === requirementId,
+      'coverageRequirements',
+      requirementId,
+    );
+    const step = adr0049Single(
+      adr0049Rows(requirement['actionSteps'], `${requirementId}.actionSteps`),
+      (row) => row['formId'] === 'CHR-041',
+      `${requirementId}.actionSteps`,
+      'CHR-041',
+    );
+    adr0049Expect(
+      step['primaryActions'],
+      channel.visible,
+      `${requirementId}.CHR-041.primaryActions`,
+    );
+    adr0049Expect(
+      step['workflowCommandIds'],
+      channel.workflowCommandIds,
+      `${requirementId}.CHR-041.workflowCommandIds`,
+    );
+  }
+  const formQa = adr0049Single(
+    qaScenarios,
+    (row) => row['qaId'] === 'QA-FORM-CHR-041',
+    'qaScenarios',
+    'QA-FORM-CHR-041',
+  );
+  adr0049Expect(
+    formQa['scenario'],
+    adr0049FormScenario(advisor, channel),
+    'QA-FORM-CHR-041.scenario',
+  );
+
+  const registryCoverage = asObject(root['registryCoverage'], WHERE, 'registryCoverage');
+  adr0049CheckRollCommands(forms, registryCoverage, qaScenarios);
+}
+
 export async function importAtlas(): Promise<AtlasImport> {
   const root = asObject(
     JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as JsonValue,
@@ -1832,6 +1929,7 @@ export async function importAtlas(): Promise<AtlasImport> {
     asNumber(counts['workflowCommands'], WHERE, 'counts.workflowCommands'),
   );
   assertAdr0049MissingChannels(root);
+  assertAdr0052AdvisorIntelligenceFloor(root);
 
   // --- forms --------------------------------------------------------------
   const formIds: string[] = [];

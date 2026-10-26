@@ -1175,6 +1175,13 @@
       "to": "CHR-041",
       "trigger": "Зафиксировать броски I и W Советника"
     },
+    "Зафиксировать бросок неснижаемого остатка интеллекта": {
+      "from": "CHR-041",
+      "guard": "UI-CMD-CHAR-CREATION-ROLL-COMMIT persisted TROGR + ADVISER; exactly one addressed pending TROGR_SUPPRESSION_B request and no existing B receipt; one D20 for future minimum intelligence; no critical chain, creation penalty, XP, I/W substitution or replacement request",
+      "kind": "workflow-command",
+      "to": "CHR-041",
+      "trigger": "Зафиксировать бросок неснижаемого остатка интеллекта"
+    },
     "Подтвердить навыки Советника": {
       "from": "CHR-041",
       "guard": "UI-CMD-CHAR-WIZARD-CHECKPOINT Advisor card and both I/W receipts persisted; all mandatory Advisor starting slots validate; no cancel/reroll",

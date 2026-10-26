@@ -9,6 +9,7 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import { describe, expect, it } from 'vitest';
 import {
   assertAdr0049MissingChannels,
+  assertAdr0052AdvisorIntelligenceFloor,
   assertAtlasCounts,
   auditAtlasSections,
   buildRendererQueryIndexes,
@@ -191,7 +192,7 @@ describe('generated atlas spec', () => {
   });
 
   it('matches the counts the audit states about the atlas', () => {
-    expect(spec('transitions.json')).toHaveLength(1680);
+    expect(spec('transitions.json')).toHaveLength(1681);
     expect(spec('journeys.json')).toHaveLength(66);
     expect(spec('requirements.json')).toHaveLength(91);
     expect(spec('qa-scenarios.json')).toHaveLength(2440);
@@ -252,7 +253,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.4', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.5', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',
@@ -418,7 +419,7 @@ describe('generated atlas types', () => {
     const known: ActionKey = 'APP-002::CTA::007';
     // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
     const absent: ActionKey = 'APP-002::CTA::999';
-    expect(members).toHaveLength(1_246);
+    expect(members).toHaveLength(1_247);
     expect(members).toEqual(extractActionKeys(clonedForms()));
     expect(members).toContain(known);
     expect(members).not.toContain(absent);
@@ -437,8 +438,8 @@ describe('action key export guards', () => {
     [rows[0], rows[1]] = [rows[1]!, rows[0]!];
     const actionKeys = extractActionKeys(forms);
 
-    expect(actionKeys).toHaveLength(1_246);
-    expect(new Set(actionKeys).size).toBe(1_246);
+    expect(actionKeys).toHaveLength(1_247);
+    expect(new Set(actionKeys).size).toBe(1_247);
     expect(actionKeys.slice(0, 4)).toEqual([
       'APP-001::CTA::002',
       'APP-001::CTA::001',
@@ -486,7 +487,7 @@ describe('action key export guards', () => {
     const forms = clonedForms();
     firstFormActionRows(forms).pop();
 
-    expect(() => extractActionKeys(forms)).toThrow(/expected 1246 action keys, got 1245/u);
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1247 action keys, got 1246/u);
   });
 });
 
@@ -656,7 +657,7 @@ describe('ADR 0049 missing decision channels', () => {
     expect(() => assertAdr0049MissingChannels(root)).toThrow();
   };
 
-  it('accepts the exact v1.4 delivery', () => {
+  it('accepts the exact v1.5 delivery', () => {
     expect(() => assertAdr0049MissingChannels(clonedAtlas())).not.toThrow();
   });
 
@@ -1058,6 +1059,141 @@ describe('ADR 0049 missing decision channels', () => {
       'CHR-018, CHR-020, CHR-033',
       'CHR-018, CHR-033',
     );
+    expectRejected(root);
+  });
+});
+
+describe('ADR 0052 advisor intelligence floor channel', () => {
+  const LABEL = 'Зафиксировать бросок неснижаемого остатка интеллекта';
+  const advisor = (root: ImportJsonObject): ImportJsonObject => {
+    const forms = root['forms'] as ImportJsonObject[];
+    const match = forms.find((row) => row['id'] === 'CHR-041');
+    if (match === undefined) throw new Error('missing CHR-041');
+    return match;
+  };
+  const actionRows = (root: ImportJsonObject): ImportJsonObject[] =>
+    atlasObject(advisor(root)['actions'])['ctaAvailabilityByAction'] as ImportJsonObject[];
+  const coverageStep = (root: ImportJsonObject, requirementId: string): ImportJsonObject => {
+    const requirements = root['coverageRequirements'] as ImportJsonObject[];
+    const requirement = requirements.find((row) => row['requirementId'] === requirementId);
+    if (requirement === undefined) throw new Error(`missing ${requirementId}`);
+    const steps = requirement['actionSteps'] as ImportJsonObject[];
+    const step = steps.find((row) => row['formId'] === 'CHR-041');
+    if (step === undefined) throw new Error(`missing ${requirementId} CHR-041`);
+    return step;
+  };
+  const qa = (root: ImportJsonObject, qaId: string): ImportJsonObject => {
+    const scenarios = root['qaScenarios'] as ImportJsonObject[];
+    const scenario = scenarios.find((row) => row['qaId'] === qaId);
+    if (scenario === undefined) throw new Error(`missing ${qaId}`);
+    return scenario;
+  };
+  const rollCommand = (root: ImportJsonObject): ImportJsonObject => {
+    const registry = atlasObject(root['registryCoverage']);
+    const commands = registry['workflowCommands'] as ImportJsonObject[];
+    const command = commands.find((row) => row['commandId'] === 'UI-CMD-CHAR-CREATION-ROLL-COMMIT');
+    if (command === undefined) throw new Error('missing ROLL-COMMIT');
+    return command;
+  };
+  const expectRejected = (root: ImportJsonObject): void => {
+    expect(() => assertAdr0052AdvisorIntelligenceFloor(root)).toThrow();
+  };
+
+  it('accepts the exact v1.5 delivery', () => {
+    expect(() => assertAdr0052AdvisorIntelligenceFloor(clonedAtlas())).not.toThrow();
+  });
+
+  it('rejects disappearance of the separate B CTA', () => {
+    const root = clonedAtlas();
+    const owner = advisor(root);
+    atlasObject(owner['actions'])['ctaAvailabilityByAction'] = actionRows(root).filter(
+      (row) => row['actionKey'] !== 'CHR-041::CTA::004',
+    );
+    expectRejected(root);
+  });
+
+  it('rejects noncanonical B guard drift', () => {
+    const root = clonedAtlas();
+    const row = actionRows(root).find((action) => action['actionKey'] === 'CHR-041::CTA::004');
+    if (row === undefined) throw new Error('missing B CTA');
+    row['guard'] = 'allow any Advisor roll';
+    expectRejected(root);
+  });
+
+  for (const field of ['visible', 'allowed'] as const) {
+    it(`rejects loss of the B label from ${field}`, () => {
+      const root = clonedAtlas();
+      const actions = atlasObject(advisor(root)['actions']);
+      actions[field] = (actions[field] as string[]).filter((value) => !value.includes(LABEL));
+      expectRejected(root);
+    });
+  }
+
+  for (const requirementId of ['REQ-002', 'REQ-063'] as const) {
+    it(`rejects loss of the B action from ${requirementId}`, () => {
+      const root = clonedAtlas();
+      coverageStep(root, requirementId)['primaryActions'] = (
+        coverageStep(root, requirementId)['primaryActions'] as string[]
+      ).filter((value) => value !== LABEL);
+      expectRejected(root);
+    });
+  }
+
+  for (const mirror of ['transitionsOut', 'transitionsIn', 'top-level'] as const) {
+    it(`rejects B transition drift in ${mirror}`, () => {
+      const root = clonedAtlas();
+      const rows = (
+        mirror === 'top-level'
+          ? (root['transitions'] as ImportJsonObject[])
+          : (advisor(root)[mirror] as ImportJsonObject[])
+      ) as ImportJsonObject[];
+      const row = rows.find(
+        (transition) =>
+          (mirror === 'transitionsOut'
+            ? transition['to'] === 'CHR-041'
+            : mirror === 'transitionsIn'
+              ? transition['from'] === 'CHR-041'
+              : transition['from'] === 'CHR-041' && transition['to'] === 'CHR-041') &&
+          transition['trigger'] === LABEL &&
+          transition['kind'] === 'workflow-command',
+      );
+      if (row === undefined) throw new Error(`missing B transition ${mirror}`);
+      row['guard'] = 'independent B mirror drift';
+      expectRejected(root);
+    });
+  }
+
+  it('rejects B drift in QA-FORM-CHR-041', () => {
+    const root = clonedAtlas();
+    qa(root, 'QA-FORM-CHR-041')['scenario'] = 'CTA: only Advisor I/W.';
+    expectRejected(root);
+  });
+
+  for (const field of ['guards', 'atomicity', 'reconnect'] as const) {
+    it(`rejects loss of the B contract from workflow ${field}`, () => {
+      const root = clonedAtlas();
+      rollCommand(root)[field] = 'generic roll without an intelligence floor';
+      expectRejected(root);
+    });
+  }
+
+  for (const field of ['scenario', 'expected'] as const) {
+    it(`rejects loss of the B contract from workflow QA ${field}`, () => {
+      const root = clonedAtlas();
+      qa(root, 'QA-WORKFLOW-UI-CMD-CHAR-CREATION-ROLL-COMMIT')[field] =
+        'Persist only the two Advisor I/W rolls.';
+      expectRejected(root);
+    });
+  }
+
+  it('rejects a retired Atlas version and transition count', () => {
+    const root = clonedAtlas();
+    root['atlasVersion'] = '1.4';
+    root['releaseDate'] = '2026-08-21';
+    root['transitions'] = (root['transitions'] as ImportJsonObject[]).filter(
+      (row) => row['trigger'] !== LABEL,
+    );
+    atlasObject(root['counts'])['transitions'] = 1_680;
     expectRejected(root);
   });
 });
