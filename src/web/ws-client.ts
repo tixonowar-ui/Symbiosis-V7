@@ -11,6 +11,7 @@ import {
   WIRE_PROTOCOL_V2_VERSION,
   WIRE_PROTOCOL_V3_VERSION,
 } from '@shared/index.js';
+import { calculateSkillSlotCost } from '../domain/rules/skill-stage/skills.js';
 import type {
   AddressableRouteIntentV2Message,
   AddressableRouteRefusalV2Message,
@@ -249,7 +250,11 @@ const CHR_014_ACTION_KEYS = [
 const CHR_014_READ_ONLY_ACTION_KEYS = [
   CHR_014_RETURN_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
-const CHR_015_MUTABLE_ACTION_KEYS = ['CHR-015::CTA::003'] as const satisfies readonly ActionKey[];
+const CHR_015_INITIAL_ACTION_KEYS = ['CHR-015::CTA::003'] as const satisfies readonly ActionKey[];
+const CHR_015_MUTABLE_ACTION_KEYS = [
+  'CHR-015::CTA::003',
+  'CHR-015::CTA::002',
+] as const satisfies readonly ActionKey[];
 const CHR_015_CONFIRM_ACTION_KEY = 'CHR-015::CTA::001' as const;
 const CHR_015_TOGGLE_ACTION_KEY = 'CHR-015::CTA::003' as const;
 const PURE_CLASS_BY_SELECTOR = new Map<ActionKey, PureClass>([
@@ -2928,6 +2933,15 @@ function decodeChr014Projection(
   }
   const levels = decodeSkillLevelOptions(value['levelsAndBonuses']!, `${path}.levelsAndBonuses`);
   if (!levels.ok) return levels;
+  const slotSources = decodeChr014SlotSources(
+    value['slotSources']!,
+    `${path}.slotSources`,
+    eligibleSkillIds,
+  );
+  if (!slotSources.ok) return slotSources;
+  const availableSlotCount =
+    slotSources.value.requiredSlotCount -
+    (slotSources.value.mandatoryClassSkillOrNull?.slotCost ?? 0);
   const selectedValue = value['selectedSkills'];
   if (!Array.isArray(selectedValue)) return unrecognized(`${path}.selectedSkills`, selectedValue!);
   const selectedSkills: SelectedSkillProjection[] = [];
@@ -2937,28 +2951,24 @@ function decodeChr014Projection(
     if (!isJsonObject(selected)) return unrecognized(selectedPath, selected);
     const selectedId = selected['skillId'];
     const optionIndex = typeof selectedId === 'string' ? eligibleSkillIds.indexOf(selectedId) : -1;
-    const level = levels.value.find(
-      ({ slotCost, targetBonus }) =>
-        slotCost === selected['slotCost'] && targetBonus === selected['targetBonus'],
-    );
-    if (optionIndex <= previousOptionIndex || level === undefined) {
+    const targetBonus = selected['targetBonus'];
+    if (
+      optionIndex <= previousOptionIndex ||
+      typeof targetBonus !== 'number' ||
+      !isSafeIntegerAtLeast(targetBonus, 1) ||
+      calculateSkillSlotCost(targetBonus) > availableSlotCount
+    ) {
       return unrecognized(selectedPath, selected);
     }
     const decoded = decodeProjection(selected, selectedPath, {
       skillId: (field) => field === selectedId,
-      slotCost: (field) => field === level.slotCost,
-      targetBonus: (field) => field === level.targetBonus,
+      slotCost: (field) => field === calculateSkillSlotCost(targetBonus),
+      targetBonus: (field) => field === targetBonus,
     });
     if (!decoded.ok) return decoded;
     selectedSkills.push(selected as unknown as SelectedSkillProjection);
     previousOptionIndex = optionIndex;
   }
-  const slotSources = decodeChr014SlotSources(
-    value['slotSources']!,
-    `${path}.slotSources`,
-    eligibleSkillIds,
-  );
-  if (!slotSources.ok) return slotSources;
   const fixedIds = [
     ...(slotSources.value.mandatoryClassSkillOrNull === null
       ? []
@@ -3896,7 +3906,9 @@ function decodeConfirmedSnapshot(
           base.availableActionKeys,
           projection.value['selectionCheckpoint'] === 'EXACT'
             ? NO_ACTION_KEYS
-            : CHR_015_MUTABLE_ACTION_KEYS,
+            : projection.value['selectionCheckpoint'] === 'PARTIAL'
+              ? CHR_015_MUTABLE_ACTION_KEYS
+              : CHR_015_INITIAL_ACTION_KEYS,
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4462,18 +4474,37 @@ function decodeAddressableRouteSnapshot(
   const destination = decoded.value.projection as Chr014Projection;
   const skillId = pending.bindings[0]?.value;
   const summary = source.skillCardSummaries.find((card) => card.skillId === skillId);
+  if (summary === undefined) {
+    return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+  }
+  const remainingSlots =
+    source.slotSources.requiredSlotCount -
+    (source.slotSources.mandatoryClassSkillOrNull?.slotCost ?? 0) -
+    destination.selectedSkills.reduce((total, selected) => total + selected.slotCost, 0);
+  const expectedLevels = summary.levelOptions.filter(({ slotCost }) => slotCost <= remainingSlots);
   if (
-    summary === undefined ||
+    remainingSlots < 0 ||
     destination.skillId !== skillId ||
     destination.characterDraftId !== source.characterDraftId ||
     destination.wizardCheckpointId !== source.wizardCheckpointId ||
     destination.selectionRevision !== source.draftRevision ||
-    destination.selectedSkills.length !== 0 ||
+    destination.selectedSkills.some((selected) => {
+      const previousCard = source.skillCardSummaries.find(
+        (candidate) => candidate.skillId === selected.skillId,
+      );
+      return (
+        previousCard === undefined ||
+        !previousCard.levelOptions.some(
+          (level) =>
+            level.slotCost === selected.slotCost && level.targetBonus === selected.targetBonus,
+        )
+      );
+    }) ||
     !sameJson(destination.skillStageValues, source.skillStageStats) ||
     !sameJson(destination.eligibleSkillIds, source.eligibleSkillIds) ||
     !sameJson(destination.slotSources, source.slotSources) ||
     !sameJson(destination.requirements, summary.requirements) ||
-    !sameJson(destination.levelsAndBonuses, summary.levelOptions) ||
+    !sameJson(destination.levelsAndBonuses, expectedLevels) ||
     destination.bonusDomainScope !== summary.bonusDomainScope ||
     destination.skillLabel !== summary.skillLabel ||
     !sameJson(destination.missingSkillPenalty, summary.missingSkillPenalty)
@@ -4514,7 +4545,6 @@ function decodeFormActionSnapshot(
     const destination = decoded.value.projection as Chr013Projection;
     if (
       decoded.value.layers.length !== 0 ||
-      source.selectedSkills.length !== 0 ||
       destination.characterDraftId !== source.characterDraftId ||
       destination.wizardCheckpointId !== source.wizardCheckpointId ||
       destination.draftRevision !== source.selectionRevision ||

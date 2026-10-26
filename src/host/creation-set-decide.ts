@@ -70,6 +70,7 @@ import {
   type StatAssignmentStage,
 } from './creation-stat-assignment.js';
 import {
+  hasSkillCardNavigationState,
   parseSkillEligibilityStage,
   parseSkillSelectionStage,
   prepareSkillEligibility,
@@ -4186,13 +4187,11 @@ export function loadCreationWizardCheckpoint(
   const formId = skillPresentationStage.formId;
   const selectionSource = selection?.request.payload.sourceFormId;
   const formMatches =
-    formId === 'CHR-014'
-      ? durableFormId === 'CHR-013' && selection === null
-      : formId === 'CHR-013'
-        ? durableFormId === 'CHR-013' && selection === null
-        : (durableFormId === 'CHR-013' && selection === null) ||
-          (durableFormId === 'CHR-015' && selectionSource === 'CHR-014') ||
-          (durableFormId === 'CHR-017' && selectionSource === 'CHR-015');
+    formId === 'CHR-014' || formId === 'CHR-013'
+      ? hasSkillCardNavigationState(checkpoint)
+      : (durableFormId === 'CHR-013' && selection === null) ||
+        (durableFormId === 'CHR-015' && selectionSource === 'CHR-014') ||
+        (durableFormId === 'CHR-017' && selectionSource === 'CHR-015');
   if (!formMatches) {
     throw new Error(
       `localCharacter ${JSON.stringify(localCharacterId)} has inconsistent skill presentation form`,
@@ -4297,15 +4296,16 @@ function assertSkillCardNavigation(
   catalog: SkillStageCatalog,
 ): void {
   const currentFormId = checkpoint.skillPresentationStage?.formId;
+  const fromPartialSelection =
+    currentFormId === 'CHR-015' && checkpoint.skillSelectionStage !== null;
   if (
     checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
-    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
+    !hasSkillCardNavigationState(checkpoint) ||
     checkpoint.skillEligibilityStage === null ||
-    checkpoint.skillSelectionStage !== null ||
     checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER ||
     (formId === 'CHR-014'
-      ? currentFormId !== undefined && currentFormId !== 'CHR-013'
-      : currentFormId !== 'CHR-014') ||
+      ? currentFormId !== undefined && currentFormId !== 'CHR-013' && !fromPartialSelection
+      : currentFormId !== 'CHR-014' && !fromPartialSelection) ||
     (formId === 'CHR-014' &&
       (skillId === null ||
         !catalog.skills.some(
@@ -4395,12 +4395,26 @@ function assertSkillSelectionPresentationAdvance(
   wizardCheckpointId: string,
 ): void {
   const eligibility = checkpoint.skillEligibilityStage;
+  const selectionAuthority = checkpoint.skillSelectionStage ?? eligibility;
+  const presentation = checkpoint.skillPresentationStage;
+  const revisions = currentCreationWizardRevisions(checkpoint);
+  const sourceIsCurrent =
+    selectionAuthority === null
+      ? false
+      : presentation == null
+        ? isDeepStrictEqual(revisions, selectionAuthority.receipt.revisions)
+        : presentation.formId === 'CHR-013' &&
+          presentation.selectionRevision === checkpoint.receipt.result.draftRevision &&
+          presentation.projectionRevision === revisions.projectionRevision &&
+          selectionAuthority.receipt.revisions.actorVisibilityRevision ===
+            revisions.actorVisibilityRevision &&
+          selectionAuthority.receipt.revisions.stateRevision === revisions.stateRevision &&
+          revisions.projectionRevision >= selectionAuthority.receipt.revisions.projectionRevision;
   if (
     checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
-    checkpoint.nextStageEnvelope.formId !== 'CHR-013' ||
     eligibility === null ||
-    checkpoint.skillSelectionStage !== null ||
-    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), eligibility.receipt.revisions) ||
+    !hasSkillCardNavigationState(checkpoint) ||
+    !sourceIsCurrent ||
     checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER
   ) {
     throw new CreationSetDecideApplicationError({ code: 'GUARD_REJECTED' });
@@ -4418,6 +4432,7 @@ export function advanceCreationSkillSelectionProjection(
     loadCreationWizardCheckpoint(database, characterDraftId, catalog),
     wizardCheckpointId,
   );
+  let nextPresentation: SkillPresentationStage | undefined;
   const committed = commitLocalCharacterCheckpoint(
     database,
     characterDraftId,
@@ -4425,13 +4440,33 @@ export function advanceCreationSkillSelectionProjection(
     (update) => {
       const current = loadCreationWizardCheckpoint(database, characterDraftId, catalog);
       assertSkillSelectionPresentationAdvance(current, wizardCheckpointId);
-      return update(
+      nextPresentation =
+        current.skillPresentationStage === undefined
+          ? undefined
+          : createSkillPresentationStage(
+              'CHR-015',
+              characterDraftId,
+              null,
+              current.receipt.result.draftRevision,
+              current.localCharacter.projectionRevision + 1,
+            );
+      const result = update(
         { payloadJson: current.localCharacter.payloadJson },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
       );
+      if (nextPresentation !== undefined) {
+        writeLocalCharacterSkillPresentation(database, nextPresentation);
+      }
+      return result;
     },
   );
-  return validateDurableCreationWizardCheckpoint(committed.result, committed.checkpoint, catalog);
+  return validateDurableCreationWizardCheckpoint(
+    committed.result,
+    committed.checkpoint,
+    catalog,
+    undefined,
+    nextPresentation,
+  );
 }
 
 const rawCommandIds = (payloadJson: string): readonly string[] => {

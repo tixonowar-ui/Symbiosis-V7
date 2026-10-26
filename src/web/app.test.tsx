@@ -936,7 +936,7 @@ function chr014Base(
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
     availableActionKeys:
-      projection.eligibility === 'ELIGIBLE'
+      projection.eligibility === 'ELIGIBLE' && projection.levelsAndBonuses.length > 0
         ? ['CHR-014::CTA::001', 'CHR-014::CTA::002']
         : ['CHR-014::CTA::002'],
     formId: 'CHR-014',
@@ -1044,7 +1044,12 @@ function chr015Base(
   projection: ReturnType<typeof chr015Projection> = chr015Projection(),
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
-    availableActionKeys: projection.selectionCheckpoint === 'EXACT' ? [] : ['CHR-015::CTA::003'],
+    availableActionKeys:
+      projection.selectionCheckpoint === 'EXACT'
+        ? []
+        : projection.selectionCheckpoint === 'PARTIAL'
+          ? ['CHR-015::CTA::003', 'CHR-015::CTA::002']
+          : ['CHR-015::CTA::003'],
     formId: 'CHR-015',
     formType: 'screen',
     roleFilteredPayload: projection,
@@ -5811,6 +5816,62 @@ describe('CHR-014 addressable skill card UI', () => {
       `/player/characters/${CHARACTER_DRAFT_ID}/create/chr-014/SKILL_03`,
     );
     expect(container.querySelector('[data-atlas-action-key="CHR-014::CTA::001"]')).toBeNull();
+  });
+
+  it('reopens a card with prior selection and safely returns to the catalog', async () => {
+    const { container, socket } = await connectToWizardBase(chr013Base(), 9);
+    const open = requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-skill-card-open="SKILL_03"]'),
+      'CHR-013 next skill action',
+    );
+    act(() => open.click());
+    const route = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (route.messageType !== 'navigation.addressable-route') {
+      throw new Error('missing repeated CHR-014 addressable route');
+    }
+    const card = {
+      ...chr014Projection('SKILL_03', [{ skillId: 'SKILL_01', slotCost: 2, targetBonus: 2 }], 2),
+      levelsAndBonuses: [],
+    };
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          route.navigationRequestId,
+          'ADDRESSABLE_ROUTE',
+          chr014Base(card),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 10, stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-skill-card="SKILL_03"]')).not.toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-014::CTA::002"]'),
+        'CHR-014 partial safe return',
+      ).click();
+    });
+    const request = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (request.messageType !== 'navigation.form-action') {
+      throw new Error('missing CHR-014 safe return');
+    }
+    expect(request).toMatchObject({ actionKey: 'CHR-014::CTA::002', sourceFormId: 'CHR-014' });
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          request.navigationRequestId,
+          'FORM_ACTION',
+          chr013Base(),
+          [],
+          { actorVisibilityRevision: 0, projectionRevision: 11, stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-013"]')).not.toBeNull();
   });
 
   it('requires a signed level and commits the full canonical current+new selection', async () => {

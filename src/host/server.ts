@@ -58,6 +58,7 @@ import { deriveChr014SkillCardView } from './creation-skill-card.js';
 import {
   deriveChr013SkillCatalogView,
   deriveChr015SkillSelectionView,
+  hasSkillCardNavigationState,
 } from './creation-skill-selection.js';
 import {
   deriveChr009AssignmentView,
@@ -188,6 +189,8 @@ import {
   CHR_015_CHECKPOINTED_ACTION_KEYS,
   CHR_015_FORM_ID,
   CHR_015_INITIAL_ACTION_KEYS,
+  CHR_015_PARTIAL_ACTION_KEYS,
+  CHR_015_RETURN_ACTION_KEY,
   CHR_015_ROUTE,
   CHR_028_FORM_ID,
   CHR_036_FORM_ID,
@@ -1135,12 +1138,16 @@ function creationSkillSelectionNavigation(
     dependencies.skillStageCatalog,
     dependencies.symbiontCatalog,
   );
+  const selectionAuthority = checkpoint.skillSelectionStage ?? checkpoint.skillEligibilityStage;
   if (
-    checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID ||
     checkpoint.skillEligibilityStage === null ||
-    checkpoint.skillSelectionStage !== null ||
+    selectionAuthority === null ||
+    !hasSkillCardNavigationState(checkpoint) ||
     !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
-    !isDeepStrictEqual(checkpoint.skillEligibilityStage.receipt.revisions, before) ||
+    selectionAuthority.receipt.revisions.actorVisibilityRevision !==
+      before.actorVisibilityRevision ||
+    selectionAuthority.receipt.revisions.stateRevision !== before.stateRevision ||
+    before.projectionRevision < selectionAuthority.receipt.revisions.projectionRevision ||
     connection.current !== current ||
     !confirmedPlayerContext(current, dependencies)
   ) {
@@ -1187,9 +1194,11 @@ function creationSkillCatalogNavigation(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
 ): NavigationSuccess | undefined {
+  const sourceMatches =
+    (message.actionKey === CHR_014_RETURN_ACTION_KEY && current.formId === CHR_014_FORM_ID) ||
+    (message.actionKey === CHR_015_RETURN_ACTION_KEY && current.formId === CHR_015_FORM_ID);
   if (
-    message.actionKey !== CHR_014_RETURN_ACTION_KEY ||
-    current.formId !== CHR_014_FORM_ID ||
+    !sourceMatches ||
     current.entityLocalCharacterId === null ||
     connection.activeLayer !== null
   ) {
@@ -1202,10 +1211,9 @@ function creationSkillCatalogNavigation(
     dependencies.symbiontCatalog,
   );
   if (
-    checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID ||
+    !hasSkillCardNavigationState(checkpoint) ||
     checkpoint.skillEligibilityStage === null ||
-    checkpoint.skillSelectionStage !== null ||
-    checkpoint.skillPresentationStage?.formId !== CHR_014_FORM_ID ||
+    checkpoint.skillPresentationStage?.formId !== message.sourceFormId ||
     !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
     connection.current !== current ||
     !confirmedPlayerContext(current, dependencies)
@@ -1393,8 +1401,8 @@ function creationWizardBase(
     inferredCreationSkillPresentationFormId(checkpoint) ??
     durableFormId;
   if (
-    (presentationFormId === CHR_013_FORM_ID && durableFormId !== CHR_013_FORM_ID) ||
-    (presentationFormId === CHR_014_FORM_ID && durableFormId !== CHR_013_FORM_ID) ||
+    ((presentationFormId === CHR_013_FORM_ID || presentationFormId === CHR_014_FORM_ID) &&
+      !hasSkillCardNavigationState(checkpoint)) ||
     (presentationFormId === CHR_015_FORM_ID &&
       durableFormId !== CHR_013_FORM_ID &&
       durableFormId !== 'CHR-015' &&
@@ -1586,9 +1594,11 @@ function creationWizardBase(
     case CHR_015_FORM_ID:
       return {
         availableActionKeys:
-          checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-015'
-            ? CHR_015_CHECKPOINTED_ACTION_KEYS
-            : CHR_015_INITIAL_ACTION_KEYS,
+          checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-014'
+            ? CHR_015_PARTIAL_ACTION_KEYS
+            : checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-015'
+              ? CHR_015_CHECKPOINTED_ACTION_KEYS
+              : CHR_015_INITIAL_ACTION_KEYS,
         formId: CHR_015_FORM_ID,
         formType: 'screen',
         roleFilteredPayload: projectChr015(
@@ -1779,7 +1789,7 @@ function handleAddressableRoute(
   if (
     current === null ||
     !connection.sessionEstablished ||
-    current.formId !== CHR_013_FORM_ID ||
+    (current.formId !== CHR_013_FORM_ID && current.formId !== CHR_015_FORM_ID) ||
     current.entityLocalCharacterId === null ||
     connection.activeLayer !== null ||
     !confirmedPlayerContext(current, dependencies)
@@ -1806,9 +1816,9 @@ function handleAddressableRoute(
   );
   if (
     !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), revisions) ||
-    checkpoint.nextStageEnvelope.formId !== CHR_013_FORM_ID ||
     checkpoint.skillEligibilityStage === null ||
-    checkpoint.skillSelectionStage !== null
+    !hasSkillCardNavigationState(checkpoint) ||
+    (current.formId === CHR_015_FORM_ID && checkpoint.skillSelectionStage === null)
   ) {
     finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
     return;
@@ -2069,6 +2079,21 @@ function handleFormAction(
       if (
         action.to === CHR_013_FORM_ID &&
         current.formId === CHR_014_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = creationSkillCatalogNavigation(
+          message,
+          current,
+          revisions,
+          connection,
+          dependencies,
+        );
+      }
+      break;
+    case CHR_015_RETURN_ACTION_KEY:
+      if (
+        action.to === CHR_013_FORM_ID &&
+        current.formId === CHR_015_FORM_ID &&
         confirmedPlayerContext(current, dependencies)
       ) {
         success = creationSkillCatalogNavigation(

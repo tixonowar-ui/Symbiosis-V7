@@ -179,3 +179,69 @@ test('CHR-014 ineligible card stays read-only and safe-return preserves selectio
     await host.close();
   }
 });
+
+test('CHR-014 reopens after card add and preserves two additions through replay and restart', async ({
+  page,
+}) => {
+  const host = await createSkillCardBrowserHost('browser-skill-card-reopen');
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  const addFirstLevel = async (): Promise<void> => {
+    const level = page.getByLabel('Целевой бонус', { exact: true });
+    const firstOption = level.locator('option:not([value=""])').first();
+    const targetBonus = await firstOption.getAttribute('value');
+    if (targetBonus === null) throw new Error('host supplied no signed first skill level');
+    await level.selectOption(targetBonus);
+    await page.getByRole('button', { name: 'Добавить доступный навык', exact: true }).click();
+  };
+  try {
+    await page.goto(host.baseURL);
+    await page.locator(`[data-skill-card-open="${host.eligibleSkillId}"]`).click();
+    await addFirstLevel();
+    await expect(page.locator('[data-selection-checkpoint="PARTIAL"]')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Вернуться в каталог навыков', exact: true }).click();
+    await expect(page.locator('[data-atlas-form-id="CHR-013"]')).toBeVisible();
+    await page.locator(`[data-skill-card-open="${host.otherEligibleSkillId}"]`).click();
+    await expect(page.locator(`[data-skill-card="${host.otherEligibleSkillId}"]`)).toBeVisible();
+    await addFirstLevel();
+    await expect(page.locator('[data-selection-checkpoint="PARTIAL"]')).toBeVisible();
+    await expect(page.locator(`[data-selected-skill="${host.eligibleSkillId}"]`)).toBeVisible();
+    await expect(
+      page.locator(`[data-selected-skill="${host.otherEligibleSkillId}"]`),
+    ).toBeVisible();
+    expect(host.checkpoint().skillSelectionStage?.derived.selectedSkills).toEqual([
+      { skillKey: host.eligibleSkillId, targetBonus: 1 },
+      { skillKey: host.otherEligibleSkillId, targetBonus: 1 },
+    ]);
+    expect(host.checkpoint().skillSelectionStage?.cardAdditionRecords).toHaveLength(2);
+    expect(host.receiptAllocations()).toBe(2);
+
+    await page.reload();
+    await expect(page.locator(`[data-selected-skill="${host.eligibleSkillId}"]`)).toBeVisible();
+    await expect(
+      page.locator(`[data-selected-skill="${host.otherEligibleSkillId}"]`),
+    ).toBeVisible();
+    await host.restart();
+    await page.goto(host.baseURL);
+    await expect(page.locator(`[data-selected-skill="${host.eligibleSkillId}"]`)).toBeVisible();
+    await expect(
+      page.locator(`[data-selected-skill="${host.otherEligibleSkillId}"]`),
+    ).toBeVisible();
+    expect(host.checkpoint().skillSelectionStage?.cardAdditionRecords).toHaveLength(2);
+    expect(host.receiptAllocations()).toBe(2);
+
+    await page.getByRole('button', { name: 'Вернуться в каталог навыков', exact: true }).click();
+    await page.locator(`[data-skill-card-open="${host.ineligibleSkillId}"]`).click();
+    await expect(
+      page.locator('section[data-skill-card-eligibility="INELIGIBLE_READ_ONLY"]'),
+    ).toBeVisible();
+    await expect(page.locator('[data-atlas-action-key="CHR-014::CTA::001"]')).toHaveCount(0);
+    expect(host.checkpoint().skillSelectionStage?.derived.selectedSkills).toHaveLength(2);
+    expect(host.receiptAllocations()).toBe(2);
+    await expectSanitizedProjection(page);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    await host.close();
+  }
+});

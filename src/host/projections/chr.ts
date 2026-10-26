@@ -13,6 +13,7 @@ import {
   type CreationStatSetDecision,
 } from '../../domain/index.js';
 import type { CreationDecisionConsequenceCatalog } from '../creation-decision-consequence-catalog.js';
+import { slotCostOptions } from '../creation-skill-selection.js';
 
 export const CHOICE_LOCK_STATUSES = ['UNLOCKED', 'LOCKED_AFTER_RESULT', 'NOT_APPLICABLE'] as const;
 export type ChoiceLockStatus = (typeof CHOICE_LOCK_STATUSES)[number];
@@ -412,15 +413,17 @@ export const CHR_015_REQUIRED_FIELDS = [
   'commandId',
 ] as const;
 export const CHR_015_LOCAL_DRAFT_ACTION_KEY = 'CHR-015::CTA::003' as const satisfies ActionKey;
+export const CHR_015_RETURN_ACTION_KEY = 'CHR-015::CTA::002' as const satisfies ActionKey;
 export const CHR_015_INITIAL_ACTION_KEYS = [
   CHR_015_LOCAL_DRAFT_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
-export const CHR_015_CHECKPOINTED_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
-/** Confirm is a web-derived EXACT capability; safe return remains excluded by ADR 0044. */
-export const CHR_015_HOST_EXCLUDED_ACTION_KEYS = [
-  'CHR-015::CTA::001',
-  'CHR-015::CTA::002',
+export const CHR_015_PARTIAL_ACTION_KEYS = [
+  CHR_015_LOCAL_DRAFT_ACTION_KEY,
+  CHR_015_RETURN_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
+export const CHR_015_CHECKPOINTED_ACTION_KEYS = [] as const satisfies readonly ActionKey[];
+/** Confirm is web-derived EXACT; partial catalog return is signed by ADR 0053. */
+export const CHR_015_HOST_EXCLUDED_ACTION_KEYS = ['CHR-015::CTA::001'] as const;
 
 export const CHR_028_FORM_ID = 'CHR-028' as const;
 export const CHR_028_ROUTE = '@dialog/chr-028' as const;
@@ -1765,6 +1768,10 @@ export function projectChr014(values: Chr014ProjectionValues): Chr014Projection 
     values.levelsAndBonuses,
     'CHR-014 levelsAndBonuses',
   );
+  const slotSources = copySkillSlotSources(values.slotSources, 'CHR-014 slotSources');
+  const previousLevels = slotCostOptions(
+    slotSources.requiredSlotCount - (slotSources.mandatoryClassSkillOrNull?.slotCost ?? 0),
+  );
   const selectedSkills = copySelectedSkills(values.selectedSkills, 'CHR-014 selectedSkills');
   let previousIndex = -1;
   for (const [index, selected] of selectedSkills.entries()) {
@@ -1772,7 +1779,7 @@ export function projectChr014(values: Chr014ProjectionValues): Chr014Projection 
     if (optionIndex <= previousIndex) {
       throw new Error('CHR-014 selectedSkills must be a canonical eligible subset');
     }
-    const level = levelsAndBonuses.find(
+    const level = previousLevels.find(
       (candidate) => candidate.targetBonus === selected.targetBonus,
     );
     if (level === undefined || level.slotCost !== selected.slotCost) {
@@ -1780,7 +1787,6 @@ export function projectChr014(values: Chr014ProjectionValues): Chr014Projection 
     }
     previousIndex = optionIndex;
   }
-  const slotSources = copySkillSlotSources(values.slotSources, 'CHR-014 slotSources');
   const fixedIds = [
     ...(slotSources.mandatoryClassSkillOrNull === null
       ? []

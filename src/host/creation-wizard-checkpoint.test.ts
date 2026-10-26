@@ -47,6 +47,7 @@ import {
   type SkillCheckpointCommandRequest,
 } from './creation-skill-selection.js';
 import { loadCreationSkillCatalog, type CreationSkillCatalog } from './creation-skill-catalog.js';
+import { deriveChr014SkillCardView } from './creation-skill-card.js';
 import {
   commitCreationWizardCheckpoint,
   CreationWizardCheckpointApplicationError,
@@ -1338,6 +1339,220 @@ describe('SKILLS wizard checkpoint', () => {
     expect(returned.skillSelectionStage).toBeNull();
     expect(returned.localCharacter.stateRevision).toBe(stateRevision);
     expect(returned.receipt).toEqual(eligible.receipt);
+  });
+
+  it('reopens eligible and ineligible CHR-014 cards after a partial addition without changing selection', () => {
+    const store = database();
+    const eligible = skillEligibility(store, 'FREE', [19, 19, 19, 19, 19, 4, 19]);
+    const derived = eligible.skillEligibilityStage?.derived;
+    const first = derived?.eligibleSkillIds[0];
+    const second = derived?.eligibleSkillIds[1];
+    const ineligible = catalog.skills.find(
+      (skill) =>
+        skill.category === 'SELECTABLE_GENERAL' &&
+        !derived?.eligibleSkillIds.includes(skill.skillKey),
+    );
+    if (
+      derived === undefined ||
+      first === undefined ||
+      second === undefined ||
+      ineligible === undefined
+    ) {
+      throw new Error('test expected two eligible skills and one ineligible skill');
+    }
+    const openCard = (skillId: string) =>
+      advanceCreationSkillCardPresentation(
+        store,
+        'character-draft',
+        'wizard-checkpoint',
+        skillId,
+        catalog,
+      );
+    const selected = [{ skillId: first, targetBonus: 1 }] as const;
+    const opened = openCard(first);
+    const partial = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(opened, 'CHR-014', 'reopen-first-command', selected),
+      'reopen-first-receipt',
+      catalog,
+    );
+    const stateRevision = partial.localCharacter.stateRevision;
+    const draftRevision = partial.receipt.result.draftRevision;
+
+    const reopened = openCard(second);
+    expect(reopened.skillPresentationStage).toMatchObject({
+      formId: 'CHR-014',
+      routeBindings: [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft' },
+        { parameterIndex: 1, source: 'client-selected', value: second },
+      ],
+      selectionRevision: draftRevision,
+    });
+    expect(reopened.skillSelectionStage?.derived.selectedSkills).toEqual([
+      { skillKey: first, targetBonus: 1 },
+    ]);
+    expect(reopened.localCharacter.stateRevision).toBe(stateRevision);
+    expect(reopened.receipt).toEqual(partial.receipt);
+    expect(
+      deriveChr014SkillCardView(
+        deriveChr013SkillCatalogView(reopened, presentationCatalog),
+        selected,
+        second,
+      ),
+    ).toMatchObject({
+      eligibility: 'ELIGIBLE',
+      levelsAndBonuses: [{ slotCost: 1, targetBonus: 1 }],
+      selectedSkills: selected,
+      selectionRevision: draftRevision,
+    });
+
+    const betweenCards = advanceCreationSkillCatalogPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    expect(betweenCards.skillPresentationStage?.formId).toBe('CHR-013');
+    expect(betweenCards.receipt).toEqual(partial.receipt);
+    const readOnly = openCard(ineligible.skillKey);
+    expect(
+      deriveChr014SkillCardView(
+        deriveChr013SkillCatalogView(readOnly, presentationCatalog),
+        selected,
+        ineligible.skillKey,
+      ),
+    ).toMatchObject({
+      eligibility: 'INELIGIBLE_READ_ONLY',
+      selectedSkills: selected,
+      selectionRevision: draftRevision,
+    });
+    const returned = advanceCreationSkillCatalogPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    expect(returned.skillPresentationStage?.formId).toBe('CHR-013');
+    expect(returned.skillSelectionStage?.derived.selectedSkills).toEqual([
+      { skillKey: first, targetBonus: 1 },
+    ]);
+    expect(returned.receipt).toEqual(partial.receipt);
+    const continued = advanceCreationSkillSelectionProjection(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    expect(
+      loadCreationWizardCheckpoint(store, 'character-draft', catalog).skillPresentationStage,
+    ).toMatchObject({
+      formId: 'CHR-015',
+      selectionRevision: draftRevision,
+    });
+    expect(continued.skillSelectionStage?.cardAdditionRecords).toHaveLength(1);
+    expect(continued.skillSelectionStage?.derived.selectedSkills).toEqual([
+      { skillKey: first, targetBonus: 1 },
+    ]);
+    expect(continued.localCharacter.stateRevision).toBe(stateRevision);
+    expect(continued.receipt).toEqual(partial.receipt);
+    const catalogAgain = advanceCreationSkillCatalogPresentation(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    expect(catalogAgain.skillPresentationStage?.formId).toBe('CHR-013');
+    expect(catalogAgain.skillSelectionStage?.derived.selectedSkills).toEqual([
+      { skillKey: first, targetBonus: 1 },
+    ]);
+    expect(catalogAgain.receipt).toEqual(partial.receipt);
+    expect(catalogAgain.localCharacter.stateRevision).toBe(stateRevision);
+  });
+
+  it('persists two canonical CHR-014 additions and replays both after reopen', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'symbiosis-skill-card-reopen-'));
+    temporaryDirectories.push(directory);
+    const path = join(directory, 'host.sqlite');
+    let store = database(path);
+    const eligible = skillEligibility(store, 'FREE');
+    const first = eligible.skillEligibilityStage?.derived.eligibleSkillIds[0];
+    const second = eligible.skillEligibilityStage?.derived.eligibleSkillIds[1];
+    if (first === undefined || second === undefined) {
+      throw new Error('test expected two eligible skills');
+    }
+    const openCard = (skillId: string) =>
+      advanceCreationSkillCardPresentation(
+        store,
+        'character-draft',
+        'wizard-checkpoint',
+        skillId,
+        catalog,
+      );
+    const firstAddition = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(openCard(first), 'CHR-014', 'reopen-first-command', [
+        { skillId: first, targetBonus: 1 },
+      ]),
+      'reopen-first-receipt',
+      catalog,
+    );
+    const canonical = [first, second].sort(
+      (left, right) =>
+        catalog.skills.findIndex((skill) => skill.skillKey === left) -
+        catalog.skills.findIndex((skill) => skill.skillKey === right),
+    );
+    const secondAddition = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(
+        openCard(second),
+        'CHR-014',
+        'reopen-second-command',
+        canonical.map((skillId) => ({ skillId, targetBonus: 1 })),
+      ),
+      'reopen-second-receipt',
+      catalog,
+    );
+    expect(secondAddition.skillSelectionStage?.derived.selectedSkills).toEqual(
+      canonical.map((skillKey) => ({ skillKey, targetBonus: 1 })),
+    );
+    expect(secondAddition.skillSelectionStage?.cardAdditionRecords).toHaveLength(2);
+    expect(secondAddition.localCharacter.payloadJson).toContain('reopen-second-receipt');
+    expect(firstAddition.skillSelectionStage?.cardAdditionRecords).toHaveLength(1);
+    const records = secondAddition.skillSelectionStage?.cardAdditionRecords;
+    if (records?.length !== 2) throw new Error('test expected both card addition records');
+    const firstReceipt = records[0]!.receipt;
+    const secondReceipt = records[1]!.receipt;
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'reopen-first-command', catalog)?.receipt,
+    ).toEqual(firstReceipt);
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'reopen-second-command', catalog)?.receipt,
+    ).toEqual(secondReceipt);
+    const payload = secondAddition.localCharacter.payloadJson;
+    store.close();
+    databases.splice(databases.indexOf(store), 1);
+
+    store = database(path);
+    const reloadedCatalog = await loadSkillStageCatalog(PROJECT_ROOT);
+    const reloadedPresentation = await loadCreationSkillCatalog(PROJECT_ROOT, reloadedCatalog);
+    const restored = loadCreationWizardCheckpoint(store, 'character-draft', reloadedCatalog);
+    expect(restored.localCharacter.payloadJson).toBe(payload);
+    expect(restored.skillSelectionStage?.cardAdditionRecords).toHaveLength(2);
+    expect(restored.skillSelectionStage?.derived.selectedSkills).toEqual(
+      canonical.map((skillKey) => ({ skillKey, targetBonus: 1 })),
+    );
+    expect(restored.skillPresentationStage?.formId).toBe('CHR-015');
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'reopen-first-command', reloadedCatalog)?.receipt,
+    ).toEqual(firstReceipt);
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'reopen-second-command', reloadedCatalog)
+        ?.receipt,
+    ).toEqual(secondReceipt);
+    expect(deriveChr015SkillSelectionView(restored, reloadedPresentation)).toMatchObject({
+      commandId: 'reopen-second-command',
+      selectionCheckpoint: 'PARTIAL',
+    });
   });
 
   it('rejects stale, missing, wrong-route, and overfilled CHR-014 additions without a write', () => {

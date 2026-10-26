@@ -911,7 +911,11 @@ function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): D
     case 'CHR-013':
       return ['CHR-013::CTA::001', 'CHR-013::CTA::002'];
     case 'CHR-015':
-      return projection['selectionCheckpoint'] === 'EXACT' ? [] : ['CHR-015::CTA::003'];
+      return projection['selectionCheckpoint'] === 'EXACT'
+        ? []
+        : projection['selectionCheckpoint'] === 'PARTIAL'
+          ? ['CHR-015::CTA::003', 'CHR-015::CTA::002']
+          : ['CHR-015::CTA::003'];
     case 'CHR-002':
       return ['CHR-002::CTA::003', 'CHR-002::CTA::004', 'CHR-002::CTA::005'];
     case 'CHR-017':
@@ -1627,6 +1631,65 @@ describe('SKILLS projection decoder and local draft', () => {
       });
     },
   );
+
+  it('allows catalog return only for PARTIAL CHR-015 selections', async () => {
+    const partial = {
+      ...decoderChr015Projection(
+        [{ skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 }],
+        'card-add',
+      ),
+      selectionCheckpoint: 'PARTIAL',
+    };
+    const { connection, socket, states } = await connectDecoderFixture('CHR-015', partial, [
+      'CHR-015::CTA::003',
+      'CHR-015::CTA::002',
+    ]);
+    expect(connection.requestFormAction('CHR-015::CTA::002')).toEqual({ ok: true });
+    const requestText = socket.sent.at(-1);
+    if (requestText === undefined) throw new Error('missing partial catalog return');
+    const request = decodeClientMessageV2(requestText, WEB_PROTOCOL_VOCABULARY);
+    if (!request.ok || request.value.messageType !== 'navigation.form-action') {
+      throw new Error('partial catalog return must use navigation.form-action');
+    }
+    expect(request.value).toMatchObject({
+      actionKey: 'CHR-015::CTA::002',
+      sourceFormId: 'CHR-015',
+    });
+    socket.message(
+      checkedHostTextV2({
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: request.value.navigationRequestId, reason: 'FORM_ACTION' },
+          base: projectionBase('CHR-013', DECODER_CHR_013_PROJECTION),
+          layers: [],
+        },
+        projectionRole: 'player',
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        revisions: { ...REVISIONS, projectionRevision: REVISIONS.projectionRevision + 1 },
+      }),
+    );
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'CHR-013' },
+    });
+    for (const projection of [
+      decoderChr015Projection(),
+      decoderChr015Projection(
+        [
+          { skillId: 'SKILL_01', slotCost: 1, targetBonus: 1 },
+          { skillId: 'SKILL_03', slotCost: 1, targetBonus: 1 },
+        ],
+        'final',
+      ),
+    ]) {
+      expect(
+        await decodeProjectionFixture('CHR-015', projection, ['CHR-015::CTA::002']),
+      ).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { path: '$.presentation.base.availableActionKeys' },
+      });
+    }
+  });
 
   it('keeps toggles wire-free and canonical, rejects unsigned candidates, and checkpoints only EXACT', async () => {
     const { connection, skillDrafts, socket, states } = await connectDecoderFixture(

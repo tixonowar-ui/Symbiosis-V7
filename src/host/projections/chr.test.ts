@@ -34,6 +34,7 @@ import {
   CHR_015_CHECKPOINTED_ACTION_KEYS,
   CHR_015_HOST_EXCLUDED_ACTION_KEYS,
   CHR_015_INITIAL_ACTION_KEYS,
+  CHR_015_PARTIAL_ACTION_KEYS,
   CHR_028_COMMITTED_ACTION_KEYS,
   CHR_028_WARNING_ACTION_KEYS,
   CHR_010_INITIAL_ACTION_KEYS,
@@ -281,7 +282,8 @@ describe('CHR host projection vocabulary', () => {
     expect(CHR_013_EXCLUDED_ACTION_KEYS).toEqual(['CHR-013::CTA::003']);
     expect(CHR_015_INITIAL_ACTION_KEYS).toEqual(['CHR-015::CTA::003']);
     expect(CHR_015_CHECKPOINTED_ACTION_KEYS).toEqual([]);
-    expect(CHR_015_HOST_EXCLUDED_ACTION_KEYS).toEqual(['CHR-015::CTA::001', 'CHR-015::CTA::002']);
+    expect(CHR_015_PARTIAL_ACTION_KEYS).toEqual(['CHR-015::CTA::003', 'CHR-015::CTA::002']);
+    expect(CHR_015_HOST_EXCLUDED_ACTION_KEYS).toEqual(['CHR-015::CTA::001']);
     expect(SET_DECIDE_CAPABLE_FORM_IDS).toEqual([
       'CHR-002',
       'CHR-005',
@@ -1012,6 +1014,24 @@ describe('CHR host projection vocabulary', () => {
     expect(ineligibleValues.requirements.some(({ satisfied }) => !satisfied)).toBe(true);
     expect(projectChr014(ineligibleValues)).toEqual(ineligibleValues);
     expect(CHR_014_READ_ONLY_ACTION_KEYS).toEqual(['CHR-014::CTA::002']);
+  });
+
+  it('keeps previous CHR-014 selection valid when new level capacity is exhausted', () => {
+    const skillId = skillCatalog.selectableSkills[0]?.skillId;
+    if (skillId === undefined) throw new Error('test expected an eligible skill');
+    const cardValues = chr014ProjectionValues(skillCatalog, skillId);
+    const values = {
+      ...cardValues,
+      levelsAndBonuses: [],
+      selectedSkills: [{ skillId, slotCost: 2, targetBonus: 2 }],
+    };
+    expect(projectChr014(values)).toEqual(values);
+    expect(() =>
+      projectChr014({
+        ...values,
+        selectedSkills: [{ skillId, slotCost: 1, targetBonus: 2 }],
+      }),
+    ).toThrow('CHR-014 selectedSkills[0] must match a signed level option');
   });
 
   it('carries source-substituted skill content through both player projections', () => {

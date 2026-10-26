@@ -105,6 +105,15 @@
 
 ### Добавлено
 
+- **2026-10-27, issue #144, ADR 0053:** исправлено повторное открытие
+  `CHR-014` после `open A → add A → open B`. Существующий
+  `CHR-015::CTA::002` теперь разрешён только для `PARTIAL`; `NONE` и `EXACT`
+  сохраняют прежние ограничения. Последовательные `add A → add B` сохраняют
+  полный canonical набор и обе card-add записи, восстанавливаемые после
+  replay/restart. Проверка исторических уровней отделена от вариантов на
+  оставшуюся paid capacity; read-only ineligible B не очищает выбор. Пятый
+  production Playwright-сценарий проходит этот маршрут через Fastify+WS/SQLite
+  без изменения outer protocol, Atlas sources или SQL migrations.
 - **2026-10-26, issue #147, ADR 0052:** `TROGR + ADVISER` получает отдельный
   durable `TROGR_SUPPRESSION_B` и в RANDOM, и в MANUAL. `B=floor(R20/4+0,5)`
   определяет будущий неснижаемый остаток интеллекта: `1+B`, либо `4+B` после

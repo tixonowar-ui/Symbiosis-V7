@@ -52,6 +52,7 @@ import {
   CHR_014_RETURN_ACTION_KEY,
   CHR_014_ROUTE,
   CHR_015_FORM_ID,
+  CHR_015_RETURN_ACTION_KEY,
   CHR_015_REQUIRED_FIELDS,
   CHR_015_ROUTE,
   CHR_016_FORM_ID,
@@ -234,6 +235,7 @@ export interface AppNavigationAction {
     | typeof CHR_001_FORM_ID
     | typeof CHR_013_FORM_ID
     | typeof CHR_014_FORM_ID
+    | typeof CHR_015_FORM_ID
     | typeof CHR_017_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -269,6 +271,7 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
     ],
     [CHR_013_FORM_ID, CHR_013_CONTINUE_ACTION_KEY, 'skill-stage revision current'],
     [CHR_014_FORM_ID, CHR_014_RETURN_ACTION_KEY, 'no selection mutation'],
+    [CHR_015_FORM_ID, CHR_015_RETURN_ACTION_KEY, 'selection draft checkpointed'],
     [
       CHR_017_FORM_ID,
       CHR_017_RANDOM_START_ACTION_KEY,

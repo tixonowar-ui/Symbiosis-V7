@@ -2607,7 +2607,7 @@ describe('durable character creation decisions', () => {
       expect(partialChr015).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: ['CHR-015::CTA::003'],
+            availableActionKeys: ['CHR-015::CTA::003', 'CHR-015::CTA::002'],
             formId: 'CHR-015',
             roleFilteredPayload: {
               commandId: 'skill-card-add',
@@ -2693,9 +2693,337 @@ describe('durable character creation decisions', () => {
       });
       expect(currentReceiptAllocations()).toBe(0);
       coldSocket.terminate();
+
+      const reopenedCard = await sendV2(
+        currentSocket,
+        addressableRouteIntent(
+          'skill-card-reopen-eligible',
+          otherEligibleSkillId,
+          hostMessageV2(coldRecovered[1] ?? '', vocabulary).revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(reopenedCard).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-014::CTA::002'],
+            formId: 'CHR-014',
+            roleFilteredPayload: {
+              eligibility: 'ELIGIBLE',
+              levelsAndBonuses: [],
+              selectedSkills: [{ skillId: eligibleSkillId, slotCost: 5, targetBonus: 5 }],
+              selectionRevision: additionResult.receipt.result['draftRevision'],
+              skillId: otherEligibleSkillId,
+            },
+          },
+        },
+      });
+      const betweenCards = await sendV2(
+        currentSocket,
+        formAction(
+          'skill-card-reopen-between-catalog',
+          'CHR-014',
+          'CHR-014::CTA::002',
+          reopenedCard.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(betweenCards).toMatchObject({
+        presentation: { base: { formId: 'CHR-013' } },
+      });
+      const readOnlyCard = await sendV2(
+        currentSocket,
+        addressableRouteIntent(
+          'skill-card-reopen-ineligible',
+          ineligibleSkill.skillKey,
+          betweenCards.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(readOnlyCard).toMatchObject({
+        presentation: {
+          base: {
+            availableActionKeys: ['CHR-014::CTA::002'],
+            formId: 'CHR-014',
+            roleFilteredPayload: {
+              eligibility: 'INELIGIBLE_READ_ONLY',
+              selectedSkills: [{ skillId: eligibleSkillId, slotCost: 5, targetBonus: 5 }],
+              skillId: ineligibleSkill.skillKey,
+            },
+          },
+        },
+      });
+      const partialCatalog = await sendV2(
+        currentSocket,
+        formAction(
+          'skill-card-reopen-return-catalog',
+          'CHR-014',
+          'CHR-014::CTA::002',
+          readOnlyCard.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(partialCatalog).toMatchObject({
+        presentation: { base: { formId: 'CHR-013' } },
+      });
+      const continuedPartial = await sendV2(
+        currentSocket,
+        formAction(
+          'skill-card-reopen-continue-partial',
+          'CHR-013',
+          'CHR-013::CTA::002',
+          partialCatalog.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(continuedPartial).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-015',
+            roleFilteredPayload: {
+              commandId: 'skill-card-add',
+              selectedSkillIds: [eligibleSkillId],
+              selectionCheckpoint: 'PARTIAL',
+            },
+          },
+        },
+        revisions: {
+          ...additionResult.receipt.revisions,
+          projectionRevision: additionResult.receipt.revisions.projectionRevision + 5,
+        },
+      });
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog)
+          .skillSelectionStage?.cardAdditionRecords,
+      ).toHaveLength(1);
+      expect(currentReceiptAllocations()).toBe(0);
+
+      const partialReturn = await sendV2(
+        currentSocket,
+        formAction(
+          'skill-card-partial-return-catalog',
+          'CHR-015',
+          'CHR-015::CTA::002',
+          continuedPartial.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(partialReturn).toMatchObject({
+        presentation: { base: { formId: 'CHR-013' } },
+      });
+      const reopenedFromCatalog = await sendV2(
+        currentSocket,
+        addressableRouteIntent(
+          'skill-card-partial-catalog-open',
+          otherEligibleSkillId,
+          partialReturn.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(reopenedFromCatalog).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-014',
+            roleFilteredPayload: {
+              selectedSkills: [{ skillId: eligibleSkillId, slotCost: 5, targetBonus: 5 }],
+              skillId: otherEligibleSkillId,
+            },
+          },
+        },
+      });
+      expect(currentReceiptAllocations()).toBe(0);
     } finally {
       currentSocket.terminate();
       if (!currentAppClosed) await currentApp.close();
+      harness.database.close();
+    }
+  }, 20_000);
+
+  it('commits two canonical CHR-014 additions and replays both after restart', async () => {
+    const harness = await createJourneyHarness(staticRoot, vocabulary, 'skill-card-two-additions');
+    let restartedApp: FastifyInstance | undefined;
+    let restartedSocket: WebSocket | undefined;
+    try {
+      const { chr013, eligibilityResult } = await completeSkillEligibility(
+        harness,
+        vocabulary,
+        'skill-card-two-additions',
+      );
+      const allocationsBeforeAdditions = harness.receiptAllocations();
+      const eligibility = loadCreationWizardCheckpoint(
+        harness.database,
+        harness.characterDraftId,
+        skillCatalog,
+      ).skillEligibilityStage?.derived;
+      const first = eligibility?.eligibleSkillIds[0];
+      const second = eligibility?.eligibleSkillIds[1];
+      if (first === undefined || second === undefined) {
+        throw new Error('test expected two eligible skills');
+      }
+      const firstOpen = await sendV2(
+        harness.socket,
+        addressableRouteIntent(
+          'two-additions-open-first',
+          first,
+          chr013.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      const firstRequest = skillCheckpointRequest(
+        'two-additions-first-command',
+        harness,
+        'CHR-014',
+        resultRevision(eligibilityResult, 'draftRevision'),
+        firstOpen.revisions,
+        [{ skillId: first, targetBonus: 1 }],
+      );
+      const [firstTerminal, firstDestination] = await sendCommand(
+        harness.socket,
+        firstRequest,
+        vocabulary,
+      );
+      const firstResult = committedResult(firstTerminal);
+      expect(firstResult.receipt.result).toMatchObject({
+        nextFormId: 'CHR-015',
+        selectedSkills: [{ skillKey: first, targetBonus: 1 }],
+        sourceFormId: 'CHR-014',
+      });
+      const secondOpen = await sendV2(
+        harness.socket,
+        addressableRouteIntent(
+          'two-additions-open-second',
+          second,
+          firstDestination.revisions.projectionRevision,
+        ),
+        vocabulary,
+      );
+      expect(secondOpen).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-014',
+            roleFilteredPayload: {
+              selectedSkills: [{ skillId: first, slotCost: 1, targetBonus: 1 }],
+              selectionRevision: firstResult.receipt.result['draftRevision'],
+              skillId: second,
+            },
+          },
+        },
+      });
+      const canonical = [first, second].sort(
+        (left, right) =>
+          skillCatalog.skills.findIndex((skill) => skill.skillKey === left) -
+          skillCatalog.skills.findIndex((skill) => skill.skillKey === right),
+      );
+      const secondRequest = skillCheckpointRequest(
+        'two-additions-second-command',
+        harness,
+        'CHR-014',
+        resultRevision(firstResult, 'draftRevision'),
+        secondOpen.revisions,
+        canonical.map((skillId) => ({ skillId, targetBonus: 1 })),
+      );
+      const [secondTerminal, secondDestination] = await sendCommand(
+        harness.socket,
+        secondRequest,
+        vocabulary,
+      );
+      const secondResult = committedResult(secondTerminal);
+      expect(secondResult.receipt.result).toMatchObject({
+        nextFormId: 'CHR-015',
+        selectedSkills: canonical.map((skillKey) => ({ skillKey, targetBonus: 1 })),
+        sourceFormId: 'CHR-014',
+        usedSlotCount: 2,
+      });
+      expect(secondDestination).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-015',
+            roleFilteredPayload: {
+              selectedSkillIds: canonical,
+              selectionCheckpoint: 'PARTIAL',
+            },
+          },
+        },
+      });
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog)
+          .skillSelectionStage?.cardAdditionRecords,
+      ).toHaveLength(2);
+
+      const firstReplay = await sendCommand(harness.socket, firstRequest, vocabulary);
+      expect(firstReplay[0]).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: firstResult.receipt,
+      });
+      expect(firstReplay[1]).toMatchObject({
+        presentation: { base: { roleFilteredPayload: { selectedSkillIds: canonical } } },
+      });
+      const secondReplay = await sendCommand(harness.socket, secondRequest, vocabulary);
+      expect(secondReplay[0]).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: secondResult.receipt,
+      });
+      expect(harness.receiptAllocations()).toBe(allocationsBeforeAdditions + 2);
+
+      await harness.app.close();
+      const runtime = revisionRuntime();
+      let restartedReceipts = 0;
+      restartedApp = await createHost({
+        advanceRevisions: runtime.advance,
+        allocateCreationBranchUuid: () => 'two-additions-restart-branch',
+        allocateCreationRollRequestId: () => 'two-additions-restart-roll-request',
+        allocateContextId: () => '60000000-0000-4000-8000-000000000001',
+        allocateLocalCharacterId: () => '70000000-0000-4000-8000-000000000001',
+        allocateReceiptId: () => `two-additions-restart-receipt-${String(++restartedReceipts)}`,
+        allocateWizardCheckpointId: () => 'two-additions-restart-wizard',
+        database: harness.database,
+        onFrameError: (error) => {
+          throw error;
+        },
+        projectRoot: PROJECT_ROOT,
+        readRevisions: runtime.read,
+        sampleCreationD20: () => 10,
+        staticRoot,
+      });
+      await startHost(restartedApp, { interface: '127.0.0.1', port: 0 });
+      restartedSocket = await restartedApp.injectWS('/state');
+      const frames = receiveFrames(restartedSocket, 4);
+      restartedSocket.send(
+        clientTextV2(
+          reconnect(harness.deviceId, 'two-additions-restart-replay', [
+            firstRequest.commandId,
+            secondRequest.commandId,
+          ]),
+          vocabulary,
+        ),
+      );
+      const recovered = await frames;
+      expect(hostMessage(recovered[0] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: firstResult.receipt,
+      });
+      expect(hostMessage(recovered[1] ?? '', vocabulary)).toMatchObject({
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt: secondResult.receipt,
+      });
+      expect(hostMessageV2(recovered[3] ?? '', vocabulary)).toMatchObject({
+        presentation: {
+          base: {
+            formId: 'CHR-015',
+            roleFilteredPayload: { selectedSkillIds: canonical, selectionCheckpoint: 'PARTIAL' },
+          },
+        },
+      });
+      expect(restartedReceipts).toBe(0);
+      expect(
+        loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog)
+          .skillSelectionStage?.cardAdditionRecords,
+      ).toHaveLength(2);
+    } finally {
+      restartedSocket?.terminate();
+      if (restartedApp !== undefined) await restartedApp.close();
+      harness.socket.terminate();
+      await harness.app.close();
       harness.database.close();
     }
   });
