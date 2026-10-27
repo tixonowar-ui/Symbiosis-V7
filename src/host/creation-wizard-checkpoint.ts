@@ -673,12 +673,7 @@ export function commitCreationWizardCheckpoint(
         };
         return preflight.request.payload.sourceFormId === 'CHR-018'
           ? commitManualComposition(database, preflight.request, receiptId, dependencies)
-          : commitManualAdvisorSkills(
-              database,
-              preflight.request,
-              receiptId,
-              dependencies,
-            );
+          : commitManualAdvisorSkills(database, preflight.request, receiptId, dependencies);
       }
       return commitCreationSymbiontAdvisor(
         database,

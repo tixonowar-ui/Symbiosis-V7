@@ -2270,9 +2270,8 @@ describe('durable character creation decisions', () => {
       if (checkpointedChr015.messageType !== 'projection.snapshot') {
         throw new Error('skill selection did not publish the manual symbiont catalog');
       }
-      const projectedSpecies = checkpointedChr015.presentation.base.roleFilteredPayload[
-        'eligibleSymbiontSpecies'
-      ];
+      const projectedSpecies =
+        checkpointedChr015.presentation.base.roleFilteredPayload['eligibleSymbiontSpecies'];
       if (!Array.isArray(projectedSpecies)) throw new Error('manual catalog lacks species');
       expect(projectedSpecies).toHaveLength(23);
       expect(
