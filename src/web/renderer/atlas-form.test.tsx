@@ -58,6 +58,7 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CHR-042',
   'CHR-020',
   'CHR-041',
+  'CHR-021',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -188,7 +189,7 @@ describe('atlas implemented-form renderer', () => {
     }
 
     // APP has nine screens/two dialogs; CHR has 23 screens/one dialog including manual composition.
-    expect(screens).toBe(32);
+    expect(screens).toBe(33);
     expect(dialogs).toBe(3);
   });
 
@@ -355,8 +356,8 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
-    expect(() => getAtlasFormModel('CHR-021')).toThrow(
-      `form "CHR-021" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
+    expect(() => getAtlasFormModel('CHR-022')).toThrow(
+      `form "CHR-022" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 

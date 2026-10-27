@@ -1,8 +1,8 @@
 import type { ActionKey } from '@generated/types/atlas.js';
 import type {
   CommandReceipt,
-  CommandResultMessage,
   DecodeResult,
+  HostToClientMessage,
   JsonObject,
   JsonValue,
   RevisionVector,
@@ -336,14 +336,19 @@ export type ArmorBundleCheckpointRequest = WorkflowCommandRequestMessage<
   ArmorBundleCheckpointPayload
 >;
 
-interface SnapshotSource {
+export interface ArmorBundleSnapshotSource {
   readonly formId: 'CHR-021';
   readonly projection: Chr021Projection;
   readonly revisions: RevisionVector;
 }
 
+type ArmorBundleTerminalMessage = Extract<
+  HostToClientMessage,
+  { readonly messageType: 'command.replay' | 'command.result' }
+>;
+
 export function armorBundleQualityPayload(
-  source: SnapshotSource,
+  source: ArmorBundleSnapshotSource,
   draft: ArmorBundleDraft,
   manualFaceOrNull: number | null,
 ): ArmorBundleQualityPayload {
@@ -373,7 +378,7 @@ export function armorBundleQualityPayload(
   };
 }
 
-export function armorBundleCheckpointPayload(source: SnapshotSource): ArmorBundleCheckpointPayload {
+export function armorBundleCheckpointPayload(source: ArmorBundleSnapshotSource): ArmorBundleCheckpointPayload {
   const projection = source.projection;
   const qualityRollReceiptId = projection.qualityRollReceiptIdOrNull;
   if (qualityRollReceiptId === null) {
@@ -478,9 +483,9 @@ function decodeArmorReceiptResult(
 }
 
 export function decodeArmorBundleQualityTerminal(
-  message: CommandResultMessage,
+  message: ArmorBundleTerminalMessage,
   request: ArmorBundleQualityRollRequest,
-  source: SnapshotSource,
+  source: ArmorBundleSnapshotSource,
 ): DecodeResult<CommandReceipt<ArmorBundleQualityPayload>> {
   const receipt = message.receipt;
   const payload = request.payload;
@@ -531,9 +536,9 @@ export function decodeArmorBundleQualityTerminal(
 }
 
 export function decodeArmorBundleCheckpointTerminal(
-  message: CommandResultMessage,
+  message: ArmorBundleTerminalMessage,
   request: ArmorBundleCheckpointRequest,
-  source: SnapshotSource,
+  source: ArmorBundleSnapshotSource,
 ): DecodeResult<CommandReceipt<ArmorBundleCheckpointPayload>> {
   const receipt = message.receipt;
   const payload = request.payload;
