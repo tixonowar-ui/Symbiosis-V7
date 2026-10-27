@@ -328,6 +328,8 @@ interface ConfirmedNavigationContext {
     | 'CHR-018'
     | 'CHR-019'
     | 'CHR-020'
+    | 'CHR-021'
+    | 'CHR-022'
     | 'CHR-041'
     | 'CHR-042';
   readonly identityDraftScope: IdentityDraftScope | null;

@@ -175,6 +175,8 @@ export type CreationNextFormId =
   | 'CHR-017'
   | 'CHR-019'
   | 'CHR-020'
+  | 'CHR-021'
+  | 'CHR-022'
   | 'CHR-036'
   | 'CHR-041';
 
