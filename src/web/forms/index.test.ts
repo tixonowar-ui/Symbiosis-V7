@@ -159,6 +159,11 @@ describe('MANUAL symbiont web form registry', () => {
       ['CHR-019::CTA::002', 'CHR-019::CTA::004'],
     ],
     ['CHR-042', '/player/characters/:localCharacterId/create/chr-042', ['CHR-042::CTA::002']],
+    [
+      'CHR-021',
+      '/player/characters/:localCharacterId/create/chr-021',
+      ['CHR-021::CTA::001', 'CHR-021::CTA::002', 'CHR-021::CTA::003'],
+    ],
   ] as const)('publishes the exact %s route and manual action subset', (formId, route, keys) => {
     expect(presentedFormDefinition(formId)).toMatchObject({ route, type: 'screen' });
     expect(availableFormActions(formId, keys).map(({ actionKey }) => actionKey)).toEqual(keys);

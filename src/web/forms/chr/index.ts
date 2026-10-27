@@ -26,6 +26,7 @@ export const CHR_FORM_IDS = [
   'CHR-042',
   'CHR-020',
   'CHR-041',
+  'CHR-021',
 ] as const satisfies readonly FormId[];
 
 export type ChrFormId = (typeof CHR_FORM_IDS)[number];
