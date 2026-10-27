@@ -280,6 +280,9 @@ describe('manual Advisor I/W fields', () => {
     expect(container.querySelector('[data-advisor-skill-options]')).toBeNull();
     expect(container.querySelector('[data-advisor-slot-usage]')).toBeNull();
     expect(container.querySelector('[data-advisor-iw-pending]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-manual-form="CHR-041"][data-advisor-iw-pending]'),
+    ).not.toBeNull();
     expect(container.querySelector('[data-manual-iw-face="I"]')).toBeNull();
     click(container.querySelector('[data-manual-iw-submit]')!);
     expect(onRoll).toHaveBeenCalledWith(null);

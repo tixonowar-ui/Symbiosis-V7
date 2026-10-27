@@ -474,7 +474,7 @@ export function ManualAdvisorIwFields({
       action={snapshot.path}
       className="manual-symbiont-flow"
       data-advisor-iw-pending
-      data-manual-form="CHR-041-IW"
+      data-manual-form="CHR-041"
       method="post"
       onSubmit={(event) => {
         event.preventDefault();
