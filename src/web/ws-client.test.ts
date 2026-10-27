@@ -1978,7 +1978,7 @@ describe('RANDOM projection decoders and action keys', () => {
     ['CHR-017', decoderChr017Projection(), ['CHR-017::CTA::001']],
     ['CHR-020', decoderChr020Projection(), ['CHR-020::CTA::001', 'CHR-020::CTA::002']],
     ['CHR-041', decoderChr041Projection(), ['CHR-041::CTA::001']],
-    ['CHR-019', decoderChr019Projection(), ['CHR-019::CTA::001']],
+    ['CHR-019', decoderChr019Projection(), ['CHR-019::CTA::003']],
   ] as const)(
     'fails closed on unsupported or incomplete actions for %s',
     async (formId, projection, actions) => {

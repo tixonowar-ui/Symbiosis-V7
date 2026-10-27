@@ -198,7 +198,7 @@ describe('CHR manual symbiont projections', () => {
       bindings: [{ binding: { kind: 'EEL_ARM', side: 'LEFT' } }],
       randomReceiptIds: [],
     });
-    expect(summary.availableActionKeys).toEqual(['CHR-019::CTA::004']);
+    expect(summary.availableActionKeys).toEqual(['CHR-019::CTA::004', 'CHR-019::CTA::001']);
     expectPrivateFieldsAbsent(summary);
 
     const catalogAgain = advanceManualSymbiontPresentation(
@@ -347,6 +347,7 @@ describe('CHR manual symbiont projections', () => {
     expect(projectManualChr019(summary, setupValue.catalog).availableActionKeys).toEqual([
       'CHR-019::CTA::002',
       'CHR-019::CTA::004',
+      'CHR-019::CTA::001',
     ]);
     const before = currentCreationWizardRevisions(summary);
     const previewCheckpoint = advanceManualSymbiontPresentation(

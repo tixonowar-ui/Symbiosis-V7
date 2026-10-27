@@ -137,11 +137,13 @@ import {
   armorBundleCheckpointPayload,
   armorBundleDraftFromSnapshot,
   armorBundleQualityPayload,
+  CHR_019_ARMOR_ENTRY_ACTION_KEY,
   CHR_021_CONFIRM_ACTION_KEY,
   CHR_021_ROLL_ACTION_KEY,
   decodeArmorBundleCheckpointTerminal,
   decodeArmorBundleQualityTerminal,
   decodeChr021Projection,
+  expectedChr019EntryActionKeys,
   expectedChr021ActionKeys,
   removeArmorPiece,
 } from './forms/chr/armor-bundle.js';
@@ -194,6 +196,7 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-020',
   'CHR-041',
   'CHR-042',
+  'CHR-021',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -4080,7 +4083,7 @@ function decodeConfirmedSnapshot(
           base.availableActionKeys,
           decoded.value.duplicatePolicy.kind === 'FORBIDDEN'
             ? expectedChr019ManualActionKeys(base.availableActionKeys)
-            : NO_ACTION_KEYS,
+            : expectedChr019EntryActionKeys(base.availableActionKeys),
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4934,6 +4937,29 @@ function decodeCheckpointTerminal(
   if (
     pending.request.payload.stage === 'SYMBIONTS' &&
     'variant' in pending.request.payload &&
+    (pending.request.payload as { readonly variant: string }).variant === 'ARMOR_BUNDLE_ENTRY'
+  ) {
+    const receipt = message.receipt;
+    if (receipt.commandId !== pending.request.commandId) {
+      return unrecognized('$.receipt.commandId', receipt.commandId);
+    }
+    if (receipt.receiptId.trim().length === 0) {
+      return unrecognized('$.receipt.receiptId', receipt.receiptId);
+    }
+    const result = receipt.result;
+    if (
+      result['variant'] !== 'ARMOR_BUNDLE_ENTRY' ||
+      result['sourceFormId'] !== 'CHR-019' ||
+      result['nextFormId'] !== 'CHR-021' ||
+      result['stage'] !== 'SYMBIONTS'
+    ) {
+      return unrecognized('$.receipt.result.variant', result['variant'] ?? null);
+    }
+    return { ok: true, value: receipt as CommandReceipt<CheckpointResult> };
+  }
+  if (
+    pending.request.payload.stage === 'SYMBIONTS' &&
+    'variant' in pending.request.payload &&
     (pending.request.payload as { readonly variant: string }).variant === 'ARMOR_BUNDLE_CHECKPOINT'
   ) {
     return decodeArmorBundleCheckpointTerminal(
@@ -5693,12 +5719,62 @@ function sameRollCommitReceipt(
   return sameJson(left as unknown as JsonValue, right as unknown as JsonValue);
 }
 
+function armorBundleSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt<CheckpointResult>,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const result = receipt.result as unknown as {
+    readonly variant: string;
+    readonly characterDraftId: string;
+    readonly checkpointId: string;
+    readonly draftRevision: number;
+    readonly armorBundleId: string;
+    readonly nextFormId: string;
+  };
+  if (snapshot.formId !== 'CHR-021') {
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  }
+  const projection = snapshot.projection as Chr021Projection;
+  if (
+    projection.commandId !== receipt.commandId ||
+    projection.characterDraftId !== result.characterDraftId ||
+    projection.wizardCheckpointId !== result.checkpointId ||
+    projection.draftRevision !== result.draftRevision ||
+    projection.armorBundleId !== result.armorBundleId ||
+    projection.ownershipState !== 'OWNED_NOT_EQUIPPED' ||
+    (result.variant === 'ARMOR_BUNDLE_ENTRY' &&
+      (projection.qualityRollReceiptIdOrNull !== null ||
+        projection.bundleCheckpointReceiptIdOrNull !== null ||
+        result.nextFormId !== 'CHR-021')) ||
+    (result.variant === 'ARMOR_BUNDLE_CHECKPOINT' &&
+      (projection.bundleCheckpointReceiptIdOrNull !== receipt.receiptId ||
+        result.nextFormId !== 'CHR-022'))
+  ) {
+    return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  }
+  if (
+    snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+    snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision ||
+    snapshot.revisions.stateRevision !== receipt.revisions.stateRevision
+  ) {
+    return unrecognized('$.revisions', { ...snapshot.revisions });
+  }
+  return { ok: true, value: snapshot };
+}
+
 function checkpointSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<CheckpointResult>,
   sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (
+    result.stage === 'SYMBIONTS' &&
+    'variant' in result &&
+    (result.variant === 'ARMOR_BUNDLE_ENTRY' || result.variant === 'ARMOR_BUNDLE_CHECKPOINT')
+  ) {
+    return armorBundleSnapshotMatchesReceipt(snapshot, receipt);
+  }
   if (result.stage === 'SYMBIONTS' && 'variant' in result) {
     return result.variant === 'MANUAL_COMPOSITION'
       ? manualCompositionSnapshotMatchesReceipt(
@@ -6044,6 +6120,28 @@ function rollCommitSnapshotMatchesReceipt(
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (
+    result.stage === 'SYMBIONTS' &&
+    (result as { readonly variant?: string }).variant === 'ARMOR_BUNDLE_QUALITY'
+  ) {
+    const checkpointReceipt = receipt as unknown as CommandReceipt<CheckpointResult>;
+    const matched = armorBundleSnapshotMatchesReceipt(snapshot, checkpointReceipt);
+    if (!matched.ok) return matched;
+    const projection = snapshot.projection as Chr021Projection;
+    const rollResult = result as unknown as {
+      readonly qualityRollRequestId: string;
+      readonly qualityRecommendation: { readonly rawFace: number } | null;
+    };
+    if (
+      projection.qualityRollRequestId !== rollResult.qualityRollRequestId ||
+      projection.qualityRecommendation === null ||
+      projection.qualityRecommendation.rawFace !== rollResult.qualityRecommendation?.rawFace ||
+      projection.bundleCheckpointReceiptIdOrNull !== null
+    ) {
+      return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+    }
+    return matched;
+  }
   if (result.stage === 'SYMBIONTS' && result.variant === 'TROGR_SUPPRESSION_B') {
     return advisorIntelligenceFloorSnapshotMatchesReceipt(
       snapshot,
@@ -8542,6 +8640,55 @@ export function connectProjection(
           role: 'player',
           workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
         });
+      }
+      if (activeForm.formId === 'CHR-019' && actionKey === CHR_019_ARMOR_ENTRY_ACTION_KEY) {
+        const projection = lastSnapshot.projection as unknown as {
+          readonly characterDraftId: string;
+          readonly wizardCheckpointId: string;
+          readonly draftRevision: number;
+        };
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload: {
+            characterDraftId: projection.characterDraftId,
+            draftRevision: projection.draftRevision,
+            sourceFormId: 'CHR-019',
+            stage: 'SYMBIONTS',
+            variant: 'ARMOR_BUNDLE_ENTRY',
+            wizardCheckpointId: projection.wizardCheckpointId,
+          },
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        } as const;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `armor bundle entry failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request: request as unknown as PendingCheckpoint['request'],
+          skillSelectionDraft: null,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return {
+            ok: false,
+            detail: `armor bundle entry could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        notifyReady();
+        return { ok: true };
       }
       if (
         activeForm.formId === 'CHR-021' &&

@@ -33,7 +33,6 @@ async function clickAction(page: Page, actionKey: string): Promise<void> {
 async function expectHealthy(page: Page, pageErrors: readonly string[]): Promise<void> {
   await expect(page.locator('[data-client-state="protocol-error"]')).toHaveCount(0);
   await expect(page.locator('[data-atlas-action-key^="CHR-021"]')).toHaveCount(0);
-  await expect(page.locator('[data-atlas-action-key="CHR-019::CTA::001"]')).toHaveCount(0);
   await expect(page.locator('[data-atlas-action-key="CHR-042::CTA::001"]')).toHaveCount(0);
   await expect(page.locator('[data-atlas-action-key="CHR-018::CTA::003"]')).toHaveCount(0);
   await expect(page.locator('[data-atlas-action-key="CHR-041::CTA::003"]')).toHaveCount(0);

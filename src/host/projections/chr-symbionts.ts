@@ -34,6 +34,7 @@ import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js'
 import type { CreationSkillCatalog } from '../creation-skill-catalog.js';
 import type { SelectedSkillCommandInput } from '../creation-skill-selection.js';
 import { createAdvisorSkillOptions } from '../symbiont-stage-catalog.js';
+import { armorBundleEntryEligible, CHR_019_ARMOR_ENTRY_ACTION_KEY } from './chr-armor-bundle.js';
 import { deriveCreationSkillStageResult } from '../creation-stat-assignment.js';
 
 export const CHR_017_FORM_ID = 'CHR-017' as const;
@@ -498,10 +499,13 @@ export function projectChr019(
     current.advisorSkillRecordOrNull?.request.commandId ??
     current.bindingRecordOrNull?.request.commandId ??
     null;
+  const actions: ActionKey[] = armorBundleEntryEligible(checkpoint)
+    ? [CHR_019_ARMOR_ENTRY_ACTION_KEY]
+    : [];
   return presentation(
     CHR_019_FORM_ID,
     CHR_019_ROUTE,
-    [],
+    actions,
     {
       characterDraftId: checkpoint.localCharacter.localCharacterId,
       raceChoice: current.raceCode,

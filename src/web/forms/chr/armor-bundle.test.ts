@@ -222,7 +222,7 @@ describe('CHR-021 web decoder', () => {
     expect(() => addArmorPiece(draft, preRoll.projection, 'ITM-ARM-005', null)).toThrow(
       'full suit cannot be combined',
     );
-    expect(() => addArmorPiece(draft, preRoll.projection, 'ITM-ARM-009', 'HEAD')).toThrow(
+    expect(() => addArmorPiece(draft, preRoll.projection, 'itm-arm-009', 'HEAD')).toThrow(
       'unknown armor item',
     );
     draft = removeArmorPiece(draft, 'TORSO');
@@ -315,7 +315,7 @@ describe('CHR-021 web decoder', () => {
       receipt: {
         commandId: 'roll-command',
         receiptId: 'receipt-2',
-        revisions: preRoll.revisions,
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 2, stateRevision: 2 },
         result: {
           stage: 'SYMBIONTS',
           characterDraftId: 'character-1',
@@ -385,7 +385,7 @@ describe('CHR-021 web decoder', () => {
       receipt: {
         commandId: 'checkpoint-command',
         receiptId: 'receipt-3',
-        revisions: rolled.revisions,
+        revisions: { actorVisibilityRevision: 0, projectionRevision: 2, stateRevision: 2 },
         result: {
           stage: 'SYMBIONTS',
           characterDraftId: 'character-1',

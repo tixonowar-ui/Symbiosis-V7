@@ -135,7 +135,7 @@ describe('ArmorBundleFields', () => {
         onRoll={onRoll}
       />,
     );
-    const input = manual.querySelector('#armor-quality-face');
+    const input = manual.querySelector<HTMLInputElement>('#armor-quality-face');
     expect(input).not.toBeNull();
     act(() => {
       if (input !== null) input.value = '16';

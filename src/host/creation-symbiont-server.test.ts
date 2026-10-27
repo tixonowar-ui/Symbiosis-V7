@@ -1078,7 +1078,7 @@ describe('RANDOM symbiont host journey', () => {
     });
     expectPlayerSafe(bound.destination, 'CHR-019');
     expect(bound.destination.presentation.base).toMatchObject({
-      availableActionKeys: [],
+      availableActionKeys: ['CHR-019::CTA::001'],
       roleFilteredPayload: {
         compositionValidation: 'VALID',
         irreversibleBoundaryStatus: 'CROSSED',

@@ -43,6 +43,7 @@ import {
   CHR_041_REQUIRED_FIELDS,
   CHR_041_ROUTE,
 } from './chr-symbionts.js';
+import { armorBundleEntryEligible, CHR_019_ARMOR_ENTRY_ACTION_KEY } from './chr-armor-bundle.js';
 
 export const CHR_018_FORM_ID = 'CHR-018' as const;
 export const CHR_042_FORM_ID = 'CHR-042' as const;
@@ -269,6 +270,7 @@ export function projectManualChr019(
   const actions: ActionKey[] = [];
   if (previewRequired) actions.push(CHR_019_PREVIEW_ACTION_KEY);
   actions.push(CHR_019_RETURN_ACTION_KEY);
+  if (armorBundleEntryEligible(checkpoint)) actions.push(CHR_019_ARMOR_ENTRY_ACTION_KEY);
   return presentation(checkpoint, CHR_019_FORM_ID, CHR_019_ROUTE, actions, {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
     raceChoice: current.composition.raceCode,

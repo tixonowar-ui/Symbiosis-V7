@@ -516,7 +516,7 @@ describe('manual symbiont host journeys', () => {
     expect(replacement.presentation.base.roleFilteredPayload).toMatchObject({
       speciesKeys: ['OWL'],
     });
-    expect(replacement.presentation.base.availableActionKeys).not.toContain('CHR-019::CTA::001');
+    expect(replacement.presentation.base.availableActionKeys).toContain('CHR-019::CTA::001');
     expect(host.sampleCalls()).toBe(0);
     expect(owl.presentation.base.roleFilteredPayload).toMatchObject({ speciesKey: 'OWL' });
     await stopHost(host);

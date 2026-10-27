@@ -435,6 +435,7 @@ export function expectedChr019ManualActionKeys(
       ? [CHR_019_MANUAL_PREVIEW_ACTION_KEY]
       : []),
     CHR_019_MANUAL_RETURN_ACTION_KEY,
+    ...(available.includes('CHR-019::CTA::001') ? (['CHR-019::CTA::001'] as const) : []),
   ];
 }
 

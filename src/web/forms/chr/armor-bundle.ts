@@ -28,6 +28,13 @@ function refused<T>(path: string, value: JsonValue): DecodeResult<T> {
 export const CHR_021_ROLL_ACTION_KEY = 'CHR-021::CTA::003' as const satisfies ActionKey;
 export const CHR_021_CONFIRM_ACTION_KEY = 'CHR-021::CTA::001' as const satisfies ActionKey;
 export const CHR_021_RETURN_ACTION_KEY = 'CHR-021::CTA::002' as const satisfies ActionKey;
+export const CHR_019_ARMOR_ENTRY_ACTION_KEY = 'CHR-019::CTA::001' as const satisfies ActionKey;
+
+export function expectedChr019EntryActionKeys(
+  available: readonly ActionKey[],
+): readonly ActionKey[] {
+  return available.includes(CHR_019_ARMOR_ENTRY_ACTION_KEY) ? [CHR_019_ARMOR_ENTRY_ACTION_KEY] : [];
+}
 
 const ARMOR_BODY_ZONES = ['HEAD', 'TORSO', 'ARM_L', 'ARM_R', 'LEG_L', 'LEG_R'] as const;
 type ArmorBodyZone = (typeof ARMOR_BODY_ZONES)[number];
@@ -378,7 +385,9 @@ export function armorBundleQualityPayload(
   };
 }
 
-export function armorBundleCheckpointPayload(source: ArmorBundleSnapshotSource): ArmorBundleCheckpointPayload {
+export function armorBundleCheckpointPayload(
+  source: ArmorBundleSnapshotSource,
+): ArmorBundleCheckpointPayload {
   const projection = source.projection;
   const qualityRollReceiptId = projection.qualityRollReceiptIdOrNull;
   if (qualityRollReceiptId === null) {
@@ -405,8 +414,8 @@ function validReceiptRevisions(
 ): boolean {
   return (
     receipt.revisions.actorVisibilityRevision === expected.actorVisibilityRevision &&
-    receipt.revisions.projectionRevision === expected.projectionRevision &&
-    receipt.revisions.stateRevision === expected.stateRevision
+    receipt.revisions.stateRevision === expected.stateRevision + 1 &&
+    receipt.revisions.projectionRevision === expected.projectionRevision + 1
   );
 }
 
