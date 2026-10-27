@@ -133,7 +133,8 @@ export function commitManualComposition(
   }
   const normalized = normalizeManualCompositionCheckpointRequest(request);
   preflightManualComposition(database, normalized, dependencies.catalog, receiptId);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -264,13 +265,19 @@ export function commitManualComposition(
       );
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('manual composition checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 export interface ManualCompositionValidationContext {

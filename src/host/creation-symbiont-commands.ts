@@ -99,6 +99,7 @@ function assertCommon(
   wizardCheckpointId: string,
   draftRevision: number,
   receiptId?: string,
+  options: { readonly allowArmorBundleStage?: boolean } = {},
 ): void {
   const actual = currentRevisions(checkpoint);
   if (!isDeepStrictEqual(request.expectedRevisions, actual)) {
@@ -113,6 +114,8 @@ function assertCommon(
     characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
     draftRevision !== checkpoint.receipt.result.draftRevision ||
+    ((checkpoint.armorBundleStage !== null && checkpoint.armorBundleStage !== undefined) &&
+      options.allowArmorBundleStage !== true) ||
     occupied.has(request.commandId) ||
     (receiptId !== undefined && (occupied.has(receiptId) || receiptId === request.commandId)) ||
     checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||
@@ -420,7 +423,8 @@ function commitPhysicalRoll(
   dependencies: CreationSymbiontRollDependencies,
 ): DurableCreationWizardCheckpoint {
   const { request } = preflight;
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     request.payload.characterDraftId,
     request.payload.wizardCheckpointId,
@@ -475,13 +479,19 @@ function commitPhysicalRoll(
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('random symbiont checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 function commitBinding(
@@ -493,7 +503,8 @@ function commitBinding(
   dependencies: CreationSymbiontRollDependencies,
 ): DurableCreationWizardCheckpoint {
   const { request } = preflight;
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     request.payload.characterDraftId,
     request.payload.wizardCheckpointId,
@@ -542,13 +553,19 @@ function commitBinding(
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('random symbiont checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 export function commitCreationSymbiontRoll(
@@ -645,7 +662,8 @@ export function commitCreationSymbiontAdvisor(
     normalized.payload.draftRevision,
     receiptId,
   );
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -714,13 +732,19 @@ export function commitCreationSymbiontAdvisor(
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        catalog.skillStage,
+        catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    catalog.skillStage,
-    catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('symbiont checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 function assertRandomStartProjectionAdvance(
@@ -756,7 +780,8 @@ export function advanceCreationSymbiontRollProjection(
     loadCreationWizardCheckpoint(database, characterDraftId, catalog.skillStage, catalog),
     wizardCheckpointId,
   );
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     characterDraftId,
     wizardCheckpointId,
@@ -773,13 +798,19 @@ export function advanceCreationSymbiontRollProjection(
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
       );
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        catalog.skillStage,
+        catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    catalog.skillStage,
-    catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('symbiont checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 export function latestSymbiontRecordForLookup(stage: RandomSymbiontStage) {

@@ -551,4 +551,66 @@ describe('CHR-021 host journey', () => {
       });
     },
   );
+
+  it('rejects a second-session composition write after armor entry without changing durable state', async () => {
+    const setup = createManualWizardSetup('armor-second-session', 'FREE', 'MANUAL');
+    databases.push(setup.database);
+    const host = await createArmorHost(setup, [], 'armor-second-session');
+    const initial = await reconnect(host, 'armor-second-session-initial');
+    await sendV2(
+      host.socket,
+      cardRoute('armor-second-session-card', 'EEL', initial.revisions.projectionRevision),
+    );
+    const [, composed] = await sendCommand(
+      host.socket,
+      manualCompositionRequest(setup, current(host), 'armor-second-session-composition', ['EEL']),
+    );
+    expect(composed.presentation.base.formId).toBe('CHR-019');
+
+    const sessionB: ArmorHost = { ...host, socket: await openSocket(host.app) };
+    const composedB = await reconnect(sessionB, 'armor-second-session-b-initial');
+    expect(composedB.presentation.base.formId).toBe('CHR-019');
+    const entryBase = current(host);
+    const [, entered] = await sendCommand(sessionB.socket, {
+      commandId: 'armor-second-session-entry',
+      commandKind: 'workflow-command',
+      expectedRevisions: currentCreationWizardRevisions(entryBase),
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: setup.characterDraftId,
+        draftRevision: entryBase.receipt.result.draftRevision,
+        sourceFormId: 'CHR-019',
+        stage: 'SYMBIONTS',
+        variant: 'ARMOR_BUNDLE_ENTRY',
+        wizardCheckpointId: setup.wizardCheckpointId,
+      },
+      protocolVersion: 1,
+      role: 'player',
+      workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+    });
+    expect(entered.presentation.base.formId).toBe('CHR-021');
+
+    const beforeRefusal = current(host);
+    const refusal = await sendRefusal(
+      host.socket,
+      manualCompositionRequest(
+        setup,
+        beforeRefusal,
+        'armor-second-session-stale-composition',
+        ['EEL'],
+      ),
+    );
+    expect(refusalCode(refusal)).toBe('GUARD_REJECTED');
+
+    const afterRefusal = current(host);
+    expect(afterRefusal.localCharacter).toEqual(beforeRefusal.localCharacter);
+    expect(afterRefusal.checkpoint).toEqual(beforeRefusal.checkpoint);
+    expect(afterRefusal.symbiontPresentationStage).toEqual(beforeRefusal.symbiontPresentationStage);
+    expect(currentCreationWizardRevisions(afterRefusal)).toEqual(
+      currentCreationWizardRevisions(beforeRefusal),
+    );
+    const restored = await reconnect(host, 'armor-second-session-reload');
+    expect(restored.presentation.base.formId).toBe('CHR-021');
+    expect(restored.revisions).toEqual(entered.revisions);
+  });
 });

@@ -93,7 +93,8 @@ export function commitAdvisorIntelligenceFloorRoll(
   }
   const normalized = normalizeAdvisorIntelligenceFloorRollRequest(request);
   preflightAdvisorIntelligenceFloorRoll(database, normalized, dependencies.catalog, receiptId);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -179,11 +180,17 @@ export function commitAdvisorIntelligenceFloorRoll(
       }
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('Advisor intelligence floor validation was not executed');
+  }
+  return validatedCheckpoint;
 }

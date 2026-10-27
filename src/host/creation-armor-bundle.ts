@@ -237,7 +237,8 @@ export function commitArmorBundleEntry(
   }
   const normalized = normalizeArmorBundleEntryRequest(request);
   preflightArmorBundleEntry(database, normalized, dependencies.catalog, receiptId);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -311,13 +312,19 @@ export function commitArmorBundleEntry(
       );
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('armor bundle checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 function assertQualityRollState(
@@ -361,6 +368,7 @@ export function preflightArmorBundleQualityRoll(
     normalized.payload.wizardCheckpointId,
     normalized.payload.draftRevision,
     receiptId,
+    { allowArmorBundleStage: true },
   );
   const stage = assertQualityRollState(checkpoint, normalized);
   return { request: normalized, checkpoint, stage };
@@ -390,7 +398,8 @@ export function commitArmorBundleQualityRoll(
   }
   const normalized = normalizeArmorBundleQualityRollRequest(request);
   preflightArmorBundleQualityRoll(database, normalized, dependencies, receiptId);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -473,13 +482,19 @@ export function commitArmorBundleQualityRoll(
       );
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('armor bundle checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 function assertCheckpointState(
@@ -522,6 +537,7 @@ export function preflightArmorBundleCheckpoint(
     normalized.payload.wizardCheckpointId,
     normalized.payload.draftRevision,
     receiptId,
+    { allowArmorBundleStage: true },
   );
   const stage = assertCheckpointState(checkpoint, normalized);
   return { request: normalized, checkpoint, stage };
@@ -540,7 +556,8 @@ export function commitArmorBundleCheckpoint(
   }
   const normalized = normalizeArmorBundleCheckpointRequest(request);
   preflightArmorBundleCheckpoint(database, normalized, dependencies.catalog, receiptId);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -606,13 +623,19 @@ export function commitArmorBundleCheckpoint(
       );
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('armor bundle checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 export interface ArmorBundleValidationContext {

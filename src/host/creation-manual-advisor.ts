@@ -149,7 +149,8 @@ export function commitManualAdvisorIw(
   }
   const normalized = normalizeManualAdvisorIwRollRequest(request);
   preflightManualAdvisorIw(database, normalized, dependencies.catalog, receiptIds);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -240,13 +241,19 @@ export function commitManualAdvisorIw(
       );
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('manual Advisor checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 function advisorSkillSelection(
@@ -323,7 +330,8 @@ export function commitManualAdvisorSkills(
   }
   const normalized = normalizeManualAdvisorSkillCheckpointRequest(request);
   preflightManualAdvisorSkills(database, normalized, dependencies.catalog, receiptId);
-  const committed = commitLocalCharacterCheckpoint(
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
     database,
     normalized.payload.characterDraftId,
     normalized.payload.wizardCheckpointId,
@@ -383,13 +391,19 @@ export function commitManualAdvisorSkills(
       );
       return result;
     },
+    (result, checkpoint) => {
+      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
+        result,
+        checkpoint,
+        dependencies.catalog.skillStage,
+        dependencies.catalog,
+      );
+    },
   );
-  return validateDurableCreationWizardCheckpoint(
-    committed.result,
-    committed.checkpoint,
-    dependencies.catalog.skillStage,
-    dependencies.catalog,
-  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('manual Advisor checkpoint validation was not executed');
+  }
+  return validatedCheckpoint;
 }
 
 export function validateManualAdvisorIwRecord(
