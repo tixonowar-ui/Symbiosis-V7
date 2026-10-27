@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
@@ -23,6 +24,10 @@ const alias = {
  */
 export default defineConfig({
   test: {
+    // Seven concurrent suites caused native Atlas clone allocation failures on
+    // Windows 8 CPU / 16 GiB. Four preserve the full suite with lower peak memory.
+    // Measurements and limits of this budget: docs/status/vitest-atlas-memory.md.
+    maxWorkers: Math.min(4, Math.max(availableParallelism() - 1, 1)),
     projects: [
       {
         resolve: { alias },

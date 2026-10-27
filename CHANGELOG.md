@@ -15,6 +15,12 @@
   Пустые Vitest, coverage и E2E-прогоны завершаются ошибкой. E2E сохраняет
   trace первой неудачной попытки, screenshot и HTML-отчёт даже при успешном
   повторе; диагностика доступна в Actions 14 дней.
+- **2026-10-27, issue #160:** штатный Vitest ограничен четырьмя параллельными
+  workers (и доступным числом CPU). Измерение на Windows 8 CPU / 16 GiB
+  воспроизвело native `DataCloneError` настоящего Atlas при семи workers;
+  ограничение уменьшает совокупный пик памяти, сохраняя Atlas, все suites,
+  guards и timeouts. Scheduler-регрессия ловит возврат к прежнему параллелизму;
+  [измерения и границы результата](docs/status/vitest-atlas-memory.md).
 - **2026-10-27, issue #157:** strict decoder перехода `CHR-013 → CHR-015`
   больше не отклоняет существующий `PARTIAL` как начальный `NONE`. Повторный
   вход из каталога восстанавливает canonical `selectedSkills`, `draftRevision`
