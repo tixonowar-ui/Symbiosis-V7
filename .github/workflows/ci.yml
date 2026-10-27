@@ -77,13 +77,14 @@ jobs:
 
       # generated/media is not committed (ADR 0016), and the media tests read
       # what the pipeline produced — so the import has to run before tests.
-      - name: Import
-        run: npm run import
+      # Compare every generated path and byte across two imports, including
+      # ignored media and SQLite output (ADR 0015, 0016 and 0019).
+      - name: Import and verify reproducibility
+        run: npm run import:verify
 
-      # The pipeline is required to be byte-reproducible (ADR 0015). If the
-      # import changed a committed file, either the artifact changed without
-      # generated/ being rebuilt, or determinism broke. Both must fail here.
-      - name: Pipeline output is reproducible
+      # Stable output can still differ from the version committed in the PR.
+      # Keep this independent gate as well as the full byte comparison above.
+      - name: Committed pipeline output is current
         shell: bash
         run: |
           if [ -n "$(git status --porcelain -- generated/)" ]; then
@@ -95,6 +96,9 @@ jobs:
           fi
           echo "generated/ matches the committed output"
 
+      - name: Traceability
+        run: npm run traceability:verify
+
       - name: Tests
         run: npm test
 
@@ -102,10 +106,22 @@ jobs:
         run: npm run validate
 
       - name: E2E
-        # Playwright is configured but has no tests yet and no browsers
-        # installed. Kept as an explicit step so the first e2e test is not
-        # silently skipped; install browsers when tests/e2e stops being empty.
+        id: e2e
+        # Builds the production client; fixtures start isolated real hosts.
+        # The tests use Chrome supplied by the Windows runner.
         run: npm run test:e2e
+
+      # A successful retry leaves the step green but must keep the original
+      # failure's trace and screenshot available for investigation.
+      - name: Upload E2E diagnostics
+        if: ${{ !cancelled() && (steps.e2e.outcome == 'success' || steps.e2e.outcome == 'failure') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics-${{ github.run_attempt }}
+          path: |
+            reports/playwright-report/
+            reports/e2e-artifacts/
+          retention-days: 14
 
   markers:
     runs-on: ubuntu-latest

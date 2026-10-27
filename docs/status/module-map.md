@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-27`
-- Тестов: 1515 Vitest + 8 Playwright, все зелёные
+- Тестов: 1526 Vitest + 8 Playwright, все зелёные
 - `npm run verify` — проходит; `npm run build && npm run test:e2e` — 8/8
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
   native Atlas clone allocation — [issue #160](vitest-atlas-memory.md).
@@ -39,7 +39,12 @@
 | `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 288 строк, 9 паспортов; детерминизм на SQLite 3.53.4                       |
 | `tools/validate`              | **готов**    | 130      | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
 | `tools/traceability`          | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм            |
+| `tools/reproducibility`       | **готов**    | 11       | два импорта, полный состав файлов и SHA-256, включая игнорируемые media и seed            |
 | `tools/package`               | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                  |
+
+Трассируемость, воспроизводимость и непустые тестовые прогоны проверяются в CI;
+диагностика E2E сохраняется и после успешного retry. Порядок проверки и чтения
+отчётов — [проверки CI](../process/ci-checks.md).
 
 ## src/ — приложение
 
