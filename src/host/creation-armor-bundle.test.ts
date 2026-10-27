@@ -475,7 +475,7 @@ describe('CHR-021 starting armor bundle', () => {
       },
       {
         name: 'unknown armor item',
-        pieces: [Object.freeze({ itemId: 'ITM-ARM-009', bodyZoneOrNull: 'HEAD' as const })],
+        pieces: [Object.freeze({ itemId: 'itm-arm-009', bodyZoneOrNull: 'HEAD' as const })],
       },
       {
         name: 'forged body zone on a full suit',

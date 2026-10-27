@@ -85,7 +85,7 @@ describe('CHR-021 starting armor bundle domain rules', () => {
       'zone element with another full suit',
       [selection('ITM-ARM-001', 'HEAD'), selection('ITM-ARM-006')],
     ],
-    ['unknown item', [selection('ITM-ARM-009', 'HEAD')]],
+    ['unknown item', [selection('itm-arm-009', 'HEAD')]],
     ['non-armor item', [selection('ITM-WPN-001', 'HEAD')]],
     ['zone element without a zone', [selection('ITM-ARM-001')]],
     ['full suit with a forged zone', [selection('ITM-ARM-005', 'HEAD')]],

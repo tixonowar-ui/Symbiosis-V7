@@ -64,7 +64,7 @@ describe('CHR-021 armor bundle item catalog', () => {
     ]);
   });
 
-  it('fails closed when an extra armor row appears in catalogue or profiles', async () => {
+  it('fails closed when a duplicate armor row appears in catalogue or profiles', async () => {
     const extraCatalogueRoot = createItemRoot();
     const catalogue = readItems(extraCatalogueRoot, 'catalogue.json') as
       Record<string, unknown> | Record<string, unknown>[];
@@ -73,28 +73,23 @@ describe('CHR-021 armor bundle item catalog', () => {
       unknown
     >[];
     const sourceRow = allRows.find((row) => row['ItemTypeID'] === 'ITM-ARM-001')!;
-    const extraRow = {
-      ...sourceRow,
-      ItemTypeID: 'ITM-ARM-009',
-      Название: 'Внепоставочный доспех',
-    };
-    if (Array.isArray(catalogue)) catalogue.push(extraRow);
-    else catalogue['64'] = extraRow;
+    if (Array.isArray(catalogue)) catalogue.push({ ...sourceRow });
+    else catalogue['64'] = { ...sourceRow };
     writeItems(extraCatalogueRoot, 'catalogue.json', catalogue);
-    await expect(loadArmorBundleCatalog(extraCatalogueRoot)).rejects.toThrow('ITM-ARM-009');
+    await expect(loadArmorBundleCatalog(extraCatalogueRoot)).rejects.toThrow(
+      'duplicate catalogue armor row ITM-ARM-001',
+    );
 
     const extraProfileRoot = createItemRoot();
     const profiles = readItems(extraProfileRoot, 'armor-profiles.json') as Record<
       string,
       unknown
     >[];
-    profiles.push({
-      ...(profiles[0] as Record<string, unknown>),
-      ItemTypeID: 'ITM-ARM-009',
-      'Модель покрытия': 'ZONE_ELEMENT',
-    });
+    profiles.push({ ...(profiles[0] as Record<string, unknown>) });
     writeItems(extraProfileRoot, 'armor-profiles.json', profiles);
-    await expect(loadArmorBundleCatalog(extraProfileRoot)).rejects.toThrow('ITM-ARM-009');
+    await expect(loadArmorBundleCatalog(extraProfileRoot)).rejects.toThrow(
+      'duplicate armor profile',
+    );
   });
 
   it('fails closed on drifted dictionaries, inventory flags or armor policy', async () => {
