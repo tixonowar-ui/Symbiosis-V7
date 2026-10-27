@@ -82,6 +82,11 @@ import {
   CHR_042_FORM_ID,
   CHR_042_RETURN_ACTION_KEY,
 } from './chr-manual-symbionts.js';
+import {
+  assertArmorBundleScreenContracts,
+  CHR_021_FORM_ID,
+  CHR_021_RETURN_ACTION_KEY,
+} from './chr-armor-bundle.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -249,6 +254,7 @@ export interface AppNavigationAction {
     | typeof CHR_017_FORM_ID
     | typeof CHR_018_FORM_ID
     | 'CHR-019'
+    | typeof CHR_021_FORM_ID
     | typeof CHR_042_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -302,6 +308,11 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       'symbiontAcquisitionMode=MANUAL; interactionGraph has suppression/destruction/absorption or other confirmation-required consequence; AQA-005 excludes RANDOM composition',
     ],
     ['CHR-019', CHR_019_RETURN_ACTION_KEY, 'irreversibleBoundaryStatus=NOT_CROSSED'],
+    [
+      CHR_021_FORM_ID,
+      CHR_021_RETURN_ACTION_KEY,
+      'composition checkpoint and any bundle receipt preserved; no request recreated',
+    ],
     [
       CHR_042_FORM_ID,
       CHR_042_RETURN_ACTION_KEY,
@@ -479,6 +490,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertScreenContract(forms, CHR_036_FORM_ID, CHR_036_REQUIRED_FIELDS, CHR_036_ROUTE);
   assertSymbiontScreenContracts(forms, assertScreenContract);
   assertManualSymbiontScreenContracts(forms, assertScreenContract);
+  assertArmorBundleScreenContracts(forms, assertScreenContract);
   return result;
 }
 

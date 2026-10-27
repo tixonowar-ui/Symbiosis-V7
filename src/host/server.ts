@@ -126,6 +126,20 @@ import {
   preflightCreationWizardCheckpoint,
 } from './creation-wizard-checkpoint.js';
 import type { CreationWizardCheckpointCommandRequest } from './creation-wizard-checkpoint.js';
+import {
+  commitArmorBundleQualityRoll,
+  preflightArmorBundleQualityRoll,
+} from './creation-armor-bundle.js';
+import {
+  normalizeArmorBundleQualityRollRequest,
+  type ArmorBundleQualityRollRequest,
+} from './creation-armor-bundle-contract.js';
+import { loadArmorBundleCatalog } from './armor-bundle-catalog.js';
+import {
+  CHR_021_FORM_ID,
+  CHR_021_RETURN_ACTION_KEY,
+  projectChr021,
+} from './projections/chr-armor-bundle.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import type { loadSkillStageCatalog } from './skill-stage-catalog.js';
 import { loadSymbiontCatalog } from './symbiont-stage-catalog.js';
@@ -372,6 +386,7 @@ interface NavigationDependencies {
   readonly allocateLocalCharacterId: HostServerConfig['allocateLocalCharacterId'];
   readonly allocateReceiptId: HostServerConfig['allocateReceiptId'];
   readonly allocateWizardCheckpointId: HostServerConfig['allocateWizardCheckpointId'];
+  readonly armorBundleCatalog: Awaited<ReturnType<typeof loadArmorBundleCatalog>>;
   readonly catalog: AppProjectionCatalog;
   readonly creationDecisionConsequenceCatalog: Awaited<
     ReturnType<typeof loadCreationDecisionConsequenceCatalog>
@@ -472,6 +487,7 @@ function allocatedWizardCheckpointId(allocator: () => string, characterDraftId: 
 function allocatedReceiptId(
   allocator: () => string,
   request:
+    | ArmorBundleQualityRollRequest
     | CreationRollCommitCommandRequest
     | CreationSetDecideCommandRequest
     | CreationWizardCheckpointCommandRequest
@@ -1136,6 +1152,7 @@ function creationWarningNavigation(
     dependencies.symbiontMediaCatalog,
     dependencies.creationDecisionConsequenceCatalog,
     dependencies.creationSkillCatalog,
+    dependencies.armorBundleCatalog,
   );
   const nextContext = creationWizardContext(connection, dependencies, checkpoint);
   return {
@@ -1215,6 +1232,7 @@ function creationSkillSelectionNavigation(
         dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
         CHR_015_FORM_ID,
       ),
       'player',
@@ -1284,6 +1302,7 @@ function creationSkillCatalogNavigation(
         dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
       ),
       'player',
       after,
@@ -1359,6 +1378,7 @@ function creationSymbiontRollNavigation(
         dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
       ),
       'player',
       after,
@@ -1423,9 +1443,19 @@ function inferredCreationSkillPresentationFormId(
 function creationPresentationFormId(
   checkpoint: DurableCreationWizardCheckpoint,
 ): ConfirmedNavigationContext['formId'] {
+  const nextFormId = checkpoint.nextStageEnvelope.formId;
+  // The armor envelope pins the presentation to CHR-021; after the bundle
+  // checkpoint the form stays actionless (CHECKPOINTED) while CHR-022 remains
+  // a host-signed, unpublished next stage.
+  if (
+    checkpoint.armorBundleStage !== null &&
+    checkpoint.armorBundleStage !== undefined &&
+    (nextFormId === CHR_021_FORM_ID || nextFormId === 'CHR-022')
+  ) {
+    return CHR_021_FORM_ID;
+  }
   const signed = checkpoint.symbiontPresentationStage;
   if (signed !== null && signed !== undefined) return signed.formId;
-  const nextFormId = checkpoint.nextStageEnvelope.formId;
   const skillPresentation = checkpoint.skillPresentationStage;
   if (
     (checkpoint.manualCompositionStage !== null &&
@@ -1451,7 +1481,9 @@ function creationWizardBase(
   symbiontMediaCatalog: NavigationDependencies['symbiontMediaCatalog'],
   consequenceCatalog: NavigationDependencies['creationDecisionConsequenceCatalog'],
   creationSkillCatalog: NavigationDependencies['creationSkillCatalog'],
-  requestedPresentationFormId?: typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID,
+  armorBundleCatalog: NavigationDependencies['armorBundleCatalog'],
+  requestedPresentationFormId?:
+    typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID | 'CHR-017' | 'CHR-019' | 'CHR-041' | 'CHR-042',
 ): PresentedBaseForm {
   const { characterDraftId, wizardCheckpointId } = checkpoint.identityStage.request.payload;
   const draftRevision = checkpoint.receipt.result.draftRevision;
@@ -1704,6 +1736,13 @@ function creationWizardBase(
         checkpoint.manualCompositionStage !== undefined
         ? projectManualChr019(checkpoint, symbiontCatalog)
         : projectChr019(checkpoint, symbiontCatalog);
+    case CHR_021_FORM_ID:
+      return projectChr021(
+        checkpoint,
+        armorBundleCatalog,
+        capabilities.rollCommit,
+        capabilities.checkpoint,
+      );
     case CHR_042_FORM_ID:
       return projectManualChr042(checkpoint, symbiontCatalog);
     default:
@@ -1942,6 +1981,7 @@ function handleAddressableRoute(
           dependencies.symbiontMediaCatalog,
           dependencies.creationDecisionConsequenceCatalog,
           dependencies.creationSkillCatalog,
+          dependencies.armorBundleCatalog,
         ),
         'player',
         after,
@@ -2031,6 +2071,7 @@ function handleAddressableRoute(
         dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
       ),
       'player',
       after,
@@ -2058,7 +2099,9 @@ function manualSymbiontNavigation(
             ? 'CHR-017'
             : message.actionKey === CHR_042_RETURN_ACTION_KEY
               ? 'CHR-019'
-              : null;
+              : message.actionKey === CHR_021_RETURN_ACTION_KEY
+                ? 'CHR-019'
+                : null;
   if (
     targetFormId === null ||
     current.entityLocalCharacterId === null ||
@@ -2121,6 +2164,8 @@ function manualSymbiontNavigation(
         dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
+        targetFormId,
       ),
       'player',
       after,
@@ -2421,6 +2466,15 @@ function handleFormAction(
         success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
       }
       break;
+    case CHR_021_RETURN_ACTION_KEY:
+      if (
+        action.to === CHR_019_FORM_ID &&
+        current.formId === CHR_021_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
     case CHR_017_RANDOM_START_ACTION_KEY:
       if (
         action.to === CHR_020_FORM_ID &&
@@ -2574,18 +2628,25 @@ function commandRequestsMatch(saved: CommandRequest, incoming: CommandRequest): 
       (saved.payload as Record<string, unknown>)['stage'] === 'SYMBIONTS';
     const advisorIwRequest =
       symbiontRequest && (saved.payload as Record<string, unknown>)['variant'] === 'ADVISOR_IW';
+    const armorQualityRequest =
+      symbiontRequest &&
+      (saved.payload as Record<string, unknown>)['variant'] === 'ARMOR_BUNDLE_QUALITY';
     try {
       return isDeepStrictEqual(
         advisorIwRequest
           ? normalizeManualAdvisorIwRollRequest(saved)
-          : symbiontRequest
-            ? normalizeSymbiontRollCommitRequest(saved)
-            : normalizeCreationRollCommitRequest(saved),
+          : armorQualityRequest
+            ? normalizeArmorBundleQualityRollRequest(saved)
+            : symbiontRequest
+              ? normalizeSymbiontRollCommitRequest(saved)
+              : normalizeCreationRollCommitRequest(saved),
         advisorIwRequest
           ? normalizeManualAdvisorIwRollRequest(incoming)
-          : symbiontRequest
-            ? normalizeSymbiontRollCommitRequest(incoming)
-            : normalizeCreationRollCommitRequest(incoming),
+          : armorQualityRequest
+            ? normalizeArmorBundleQualityRollRequest(incoming)
+            : symbiontRequest
+              ? normalizeSymbiontRollCommitRequest(incoming)
+              : normalizeCreationRollCommitRequest(incoming),
       );
     } catch (error: unknown) {
       if (
@@ -2686,6 +2747,7 @@ function sendCreationWizardDestination(
         dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
       ),
       'player',
       currentCreationWizardRevisions(checkpoint),
@@ -2991,6 +3053,103 @@ function handleCommandRequest(
           sampleD20: dependencies.sampleCreationD20,
         },
       );
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durableCheckpoint.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durableCheckpoint.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durableCheckpoint),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durableCheckpoint,
+      dependencies,
+      connection,
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
+    return;
+  }
+  if (
+    message.workflowCommandId === CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID &&
+    message.payload !== null &&
+    typeof message.payload === 'object' &&
+    !Array.isArray(message.payload) &&
+    (message.payload as Record<string, unknown>)['stage'] === 'SYMBIONTS' &&
+    (message.payload as Record<string, unknown>)['variant'] === 'ARMOR_BUNDLE_QUALITY'
+  ) {
+    let request: ArmorBundleQualityRollRequest;
+    try {
+      request = normalizeArmorBundleQualityRollRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.identityDraftScope !== null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== CHR_021_FORM_ID ||
+      request.payload.sourceFormId !== CHR_021_FORM_ID ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    if (!isDeepStrictEqual(request.expectedRevisions, revisions)) {
+      finishRefusal(request, {
+        actual: revisions,
+        code: 'STALE_REVISION',
+        expected: request.expectedRevisions,
+      });
+      return;
+    }
+    try {
+      preflightArmorBundleQualityRoll(dependencies.database, request, {
+        catalog: dependencies.symbiontCatalog,
+        armorCatalog: dependencies.armorBundleCatalog,
+        sampleD20: dependencies.sampleCreationD20,
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+    assertProcessLocalIdUnused(receiptId, 'command receipt allocator', commandJournal);
+    const finalRevisions = currentNavigationRevisions(connection, dependencies);
+    if (
+      !isDeepStrictEqual(finalRevisions, revisions) ||
+      !connection.sessionEstablished ||
+      connection.current !== current ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    let durableCheckpoint: DurableCreationWizardCheckpoint;
+    try {
+      durableCheckpoint = commitArmorBundleQualityRoll(dependencies.database, request, receiptId, {
+        catalog: dependencies.symbiontCatalog,
+        armorCatalog: dependencies.armorBundleCatalog,
+        sampleD20: dependencies.sampleCreationD20,
+      });
     } catch (error: unknown) {
       if (!(error instanceof CreationSymbiontApplicationError)) throw error;
       finishRefusal(request, error.refusal);
@@ -3396,7 +3555,11 @@ function handleCommandRequest(
         : request.payload.stage === 'SYMBIONTS'
           ? request.payload.sourceFormId === 'CHR-018'
             ? 'CHR-018'
-            : CHR_041_FORM_ID
+            : request.payload.sourceFormId === 'CHR-019'
+              ? 'CHR-019'
+              : request.payload.sourceFormId === 'CHR-021'
+                ? 'CHR-021'
+                : CHR_041_FORM_ID
           : request.payload.sourceFormId === 'CHR-012'
             ? CHR_012_FORM_ID
             : request.payload.sourceFormId === 'CHR-014'
@@ -3405,7 +3568,11 @@ function handleCommandRequest(
     const expectedFormIds: ReadonlySet<string> =
       request.payload.sourceFormId === 'CHR-018'
         ? new Set(['CHR-018', 'CHR-019', 'CHR-041'])
-        : new Set([expectedFormId]);
+        : request.payload.sourceFormId === 'CHR-019'
+          ? new Set(['CHR-019'])
+          : request.payload.sourceFormId === 'CHR-021'
+            ? new Set(['CHR-021'])
+            : new Set([expectedFormId]);
     if (
       current === null ||
       current.identityDraftScope !== null ||
@@ -3477,6 +3644,20 @@ function handleCommandRequest(
               commandJournal,
             ),
           sampleD20: dependencies.sampleCreationD20,
+        },
+        {
+          allocateArmorBundleId: () =>
+            assertProcessLocalIdUnused(
+              dependencies.allocateCreationRollRequestId(),
+              'creation roll-request allocator',
+              commandJournal,
+            ),
+          allocateQualityRollRequestId: () =>
+            assertProcessLocalIdUnused(
+              dependencies.allocateCreationRollRequestId(),
+              'creation roll-request allocator',
+              commandJournal,
+            ),
         },
       );
     } catch (error: unknown) {
@@ -3837,6 +4018,7 @@ function handleReconnectV2(
       dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
+      dependencies.armorBundleCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, replayDestination);
     projectionRole = 'player';
@@ -3850,6 +4032,7 @@ function handleReconnectV2(
       dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
+      dependencies.armorBundleCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, acknowledgedRandomDestination);
     projectionRole = 'player';
@@ -3863,6 +4046,7 @@ function handleReconnectV2(
       dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
+      dependencies.armorBundleCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, acknowledgedSkillDestination);
     projectionRole = 'player';
@@ -3889,6 +4073,7 @@ function handleReconnectV2(
       restored.formId === CHR_017_FORM_ID ||
       restored.formId === CHR_019_FORM_ID ||
       restored.formId === CHR_020_FORM_ID ||
+      restored.formId === CHR_021_FORM_ID ||
       restored.formId === CHR_041_FORM_ID)
   ) {
     const checkpoint = loadCreationWizardCheckpoint(
@@ -3905,6 +4090,7 @@ function handleReconnectV2(
       dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
+      dependencies.armorBundleCatalog,
       restored.formId === CHR_015_FORM_ID ? CHR_015_FORM_ID : undefined,
     );
     nextContext = creationWizardContext(
@@ -4197,12 +4383,14 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     throw new TypeError('host onFrameError configuration must be a function');
   const projectRoot = resolve(config.projectRoot);
   const staticRoot = await realpath(resolve(config.staticRoot));
-  const [catalog, symbiontCatalog, vocabulary, symbiontMediaCatalog] = await Promise.all([
-    loadAppProjectionCatalog(projectRoot),
-    loadSymbiontCatalog(projectRoot),
-    loadProtocolVocabulary(projectRoot),
-    loadSymbiontMediaCatalog(projectRoot),
-  ]);
+  const [catalog, symbiontCatalog, vocabulary, symbiontMediaCatalog, armorBundleCatalog] =
+    await Promise.all([
+      loadAppProjectionCatalog(projectRoot),
+      loadSymbiontCatalog(projectRoot),
+      loadProtocolVocabulary(projectRoot),
+      loadSymbiontMediaCatalog(projectRoot),
+      loadArmorBundleCatalog(projectRoot),
+    ]);
   const skillStageCatalog = symbiontCatalog.skillStage;
   const creationSkillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
   const creationDecisionConsequenceCatalog = await loadCreationDecisionConsequenceCatalog(
@@ -4221,6 +4409,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     allocateLocalCharacterId: config.allocateLocalCharacterId,
     allocateReceiptId: config.allocateReceiptId,
     allocateWizardCheckpointId: config.allocateWizardCheckpointId,
+    armorBundleCatalog,
     catalog,
     creationDecisionConsequenceCatalog,
     creationSkillCatalog,
