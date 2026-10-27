@@ -91,7 +91,7 @@ function manifestEntry(value: unknown, index: number): SymbiontMediaManifestEntr
 export async function loadSymbiontMediaCatalog(
   projectRoot: string,
 ): Promise<ReadonlyMap<SymbiontSpeciesKey, SymbiontMediaPreview>> {
-  const root = resolve(projectRoot);
+  const root = await realpath(resolve(projectRoot));
   const manifest = objectAt(
     await readJsonFile(
       join(root, 'generated', 'spec', 'symbiont-media', 'manifest.json'),

@@ -4,7 +4,7 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-27`
-- Тестов: 1513 Vitest + 8 Playwright, все зелёные
+- Тестов: 1514 Vitest + 8 Playwright, все зелёные
 - `npm run verify` — проходит; `npm run build && npm run test:e2e` — 8/8
 
 ## Легенда

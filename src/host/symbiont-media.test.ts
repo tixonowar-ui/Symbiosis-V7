@@ -1,4 +1,12 @@
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -49,6 +57,19 @@ describe('CHR-018 symbiont media catalog', () => {
         developmentTreePath: `/generated/media/development-trees/${species.speciesKey}.png`,
       });
     }
+  });
+
+  it('accepts a linked project root while preserving media containment', async () => {
+    const root = createMediaRoot();
+    const linkParent = mkdtempSync(join(tmpdir(), 'symbiosis-manual-media-link-'));
+    temporaryDirectories.push(linkParent);
+    const linkedRoot = join(linkParent, 'linked-project');
+    symlinkSync(root, linkedRoot, 'junction');
+
+    const catalog = await loadSymbiontMediaCatalog(linkedRoot);
+    expect([...catalog.keys()].sort()).toEqual(
+      CATALOG.species.map((species) => species.speciesKey).sort(),
+    );
   });
 
   it('fails closed on missing, extra and mismatched media', async () => {
