@@ -112,19 +112,26 @@ describe('host protocol vocabulary implemented presentation support', () => {
     ).toBe(false);
   });
 
-  it('accepts only the exact CHR-014 addressable route and both assigned bindings', () => {
+  it('accepts both exact addressable routes and validates assigned bindings', () => {
     const route =
       '/player/characters/:localCharacterId/create/chr-014/:skillId' as AddressableRouteTemplate;
+    const symbiontRoute =
+      '/player/characters/:localCharacterId/create/chr-018/:speciesKey' as AddressableRouteTemplate;
     const clientBinding = {
       parameterIndex: 1,
       source: 'client-selected',
       value: 'ACROBATICS',
     } as const;
+    const speciesBinding = { ...clientBinding, value: 'EEL' } as const;
     expect(vocabulary.isAddressableRouteTemplate(route)).toBe(true);
+    expect(vocabulary.isAddressableRouteTemplate(symbiontRoute)).toBe(true);
+    expect(vocabulary.isClientRouteBindings(symbiontRoute, [speciesBinding])).toBe(true);
+    expect(vocabulary.isClientRouteBindings(symbiontRoute, [clientBinding])).toBe(false);
     expect(
-      vocabulary.isAddressableRouteTemplate(
-        '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
-      ),
+      vocabulary.isClientRouteBindings(symbiontRoute, [{ ...speciesBinding, value: 'UNKNOWN' }]),
+    ).toBe(false);
+    expect(
+      vocabulary.isAddressableRouteTemplate('/player/characters/:localCharacterId/create/chr-019'),
     ).toBe(false);
     expect(vocabulary.isClientRouteBindings(route, [clientBinding])).toBe(true);
     expect(vocabulary.isClientRouteBindings(route, [])).toBe(false);
@@ -150,6 +157,21 @@ describe('host protocol vocabulary implemented presentation support', () => {
         { ...clientBinding, source: 'inherited' },
       ]),
     ).toBe(false);
+    expect(
+      vocabulary.isPresentedForm('CHR-018', 'screen', symbiontRoute, [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft' },
+        speciesBinding,
+      ]),
+    ).toBe(true);
+    expect(
+      vocabulary.isPresentedForm('CHR-018', 'screen', symbiontRoute, [
+        { parameterIndex: 0, source: 'inherited', value: 'character-draft' },
+        { ...speciesBinding, value: 'UNKNOWN' },
+      ]),
+    ).toBe(false);
+    expect(vocabulary.isPresentedForm('CHR-018', 'screen', symbiontRoute, [speciesBinding])).toBe(
+      false,
+    );
   });
 
   it('recognizes both creation workflow commands and exposes implemented confirmations', () => {

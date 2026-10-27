@@ -30,6 +30,7 @@ import {
 import {
   manualCompositionCheckpointReceipt,
   manualCompositionStageIds,
+  manualNavigationRevisionsMatch,
   normalizeManualCompositionCheckpointRequest,
   parseManualCompositionStage,
   type ManualCompositionCheckpointCommandRequest,
@@ -45,6 +46,7 @@ import {
   advisorSuppressedByTrogr,
   validateAdvisorIntelligenceFloorStageHistory,
 } from './creation-advisor-intelligence-floor-contract.js';
+import { writeManualCommandPresentation } from './creation-manual-composition-navigation.js';
 
 export { latestManualCompositionRecord } from './creation-manual-composition-contract.js';
 
@@ -100,6 +102,14 @@ export function preflightManualComposition(
     receiptId,
   );
   const currentStage = checkpoint.manualCompositionStage;
+  if (
+    checkpoint.randomSymbiontStage !== null ||
+    (checkpoint.advisorIntelligenceFloorStage !== null &&
+      checkpoint.advisorIntelligenceFloorStage !== undefined) ||
+    (currentStage === null && checkpoint.nextStageEnvelope.formId !== 'CHR-017')
+  ) {
+    return guardSymbiontRejected();
+  }
   if (
     normalized.payload.compositionDraftRevision !==
     (currentStage?.compositionDraftRevision ?? checkpoint.receipt.result.draftRevision)
@@ -234,10 +244,18 @@ export function commitManualComposition(
         randomSymbiontStage: null,
         manualCompositionStage,
       };
-      return update(
+      const result = update(
         { payloadJson: JSON.stringify(nextPayload) },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
+      writeManualCommandPresentation(
+        database,
+        nextStageEnvelope.formId,
+        normalized.payload.characterDraftId,
+        draftRevision,
+        revisions.projectionRevision,
+      );
+      return result;
     },
   );
   return validateDurableCreationWizardCheckpoint(
@@ -325,7 +343,7 @@ export function validateManualCompositionStageHistory(
         request.payload.draftRevision !== cursor.draftRevision ||
         request.payload.compositionDraftRevision !==
           (compositionDraftRevision ?? cursor.draftRevision) ||
-        !isDeepStrictEqual(request.expectedRevisions, cursor.revisions)
+        !manualNavigationRevisionsMatch(request.expectedRevisions, cursor.revisions)
       ) {
         return guardSymbiontRejected();
       }

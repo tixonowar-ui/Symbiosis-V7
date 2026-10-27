@@ -41,7 +41,11 @@ import {
   type ManualPhysicalRoll,
 } from './creation-manual-advisor-contract.js';
 import type { ManualCompositionValidationContext } from './creation-manual-composition.js';
-import type { ManualAdvisorIwRecord } from './creation-manual-composition-contract.js';
+import {
+  manualNavigationRevisionsMatch,
+  type ManualAdvisorIwRecord,
+} from './creation-manual-composition-contract.js';
+import { writeManualCommandPresentation } from './creation-manual-composition-navigation.js';
 
 type DecodedCommandRequest = Parameters<typeof normalizeManualAdvisorIwRollRequest>[0];
 
@@ -208,7 +212,7 @@ export function commitManualAdvisorIw(
           : current.stage.pendingSuppressionRollRequestIdOrNull;
       const durablePayload = current.checkpoint.durablePayload;
       if (!('randomSymbiontStage' in durablePayload)) return guardSymbiontRejected();
-      return update(
+      const result = update(
         {
           payloadJson: JSON.stringify({
             ...durablePayload,
@@ -227,6 +231,14 @@ export function commitManualAdvisorIw(
         },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
+      writeManualCommandPresentation(
+        database,
+        'CHR-041',
+        normalized.payload.characterDraftId,
+        current.stage.compositionDraftRevision,
+        receipt.revisions.projectionRevision,
+      );
+      return result;
     },
   );
   return validateDurableCreationWizardCheckpoint(
@@ -351,7 +363,7 @@ export function commitManualAdvisorSkills(
         receipt,
         nextStageEnvelope: nextSymbiontEnvelope('CHR-019', normalized.payload.characterDraftId),
       };
-      return update(
+      const result = update(
         {
           payloadJson: JSON.stringify({
             ...current.checkpoint.durablePayload,
@@ -362,6 +374,14 @@ export function commitManualAdvisorSkills(
         },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
+      writeManualCommandPresentation(
+        database,
+        'CHR-019',
+        normalized.payload.characterDraftId,
+        current.stage.compositionDraftRevision,
+        receipt.revisions.projectionRevision,
+      );
+      return result;
     },
   );
   return validateDurableCreationWizardCheckpoint(
@@ -388,7 +408,7 @@ export function validateManualAdvisorIwRecord(
     request.payload.compositionDraftRevision !== compositionDraftRevision ||
     request.payload.advisorInstanceDraftId !== stage.advisorInstanceDraftIdOrNull ||
     !isDeepStrictEqual(request.payload.pendingRollRequestIds, stage.iwRollRequestIdsOrNull) ||
-    !isDeepStrictEqual(request.expectedRevisions, cursor.revisions) ||
+    !manualNavigationRevisionsMatch(request.expectedRevisions, cursor.revisions) ||
     physicalRolls[0].kind !== 'ADVISOR_I' ||
     physicalRolls[1].kind !== 'ADVISOR_W' ||
     physicalRolls[0].rollRequestId !== request.payload.pendingRollRequestIds[0] ||
@@ -462,7 +482,7 @@ export function validateManualAdvisorSkillRecord(
     request.payload.draftRevision !== cursor.draftRevision ||
     request.payload.compositionDraftRevision !== compositionDraftRevision ||
     request.payload.advisorInstanceDraftId !== stage.advisorInstanceDraftIdOrNull ||
-    !isDeepStrictEqual(request.expectedRevisions, cursor.revisions)
+    !manualNavigationRevisionsMatch(request.expectedRevisions, cursor.revisions)
   ) {
     return guardSymbiontRejected();
   }

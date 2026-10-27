@@ -32,6 +32,7 @@ import {
   type AdvisorIntelligenceFloorStage,
 } from './creation-advisor-intelligence-floor-contract.js';
 import { advisorIntelligenceFloorStageForManual } from './creation-manual-advisor-contract.js';
+import { writeManualCommandPresentation } from './creation-manual-composition-navigation.js';
 
 type DecodedCommandRequest = Parameters<typeof normalizeAdvisorIntelligenceFloorRollRequest>[0];
 
@@ -163,10 +164,20 @@ export function commitAdvisorIntelligenceFloorRoll(
               },
             }),
       };
-      return update(
+      const result = update(
         { payloadJson: JSON.stringify(nextPayload) },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
+      if (manualCompositionStage !== null && manualCompositionStage !== undefined) {
+        writeManualCommandPresentation(
+          database,
+          'CHR-041',
+          normalized.payload.characterDraftId,
+          current.stage.compositionDraftRevision,
+          receipt.revisions.projectionRevision,
+        );
+      }
+      return result;
     },
   );
   return validateDurableCreationWizardCheckpoint(

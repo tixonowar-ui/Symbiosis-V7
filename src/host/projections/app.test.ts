@@ -139,10 +139,10 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the fourteen slice actions with their exact source-owned guards', () => {
+  it('loads the nineteen slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(14);
+    expect(catalog.actions.size).toBe(19);
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:
@@ -201,6 +201,42 @@ describe('APP host projection', () => {
       kind: 'normative',
       to: 'CHR-020',
       trigger: 'Начать сохранённую случайную ветвь',
+    });
+    expect(catalog.actions.get('CHR-017::CTA::002')).toEqual({
+      from: 'CHR-017',
+      guard: 'symbiontAcquisitionMode=MANUAL; composition draft exists',
+      kind: 'normative',
+      to: 'CHR-019',
+      trigger: 'Открыть ручной состав',
+    });
+    expect(catalog.actions.get('CHR-018::CTA::002')).toEqual({
+      from: 'CHR-018',
+      guard: 'no composition commit',
+      kind: 'safe-return',
+      to: 'CHR-017',
+      trigger: 'Вернуться в каталог симбионтов',
+    });
+    expect(catalog.actions.get('CHR-019::CTA::002')).toEqual({
+      from: 'CHR-019',
+      guard:
+        'symbiontAcquisitionMode=MANUAL; interactionGraph has suppression/destruction/absorption or other confirmation-required consequence; AQA-005 excludes RANDOM composition',
+      kind: 'normative',
+      to: 'CHR-042',
+      trigger: 'Открыть предпросмотр взаимодействий',
+    });
+    expect(catalog.actions.get('CHR-019::CTA::004')).toEqual({
+      from: 'CHR-019',
+      guard: 'irreversibleBoundaryStatus=NOT_CROSSED',
+      kind: 'safe-return',
+      to: 'CHR-017',
+      trigger: 'Вернуться к выбору симбионтов до необратимой границы',
+    });
+    expect(catalog.actions.get('CHR-042::CTA::002')).toEqual({
+      from: 'CHR-042',
+      guard: 'irreversibleOperationIds have no shown/committed result',
+      kind: 'safe-return',
+      to: 'CHR-019',
+      trigger: 'Вернуться к составу до необратимого результата',
     });
     const createCharacterTrigger = 'Открыть «Создание персонажа: идентичность»';
     expect(catalog.actions.get('APP-004::CTA::001')).toEqual({

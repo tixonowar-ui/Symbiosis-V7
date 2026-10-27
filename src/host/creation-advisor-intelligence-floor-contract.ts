@@ -638,7 +638,9 @@ export function validateAdvisorIntelligenceFloorStageHistory(
     request.expectedRevisions.actorVisibilityRevision !==
       cursor.revisions.actorVisibilityRevision ||
     request.expectedRevisions.stateRevision !== cursor.revisions.stateRevision ||
-    request.expectedRevisions.projectionRevision !== expectedProjectionRevision
+    (context.idsAlreadyOccupied === true
+      ? request.expectedRevisions.projectionRevision < cursor.revisions.projectionRevision
+      : request.expectedRevisions.projectionRevision !== expectedProjectionRevision)
   ) {
     return guardSymbiontRejected();
   }

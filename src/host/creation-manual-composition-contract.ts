@@ -945,6 +945,17 @@ export function latestManualCompositionRecord(
   );
 }
 
+export function manualNavigationRevisionsMatch(
+  expected: RevisionVector,
+  previous: RevisionVector,
+): boolean {
+  return (
+    expected.actorVisibilityRevision === previous.actorVisibilityRevision &&
+    expected.stateRevision === previous.stateRevision &&
+    expected.projectionRevision >= previous.projectionRevision
+  );
+}
+
 export function manualCompositionStageIds(stage: ManualCompositionStage): ReadonlySet<string> {
   const ids: string[] = [];
   for (const record of stage.compositionRecords)

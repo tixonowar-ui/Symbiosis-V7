@@ -10,6 +10,7 @@ import type {
 import type { AddressableRouteTemplate, WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
 
 import { array, readJsonFile, record, string } from './json-source.js';
+import { CORE_169_SPECIES_BY_FACE, SYMBIOTIC_MONSTER_SPECIES_KEYS } from '../domain/index.js';
 
 const WORKFLOW_QA_PREFIX = 'QA-WORKFLOW-';
 const WORKFLOW_COMMAND = /^UI-CMD-[A-Z0-9-]+$/u;
@@ -42,10 +43,12 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-016',
   'CHR-028',
   'CHR-017',
+  'CHR-018',
   'CHR-019',
   'CHR-020',
   'CHR-036',
   'CHR-041',
+  'CHR-042',
 ]);
 const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-002',
@@ -67,6 +70,11 @@ const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-020',
   'CHR-036',
   'CHR-041',
+  'CHR-042',
+]);
+const PUBLIC_SYMBIONT_SPECIES: ReadonlySet<string> = new Set([
+  ...CORE_169_SPECIES_BY_FACE,
+  ...SYMBIOTIC_MONSTER_SPECIES_KEYS,
 ]);
 
 const jsonFile = (path: string): Promise<unknown> =>
@@ -172,16 +180,20 @@ export async function loadProtocolVocabulary(
   if (skillCardRoute !== '/player/characters/:localCharacterId/create/chr-014/:skillId') {
     throw new Error('CHR-014 route is missing or drifted from its exact addressable template');
   }
+  const symbiontCardRoute = presentedForms.get('CHR-018')?.route;
+  if (symbiontCardRoute !== '/player/characters/:localCharacterId/create/chr-018/:speciesKey') {
+    throw new Error('CHR-018 route is missing or drifted from its exact addressable template');
+  }
 
   return {
     isAddressableRouteTemplate: (value): value is AddressableRouteTemplate =>
-      value === skillCardRoute,
+      value === skillCardRoute || value === symbiontCardRoute,
     isClientRouteBindings: (routeTemplate, bindings) =>
-      routeTemplate === skillCardRoute &&
       bindings.length === 1 &&
       bindings[0]?.parameterIndex === 1 &&
       bindings[0].source === 'client-selected' &&
-      isPublicSkillId(bindings[0].value),
+      ((routeTemplate === skillCardRoute && isPublicSkillId(bindings[0].value)) ||
+        (routeTemplate === symbiontCardRoute && PUBLIC_SYMBIONT_SPECIES.has(bindings[0].value))),
     isFormActionKey: (sourceFormId, value): value is ActionKey =>
       actionKeys.get(sourceFormId)?.has(value) === true,
     isFormId: (value): value is FormId => formIds.has(value),
@@ -192,7 +204,7 @@ export async function loadProtocolVocabulary(
       const form = presentedForms.get(formId);
       if (form === undefined || form.type !== formType || form.route !== routeTemplate)
         return false;
-      if (formId === 'CHR-014') {
+      if (formId === 'CHR-014' || formId === 'CHR-018') {
         return (
           bindings.length === 2 &&
           bindings[0]?.parameterIndex === 0 &&
@@ -200,7 +212,9 @@ export async function loadProtocolVocabulary(
           bindings[0].value.length > 0 &&
           bindings[1]?.parameterIndex === 1 &&
           bindings[1].source === 'client-selected' &&
-          isPublicSkillId(bindings[1].value)
+          (formId === 'CHR-014'
+            ? isPublicSkillId(bindings[1].value)
+            : PUBLIC_SYMBIONT_SPECIES.has(bindings[1].value))
         );
       }
       if (formId === 'CHR-001') {

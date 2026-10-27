@@ -129,6 +129,7 @@ import type { CreationWizardCheckpointCommandRequest } from './creation-wizard-c
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import type { loadSkillStageCatalog } from './skill-stage-catalog.js';
 import { loadSymbiontCatalog } from './symbiont-stage-catalog.js';
+import type { SymbiontSpeciesKey } from '../domain/index.js';
 import {
   APP_001_ACTION_KEYS,
   APP_001_PLAYER_ACTION_KEY,
@@ -235,6 +236,26 @@ import {
   projectChr020,
   projectChr041,
 } from './projections/chr-symbionts.js';
+import {
+  CHR_017_MANUAL_COMPOSITION_ACTION_KEY,
+  CHR_018_FORM_ID,
+  CHR_018_RETURN_ACTION_KEY,
+  CHR_018_ROUTE,
+  CHR_019_PREVIEW_ACTION_KEY,
+  CHR_019_RETURN_ACTION_KEY,
+  CHR_042_FORM_ID,
+  CHR_042_RETURN_ACTION_KEY,
+  projectManualChr017,
+  projectManualChr018,
+  projectManualChr019,
+  projectManualChr041,
+  projectManualChr042,
+} from './projections/chr-manual-symbionts.js';
+import {
+  advanceManualSymbiontPresentation,
+  handleSymbiontAddressableRoute,
+} from './creation-manual-composition-navigation.js';
+import { loadSymbiontMediaCatalog } from './symbiont-media.js';
 
 export interface HostServerConfig {
   readonly advanceRevisions: (impact: RevisionImpact) => RevisionVector;
@@ -304,9 +325,11 @@ interface ConfirmedNavigationContext {
     | typeof CHR_016_FORM_ID
     | typeof CHR_036_FORM_ID
     | 'CHR-017'
+    | 'CHR-018'
     | 'CHR-019'
     | 'CHR-020'
-    | 'CHR-041';
+    | 'CHR-041'
+    | 'CHR-042';
   readonly identityDraftScope: IdentityDraftScope | null;
 }
 type ConfirmedPlayerContext = ConfirmedNavigationContext & { readonly contextId: string };
@@ -363,6 +386,7 @@ interface NavigationDependencies {
   readonly sampleCreationD20: HostServerConfig['sampleCreationD20'];
   readonly skillStageCatalog: Awaited<ReturnType<typeof loadSkillStageCatalog>>;
   readonly symbiontCatalog: Awaited<ReturnType<typeof loadSymbiontCatalog>>;
+  readonly symbiontMediaCatalog: Awaited<ReturnType<typeof loadSymbiontMediaCatalog>>;
   readonly vocabulary: HostVocabulary;
 }
 interface NavigationSuccess {
@@ -796,7 +820,9 @@ function adoptNavigationContext(
     next.formId === CHR_013_FORM_ID ||
     next.formId === CHR_015_FORM_ID ||
     next.formId === CHR_017_FORM_ID ||
+    next.formId === CHR_018_FORM_ID ||
     next.formId === CHR_019_FORM_ID ||
+    next.formId === CHR_042_FORM_ID ||
     next.formId === CHR_020_FORM_ID ||
     next.formId === CHR_041_FORM_ID
   ) {
@@ -1105,6 +1131,7 @@ function creationWarningNavigation(
     creationWizardCapabilities(connection.executableWorkflowCommandIds),
     dependencies.skillStageCatalog,
     dependencies.symbiontCatalog,
+    dependencies.symbiontMediaCatalog,
     dependencies.creationDecisionConsequenceCatalog,
     dependencies.creationSkillCatalog,
   );
@@ -1183,6 +1210,7 @@ function creationSkillSelectionNavigation(
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
         dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         CHR_015_FORM_ID,
@@ -1251,6 +1279,7 @@ function creationSkillCatalogNavigation(
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
         dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
       ),
@@ -1325,6 +1354,7 @@ function creationSymbiontRollNavigation(
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
         dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
       ),
@@ -1388,11 +1418,35 @@ function inferredCreationSkillPresentationFormId(
   throw new Error('durable CHR-013 has an unrecognized skill presentation revision gap');
 }
 
+function creationPresentationFormId(
+  checkpoint: DurableCreationWizardCheckpoint,
+): ConfirmedNavigationContext['formId'] {
+  const signed = checkpoint.symbiontPresentationStage;
+  if (signed !== null && signed !== undefined) return signed.formId;
+  const nextFormId = checkpoint.nextStageEnvelope.formId;
+  const skillPresentation = checkpoint.skillPresentationStage;
+  if (
+    (checkpoint.manualCompositionStage !== null &&
+      checkpoint.manualCompositionStage !== undefined) ||
+    (checkpoint.advisorIntelligenceFloorStage !== null &&
+      checkpoint.advisorIntelligenceFloorStage !== undefined) ||
+    ((skillPresentation === undefined || skillPresentation === null) &&
+      checkpoint.raceAndMethodStage?.symbiontAcquisition.value === 'MANUAL' &&
+      (nextFormId === CHR_017_FORM_ID ||
+        nextFormId === CHR_019_FORM_ID ||
+        nextFormId === CHR_041_FORM_ID))
+  ) {
+    return nextFormId;
+  }
+  return inferredCreationSkillPresentationFormId(checkpoint) ?? checkpoint.nextStageEnvelope.formId;
+}
+
 function creationWizardBase(
   checkpoint: DurableCreationWizardCheckpoint,
   capabilities: CreationWizardCapabilities,
   skillStageCatalog: NavigationDependencies['skillStageCatalog'],
   symbiontCatalog: NavigationDependencies['symbiontCatalog'],
+  symbiontMediaCatalog: NavigationDependencies['symbiontMediaCatalog'],
   consequenceCatalog: NavigationDependencies['creationDecisionConsequenceCatalog'],
   creationSkillCatalog: NavigationDependencies['creationSkillCatalog'],
   requestedPresentationFormId?: typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID,
@@ -1402,10 +1456,7 @@ function creationWizardBase(
   const signedPresentation = checkpoint.skillPresentationStage;
   const routeBindings = checkpoint.nextStageEnvelope.routeBindings;
   const durableFormId = checkpoint.nextStageEnvelope.formId;
-  const presentationFormId =
-    requestedPresentationFormId ??
-    inferredCreationSkillPresentationFormId(checkpoint) ??
-    durableFormId;
+  const presentationFormId = requestedPresentationFormId ?? creationPresentationFormId(checkpoint);
   if (
     ((presentationFormId === CHR_013_FORM_ID || presentationFormId === CHR_014_FORM_ID) &&
       !hasSkillCardNavigationState(checkpoint)) ||
@@ -1614,19 +1665,45 @@ function creationWizardBase(
         routeTemplate: CHR_015_ROUTE,
       };
     case CHR_017_FORM_ID:
-      return projectChr017(checkpoint, symbiontCatalog);
+      return checkpoint.raceAndMethodStage?.symbiontAcquisition.value === 'MANUAL'
+        ? projectManualChr017(checkpoint, symbiontCatalog)
+        : projectChr017(checkpoint, symbiontCatalog);
+    case CHR_018_FORM_ID: {
+      const signed = checkpoint.symbiontPresentationStage;
+      if (signed?.formId !== CHR_018_FORM_ID) throw new Error('CHR-018 lacks signed presentation');
+      return projectManualChr018(
+        checkpoint,
+        symbiontCatalog,
+        symbiontMediaCatalog,
+        capabilities.checkpoint,
+      );
+    }
     case CHR_020_FORM_ID:
       return projectChr020(checkpoint, symbiontCatalog, capabilities.rollCommit);
     case CHR_041_FORM_ID:
-      return projectChr041(
-        checkpoint,
-        symbiontCatalog,
-        creationSkillCatalog,
-        capabilities.checkpoint,
-        capabilities.rollCommit,
-      );
+      return checkpoint.manualCompositionStage !== null &&
+        checkpoint.manualCompositionStage !== undefined
+        ? projectManualChr041(
+            checkpoint,
+            symbiontCatalog,
+            creationSkillCatalog,
+            capabilities.checkpoint,
+            capabilities.rollCommit,
+          )
+        : projectChr041(
+            checkpoint,
+            symbiontCatalog,
+            creationSkillCatalog,
+            capabilities.checkpoint,
+            capabilities.rollCommit,
+          );
     case CHR_019_FORM_ID:
-      return projectChr019(checkpoint, symbiontCatalog);
+      return checkpoint.manualCompositionStage !== null &&
+        checkpoint.manualCompositionStage !== undefined
+        ? projectManualChr019(checkpoint, symbiontCatalog)
+        : projectChr019(checkpoint, symbiontCatalog);
+    case CHR_042_FORM_ID:
+      return projectManualChr042(checkpoint, symbiontCatalog);
     default:
       throw new Error(
         `durable creation wizard destination ${JSON.stringify(durableFormId)} is not publishable`,
@@ -1790,6 +1867,88 @@ function handleAddressableRoute(
     );
     return;
   }
+  if (message.routeTemplate === CHR_018_ROUTE) {
+    const current = connection.current;
+    const binding = message.bindings[0];
+    if (
+      current === null ||
+      !connection.sessionEstablished ||
+      (current.formId !== CHR_017_FORM_ID && current.formId !== CHR_018_FORM_ID) ||
+      current.entityLocalCharacterId === null ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies)
+    ) {
+      finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+      return;
+    }
+    if (
+      message.bindings.length !== 1 ||
+      binding?.parameterIndex !== 1 ||
+      binding.source !== 'client-selected' ||
+      binding.value.length === 0
+    ) {
+      finish(addressableRouteRefusal(message, { code: 'INVALID_BINDINGS' }, revisions));
+      return;
+    }
+    const characterDraftId = current.entityLocalCharacterId;
+    const before = loadCreationWizardCheckpoint(
+      dependencies.database,
+      characterDraftId,
+      dependencies.skillStageCatalog,
+      dependencies.symbiontCatalog,
+    );
+    if (!isDeepStrictEqual(currentCreationWizardRevisions(before), revisions)) {
+      finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+      return;
+    }
+    let committed: DurableCreationWizardCheckpoint;
+    try {
+      committed = handleSymbiontAddressableRoute(
+        dependencies.database,
+        {
+          characterDraftId,
+          wizardCheckpointId: before.checkpoint.checkpointId,
+          speciesKey: binding.value as SymbiontSpeciesKey,
+        },
+        dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
+      );
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finish(addressableRouteRefusal(message, { code: 'INVALID_BINDINGS' }, revisions));
+      return;
+    }
+    const after = currentCreationWizardRevisions(committed);
+    if (
+      after.actorVisibilityRevision !== revisions.actorVisibilityRevision ||
+      after.stateRevision !== revisions.stateRevision ||
+      after.projectionRevision !== revisions.projectionRevision + 1 ||
+      committed.checkpoint.checkpointRevision !== before.checkpoint.checkpointRevision ||
+      committed.receipt.result.draftRevision !== before.receipt.result.draftRevision ||
+      committed.localCharacter.payloadJson !== before.localCharacter.payloadJson
+    ) {
+      throw new Error('CHR-018 route-open changed more than the projection revision');
+    }
+    finish(
+      projectionSnapshot(
+        message.navigationRequestId,
+        creationWizardBase(
+          committed,
+          creationWizardCapabilities(connection.executableWorkflowCommandIds),
+          dependencies.skillStageCatalog,
+          dependencies.symbiontCatalog,
+          dependencies.symbiontMediaCatalog,
+          dependencies.creationDecisionConsequenceCatalog,
+          dependencies.creationSkillCatalog,
+        ),
+        'player',
+        after,
+        'ADDRESSABLE_ROUTE',
+      ),
+      creationWizardContext(connection, dependencies, committed),
+    );
+    return;
+  }
   const current = connection.current;
   const binding = message.bindings[0];
   if (
@@ -1867,6 +2026,7 @@ function handleAddressableRoute(
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
         dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
       ),
@@ -1876,6 +2036,94 @@ function handleAddressableRoute(
     ),
     nextContext,
   );
+}
+
+function manualSymbiontNavigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): NavigationSuccess | undefined {
+  const targetFormId =
+    message.actionKey === CHR_017_MANUAL_COMPOSITION_ACTION_KEY
+      ? 'CHR-019'
+      : message.actionKey === CHR_018_RETURN_ACTION_KEY
+        ? 'CHR-017'
+        : message.actionKey === CHR_019_PREVIEW_ACTION_KEY
+          ? 'CHR-042'
+          : message.actionKey === CHR_019_RETURN_ACTION_KEY
+            ? 'CHR-017'
+            : message.actionKey === CHR_042_RETURN_ACTION_KEY
+              ? 'CHR-019'
+              : null;
+  if (
+    targetFormId === null ||
+    current.entityLocalCharacterId === null ||
+    current.formId !== message.sourceFormId ||
+    connection.activeLayer !== null
+  ) {
+    return undefined;
+  }
+  const characterDraftId = current.entityLocalCharacterId;
+  const checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    characterDraftId,
+    dependencies.skillStageCatalog,
+    dependencies.symbiontCatalog,
+  );
+  if (
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
+    connection.current !== current ||
+    !confirmedPlayerContext(current, dependencies) ||
+    (message.sourceFormId !== CHR_017_FORM_ID &&
+      checkpoint.symbiontPresentationStage?.formId !== message.sourceFormId)
+  ) {
+    return undefined;
+  }
+  let committed: DurableCreationWizardCheckpoint;
+  try {
+    committed = advanceManualSymbiontPresentation(
+      dependencies.database,
+      {
+        characterDraftId,
+        wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+        formId: targetFormId,
+      },
+      dependencies.symbiontCatalog,
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+    return undefined;
+  }
+  const after = currentCreationWizardRevisions(committed);
+  if (
+    after.actorVisibilityRevision !== before.actorVisibilityRevision ||
+    after.stateRevision !== before.stateRevision ||
+    after.projectionRevision !== before.projectionRevision + 1 ||
+    committed.checkpoint.checkpointRevision !== checkpoint.checkpoint.checkpointRevision ||
+    committed.receipt.result.draftRevision !== checkpoint.receipt.result.draftRevision ||
+    committed.localCharacter.payloadJson !== checkpoint.localCharacter.payloadJson
+  ) {
+    throw new Error('manual symbiont navigation changed more than the projection revision');
+  }
+  return {
+    nextContext: creationWizardContext(connection, dependencies, committed),
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        committed,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+      ),
+      'player',
+      after,
+    ),
+  };
 }
 
 function handleFormAction(
@@ -2126,6 +2374,51 @@ function handleFormAction(
         );
       }
       break;
+    case CHR_017_MANUAL_COMPOSITION_ACTION_KEY:
+      if (
+        action.to === CHR_019_FORM_ID &&
+        current.formId === CHR_017_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
+    case CHR_018_RETURN_ACTION_KEY:
+      if (
+        action.to === CHR_017_FORM_ID &&
+        current.formId === CHR_018_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
+    case CHR_019_PREVIEW_ACTION_KEY:
+      if (
+        action.to === CHR_042_FORM_ID &&
+        current.formId === CHR_019_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
+    case CHR_019_RETURN_ACTION_KEY:
+      if (
+        action.to === CHR_017_FORM_ID &&
+        current.formId === CHR_019_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
+    case CHR_042_RETURN_ACTION_KEY:
+      if (
+        action.to === CHR_019_FORM_ID &&
+        current.formId === CHR_042_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
     case CHR_017_RANDOM_START_ACTION_KEY:
       if (
         action.to === CHR_020_FORM_ID &&
@@ -2366,10 +2659,7 @@ function creationWizardContext(
     deviceId,
     entityLocalCharacterId: checkpoint.localCharacter.localCharacterId,
     entityRevisions: currentCreationWizardRevisions(checkpoint),
-    formId:
-      requestedPresentationFormId ??
-      inferredCreationSkillPresentationFormId(checkpoint) ??
-      checkpoint.nextStageEnvelope.formId,
+    formId: requestedPresentationFormId ?? creationPresentationFormId(checkpoint),
     identityDraftScope: null,
   };
 }
@@ -2391,6 +2681,7 @@ function sendCreationWizardDestination(
         creationWizardCapabilities(connection.executableWorkflowCommandIds),
         dependencies.skillStageCatalog,
         dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
       ),
@@ -3109,11 +3400,15 @@ function handleCommandRequest(
             : request.payload.sourceFormId === 'CHR-014'
               ? CHR_014_FORM_ID
               : CHR_015_FORM_ID;
+    const expectedFormIds: ReadonlySet<string> =
+      request.payload.sourceFormId === 'CHR-018'
+        ? new Set(['CHR-018', 'CHR-019', 'CHR-041'])
+        : new Set([expectedFormId]);
     if (
       current === null ||
       current.identityDraftScope !== null ||
       current.entityLocalCharacterId !== request.payload.characterDraftId ||
-      current.formId !== expectedFormId ||
+      !expectedFormIds.has(current.formId) ||
       !confirmedPlayerContext(current, dependencies) ||
       !connection.executableWorkflowCommandIds.has(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
     ) {
@@ -3146,7 +3441,7 @@ function handleCommandRequest(
     if (
       !isDeepStrictEqual(finalRevisions, revisions) ||
       connection.current !== current ||
-      connection.current.formId !== expectedFormId ||
+      !expectedFormIds.has(connection.current.formId) ||
       !confirmedPlayerContext(current, dependencies) ||
       !connection.executableWorkflowCommandIds.has(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
     ) {
@@ -3537,6 +3832,7 @@ function handleReconnectV2(
       creationCapabilities,
       dependencies.skillStageCatalog,
       dependencies.symbiontCatalog,
+      dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
     );
@@ -3549,6 +3845,7 @@ function handleReconnectV2(
       creationCapabilities,
       dependencies.skillStageCatalog,
       dependencies.symbiontCatalog,
+      dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
     );
@@ -3561,6 +3858,7 @@ function handleReconnectV2(
       creationCapabilities,
       dependencies.skillStageCatalog,
       dependencies.symbiontCatalog,
+      dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
     );
@@ -3602,6 +3900,7 @@ function handleReconnectV2(
       creationCapabilities,
       dependencies.skillStageCatalog,
       dependencies.symbiontCatalog,
+      dependencies.symbiontMediaCatalog,
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
       restored.formId === CHR_015_FORM_ID ? CHR_015_FORM_ID : undefined,
@@ -3868,6 +4167,15 @@ async function sendStaticFile(
   reply.type(contentType).send(await readFile(realPath));
 }
 
+function sendGeneratedMediaFile(
+  projectRoot: string,
+  filePath: string,
+  reply: FastifyReply,
+): Promise<void> {
+  const mediaRoot = resolve(projectRoot, 'generated', 'media');
+  return sendStaticFile(mediaRoot, relative(mediaRoot, filePath).split(sep).join('/'), reply);
+}
+
 export async function createHost(config: HostServerConfig): Promise<FastifyInstance> {
   for (const [name, value] of Object.entries({
     advanceRevisions: config.advanceRevisions,
@@ -3887,10 +4195,11 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     throw new TypeError('host onFrameError configuration must be a function');
   const projectRoot = resolve(config.projectRoot);
   const staticRoot = await realpath(resolve(config.staticRoot));
-  const [catalog, symbiontCatalog, vocabulary] = await Promise.all([
+  const [catalog, symbiontCatalog, vocabulary, symbiontMediaCatalog] = await Promise.all([
     loadAppProjectionCatalog(projectRoot),
     loadSymbiontCatalog(projectRoot),
     loadProtocolVocabulary(projectRoot),
+    loadSymbiontMediaCatalog(projectRoot),
   ]);
   const skillStageCatalog = symbiontCatalog.skillStage;
   const creationSkillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
@@ -3924,6 +4233,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     sampleCreationD20: config.sampleCreationD20,
     skillStageCatalog,
     symbiontCatalog,
+    symbiontMediaCatalog,
     vocabulary,
   };
   await app.register(websocket);
@@ -3961,6 +4271,34 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     }
     await reply.send({ deviceId });
   });
+  app.get<{ Params: { speciesKey: string } }>(
+    '/generated/media/symbionts/:speciesKey',
+    async (request, reply) => {
+      const speciesKey = request.params.speciesKey.endsWith('.png')
+        ? request.params.speciesKey.slice(0, -4)
+        : request.params.speciesKey;
+      const media = symbiontMediaCatalog.get(speciesKey as SymbiontSpeciesKey);
+      if (media === undefined || request.params.speciesKey !== `${speciesKey}.png`) {
+        await reply.code(404).send({ error: 'unknown symbiont art' });
+        return;
+      }
+      await sendGeneratedMediaFile(projectRoot, media.artFile, reply);
+    },
+  );
+  app.get<{ Params: { speciesKey: string } }>(
+    '/generated/media/development-trees/:speciesKey',
+    async (request, reply) => {
+      const speciesKey = request.params.speciesKey.endsWith('.png')
+        ? request.params.speciesKey.slice(0, -4)
+        : request.params.speciesKey;
+      const media = symbiontMediaCatalog.get(speciesKey as SymbiontSpeciesKey);
+      if (media === undefined || request.params.speciesKey !== `${speciesKey}.png`) {
+        await reply.code(404).send({ error: 'unknown symbiont development tree' });
+        return;
+      }
+      await sendGeneratedMediaFile(projectRoot, media.developmentTreeFile, reply);
+    },
+  );
   app.get('/', async (_request, reply) => {
     await sendStaticFile(staticRoot, 'index.html', reply);
   });

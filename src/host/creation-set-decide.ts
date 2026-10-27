@@ -4110,6 +4110,14 @@ const validatePostIdentityPayload = (
   }
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
+  if (
+    symbiontPresentationStage !== undefined &&
+    (raceAndMethodStage?.symbiontAcquisition.value !== 'MANUAL' ||
+      randomSymbiontStage !== null ||
+      advisorIntelligenceFloorStage !== null)
+  ) {
+    mismatches.push('symbiont presentation authority');
+  }
   const randomStartPending =
     randomSymbiontStage !== null &&
     randomSymbiontStage.pendingRollRequestOrNull === null &&
@@ -4162,9 +4170,11 @@ const validatePostIdentityPayload = (
       : symbiontPresentationStage !== undefined
         ? currentRevisions.projectionRevision === symbiontPresentationStage.projectionRevision &&
           symbiontPresentationStage.compositionDraftRevision ===
-            durablePayload.receipt.result.draftRevision &&
+            (manualCompositionStage?.compositionDraftRevision ??
+              durablePayload.receipt.result.draftRevision) &&
           symbiontPresentationStage.projectionRevision >= previousRevisions.projectionRevision
         : skillPresentationStage !== undefined &&
+            manualCompositionStage === null &&
             (randomSymbiontStage === null || durablePayload.nextStageEnvelope.formId === 'CHR-017')
           ? currentRevisions.projectionRevision === skillPresentationStage.projectionRevision &&
             skillPresentationStage.selectionRevision ===
@@ -4293,6 +4303,8 @@ export function loadCreationWizardCheckpoint(
     symbiontPresentationStage ?? undefined,
   );
   if (
+    symbiontPresentationStage !== null ||
+    checkpoint.manualCompositionStage !== null ||
     skillPresentationStage === null ||
     (checkpoint.randomSymbiontStage !== null && checkpoint.nextStageEnvelope.formId !== 'CHR-017')
   ) {

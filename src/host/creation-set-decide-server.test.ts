@@ -1771,7 +1771,7 @@ describe('durable character creation decisions', () => {
     }
   });
 
-  it('accepts the current set and completes the real CHR-012 → CHR-015 skill route', async () => {
+  it('accepts the current set and completes the skill route into the manual symbiont catalog', async () => {
     const harness = await createJourneyHarness(staticRoot, vocabulary, 'accept-set');
     let limitedSocket: WebSocket | undefined;
     let recoverySocket: WebSocket | undefined;
@@ -2249,17 +2249,18 @@ describe('durable character creation decisions', () => {
       expect(checkpointedChr015).toMatchObject({
         presentation: {
           base: {
-            availableActionKeys: [],
-            formId: 'CHR-015',
+            availableActionKeys: ['CHR-017::CTA::001'],
+            formId: 'CHR-017',
             roleFilteredPayload: {
-              commandId: selectionRequest.commandId,
-              paidSlotUsage: { usedSlotCount: eligibility.requiredSlotCount },
-              selectedSkillIds: selectedSkills.map(({ skillId }) => skillId),
-              selectionValidation: {
-                kind: 'EXACT',
-                requiredSlotCount: eligibility.requiredSlotCount,
-                usedSlotCount: eligibility.requiredSlotCount,
-              },
+              characterDraftId: harness.characterDraftId,
+              raceChoice: 'UNITED',
+              symbiontAcquisitionModeOrNull: 'MANUAL',
+              manualCompositionDraft: [],
+              slotCapacity: 4,
+              selectedSpeciesOrNull: null,
+              pureNoSymbiontRoute: false,
+              wizardCheckpointId: harness.wizardCheckpointId,
+              draftRevision: resultRevision(selectionResult, 'draftRevision'),
             },
           },
           layers: [],
@@ -2267,8 +2268,24 @@ describe('durable character creation decisions', () => {
         revisions: selectionResult.receipt.revisions,
       });
       if (checkpointedChr015.messageType !== 'projection.snapshot') {
-        throw new Error('skill selection did not publish checkpointed CHR-015');
+        throw new Error('skill selection did not publish the manual symbiont catalog');
       }
+      const projectedSpecies = checkpointedChr015.presentation.base.roleFilteredPayload[
+        'eligibleSymbiontSpecies'
+      ];
+      if (!Array.isArray(projectedSpecies)) throw new Error('manual catalog lacks species');
+      expect(projectedSpecies).toHaveLength(23);
+      expect(
+        projectedSpecies.some((entry) => {
+          if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false;
+          const row = entry as Record<string, unknown>;
+          return (
+            row['speciesKey'] === 'EEL' &&
+            row['bindingPolicy'] === 'EEL_ARM' &&
+            row['slotCost'] === 1
+          );
+        }),
+      ).toBe(true);
       expect(JSON.stringify(checkpointedChr015.presentation.base.roleFilteredPayload)).not.toMatch(
         /SKL-|CORE-|REQ-|Q-/u,
       );
@@ -2283,7 +2300,7 @@ describe('durable character creation decisions', () => {
       });
       expect(hostMessageV2(directSelectionReplay[1] ?? '', vocabulary)).toMatchObject({
         presentation: {
-          base: { availableActionKeys: [], formId: 'CHR-015' },
+          base: { availableActionKeys: ['CHR-017::CTA::001'], formId: 'CHR-017' },
           layers: [],
         },
         revisions: selectionResult.receipt.revisions,
@@ -2307,7 +2324,7 @@ describe('durable character creation decisions', () => {
       });
       expect(hostMessageV2(selectionRecovered[2] ?? '', vocabulary)).toMatchObject({
         presentation: {
-          base: { availableActionKeys: [], formId: 'CHR-015' },
+          base: { availableActionKeys: ['CHR-017::CTA::001'], formId: 'CHR-017' },
           layers: [],
         },
         revisions: selectionResult.receipt.revisions,
