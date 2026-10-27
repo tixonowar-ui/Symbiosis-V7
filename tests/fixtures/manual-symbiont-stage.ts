@@ -15,10 +15,18 @@ import {
   type DurableCreationWizardCheckpoint,
 } from '../../src/host/creation-set-decide.js';
 import { commitCreationRoll } from '../../src/host/creation-roll-commit.js';
-import type {
-  ManualBindingSelection,
-  ManualCompositionCheckpointCommandRequest,
+import {
+  advisorIntelligenceFloorStageFromCheckpoint,
+  type ManualAdvisorIwRollCommandRequest,
+  type ManualAdvisorSkillCheckpointCommandRequest,
+  type ManualBindingSelection,
+  type ManualCompositionCheckpointCommandRequest,
 } from '../../src/host/creation-manual-composition-contract.js';
+import type { AdvisorIntelligenceFloorRollCommandRequest } from '../../src/host/creation-advisor-intelligence-floor-contract.js';
+import type { CreationSkillCatalog } from '../../src/host/creation-skill-catalog.js';
+import type { SelectedSkillCommandInput } from '../../src/host/creation-skill-selection.js';
+import { deriveCreationSkillStageResult } from '../../src/host/creation-stat-assignment.js';
+import { createAdvisorSkillOptions } from '../../src/host/symbiont-stage-catalog.js';
 import { commitCreationWizardCheckpoint } from '../../src/host/creation-wizard-checkpoint.js';
 import {
   commitIdentityCheckpoint,
@@ -329,7 +337,9 @@ export function manualCompositionRequest(
       })),
       characterDraftId: setup.characterDraftId,
       draftRevision: current.receipt.result.draftRevision,
-      compositionDraftRevision: current.receipt.result.draftRevision,
+      compositionDraftRevision:
+        current.manualCompositionStage?.compositionDraftRevision ??
+        current.receipt.result.draftRevision,
       selectedBindings,
       sourceFormId: 'CHR-018',
       stage: 'SYMBIONTS',
@@ -348,4 +358,140 @@ export function manualRace(setup: ManualWizardSetup): RandomSymbiontRaceCode {
     throw new Error('expected FREE or UNITED');
   }
   return raceChoice;
+}
+
+function manualStage(current: DurableCreationWizardCheckpoint) {
+  const stage = current.manualCompositionStage;
+  if (
+    stage === null ||
+    stage === undefined ||
+    stage.advisorInstanceDraftIdOrNull === null ||
+    stage.iwRollRequestIdsOrNull === null
+  ) {
+    throw new Error('expected manual Advisor stage');
+  }
+  return stage;
+}
+
+export function manualAdvisorIwRequest(
+  setup: ManualWizardSetup,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+  manualFacesOrNull: readonly [number, number] | null,
+): ManualAdvisorIwRollCommandRequest {
+  const stage = manualStage(current);
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(current),
+    messageType: 'command.request',
+    payload: {
+      advisorInstanceDraftId: stage.advisorInstanceDraftIdOrNull!,
+      characterDraftId: setup.characterDraftId,
+      compositionDraftRevision: stage.compositionDraftRevision,
+      draftRevision: current.receipt.result.draftRevision,
+      manualFacesOrNull,
+      pendingRollRequestIds: stage.iwRollRequestIdsOrNull!,
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      variant: 'ADVISOR_IW',
+      wizardCheckpointId: setup.wizardCheckpointId,
+    },
+    protocolVersion: 1,
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  };
+}
+
+export function manualAdvisorSkillRequest(
+  setup: ManualWizardSetup,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+  selectedSkills: readonly SelectedSkillCommandInput[],
+): ManualAdvisorSkillCheckpointCommandRequest {
+  const stage = manualStage(current);
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(current),
+    messageType: 'command.request',
+    payload: {
+      advisorInstanceDraftId: stage.advisorInstanceDraftIdOrNull!,
+      characterDraftId: setup.characterDraftId,
+      compositionDraftRevision: stage.compositionDraftRevision,
+      draftRevision: current.receipt.result.draftRevision,
+      selectedSkills,
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      variant: 'MANUAL_ADVISOR_SKILLS',
+      wizardCheckpointId: setup.wizardCheckpointId,
+    },
+    protocolVersion: 1,
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+  };
+}
+
+export function manualAdvisorFloorRollRequest(
+  setup: ManualWizardSetup,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+  manualFaceOrNull: number | null,
+): AdvisorIntelligenceFloorRollCommandRequest {
+  const stage = advisorIntelligenceFloorStageFromCheckpoint(current);
+  if (stage === null || stage.pendingRollRequestIdOrNull === null) {
+    throw new Error('expected pending manual Advisor B');
+  }
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(current),
+    messageType: 'command.request',
+    payload: {
+      advisorInstanceDraftId: stage.advisorInstanceDraftId,
+      characterDraftId: setup.characterDraftId,
+      compositionDraftRevision: stage.compositionDraftRevision,
+      draftRevision: current.receipt.result.draftRevision,
+      manualFaceOrNull,
+      pendingRollRequestId: stage.pendingRollRequestIdOrNull,
+      sourceFormId: 'CHR-041',
+      stage: 'SYMBIONTS',
+      variant: 'TROGR_SUPPRESSION_B',
+      wizardCheckpointId: setup.wizardCheckpointId,
+    },
+    protocolVersion: 1,
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  };
+}
+
+export function exactManualAdvisorSkills(
+  current: DurableCreationWizardCheckpoint,
+  presentation: CreationSkillCatalog,
+): readonly SelectedSkillCommandInput[] {
+  const stage = manualStage(current);
+  const advisorIw = stage.advisorIwRecordOrNull?.receipt.result.advisorIw;
+  if (advisorIw === undefined) throw new Error('expected committed manual I/W');
+  const stats = deriveCreationSkillStageResult(current, CATALOG.skillStage).skillStageStats;
+  const options = createAdvisorSkillOptions(CATALOG, presentation, advisorIw, {
+    S: stats.S,
+    D: stats.D,
+    M: stats.M,
+    Z: stats.Z,
+    C: stats.C,
+  });
+  let remaining = options.requiredSlotCount;
+  const selected: SelectedSkillCommandInput[] = [];
+  for (const candidate of options.skillOptions) {
+    let level;
+    for (const option of candidate.levelOptions) {
+      if (option.slotCost <= remaining) level = option;
+    }
+    if (level === undefined) continue;
+    selected.push({ skillId: candidate.skillId, targetBonus: level.targetBonus });
+    remaining -= level.slotCost;
+    if (remaining === 0) break;
+  }
+  if (remaining !== 0) throw new Error('manual Advisor fixture could not fill exact slots');
+  return selected;
 }

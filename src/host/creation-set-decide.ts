@@ -3255,11 +3255,26 @@ const validateStatRollHistory = (
     durablePayload.raceAndMethodStage.diceInput?.value === 'AUTO'
       ? [symbiontPayload.advisorIntelligenceFloorStage.rollRecordOrNull.receipt.receiptId]
       : [];
+  const manualRandomReceiptIds =
+    symbiontPayload?.manualCompositionStage?.diceInputModeSnapshot === 'AUTO'
+      ? [
+          ...(symbiontPayload.manualCompositionStage.advisorIwRecordOrNull?.physicalRolls.map(
+            (roll) => roll.rollReceiptId,
+          ) ?? []),
+          ...(symbiontPayload.manualCompositionStage.suppressionRollRecordOrNull === null
+            ? []
+            : [
+                symbiontPayload.manualCompositionStage.suppressionRollRecordOrNull.receipt
+                  .receiptId,
+              ]),
+        ]
+      : [];
   if (
     !isDeepStrictEqual(durablePayload.randomReceiptIds, [
       ...expectedRandomReceiptIds,
       ...symbiontRandomReceiptIds,
       ...floorRandomReceiptIds,
+      ...manualRandomReceiptIds,
     ])
   ) {
     mismatches.push('randomReceiptIds roll provenance');

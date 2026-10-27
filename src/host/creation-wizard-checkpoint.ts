@@ -34,6 +34,14 @@ import {
   type ManualCompositionCheckpointCommandRequest,
 } from './creation-manual-composition-contract.js';
 import {
+  commitManualAdvisorSkills,
+  preflightManualAdvisorSkills,
+} from './creation-manual-advisor.js';
+import {
+  normalizeManualAdvisorSkillCheckpointRequest,
+  type ManualAdvisorSkillCheckpointCommandRequest,
+} from './creation-manual-advisor-contract.js';
+import {
   CreationSymbiontApplicationError,
   normalizeSymbiontAdvisorCheckpointRequest,
   type SymbiontAdvisorCheckpointCommandRequest,
@@ -103,7 +111,8 @@ export type CreationWizardCheckpointCommandRequest =
   | StatAssignmentCheckpointCommandRequest
   | SkillCheckpointCommandRequest
   | SymbiontAdvisorCheckpointCommandRequest
-  | ManualCompositionCheckpointCommandRequest;
+  | ManualCompositionCheckpointCommandRequest
+  | ManualAdvisorSkillCheckpointCommandRequest;
 
 export type CreationWizardCheckpointPreflight =
   | {
@@ -125,7 +134,9 @@ export type CreationWizardCheckpointPreflight =
   | {
       readonly stage: 'SYMBIONTS';
       readonly request:
-        SymbiontAdvisorCheckpointCommandRequest | ManualCompositionCheckpointCommandRequest;
+        | SymbiontAdvisorCheckpointCommandRequest
+        | ManualCompositionCheckpointCommandRequest
+        | ManualAdvisorSkillCheckpointCommandRequest;
       readonly checkpoint: DurableCreationWizardCheckpoint;
     };
 
@@ -162,8 +173,15 @@ const CHECKPOINT_STAGE_NORMALIZERS = {
       !Array.isArray(request.payload)
         ? (request.payload as Record<string, unknown>)['sourceFormId']
         : undefined;
-    return sourceFormId === 'CHR-018'
-      ? normalizeManualCompositionCheckpointRequest(request)
+    if (sourceFormId === 'CHR-018') return normalizeManualCompositionCheckpointRequest(request);
+    const variant =
+      request.payload !== null &&
+      typeof request.payload === 'object' &&
+      !Array.isArray(request.payload)
+        ? (request.payload as Record<string, unknown>)['variant']
+        : undefined;
+    return sourceFormId === 'CHR-041' && variant === 'MANUAL_ADVISOR_SKILLS'
+      ? normalizeManualAdvisorSkillCheckpointRequest(request)
       : normalizeSymbiontAdvisorCheckpointRequest(request);
   },
 } as const satisfies Record<
@@ -325,7 +343,10 @@ export function preflightCreationWizardCheckpoint(
       const preflight =
         normalized.payload.sourceFormId === 'CHR-018'
           ? preflightManualComposition(database, normalized, symbiontCatalog)
-          : preflightCreationSymbiontAdvisor(database, normalized, symbiontCatalog);
+          : 'variant' in normalized.payload &&
+              normalized.payload.variant === 'MANUAL_ADVISOR_SKILLS'
+            ? preflightManualAdvisorSkills(database, normalized, symbiontCatalog)
+            : preflightCreationSymbiontAdvisor(database, normalized, symbiontCatalog);
       return {
         checkpoint: preflight.checkpoint,
         request: preflight.request,
@@ -638,14 +659,26 @@ export function commitCreationWizardCheckpoint(
   }
   if (preflight.stage === 'SYMBIONTS') {
     try {
-      if (preflight.request.payload.sourceFormId === 'CHR-018') {
+      if (
+        preflight.request.payload.sourceFormId === 'CHR-018' ||
+        ('variant' in preflight.request.payload &&
+          preflight.request.payload.variant === 'MANUAL_ADVISOR_SKILLS')
+      ) {
         if (manualCompositionDependencies === undefined) {
-          throw new Error('MANUAL_COMPOSITION checkpoint requires roll dependencies');
+          throw new Error('manual symbiont checkpoint requires roll dependencies');
         }
-        return commitManualComposition(database, preflight.request, receiptId, {
+        const dependencies = {
           catalog: fullSymbiontCatalog(catalog)!,
           ...manualCompositionDependencies,
-        });
+        };
+        return preflight.request.payload.sourceFormId === 'CHR-018'
+          ? commitManualComposition(database, preflight.request, receiptId, dependencies)
+          : commitManualAdvisorSkills(
+              database,
+              preflight.request,
+              receiptId,
+              dependencies,
+            );
       }
       return commitCreationSymbiontAdvisor(
         database,

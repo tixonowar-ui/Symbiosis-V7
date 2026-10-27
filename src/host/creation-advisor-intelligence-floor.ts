@@ -31,6 +31,7 @@ import {
   type AdvisorIntelligenceFloorRollCommandRequest,
   type AdvisorIntelligenceFloorStage,
 } from './creation-advisor-intelligence-floor-contract.js';
+import { advisorIntelligenceFloorStageForManual } from './creation-manual-advisor-contract.js';
 
 type DecodedCommandRequest = Parameters<typeof normalizeAdvisorIntelligenceFloorRollRequest>[0];
 
@@ -62,7 +63,7 @@ export function preflightAdvisorIntelligenceFloorRoll(
     normalized.payload.draftRevision,
     receiptId,
   );
-  const stage = checkpoint.advisorIntelligenceFloorStage;
+  const stage = advisorIntelligenceFloorStageForManual(checkpoint, catalog);
   if (
     stage === null ||
     stage === undefined ||
@@ -143,6 +144,7 @@ export function commitAdvisorIntelligenceFloorRoll(
         pendingRollRequestIdOrNull: null,
         rollRecordOrNull,
       };
+      const manualCompositionStage = current.checkpoint.manualCompositionStage;
       const nextPayload = {
         ...current.checkpoint.durablePayload,
         nextStageEnvelope: rollRecordOrNull.nextStageEnvelope,
@@ -151,7 +153,15 @@ export function commitAdvisorIntelligenceFloorRoll(
           current.stage.diceInputModeSnapshot === 'AUTO'
             ? [...current.checkpoint.durablePayload.randomReceiptIds, receiptId]
             : current.checkpoint.durablePayload.randomReceiptIds,
-        advisorIntelligenceFloorStage,
+        ...(manualCompositionStage === null || manualCompositionStage === undefined
+          ? { advisorIntelligenceFloorStage }
+          : {
+              manualCompositionStage: {
+                ...manualCompositionStage,
+                pendingSuppressionRollRequestIdOrNull: null,
+                suppressionRollRecordOrNull: rollRecordOrNull,
+              },
+            }),
       };
       return update(
         { payloadJson: JSON.stringify(nextPayload) },

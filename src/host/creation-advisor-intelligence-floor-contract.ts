@@ -334,6 +334,15 @@ function rollRecordAt(value: unknown, label: string): AdvisorIntelligenceFloorRo
   };
 }
 
+export function parseAdvisorIntelligenceFloorRollRecord(
+  value: unknown,
+  path: string,
+): AdvisorIntelligenceFloorRollRecord {
+  const record = rollRecordAt(value, path);
+  if (record === null) return guardSymbiontRejected();
+  return record;
+}
+
 export function parseAdvisorIntelligenceFloorStage(
   value: unknown,
   catalog: SymbiontCatalog,
@@ -559,6 +568,7 @@ export interface AdvisorIntelligenceFloorValidationContext {
   readonly commandIds: Set<string>;
   readonly receiptIds: Set<string>;
   readonly occupiedIds: Set<string>;
+  readonly idsAlreadyOccupied?: boolean;
 }
 
 function occupy(context: AdvisorIntelligenceFloorValidationContext, id: string): void {
@@ -582,7 +592,9 @@ export function validateAdvisorIntelligenceFloorStageHistory(
   ) {
     return guardSymbiontRejected();
   }
-  for (const id of advisorIntelligenceFloorStageIds(stage)) occupy(context, id);
+  if (context.idsAlreadyOccupied !== true) {
+    for (const id of advisorIntelligenceFloorStageIds(stage)) occupy(context, id);
+  }
   const record = stage.rollRecordOrNull;
   let cursor = context.cursor;
   if (cursor.latestReceipt.result.stage === 'SKILLS') {

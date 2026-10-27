@@ -36,6 +36,15 @@ import {
   type ManualCompositionRecord,
   type ManualCompositionStage,
 } from './creation-manual-composition-contract.js';
+import { advisorIntelligenceFloorStageForManual } from './creation-manual-advisor-contract.js';
+import {
+  validateManualAdvisorIwRecord,
+  validateManualAdvisorSkillRecord,
+} from './creation-manual-advisor.js';
+import {
+  advisorSuppressedByTrogr,
+  validateAdvisorIntelligenceFloorStageHistory,
+} from './creation-advisor-intelligence-floor-contract.js';
 
 export { latestManualCompositionRecord } from './creation-manual-composition-contract.js';
 
@@ -202,7 +211,18 @@ export function commitManualComposition(
         iwRollRequestIdsOrNull,
         advisorIwRecordOrNull: currentStage?.advisorIwRecordOrNull ?? null,
         pendingSuppressionRollRequestIdOrNull:
-          currentStage?.pendingSuppressionRollRequestIdOrNull ?? null,
+          currentStage?.suppressionRollRecordOrNull === null &&
+          currentStage.advisorIwRecordOrNull !== null &&
+          hasAdvisor &&
+          advisorSuppressedByTrogr(validated.composition)
+            ? (currentStage.pendingSuppressionRollRequestIdOrNull ??
+              freshManualId(
+                current.checkpoint,
+                normalized.commandId,
+                receiptId,
+                dependencies.allocateRollRequestId,
+              ))
+            : (currentStage?.pendingSuppressionRollRequestIdOrNull ?? null),
         suppressionRollRecordOrNull: currentStage?.suppressionRollRecordOrNull ?? null,
         advisorSkillRecordOrNull: currentStage?.advisorSkillRecordOrNull ?? null,
       };
@@ -261,106 +281,154 @@ export function validateManualCompositionStageHistory(
   }
   for (const id of manualCompositionStageIds(stage)) occupy(context, id);
   let cursor = context.cursor;
-  for (const record of stage.compositionRecords) {
-    const validated = validateManualSymbiontComposition(context.catalog, {
-      raceCode: stage.composition.raceCode,
-      acceptedSpecies: record.acceptedSpecies,
-      selectedBindings: record.request.payload.selectedBindings,
-    });
-    if (
-      !isDeepStrictEqual(record.bindings, validated.bindings) ||
-      !isDeepStrictEqual(record.acceptedSpecies, validated.composition.acceptedSpecies)
-    ) {
-      return guardSymbiontRejected();
-    }
-    const request = record.request;
-    if (
-      request.payload.characterDraftId !== context.localCharacter.localCharacterId ||
-      request.payload.wizardCheckpointId !== context.checkpoint.checkpointId ||
-      request.payload.draftRevision !== cursor.draftRevision ||
-      request.payload.compositionDraftRevision !== cursor.draftRevision ||
-      !isDeepStrictEqual(request.expectedRevisions, cursor.revisions)
-    ) {
-      return guardSymbiontRejected();
-    }
-    if (context.commandIds.has(request.commandId)) return guardSymbiontRejected();
-    context.commandIds.add(request.commandId);
-    if (context.receiptIds.has(record.receipt.receiptId)) return guardSymbiontRejected();
-    context.receiptIds.add(record.receipt.receiptId);
-    const revisions = {
-      actorVisibilityRevision: request.expectedRevisions.actorVisibilityRevision,
-      projectionRevision: request.expectedRevisions.projectionRevision + 1,
-      stateRevision: request.expectedRevisions.stateRevision + 1,
-    };
-    const receipt = manualCompositionCheckpointReceipt(
-      {
-        checkpoint: context.checkpointView,
-        receiptId: record.receipt.receiptId,
-        revisions,
-        checkpointRevision: cursor.checkpointRevision + 1,
-        draftRevision: cursor.draftRevision + 1,
-        compositionDraftRevision: cursor.draftRevision + 1,
-      },
-      request,
-      validated.composition,
-      validated.bindings,
-    );
-    if (!isDeepStrictEqual(record.receipt, receipt)) return guardSymbiontRejected();
-    const nextStageEnvelope = nextSymbiontEnvelope(
-      receipt.result.nextFormId,
-      context.localCharacter.localCharacterId,
-    );
-    if (!isDeepStrictEqual(record.nextStageEnvelope, nextStageEnvelope)) {
-      return guardSymbiontRejected();
-    }
-    cursor = {
-      checkpointRevision: cursor.checkpointRevision + 1,
-      draftRevision: cursor.draftRevision + 1,
-      latestEnvelope: nextStageEnvelope,
-      latestReceipt: receipt,
-      latestRequest: request,
-      revisions,
-    };
-  }
+  let currentComposition: SymbiontComposition | null = null;
+  let compositionDraftRevision: number | null = null;
+  let advisorEverPresent = false;
+  let iwCommitted = false;
+  let suppressionCommitted = false;
+  let pendingSuppressionExpected = false;
   if (
-    stage.advisorIwRecordOrNull !== null ||
-    stage.suppressionRollRecordOrNull !== null ||
-    stage.advisorSkillRecordOrNull !== null
-  ) {
-    return guardSymbiontRejected();
-  }
-  if (
-    stage.pendingSuppressionRollRequestIdOrNull !== null ||
-    stage.compositionDraftRevision !== cursor.draftRevision
-  ) {
-    return guardSymbiontRejected();
-  }
-  const latestRecord = stage.compositionRecords.at(-1)!;
-  if (
-    !isDeepStrictEqual(
-      stage.composition,
-      validateManualSymbiontComposition(context.catalog, {
-        raceCode: stage.composition.raceCode,
-        acceptedSpecies: latestRecord.acceptedSpecies,
-        selectedBindings: latestRecord.request.payload.selectedBindings,
-      }).composition,
+    stage.compositionRecords.some(
+      (record, index, records) =>
+        index > 0 &&
+        record.receipt.result.draftRevision <= records[index - 1]!.receipt.result.draftRevision,
     )
   ) {
     return guardSymbiontRejected();
   }
-  const advisorPresent = stage.composition.acceptedSpecies.some(
-    (accepted) => accepted.speciesKey === 'ADVISER',
-  );
-  if (
-    advisorPresent &&
-    (stage.advisorInstanceDraftIdOrNull === null || stage.iwRollRequestIdsOrNull === null)
-  ) {
-    return guardSymbiontRejected();
+  const records = [
+    ...stage.compositionRecords,
+    ...(stage.advisorIwRecordOrNull === null ? [] : [stage.advisorIwRecordOrNull]),
+    ...(stage.suppressionRollRecordOrNull === null ? [] : [stage.suppressionRollRecordOrNull]),
+    ...(stage.advisorSkillRecordOrNull === null ? [] : [stage.advisorSkillRecordOrNull]),
+  ].sort((left, right) => left.receipt.result.draftRevision - right.receipt.result.draftRevision);
+  for (const record of records) {
+    if (record.receipt.result.draftRevision !== cursor.draftRevision + 1) {
+      return guardSymbiontRejected();
+    }
+    if ('acceptedSpecies' in record) {
+      const validated = validateManualSymbiontComposition(context.catalog, {
+        raceCode: stage.composition.raceCode,
+        acceptedSpecies: record.acceptedSpecies,
+        selectedBindings: record.request.payload.selectedBindings,
+      });
+      if (
+        !isDeepStrictEqual(record.bindings, validated.bindings) ||
+        !isDeepStrictEqual(record.acceptedSpecies, validated.composition.acceptedSpecies)
+      ) {
+        return guardSymbiontRejected();
+      }
+      const request = record.request;
+      if (
+        request.payload.characterDraftId !== context.localCharacter.localCharacterId ||
+        request.payload.wizardCheckpointId !== context.checkpoint.checkpointId ||
+        request.payload.draftRevision !== cursor.draftRevision ||
+        request.payload.compositionDraftRevision !==
+          (compositionDraftRevision ?? cursor.draftRevision) ||
+        !isDeepStrictEqual(request.expectedRevisions, cursor.revisions)
+      ) {
+        return guardSymbiontRejected();
+      }
+      if (context.commandIds.has(request.commandId)) return guardSymbiontRejected();
+      context.commandIds.add(request.commandId);
+      if (context.receiptIds.has(record.receipt.receiptId)) return guardSymbiontRejected();
+      context.receiptIds.add(record.receipt.receiptId);
+      const receipt = manualCompositionCheckpointReceipt(
+        {
+          checkpoint: context.checkpointView,
+          receiptId: record.receipt.receiptId,
+          revisions: incrementedSymbiontRevisions(request.expectedRevisions),
+          checkpointRevision: cursor.checkpointRevision + 1,
+          draftRevision: cursor.draftRevision + 1,
+          compositionDraftRevision: cursor.draftRevision + 1,
+        },
+        request,
+        validated.composition,
+        validated.bindings,
+      );
+      const nextStageEnvelope = nextSymbiontEnvelope(
+        receipt.result.nextFormId,
+        context.localCharacter.localCharacterId,
+      );
+      if (
+        !isDeepStrictEqual(record.receipt, receipt) ||
+        !isDeepStrictEqual(record.nextStageEnvelope, nextStageEnvelope)
+      ) {
+        return guardSymbiontRejected();
+      }
+      cursor = {
+        checkpointRevision: cursor.checkpointRevision + 1,
+        draftRevision: cursor.draftRevision + 1,
+        latestEnvelope: nextStageEnvelope,
+        latestReceipt: receipt,
+        latestRequest: request,
+        revisions: receipt.revisions,
+      };
+      currentComposition = validated.composition;
+      compositionDraftRevision = receipt.result.compositionDraftRevision;
+      advisorEverPresent ||= validated.composition.acceptedSpecies.some(
+        (accepted) => accepted.speciesKey === 'ADVISER',
+      );
+      if (iwCommitted && !suppressionCommitted && advisorSuppressedByTrogr(validated.composition)) {
+        pendingSuppressionExpected = true;
+      }
+      continue;
+    }
+    if (currentComposition === null || compositionDraftRevision === null) {
+      return guardSymbiontRejected();
+    }
+    if ('physicalRolls' in record) {
+      cursor = validateManualAdvisorIwRecord(stage, currentComposition, compositionDraftRevision, {
+        ...context,
+        cursor,
+      }).cursor;
+      iwCommitted = true;
+      if (advisorSuppressedByTrogr(currentComposition)) pendingSuppressionExpected = true;
+      continue;
+    }
+    if ('physicalRoll' in record) {
+      if (
+        !iwCommitted ||
+        suppressionCommitted ||
+        !pendingSuppressionExpected ||
+        (stage.pendingSuppressionRollRequestIdOrNull !== null &&
+          stage.pendingSuppressionRollRequestIdOrNull !==
+            record.request.payload.pendingRollRequestId) ||
+        !advisorSuppressedByTrogr(currentComposition)
+      ) {
+        return guardSymbiontRejected();
+      }
+      const floorStage = advisorIntelligenceFloorStageForManual(
+        { ...context.checkpointView, manualCompositionStage: stage },
+        context.catalog,
+      );
+      if (floorStage === null) return guardSymbiontRejected();
+      cursor = validateAdvisorIntelligenceFloorStageHistory(floorStage, {
+        ...context,
+        cursor,
+        idsAlreadyOccupied: true,
+      }).cursor;
+      suppressionCommitted = true;
+      pendingSuppressionExpected = false;
+      continue;
+    }
+    if (advisorSuppressedByTrogr(currentComposition) && (!iwCommitted || !suppressionCommitted)) {
+      return guardSymbiontRejected();
+    }
+    cursor = validateManualAdvisorSkillRecord(stage, currentComposition, compositionDraftRevision, {
+      ...context,
+      cursor,
+    }).cursor;
   }
   if (
-    !advisorPresent &&
-    stage.advisorInstanceDraftIdOrNull === null &&
-    stage.iwRollRequestIdsOrNull !== null
+    currentComposition === null ||
+    compositionDraftRevision === null ||
+    !isDeepStrictEqual(stage.composition, currentComposition) ||
+    stage.compositionDraftRevision !== compositionDraftRevision ||
+    advisorEverPresent !==
+      (stage.advisorInstanceDraftIdOrNull !== null && stage.iwRollRequestIdsOrNull !== null) ||
+    (stage.advisorInstanceDraftIdOrNull === null) !== (stage.iwRollRequestIdsOrNull === null) ||
+    pendingSuppressionExpected !== (stage.pendingSuppressionRollRequestIdOrNull !== null)
   ) {
     return guardSymbiontRejected();
   }

@@ -32,11 +32,13 @@ import {
   CreationSymbiontApplicationError,
   d20SymbiontFaceAt,
   exactSymbiontObject,
+  guardSymbiontRejected,
   nonEmptySymbiontStringAt,
   objectSymbiontAt,
   revisionSymbiontAt,
 } from './creation-symbiont-contract.js';
-import { nextSymbiontEnvelope } from './creation-symbiont-contract.js';
+import { nextSymbiontEnvelope, positiveSymbiontIntegerAt } from './creation-symbiont-contract.js';
+import { parseAdvisorIntelligenceFloorRollRecord } from './creation-advisor-intelligence-floor-contract.js';
 import type {
   AdvisorIntelligenceFloorRollRecord,
   AdvisorIntelligenceFloorStage,
@@ -453,7 +455,7 @@ export function normalizeManualAdvisorSkillCheckpointRequest(
         item['skillId'],
         `$.payload.selectedSkills[${String(index)}].skillId`,
       ),
-      targetBonus: revisionSymbiontAt(
+      targetBonus: positiveSymbiontIntegerAt(
         item['targetBonus'],
         `$.payload.selectedSkills[${String(index)}].targetBonus`,
       ),
@@ -891,7 +893,10 @@ export function parseManualCompositionStage(
   const suppressionRollRecordOrNull =
     object['suppressionRollRecordOrNull'] === null
       ? null
-      : (object['suppressionRollRecordOrNull'] as AdvisorIntelligenceFloorRollRecord);
+      : parseAdvisorIntelligenceFloorRollRecord(
+          object['suppressionRollRecordOrNull'],
+          '$.manualCompositionStage.suppressionRollRecordOrNull',
+        );
   const advisorSkillRecordOrNull =
     object['advisorSkillRecordOrNull'] === null
       ? null
@@ -945,7 +950,9 @@ export function manualCompositionStageIds(stage: ManualCompositionStage): Readon
   for (const record of stage.compositionRecords)
     ids.push(record.request.commandId, record.receipt.receiptId);
   if (stage.advisorInstanceDraftIdOrNull !== null) ids.push(stage.advisorInstanceDraftIdOrNull);
-  if (stage.iwRollRequestIdsOrNull !== null) ids.push(...stage.iwRollRequestIdsOrNull);
+  if (stage.iwRollRequestIdsOrNull !== null && stage.advisorIwRecordOrNull === null) {
+    ids.push(...stage.iwRollRequestIdsOrNull);
+  }
   if (stage.advisorIwRecordOrNull !== null) {
     ids.push(stage.advisorIwRecordOrNull.request.commandId);
     for (const roll of stage.advisorIwRecordOrNull.physicalRolls)
@@ -984,13 +991,26 @@ export function advisorIntelligenceFloorStageFromCheckpoint(
   const stage = checkpoint.manualCompositionStage;
   const record = stage?.advisorIwRecordOrNull;
   if (stage === null || stage === undefined || record === null || record === undefined) return null;
+  const advisorInstanceDraftId = stage.advisorInstanceDraftIdOrNull;
+  const iwRollRequestIds = stage.iwRollRequestIdsOrNull;
+  if (advisorInstanceDraftId === null || iwRollRequestIds === null) {
+    return guardSymbiontRejected();
+  }
+  const suppressionRecord = stage.suppressionRollRecordOrNull;
+  const compositionDraftRevision =
+    suppressionRecord?.request.payload.compositionDraftRevision ?? stage.compositionDraftRevision;
+  const composition =
+    compositionAtRoll ??
+    (suppressionRecord === null || compositionDraftRevision === stage.compositionDraftRevision
+      ? stage.composition
+      : guardSymbiontRejected());
   return {
-    advisorInstanceDraftId: stage.advisorInstanceDraftIdOrNull!,
-    composition: compositionAtRoll ?? stage.composition,
-    compositionDraftRevision: stage.compositionDraftRevision,
+    advisorInstanceDraftId,
+    composition,
+    compositionDraftRevision,
     diceInputModeSnapshot: stage.diceInputModeSnapshot,
     advisorIw: record.receipt.result.advisorIw,
-    iwRollRequestIds: stage.iwRollRequestIdsOrNull!,
+    iwRollRequestIds,
     iwRollReceiptIds: [
       record.physicalRolls[0].rollReceiptId,
       record.physicalRolls[1].rollReceiptId,
@@ -999,10 +1019,10 @@ export function advisorIntelligenceFloorStageFromCheckpoint(
       stage.advisorSkillRecordOrNull === null
         ? null
         : {
-            receiptId: stage.advisorSkillRecordOrNull!.receipt.receiptId,
-            selectedSkills: stage.advisorSkillRecordOrNull!.selectedSkills,
+            receiptId: stage.advisorSkillRecordOrNull.receipt.receiptId,
+            selectedSkills: stage.advisorSkillRecordOrNull.selectedSkills,
           },
     pendingRollRequestIdOrNull: stage.pendingSuppressionRollRequestIdOrNull,
-    rollRecordOrNull: stage.suppressionRollRecordOrNull,
+    rollRecordOrNull: suppressionRecord,
   };
 }

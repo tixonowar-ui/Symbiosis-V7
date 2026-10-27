@@ -45,7 +45,7 @@ function exactKeys(object: Record<string, unknown>, keys: readonly string[], pat
 
 function text(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.length === 0) fail(`${path} must be non-empty`);
-  return value as string;
+  return value;
 }
 
 function literal(value: unknown, expected: string, path: string): void {
