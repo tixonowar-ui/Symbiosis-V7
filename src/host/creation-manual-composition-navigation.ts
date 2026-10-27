@@ -24,6 +24,8 @@ const ROUTES = {
   'CHR-017': '/player/characters/:localCharacterId/create/chr-017',
   'CHR-018': '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
   'CHR-019': '/player/characters/:localCharacterId/create/chr-019',
+  'CHR-021': '/player/characters/:localCharacterId/create/chr-021',
+  'CHR-022': '/player/characters/:localCharacterId/create/chr-022',
   'CHR-041': '/player/characters/:localCharacterId/create/chr-041',
   'CHR-042': '/player/characters/:localCharacterId/create/chr-042',
 } as const;
@@ -244,7 +246,7 @@ export function handleSymbiontAddressableRoute(
 
 export function writeManualCommandPresentation(
   database: Database.Database,
-  formId: 'CHR-019' | 'CHR-041',
+  formId: 'CHR-019' | 'CHR-021' | 'CHR-022' | 'CHR-041',
   characterDraftId: string,
   compositionDraftRevision: number,
   projectionRevision: number,
