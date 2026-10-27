@@ -65,9 +65,11 @@ Build Tools, проверь `allowScripts`.
 | --------------------------------- | ----------------------------------------------------------------------------------------- |
 | `npm run verify`                  | **главная проверка**: суммы → трассируемость → типы → линтер → формат → тесты → валидация |
 | `npm run import`                  | `artifacts/` → `generated/`                                                               |
+| `npm run import:verify`           | два импорта, сравнение полного состава и SHA-256 всех файлов `generated/`                 |
 | `npm start`                       | запустить host и готовый `dist/web`; сборку не выполняет                                  |
 | `npm run build`                   | Vite собирает веб-клиент в `dist/web`                                                     |
 | `npm run traceability`            | перегенерировать матрицу покрытия                                                         |
+| `npm run traceability:verify`     | проверить актуальность матрицы и отсутствие расхождений источников                        |
 | `npm run validate`                | кросс-реестровая валидация `generated/spec`                                               |
 | `npm run checksums:verify`        | проверить артефакты на дрейф                                                              |
 | `npm run checksums`               | пересчитать `artifacts/CHECKSUMS.sha256`                                                  |
@@ -75,6 +77,7 @@ Build Tools, проверь `allowScripts`.
 | `npm run lint` / `lint:fix`       | ESLint                                                                                    |
 | `npm run format` / `format:check` | Prettier                                                                                  |
 | `npm test`                        | vitest                                                                                    |
+| `npm run test:coverage`           | Vitest с покрытием V8                                                                     |
 | `npm run test:e2e`                | Playwright                                                                                |
 
 Перед push обязана проходить:
@@ -85,6 +88,19 @@ npm run verify
 
 `validate` и `traceability:verify` входят в `verify`; отдельно запускают, когда
 меняют только данные или только покрытие.
+
+`import:verify` и `test:e2e` в локальный `verify` **не входят**; CI запускает
+их отдельно. Первый сравнивает два последовательных импорта в текущем дереве,
+включая игнорируемые Git `media` и SQLite seed. Выходной каталог не очищается.
+
+**Пустой набор тестов — ошибка.** `npm test`, `npm run test:coverage` и
+`npm run test:e2e` не принимают отсутствие найденных тестов за успех.
+Фиксированного ожидаемого количества тестов нет.
+
+**Vitest сам ограничивает параллелизм четырьмя workers** с учётом доступных
+CPU. Это штатная настройка после #160, отдельный флаг запуска не нужен.
+Причина — измеренный совокупный пик памяти Atlas suites на Windows;
+[измерения и границы результата](docs/status/vitest-atlas-memory.md).
 
 **`npm run build` — это веб-клиент, а не поставка.** Vite складывает статику в
 `dist/web`, откуда её отдаёт хост. К упаковке приложения это отношения не
@@ -97,6 +113,13 @@ npm run verify
 (`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную SQLite,
 без mocked projection. `npm run test:e2e` сначала собирает веб-клиент, затем
 запускает все восемь сценариев.
+
+В CI разрешён один retry. Успешный повтор отмечается как `flaky`, но пока
+не делает CI красным. Trace и screenshot каждой неудачной попытки, включая
+первую перед успешным повтором, сохраняются вместе с HTML-отчётом в артефакте
+Actions `e2e-diagnostics-<номер попытки workflow>` на 14 дней. Локальные
+отчёты — `reports/playwright-report` и `reports/e2e-artifacts`.
+Порядок разбора — [проверки CI](docs/process/ci-checks.md).
 
 ---
 
@@ -128,6 +151,7 @@ tools/
   checksums/        SHA-256 манифест артефактов. РАБОТАЕТ
   validate/         кросс-реестровая валидация generated/spec + literal guard md. РАБОТАЕТ
   traceability/     генератор матрицы покрытия. РАБОТАЕТ, гейт в verify
+  reproducibility/  полный состав и SHA-256 generated между двумя импортами. РАБОТАЕТ
   package/          portable-сборка. ПУСТО
 
 tests/
@@ -141,6 +165,7 @@ docs/
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия
   status/           честное состояние модулей
+  status/handoff.md актуальная передача контекста с датой и доказательствами
   process/          ревью и ручная настройка
   backlog/          подготовленные задачи
 ```
@@ -443,8 +468,11 @@ PR готов, когда выполнено **всё**:
 npm run import && git add generated/
 ```
 
-CI сверяет, что после прогона импорта рабочее дерево чистое. Забыл
-закоммитить — шаг «Pipeline output is reproducible» упадёт.
+CI запускает `npm run import:verify`: два последовательных импорта должны
+дать одинаковые пути и SHA-256 всех файлов `generated/`, включая media и seed.
+Отдельно шаг «Committed pipeline output is current» проверяет чистоту
+отслеживаемого вывода. Забыл закоммитить пересобранный вывод — этот шаг упадёт,
+даже если два импорта совпали между собой.
 
 Оформление PR — по [шаблону](.github/pull_request_template.md).
 
@@ -490,8 +518,10 @@ CI сверяет, что после прогона импорта рабоче�
 1. Прочитай [CLAUDE.md](CLAUDE.md) — правила проекта
 2. Прочитай [docs/status/module-map.md](docs/status/module-map.md) — что готово,
    а что дыра, которую ты и пришёл закрывать
-3. Прочитай ADR, относящиеся к твоей задаче
-4. Возьми задачу из [docs/backlog/](docs/backlog/)
+3. Прочитай [docs/status/handoff.md](docs/status/handoff.md) — последнюю передачу
+   контекста; учитывай дату снимка и сверяй его с текущей веткой
+4. Прочитай ADR, относящиеся к твоей задаче
+5. Возьми задачу из [docs/backlog/](docs/backlog/)
 
 Слой, в котором работаешь, имеет собственный `CLAUDE.md` — читать вместе с
 корневым: [domain](src/domain/CLAUDE.md), [persistence](src/persistence/CLAUDE.md),
