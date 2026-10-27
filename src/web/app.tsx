@@ -16,6 +16,9 @@ import {
   isManualChr017Projection,
 } from './forms/chr/manual-symbionts.js';
 import { ManualAdvisorIwFields, ManualSymbiontFields } from './forms/chr/manual-symbiont-fields.js';
+import { ArmorBundleFields } from './forms/chr/armor-bundle-fields.js';
+import { CHR_021_ROLL_ACTION_KEY } from './forms/chr/armor-bundle.js';
+import type { ArmorBundleDraft } from './forms/chr/armor-bundle.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
@@ -2177,6 +2180,7 @@ export function App(): ReactElement {
   const [skillCardDraft, setSkillCardDraft] = useState<CharacterSkillCardDraft | null>(null);
   const [manualCompositionDraft, setManualCompositionDraft] =
     useState<ManualCompositionDraft | null>(null);
+  const [armorBundleDraft, setArmorBundleDraft] = useState<ArmorBundleDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -2192,6 +2196,7 @@ export function App(): ReactElement {
       setAdvisorSkillSelectionDraft,
       setSkillCardDraft,
       setManualCompositionDraft,
+      setArmorBundleDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2225,7 +2230,8 @@ export function App(): ReactElement {
     (actionKey) =>
       actionKey !== CHR_017_MANUAL_CARD_ACTION_KEY &&
       actionKey !== CHR_018_MANUAL_BINDING_ACTION_KEY &&
-      actionKey !== CHR_041_MANUAL_IW_ACTION_KEY,
+      actionKey !== CHR_041_MANUAL_IW_ACTION_KEY &&
+      actionKey !== CHR_021_ROLL_ACTION_KEY,
   );
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
@@ -2455,6 +2461,39 @@ export function App(): ReactElement {
               }}
             />
             <SymbiontCompositionFields snapshot={snapshot} />
+            <ArmorBundleFields
+              draft={armorBundleDraft}
+              snapshot={snapshot}
+              onAddPiece={(itemId, bodyZoneOrNull) => {
+                const result = connectionRef.current?.addArmorBundleSelection(
+                  itemId,
+                  bodyZoneOrNull as 'HEAD' | 'TORSO' | 'ARM_L' | 'ARM_R' | 'LEG_L' | 'LEG_R' | null,
+                );
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Выбор не сохранён: ${result.detail}.`,
+                );
+              }}
+              onRemovePiece={(bodyZoneOrNull) => {
+                const result = connectionRef.current?.removeArmorBundleSelection(
+                  bodyZoneOrNull as 'HEAD' | 'TORSO' | 'ARM_L' | 'ARM_R' | 'LEG_L' | 'LEG_R' | null,
+                );
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Выбор не сохранён: ${result.detail}.`,
+                );
+              }}
+              onRoll={(manualFaceOrNull) => {
+                const connection = connectionRef.current;
+                if (connection === null) {
+                  setActionNotice('Бросок не отправлен: соединение ещё не готово.');
+                  return;
+                }
+                const result = connection.requestFormAction(
+                  CHR_021_ROLL_ACTION_KEY,
+                  manualFaceOrNull,
+                );
+                setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
+              }}
+            />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}
