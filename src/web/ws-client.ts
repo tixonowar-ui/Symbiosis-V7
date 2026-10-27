@@ -4632,7 +4632,7 @@ function decodeAddressableRouteSnapshot(
       destination.speciesKey !== speciesKey ||
       !source.eligibleSymbiontSpecies.some((entry) => entry.speciesKey === speciesKey) ||
       destination.characterDraftId !== source.characterDraftId ||
-      destination.compositionDraftRevision !== source.draftRevision
+      destination.compositionDraftRevision > source.draftRevision
     ) {
       return unrecognized('$.presentation.base.roleFilteredPayload', destination);
     }
@@ -4831,7 +4831,8 @@ function decodeFormActionSnapshot(
       decoded.value.layers.length !== 0 ||
       previous.layers.length !== 0 ||
       destination['characterDraftId'] !== source['characterDraftId'] ||
-      destination['wizardCheckpointId'] !== source['wizardCheckpointId'] ||
+      (pending.sourceFormId !== 'CHR-018' &&
+        destination['wizardCheckpointId'] !== source['wizardCheckpointId']) ||
       destination['draftRevision'] !== sourceRevision
     ) {
       return unrecognized('$.presentation.base.roleFilteredPayload', destination);
@@ -6585,6 +6586,14 @@ export function connectProjection(
   };
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
+    const checkpointResult = pendingCheckpoint?.receipt?.result;
+    const committedCompositionRevision =
+      checkpointResult?.stage === 'SYMBIONTS' &&
+      'variant' in checkpointResult &&
+      checkpointResult.variant === 'MANUAL_COMPOSITION' &&
+      typeof checkpointResult.compositionDraftRevision === 'number'
+        ? checkpointResult.compositionDraftRevision
+        : undefined;
     lastSnapshot = next;
     if (pendingCheckpoint !== null) pendingCheckpoint = null;
     if (pendingSetDecision !== null) pendingSetDecision = null;
@@ -6607,6 +6616,7 @@ export function connectProjection(
     manualCompositionDraft = manualCompositionDraftFromSnapshot(
       next,
       reconnect ? null : manualCompositionDraft,
+      committedCompositionRevision,
     );
     onManualCompositionDraft(manualCompositionDraft);
     if (next.formId === 'APP-001') playerContextId = null;

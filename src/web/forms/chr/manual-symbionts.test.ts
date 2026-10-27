@@ -23,7 +23,10 @@ import type {
 } from '@shared/index.js';
 
 import { commitManualComposition } from '../../../host/creation-manual-composition.js';
-import { commitManualAdvisorIw } from '../../../host/creation-manual-advisor.js';
+import {
+  commitManualAdvisorIw,
+  commitManualAdvisorSkills,
+} from '../../../host/creation-manual-advisor.js';
 import { commitAdvisorIntelligenceFloorRoll } from '../../../host/creation-advisor-intelligence-floor.js';
 import type {
   ManualAdvisorIwRollCommandRequest,
@@ -53,8 +56,10 @@ import {
 import type { SymbiontSpeciesKey } from '../../../domain/index.js';
 import {
   createManualWizardSetup,
+  exactManualAdvisorSkills,
   manualAdvisorFloorRollRequest,
   manualAdvisorIwRequest,
+  manualAdvisorSkillRequest,
   manualCompositionRequest,
   type ManualWizardSetup,
 } from '../../../../tests/fixtures/manual-symbiont-stage.js';
@@ -382,6 +387,18 @@ describe('manual Advisor roll-time B recovery', () => {
       'roll-time-composition-receipt',
       dependencies,
     );
+    const pendingIw = projectManualChr041(current, value.catalog, presentation, true, true);
+    expect(decodeChr041ManualProjection(pendingIw.roleFilteredPayload, '$.payload')).toMatchObject({
+      ok: true,
+      value: {
+        advisorSlotsAndSkills: { kind: 'IW_ROLLS_REQUIRED' },
+        trogrSuppressionState: {
+          kind: 'SUPPRESSED',
+          rollReceiptIdOrNull: null,
+          rollRequestIdOrNull: null,
+        },
+      },
+    });
     current = commitManualAdvisorIw(
       value.database,
       manualAdvisorIwRequest(value, current, 'roll-time-iw', [8, 9]),
@@ -389,6 +406,8 @@ describe('manual Advisor roll-time B recovery', () => {
       dependencies,
     );
     const before = projectManualChr041(current, value.catalog, presentation, true, true);
+    expect(decodeChr041ManualProjection(before.roleFilteredPayload, '$.payload').ok).toBe(true);
+    expect(before.availableActionKeys).toEqual(['CHR-041::CTA::004', 'CHR-041::CTA::002']);
     const source = {
       ...snapshot('CHR-041', before.roleFilteredPayload, before.availableActionKeys, '/chr-041'),
       revisions: currentCreationWizardRevisions(current),
@@ -401,9 +420,54 @@ describe('manual Advisor roll-time B recovery', () => {
     );
     const receipt = current.manualCompositionStage?.suppressionRollRecordOrNull?.receipt;
     if (receipt === undefined) throw new Error('missing B receipt');
+    current = commitManualAdvisorSkills(
+      value.database,
+      manualAdvisorSkillRequest(
+        value,
+        current,
+        'roll-time-skills',
+        exactManualAdvisorSkills(current, presentation),
+      ),
+      'roll-time-skills-receipt',
+      dependencies,
+    );
+    const catalogCheckpoint = advanceManualSymbiontPresentation(
+      value.database,
+      {
+        characterDraftId: value.characterDraftId,
+        wizardCheckpointId: value.wizardCheckpointId,
+        formId: 'CHR-017',
+      },
+      value.catalog,
+    );
+    const catalogProjection = projectManualChr017(catalogCheckpoint, value.catalog);
+    const baseline = manualCompositionDraftFromSnapshot(
+      snapshot(
+        'CHR-017',
+        catalogProjection.roleFilteredPayload,
+        catalogProjection.availableActionKeys,
+        '/chr-017',
+      ),
+      null,
+    );
+    const replacementCheckpoint = card(value, 'TEACHER');
+    const replacementCard = projectManualChr018(replacementCheckpoint, value.catalog, media, true);
+    const replacementDraft = manualCompositionDraftFromSnapshot(
+      snapshot(
+        'CHR-018',
+        replacementCard.roleFilteredPayload,
+        replacementCard.availableActionKeys,
+        '/chr-018/TEACHER',
+      ),
+      baseline,
+    );
+    expect(replacementDraft).toMatchObject({
+      compositionDraftRevision: current.manualCompositionStage?.compositionDraftRevision,
+    });
+    expect(replacementDraft?.entries).toHaveLength(4);
     current = commitManualComposition(
       value.database,
-      manualCompositionRequest(value, current, 'roll-time-replacement', [
+      manualCompositionRequest(value, replacementCheckpoint, 'roll-time-replacement', [
         'TROGR',
         'TEACHER',
         'ADVISER',
@@ -417,8 +481,11 @@ describe('manual Advisor roll-time B recovery', () => {
       ...snapshot('CHR-041', after.roleFilteredPayload, after.availableActionKeys, '/chr-041'),
       revisions: currentCreationWizardRevisions(current),
     };
+    expect(current.nextStageEnvelope.formId).toBe('CHR-019');
+    expect(after.roleFilteredPayload['compositionDraftRevision']).toBeGreaterThan(
+      receipt.result.compositionDraftRevision,
+    );
     expect(after.roleFilteredPayload).toMatchObject({
-      compositionDraftRevision: receipt.result.draftRevision + 1,
       trogrSuppressionState: {
         minimumIOrNull: receipt.result.minimumI,
         rollReceiptIdOrNull: receipt.receiptId,
@@ -686,6 +753,37 @@ describe('manual symbiont websocket delivery', () => {
       expect(readySnapshot(harness.states).formId).toBe('CHR-017');
       expect(harness.connection.requestSymbiontCard('EEL')).toEqual({ ok: true });
       let checkpoint = card(value, 'EEL');
+      sendProjection(
+        harness.socket,
+        'CHR-018',
+        value,
+        checkpoint,
+        navigationId(harness.socket, 'navigation.addressable-route'),
+        'ADDRESSABLE_ROUTE',
+      );
+      expect(readySnapshot(harness.states).formId).toBe('CHR-018');
+      expect(harness.drafts.at(-1)?.entries).toEqual([]);
+      expect(harness.connection.requestFormAction('CHR-018::CTA::002')).toEqual({ ok: true });
+      checkpoint = advanceManualSymbiontPresentation(
+        value.database,
+        {
+          characterDraftId: value.characterDraftId,
+          wizardCheckpointId: value.wizardCheckpointId,
+          formId: 'CHR-017',
+        },
+        value.catalog,
+      );
+      sendProjection(
+        harness.socket,
+        'CHR-017',
+        value,
+        checkpoint,
+        navigationId(harness.socket, 'navigation.form-action'),
+        'FORM_ACTION',
+      );
+      expect(readySnapshot(harness.states).formId).toBe('CHR-017');
+      expect(harness.connection.requestSymbiontCard('EEL')).toEqual({ ok: true });
+      checkpoint = card(value, 'EEL');
       sendProjection(
         harness.socket,
         'CHR-018',

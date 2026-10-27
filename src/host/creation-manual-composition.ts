@@ -184,8 +184,14 @@ export function commitManualComposition(
               ),
             ]
           : null);
+      const advisorWorkPending =
+        hasAdvisor &&
+        ((currentStage?.advisorIwRecordOrNull ?? null) === null ||
+          (currentStage?.advisorSkillRecordOrNull ?? null) === null ||
+          ((currentStage?.suppressionRollRecordOrNull ?? null) === null &&
+            advisorSuppressedByTrogr(validated.composition)));
       const nextStageEnvelope = nextSymbiontEnvelope(
-        hasAdvisor ? 'CHR-041' : 'CHR-019',
+        advisorWorkPending ? 'CHR-041' : 'CHR-019',
         normalized.payload.characterDraftId,
       );
       const revisions = incrementedSymbiontRevisions(
@@ -204,6 +210,7 @@ export function commitManualComposition(
         normalized,
         validated.composition,
         validated.bindings,
+        nextStageEnvelope.formId,
       );
       const record: ManualCompositionRecord = {
         acceptedSpecies: validated.composition.acceptedSpecies,
@@ -363,6 +370,7 @@ export function validateManualCompositionStageHistory(
         request,
         validated.composition,
         validated.bindings,
+        record.nextStageEnvelope.formId,
       );
       const nextStageEnvelope = nextSymbiontEnvelope(
         receipt.result.nextFormId,

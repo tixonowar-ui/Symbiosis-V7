@@ -670,73 +670,80 @@ function baselineEntries(projection: JsonObject): readonly ManualCompositionEntr
 export function manualCompositionDraftFromSnapshot(
   snapshot: ConfirmedProjectionSnapshot,
   previous: ManualCompositionDraft | null,
+  committedCompositionRevision?: number,
 ): ManualCompositionDraft | null {
-  if (
-    snapshot.formId !== 'CHR-017' &&
-    snapshot.formId !== 'CHR-018' &&
-    snapshot.formId !== 'CHR-019'
-  )
+  const card = snapshot.formId === 'CHR-018';
+  const advisor = snapshot.formId === 'CHR-041';
+  if (snapshot.formId === 'CHR-042') return previous;
+  if (snapshot.formId !== 'CHR-017' && !card && snapshot.formId !== 'CHR-019' && !advisor) {
     return null;
-  if (snapshot.formId === 'CHR-019' && snapshot.projection.duplicatePolicy.kind !== 'FORBIDDEN')
+  }
+  if (snapshot.formId === 'CHR-019' && snapshot.projection.duplicatePolicy.kind !== 'FORBIDDEN') {
     return null;
+  }
   if (snapshot.formId === 'CHR-017' && !isManualChr017Projection(snapshot.projection)) return null;
+  if (advisor && !isManualChr041Projection(snapshot.projection)) return null;
   const projection = snapshot.projection as
-    ManualChr017Projection | Chr018Projection | ManualChr019Projection;
+    ManualChr017Projection | Chr018Projection | ManualChr019Projection | Chr041ManualProjection;
   const characterDraftId = projection.characterDraftId;
-  const compositionDraftRevisionValue: unknown =
-    snapshot.formId === 'CHR-018' ? projection.compositionDraftRevision : projection.draftRevision;
-  if (
-    typeof compositionDraftRevisionValue !== 'number' ||
-    !Number.isSafeInteger(compositionDraftRevisionValue) ||
-    compositionDraftRevisionValue < 0
-  )
+  const wizardCheckpointId = card ? previous?.wizardCheckpointId : projection.wizardCheckpointId;
+  const raceChoice = card || advisor ? previous?.raceChoice : projection.raceChoice;
+  if (!isNonEmptyString(wizardCheckpointId) || (raceChoice !== 'FREE' && raceChoice !== 'UNITED')) {
     return null;
-  const compositionDraftRevision = compositionDraftRevisionValue;
-  if (
-    snapshot.formId === 'CHR-018' &&
-    (previous === null ||
-      previous.characterDraftId !== characterDraftId ||
-      previous.compositionDraftRevision !== compositionDraftRevision)
-  )
-    return null;
-  const wizardCheckpointId =
-    snapshot.formId === 'CHR-018' ? previous?.wizardCheckpointId : projection.wizardCheckpointId;
-  const draftRevisionValue: unknown =
-    snapshot.formId === 'CHR-018' ? previous?.draftRevision : projection.draftRevision;
-  if (
-    !isNonEmptyString(wizardCheckpointId) ||
-    typeof draftRevisionValue !== 'number' ||
-    !Number.isSafeInteger(draftRevisionValue) ||
-    draftRevisionValue < 0
-  )
-    return null;
-  const draftRevision = draftRevisionValue;
-  const currentSpeciesKeyOrNull: SymbiontSpeciesKey | null =
-    snapshot.formId === 'CHR-018' && isSpeciesKey(projection.speciesKey)
-      ? projection.speciesKey
-      : null;
-  if (snapshot.formId === 'CHR-018' && currentSpeciesKeyOrNull === null) return null;
-  const raceChoice = snapshot.formId === 'CHR-018' ? previous?.raceChoice : projection.raceChoice;
-  if (raceChoice !== 'FREE' && raceChoice !== 'UNITED') return null;
-  const sameScope =
+  }
+  const previousScope =
     previous !== null &&
     previous.characterDraftId === characterDraftId &&
     previous.wizardCheckpointId === wizardCheckpointId &&
-    previous.draftRevision === draftRevision &&
-    previous.compositionDraftRevision === compositionDraftRevision &&
     previous.raceChoice === raceChoice;
+  if ((card && previous === null) || (advisor && !previousScope)) return null;
+  const compositionDraftRevisionValue: unknown = card
+    ? projection.compositionDraftRevision
+    : (committedCompositionRevision ??
+      (advisor
+        ? projection.compositionDraftRevision
+        : previousScope
+          ? previous.compositionDraftRevision
+          : projection.draftRevision));
+  if (
+    typeof compositionDraftRevisionValue !== 'number' ||
+    !Number.isSafeInteger(compositionDraftRevisionValue) ||
+    compositionDraftRevisionValue < 0 ||
+    (advisor && compositionDraftRevisionValue !== projection.compositionDraftRevision)
+  ) {
+    return null;
+  }
+  const compositionDraftRevision = compositionDraftRevisionValue;
+  const draftRevisionValue: unknown = card ? previous?.draftRevision : projection.draftRevision;
+  if (
+    typeof draftRevisionValue !== 'number' ||
+    !Number.isSafeInteger(draftRevisionValue) ||
+    draftRevisionValue < 0
+  ) {
+    return null;
+  }
+  const draftRevision = draftRevisionValue;
+  const currentSpeciesKeyOrNull: SymbiontSpeciesKey | null =
+    card && isSpeciesKey(projection.speciesKey) ? projection.speciesKey : null;
+  if (card && currentSpeciesKeyOrNull === null) return null;
+  const sameScope =
+    previousScope &&
+    (committedCompositionRevision !== undefined || previous.draftRevision === draftRevision);
+  if (advisor && !sameScope) return null;
   const entries = sameScope ? previous.entries : baselineEntries(projection);
   const sideBySpecies: Partial<Record<'OWL' | 'EEL', SymbiontSide>> = {};
   for (const entry of entries) {
-    if ((entry.speciesKey === 'OWL' || entry.speciesKey === 'EEL') && entry.sideOrNull !== null)
+    if ((entry.speciesKey === 'OWL' || entry.speciesKey === 'EEL') && entry.sideOrNull !== null) {
       sideBySpecies[entry.speciesKey] = entry.sideOrNull;
+    }
   }
   if (
-    snapshot.formId === 'CHR-018' &&
+    card &&
     (currentSpeciesKeyOrNull === 'OWL' || currentSpeciesKeyOrNull === 'EEL') &&
     sideBySpecies[currentSpeciesKeyOrNull] === undefined
-  )
+  ) {
     sideBySpecies[currentSpeciesKeyOrNull] = 'RIGHT';
+  }
   return {
     characterDraftId,
     compositionDraftRevision,
@@ -1031,10 +1038,9 @@ export function decodeManualCompositionTerminal(
       field === payload.acceptedSpecies.some((entry) => entry.speciesKey === 'ADVISER'),
     bindings: (field) => field === receipt.result['bindings'],
     nextFormId: (field) =>
-      field ===
-      (payload.acceptedSpecies.some((entry) => entry.speciesKey === 'ADVISER')
-        ? 'CHR-041'
-        : 'CHR-019'),
+      field === 'CHR-019' ||
+      (field === 'CHR-041' &&
+        payload.acceptedSpecies.some((entry) => entry.speciesKey === 'ADVISER')),
     sourceFormId: (field) => field === 'CHR-018',
     variant: (field) => field === 'MANUAL_COMPOSITION',
   });

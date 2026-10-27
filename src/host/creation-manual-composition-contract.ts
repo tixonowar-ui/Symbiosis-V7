@@ -511,6 +511,7 @@ export function manualCompositionCheckpointReceipt(
   request: ManualCompositionCheckpointCommandRequest,
   composition: SymbiontComposition,
   bindings: readonly SymbiontSpeciesBinding[],
+  nextFormId?: 'CHR-019' | 'CHR-041',
 ): ManualCompositionCheckpointReceipt {
   const advisorBranch = composition.acceptedSpecies.some(
     (accepted) => accepted.speciesKey === 'ADVISER',
@@ -537,7 +538,7 @@ export function manualCompositionCheckpointReceipt(
             : { kind: entry.binding.kind },
       })),
       advisorBranch,
-      nextFormId: advisorBranch ? 'CHR-041' : 'CHR-019',
+      nextFormId: nextFormId ?? (advisorBranch ? 'CHR-041' : 'CHR-019'),
     },
   };
 }

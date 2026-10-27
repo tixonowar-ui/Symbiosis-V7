@@ -1165,25 +1165,31 @@ export function decodeChr041Projection(
     const receiptId = suppression['rollReceiptIdOrNull'];
     const suppressionB = suppression['suppressionBOrNull'];
     const minimumI = suppression['minimumIOrNull'];
-    if (!isNonEmptyString(requestId)) {
-      return refused(`${path}.trogrSuppressionState.rollRequestIdOrNull`, requestId ?? null);
-    }
-    if (receiptId === null) {
-      if (suppressionB !== null) {
-        return refused(`${path}.trogrSuppressionState.suppressionBOrNull`, suppressionB ?? null);
-      }
-      if (minimumI !== null) {
-        return refused(`${path}.trogrSuppressionState.minimumIOrNull`, minimumI ?? null);
+    if (iwPending) {
+      if (requestId !== null || receiptId !== null || suppressionB !== null || minimumI !== null) {
+        return refused(`${path}.trogrSuppressionState`, suppression);
       }
     } else {
-      if (!isNonEmptyString(receiptId)) {
-        return refused(`${path}.trogrSuppressionState.rollReceiptIdOrNull`, receiptId ?? null);
+      if (!isNonEmptyString(requestId)) {
+        return refused(`${path}.trogrSuppressionState.rollRequestIdOrNull`, requestId ?? null);
       }
-      if (!isSafeIntegerAtLeast(suppressionB, 0)) {
-        return refused(`${path}.trogrSuppressionState.suppressionBOrNull`, suppressionB ?? null);
-      }
-      if (!isSafeIntegerAtLeast(minimumI, 1)) {
-        return refused(`${path}.trogrSuppressionState.minimumIOrNull`, minimumI ?? null);
+      if (receiptId === null) {
+        if (suppressionB !== null) {
+          return refused(`${path}.trogrSuppressionState.suppressionBOrNull`, suppressionB ?? null);
+        }
+        if (minimumI !== null) {
+          return refused(`${path}.trogrSuppressionState.minimumIOrNull`, minimumI ?? null);
+        }
+      } else {
+        if (!isNonEmptyString(receiptId)) {
+          return refused(`${path}.trogrSuppressionState.rollReceiptIdOrNull`, receiptId ?? null);
+        }
+        if (!isSafeIntegerAtLeast(suppressionB, 0)) {
+          return refused(`${path}.trogrSuppressionState.suppressionBOrNull`, suppressionB ?? null);
+        }
+        if (!isSafeIntegerAtLeast(minimumI, 1)) {
+          return refused(`${path}.trogrSuppressionState.minimumIOrNull`, minimumI ?? null);
+        }
       }
     }
   }
@@ -1230,8 +1236,7 @@ export function decodeChr041Projection(
         value['acknowledged'] !== false ||
         receiptIds.some((id) => id !== null) ||
         value['advisorIPlus8OrNull'] !== null ||
-        value['advisorWPlus8OrNull'] !== null ||
-        suppressionKind === 'SUPPRESSED'
+        value['advisorWPlus8OrNull'] !== null
       ) {
         return refused(`${path}.advisorSlotsAndSkills.kind`, slots['kind']!);
       }
@@ -1272,9 +1277,12 @@ export function expectedChr041ActionKeys(
     projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
     projection.trogrSuppressionState.rollReceiptIdOrNull === null
   ) {
-    return executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+    const rollActions = executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
       ? [CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY]
       : NO_ACTION_KEYS;
+    return projection.commandId === null
+      ? rollActions
+      : [...rollActions, CHR_041_SKILL_DRAFT_ACTION_KEY];
   }
   return projection.acknowledged
     ? NO_ACTION_KEYS
