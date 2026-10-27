@@ -63,6 +63,8 @@ import {
   expectedChr017ActionKeys,
   expectedChr020ActionKeys,
   expectedChr041ActionKeys,
+  isAdvisorSkillSlots,
+  isSpeciesKey,
   randomRollCommitPayload,
   randomSymbiontDraftFromSnapshot,
   replaceAdvisorSkillCandidate,
@@ -88,8 +90,48 @@ import type {
   SymbiontRollCommitRequest,
   SymbiontRollCommitResult,
   SymbiontSide,
+  SymbiontSpeciesKey,
   SymbioticMonsterSpeciesKey,
 } from './forms/chr/random-symbionts.js';
+import {
+  CHR_017_MANUAL_CARD_ACTION_KEY,
+  CHR_018_MANUAL_ADD_ACTION_KEY,
+  CHR_018_MANUAL_BINDING_ACTION_KEY,
+  CHR_041_MANUAL_IW_ACTION_KEY,
+  decodeChr017ManualProjection,
+  decodeChr018Projection,
+  decodeChr019ManualProjection,
+  decodeChr042Projection,
+  decodeManualAdvisorIwTerminal,
+  decodeManualAdvisorSkillTerminal,
+  decodeManualCompositionTerminal,
+  expectedChr017ManualActionKeys,
+  expectedChr018ActionKeys,
+  expectedChr019ManualActionKeys,
+  isManualChr017Projection,
+  manualAdvisorIwPayload,
+  manualAdvisorIwSnapshotMatchesReceipt,
+  manualAdvisorSkillPayload,
+  manualAdvisorSkillSnapshotMatchesReceipt,
+  manualCompositionDraftFromSnapshot,
+  manualCompositionPayload,
+  manualCompositionSnapshotMatchesReceipt,
+  replaceManualBindingSide,
+  toggleManualCompositionSpecies,
+} from './forms/chr/manual-symbionts.js';
+import type {
+  Chr018Projection,
+  Chr042Projection,
+  ManualAdvisorIwRequest,
+  ManualAdvisorIwResult,
+  ManualAdvisorSkillRequest,
+  ManualAdvisorSkillResult,
+  ManualCompositionDraft,
+  ManualCompositionRequest,
+  ManualCompositionResult,
+  ManualChr017Projection,
+  ManualChr019Projection,
+} from './forms/chr/manual-symbionts.js';
 import {
   IdentityDraftClient,
   type IdentityDraftClientState,
@@ -100,9 +142,12 @@ export type { IdentityDraftClientState, IdentityDraftValues };
 export type {
   AdvisorSkillSelectionDraft,
   Chr017Projection,
+  Chr018Projection,
   Chr019Projection,
   Chr020Projection,
   Chr041Projection,
+  Chr042Projection,
+  ManualCompositionDraft,
   RandomSymbiontDraft,
   SymbiontSide,
   SymbioticMonsterSpeciesKey,
@@ -124,9 +169,11 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-013',
   'CHR-015',
   'CHR-017',
+  'CHR-018',
   'CHR-019',
   'CHR-020',
   'CHR-041',
+  'CHR-042',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -134,15 +181,20 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
 
 const CHR_014_ROUTE =
   '/player/characters/:localCharacterId/create/chr-014/:skillId' as AddressableRouteTemplate;
+const CHR_018_ROUTE =
+  '/player/characters/:localCharacterId/create/chr-018/:speciesKey' as AddressableRouteTemplate;
 
 export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
-  isAddressableRouteTemplate: (value): value is AddressableRouteTemplate => value === CHR_014_ROUTE,
+  isAddressableRouteTemplate: (value): value is AddressableRouteTemplate =>
+    value === CHR_014_ROUTE || value === CHR_018_ROUTE,
   isClientRouteBindings: (routeTemplate, bindings) =>
-    routeTemplate === CHR_014_ROUTE &&
+    (routeTemplate === CHR_014_ROUTE || routeTemplate === CHR_018_ROUTE) &&
     bindings.length === 1 &&
     bindings[0]?.parameterIndex === 1 &&
     bindings[0].source === 'client-selected' &&
-    isPublicSkillId(bindings[0].value),
+    (routeTemplate === CHR_014_ROUTE
+      ? isPublicSkillId(bindings[0].value)
+      : isSpeciesKey(bindings[0].value)),
   isFormActionKey: isImplementedFormActionKey,
   isFormId: (value): value is FormId => FORM_ID_SET.has(value),
   isHostTransition: () => false,
@@ -150,17 +202,17 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     const definition = presentedFormDefinition(formId);
     if (definition === null || formType !== definition.type || routeTemplate !== definition.route)
       return false;
-    if (formId === 'CHR-014') {
+    if (formId === 'CHR-014' || formId === 'CHR-018') {
       const character = bindings[0];
-      const skill = bindings[1];
+      const selected = bindings[1];
       return (
         bindings.length === 2 &&
         character?.parameterIndex === 0 &&
         character.source === 'inherited' &&
         UUID_PATTERN.test(character.value) &&
-        skill?.parameterIndex === 1 &&
-        skill.source === 'client-selected' &&
-        isPublicSkillId(skill.value)
+        selected?.parameterIndex === 1 &&
+        selected.source === 'client-selected' &&
+        (formId === 'CHR-014' ? isPublicSkillId(selected.value) : isSpeciesKey(selected.value))
       );
     }
     if (formId !== 'CHR-001' && !INHERITED_CHARACTER_WIZARD_FORM_IDS.has(formId)) {
@@ -1095,6 +1147,8 @@ type SkillSelectionCheckpointRequest = WorkflowCommandRequestMessage<
 >;
 type CheckpointRequest =
   | IdentityCheckpointRequest
+  | ManualAdvisorSkillRequest
+  | ManualCompositionRequest
   | SkillSelectionCheckpointRequest
   | StatAssignmentCheckpointRequest
   | SymbiontAdvisorCheckpointRequest;
@@ -1152,6 +1206,8 @@ interface SkillSelectionCheckpointResult extends JsonObject {
 
 type CheckpointResult =
   | IdentityCheckpointResult
+  | ManualAdvisorSkillResult
+  | ManualCompositionResult
   | SkillSelectionCheckpointResult
   | StatAssignmentCheckpointResult
   | SymbiontAdvisorCheckpointResult;
@@ -1375,6 +1431,7 @@ interface ConfirmationRollCommitPayload extends RollCommitCommonPayload {
 type RollCommitPayload =
   | AdvisorIntelligenceFloorRollPayload
   | ConfirmationRollCommitPayload
+  | ManualAdvisorIwRequest['payload']
   | SetRollCommitPayload
   | SymbiontRollCommitPayload;
 type RollCommitRequest = WorkflowCommandRequestMessage<
@@ -1423,6 +1480,7 @@ interface ConfirmationRollCommitResult extends RollCommitResultCommon {
 type RollCommitResult =
   | AdvisorIntelligenceFloorRollResult
   | ConfirmationRollCommitResult
+  | ManualAdvisorIwResult
   | SetRollCommitResult
   | SymbiontRollCommitResult;
 
@@ -1434,7 +1492,8 @@ interface PendingRollCommit {
   readonly sourceSnapshot: ConfirmedProjectionSnapshot;
 }
 
-type SymbiontPresentationFormId = 'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041';
+type SymbiontPresentationFormId =
+  'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-020' | 'CHR-041' | 'CHR-042';
 
 interface ConfirmedProjectionSnapshotBase {
   readonly availableActionKeys: readonly ActionKey[];
@@ -1452,12 +1511,16 @@ type ConfirmedSymbiontProjectionSnapshot<
   ? Omit<ConfirmedProjectionSnapshotBase, 'formId' | 'projection'> & {
       readonly formId: FormId;
       readonly projection: FormId extends 'CHR-017'
-        ? Chr017Projection
-        : FormId extends 'CHR-019'
-          ? Chr019Projection
-          : FormId extends 'CHR-020'
-            ? Chr020Projection
-            : Chr041Projection;
+        ? Chr017Projection | ManualChr017Projection
+        : FormId extends 'CHR-018'
+          ? Chr018Projection
+          : FormId extends 'CHR-019'
+            ? Chr019Projection | ManualChr019Projection
+            : FormId extends 'CHR-020'
+              ? Chr020Projection
+              : FormId extends 'CHR-041'
+                ? Chr041Projection
+                : Chr042Projection;
     }
   : never;
 
@@ -1516,6 +1579,7 @@ export interface ProjectionConnection {
     targetBonus: number | null,
   ): FormActionRequestResult;
   replaceConfirmationManualFace(value: number | null): FormActionRequestResult;
+  replaceManualBindingSide(side: SymbiontSide): FormActionRequestResult;
   replaceRandomManualFace(value: number | null): FormActionRequestResult;
   replaceRandomSideSpecies(species: 'OWL' | 'EEL' | null): FormActionRequestResult;
   replaceSetManualFace(index: number, value: number | null): FormActionRequestResult;
@@ -1527,10 +1591,15 @@ export interface ProjectionConnection {
   ): FormActionRequestResult;
   requestFormAction(
     actionKey: ActionKey,
-    advisorIntelligenceFloorManualFaceOrNull?: number | null,
+    manualFacesOrNull?: number | readonly [number, number] | null,
   ): FormActionRequestResult;
   requestSkillCard(skillId: string): FormActionRequestResult;
+  requestSymbiontCard(speciesKey: SymbiontSpeciesKey): FormActionRequestResult;
   replaceStatAssignmentValue(statCode: StatCode, value: number | null): FormActionRequestResult;
+  toggleManualCompositionSpecies(
+    speciesKey: SymbiontSpeciesKey,
+    included: boolean,
+  ): FormActionRequestResult;
 }
 
 function refused<T>(refusal: DecodeRefusal): DecodeResult<T> {
@@ -3915,15 +3984,51 @@ function decodeConfirmedSnapshot(
       }
       break;
     case 'CHR-017': {
-      const decoded = decodeChr017Projection(
+      const manual = base.roleFilteredPayload['symbiontAcquisitionModeOrNull'] === 'MANUAL';
+      const decoded = manual
+        ? decodeChr017ManualProjection(
+            base.roleFilteredPayload,
+            '$.presentation.base.roleFilteredPayload',
+          )
+        : decodeChr017Projection(
+            base.roleFilteredPayload,
+            '$.presentation.base.roleFilteredPayload',
+          );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          isManualChr017Projection(decoded.value)
+            ? expectedChr017ManualActionKeys(decoded.value)
+            : expectedChr017ActionKeys(decoded.value),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-018': {
+      const decoded = decodeChr018Projection(
         base.roleFilteredPayload,
         '$.presentation.base.roleFilteredPayload',
       );
       projection = decoded;
       if (decoded.ok) {
+        if (
+          decoded.value.speciesKey !== base.routeBindings[1]?.value ||
+          decoded.value.characterDraftId !== base.routeBindings[0]?.value
+        ) {
+          return unrecognized(
+            '$.presentation.base.roleFilteredPayload.speciesKey',
+            decoded.value.speciesKey,
+          );
+        }
         const actions = exactSymbiontActionKeys(
           base.availableActionKeys,
-          expectedChr017ActionKeys(decoded.value),
+          expectedChr018ActionKeys(
+            decoded.value,
+            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
+          ),
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -3931,7 +4036,32 @@ function decodeConfirmedSnapshot(
       break;
     }
     case 'CHR-019': {
-      const decoded = decodeChr019Projection(
+      const duplicate = base.roleFilteredPayload['duplicatePolicy'];
+      const manual = isJsonObject(duplicate) && duplicate['kind'] === 'FORBIDDEN';
+      const decoded = manual
+        ? decodeChr019ManualProjection(
+            base.roleFilteredPayload,
+            '$.presentation.base.roleFilteredPayload',
+          )
+        : decodeChr019Projection(
+            base.roleFilteredPayload,
+            '$.presentation.base.roleFilteredPayload',
+          );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          decoded.value.duplicatePolicy.kind === 'FORBIDDEN'
+            ? expectedChr019ManualActionKeys(base.availableActionKeys)
+            : NO_ACTION_KEYS,
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-042': {
+      const decoded = decodeChr042Projection(
         base.roleFilteredPayload,
         '$.presentation.base.roleFilteredPayload',
       );
@@ -3939,7 +4069,7 @@ function decodeConfirmedSnapshot(
       if (decoded.ok) {
         const actions = exactSymbiontActionKeys(
           base.availableActionKeys,
-          NO_ACTION_KEYS,
+          ['CHR-042::CTA::002'],
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4232,6 +4362,7 @@ function visibleSnapshotCore(
   randomSymbiontDraft: RandomSymbiontDraft | null = null,
   advisorSkillSelectionDraft: AdvisorSkillSelectionDraft | null = null,
   skillCardDraft: CharacterSkillCardDraft | null = null,
+  manualCompositionDraft: ManualCompositionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
@@ -4341,6 +4472,20 @@ function visibleSnapshotCore(
         (key) => key !== CHR_020_SIDE_DRAFT_ACTION_KEY && key !== CHR_020_MONSTER_DRAFT_ACTION_KEY,
       );
     }
+  } else if (snapshot.formId === 'CHR-018') {
+    const included = manualCompositionDraft?.entries.some(
+      (entry) => entry.speciesKey === snapshot.projection.speciesKey,
+    );
+    if (commandPending || manualCompositionDraft === null || included !== true) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_018_MANUAL_ADD_ACTION_KEY,
+      );
+    }
+    if (commandPending || manualCompositionDraft === null) {
+      availableActionKeys = availableActionKeys.filter(
+        (key) => key !== CHR_018_MANUAL_BINDING_ACTION_KEY,
+      );
+    }
   } else if (snapshot.formId === 'CHR-041') {
     const pendingIntelligenceFloor =
       'compositionDraftRevision' in snapshot.projection &&
@@ -4353,12 +4498,16 @@ function visibleSnapshotCore(
     }
     if (commandPending) {
       availableActionKeys = availableActionKeys.filter(
-        (key) => key !== CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
+        (key) =>
+          key !== CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY && key !== CHR_041_MANUAL_IW_ACTION_KEY,
       );
     }
-    const candidateOption = snapshot.projection.advisorSlotsAndSkills.skillOptions.find(
-      ({ skillId }) => skillId === advisorSkillSelectionDraft?.candidateSkillIdOrNull,
-    );
+    const slots = snapshot.projection.advisorSlotsAndSkills;
+    const candidateOption = !isAdvisorSkillSlots(slots)
+      ? undefined
+      : slots.skillOptions.find(
+          ({ skillId }) => skillId === advisorSkillSelectionDraft?.candidateSkillIdOrNull,
+        );
     const signedLevel = candidateOption?.levelOptions.some(
       ({ targetBonus }) => targetBonus === advisorSkillSelectionDraft?.candidateTargetBonusOrNull,
     );
@@ -4467,6 +4616,28 @@ function decodeAddressableRouteSnapshot(
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   if (!decoded.ok) return decoded;
+  if (previous.formId === 'CHR-017') {
+    const source = previous.projection;
+    if (
+      decoded.value.formId !== 'CHR-018' ||
+      pending.routeTemplate !== CHR_018_ROUTE ||
+      source.symbiontAcquisitionModeOrNull !== 'MANUAL' ||
+      !previous.availableActionKeys.includes(CHR_017_MANUAL_CARD_ACTION_KEY)
+    ) {
+      return unrecognized('$.presentation.base.formId', decoded.value.formId);
+    }
+    const destination = decoded.value.projection;
+    const speciesKey = pending.bindings[0]?.value;
+    if (
+      destination.speciesKey !== speciesKey ||
+      !source.eligibleSymbiontSpecies.some((entry) => entry.speciesKey === speciesKey) ||
+      destination.characterDraftId !== source.characterDraftId ||
+      destination.compositionDraftRevision !== source.draftRevision
+    ) {
+      return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+    }
+    return decoded;
+  }
   if (previous.formId !== 'CHR-013' || decoded.value.formId !== 'CHR-014') {
     return unrecognized('$.presentation.base.formId', decoded.value.formId);
   }
@@ -4610,6 +4781,97 @@ function decodeFormActionSnapshot(
       );
     }
   }
+  if (pending.sourceFormId === 'CHR-017' && pending.actionKey === 'CHR-017::CTA::003') {
+    const source = previous.projection;
+    if (
+      previous.formId !== 'CHR-017' ||
+      decoded.value.formId !== 'CHR-020' ||
+      source.symbiontAcquisitionModeOrNull !== 'RANDOM' ||
+      decoded.value.projection.characterDraftId !== source.characterDraftId ||
+      decoded.value.projection.wizardCheckpointId !== source.wizardCheckpointId ||
+      decoded.value.projection.draftRevision !== source.draftRevision ||
+      decoded.value.projection.randomStatus !== 'NOT_STARTED'
+    ) {
+      return unrecognized('$.presentation.base.formId', decoded.value.formId);
+    }
+    return decoded;
+  }
+  if (
+    pending.sourceFormId === 'CHR-017' ||
+    pending.sourceFormId === 'CHR-018' ||
+    pending.sourceFormId === 'CHR-019' ||
+    pending.sourceFormId === 'CHR-042'
+  ) {
+    if (previous.formId !== pending.sourceFormId) {
+      return unrecognized('$.presentation.base.formId', previous.formId);
+    }
+    const source: JsonObject = previous.projection;
+    const destination: JsonObject = decoded.value.projection;
+    const sourceRevision = source['draftRevision'] ?? source['compositionDraftRevision'];
+    let expectedForm: SupportedPresentationFormId;
+    switch (pending.actionKey) {
+      case 'CHR-017::CTA::002':
+        expectedForm = 'CHR-019';
+        break;
+      case 'CHR-018::CTA::002':
+      case 'CHR-019::CTA::004':
+        expectedForm = 'CHR-017';
+        break;
+      case 'CHR-019::CTA::002':
+        expectedForm = 'CHR-042';
+        break;
+      case 'CHR-042::CTA::002':
+        expectedForm = 'CHR-019';
+        break;
+      default:
+        return unrecognized('$.request.actionKey', pending.actionKey);
+    }
+    if (
+      decoded.value.formId !== expectedForm ||
+      decoded.value.layers.length !== 0 ||
+      previous.layers.length !== 0 ||
+      destination['characterDraftId'] !== source['characterDraftId'] ||
+      destination['wizardCheckpointId'] !== source['wizardCheckpointId'] ||
+      destination['draftRevision'] !== sourceRevision
+    ) {
+      return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+    }
+    const fields = [
+      'bindings',
+      'speciesKeys',
+      'symbiontInstancesDraft',
+      'slotUsageAndCapacity',
+    ] as const;
+    const duplicate = destination['duplicatePolicy'];
+    const after =
+      pending.sourceFormId === 'CHR-042'
+        ? source['compositionAfter']
+        : destination['compositionAfter'];
+    let contentMatches: boolean;
+    if (pending.sourceFormId === 'CHR-017') {
+      contentMatches =
+        isJsonObject(duplicate) &&
+        duplicate['kind'] === 'FORBIDDEN' &&
+        sameJson(destination['bindings']!, source['manualCompositionDraft']!);
+    } else if (pending.sourceFormId === 'CHR-018') {
+      contentMatches = destination['symbiontAcquisitionModeOrNull'] === 'MANUAL';
+    } else if (pending.sourceFormId === 'CHR-019') {
+      contentMatches =
+        pending.actionKey === 'CHR-019::CTA::002'
+          ? isJsonObject(after) && fields.every((key) => sameJson(after[key]!, source[key]!))
+          : destination['symbiontAcquisitionModeOrNull'] === 'MANUAL' &&
+            sameJson(destination['manualCompositionDraft']!, source['bindings']!);
+    } else {
+      contentMatches =
+        isJsonObject(duplicate) &&
+        duplicate['kind'] === 'FORBIDDEN' &&
+        isJsonObject(after) &&
+        fields.every((key) => sameJson(destination[key]!, after[key]!));
+    }
+    if (!contentMatches) {
+      return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+    }
+  }
   return decoded;
 }
 
@@ -4620,6 +4882,19 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
+  if (pending.request.payload.stage === 'SYMBIONTS' && 'variant' in pending.request.payload) {
+    return pending.request.payload.variant === 'MANUAL_COMPOSITION'
+      ? decodeManualCompositionTerminal(
+          message,
+          pending.request as ManualCompositionRequest,
+          pending.sourceSnapshot,
+        )
+      : decodeManualAdvisorSkillTerminal(
+          message,
+          pending.request as ManualAdvisorSkillRequest,
+          pending.sourceSnapshot,
+        );
+  }
   if (pending.request.payload.stage === 'SYMBIONTS') {
     return decodeSymbiontAdvisorCheckpointTerminal(
       message,
@@ -5206,11 +5481,17 @@ function decodeRollCommitTerminal(
     );
   }
   if (pending.request.payload.stage === 'SYMBIONTS') {
-    return decodeSymbiontRollCommitTerminal(
-      message,
-      pending.request as SymbiontRollCommitRequest,
-      pending.sourceSnapshot,
-    );
+    return pending.request.payload.variant === 'ADVISOR_IW'
+      ? decodeManualAdvisorIwTerminal(
+          message,
+          pending.request as ManualAdvisorIwRequest,
+          pending.sourceSnapshot,
+        )
+      : decodeSymbiontRollCommitTerminal(
+          message,
+          pending.request as SymbiontRollCommitRequest,
+          pending.sourceSnapshot,
+        );
   }
   const receipt = message.receipt;
   if (receipt.commandId !== pending.request.commandId) {
@@ -5348,6 +5629,17 @@ function checkpointSnapshotMatchesReceipt(
   sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (result.stage === 'SYMBIONTS' && 'variant' in result) {
+    return result.variant === 'MANUAL_COMPOSITION'
+      ? manualCompositionSnapshotMatchesReceipt(
+          snapshot,
+          receipt as CommandReceipt<ManualCompositionResult>,
+        )
+      : manualAdvisorSkillSnapshotMatchesReceipt(
+          snapshot,
+          receipt as CommandReceipt<ManualAdvisorSkillResult>,
+        );
+  }
   if (result.stage === 'SYMBIONTS') {
     return advisorCheckpointSnapshotMatchesReceipt(
       snapshot,
@@ -5690,10 +5982,16 @@ function rollCommitSnapshotMatchesReceipt(
     );
   }
   if (result.stage === 'SYMBIONTS') {
-    return symbiontRollSnapshotMatchesReceipt(
-      snapshot,
-      receipt as CommandReceipt<SymbiontRollCommitResult>,
-    );
+    return result.variant === 'ADVISOR_IW'
+      ? manualAdvisorIwSnapshotMatchesReceipt(
+          snapshot,
+          receipt as CommandReceipt<ManualAdvisorIwResult>,
+          source,
+        )
+      : symbiontRollSnapshotMatchesReceipt(
+          snapshot,
+          receipt as CommandReceipt<SymbiontRollCommitResult>,
+        );
   }
   if (snapshot.formId !== 'CHR-003' && snapshot.formId !== 'CHR-004') {
     return unrecognized('$.presentation.base.formId', snapshot.formId);
@@ -6169,6 +6467,7 @@ export function connectProjection(
   onRandomSymbiontDraft: (value: RandomSymbiontDraft | null) => void = () => {},
   onAdvisorSkillSelectionDraft: (value: AdvisorSkillSelectionDraft | null) => void = () => {},
   onSkillCardDraft: (value: CharacterSkillCardDraft | null) => void = () => {},
+  onManualCompositionDraft: (value: ManualCompositionDraft | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -6188,6 +6487,7 @@ export function connectProjection(
   let randomSymbiontDraft: RandomSymbiontDraft | null = null;
   let advisorSkillSelectionDraft: AdvisorSkillSelectionDraft | null = null;
   let skillCardDraft: CharacterSkillCardDraft | null = null;
+  let manualCompositionDraft: ManualCompositionDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
@@ -6212,6 +6512,7 @@ export function connectProjection(
       randomSymbiontDraft,
       advisorSkillSelectionDraft,
       skillCardDraft,
+      manualCompositionDraft,
     );
   const visibleLast = () =>
     lastSnapshot === null
@@ -6303,6 +6604,11 @@ export function connectProjection(
     onAdvisorSkillSelectionDraft(advisorSkillSelectionDraft);
     skillCardDraft = next.formId === 'CHR-014' ? { formId: 'CHR-014', targetBonus: null } : null;
     onSkillCardDraft(skillCardDraft);
+    manualCompositionDraft = manualCompositionDraftFromSnapshot(
+      next,
+      reconnect ? null : manualCompositionDraft,
+    );
+    onManualCompositionDraft(manualCompositionDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -6929,6 +7235,65 @@ export function connectProjection(
     closeAfterTerminalState();
   });
 
+  const notifyReady = (): void => {
+    if (lastSnapshot === null) return;
+    onState({
+      kind: 'ready',
+      snapshot: visibleSnapshotBase(
+        lastSnapshot,
+        identity,
+        commandPending(),
+        creationChoiceDraft,
+        creationRollDraft,
+        statAssignmentDraft,
+        skillSelectionDraft,
+      ),
+    });
+  };
+  const sendManualRequest = (
+    request: ManualAdvisorIwRequest | ManualAdvisorSkillRequest | ManualCompositionRequest,
+  ): FormActionRequestResult => {
+    if (lastSnapshot === null || socket === null || socket.readyState !== WebSocket.OPEN) {
+      return { ok: false, detail: 'WebSocket is not open' };
+    }
+    const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok) {
+      return {
+        ok: false,
+        detail: `manual symbiont command failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+      };
+    }
+    const roll = request.payload.variant === 'ADVISOR_IW';
+    if (roll) {
+      pendingRollCommit = {
+        receipt: null,
+        request: request as ManualAdvisorIwRequest,
+        sourceProjection: lastSnapshot.projection as Chr041Projection,
+        sourceSnapshot: lastSnapshot,
+      };
+    } else {
+      pendingCheckpoint = {
+        assignmentDraft: null,
+        receipt: null,
+        request: request as ManualCompositionRequest | ManualAdvisorSkillRequest,
+        skillSelectionDraft: null,
+        sourceSnapshot: lastSnapshot,
+      };
+    }
+    try {
+      socket.send(encoded.text);
+    } catch (error: unknown) {
+      if (roll) pendingRollCommit = null;
+      else pendingCheckpoint = null;
+      return {
+        ok: false,
+        detail: `manual symbiont command could not be sent: ${diagnostic(error)}`,
+      };
+    }
+    notifyReady();
+    return { ok: true };
+  };
+
   return {
     disconnect: () => {
       if (disposed) return;
@@ -6942,6 +7307,98 @@ export function connectProjection(
       ) {
         socket.close(1000, 'web client unmounted');
       }
+    },
+    toggleManualCompositionSpecies: (speciesKey, included) => {
+      if (disposed || terminal || lastSnapshot === null) {
+        return { ok: false, detail: 'projection connection is closed' };
+      }
+      if (commandPending() || pendingFormAction !== null || pendingAddressableRoute !== null) {
+        return { ok: false, detail: 'manual composition is frozen while delivery is pending' };
+      }
+      try {
+        manualCompositionDraft = toggleManualCompositionSpecies(
+          lastSnapshot,
+          manualCompositionDraft,
+          speciesKey,
+          included,
+        );
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      onManualCompositionDraft(manualCompositionDraft);
+      notifyReady();
+      return { ok: true };
+    },
+    replaceManualBindingSide: (side) => {
+      if (disposed || terminal || lastSnapshot === null) {
+        return { ok: false, detail: 'projection connection is closed' };
+      }
+      if (commandPending() || pendingFormAction !== null || pendingAddressableRoute !== null) {
+        return { ok: false, detail: 'manual binding is frozen while delivery is pending' };
+      }
+      if (!lastSnapshot.availableActionKeys.includes(CHR_018_MANUAL_BINDING_ACTION_KEY)) {
+        return { ok: false, detail: 'CHR-018 binding draft is unavailable' };
+      }
+      try {
+        manualCompositionDraft = replaceManualBindingSide(
+          lastSnapshot,
+          manualCompositionDraft,
+          side,
+        );
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      onManualCompositionDraft(manualCompositionDraft);
+      notifyReady();
+      return { ok: true };
+    },
+    requestSymbiontCard: (speciesKey) => {
+      if (disposed || terminal || lastSnapshot === null) {
+        return { ok: false, detail: 'projection connection is closed' };
+      }
+      if (
+        lastSnapshot.formId !== 'CHR-017' ||
+        lastSnapshot.projection.symbiontAcquisitionModeOrNull !== 'MANUAL' ||
+        !lastSnapshot.availableActionKeys.includes(CHR_017_MANUAL_CARD_ACTION_KEY)
+      ) {
+        return { ok: false, detail: 'no active CHR-017 manual catalog scope' };
+      }
+      if (
+        !lastSnapshot.projection.eligibleSymbiontSpecies.some(
+          (entry) => entry.speciesKey === speciesKey,
+        )
+      ) {
+        return { ok: false, detail: 'speciesKey is absent from the confirmed manual catalog' };
+      }
+      if (pendingAddressableRoute !== null || pendingFormAction !== null || commandPending()) {
+        return { ok: false, detail: 'another wizard transition is awaiting host delivery' };
+      }
+      if (socket === null || socket.readyState !== WebSocket.OPEN) {
+        return { ok: false, detail: 'WebSocket is not open' };
+      }
+      const request = {
+        bindings: [{ parameterIndex: 1, source: 'client-selected', value: speciesKey }],
+        expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+        messageType: 'navigation.addressable-route',
+        navigationRequestId: createRequestId('navigation'),
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        routeTemplate: CHR_018_ROUTE,
+      } as const satisfies AddressableRouteIntentV2Message;
+      const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) {
+        return {
+          ok: false,
+          detail: `addressable route failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+        };
+      }
+      pendingAddressableRoute = request;
+      try {
+        socket.send(encoded.text);
+      } catch (error: unknown) {
+        pendingAddressableRoute = null;
+        return { ok: false, detail: `addressable route could not be sent: ${diagnostic(error)}` };
+      }
+      return { ok: true };
     },
     reconnect: () => {
       if (disposed || terminal || deviceId === null)
@@ -7335,7 +7792,7 @@ export function connectProjection(
       }
       return { ok: true };
     },
-    requestFormAction: (actionKey, advisorIntelligenceFloorManualFaceOrNull) => {
+    requestFormAction: (actionKey, manualFacesOrNull) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (lastSnapshot === null)
         return { ok: false, detail: 'no confirmed projection is available' };
@@ -7366,6 +7823,29 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (
+        activeForm.formId === 'CHR-018' &&
+        lastSnapshot.formId === 'CHR-018' &&
+        actionKey === CHR_018_MANUAL_ADD_ACTION_KEY
+      ) {
+        let payload: ManualCompositionRequest['payload'];
+        try {
+          payload = manualCompositionPayload(lastSnapshot, manualCompositionDraft);
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const request: ManualCompositionRequest = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload,
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        };
+        return sendManualRequest(request);
       }
       if (activeForm.formId === 'CHR-014' && actionKey === CHR_014_ADD_ACTION_KEY) {
         let payload: SkillSelectionCheckpointPayload;
@@ -7656,6 +8136,24 @@ export function connectProjection(
         lastSnapshot.formId === 'CHR-041' &&
         actionKey === CHR_041_CHECKPOINT_ACTION_KEY
       ) {
+        if ('compositionDraftRevision' in lastSnapshot.projection) {
+          let payload: ManualAdvisorSkillRequest['payload'];
+          try {
+            payload = manualAdvisorSkillPayload(lastSnapshot, advisorSkillSelectionDraft);
+          } catch (error: unknown) {
+            return { ok: false, detail: diagnostic(error) };
+          }
+          return sendManualRequest({
+            commandId: createRequestId('command'),
+            commandKind: 'workflow-command',
+            expectedRevisions: { ...lastSnapshot.revisions },
+            messageType: 'command.request',
+            payload,
+            protocolVersion: WIRE_PROTOCOL_VERSION,
+            role: 'player',
+            workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+          });
+        }
         let payload: SymbiontAdvisorCheckpointRequest['payload'];
         try {
           payload = advisorCheckpointPayload(lastSnapshot, advisorSkillSelectionDraft);
@@ -7863,6 +8361,38 @@ export function connectProjection(
         return { ok: true };
       }
       if (
+        activeForm.formId === 'CHR-041' &&
+        lastSnapshot.formId === 'CHR-041' &&
+        actionKey === CHR_041_MANUAL_IW_ACTION_KEY
+      ) {
+        const input: unknown = manualFacesOrNull;
+        if (input !== null && input !== undefined && !Array.isArray(input)) {
+          return { ok: false, detail: 'CHR-041 I/W requires exactly two faces or AUTO' };
+        }
+        if (Array.isArray(input) && input.length !== 2) {
+          return { ok: false, detail: 'CHR-041 I/W requires exactly two faces' };
+        }
+        const faces: readonly [number, number] | null = Array.isArray(input)
+          ? [input[0], input[1]]
+          : null;
+        let payload: ManualAdvisorIwRequest['payload'];
+        try {
+          payload = manualAdvisorIwPayload(lastSnapshot, faces);
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        return sendManualRequest({
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload,
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+        });
+      }
+      if (
         (activeForm.formId === 'CHR-003' && actionKey === CHR_003_ROLL_COMMIT_ACTION_KEY) ||
         (activeForm.formId === 'CHR-004' && actionKey === CHR_004_ROLL_COMMIT_ACTION_KEY) ||
         (activeForm.formId === 'CHR-020' && actionKey === CHR_020_ROLL_COMMIT_ACTION_KEY) ||
@@ -7883,7 +8413,7 @@ export function connectProjection(
                 : activeForm.formId === 'CHR-041'
                   ? advisorIntelligenceFloorRollPayload(
                       lastSnapshot,
-                      advisorIntelligenceFloorManualFaceOrNull ?? null,
+                      typeof manualFacesOrNull === 'number' ? manualFacesOrNull : null,
                     )
                   : rollCommitPayload(lastSnapshot, creationRollDraft),
             protocolVersion: WIRE_PROTOCOL_VERSION,

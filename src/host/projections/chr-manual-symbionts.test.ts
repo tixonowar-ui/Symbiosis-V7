@@ -215,12 +215,13 @@ describe('CHR manual symbiont projections', () => {
       'CHR-017::CTA::002',
     ]);
     const replacement = card(initial, 'OWL');
-    expect(
-      projectManualChr018(replacement, initial.catalog, media, true).roleFilteredPayload,
-    ).toMatchObject({
+    const replacementCard = projectManualChr018(replacement, initial.catalog, media, true);
+    expect(replacementCard.roleFilteredPayload).toMatchObject({
       speciesKey: 'OWL',
+      compatibility: { kind: 'COMPATIBLE' },
       compositionDraftRevision: current.manualCompositionStage?.compositionDraftRevision,
     });
+    expect(replacementCard.availableActionKeys).toContain('CHR-018::CTA::001');
     const duplicate = card(initial, 'EEL');
     const duplicateCard = projectManualChr018(duplicate, initial.catalog, media, true);
     expect(duplicateCard.roleFilteredPayload).toMatchObject({

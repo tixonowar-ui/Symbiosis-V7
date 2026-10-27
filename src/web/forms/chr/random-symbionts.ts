@@ -215,6 +215,19 @@ export type SkillSelectionValidation =
       readonly requiredSlotCount: number;
       readonly usedSlotCount: number;
     };
+export interface AdvisorSkillSlotsProjection extends JsonObject {
+  readonly requiredSlotCount: number;
+  readonly selectedSkills: readonly SelectedSkillProjection[];
+  readonly selectionValidation: SkillSelectionValidation;
+  readonly skillOptions: readonly AdvisorSkillOptionProjection[];
+}
+export type AdvisorSlotsAndSkillsProjection =
+  AdvisorSkillSlotsProjection | { readonly kind: 'IW_ROLLS_REQUIRED' };
+export function isAdvisorSkillSlots(
+  value: AdvisorSlotsAndSkillsProjection,
+): value is AdvisorSkillSlotsProjection {
+  return value.kind !== 'IW_ROLLS_REQUIRED';
+}
 interface Chr041ProjectionCommon extends JsonObject {
   readonly acknowledged: boolean;
   readonly advisorCard: {
@@ -225,12 +238,7 @@ interface Chr041ProjectionCommon extends JsonObject {
   };
   readonly advisorIPlus8OrNull: number | null;
   readonly advisorInstanceDraftId: string;
-  readonly advisorSlotsAndSkills: {
-    readonly requiredSlotCount: number;
-    readonly selectedSkills: readonly SelectedSkillProjection[];
-    readonly selectionValidation: SkillSelectionValidation;
-    readonly skillOptions: readonly AdvisorSkillOptionProjection[];
-  };
+  readonly advisorSlotsAndSkills: AdvisorSlotsAndSkillsProjection;
   readonly advisorWPlus8OrNull: number | null;
   readonly characterDraftId: string;
   readonly commandId: string | null;
@@ -303,6 +311,25 @@ export interface Chr019Projection extends JsonObject {
   readonly suppressionDestructionAbsorptionPreview:
     | { readonly kind: 'NONE' }
     | { readonly entries: readonly SymbiontInteractionProjection[]; readonly kind: 'CONSEQUENCES' };
+  readonly symbiontInstancesDraft: readonly SymbiontInstanceProjection[];
+  readonly symbiontModifierBreakdown: SymbiontModifierBreakdownProjection;
+  readonly wizardCheckpointId: string;
+}
+
+export interface ManualChr019Projection extends JsonObject {
+  readonly bindings: readonly SymbiontBindingProjection[];
+  readonly characterDraftId: string;
+  readonly commandId: string | null;
+  readonly compositionValidation: 'VALID';
+  readonly draftRevision: number;
+  readonly duplicatePolicy: { readonly kind: 'FORBIDDEN' };
+  readonly interactionGraph: Chr019Projection['interactionGraph'];
+  readonly irreversibleBoundaryStatus: 'NOT_CROSSED';
+  readonly raceChoice: 'FREE' | 'UNITED';
+  readonly randomReceiptIds: readonly string[];
+  readonly slotUsageAndCapacity: Chr019Projection['slotUsageAndCapacity'];
+  readonly speciesKeys: readonly SymbiontSpeciesKey[];
+  readonly suppressionDestructionAbsorptionPreview: Chr019Projection['suppressionDestructionAbsorptionPreview'];
   readonly symbiontInstancesDraft: readonly SymbiontInstanceProjection[];
   readonly symbiontModifierBreakdown: SymbiontModifierBreakdownProjection;
   readonly wizardCheckpointId: string;
@@ -1059,29 +1086,61 @@ export function decodeChr041Projection(
   if (!cardResult.ok) return cardResult;
   const slots = value['advisorSlotsAndSkills'];
   if (!isJsonObject(slots)) return refused(`${path}.advisorSlotsAndSkills`, slots!);
-  const slotKeys = exactObjectKeys(
-    slots,
-    new Set(['requiredSlotCount', 'selectedSkills', 'selectionValidation', 'skillOptions']),
-    `${path}.advisorSlotsAndSkills`,
-  );
-  if (!slotKeys.ok) return slotKeys;
-  const skillOptions = decodeArray(
-    slots['skillOptions'],
-    `${path}.advisorSlotsAndSkills.skillOptions`,
-    decodeAdvisorSkillOption,
-  );
-  if (!skillOptions.ok) return skillOptions;
-  const selectedSkills = decodeArray(
-    slots['selectedSkills'],
-    `${path}.advisorSlotsAndSkills.selectedSkills`,
-    decodeSelectedSkill,
-  );
-  if (!selectedSkills.ok) return selectedSkills;
-  const selectionValidation = decodeSelectionValidation(
-    slots['selectionValidation'],
-    `${path}.advisorSlotsAndSkills.selectionValidation`,
-  );
-  if (!selectionValidation.ok) return selectionValidation;
+  let decodedSlots: AdvisorSlotsAndSkillsProjection;
+  const iwPending = slots['kind'] === 'IW_ROLLS_REQUIRED';
+  if (iwPending) {
+    const pendingResult = decodeProjection(slots, `${path}.advisorSlotsAndSkills`, {
+      kind: (field) => field === 'IW_ROLLS_REQUIRED',
+    });
+    if (!pendingResult.ok) return pendingResult;
+    if (!manualComposition) return refused(`${path}.advisorSlotsAndSkills.kind`, slots['kind']!);
+    decodedSlots = { kind: 'IW_ROLLS_REQUIRED' };
+  } else {
+    const slotKeys = exactObjectKeys(
+      slots,
+      new Set(['requiredSlotCount', 'selectedSkills', 'selectionValidation', 'skillOptions']),
+      `${path}.advisorSlotsAndSkills`,
+    );
+    if (!slotKeys.ok) return slotKeys;
+    const skillOptions = decodeArray(
+      slots['skillOptions'],
+      `${path}.advisorSlotsAndSkills.skillOptions`,
+      decodeAdvisorSkillOption,
+    );
+    if (!skillOptions.ok) return skillOptions;
+    const selectedSkills = decodeArray(
+      slots['selectedSkills'],
+      `${path}.advisorSlotsAndSkills.selectedSkills`,
+      decodeSelectedSkill,
+    );
+    if (!selectedSkills.ok) return selectedSkills;
+    const selectionValidation = decodeSelectionValidation(
+      slots['selectionValidation'],
+      `${path}.advisorSlotsAndSkills.selectionValidation`,
+    );
+    if (!selectionValidation.ok) return selectionValidation;
+    const requiredSlotCount = slots['requiredSlotCount'];
+    if (!isSafeIntegerAtLeast(requiredSlotCount, 0)) {
+      return refused(`${path}.advisorSlotsAndSkills.requiredSlotCount`, requiredSlotCount!);
+    }
+    const usedSlotCount = selectedSkills.value.reduce(
+      (sum, selected) => sum + selected.slotCost,
+      0,
+    );
+    const expectedValidation = skillSelectionValidation(requiredSlotCount, usedSlotCount);
+    if (!sameJson(selectionValidation.value, expectedValidation)) {
+      return refused(
+        `${path}.advisorSlotsAndSkills.selectionValidation`,
+        selectionValidation.value,
+      );
+    }
+    decodedSlots = {
+      requiredSlotCount,
+      selectedSkills: selectedSkills.value,
+      selectionValidation: selectionValidation.value,
+      skillOptions: skillOptions.value,
+    };
+  }
   const suppression = value['trogrSuppressionState'];
   if (!isJsonObject(suppression)) return refused(`${path}.trogrSuppressionState`, suppression!);
   const suppressionKind = suppression['kind'];
@@ -1155,55 +1214,45 @@ export function decodeChr041Projection(
   });
   if (!result.ok) return result;
   if (manualComposition) {
-    for (const [key, ids] of [
-      ['iwRollRequestIds', value['iwRollRequestIds'] as readonly JsonValue[] | undefined],
-      ['iwRollReceiptIds', value['iwRollReceiptIds'] as readonly JsonValue[] | undefined],
-    ] as const) {
-      if (
-        !isJsonArray(ids) ||
-        ids.some((id) => !isNonEmptyString(id)) ||
-        new Set(ids).size !== ids.length
-      ) {
-        return refused(`${path}.${key}`, ids ?? null);
-      }
-    }
     const requestIds = value['iwRollRequestIds'];
     const receiptIds = value['iwRollReceiptIds'];
     if (
-      isJsonArray(requestIds) &&
-      isJsonArray(receiptIds) &&
-      new Set([...requestIds, ...receiptIds]).size !== 4
+      !isJsonArray(requestIds) ||
+      !isJsonArray(receiptIds) ||
+      requestIds.some((id) => !isNonEmptyString(id)) ||
+      new Set(requestIds).size !== 2 ||
+      receiptIds.some((id) => id !== null && !isNonEmptyString(id))
     ) {
-      return refused(`${path}.iwRollReceiptIds`, receiptIds ?? null);
+      return refused(`${path}.iwRollRequestIds`, requestIds ?? null);
     }
-  }
-  const requiredSlotCount = slots['requiredSlotCount'];
-  if (!isSafeIntegerAtLeast(requiredSlotCount, 0)) {
-    return refused(`${path}.advisorSlotsAndSkills.requiredSlotCount`, requiredSlotCount!);
-  }
-  const usedSlotCount = selectedSkills.value.reduce((sum, selected) => sum + selected.slotCost, 0);
-  const expectedValidation = skillSelectionValidation(requiredSlotCount, usedSlotCount);
-  if (!sameJson(selectionValidation.value, expectedValidation)) {
-    return refused(`${path}.advisorSlotsAndSkills.selectionValidation`, selectionValidation.value);
-  }
-  if (
-    value['advisorIPlus8OrNull'] === null ||
-    value['advisorWPlus8OrNull'] === null ||
-    value['iwRollReceiptIds'] === null ||
-    value['iwRollRequestIds'] === null
-  ) {
+    if (iwPending) {
+      if (
+        value['acknowledged'] !== false ||
+        receiptIds.some((id) => id !== null) ||
+        value['advisorIPlus8OrNull'] !== null ||
+        value['advisorWPlus8OrNull'] !== null ||
+        suppressionKind === 'SUPPRESSED'
+      ) {
+        return refused(`${path}.advisorSlotsAndSkills.kind`, slots['kind']!);
+      }
+    } else {
+      if (
+        receiptIds.some((id) => !isNonEmptyString(id)) ||
+        new Set([...requestIds, ...receiptIds]).size !== 4 ||
+        value['advisorIPlus8OrNull'] === null ||
+        value['advisorWPlus8OrNull'] === null
+      ) {
+        return refused(`${path}.iwRollReceiptIds`, receiptIds);
+      }
+    }
+  } else if (value['advisorIPlus8OrNull'] === null || value['advisorWPlus8OrNull'] === null) {
     return refused(path, value);
   }
   return {
     ok: true,
     value: {
       ...(value as Chr041Projection),
-      advisorSlotsAndSkills: {
-        requiredSlotCount,
-        selectedSkills: selectedSkills.value,
-        selectionValidation: selectionValidation.value,
-        skillOptions: skillOptions.value,
-      },
+      advisorSlotsAndSkills: decodedSlots,
       trogrSuppressionState: suppression as Chr041Projection['trogrSuppressionState'],
     },
   };
@@ -1213,6 +1262,11 @@ export function expectedChr041ActionKeys(
   projection: Chr041Projection,
   executableWorkflowCommandIds: readonly WorkflowCommandId[],
 ): readonly ActionKey[] {
+  if (projection.advisorSlotsAndSkills.kind === 'IW_ROLLS_REQUIRED') {
+    return executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+      ? ['CHR-041::CTA::003']
+      : NO_ACTION_KEYS;
+  }
   if (
     'compositionDraftRevision' in projection &&
     projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
@@ -1352,7 +1406,8 @@ function decodeModifierBreakdown(
 export function decodeChr019Projection(
   value: JsonObject,
   path: string,
-): DecodeResult<Chr019Projection> {
+  mode: 'MANUAL' | 'RANDOM' = 'RANDOM',
+): DecodeResult<Chr019Projection | ManualChr019Projection> {
   const bindings = decodeArray(value['bindings'], `${path}.bindings`, decodeSymbiontBinding);
   if (!bindings.ok) return bindings;
   const symbiontInstancesDraft = decodeArray<SymbiontInstanceProjection>(
@@ -1404,21 +1459,29 @@ export function decodeChr019Projection(
   if (!suppressionPreview.ok) return suppressionPreview;
   const duplicatePolicy = value['duplicatePolicy'];
   if (!isJsonObject(duplicatePolicy)) return refused(`${path}.duplicatePolicy`, duplicatePolicy!);
-  if (duplicatePolicy['kind'] !== 'REROLL_WITH_SEPARATE_RECEIPTS') {
+  const duplicateKind = mode === 'MANUAL' ? 'FORBIDDEN' : 'REROLL_WITH_SEPARATE_RECEIPTS';
+  if (duplicatePolicy['kind'] !== duplicateKind) {
     return refused(`${path}.duplicatePolicy.kind`, duplicatePolicy['kind']!);
   }
-  const duplicateReceipts = decodeArray(
-    duplicatePolicy['receipts'],
-    `${path}.duplicatePolicy.receipts`,
-    decodeDuplicateReceipt,
-  );
+  const duplicateResult = decodeProjection(duplicatePolicy, `${path}.duplicatePolicy`, {
+    kind: (field) => field === duplicateKind,
+    ...(mode === 'RANDOM'
+      ? {
+          receipts: (field: JsonValue | undefined) =>
+            Array.isArray(field) && field.every(isJsonObject),
+        }
+      : {}),
+  });
+  if (!duplicateResult.ok) return duplicateResult;
+  const duplicateReceipts =
+    mode === 'RANDOM'
+      ? decodeArray(
+          duplicatePolicy['receipts'],
+          `${path}.duplicatePolicy.receipts`,
+          decodeDuplicateReceipt,
+        )
+      : ({ ok: true, value: [] } as const);
   if (!duplicateReceipts.ok) return duplicateReceipts;
-  const duplicateKeys = exactObjectKeys(
-    duplicatePolicy,
-    new Set(['kind', 'receipts']),
-    `${path}.duplicatePolicy`,
-  );
-  if (!duplicateKeys.ok) return duplicateKeys;
   const slots = value['slotUsageAndCapacity'];
   if (!isJsonObject(slots)) return refused(`${path}.slotUsageAndCapacity`, slots!);
   const slotResult = decodeProjection(slots, `${path}.slotUsageAndCapacity`, {
@@ -1439,7 +1502,8 @@ export function decodeChr019Projection(
     draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
     duplicatePolicy: (field) => field === duplicatePolicy,
     interactionGraph: (field) => field === value['interactionGraph'],
-    irreversibleBoundaryStatus: (field) => field === 'CROSSED',
+    irreversibleBoundaryStatus: (field) =>
+      field === (mode === 'MANUAL' ? 'NOT_CROSSED' : 'CROSSED'),
     raceChoice: (field) => field === 'FREE' || field === 'UNITED',
     randomReceiptIds: (field) =>
       Array.isArray(field) && field.every(isNonEmptyString) && new Set(field).size === field.length,
@@ -1459,19 +1523,20 @@ export function decodeChr019Projection(
   ) {
     return refused(`${path}.speciesKeys`, speciesKeys);
   }
-  return {
-    ok: true,
-    value: {
-      ...(value as Chr019Projection),
-      bindings: bindings.value,
-      duplicatePolicy: { kind: 'REROLL_WITH_SEPARATE_RECEIPTS', receipts: duplicateReceipts.value },
-      interactionGraph: interactionGraph.value as Chr019Projection['interactionGraph'],
-      suppressionDestructionAbsorptionPreview:
-        suppressionPreview.value as Chr019Projection['suppressionDestructionAbsorptionPreview'],
-      symbiontInstancesDraft: symbiontInstancesDraft.value,
-      symbiontModifierBreakdown: modifier.value,
-    },
+  const decoded = {
+    ...(value as Chr019Projection),
+    bindings: bindings.value,
+    duplicatePolicy:
+      mode === 'MANUAL'
+        ? { kind: 'FORBIDDEN' }
+        : { kind: 'REROLL_WITH_SEPARATE_RECEIPTS', receipts: duplicateReceipts.value },
+    interactionGraph: interactionGraph.value as Chr019Projection['interactionGraph'],
+    suppressionDestructionAbsorptionPreview:
+      suppressionPreview.value as Chr019Projection['suppressionDestructionAbsorptionPreview'],
+    symbiontInstancesDraft: symbiontInstancesDraft.value,
+    symbiontModifierBreakdown: modifier.value,
   };
+  return { ok: true, value: decoded as Chr019Projection | ManualChr019Projection };
 }
 
 export function randomSymbiontDraftFromSnapshot(
@@ -1545,6 +1610,7 @@ export function advisorSkillSelectionDraftFromSnapshot(
   if (snapshot.formId !== 'CHR-041') return null;
   const projection = snapshot.projection;
   if (
+    !isAdvisorSkillSlots(projection.advisorSlotsAndSkills) ||
     projection.acknowledged ||
     ('compositionDraftRevision' in projection &&
       projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
@@ -1571,6 +1637,9 @@ export function replaceAdvisorSkillCandidate(
     if (targetBonus !== null) throw new Error('CHR-041 target bonus requires an explicit skill');
     return { ...draft, candidateSkillIdOrNull: null, candidateTargetBonusOrNull: null };
   }
+  if (!isAdvisorSkillSlots(projection.advisorSlotsAndSkills)) {
+    throw new Error('CHR-041 requires committed I/W before skill options');
+  }
   const option = projection.advisorSlotsAndSkills.skillOptions.find(
     (candidate) => candidate.skillId === skillId,
   );
@@ -1596,6 +1665,9 @@ export function toggleAdvisorSkillSelection(
   const targetBonus = draft.candidateTargetBonusOrNull;
   if (skillId === null || targetBonus === null) {
     throw new Error('CHR-041 requires an explicit skill and target bonus');
+  }
+  if (!isAdvisorSkillSlots(projection.advisorSlotsAndSkills)) {
+    throw new Error('CHR-041 requires committed I/W before skill options');
   }
   const option = projection.advisorSlotsAndSkills.skillOptions.find(
     (candidate) => candidate.skillId === skillId,
@@ -1689,6 +1761,9 @@ export function advisorCheckpointPayload(
   const randomSequenceId = projection['randomSequenceId'];
   if (typeof randomSequenceId !== 'string') {
     throw new Error('CHR-041 skill checkpoint requires the RANDOM Advisor transport');
+  }
+  if (!isAdvisorSkillSlots(projection.advisorSlotsAndSkills)) {
+    throw new Error('CHR-041 requires committed I/W before skills');
   }
   if (projection.acknowledged || draft.selectionValidation.kind !== 'EXACT') {
     throw new Error('CHR-041 requires exact skill slots');
@@ -1937,6 +2012,12 @@ export function decodeSymbiontAdvisorCheckpointTerminal(
   const receipt = message.receipt;
   const payload = request.payload;
   const sourceProjection = source.projection as Chr041Projection;
+  if (sourceProjection.advisorSlotsAndSkills.kind === 'IW_ROLLS_REQUIRED') {
+    return refused(
+      '$.presentation.base.roleFilteredPayload.advisorSlotsAndSkills.kind',
+      sourceProjection.advisorSlotsAndSkills.kind,
+    );
+  }
   if (
     source.formId !== 'CHR-041' ||
     receipt.commandId !== request.commandId ||
@@ -1950,8 +2031,15 @@ export function decodeSymbiontAdvisorCheckpointTerminal(
   ) {
     return refused('$.receipt.revisions', { ...receipt.revisions });
   }
+  const sourceSlots = sourceProjection.advisorSlotsAndSkills;
+  if (!isAdvisorSkillSlots(sourceSlots)) {
+    return refused(
+      '$.presentation.base.roleFilteredPayload.advisorSlotsAndSkills',
+      sourceProjection.advisorSlotsAndSkills,
+    );
+  }
   const expectedLearnedSkills = payload.selectedSkills.map((selected) => {
-    const option = sourceProjection.advisorSlotsAndSkills.skillOptions.find(
+    const option = sourceSlots.skillOptions.find(
       (candidate) => candidate.skillId === selected.skillId,
     );
     const level = option?.levelOptions.find(
@@ -1969,8 +2057,7 @@ export function decodeSymbiontAdvisorCheckpointTerminal(
     effectsActive: (field) => field === sourceProjection.advisorCard.effectsActive,
     learnedSkills: (field) => sameJson(field, expectedLearnedSkills),
     nextFormId: (field) => field === 'CHR-019',
-    requiredSlotCount: (field) =>
-      field === sourceProjection.advisorSlotsAndSkills.requiredSlotCount,
+    requiredSlotCount: (field) => field === sourceSlots.requiredSlotCount,
     selectedSkills: (field) => sameJson(field, payload.selectedSkills),
     sourceFormId: (field) => field === 'CHR-041',
     usedSlotCount: (field) => field === expectedUsed,
@@ -2073,6 +2160,12 @@ export function symbiontRollSnapshotMatchesReceipt(
     }
     if (snapshot.formId === 'CHR-019') {
       const projection = snapshot.projection;
+      if (projection.duplicatePolicy.kind === 'FORBIDDEN') {
+        return refused(
+          '$.presentation.base.roleFilteredPayload.duplicatePolicy.kind',
+          projection.duplicatePolicy.kind,
+        );
+      }
       const randomReceiptId = result.randomReceiptIdOrNull;
       if (
         randomReceiptId === null
@@ -2107,6 +2200,12 @@ export function symbiontRollSnapshotMatchesReceipt(
     return refused('$.presentation.base.formId', snapshot.formId);
   }
   const projection = snapshot.projection;
+  if (projection.duplicatePolicy.kind === 'FORBIDDEN') {
+    return refused(
+      '$.presentation.base.roleFilteredPayload.duplicatePolicy.kind',
+      projection.duplicatePolicy.kind,
+    );
+  }
   if (!sameJson(projection.bindings, result.bindings)) {
     return refused('$.presentation.base.roleFilteredPayload.bindings', projection.bindings);
   }
@@ -2233,24 +2332,37 @@ export function advisorIntelligenceFloorSnapshotMatchesReceipt(
   const sourceProjection = source.projection;
   const projection = snapshot.projection;
   const result = receipt.result;
+  const compositionDraftRevision = projection['compositionDraftRevision'];
+  if (!isSafeIntegerAtLeast(compositionDraftRevision, 0)) {
+    return refused(
+      '$.presentation.base.roleFilteredPayload.compositionDraftRevision',
+      compositionDraftRevision ?? null,
+    );
+  }
   const suppression = projection.trogrSuppressionState;
   const revisionsMatch =
-    snapshot.revisions.actorVisibilityRevision === receipt.revisions.actorVisibilityRevision &&
-    snapshot.revisions.projectionRevision === receipt.revisions.projectionRevision &&
-    snapshot.revisions.stateRevision === receipt.revisions.stateRevision;
+    snapshot.revisions.actorVisibilityRevision >= receipt.revisions.actorVisibilityRevision &&
+    snapshot.revisions.projectionRevision >= receipt.revisions.projectionRevision &&
+    snapshot.revisions.stateRevision >= receipt.revisions.stateRevision;
+  const laterComposition =
+    projection.draftRevision > result.draftRevision ||
+    compositionDraftRevision > result.compositionDraftRevision;
+  const currentCommandMatches = laterComposition
+    ? isNonEmptyString(projection.commandId)
+    : projection.commandId === receipt.commandId &&
+      projection.acknowledged === sourceProjection.acknowledged &&
+      sameJson(projection.advisorSlotsAndSkills, sourceProjection.advisorSlotsAndSkills);
   if (
     !revisionsMatch ||
-    projection.acknowledged !== sourceProjection.acknowledged ||
-    projection.commandId !== receipt.commandId ||
+    !currentCommandMatches ||
     projection.characterDraftId !== result.characterDraftId ||
     projection.wizardCheckpointId !== result.checkpointId ||
-    projection.draftRevision !== result.draftRevision ||
-    projection.compositionDraftRevision !== result.compositionDraftRevision ||
+    projection.draftRevision < result.draftRevision ||
+    compositionDraftRevision < result.compositionDraftRevision ||
     projection.advisorInstanceDraftId !== result.advisorInstanceDraftId ||
     !sameJson(projection.iwRollRequestIds, sourceProjection.iwRollRequestIds) ||
     !sameJson(projection.iwRollReceiptIds, sourceProjection.iwRollReceiptIds) ||
     !sameJson(projection.advisorCard, sourceProjection.advisorCard) ||
-    !sameJson(projection.advisorSlotsAndSkills, sourceProjection.advisorSlotsAndSkills) ||
     suppression.kind !== 'SUPPRESSED' ||
     suppression.rollPurpose !== result.rollPurpose ||
     suppression.rollRequestIdOrNull !== result.physicalRoll.rollRequestId ||
@@ -2262,3 +2374,20 @@ export function advisorIntelligenceFloorSnapshotMatchesReceipt(
   }
   return { ok: true, value: snapshot };
 }
+
+export {
+  decodeArray,
+  decodeInteractionContainer,
+  decodeModifierBreakdown,
+  decodeProjection,
+  decodeSymbiontBinding,
+  decodeSymbiontModifierEffect,
+  decodeSymbiontSpecies,
+  decodeStatModifierEffect,
+  isFace,
+  isJsonObject,
+  isNonEmptyString,
+  isSafeIntegerAtLeast,
+  isSpeciesKey,
+  sameJson,
+};

@@ -5,7 +5,10 @@ import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-char
 
 import { CHARACTER_ART_ACCEPT, characterArtFromFile } from './character-art.js';
 import { availableFormActions } from './forms/index.js';
-import { CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY } from './forms/chr/random-symbionts.js';
+import {
+  CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
+  isAdvisorSkillSlots,
+} from './forms/chr/random-symbionts.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
@@ -1674,6 +1677,22 @@ function AdvisorSkillSelectionFields({
     projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
     projection.trogrSuppressionState.rollReceiptIdOrNull === null;
   const slots = projection.advisorSlotsAndSkills;
+  if (!isAdvisorSkillSlots(slots)) {
+    return (
+      <section aria-labelledby="chr-041-pending-title" data-advisor-iw-pending>
+        <h2 id="chr-041-pending-title">Броски Советника</h2>
+        <p>Сначала зафиксируйте I и W. Слоты и навыки ещё не рассчитаны.</p>
+        <ol data-advisor-iw-history>
+          {projection.iwRollRequestIds.map((requestId, index) => (
+            <li key={requestId ?? `pending-${String(index)}`}>
+              {index === 0 ? 'I' : 'W'}: request {requestId ?? 'Нет значения'}; receipt{' '}
+              {projection.iwRollReceiptIds[index] ?? 'Нет receipt'}
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+  }
   const selectedSkills = draft?.selectedSkills ?? slots.selectedSkills;
   const validation = draft?.selectionValidation ?? slots.selectionValidation;
   const candidateSkillId = draft?.candidateSkillIdOrNull ?? null;
@@ -2049,7 +2068,9 @@ function SymbiontCompositionFields({
         <p data-duplicate-policy={projection.duplicatePolicy.kind}>
           Политика: {projection.duplicatePolicy.kind}
         </p>
-        {projection.duplicatePolicy.receipts.length === 0 ? (
+        {projection.duplicatePolicy.kind === 'FORBIDDEN' ? (
+          <p data-composition-duplicates="empty">Дубликаты запрещены ручным составом.</p>
+        ) : projection.duplicatePolicy.receipts.length === 0 ? (
           <p data-composition-duplicates="empty">Дубликатов и отдельных reroll receipts нет.</p>
         ) : (
           <ul data-composition-duplicates="ready">

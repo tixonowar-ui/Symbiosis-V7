@@ -212,10 +212,7 @@ function compatibility(
   ) {
     return 'MONSTER_EXCLUSIVE';
   }
-  const capacity =
-    checkpoint.manualCompositionStage?.composition.slotCapacity ??
-    createSymbiontPlayerCatalog(catalog, checkpoint.raceAndMethodStage!.race!.value).slotCapacity;
-  if ((current?.acceptedSpecies.length ?? 0) >= capacity) return 'OVER_CAPACITY';
+  // The command validates a full replacement, not an incremental addition to this baseline.
   return 'COMPATIBLE';
 }
 

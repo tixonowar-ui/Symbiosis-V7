@@ -104,10 +104,10 @@ export function createManualWizardSetup(
   raceChoice: 'FREE' | 'UNITED',
   diceInputMode: 'AUTO' | 'MANUAL',
   databasePath = ':memory:',
+  characterDraftId = `${prefix}-character`,
 ): ManualWizardSetup {
   const database = openPersistenceDatabase(databasePath);
   const deviceId = bootstrapDeviceIdentity(database);
-  const characterDraftId = `${prefix}-character`;
   const wizardCheckpointId = `${prefix}-wizard`;
   commitIdentityCheckpoint(
     database,
