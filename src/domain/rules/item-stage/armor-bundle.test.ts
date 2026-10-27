@@ -120,7 +120,7 @@ describe('CHR-021 starting armor bundle domain rules', () => {
   });
 
   it.each([0, 21, 1.5, Number.NaN])('rejects invalid D20 quality face %s', (face) => {
-    expect(() => recommendArmorQuality(face as number)).toThrow('safe integer in 1..20');
-    expect(() => validateArmorQualityFace(face as number)).toThrow('safe integer in 1..20');
+    expect(() => recommendArmorQuality(face)).toThrow('safe integer in 1..20');
+    expect(() => validateArmorQualityFace(face)).toThrow('safe integer in 1..20');
   });
 });

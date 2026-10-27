@@ -13,7 +13,6 @@ import {
   ARMOR_BODY_ZONES,
   recommendArmorQuality,
   type ArmorBodyZone,
-  type ArmorCoverageModel,
   type ValidatedArmorBundle,
   type ValidatedArmorBundlePiece,
 } from '../domain/index.js';
@@ -634,7 +633,7 @@ function validatedBundleAt(value: unknown, path: string): ValidatedArmorBundle {
         `${path}.armorPieces[${String(index)}].itemId`,
       ),
       name: nonEmptySymbiontStringAt(piece['name'], `${path}.armorPieces[${String(index)}].name`),
-      coverageModel: coverageModel as ArmorCoverageModel,
+      coverageModel: coverageModel,
       bodyZone:
         piece['bodyZone'] === null
           ? null

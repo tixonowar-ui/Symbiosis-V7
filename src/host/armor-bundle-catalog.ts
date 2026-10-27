@@ -141,8 +141,8 @@ function loadQualityScale(dictionaries: Row[]): readonly ArmorQualityScaleEntry[
 function armourCatalogueRows(catalogueRows: Row[]): Row[] {
   const result = catalogueRows.filter(
     (row) =>
-      row['ItemTypeID'] !== undefined &&
-      String(row['ItemTypeID']).startsWith('ITM-ARM-') &&
+      typeof row['ItemTypeID'] === 'string' &&
+      row['ItemTypeID'].startsWith('ITM-ARM-') &&
       row['Категория'] === 'Броня',
   );
   const byId = new Map<string, Row>();
@@ -168,8 +168,8 @@ function armourCatalogueRows(catalogueRows: Row[]): Row[] {
 }
 
 function armorProfileRows(profileRows: Row[]): Map<string, ArmorCoverageModel> {
-  const profiles = profileRows.filter((row) =>
-    String(row['ItemTypeID'] ?? '').startsWith('ITM-ARM-'),
+  const profiles = profileRows.filter(
+    (row) => typeof row['ItemTypeID'] === 'string' && row['ItemTypeID'].startsWith('ITM-ARM-'),
   );
   const byId = new Map<string, ArmorCoverageModel>();
   for (const [index, row] of profiles.entries()) {

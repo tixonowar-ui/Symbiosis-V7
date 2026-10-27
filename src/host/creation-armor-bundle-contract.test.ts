@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { JsonObject, RevisionVector } from '@shared/index.js';
 
-import {
-  recommendArmorQuality,
-  type ArmorBodyZone,
-  type ValidatedArmorBundle,
-} from '../domain/index.js';
+import { recommendArmorQuality, type ValidatedArmorBundle } from '../domain/index.js';
 import type { DurableCreationWizardCheckpoint } from './creation-set-decide.js';
 import {
   armorBundleCheckpointReceipt,
@@ -39,7 +35,7 @@ function rawRequest(
     protocolVersion: 1,
     role: 'player',
     workflowCommandId,
-  } as Parameters<typeof normalizeArmorBundleEntryRequest>[0];
+  };
 }
 
 function entryPayload(): JsonObject {
@@ -103,10 +99,10 @@ function validatedBundle(): ValidatedArmorBundle {
         itemId: 'ITM-ARM-001',
         name: 'Кожаный доспех',
         coverageModel: 'ZONE_ELEMENT',
-        bodyZone: 'HEAD' as ArmorBodyZone,
+        bodyZone: 'HEAD',
       },
     ],
-    distinctBodyZones: ['HEAD' as ArmorBodyZone],
+    distinctBodyZones: ['HEAD'],
   };
 }
 

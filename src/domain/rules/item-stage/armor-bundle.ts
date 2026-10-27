@@ -48,6 +48,14 @@ function invalidArmorBundle(detail: string): never {
   throw new Error(`armor bundle: ${detail}`);
 }
 
+function isArmorEntryArray(value: unknown): value is readonly ArmorBundleCatalogEntry[] {
+  return Array.isArray(value);
+}
+
+function isSelectionArray(value: unknown): value is readonly ArmorBundleSelection[] {
+  return Array.isArray(value);
+}
+
 export function validateArmorQualityFace(rawFace: number): number {
   if (
     typeof rawFace !== 'number' ||
@@ -98,11 +106,11 @@ export function validateArmorBundle(
     catalog === null ||
     typeof catalog !== 'object' ||
     Array.isArray(catalog) ||
-    !Array.isArray(catalog.entries)
+    !isArmorEntryArray(catalog.entries)
   ) {
     invalidArmorBundle('catalog must be an object with an entries array');
   }
-  const entries = catalog.entries;
+  const entries: readonly ArmorBundleCatalogEntry[] = catalog.entries;
   const ids = new Set<string>();
   for (const [index, entry] of entries.entries()) {
     if (
@@ -120,7 +128,7 @@ export function validateArmorBundle(
     if (ids.has(entry.itemId)) invalidArmorBundle(`duplicate catalog item ${entry.itemId}`);
     ids.add(entry.itemId);
   }
-  if (!Array.isArray(selections) || selections.length < 1 || selections.length > 6) {
+  if (!isSelectionArray(selections) || selections.length < 1 || selections.length > 6) {
     invalidArmorBundle('selection must contain 1..6 armor pieces');
   }
 
