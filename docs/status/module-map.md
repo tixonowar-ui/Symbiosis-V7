@@ -123,18 +123,18 @@ Advisor и TROGR+ADVISER с MANUAL I/W/B/preview через Fastify+WS/SQLite.
 Equipment, `CHR-021+` и final save остаются в #146 и последующих задачах.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                | Веха |
-| ---------------------------- | ------------ | -------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                            | M4   |
-| `src/domain/rules`           | **частично** | rolls, stats, skills, random/manual composition, Advisor и interaction preview         | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                          | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                   | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation   | M2   |
-| `src/host`                   | **частично** | creation до actionless CHR-019; playable MANUAL editor, Advisor I/W/B/skills и preview | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–020/028/036/041/042 exact slice                               | M4   |
-| `src/web`                    | **частично** | recovery, stats, skills, random/manual symbiont UI и 8 Playwright-сценариев            | M5   |
-| `src/web/renderer`           | **частично** | 35 форм: 11 APP и 24 CHR; остальные fail-closed                                        | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати четырёх CHR                          | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                                          | Веха |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                                      | M4   |
+| `src/domain/rules`           | **частично** | rolls, stats, skills, random/manual composition, Advisor и interaction preview                                   | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                                    | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                                             | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation                             | M2   |
+| `src/host`                   | **частично** | creation до actionless CHR-021/CHECKPOINTED; playable MANUAL editor, Advisor I/W/B/skills, preview и armorBundle | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–021/028/036/041/042 exact slice; CHR-022 host-signed, не публикуется                    | M4   |
+| `src/web`                    | **частично** | recovery, stats, skills, random/manual symbiont и armor UI; 9 Playwright-сценариев                               | M5   |
+| `src/web/renderer`           | **частично** | 36 форм: 11 APP и 25 CHR; остальные fail-closed                                                                  | M5   |
+| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати пяти CHR                                                       | M6   |
 
 ## generated/ — вывод конвейера
 
@@ -147,11 +147,11 @@ Equipment, `CHR-021+` и final save остаются в #146 и последую
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                                     |
-| ------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                             |
-| `tests/e2e`         | **частично** | 8 сценариев: два RANDOM, два CHR-014, ручные FREE replacement, UNITED Advisor и TROGR+ADVISER; production + WS |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                         |
+| Каталог             | Состояние    | Примечание                                                                                                                          |
+| ------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                                  |
+| `tests/e2e`         | **частично** | 9 сценариев: два RANDOM, два CHR-014, ручные FREE replacement, UNITED Advisor, TROGR+ADVISER и armorBundle CHR-021; production + WS |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                              |
 
 ---
 

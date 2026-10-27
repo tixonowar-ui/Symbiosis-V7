@@ -1,24 +1,43 @@
-# Передача контекста — 2026-10-27
+# Передача контекста — 2026-10-28
 
-Снимок состояния после слияния CI-изменений. База — `main`, коммит
-`bf598d1422302901388833c473519d6beddd9c21`.
+Снимок состояния после среза issue #146 (PR #165, ветка
+`codex/146-starting-armor-bundle`). База — `main`, коммит
+`45f6f23d07324f455c50b4a8495aeb4ab2b16834`.
 Это подтверждение перечисленных проверок, а не приёмка всего продукта.
 
 ## Что завершено
 
+- [PR #165](https://github.com/tixonowar-ui/Symbiosis-V7/pull/165): стартовый
+  armorBundle CHR-021 — domain-валидация, host-контракт и loader, durable
+  entry/quality roll/checkpoint с actionless `CHR-021/CHECKPOINTED` и
+  host-signed `CHR-022` (не публикуется), projection/navigation, strict web
+  decoder, accessible UI и девятый production E2E-сценарий.
+  [ADR 0055](../adr/0055-starting-armor-bundle.md); один D20 на bundle,
+  AUTO — один sampler в транзакции, MANUAL — одна грань; bundle всегда
+  `OWNED_NOT_EQUIPPED`; recommendation не является модификатором и не
+  final qualityTier; PURE не инициализируется; safe-return меняет только
+  projectionRevision.
 - [PR #161](https://github.com/tixonowar-ui/Symbiosis-V7/pull/161) слит:
   штатный Vitest ограничивает параллелизм максимум четырьмя workers с учётом
   доступных CPU. Измеренный пик памяти Atlas suites снижен; игровые данные,
   guards, timeout и состав тестов сохранены. Причина и границы исправления —
   [Vitest / Atlas memory](vitest-atlas-memory.md).
 - [PR #163](https://github.com/tixonowar-ui/Symbiosis-V7/pull/163) слит после
-  разрешения конфликтов с #161. В changelog сохранены обе записи; итоговый
-  набор — **80 файлов / 1526 Vitest-тестов и 8 Playwright-сценариев**.
+  разрешения конфликтов с #161. В changelog сохранены обе записи; исходный
+  набор — 80 файлов / 1526 Vitest-тестов и 8 Playwright-сценариев; после
+  #146 — актуальные счётчики в шапке module-map.
 - CI проверяет трассируемость, полный вывод двух импортов и наличие тестов;
   диагностические материалы E2E сохраняются и после успешного retry.
   Подробности команд и отчётов — [проверки CI](../process/ci-checks.md).
 
 Правила ревью, защита `main` и лимиты размера PR не менялись.
+
+## Следующие задачи
+
+- Очередь #151–#156: стартовое оружие CHR-022, профили оружия, деньги,
+  пять позиций, итог восьми операций, post-save recovery. Порядок и границы —
+  в соответствующих issues; `CHR-022` по #146 остаётся host-signed и
+  не публикуется renderer до отдельного среза.
 
 ## Доказательства
 

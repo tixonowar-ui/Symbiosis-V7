@@ -86,6 +86,7 @@
 | [0052](0052-advisor-intelligence-floor-roll.md)           | Отдельный бросок неснижаемого остатка I | принято                                     |
 | [0053](0053-partial-skill-card-navigation.md)             | Повторный CHR-014 после partial add     | принято; PARTIAL уточняет 0050              |
 | [0054](0054-manual-symbiont-composition.md)               | Ручной состав и preview симбионтов      | принято                                     |
+| [0055](0055-starting-armor-bundle.md)                     | Стартовый armorBundle CHR-021           | принято                                     |
 
 ## Перенос решений аудита
 
