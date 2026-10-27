@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test';
 
 import { createManualSymbiontBrowserHost } from '../fixtures/manual-symbiont-e2e.js';
 
+test.use({ channel: 'chrome' });
+
 async function clickAction(page: Page, actionKey: string): Promise<void> {
   await page.locator(`[data-atlas-action-key="${actionKey}"]`).click();
 }
