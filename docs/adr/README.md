@@ -85,6 +85,7 @@
 | [0051](0051-symbiont-art-and-tree-delivery.md)            | Арт симбионтов и изображения деревьев   | принято                                     |
 | [0052](0052-advisor-intelligence-floor-roll.md)           | Отдельный бросок неснижаемого остатка I | принято                                     |
 | [0053](0053-partial-skill-card-navigation.md)             | Повторный CHR-014 после partial add     | принято; PARTIAL уточняет 0050              |
+| [0054](0054-manual-symbiont-composition.md)               | Ручной состав и preview симбионтов      | принято                                     |
 
 ## Перенос решений аудита
 

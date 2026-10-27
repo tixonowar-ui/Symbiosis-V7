@@ -8,6 +8,11 @@ export {
 } from './skill-presentation.js';
 export type { SkillPresentationStage } from './skill-presentation.js';
 export {
+  readLocalCharacterSymbiontPresentation,
+  writeLocalCharacterSymbiontPresentation,
+} from './symbiont-presentation.js';
+export type { SymbiontPresentationStage } from './symbiont-presentation.js';
+export {
   advanceRevisions,
   commitLocalCharacterCheckpoint,
   commitNewLocalCharacterCheckpoint,

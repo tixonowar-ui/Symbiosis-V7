@@ -1366,7 +1366,7 @@ function chr019Projection(): JsonObject {
   };
 }
 
-type SymbiontUiFormId = 'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041';
+type SymbiontUiFormId = 'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-020' | 'CHR-041' | 'CHR-042';
 
 function symbiontBase(
   formId: SymbiontUiFormId,
@@ -1378,8 +1378,19 @@ function symbiontBase(
     formId,
     formType: 'screen',
     roleFilteredPayload,
-    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
-    routeTemplate: `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`,
+    routeBindings: [
+      { parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID },
+      ...(formId === 'CHR-018'
+        ? [
+            {
+              parameterIndex: 1,
+              source: 'client-selected' as const,
+              value: roleFilteredPayload['speciesKey'] as string,
+            },
+          ]
+        : []),
+    ],
+    routeTemplate: `/player/characters/:localCharacterId/create/${formId.toLowerCase()}${formId === 'CHR-018' ? '/:speciesKey' : ''}`,
   };
 }
 
@@ -6850,5 +6861,136 @@ describe('CHR-041 and CHR-019 symbiont UI', () => {
     expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
     expect(container.querySelectorAll('button')).toHaveLength(0);
     expect(container.textContent).not.toContain('CHR-021');
+  });
+});
+
+describe('manual symbiont composition UI', () => {
+  it('opens the exact addressable card and keeps binding local without false CTA', async () => {
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-017', { ...chr017Projection(), symbiontAcquisitionModeOrNull: 'MANUAL' }, [
+        'CHR-017::CTA::001',
+      ]),
+      9,
+    );
+    expect(container.querySelector('[data-manual-form="CHR-017"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-017::CTA::003"]')).toBeNull();
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-manual-open-species="EEL"]'),
+        'manual EEL card opener',
+      ).click();
+    });
+    const route = decodedClientMessageV2(socket, socket.sent.length - 1);
+    if (route.messageType !== 'navigation.addressable-route') {
+      throw new Error('missing manual species addressable route');
+    }
+    expect(route).toMatchObject({
+      bindings: [{ parameterIndex: 1, source: 'client-selected', value: 'EEL' }],
+      routeTemplate: '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
+    });
+    const card: JsonObject = {
+      artAndTreePreview: {
+        artPath: '/generated/media/symbionts/EEL.png',
+        developmentTreePath: '/generated/media/development-trees/EEL.png',
+      },
+      bindingChoiceOrReadOnly: {
+        defaultSide: 'RIGHT',
+        kind: 'CHOICE',
+        options: ['LEFT', 'RIGHT'],
+      },
+      bindingKind: 'EEL_ARM',
+      characterDraftId: CHARACTER_DRAFT_ID,
+      compatibility: { kind: 'COMPATIBLE' },
+      compositionDraftRevision: 9,
+      slotCost: 1,
+      speciesKey: 'EEL',
+    };
+    deliver(
+      socket,
+      checkedHostTextV2(
+        setDecisionPresentationSnapshot(
+          route.navigationRequestId,
+          'ADDRESSABLE_ROUTE',
+          symbiontBase('CHR-018', card, [
+            'CHR-018::CTA::001',
+            'CHR-018::CTA::002',
+            'CHR-018::CTA::003',
+          ]),
+          [],
+          { ...entityRevisions(10), stateRevision: 9 },
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-manual-art]')?.getAttribute('alt')).toBe(
+      'Арт симбионта EEL',
+    );
+    expect(container.querySelector<HTMLInputElement>('#manual-binding-right')?.checked).toBe(true);
+    expect(container.querySelector('[data-atlas-action-key="CHR-018::CTA::003"]')).toBeNull();
+    const wireCount = socket.sent.length;
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLInputElement>('#manual-binding-left'),
+        'manual binding LEFT',
+      ).click();
+    });
+    expect(container.querySelector<HTMLInputElement>('#manual-binding-left')?.checked).toBe(true);
+    expect(socket.sent).toHaveLength(wireCount);
+  });
+
+  it('submits exactly two pending MANUAL Advisor I/W faces without fabricated skills', async () => {
+    const base = manualAdvisorFloorProjection({ suppressed: false });
+    const card = base['advisorCard'] as JsonObject;
+    const pending: JsonObject = {
+      ...base,
+      advisorCard: { ...card, advisorIPlus8: null, advisorWPlus8: null },
+      advisorIPlus8OrNull: null,
+      advisorSlotsAndSkills: { kind: 'IW_ROLLS_REQUIRED' },
+      advisorWPlus8OrNull: null,
+      commandId: 'manual-advisor-add',
+      iwRollReceiptIds: [null, null],
+      iwRollRequestIds: ['manual-i-request', 'manual-w-request'],
+    };
+    const { container, socket } = await connectToWizardBase(
+      symbiontBase('CHR-041', pending, ['CHR-041::CTA::003']),
+      10,
+    );
+    expect(container.querySelector('[data-advisor-iw-pending]')).not.toBeNull();
+    expect(container.querySelector('[data-advisor-skill-options]')).toBeNull();
+    expect(container.querySelector('[data-advisor-slot-usage]')).toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="CHR-041::CTA::003"]')).toBeNull();
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-manual-iw-face="I"]'),
+        'manual Advisor I',
+      ),
+      3,
+    );
+    inputNumber(
+      requiredElement(
+        container.querySelector<HTMLInputElement>('[data-manual-iw-face="W"]'),
+        'manual Advisor W',
+      ),
+      5,
+    );
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-manual-iw-submit]'),
+        'manual Advisor I/W submit',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request' || request.commandKind !== 'workflow-command') {
+      throw new Error('missing manual Advisor I/W command');
+    }
+    expect(request.payload).toMatchObject({
+      manualFacesOrNull: [3, 5],
+      pendingRollRequestIds: ['manual-i-request', 'manual-w-request'],
+      variant: 'ADVISOR_IW',
+    });
+    expect(request.payload).not.toHaveProperty('randomSequenceId');
+    expect(container.querySelector<HTMLButtonElement>('[data-manual-iw-submit]')?.disabled).toBe(
+      true,
+    );
   });
 });

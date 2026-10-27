@@ -21,7 +21,9 @@ export const CHR_FORM_IDS = [
   'CHR-014',
   'CHR-015',
   'CHR-017',
+  'CHR-018',
   'CHR-019',
+  'CHR-042',
   'CHR-020',
   'CHR-041',
 ] as const satisfies readonly FormId[];

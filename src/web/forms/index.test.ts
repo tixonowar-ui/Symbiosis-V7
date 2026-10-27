@@ -141,6 +141,30 @@ describe('RANDOM symbiont web form registry', () => {
   });
 });
 
+describe('MANUAL symbiont web form registry', () => {
+  it.each([
+    [
+      'CHR-017',
+      '/player/characters/:localCharacterId/create/chr-017',
+      ['CHR-017::CTA::001', 'CHR-017::CTA::002'],
+    ],
+    [
+      'CHR-018',
+      '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
+      ['CHR-018::CTA::001', 'CHR-018::CTA::002', 'CHR-018::CTA::003'],
+    ],
+    [
+      'CHR-019',
+      '/player/characters/:localCharacterId/create/chr-019',
+      ['CHR-019::CTA::002', 'CHR-019::CTA::004'],
+    ],
+    ['CHR-042', '/player/characters/:localCharacterId/create/chr-042', ['CHR-042::CTA::002']],
+  ] as const)('publishes the exact %s route and manual action subset', (formId, route, keys) => {
+    expect(presentedFormDefinition(formId)).toMatchObject({ route, type: 'screen' });
+    expect(availableFormActions(formId, keys).map(({ actionKey }) => actionKey)).toEqual(keys);
+  });
+});
+
 describe('SKILLS web form registry', () => {
   it.each([
     ['CHR-013', '/player/characters/:localCharacterId/create/chr-013'],

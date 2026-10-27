@@ -5,7 +5,17 @@ import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-char
 
 import { CHARACTER_ART_ACCEPT, characterArtFromFile } from './character-art.js';
 import { availableFormActions } from './forms/index.js';
-import { CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY } from './forms/chr/random-symbionts.js';
+import {
+  CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY,
+  isAdvisorSkillSlots,
+} from './forms/chr/random-symbionts.js';
+import {
+  CHR_017_MANUAL_CARD_ACTION_KEY,
+  CHR_018_MANUAL_BINDING_ACTION_KEY,
+  CHR_041_MANUAL_IW_ACTION_KEY,
+  isManualChr017Projection,
+} from './forms/chr/manual-symbionts.js';
+import { ManualAdvisorIwFields, ManualSymbiontFields } from './forms/chr/manual-symbiont-fields.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
@@ -34,6 +44,7 @@ import type {
   FormActionRequestResult,
   IdentityDraftClientState,
   IdentityDraftValues,
+  ManualCompositionDraft,
   MethodConsequencesProjection,
   MissingSkillPenaltyProjection,
   ModeConsequencesProjection,
@@ -1655,11 +1666,13 @@ function RandomSymbiontFields({
 
 function AdvisorSkillSelectionFields({
   draft,
+  onAdvisorIw,
   onCandidateChange,
   onIntelligenceFloorManualFaceChange,
   snapshot,
 }: {
   readonly draft: AdvisorSkillSelectionDraft | null;
+  readonly onAdvisorIw: (faces: readonly [number, number] | null) => FormActionRequestResult;
   readonly onCandidateChange: (skillId: string | null, targetBonus: number | null) => void;
   readonly onIntelligenceFloorManualFaceChange: (value: number | null) => void;
   readonly snapshot: ConfirmedProjectionSnapshot;
@@ -1674,6 +1687,9 @@ function AdvisorSkillSelectionFields({
     projection.trogrSuppressionState.kind === 'SUPPRESSED' &&
     projection.trogrSuppressionState.rollReceiptIdOrNull === null;
   const slots = projection.advisorSlotsAndSkills;
+  if (!isAdvisorSkillSlots(slots)) {
+    return <ManualAdvisorIwFields onRoll={onAdvisorIw} snapshot={snapshot} />;
+  }
   const selectedSkills = draft?.selectedSkills ?? slots.selectedSkills;
   const validation = draft?.selectionValidation ?? slots.selectionValidation;
   const candidateSkillId = draft?.candidateSkillIdOrNull ?? null;
@@ -1815,10 +1831,11 @@ function AdvisorSkillSelectionFields({
         {mutable ? (
           <fieldset data-advisor-selection-controls>
             <legend>Локальное добавление или удаление</legend>
-            <label>
+            <label htmlFor="chr-041-advisor-skill">
               Навык{' '}
               <select
                 data-advisor-skill-candidate
+                id="chr-041-advisor-skill"
                 value={candidateSkillId ?? ''}
                 onChange={(event) => {
                   const skillId = event.target.value || null;
@@ -1837,10 +1854,11 @@ function AdvisorSkillSelectionFields({
                 ))}
               </select>
             </label>
-            <label>
+            <label htmlFor="chr-041-advisor-target">
               Целевой бонус{' '}
               <select
                 data-advisor-target-bonus
+                id="chr-041-advisor-target"
                 disabled={candidateOption === undefined || selectedCandidate !== undefined}
                 value={candidateTargetBonus ?? ''}
                 onChange={(event) =>
@@ -2049,7 +2067,9 @@ function SymbiontCompositionFields({
         <p data-duplicate-policy={projection.duplicatePolicy.kind}>
           Политика: {projection.duplicatePolicy.kind}
         </p>
-        {projection.duplicatePolicy.receipts.length === 0 ? (
+        {projection.duplicatePolicy.kind === 'FORBIDDEN' ? (
+          <p data-composition-duplicates="empty">Дубликаты запрещены ручным составом.</p>
+        ) : projection.duplicatePolicy.receipts.length === 0 ? (
           <p data-composition-duplicates="empty">Дубликатов и отдельных reroll receipts нет.</p>
         ) : (
           <ul data-composition-duplicates="ready">
@@ -2155,6 +2175,8 @@ export function App(): ReactElement {
     readonly face: number | null;
   } | null>(null);
   const [skillCardDraft, setSkillCardDraft] = useState<CharacterSkillCardDraft | null>(null);
+  const [manualCompositionDraft, setManualCompositionDraft] =
+    useState<ManualCompositionDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -2169,6 +2191,7 @@ export function App(): ReactElement {
       setRandomSymbiontDraft,
       setAdvisorSkillSelectionDraft,
       setSkillCardDraft,
+      setManualCompositionDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2192,12 +2215,18 @@ export function App(): ReactElement {
     if (state.kind !== 'ready') return;
     window.history.replaceState(null, '', state.snapshot.path);
   }, [state]);
-  const availableActionKeys =
+  const availableActionKeys = (
     characterArtReadPending && snapshot?.formId === 'CHR-001'
       ? snapshot.availableActionKeys.filter(
           (actionKey) => actionKey !== CHR_001_CHECKPOINT_ACTION_KEY,
         )
-      : snapshot?.availableActionKeys;
+      : snapshot?.availableActionKeys
+  )?.filter(
+    (actionKey) =>
+      actionKey !== CHR_017_MANUAL_CARD_ACTION_KEY &&
+      actionKey !== CHR_018_MANUAL_BINDING_ACTION_KEY &&
+      actionKey !== CHR_041_MANUAL_IW_ACTION_KEY,
+  );
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
     creationChoiceDraft?.formId === snapshot?.formId ? creationChoiceDraft : null;
@@ -2327,7 +2356,38 @@ export function App(): ReactElement {
                 );
               }}
             />
-            <SymbiontCatalogFields snapshot={snapshot} />
+            <ManualSymbiontFields
+              draft={manualCompositionDraft}
+              onBindingSide={(side) => {
+                const result = connectionRef.current?.replaceManualBindingSide(side);
+                setActionNotice(
+                  result === undefined || result.ok
+                    ? null
+                    : `Привязка не сохранена: ${result.detail}.`,
+                );
+              }}
+              onOpenSpecies={(speciesKey) => {
+                const result = connectionRef.current?.requestSymbiontCard(speciesKey);
+                setActionNotice(
+                  result === undefined || result.ok
+                    ? null
+                    : `Карточка не открыта: ${result.detail}.`,
+                );
+              }}
+              onToggleSpecies={(speciesKey, included) => {
+                const result = connectionRef.current?.toggleManualCompositionSpecies(
+                  speciesKey,
+                  included,
+                );
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Состав не изменён: ${result.detail}.`,
+                );
+              }}
+              snapshot={snapshot}
+            />
+            {snapshot.formId !== 'CHR-017' || !isManualChr017Projection(snapshot.projection) ? (
+              <SymbiontCatalogFields snapshot={snapshot} />
+            ) : null}
             <RandomSymbiontFields
               draft={randomSymbiontDraft}
               snapshot={snapshot}
@@ -2363,6 +2423,20 @@ export function App(): ReactElement {
             <AdvisorSkillSelectionFields
               key={intelligenceFloorRollScope ?? 'no-advisor-floor'}
               draft={advisorSkillSelectionDraft}
+              onAdvisorIw={(faces) => {
+                const connection = connectionRef.current;
+                if (connection === null) {
+                  const result = {
+                    detail: 'projection connection is not ready',
+                    ok: false,
+                  } as const;
+                  setActionNotice(`Броски не отправлены: ${result.detail}.`);
+                  return result;
+                }
+                const result = connection.requestFormAction(CHR_041_MANUAL_IW_ACTION_KEY, faces);
+                setActionNotice(result.ok ? null : `Броски не отправлены: ${result.detail}.`);
+                return result;
+              }}
               onIntelligenceFloorManualFaceChange={(value) => {
                 intelligenceFloorManualFaceRef.current = {
                   rollScope: intelligenceFloorRollScope,

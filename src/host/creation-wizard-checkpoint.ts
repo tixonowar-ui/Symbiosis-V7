@@ -26,6 +26,22 @@ import {
   preflightCreationSymbiontAdvisor,
 } from './creation-symbiont-commands.js';
 import {
+  commitManualComposition,
+  preflightManualComposition,
+} from './creation-manual-composition.js';
+import {
+  normalizeManualCompositionCheckpointRequest,
+  type ManualCompositionCheckpointCommandRequest,
+} from './creation-manual-composition-contract.js';
+import {
+  commitManualAdvisorSkills,
+  preflightManualAdvisorSkills,
+} from './creation-manual-advisor.js';
+import {
+  normalizeManualAdvisorSkillCheckpointRequest,
+  type ManualAdvisorSkillCheckpointCommandRequest,
+} from './creation-manual-advisor-contract.js';
+import {
   CreationSymbiontApplicationError,
   normalizeSymbiontAdvisorCheckpointRequest,
   type SymbiontAdvisorCheckpointCommandRequest,
@@ -94,7 +110,9 @@ export type CreationWizardCheckpointCommandRequest =
   | IdentityCheckpointCommandRequest
   | StatAssignmentCheckpointCommandRequest
   | SkillCheckpointCommandRequest
-  | SymbiontAdvisorCheckpointCommandRequest;
+  | SymbiontAdvisorCheckpointCommandRequest
+  | ManualCompositionCheckpointCommandRequest
+  | ManualAdvisorSkillCheckpointCommandRequest;
 
 export type CreationWizardCheckpointPreflight =
   | {
@@ -115,7 +133,10 @@ export type CreationWizardCheckpointPreflight =
     }
   | {
       readonly stage: 'SYMBIONTS';
-      readonly request: SymbiontAdvisorCheckpointCommandRequest;
+      readonly request:
+        | SymbiontAdvisorCheckpointCommandRequest
+        | ManualCompositionCheckpointCommandRequest
+        | ManualAdvisorSkillCheckpointCommandRequest;
       readonly checkpoint: DurableCreationWizardCheckpoint;
     };
 
@@ -145,7 +166,24 @@ const CHECKPOINT_STAGE_NORMALIZERS = {
   IDENTITY: normalizeIdentityCheckpointRequest,
   STAT_ASSIGNMENT: normalizeStatAssignmentCheckpointRequest,
   SKILLS: normalizeSkillCheckpointRequest,
-  SYMBIONTS: normalizeSymbiontAdvisorCheckpointRequest,
+  SYMBIONTS: (request: DecodedCommandRequest) => {
+    const sourceFormId =
+      request.payload !== null &&
+      typeof request.payload === 'object' &&
+      !Array.isArray(request.payload)
+        ? (request.payload as Record<string, unknown>)['sourceFormId']
+        : undefined;
+    if (sourceFormId === 'CHR-018') return normalizeManualCompositionCheckpointRequest(request);
+    const variant =
+      request.payload !== null &&
+      typeof request.payload === 'object' &&
+      !Array.isArray(request.payload)
+        ? (request.payload as Record<string, unknown>)['variant']
+        : undefined;
+    return sourceFormId === 'CHR-041' && variant === 'MANUAL_ADVISOR_SKILLS'
+      ? normalizeManualAdvisorSkillCheckpointRequest(request)
+      : normalizeSymbiontAdvisorCheckpointRequest(request);
+  },
 } as const satisfies Record<
   (typeof CREATION_WIZARD_CHECKPOINT_STAGES)[number],
   (request: DecodedCommandRequest) => CreationWizardCheckpointCommandRequest
@@ -302,7 +340,13 @@ export function preflightCreationWizardCheckpoint(
       throw new Error('SYMBIONTS checkpoint requires a validated symbiont catalog');
     }
     try {
-      const preflight = preflightCreationSymbiontAdvisor(database, normalized, symbiontCatalog);
+      const preflight =
+        normalized.payload.sourceFormId === 'CHR-018'
+          ? preflightManualComposition(database, normalized, symbiontCatalog)
+          : 'variant' in normalized.payload &&
+              normalized.payload.variant === 'MANUAL_ADVISOR_SKILLS'
+            ? preflightManualAdvisorSkills(database, normalized, symbiontCatalog)
+            : preflightCreationSymbiontAdvisor(database, normalized, symbiontCatalog);
       return {
         checkpoint: preflight.checkpoint,
         request: preflight.request,
@@ -589,6 +633,10 @@ export function commitCreationWizardCheckpoint(
   receiptId: string,
   catalog?: CreationCatalog,
   allocateRandomSequenceId: () => string = randomUUID,
+  manualCompositionDependencies?: {
+    readonly allocateRollRequestId: () => string;
+    readonly sampleD20: () => number;
+  },
 ): DurableCreationWizardCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
     throw new TypeError(
@@ -611,6 +659,22 @@ export function commitCreationWizardCheckpoint(
   }
   if (preflight.stage === 'SYMBIONTS') {
     try {
+      if (
+        preflight.request.payload.sourceFormId === 'CHR-018' ||
+        ('variant' in preflight.request.payload &&
+          preflight.request.payload.variant === 'MANUAL_ADVISOR_SKILLS')
+      ) {
+        if (manualCompositionDependencies === undefined) {
+          throw new Error('manual symbiont checkpoint requires roll dependencies');
+        }
+        const dependencies = {
+          catalog: fullSymbiontCatalog(catalog)!,
+          ...manualCompositionDependencies,
+        };
+        return preflight.request.payload.sourceFormId === 'CHR-018'
+          ? commitManualComposition(database, preflight.request, receiptId, dependencies)
+          : commitManualAdvisorSkills(database, preflight.request, receiptId, dependencies);
+      }
       return commitCreationSymbiontAdvisor(
         database,
         preflight.request,

@@ -234,7 +234,7 @@ export function projectChr020(
   );
 }
 
-function advisorSelectionValidation(
+export function advisorSelectionValidation(
   selectedSkills: readonly SelectedSkillCommandInput[],
   requiredSlotCount: number,
 ): JsonObject {
@@ -261,7 +261,7 @@ function advisorSelectionValidation(
   return { kind: 'EXACT', requiredSlotCount, usedSlotCount };
 }
 
-function advisorSkillOptionsJson(
+export function advisorSkillOptionsJson(
   options: ReturnType<typeof createAdvisorSkillOptions>,
 ): readonly JsonObject[] {
   return options.skillOptions.map((option) => ({
@@ -289,7 +289,7 @@ function advisorSkillOptionsJson(
   }));
 }
 
-function modifierEffectJson(
+export function modifierEffectJson(
   effect: SymbiontStatModifierEffect | Readonly<{ kind: 'INACTIVE' }>,
 ): JsonObject {
   if (effect.kind !== 'ADDITIVE_STAT_MODIFIERS') return { kind: effect.kind };
@@ -303,7 +303,7 @@ function modifierEffectJson(
   };
 }
 
-function modifierBreakdownJson(breakdown: SymbiontModifierBreakdown): JsonObject {
+export function modifierBreakdownJson(breakdown: SymbiontModifierBreakdown): JsonObject {
   return {
     bySpecies: breakdown.bySpecies.map((entry) => ({
       acceptedIndex: entry.acceptedIndex,

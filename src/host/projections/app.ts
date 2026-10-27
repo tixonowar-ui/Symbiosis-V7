@@ -72,6 +72,16 @@ import {
   CHR_017_FORM_ID,
   CHR_017_RANDOM_START_ACTION_KEY,
 } from './chr-symbionts.js';
+import {
+  assertManualSymbiontScreenContracts,
+  CHR_017_MANUAL_COMPOSITION_ACTION_KEY,
+  CHR_018_FORM_ID,
+  CHR_018_RETURN_ACTION_KEY,
+  CHR_019_PREVIEW_ACTION_KEY,
+  CHR_019_RETURN_ACTION_KEY,
+  CHR_042_FORM_ID,
+  CHR_042_RETURN_ACTION_KEY,
+} from './chr-manual-symbionts.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -236,7 +246,10 @@ export interface AppNavigationAction {
     | typeof CHR_013_FORM_ID
     | typeof CHR_014_FORM_ID
     | typeof CHR_015_FORM_ID
-    | typeof CHR_017_FORM_ID;
+    | typeof CHR_017_FORM_ID
+    | typeof CHR_018_FORM_ID
+    | 'CHR-019'
+    | typeof CHR_042_FORM_ID;
   readonly guard: string;
   readonly kind: string;
   readonly to: string;
@@ -276,6 +289,23 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       CHR_017_FORM_ID,
       CHR_017_RANDOM_START_ACTION_KEY,
       'symbiontAcquisitionMode=RANDOM; randomStatus=NOT_STARTED|PENDING; replay restores same sequence',
+    ],
+    [
+      CHR_017_FORM_ID,
+      CHR_017_MANUAL_COMPOSITION_ACTION_KEY,
+      'symbiontAcquisitionMode=MANUAL; composition draft exists',
+    ],
+    [CHR_018_FORM_ID, CHR_018_RETURN_ACTION_KEY, 'no composition commit'],
+    [
+      'CHR-019',
+      CHR_019_PREVIEW_ACTION_KEY,
+      'symbiontAcquisitionMode=MANUAL; interactionGraph has suppression/destruction/absorption or other confirmation-required consequence; AQA-005 excludes RANDOM composition',
+    ],
+    ['CHR-019', CHR_019_RETURN_ACTION_KEY, 'irreversibleBoundaryStatus=NOT_CROSSED'],
+    [
+      CHR_042_FORM_ID,
+      CHR_042_RETURN_ACTION_KEY,
+      'irreversibleOperationIds have no shown/committed result',
     ],
     [
       'APP-004',
@@ -448,6 +478,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertScreenContract(forms, CHR_028_FORM_ID, CHR_028_REQUIRED_FIELDS, CHR_028_ROUTE, 'dialog');
   assertScreenContract(forms, CHR_036_FORM_ID, CHR_036_REQUIRED_FIELDS, CHR_036_ROUTE);
   assertSymbiontScreenContracts(forms, assertScreenContract);
+  assertManualSymbiontScreenContracts(forms, assertScreenContract);
   return result;
 }
 

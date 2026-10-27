@@ -112,6 +112,18 @@
 
 ### Добавлено
 
+- **2026-10-27, issue #145, ADR 0054:** реализован playable ручной путь
+  `CHR-017 → CHR-018 → CHR-019 / CHR-041` с exact FREE/UNITED composition,
+  полными replacement checkpoints, art/tree для всех 23 видов и привязками по
+  `Q-CHAR-010`. Локальное удаление и binding draft сохраняются только между
+  projection-only переходами и сбрасываются к host baseline после reconnect.
+  Advisor сохраняет identity, два I/W, обязательный отдельный B с roll-time
+  составом и exact-fill навыков после remove/re-add и recovery. Немутирующий
+  `CHR-042` показывает before/after, interactions и slot/stat/OE diff. Forward-only
+  `0005` восстанавливает только presentation; Atlas, `src/shared`, outer protocol
+  и RANDOM records не изменены. Добавлены три production Playwright-сценария —
+  всего восемь; renderer публикует 35 форм (11 APP + 24 CHR). Equipment,
+  `CHR-021+`, final save и готовность V1 остаются вне этого среза.
 - **2026-10-27, issue #144, ADR 0053:** исправлено повторное открытие
   `CHR-014` после `open A → add A → open B`. Существующий
   `CHR-015::CTA::002` теперь разрешён только для `PARTIAL`; `NONE` и `EXACT`
