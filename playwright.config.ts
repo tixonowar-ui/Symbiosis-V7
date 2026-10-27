@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * End-to-end tests drive the renderer against a real host process.
- * The host is not wired up yet, so no webServer is configured here — add one
- * once src/host has an entry point.
+ * Each scenario starts an isolated host and SQLite database through fixtures,
+ * so a shared webServer would break that isolation.
  */
 export default defineConfig({
   testDir: './tests/e2e',
@@ -12,9 +12,13 @@ export default defineConfig({
   forbidOnly: !!process.env['CI'],
   retries: process.env['CI'] ? 1 : 0,
   workers: 1,
-  reporter: [['list'], ['html', { outputFolder: './reports/playwright-report', open: 'never' }]],
+  reporter: [
+    [process.env['CI'] ? 'github' : 'list'],
+    ['html', { outputFolder: './reports/playwright-report', open: 'never' }],
+  ],
   use: {
-    trace: 'on-first-retry',
+    // Keep the failing first attempt even when the retry succeeds.
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   projects: [
