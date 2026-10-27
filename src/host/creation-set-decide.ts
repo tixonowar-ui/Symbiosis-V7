@@ -35,6 +35,7 @@ import {
   loadLocalCharacterCheckpoint,
   readLocalCharacter,
   readLocalCharacterSkillPresentation,
+  readLocalCharacterSymbiontPresentation,
   writeLocalCharacterSkillPresentation,
 } from '../persistence/index.js';
 import type { LocalCharacter, LocalCharacterCheckpoint } from '../persistence/index.js';
@@ -116,6 +117,22 @@ import type {
   IdentityCheckpointDurablePayload,
   IdentityCheckpointReceipt,
 } from './identity-checkpoint.js';
+import {
+  latestManualCompositionRecord,
+  manualCompositionStageIds,
+  parseManualCompositionStage,
+} from './creation-manual-composition-contract.js';
+import type {
+  ManualAdvisorIwRollCommandRequest,
+  ManualAdvisorIwRollReceipt,
+  ManualAdvisorSkillCheckpointCommandRequest,
+  ManualAdvisorSkillCheckpointReceipt,
+  ManualCompositionCheckpointCommandRequest,
+  ManualCompositionCheckpointReceipt,
+  ManualCompositionStage,
+} from './creation-manual-composition-contract.js';
+import { validateManualCompositionStageHistory } from './creation-manual-composition.js';
+import type { SymbiontPresentationStage } from '../persistence/symbiont-presentation.js';
 
 export const CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID =
   'UI-CMD-CHAR-CREATION-SET-DECIDE' as const satisfies WorkflowCommandId;
@@ -666,12 +683,16 @@ export interface CreationWizardSymbiontPayload extends Omit<
   readonly nextStageEnvelope: CreationNextStageEnvelope<
     'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041'
   >;
+  readonly manualCompositionStage?: ManualCompositionStage;
   readonly receipt:
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
     | SymbiontAdvisorCheckpointReceipt
-    | AdvisorIntelligenceFloorRollReceipt;
+    | AdvisorIntelligenceFloorRollReceipt
+    | ManualCompositionCheckpointReceipt
+    | ManualAdvisorIwRollReceipt
+    | ManualAdvisorSkillCheckpointReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -703,6 +724,8 @@ export interface DurableCreationWizardCheckpoint {
   readonly skillPresentationStage?: SkillPresentationStage | null;
   readonly randomSymbiontStage: RandomSymbiontStage | null;
   readonly advisorIntelligenceFloorStage?: AdvisorIntelligenceFloorStage | null;
+  readonly manualCompositionStage?: ManualCompositionStage | null;
+  readonly symbiontPresentationStage?: SymbiontPresentationStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
     | DurableCreationSetDecideReceipt
@@ -714,7 +737,10 @@ export interface DurableCreationWizardCheckpoint {
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
     | SymbiontAdvisorCheckpointReceipt
-    | AdvisorIntelligenceFloorRollReceipt;
+    | AdvisorIntelligenceFloorRollReceipt
+    | ManualCompositionCheckpointReceipt
+    | ManualAdvisorIwRollReceipt
+    | ManualAdvisorSkillCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -723,7 +749,10 @@ export interface DurableCreationWizardCheckpoint {
     | SkillCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
     | SymbiontAdvisorCheckpointCommandRequest
-    | AdvisorIntelligenceFloorRollCommandRequest;
+    | AdvisorIntelligenceFloorRollCommandRequest
+    | ManualCompositionCheckpointCommandRequest
+    | ManualAdvisorIwRollCommandRequest
+    | ManualAdvisorSkillCheckpointCommandRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -740,7 +769,10 @@ export interface DurableCreationWizardCommand {
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
     | SymbiontAdvisorCheckpointReceipt
-    | AdvisorIntelligenceFloorRollReceipt;
+    | AdvisorIntelligenceFloorRollReceipt
+    | ManualCompositionCheckpointReceipt
+    | ManualAdvisorIwRollReceipt
+    | ManualAdvisorSkillCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -749,7 +781,10 @@ export interface DurableCreationWizardCommand {
     | SkillCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
     | SymbiontAdvisorCheckpointCommandRequest
-    | AdvisorIntelligenceFloorRollCommandRequest;
+    | AdvisorIntelligenceFloorRollCommandRequest
+    | ManualCompositionCheckpointCommandRequest
+    | ManualAdvisorIwRollCommandRequest
+    | ManualAdvisorSkillCheckpointCommandRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -2333,16 +2368,22 @@ const postIdentityPayloadAt = (
       unshaped,
       'advisorIntelligenceFloorStage',
     );
-    if (hasAdvisorIntelligenceFloorStage && !hasRandomSymbiontStage) {
-      throw new Error(`${label} advisorIntelligenceFloorStage requires randomSymbiontStage:null`);
+    const hasManualCompositionStage = Object.hasOwn(unshaped, 'manualCompositionStage');
+    if (
+      (hasAdvisorIntelligenceFloorStage || hasManualCompositionStage) &&
+      !hasRandomSymbiontStage
+    ) {
+      throw new Error(`${label} symbiont stages require randomSymbiontStage:null`);
     }
+    const optionalSymbiontStages = [
+      ...(hasAdvisorIntelligenceFloorStage ? ['advisorIntelligenceFloorStage'] : []),
+      ...(hasManualCompositionStage ? ['manualCompositionStage'] : []),
+    ];
     const object = exactObject(
       value,
       '$',
       hasRandomSymbiontStage
-        ? hasAdvisorIntelligenceFloorStage
-          ? [...SYMBIONT_PAYLOAD_KEYS, 'advisorIntelligenceFloorStage']
-          : SYMBIONT_PAYLOAD_KEYS
+        ? [...SYMBIONT_PAYLOAD_KEYS, ...optionalSymbiontStages]
         : hasSkillEligibilityStage
           ? SKILL_PAYLOAD_KEYS
           : hasStatAssignmentStage
@@ -2423,12 +2464,24 @@ const postIdentityPayloadAt = (
           checkpointView,
         )
       : null;
-    if (randomSymbiontStage !== null && advisorIntelligenceFloorStage !== null) {
-      throw new Error(`${label} random and manual symbiont stages cannot coexist`);
+    const manualCompositionStage = hasManualCompositionStage
+      ? parseManualCompositionStage(object['manualCompositionStage'], symbiontCatalog!)
+      : null;
+    const symbiontStageCount = [
+      randomSymbiontStage,
+      advisorIntelligenceFloorStage,
+      manualCompositionStage,
+    ].filter((stage) => stage !== null).length;
+    if (symbiontStageCount > 1) {
+      throw new Error(`${label} random, manual and legacy symbiont stages cannot coexist`);
     }
     const latestSymbiontRecord =
       advisorIntelligenceFloorStage?.rollRecordOrNull ??
-      (randomSymbiontStage === null ? null : latestRandomSymbiontRecord(randomSymbiontStage));
+      (randomSymbiontStage !== null
+        ? latestRandomSymbiontRecord(randomSymbiontStage)
+        : manualCompositionStage === null
+          ? null
+          : latestManualCompositionRecord(manualCompositionStage));
     const receipt =
       receiptResult['stage'] === 'SYMBIONTS'
         ? (latestSymbiontRecord?.receipt ??
@@ -2467,7 +2520,9 @@ const postIdentityPayloadAt = (
     }
     if (hasRandomSymbiontStage) {
       if (
-        (randomSymbiontStage !== null || advisorIntelligenceFloorStage !== null) &&
+        (randomSymbiontStage !== null ||
+          advisorIntelligenceFloorStage !== null ||
+          manualCompositionStage !== null) &&
         (latestSymbiontRecord === null
           ? receipt.result.stage !== 'SKILLS'
           : receipt.result.stage !== 'SYMBIONTS' ||
@@ -2484,6 +2539,7 @@ const postIdentityPayloadAt = (
         receipt,
         randomSymbiontStage,
         ...(hasAdvisorIntelligenceFloorStage ? { advisorIntelligenceFloorStage } : {}),
+        ...(hasManualCompositionStage ? { manualCompositionStage } : {}),
         skillEligibilityStage,
         skillSelectionStage,
         statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
@@ -2565,7 +2621,10 @@ export interface RollValidationCursor {
     | SymbiontPhysicalRollReceipt
     | SymbiontBindingReceipt
     | SymbiontAdvisorCheckpointReceipt
-    | AdvisorIntelligenceFloorRollReceipt;
+    | AdvisorIntelligenceFloorRollReceipt
+    | ManualCompositionCheckpointReceipt
+    | ManualAdvisorIwRollReceipt
+    | ManualAdvisorSkillCheckpointReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -2573,7 +2632,10 @@ export interface RollValidationCursor {
     | SkillCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
     | SymbiontAdvisorCheckpointCommandRequest
-    | AdvisorIntelligenceFloorRollCommandRequest;
+    | AdvisorIntelligenceFloorRollCommandRequest
+    | ManualCompositionCheckpointCommandRequest
+    | ManualAdvisorIwRollCommandRequest
+    | ManualAdvisorSkillCheckpointCommandRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3675,6 +3737,7 @@ const validatePostIdentityPayload = (
   catalog?: SkillStageCatalog,
   symbiontCatalog?: SymbiontCatalog,
   skillPresentationStage?: SkillPresentationStage,
+  symbiontPresentationStage?: SymbiontPresentationStage,
 ): DurableCreationWizardCheckpoint => {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   const mismatches: string[] = [];
@@ -3997,6 +4060,39 @@ const validatePostIdentityPayload = (
       occupiedIds,
     }).cursor;
   }
+  const manualCompositionStage =
+    'manualCompositionStage' in durablePayload ? durablePayload.manualCompositionStage : null;
+  if (manualCompositionStage !== null) {
+    if (symbiontCatalog === undefined) {
+      throw new Error(`${label} manual composition stage requires a symbiont catalog`);
+    }
+    if (skillEligibilityStage === null || statAssignmentStage === null) {
+      throw new Error(`${label} manual composition stage lacks creation prerequisites`);
+    }
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateManualCompositionStageHistory(manualCompositionStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
   const randomStartPending =
@@ -4048,19 +4144,24 @@ const validatePostIdentityPayload = (
         ((randomStartPending || advisorFloorNavigation) &&
           previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
           currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
-      : skillPresentationStage !== undefined &&
-          (randomSymbiontStage === null || durablePayload.nextStageEnvelope.formId === 'CHR-017')
-        ? currentRevisions.projectionRevision === skillPresentationStage.projectionRevision &&
-          skillPresentationStage.selectionRevision ===
+      : symbiontPresentationStage !== undefined
+        ? currentRevisions.projectionRevision === symbiontPresentationStage.projectionRevision &&
+          symbiontPresentationStage.compositionDraftRevision ===
             durablePayload.receipt.result.draftRevision &&
-          skillPresentationStage.projectionRevision >= previousRevisions.projectionRevision
-        : skillEligibilityStage !== null && skillSelectionStage === null
-          ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
-            (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
-              currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
-          : statAssignmentStage !== null
-            ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
-            : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
+          symbiontPresentationStage.projectionRevision >= previousRevisions.projectionRevision
+        : skillPresentationStage !== undefined &&
+            (randomSymbiontStage === null || durablePayload.nextStageEnvelope.formId === 'CHR-017')
+          ? currentRevisions.projectionRevision === skillPresentationStage.projectionRevision &&
+            skillPresentationStage.selectionRevision ===
+              durablePayload.receipt.result.draftRevision &&
+            skillPresentationStage.projectionRevision >= previousRevisions.projectionRevision
+          : skillEligibilityStage !== null && skillSelectionStage === null
+            ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
+              (previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
+                currentRevisions.projectionRevision === previousRevisions.projectionRevision + 1)
+            : statAssignmentStage !== null
+              ? currentRevisions.projectionRevision === previousRevisions.projectionRevision
+              : currentRevisions.projectionRevision >= previousRevisions.projectionRevision;
   if (
     currentRevisions.actorVisibilityRevision !== previousRevisions.actorVisibilityRevision ||
     currentRevisions.stateRevision !== previousRevisions.stateRevision ||
@@ -4089,6 +4190,9 @@ const validatePostIdentityPayload = (
       'advisorIntelligenceFloorStage' in durablePayload
         ? durablePayload.advisorIntelligenceFloorStage
         : null,
+    manualCompositionStage:
+      'manualCompositionStage' in durablePayload ? durablePayload.manualCompositionStage : null,
+    symbiontPresentationStage: symbiontPresentationStage ?? null,
     statRollStage,
     statAssignmentStage,
     receipt: durablePayload.receipt,
@@ -4124,6 +4228,7 @@ export function validateDurableCreationWizardCheckpoint(
   catalog?: SkillStageCatalog,
   symbiontCatalog?: SymbiontCatalog,
   skillPresentationStage?: SkillPresentationStage,
+  symbiontPresentationStage?: SymbiontPresentationStage,
 ): DurableCreationWizardCheckpoint {
   const label = `localCharacter ${JSON.stringify(localCharacter.localCharacterId)}`;
   let value: unknown;
@@ -4144,6 +4249,7 @@ export function validateDurableCreationWizardCheckpoint(
       catalog,
       symbiontCatalog,
       skillPresentationStage,
+      symbiontPresentationStage,
     );
   }
   if (Object.hasOwn(object, 'lastCompleteStage')) {
@@ -4159,12 +4265,17 @@ export function loadCreationWizardCheckpoint(
   symbiontCatalog?: SymbiontCatalog,
 ): DurableCreationWizardCheckpoint {
   const skillPresentationStage = readLocalCharacterSkillPresentation(database, localCharacterId);
+  const symbiontPresentationStage = readLocalCharacterSymbiontPresentation(
+    database,
+    localCharacterId,
+  );
   const checkpoint = validateDurableCreationWizardCheckpoint(
     readLocalCharacter(database, localCharacterId),
     loadLocalCharacterCheckpoint(database, localCharacterId),
     catalog,
     symbiontCatalog,
     skillPresentationStage ?? undefined,
+    symbiontPresentationStage ?? undefined,
   );
   if (
     skillPresentationStage === null ||
@@ -4210,7 +4321,7 @@ export function loadCreationWizardCheckpoint(
       );
     }
   }
-  return { ...checkpoint, skillPresentationStage };
+  return { ...checkpoint, skillPresentationStage, symbiontPresentationStage };
 }
 
 export function currentCreationWizardRevisions(
@@ -4596,6 +4707,32 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
       addRequestId((record as Record<string, unknown>)['request']);
     }
   }
+  const manualCompositionStage = object['manualCompositionStage'];
+  if (
+    manualCompositionStage !== null &&
+    typeof manualCompositionStage === 'object' &&
+    !Array.isArray(manualCompositionStage)
+  ) {
+    const stage = manualCompositionStage as Record<string, unknown>;
+    const records = stage['compositionRecords'];
+    if (Array.isArray(records)) {
+      for (const record of records) {
+        if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+          addRequestId((record as Record<string, unknown>)['request']);
+        }
+      }
+    }
+    for (const key of [
+      'advisorIwRecordOrNull',
+      'suppressionRollRecordOrNull',
+      'advisorSkillRecordOrNull',
+    ] as const) {
+      const record = stage[key];
+      if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+        addRequestId((record as Record<string, unknown>)['request']);
+      }
+    }
+  }
   return ids;
 };
 
@@ -4671,6 +4808,30 @@ export function loadCreationWizardCommandByCommandId(
       ...attempt.confirmationRecords,
       ...(attempt.decisionRecordOrNull === null ? [] : [attempt.decisionRecordOrNull]),
     ]) ?? [];
+  const manualStage = durableCheckpoint.manualCompositionStage;
+  const manualRecord =
+    manualStage === null || manualStage === undefined
+      ? undefined
+      : [
+          ...manualStage.compositionRecords,
+          ...(manualStage.advisorIwRecordOrNull === null
+            ? []
+            : [manualStage.advisorIwRecordOrNull]),
+          ...(manualStage.suppressionRollRecordOrNull === null
+            ? []
+            : [manualStage.suppressionRollRecordOrNull]),
+          ...(manualStage.advisorSkillRecordOrNull === null
+            ? []
+            : [manualStage.advisorSkillRecordOrNull]),
+        ].find(({ request }) => request.commandId === commandId);
+  if (manualRecord !== undefined) {
+    return {
+      durableCheckpoint,
+      nextStageEnvelope: manualRecord.nextStageEnvelope,
+      receipt: manualRecord.receipt,
+      request: manualRecord.request,
+    };
+  }
   const randomStage = durableCheckpoint.randomSymbiontStage;
   const floorRecord = durableCheckpoint.advisorIntelligenceFloorStage?.rollRecordOrNull;
   const symbiontRecord =
@@ -4741,6 +4902,19 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   checkpoint.advisorIntelligenceFloorStage.rollRecordOrNull === null
     ? []
     : [checkpoint.advisorIntelligenceFloorStage.rollRecordOrNull]),
+  ...(checkpoint.manualCompositionStage?.compositionRecords ?? []),
+  ...(checkpoint.manualCompositionStage?.advisorIwRecordOrNull === null ||
+  checkpoint.manualCompositionStage?.advisorIwRecordOrNull === undefined
+    ? []
+    : [checkpoint.manualCompositionStage.advisorIwRecordOrNull]),
+  ...(checkpoint.manualCompositionStage?.suppressionRollRecordOrNull === null ||
+  checkpoint.manualCompositionStage?.suppressionRollRecordOrNull === undefined
+    ? []
+    : [checkpoint.manualCompositionStage.suppressionRollRecordOrNull]),
+  ...(checkpoint.manualCompositionStage?.advisorSkillRecordOrNull === null ||
+  checkpoint.manualCompositionStage?.advisorSkillRecordOrNull === undefined
+    ? []
+    : [checkpoint.manualCompositionStage.advisorSkillRecordOrNull]),
 ];
 
 const guardRejected = (): never => {
@@ -5248,6 +5422,10 @@ export const creationWizardDurableIds = (
       checkpoint.advisorIntelligenceFloorStage === undefined
         ? []
         : [...advisorIntelligenceFloorStageIds(checkpoint.advisorIntelligenceFloorStage)]),
+      ...(checkpoint.manualCompositionStage === null ||
+      checkpoint.manualCompositionStage === undefined
+        ? []
+        : [...manualCompositionStageIds(checkpoint.manualCompositionStage)]),
     ].filter((value): value is string => typeof value === 'string'),
   );
 

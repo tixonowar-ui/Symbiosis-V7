@@ -64,7 +64,7 @@ afterEach(() => {
 });
 
 describe('device identity migration', () => {
-  it('upgrades version 2 to 4 without changing existing persistence rows', () => {
+  it('upgrades version 2 to 5 without changing existing persistence rows', () => {
     const database = rawMemoryDatabase();
     expect(applyMigrationSequence(database, [migration0001, migration0002])).toBe(2);
     database
@@ -74,7 +74,7 @@ describe('device identity migration', () => {
       )
       .run('preserved', 'DRAFT', '{ "source": "v2" }');
 
-    expect(applyMigrations(database)).toBe(4);
+    expect(applyMigrations(database)).toBe(5);
     expect(
       database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
     ).toEqual([
@@ -82,6 +82,7 @@ describe('device identity migration', () => {
       { version: 2, name: 'local-character-checkpoint' },
       { version: 3, name: 'device-identity' },
       { version: 4, name: 'skill-presentation' },
+      { version: 5, name: 'symbiont-presentation' },
     ]);
     expect(
       database
@@ -154,7 +155,7 @@ describe('device identity store', () => {
     databases.splice(databases.indexOf(firstDatabase), 1);
     const restartedDatabase = new Database(carrier);
     configurePersistenceDatabase(restartedDatabase);
-    expect(applyMigrations(restartedDatabase)).toBe(4);
+    expect(applyMigrations(restartedDatabase)).toBe(5);
     databases.push(restartedDatabase);
 
     expect(bootstrapDeviceIdentity(restartedDatabase)).toBe(firstBootstrap);
