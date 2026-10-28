@@ -37,11 +37,11 @@ import {
   manualInteractionPreview,
   writeManualCommandPresentation,
 } from './creation-manual-composition-navigation.js';
-import { manualInteractionDiffJson } from './creation-manual-interaction-json.js';
 import {
   MANUAL_INTERACTION_CONFIRMATION_VARIANT,
   manualInteractionConfirmationReceipt,
-} from './creation-manual-interaction-contract.js';
+  manualInteractionDiffJson,
+} from './creation-manual-interaction.js';
 import {
   armorBundleCheckpointReceipt,
   armorBundleEntryReceipt,

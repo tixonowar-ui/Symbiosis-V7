@@ -17,7 +17,7 @@ import {
   ADVISOR_INTELLIGENCE_FLOOR_PURPOSE,
 } from '../creation-advisor-intelligence-floor-contract.js';
 import { latestManualCompositionRecord } from '../creation-manual-composition-contract.js';
-import { manualInteractionDiffJson } from '../creation-manual-interaction-json.js';
+import { manualInteractionDiffJson } from '../creation-manual-interaction.js';
 import {
   manualAdvisorWorkPending,
   manualCompositionRevision,

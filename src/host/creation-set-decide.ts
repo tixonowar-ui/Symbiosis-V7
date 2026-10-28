@@ -140,7 +140,7 @@ import {
 import type {
   ManualInteractionConfirmationReceipt,
   ManualInteractionConfirmationRequest,
-} from './creation-manual-interaction-contract.js';
+} from './creation-manual-interaction.js';
 import {
   armorBundleStageIds,
   parseArmorBundleStage,

@@ -103,7 +103,7 @@ import {
   MANUAL_INTERACTION_CONFIRMATION_VARIANT,
   normalizeManualInteractionConfirmationRequest,
   type ManualInteractionConfirmationRequest,
-} from './creation-manual-interaction-contract.js';
+} from './creation-manual-interaction.js';
 import type { CreationRollCommitCommandRequest } from './creation-set-decide.js';
 import {
   advanceCreationSkillCardPresentation,

@@ -26,7 +26,7 @@ import {
   normalizeManualInteractionConfirmationRequest,
   type ManualInteractionConfirmationReceipt,
   type ManualInteractionConfirmationRequest,
-} from './creation-manual-interaction-contract.js';
+} from './creation-manual-interaction.js';
 import {
   CreationSymbiontApplicationError,
   SYMBIONT_STAGE,
