@@ -159,7 +159,14 @@ export function validateArmorBundle(
       }
       fullSuitSelected = true;
       for (const zone of ARMOR_BODY_ZONES) occupiedZones.add(zone);
-      armorPieces.push(Object.freeze({ ...entry, bodyZone: null }));
+      armorPieces.push(
+        Object.freeze({
+          itemId: entry.itemId,
+          name: entry.name,
+          coverageModel: entry.coverageModel,
+          bodyZone: null,
+        }),
+      );
       continue;
     }
 
@@ -174,7 +181,14 @@ export function validateArmorBundle(
       invalidArmorBundle(`duplicate armor body zone ${bodyZone}`);
     }
     occupiedZones.add(bodyZone);
-    armorPieces.push(Object.freeze({ ...entry, bodyZone }));
+    armorPieces.push(
+      Object.freeze({
+        itemId: entry.itemId,
+        name: entry.name,
+        coverageModel: entry.coverageModel,
+        bodyZone,
+      }),
+    );
   }
 
   return Object.freeze({

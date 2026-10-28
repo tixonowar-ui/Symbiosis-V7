@@ -32,6 +32,16 @@ function mount(element: Parameters<Root['render']>[0]): HTMLDivElement {
   return container;
 }
 
+function changeInput(input: HTMLInputElement, value: string): void {
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (descriptor?.set === undefined) throw new Error('missing native input setter');
+  act(() => {
+    descriptor.set!.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 function snapshot(
   overrides: {
     readonly availableActionKeys?: readonly string[];
@@ -44,7 +54,9 @@ function snapshot(
     armorCatalog: {
       entries: [
         { itemId: 'ITM-ARM-001', name: 'Кожаный доспех', coverageModel: 'ZONE_ELEMENT' },
+        { itemId: 'ITM-ARM-002', name: 'Бригантина', coverageModel: 'ZONE_ELEMENT' },
         { itemId: 'ITM-ARM-005', name: 'Нэйт', coverageModel: 'FULL_SUIT' },
+        { itemId: 'ITM-ARM-008', name: 'Гленхейм', coverageModel: 'FULL_SUIT' },
       ],
     },
     armorBundleId: 'bundle-1',
@@ -138,7 +150,7 @@ describe('ArmorBundleFields', () => {
     const input = manual.querySelector<HTMLInputElement>('#armor-quality-face');
     expect(input).not.toBeNull();
     act(() => {
-      if (input !== null) input.value = '16';
+      if (input !== null) changeInput(input, '16');
     });
     const manualRoll = Array.from(manual.querySelectorAll('button')).find(
       (button) => button.textContent === 'Зафиксировать один бросок качества',
@@ -147,6 +159,64 @@ describe('ArmorBundleFields', () => {
       manualRoll?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onRoll).toHaveBeenCalledWith(16);
+  });
+
+  it('requires an explicitly entered valid MANUAL face before enabling the roll', () => {
+    const onRoll = vi.fn();
+    const container = mount(
+      <ArmorBundleFields
+        draft={{ pieces: [{ itemId: 'ITM-ARM-001', bodyZoneOrNull: 'HEAD' }] }}
+        snapshot={snapshot({ availableActionKeys: [CHR_021_ROLL_ACTION_KEY] })}
+        onAddPiece={() => undefined}
+        onRemovePiece={() => undefined}
+        onRoll={onRoll}
+      />,
+    );
+    const input = container.querySelector<HTMLInputElement>('#armor-quality-face')!;
+    const roll = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Зафиксировать один бросок качества',
+    )!;
+    expect(input.value).toBe('');
+    expect(roll.hasAttribute('disabled')).toBe(true);
+    act(() => {
+      roll.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onRoll).not.toHaveBeenCalled();
+
+    act(() => {
+      changeInput(input, '0');
+    });
+    expect(roll.hasAttribute('disabled')).toBe(true);
+    act(() => {
+      changeInput(input, '16');
+    });
+    expect(roll.hasAttribute('disabled')).toBe(false);
+    act(() => {
+      roll.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onRoll).toHaveBeenCalledWith(16);
+  });
+
+  it('shows the selected item identity before locking either full suits or zone elements', () => {
+    const selected = (
+      itemId: string,
+      bodyZoneOrNull: ArmorBundleDraft['pieces'][number]['bodyZoneOrNull'],
+    ) => {
+      const container = mount(
+        <ArmorBundleFields
+          draft={{ pieces: [{ itemId, bodyZoneOrNull }] }}
+          snapshot={snapshot()}
+          onAddPiece={() => undefined}
+          onRemovePiece={() => undefined}
+          onRoll={() => undefined}
+        />,
+      );
+      return container.querySelector('[data-armor-selected]')?.textContent ?? '';
+    };
+    expect(selected('ITM-ARM-005', null)).toContain('Нэйт');
+    expect(selected('ITM-ARM-008', null)).toContain('Гленхейм');
+    expect(selected('ITM-ARM-001', 'HEAD')).toContain('Кожаный доспех');
+    expect(selected('ITM-ARM-002', 'HEAD')).toContain('Бригантина');
   });
 
   it('disables zone elements while a full suit is selected and edits only via callbacks', () => {

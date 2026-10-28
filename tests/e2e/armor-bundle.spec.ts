@@ -41,6 +41,16 @@ test('FREE MANUAL starting armor bundle rolls one manual D20 and checkpoints act
     await expect(page.locator('#armor-quality-face')).toBeVisible();
     await expect(page.locator('[data-atlas-action-key="CHR-021::CTA::003"]')).toHaveCount(0);
     expect(host.sampleCalls()).toBe(0);
+    await expect(page.locator('#armor-quality-face')).toHaveValue('');
+    await expect(
+      page.locator('button', { hasText: 'Зафиксировать один бросок качества' }),
+    ).toBeDisabled();
+    await expect(
+      page.locator('[aria-label="Характеристики и ограничения брони"]').first(),
+    ).toContainText('R6');
+    await expect(
+      page.locator('[aria-label="Характеристики и ограничения брони"]').first(),
+    ).toContainText('2 за элемент');
 
     await page.locator('#armor-zone-ITM-ARM-001').selectOption('HEAD');
     await page.locator('button[aria-label="Добавить Кожаный доспех"]').click();
@@ -48,6 +58,8 @@ test('FREE MANUAL starting armor bundle rolls one manual D20 and checkpoints act
     await page.locator('button[aria-label="Добавить Бригантина"]').click();
     await expect(page.locator('button[aria-label="Убрать Голова"]')).toBeVisible();
     await expect(page.locator('button[aria-label="Убрать Корпус"]')).toBeVisible();
+    await expect(page.locator('[data-armor-selected]')).toContainText('Кожаный доспех');
+    await expect(page.locator('[data-armor-selected]')).toContainText('Бригантина');
 
     await page.locator('#armor-quality-face').fill('16');
     await page.locator('button', { hasText: 'Зафиксировать один бросок качества' }).click();

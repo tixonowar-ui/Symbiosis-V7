@@ -64,6 +64,49 @@ describe('CHR-021 armor bundle item catalog', () => {
     ]);
   });
 
+  it('loads source-backed decision previews for all eight profiles without private fields', async () => {
+    const catalog = await loadArmorBundleCatalog(REPO_ROOT);
+    expect(
+      catalog.entries.map((entry) => [
+        entry.itemId,
+        entry.decisionPreview.armorExpression,
+        entry.decisionPreview.strengthRequirement,
+        entry.decisionPreview.movementPenalty,
+        entry.decisionPreview.acrobaticsPenalty,
+        entry.decisionPreview.runningPenalty,
+        entry.decisionPreview.dodgePenalty,
+      ]),
+    ).toEqual([
+      ['ITM-ARM-001', 'R6', '2 за элемент', null, null, null, null],
+      ['ITM-ARM-002', 'R12', '3 за элемент', '−3 при >2', '−1 за элемент', '−1 за элемент', null],
+      ['ITM-ARM-003', 'R12', '3 за элемент', '−3 при >2', '−1 за элемент', '−1 за элемент', null],
+      ['ITM-ARM-004', 'R20', '4 за элемент', '−5 при >2', '−2 за элемент', '−2 за элемент', null],
+      ['ITM-ARM-005', '—', '6', null, null, null, null],
+      ['ITM-ARM-006', 'R20', '20', '−3', '−6', '−6', null],
+      ['ITM-ARM-007', 'R20', '14', null, null, null, null],
+      ['ITM-ARM-008', '2×R20+5 (тот же бросок)', '24', '−5', '−12', '−12', '−6'],
+    ]);
+    expect(catalog.entries[0]?.decisionPreview).toMatchObject({
+      hermetic: false,
+      layersAllowed: true,
+      physicalArmor: true,
+      protections: 'Шлем не закрывает лицо.',
+      conditionOrLimitation: null,
+    });
+    expect(catalog.entries[4]?.decisionPreview).toMatchObject({
+      hermetic: true,
+      layersAllowed: false,
+      physicalArmor: false,
+    });
+    expect(catalog.entries[7]?.decisionPreview.protections).toBe(
+      'Иммунитет травмирующим и удушающим приёмам.',
+    );
+    const json = JSON.stringify(catalog.entries);
+    for (const forbidden of ['Rule ID', 'PDF, с.', 'Источник', 'availabilityTrace']) {
+      expect(json).not.toContain(forbidden);
+    }
+  });
+
   it('fails closed when a duplicate armor row appears in catalogue or profiles', async () => {
     const extraCatalogueRoot = createItemRoot();
     const catalogue = readItems(extraCatalogueRoot, 'catalogue.json') as

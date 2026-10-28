@@ -15,7 +15,26 @@ export interface ArmorQualityScaleEntry {
   readonly label: string;
 }
 
+export interface ArmorDecisionPreview {
+  readonly armorExpression: string;
+  readonly strengthRequirement: string;
+  readonly movementPenalty: string | null;
+  readonly acrobaticsPenalty: string | null;
+  readonly runningPenalty: string | null;
+  readonly dodgePenalty: string | null;
+  readonly protections: string | null;
+  readonly conditionOrLimitation: string | null;
+  readonly hermetic: boolean;
+  readonly layersAllowed: boolean;
+  readonly physicalArmor: boolean;
+}
+
+export interface ArmorBundleItemCatalogEntry extends ArmorBundleCatalogEntry {
+  readonly decisionPreview: ArmorDecisionPreview;
+}
+
 export interface ArmorBundleItemCatalog extends ArmorBundleCatalog {
+  readonly entries: readonly ArmorBundleItemCatalogEntry[];
   readonly bodyZones: readonly ArmorBodyZone[];
   readonly qualityScale: readonly ArmorQualityScaleEntry[];
 }
@@ -84,6 +103,37 @@ function literal(row: Row, key: string, expected: unknown, path: string): void {
   if (row[key] !== expected) {
     fail(`${path}.${key} must be ${JSON.stringify(expected)}`);
   }
+}
+
+function optionalText(row: Row, key: string, path: string): string | null {
+  const value = row[key];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || value.length === 0) {
+    fail(`${path}.${key} must be a non-empty string or absent`);
+  }
+  return value;
+}
+
+function boolean(row: Row, key: string, path: string): boolean {
+  const value = row[key];
+  if (typeof value !== 'boolean') fail(`${path}.${key} must be boolean`);
+  return value;
+}
+
+function decisionPreview(row: Row, path: string): ArmorDecisionPreview {
+  return Object.freeze({
+    armorExpression: text(row, 'Броня: исходное выражение', path),
+    strengthRequirement: text(row, 'Требование S', path),
+    movementPenalty: optionalText(row, 'M', path),
+    acrobaticsPenalty: optionalText(row, 'Акробатика', path),
+    runningPenalty: optionalText(row, 'Бег', path),
+    dodgePenalty: optionalText(row, 'Уклонение', path),
+    protections: optionalText(row, 'Защиты/иммунитеты', path),
+    conditionOrLimitation: optionalText(row, 'Условие/ограничение', path),
+    hermetic: boolean(row, 'Герметичен', path),
+    layersAllowed: boolean(row, 'Допускает слои', path),
+    physicalArmor: boolean(row, 'Физическая броня', path),
+  });
 }
 
 function armourRows(catalogue: unknown): Row[] {
@@ -211,13 +261,21 @@ export async function loadArmorBundleCatalog(projectRoot: string): Promise<Armor
   const armorRows = armourCatalogueRows(catalogueRows);
   const byId = new Map(armorRows.map((row) => [String(row['ItemTypeID']), row]));
   const profileById = new Map(profileRows.map((row) => [String(row['ItemTypeID']), row]));
-  const entries: ArmorBundleCatalogEntry[] = [];
+  const entries: ArmorBundleItemCatalogEntry[] = [];
   for (const id of EXPECTED_ARMOR_ITEM_IDS) {
     const row = byId.get(id)!;
+    const profile = profileById.get(id)!;
     const name = text(row, 'Название', `catalogue ${id}`);
-    const profileName = text(profileById.get(id)!, 'Название', `armor profile ${id}`);
+    const profileName = text(profile, 'Название', `armor profile ${id}`);
     if (profileName !== name) fail(`armor profile ${id} name does not match catalogue`);
-    entries.push(Object.freeze({ itemId: id, name, coverageModel: profiles.get(id)! }));
+    entries.push(
+      Object.freeze({
+        itemId: id,
+        name,
+        coverageModel: profiles.get(id)!,
+        decisionPreview: decisionPreview(profile, `armor profile ${id}`),
+      }),
+    );
   }
 
   return Object.freeze({

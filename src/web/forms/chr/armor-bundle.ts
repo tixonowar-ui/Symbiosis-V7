@@ -48,10 +48,25 @@ const QUALITY_KINDS = new Set([
   'RARE',
 ]);
 
+export interface ArmorDecisionPreviewProjection extends JsonObject {
+  readonly armorExpression: string;
+  readonly strengthRequirement: string;
+  readonly movementPenalty: string | null;
+  readonly acrobaticsPenalty: string | null;
+  readonly runningPenalty: string | null;
+  readonly dodgePenalty: string | null;
+  readonly protections: string | null;
+  readonly conditionOrLimitation: string | null;
+  readonly hermetic: boolean;
+  readonly layersAllowed: boolean;
+  readonly physicalArmor: boolean;
+}
+
 export interface ArmorBundleCatalogEntryProjection extends JsonObject {
   readonly itemId: string;
   readonly name: string;
   readonly coverageModel: 'ZONE_ELEMENT' | 'FULL_SUIT';
+  readonly decisionPreview?: ArmorDecisionPreviewProjection;
 }
 
 export interface ArmorBundlePieceProjection extends JsonObject {
@@ -95,17 +110,57 @@ function isArmorBodyZone(value: JsonValue | undefined): value is ArmorBodyZone {
   return typeof value === 'string' && (ARMOR_BODY_ZONES as readonly string[]).includes(value);
 }
 
+function decodeDecisionPreview(
+  value: unknown,
+  path: string,
+): DecodeResult<ArmorDecisionPreviewProjection> {
+  if (!isJsonObject(value)) return refused(path, value as JsonValue);
+  const nullableText = (field: JsonValue | undefined): boolean =>
+    field === null || isNonEmptyString(field);
+  const result = decodeProjection(value, path, {
+    armorExpression: isNonEmptyString,
+    strengthRequirement: isNonEmptyString,
+    movementPenalty: nullableText,
+    acrobaticsPenalty: nullableText,
+    runningPenalty: nullableText,
+    dodgePenalty: nullableText,
+    protections: nullableText,
+    conditionOrLimitation: nullableText,
+    hermetic: (field) => typeof field === 'boolean',
+    layersAllowed: (field) => typeof field === 'boolean',
+    physicalArmor: (field) => typeof field === 'boolean',
+  });
+  return result.ok ? { ok: true, value: value as ArmorDecisionPreviewProjection } : result;
+}
+
 function decodeCatalogEntry(
   value: unknown,
   path: string,
 ): DecodeResult<ArmorBundleCatalogEntryProjection> {
   if (!isJsonObject(value)) return refused(path, value as JsonValue);
+  const hasPreview = Object.hasOwn(value, 'decisionPreview');
+  let decisionPreview: ArmorDecisionPreviewProjection | undefined;
+  if (hasPreview) {
+    const decoded = decodeDecisionPreview(value['decisionPreview'], `${path}.decisionPreview`);
+    if (!decoded.ok) return decoded;
+    decisionPreview = decoded.value;
+  }
   const result = decodeProjection(value, path, {
     coverageModel: (field) => field === 'ZONE_ELEMENT' || field === 'FULL_SUIT',
     itemId: isNonEmptyString,
     name: isNonEmptyString,
+    ...(hasPreview
+      ? { decisionPreview: (field: JsonValue | undefined) => field === value['decisionPreview'] }
+      : {}),
   });
-  return result.ok ? { ok: true, value: value as ArmorBundleCatalogEntryProjection } : result;
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: {
+      ...(value as ArmorBundleCatalogEntryProjection),
+      ...(decisionPreview === undefined ? {} : { decisionPreview }),
+    },
+  };
 }
 
 function decodePiece(value: unknown, path: string): DecodeResult<ArmorBundlePieceProjection> {

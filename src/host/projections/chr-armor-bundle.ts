@@ -2,7 +2,8 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 
-import type { ArmorBundleCatalog, SymbiontCatalog } from '../../domain/index.js';
+import type { SymbiontCatalog } from '../../domain/index.js';
+import type { ArmorBundleItemCatalog } from '../armor-bundle-catalog.js';
 import type { ArmorBundleStage } from '../creation-armor-bundle-contract.js';
 import { latestArmorBundleRecord } from '../creation-armor-bundle.js';
 import {
@@ -40,19 +41,20 @@ function armorStage(checkpoint: DurableCreationWizardCheckpoint): ArmorBundleSta
   return stage;
 }
 
-function catalogJson(catalog: ArmorBundleCatalog): JsonObject {
+function catalogJson(catalog: Pick<ArmorBundleItemCatalog, 'entries'>): JsonObject {
   return {
     entries: catalog.entries.map((entry) => ({
       itemId: entry.itemId,
       name: entry.name,
       coverageModel: entry.coverageModel,
+      decisionPreview: { ...entry.decisionPreview },
     })),
   };
 }
 
 export function projectChr021(
   checkpoint: DurableCreationWizardCheckpoint,
-  armorCatalog: ArmorBundleCatalog,
+  armorCatalog: Pick<ArmorBundleItemCatalog, 'entries'>,
   rollCommitCapable: boolean,
   checkpointCapable: boolean,
 ): PresentedBaseForm {

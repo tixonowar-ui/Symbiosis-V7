@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { ArmorBundleCatalog } from '../../domain/index.js';
+import type { ArmorBundleItemCatalog } from '../armor-bundle-catalog.js';
 import {
   commitArmorBundleCheckpoint,
   commitArmorBundleEntry,
@@ -35,10 +35,48 @@ import {
 } from './chr-armor-bundle.js';
 import { assertScreenContract } from './app.js';
 
-const ARMOR_CATALOG: ArmorBundleCatalog = Object.freeze({
+const LEATHER_PREVIEW = {
+  armorExpression: 'R6',
+  strengthRequirement: '2 за элемент',
+  movementPenalty: null,
+  acrobaticsPenalty: null,
+  runningPenalty: null,
+  dodgePenalty: null,
+  protections: 'Шлем не закрывает лицо.',
+  conditionOrLimitation: null,
+  hermetic: false,
+  layersAllowed: true,
+  physicalArmor: true,
+} as const;
+const NATE_PREVIEW = {
+  armorExpression: '—',
+  strengthRequirement: '6',
+  movementPenalty: null,
+  acrobaticsPenalty: null,
+  runningPenalty: null,
+  dodgePenalty: null,
+  protections:
+    'Пока герметичен: +20 к проверкам против заражения симбионтом, болезни, внешней химии и ядовитых испарений; −20 от каждой порции электрического, ментального, химического урона или урона от ядовитых испарений; +20 во встречных проверках против недамажащего электрического/пси-контроля; полностью блокирует вдыхаемые феромоны и заражённые испарения.',
+  conditionOrLimitation:
+    'При потере ≥1 HP носителем или отдельном режущем/колющем/огненном/разъедающем повреждении костюма теряет все свойства; не защищает от проглоченного/введённого/внутреннего яда и не снимает прежний эффект; ремонт не формализован.',
+  hermetic: true,
+  layersAllowed: false,
+  physicalArmor: false,
+} as const;
+const ARMOR_CATALOG: Pick<ArmorBundleItemCatalog, 'entries'> = Object.freeze({
   entries: Object.freeze([
-    Object.freeze({ itemId: 'ITM-ARM-001', name: 'Кожаный доспех', coverageModel: 'ZONE_ELEMENT' }),
-    Object.freeze({ itemId: 'ITM-ARM-005', name: 'Нэйт', coverageModel: 'FULL_SUIT' }),
+    Object.freeze({
+      itemId: 'ITM-ARM-001',
+      name: 'Кожаный доспех',
+      coverageModel: 'ZONE_ELEMENT',
+      decisionPreview: LEATHER_PREVIEW,
+    }),
+    Object.freeze({
+      itemId: 'ITM-ARM-005',
+      name: 'Нэйт',
+      coverageModel: 'FULL_SUIT',
+      decisionPreview: NATE_PREVIEW,
+    }),
   ]),
 });
 

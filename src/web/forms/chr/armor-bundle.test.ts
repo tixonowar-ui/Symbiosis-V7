@@ -125,6 +125,63 @@ describe('CHR-021 web decoder', () => {
     }
   });
 
+  it('accepts exact decision previews and rejects unknown or private preview fields', () => {
+    const decisionPreview = {
+      armorExpression: 'R6',
+      strengthRequirement: '2 за элемент',
+      movementPenalty: null,
+      acrobaticsPenalty: null,
+      runningPenalty: null,
+      dodgePenalty: null,
+      protections: 'Шлем не закрывает лицо.',
+      conditionOrLimitation: null,
+      hermetic: false,
+      layersAllowed: true,
+      physicalArmor: true,
+    } as const;
+    const decoded = decodeChr021Projection(
+      payload({
+        armorCatalog: {
+          entries: [
+            {
+              itemId: 'ITM-ARM-001',
+              name: 'Кожаный доспех',
+              coverageModel: 'ZONE_ELEMENT',
+              decisionPreview,
+            },
+          ],
+        },
+      }),
+      '$.payload',
+    );
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok)
+      expect(decoded.value.armorCatalog.entries[0]?.decisionPreview).toEqual(decisionPreview);
+
+    for (const overrides of [
+      { decisionPreview: { ...decisionPreview, availabilityTrace: [] } },
+      { decisionPreview: { ...decisionPreview, 'Rule ID': 'CORE-049' } },
+      { decisionPreview: { ...decisionPreview, armorExpression: 6 } },
+    ] as const) {
+      const result = decodeChr021Projection(
+        payload({
+          armorCatalog: {
+            entries: [
+              {
+                itemId: 'ITM-ARM-001',
+                name: 'Кожаный доспех',
+                coverageModel: 'ZONE_ELEMENT',
+                ...overrides,
+              },
+            ],
+          },
+        }),
+        '$.payload',
+      );
+      expect(result.ok).toBe(false);
+    }
+  });
+
   it('accepts the committed post-roll and post-checkpoint shapes', () => {
     const pieces = [
       {
