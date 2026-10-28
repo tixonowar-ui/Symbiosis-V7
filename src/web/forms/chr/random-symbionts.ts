@@ -291,6 +291,7 @@ export interface SymbiontModifierBreakdownProjection extends JsonObject {
   readonly total: StatModifierEffectProjection;
 }
 export interface Chr019Projection extends JsonObject {
+  readonly armorBundleEntryMode?: 'INITIAL' | 'RESUME' | null;
   readonly bindings: readonly SymbiontBindingProjection[];
   readonly characterDraftId: string;
   readonly commandId: string | null;
@@ -317,6 +318,7 @@ export interface Chr019Projection extends JsonObject {
 }
 
 export interface ManualChr019Projection extends JsonObject {
+  readonly armorBundleEntryMode?: 'INITIAL' | 'RESUME' | null;
   readonly bindings: readonly SymbiontBindingProjection[];
   readonly characterDraftId: string;
   readonly commandId: string | null;
@@ -1503,6 +1505,12 @@ export function decodeChr019Projection(
   );
   if (!modifier.ok) return modifier;
   const result = decodeProjection(value, path, {
+    ...(Object.hasOwn(value, 'armorBundleEntryMode')
+      ? {
+          armorBundleEntryMode: (field: JsonValue | undefined) =>
+            field === null || field === 'INITIAL' || field === 'RESUME',
+        }
+      : {}),
     bindings: (field) => field === value['bindings'],
     characterDraftId: isNonEmptyString,
     commandId: isNullableString,

@@ -4881,6 +4881,9 @@ function decodeFormActionSnapshot(
       case 'CHR-019::CTA::004':
         expectedForm = 'CHR-017';
         break;
+      case 'CHR-019::CTA::001':
+        expectedForm = 'CHR-021';
+        break;
       case 'CHR-019::CTA::002':
         expectedForm = 'CHR-042';
         break;
@@ -4922,10 +4925,15 @@ function decodeFormActionSnapshot(
       contentMatches = destination['symbiontAcquisitionModeOrNull'] === 'MANUAL';
     } else if (pending.sourceFormId === 'CHR-019') {
       contentMatches =
-        pending.actionKey === 'CHR-019::CTA::002'
-          ? isJsonObject(after) && fields.every((key) => sameJson(after[key]!, source[key]!))
-          : destination['symbiontAcquisitionModeOrNull'] === 'MANUAL' &&
-            sameJson(destination['manualCompositionDraft']!, source['bindings']!);
+        pending.actionKey === 'CHR-019::CTA::001'
+          ? source['armorBundleEntryMode'] === 'RESUME' &&
+            destination['nextFormId'] === 'CHR-021' &&
+            destination['qualityRollReceiptIdOrNull'] !== null &&
+            destination['bundleCheckpointReceiptIdOrNull'] === null
+          : pending.actionKey === 'CHR-019::CTA::002'
+            ? isJsonObject(after) && fields.every((key) => sameJson(after[key]!, source[key]!))
+            : destination['symbiontAcquisitionModeOrNull'] === 'MANUAL' &&
+              sameJson(destination['manualCompositionDraft']!, source['bindings']!);
     } else {
       contentMatches =
         isJsonObject(duplicate) &&
@@ -8709,7 +8717,12 @@ export function connectProjection(
         notifyReady();
         return { ok: true };
       }
-      if (activeForm.formId === 'CHR-019' && actionKey === CHR_019_ARMOR_ENTRY_ACTION_KEY) {
+      if (
+        activeForm.formId === 'CHR-019' &&
+        actionKey === CHR_019_ARMOR_ENTRY_ACTION_KEY &&
+        (lastSnapshot.projection as unknown as { readonly armorBundleEntryMode?: string | null })
+          .armorBundleEntryMode !== 'RESUME'
+      ) {
         const projection = lastSnapshot.projection as unknown as {
           readonly characterDraftId: string;
           readonly wizardCheckpointId: string;

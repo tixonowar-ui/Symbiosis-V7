@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 import { createManualSymbiontBrowserHost } from '../fixtures/manual-symbiont-e2e.js';
+import { createRandomSymbiontBrowserHost } from '../fixtures/random-symbiont-e2e.js';
 
 test.use({ channel: 'chrome' });
 
@@ -59,7 +60,11 @@ test('FREE MANUAL starting armor bundle rolls one manual D20 and checkpoints act
 
     await clickAction(page, 'CHR-021::CTA::002');
     await expect(page.locator('[data-manual-form="CHR-019"]')).toBeVisible();
-    await page.reload();
+    await clickAction(page, 'CHR-019::CTA::004');
+    await expect(page.locator('[data-manual-form="CHR-017"]')).toBeVisible();
+    await clickAction(page, 'CHR-017::CTA::002');
+    await expect(page.locator('[data-manual-form="CHR-019"]')).toBeVisible();
+    await clickAction(page, 'CHR-019::CTA::001');
     await expect(page.locator('[aria-label="Зафиксированный комплект"]')).toBeVisible();
 
     await clickAction(page, 'CHR-021::CTA::001');
@@ -117,6 +122,71 @@ test('UNITED confirms the exact interaction diff before entering starting armor'
     await expect(page.locator('[aria-label="Стартовый комплект брони"]')).toBeVisible();
     expect(host.receiptAllocations()).toBe(receipts);
     expect(host.rollRequestAllocations()).toBe(2);
+    await expectNoProtocolError(page, pageErrors);
+  } finally {
+    await host.close();
+  }
+});
+
+test('FREE RANDOM safe-returns and resumes the same armor bundle without a new request', async ({
+  page,
+}) => {
+  const host = await createRandomSymbiontBrowserHost({
+    diceInputMode: 'AUTO',
+    prefix: 'armor-random-e2e',
+    raceChoice: 'FREE',
+    sampleFaces: [15, 16],
+  });
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  try {
+    await page.goto(host.baseURL);
+    await page
+      .getByRole('button', { name: 'Начать сохранённую случайную ветвь', exact: true })
+      .click();
+    await page
+      .getByRole('button', {
+        name: 'Зафиксировать случайное определение симбионтов',
+        exact: true,
+      })
+      .click();
+    await expect(page.locator('[data-chr-020-random]')).toHaveAttribute(
+      'data-random-status',
+      'BINDING',
+    );
+    await page
+      .getByRole('button', {
+        name: 'Зафиксировать случайное определение симбионтов',
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Состав симбионтов только для чтения', exact: true }),
+    ).toBeVisible();
+
+    await clickAction(page, 'CHR-019::CTA::001');
+    await expect(page.locator('[aria-label="Стартовый комплект брони"]')).toBeVisible();
+    await page.locator('button[aria-label="Добавить Кожаный доспех"]').click();
+    await page.locator('button', { hasText: 'Зафиксировать один бросок качества' }).click();
+    await expect(page.locator('[aria-label="Зафиксированный комплект"]')).toBeVisible();
+    expect(host.sampleCalls()).toBe(2);
+    const rollRequests = host.rollRequestAllocations();
+    const receipts = host.receiptAllocations();
+
+    await clickAction(page, 'CHR-021::CTA::002');
+    await expect(
+      page.getByRole('heading', { name: 'Состав симбионтов только для чтения', exact: true }),
+    ).toBeVisible();
+    await clickAction(page, 'CHR-019::CTA::001');
+    await expect(page.locator('[aria-label="Зафиксированный комплект"]')).toBeVisible();
+    expect(host.rollRequestAllocations()).toBe(rollRequests);
+    expect(host.receiptAllocations()).toBe(receipts);
+    expect(host.sampleCalls()).toBe(2);
+
+    await clickAction(page, 'CHR-021::CTA::001');
+    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expect(page.locator('[data-atlas-action-key^="CHR-021"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key^="CHR-022"]')).toHaveCount(0);
     await expectNoProtocolError(page, pageErrors);
   } finally {
     await host.close();

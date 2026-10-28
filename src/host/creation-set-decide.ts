@@ -4211,8 +4211,15 @@ const validatePostIdentityPayload = (
   }
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
+  const armorPresentation =
+    armorBundleStage !== null &&
+    symbiontPresentationStage !== undefined &&
+    (symbiontPresentationStage.formId === 'CHR-019' ||
+      symbiontPresentationStage.formId === 'CHR-021' ||
+      symbiontPresentationStage.formId === 'CHR-022');
   if (
     symbiontPresentationStage !== undefined &&
+    !armorPresentation &&
     (raceAndMethodStage?.symbiontAcquisition.value !== 'MANUAL' ||
       randomSymbiontStage !== null ||
       advisorIntelligenceFloorStage !== null)
@@ -4263,7 +4270,8 @@ const validatePostIdentityPayload = (
     stateRevision: checkpoint.stateRevision,
   };
   const projectionRevisionMatches =
-    randomSymbiontStage !== null || advisorFloorNavigation
+    (randomSymbiontStage !== null && symbiontPresentationStage === undefined) ||
+    advisorFloorNavigation
       ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
         ((randomStartPending || advisorFloorNavigation) &&
           previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&

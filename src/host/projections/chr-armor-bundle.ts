@@ -150,3 +150,21 @@ export function armorBundleEntryEligible(
   }
   return false;
 }
+
+export function armorBundleEntryMode(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+): 'INITIAL' | 'RESUME' | null {
+  if (armorBundleEntryEligible(checkpoint, catalog)) return 'INITIAL';
+  const stage = checkpoint.armorBundleStage;
+  if (
+    stage !== null &&
+    stage !== undefined &&
+    stage.qualityRollRecordOrNull !== null &&
+    stage.checkpointRecordOrNull === null &&
+    checkpoint.nextStageEnvelope.formId === 'CHR-021'
+  ) {
+    return 'RESUME';
+  }
+  return null;
+}

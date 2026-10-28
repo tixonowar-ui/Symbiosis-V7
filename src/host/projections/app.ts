@@ -84,6 +84,7 @@ import {
 } from './chr-manual-symbionts.js';
 import {
   assertArmorBundleScreenContracts,
+  CHR_019_ARMOR_ENTRY_ACTION_KEY,
   CHR_021_FORM_ID,
   CHR_021_RETURN_ACTION_KEY,
 } from './chr-armor-bundle.js';
@@ -308,6 +309,11 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       'symbiontAcquisitionMode=MANUAL; interactionGraph has suppression/destruction/absorption or other confirmation-required consequence; AQA-005 excludes RANDOM composition',
     ],
     ['CHR-019', CHR_019_RETURN_ACTION_KEY, 'irreversibleBoundaryStatus=NOT_CROSSED'],
+    [
+      'CHR-019',
+      CHR_019_ARMOR_ENTRY_ACTION_KEY,
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT composition valid and no pending interaction; OP-SYMBIONT-ADD local-creation boundary recorded',
+    ],
     [
       CHR_021_FORM_ID,
       CHR_021_RETURN_ACTION_KEY,

@@ -43,7 +43,7 @@ import {
   CHR_041_REQUIRED_FIELDS,
   CHR_041_ROUTE,
 } from './chr-symbionts.js';
-import { armorBundleEntryEligible, CHR_019_ARMOR_ENTRY_ACTION_KEY } from './chr-armor-bundle.js';
+import { armorBundleEntryMode, CHR_019_ARMOR_ENTRY_ACTION_KEY } from './chr-armor-bundle.js';
 
 export const CHR_018_FORM_ID = 'CHR-018' as const;
 export const CHR_042_FORM_ID = 'CHR-042' as const;
@@ -267,12 +267,14 @@ export function projectManualChr019(
   const previewRequired =
     current.compositionRecords.length > 1 &&
     manualInteractionPreview(checkpoint, catalog).irreversibleOperationIds.length > 0;
+  const entryMode = armorBundleEntryMode(checkpoint, catalog);
   const actions: ActionKey[] = [];
   if (previewRequired) actions.push(CHR_019_PREVIEW_ACTION_KEY);
   actions.push(CHR_019_RETURN_ACTION_KEY);
-  if (armorBundleEntryEligible(checkpoint, catalog)) actions.push(CHR_019_ARMOR_ENTRY_ACTION_KEY);
+  if (entryMode !== null) actions.push(CHR_019_ARMOR_ENTRY_ACTION_KEY);
   return presentation(checkpoint, CHR_019_FORM_ID, CHR_019_ROUTE, actions, {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
+    armorBundleEntryMode: entryMode,
     raceChoice: current.composition.raceCode,
     ...compositionJson(catalog, current.composition, latest.bindings),
     interactionGraph: interactions.interactionGraph,

@@ -145,6 +145,7 @@ import {
 } from './creation-armor-bundle-contract.js';
 import { loadArmorBundleCatalog } from './armor-bundle-catalog.js';
 import {
+  CHR_019_ARMOR_ENTRY_ACTION_KEY,
   CHR_021_FORM_ID,
   CHR_021_RETURN_ACTION_KEY,
   projectChr021,
@@ -275,6 +276,7 @@ import {
   projectManualChr042,
 } from './projections/chr-manual-symbionts.js';
 import {
+  advanceArmorBundlePresentation,
   advanceManualSymbiontPresentation,
   handleSymbiontAddressableRoute,
 } from './creation-manual-composition-navigation.js';
@@ -1454,18 +1456,24 @@ function creationPresentationFormId(
   checkpoint: DurableCreationWizardCheckpoint,
 ): ConfirmedNavigationContext['formId'] {
   const nextFormId = checkpoint.nextStageEnvelope.formId;
-  // The armor envelope pins the presentation to CHR-021; after the bundle
-  // checkpoint the form stays actionless (CHECKPOINTED) while CHR-022 remains
-  // a host-signed, unpublished next stage.
+  const signed = checkpoint.symbiontPresentationStage;
+  // After the bundle checkpoint the form stays actionless on CHR-021 while
+  // CHR-022 remains a host-signed, unpublished next stage.
   if (
     checkpoint.armorBundleStage !== null &&
     checkpoint.armorBundleStage !== undefined &&
-    (nextFormId === CHR_021_FORM_ID || nextFormId === 'CHR-022')
+    nextFormId === 'CHR-022'
   ) {
     return CHR_021_FORM_ID;
   }
-  const signed = checkpoint.symbiontPresentationStage;
   if (signed !== null && signed !== undefined) return signed.formId;
+  if (
+    checkpoint.armorBundleStage !== null &&
+    checkpoint.armorBundleStage !== undefined &&
+    nextFormId === CHR_021_FORM_ID
+  ) {
+    return CHR_021_FORM_ID;
+  }
   const skillPresentation = checkpoint.skillPresentationStage;
   if (
     (checkpoint.manualCompositionStage !== null &&
@@ -2109,9 +2117,7 @@ function manualSymbiontNavigation(
             ? 'CHR-017'
             : message.actionKey === CHR_042_RETURN_ACTION_KEY
               ? 'CHR-019'
-              : message.actionKey === CHR_021_RETURN_ACTION_KEY
-                ? 'CHR-019'
-                : null;
+              : null;
   if (
     targetFormId === null ||
     current.entityLocalCharacterId === null ||
@@ -2176,6 +2182,96 @@ function manualSymbiontNavigation(
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
         targetFormId,
+      ),
+      'player',
+      after,
+    ),
+  };
+}
+
+function armorBundleNavigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): NavigationSuccess | undefined {
+  const targetFormId =
+    message.actionKey === CHR_021_RETURN_ACTION_KEY
+      ? 'CHR-019'
+      : message.actionKey === CHR_019_ARMOR_ENTRY_ACTION_KEY
+        ? 'CHR-021'
+        : null;
+  if (
+    targetFormId === null ||
+    current.entityLocalCharacterId === null ||
+    current.formId !== message.sourceFormId ||
+    connection.activeLayer !== null
+  ) {
+    return undefined;
+  }
+  const characterDraftId = current.entityLocalCharacterId;
+  const checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    characterDraftId,
+    dependencies.skillStageCatalog,
+    dependencies.symbiontCatalog,
+  );
+  const armor = checkpoint.armorBundleStage;
+  if (
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
+    connection.current !== current ||
+    !confirmedPlayerContext(current, dependencies) ||
+    armor === null ||
+    armor === undefined ||
+    armor.qualityRollRecordOrNull === null ||
+    armor.checkpointRecordOrNull !== null ||
+    checkpoint.nextStageEnvelope.formId !== CHR_021_FORM_ID ||
+    (checkpoint.symbiontPresentationStage !== null &&
+      checkpoint.symbiontPresentationStage !== undefined &&
+      checkpoint.symbiontPresentationStage.formId !== message.sourceFormId)
+  ) {
+    return undefined;
+  }
+  let committed: DurableCreationWizardCheckpoint;
+  try {
+    committed = advanceArmorBundlePresentation(
+      dependencies.database,
+      {
+        characterDraftId,
+        wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+        formId: targetFormId,
+      },
+      dependencies.symbiontCatalog,
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+    return undefined;
+  }
+  const after = currentCreationWizardRevisions(committed);
+  if (
+    after.actorVisibilityRevision !== before.actorVisibilityRevision ||
+    after.stateRevision !== before.stateRevision ||
+    after.projectionRevision !== before.projectionRevision + 1 ||
+    committed.checkpoint.checkpointRevision !== checkpoint.checkpoint.checkpointRevision ||
+    committed.receipt.result.draftRevision !== checkpoint.receipt.result.draftRevision ||
+    committed.localCharacter.payloadJson !== checkpoint.localCharacter.payloadJson
+  ) {
+    throw new Error('armor navigation changed more than the projection revision');
+  }
+  return {
+    nextContext: creationWizardContext(connection, dependencies, committed),
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        committed,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
       ),
       'player',
       after,
@@ -2476,13 +2572,22 @@ function handleFormAction(
         success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
       }
       break;
+    case CHR_019_ARMOR_ENTRY_ACTION_KEY:
+      if (
+        action.to === CHR_021_FORM_ID &&
+        current.formId === CHR_019_FORM_ID &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = armorBundleNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
     case CHR_021_RETURN_ACTION_KEY:
       if (
         action.to === CHR_019_FORM_ID &&
         current.formId === CHR_021_FORM_ID &&
         confirmedPlayerContext(current, dependencies)
       ) {
-        success = manualSymbiontNavigation(message, current, revisions, connection, dependencies);
+        success = armorBundleNavigation(message, current, revisions, connection, dependencies);
       }
       break;
     case CHR_017_RANDOM_START_ACTION_KEY:

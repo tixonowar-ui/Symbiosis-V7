@@ -597,6 +597,50 @@ describe('CHR-021 host journey', () => {
         rollReceiptId,
       );
 
+      const returnedReload = await reconnect(host, 'armor-host-return-reload');
+      expect(returnedReload.presentation.base.formId).toBe('CHR-019');
+      const catalog = await sendV2(
+        host.socket,
+        formAction(
+          'armor-host-return-catalog',
+          'CHR-019',
+          'CHR-019::CTA::004',
+          returnedReload.revisions.projectionRevision,
+        ),
+      );
+      expect(catalog.presentation.base.formId).toBe('CHR-017');
+      const summary = await sendV2(
+        host.socket,
+        formAction(
+          'armor-host-return-summary',
+          'CHR-017',
+          'CHR-017::CTA::002',
+          catalog.revisions.projectionRevision,
+        ),
+      );
+      expect(summary.presentation.base.formId).toBe('CHR-019');
+      const beforeResume = current(host);
+      const resumed = await sendV2(
+        host.socket,
+        formAction(
+          'armor-host-resume',
+          'CHR-019',
+          'CHR-019::CTA::001',
+          summary.revisions.projectionRevision,
+        ),
+      );
+      expect(resumed.presentation.base.formId).toBe('CHR-021');
+      expect(resumed.presentation.base.availableActionKeys).toEqual([
+        CHR_021_CONFIRM_ACTION_KEY,
+        CHR_021_RETURN_ACTION_KEY,
+      ]);
+      const afterResume = current(host);
+      expect(afterResume.localCharacter.payloadJson).toBe(beforeResume.localCharacter.payloadJson);
+      expect(afterResume.checkpoint.checkpointRevision).toBe(
+        beforeResume.checkpoint.checkpointRevision,
+      );
+      expect(afterResume.armorBundleStage).toEqual(beforeResume.armorBundleStage);
+
       const restored = await reconnect(host, 'armor-host-restore');
       expect(restored.presentation.base.formId).toBe('CHR-021');
       expect(restored.presentation.base.availableActionKeys).toEqual([

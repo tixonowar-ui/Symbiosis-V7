@@ -230,6 +230,84 @@ export function advanceManualSymbiontPresentation(
   return commitPresentation(database, input, catalog);
 }
 
+function assertArmorNavigationCheckpoint(
+  checkpoint: DurableCreationWizardCheckpoint,
+  wizardCheckpointId: string,
+): void {
+  const armor = checkpoint.armorBundleStage;
+  if (
+    checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
+    armor === null ||
+    armor === undefined ||
+    armor.qualityRollRecordOrNull === null ||
+    armor.checkpointRecordOrNull !== null ||
+    checkpoint.nextStageEnvelope.formId !== 'CHR-021' ||
+    checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER ||
+    (checkpoint.symbiontPresentationStage !== null &&
+      checkpoint.symbiontPresentationStage !== undefined &&
+      checkpoint.symbiontPresentationStage.compositionDraftRevision !==
+        manualCompositionRevision(checkpoint))
+  ) {
+    guardSymbiontRejected();
+  }
+}
+
+export function advanceArmorBundlePresentation(
+  database: Database.Database,
+  input: {
+    readonly characterDraftId: string;
+    readonly wizardCheckpointId: string;
+    readonly formId: 'CHR-019' | 'CHR-021';
+  },
+  catalog: SymbiontCatalog,
+): DurableCreationWizardCheckpoint {
+  const preflight = loadCreationWizardCheckpoint(
+    database,
+    input.characterDraftId,
+    catalog.skillStage,
+    catalog,
+  );
+  assertArmorNavigationCheckpoint(preflight, input.wizardCheckpointId);
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
+    database,
+    input.characterDraftId,
+    input.wizardCheckpointId,
+    (update) => {
+      const current = loadCreationWizardCheckpoint(
+        database,
+        input.characterDraftId,
+        catalog.skillStage,
+        catalog,
+      );
+      assertArmorNavigationCheckpoint(current, input.wizardCheckpointId);
+      writeLocalCharacterSymbiontPresentation(database, {
+        formId: input.formId,
+        compositionDraftRevision: manualCompositionRevision(current),
+        projectionRevision: current.localCharacter.projectionRevision + 1,
+        routeBindings: [inherited(input.characterDraftId)],
+        routeTemplate: ROUTES[input.formId],
+      });
+      return update(
+        { payloadJson: current.localCharacter.payloadJson },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      );
+    },
+    () => {
+      validatedCheckpoint = loadCreationWizardCheckpoint(
+        database,
+        input.characterDraftId,
+        catalog.skillStage,
+        catalog,
+      );
+    },
+  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('armor presentation validation was not executed');
+  }
+  return validatedCheckpoint;
+}
+
 export function handleSymbiontAddressableRoute(
   database: Database.Database,
   input: {
