@@ -19,6 +19,13 @@
 
 ### Исправлено
 
+- **2026-10-28, issue #146:** `CHR-042::CTA::001` подтверждает exact interaction
+  diff и атомарно создаёт armorBundle через SET-DECIDE; прямой вход при pending
+  diff запрещён. Post-write validation выполняется внутри SQLite-транзакции,
+  а команды прежних стадий отклоняются без изменения payload. Safe-return/resume
+  работает для RANDOM и MANUAL без новых IDs и reload. MANUAL-грань требует
+  явного ввода, выбранный предмет и его source-backed характеристики видны до
+  необратимой фиксации. [ADR 0056](docs/adr/0056-armor-interaction-confirmation-and-recovery.md).
 - **2026-10-27:** `AGENTS.md` актуализирован после PR #161 и #163:
   команды и гейты CI, бюджет Vitest и диагностика E2E. Добавлен текущий
   [handoff](docs/status/handoff.md) с подтверждённой базой и границами результата.

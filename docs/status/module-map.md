@@ -114,13 +114,17 @@ reopen без нового sampler; подтверждение навыков д
 B-specific fixture #147 сам по себе не был playable manual composition. #145
 создаёт `manualCompositionStage` лениво на первом валидном add и добавляет
 полные replacement checkpoints, addressable `CHR-018` с art/tree и bindings,
-Advisor I/W/B/skills с continuity после remove/re-add и немутирующий `CHR-042`.
-Локальное удаление не сохраняется как неполный состав и сбрасывается после
-reconnect; presentation migration `0005` не хранит вторую composition authority.
-Восемь production Playwright-сценариев проходят RANDOM FREE EEL и UNITED
-ADVISER, карточки `CHR-014`, а также ручные FREE replacement/restart, UNITED
-Advisor и TROGR+ADVISER с MANUAL I/W/B/preview через Fastify+WS/SQLite.
-Equipment, `CHR-021+` и final save остаются в #146 и последующих задачах.
+Advisor I/W/B/skills с continuity после remove/re-add и exact-diff `CHR-042`.
+#146 добавляет стартовый armorBundle: атомарное подтверждение взаимодействий,
+transactional rollback, RANDOM/MANUAL safe-return/resume и source-backed
+read-only preview брони. Bundle остаётся `OWNED_NOT_EQUIPPED`, `CHR-022`
+host-signed и не публикуется. Локальное удаление не сохраняется как неполный
+состав и сбрасывается после reconnect; presentation migration `0005` не хранит
+вторую composition authority. Одиннадцать production Playwright-сценариев проходят
+RANDOM FREE EEL и UNITED ADVISER, карточки `CHR-014`, ручной FREE
+replacement/restart, UNITED Advisor, TROGR+ADVISER, а также MANUAL/UNITED/RANDOM
+armorBundle через Fastify+WS/SQLite. Следующее equipment и final save остаются
+в #151–#156.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                                                          | Веха |
@@ -132,7 +136,7 @@ Equipment, `CHR-021+` и final save остаются в #146 и последую
 | `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation                             | M2   |
 | `src/host`                   | **частично** | creation до actionless CHR-021/CHECKPOINTED; playable MANUAL editor, Advisor I/W/B/skills, preview и armorBundle | M4   |
 | `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–021/028/036/041/042 exact slice; CHR-022 host-signed, не публикуется                    | M4   |
-| `src/web`                    | **частично** | recovery, stats, skills, random/manual symbiont и armor UI; 9 Playwright-сценариев                               | M5   |
+| `src/web`                    | **частично** | recovery, stats, skills, random/manual symbiont и armor UI; 11 Playwright-сценариев                              | M5   |
 | `src/web/renderer`           | **частично** | 36 форм: 11 APP и 25 CHR; остальные fail-closed                                                                  | M5   |
 | `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати пяти CHR                                                       | M6   |
 
@@ -147,11 +151,11 @@ Equipment, `CHR-021+` и final save остаются в #146 и последую
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                                                          |
-| ------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                                  |
-| `tests/e2e`         | **частично** | 9 сценариев: два RANDOM, два CHR-014, ручные FREE replacement, UNITED Advisor, TROGR+ADVISER и armorBundle CHR-021; production + WS |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                              |
+| Каталог             | Состояние    | Примечание                                                                                |
+| ------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                        |
+| `tests/e2e`         | **частично** | 11 сценариев: исходные восемь и MANUAL/UNITED/RANDOM armorBundle CHR-021; production + WS |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                    |
 
 ---
 
