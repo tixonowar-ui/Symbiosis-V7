@@ -17,6 +17,7 @@ import {
   ADVISOR_INTELLIGENCE_FLOOR_PURPOSE,
 } from '../creation-advisor-intelligence-floor-contract.js';
 import { latestManualCompositionRecord } from '../creation-manual-composition-contract.js';
+import { manualInteractionDiffJson } from '../creation-manual-interaction-json.js';
 import {
   manualAdvisorWorkPending,
   manualCompositionRevision,
@@ -32,7 +33,6 @@ import {
   advisorSelectionValidation,
   advisorSkillOptionsJson,
   modifierBreakdownJson,
-  modifierEffectJson,
   CHR_017_FORM_ID,
   CHR_017_REQUIRED_FIELDS,
   CHR_017_ROUTE,
@@ -270,7 +270,7 @@ export function projectManualChr019(
   const actions: ActionKey[] = [];
   if (previewRequired) actions.push(CHR_019_PREVIEW_ACTION_KEY);
   actions.push(CHR_019_RETURN_ACTION_KEY);
-  if (armorBundleEntryEligible(checkpoint)) actions.push(CHR_019_ARMOR_ENTRY_ACTION_KEY);
+  if (armorBundleEntryEligible(checkpoint, catalog)) actions.push(CHR_019_ARMOR_ENTRY_ACTION_KEY);
   return presentation(checkpoint, CHR_019_FORM_ID, CHR_019_ROUTE, actions, {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
     raceChoice: current.composition.raceCode,
@@ -391,6 +391,7 @@ export function projectManualChr041(
 export function projectManualChr042(
   checkpoint: DurableCreationWizardCheckpoint,
   catalog: SymbiontCatalog,
+  setDecideCapable = false,
 ): PresentedBaseForm {
   const current = stage(checkpoint);
   if (manualAdvisorWorkPending(current)) throw new Error('CHR-042 has pending Advisor work');
@@ -398,46 +399,13 @@ export function projectManualChr042(
   if (preview.irreversibleOperationIds.length === 0) {
     throw new Error('CHR-042 requires a confirmation-required interaction');
   }
-  return presentation(checkpoint, CHR_042_FORM_ID, CHR_042_ROUTE, [CHR_042_RETURN_ACTION_KEY], {
+  const actions: ActionKey[] = [
+    ...(setDecideCapable ? (['CHR-042::CTA::001'] as const) : []),
+    CHR_042_RETURN_ACTION_KEY,
+  ];
+  return presentation(checkpoint, CHR_042_FORM_ID, CHR_042_ROUTE, actions, {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
-    compositionBefore: compositionJson(
-      catalog,
-      preview.compositionBefore.composition,
-      preview.compositionBefore.bindings,
-    ),
-    compositionAfter: compositionJson(
-      catalog,
-      preview.compositionAfter.composition,
-      preview.compositionAfter.bindings,
-    ),
-    interactionGraph: preview.interactionGraph,
-    suppressionDestructionAbsorption: preview.suppressionDestructionAbsorption,
-    slotStatOeDiff: {
-      slotUsageBefore: preview.slotStatOeDiff.slotUsageBefore,
-      slotUsageAfter: preview.slotStatOeDiff.slotUsageAfter,
-      entries: preview.slotStatOeDiff.entries.map((entry) => ({
-        speciesKey: entry.speciesKey,
-        before:
-          entry.before === null
-            ? null
-            : {
-                slotCost: entry.before.slotCost,
-                currentOe: entry.before.currentOe,
-                status: entry.before.status,
-              },
-        after:
-          entry.after === null
-            ? null
-            : {
-                slotCost: entry.after.slotCost,
-                currentOe: entry.after.currentOe,
-                status: entry.after.status,
-              },
-      })),
-      modifierBreakdownBefore: modifierEffectJson(preview.slotStatOeDiff.modifierBreakdownBefore),
-      modifierBreakdownAfter: modifierEffectJson(preview.slotStatOeDiff.modifierBreakdownAfter),
-    },
-    irreversibleOperationIds: preview.irreversibleOperationIds,
+    ...manualInteractionDiffJson(catalog, preview),
     confirmationStatus: 'PREVIEW',
     wizardCheckpointId: checkpoint.checkpoint.checkpointId,
     draftRevision: checkpoint.receipt.result.draftRevision,

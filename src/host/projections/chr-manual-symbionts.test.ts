@@ -347,7 +347,6 @@ describe('CHR manual symbiont projections', () => {
     expect(projectManualChr019(summary, setupValue.catalog).availableActionKeys).toEqual([
       'CHR-019::CTA::002',
       'CHR-019::CTA::004',
-      'CHR-019::CTA::001',
     ]);
     const before = currentCreationWizardRevisions(summary);
     const previewCheckpoint = advanceManualSymbiontPresentation(

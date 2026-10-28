@@ -630,7 +630,10 @@ describe('manual symbiont host journeys', () => {
         ),
       ),
     );
-    expect(preview.presentation.base.availableActionKeys).toEqual(['CHR-042::CTA::002']);
+    expect(preview.presentation.base.availableActionKeys).toEqual([
+      'CHR-042::CTA::001',
+      'CHR-042::CTA::002',
+    ]);
     expect(preview.presentation.base.roleFilteredPayload).toMatchObject({
       confirmationStatus: 'PREVIEW',
       irreversibleOperationIds: ['ABSORPTION', 'SPECIES_SUPPRESSION'],

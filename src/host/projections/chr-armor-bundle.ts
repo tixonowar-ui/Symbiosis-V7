@@ -2,10 +2,13 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 
-import type { ArmorBundleCatalog } from '../../domain/index.js';
+import type { ArmorBundleCatalog, SymbiontCatalog } from '../../domain/index.js';
 import type { ArmorBundleStage } from '../creation-armor-bundle-contract.js';
 import { latestArmorBundleRecord } from '../creation-armor-bundle.js';
-import { manualAdvisorWorkPending } from '../creation-manual-composition-navigation.js';
+import {
+  manualAdvisorWorkPending,
+  manualInteractionConfirmationRequired,
+} from '../creation-manual-composition-navigation.js';
 import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js';
 
 export const CHR_021_FORM_ID = 'CHR-021' as const;
@@ -115,7 +118,10 @@ export function assertArmorBundleScreenContracts(
 
 export const CHR_019_ARMOR_ENTRY_ACTION_KEY = 'CHR-019::CTA::001' as const satisfies ActionKey;
 
-export function armorBundleEntryEligible(checkpoint: DurableCreationWizardCheckpoint): boolean {
+export function armorBundleEntryEligible(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+): boolean {
   const raceAndMethod = checkpoint.raceAndMethodStage;
   if (
     raceAndMethod === null ||
@@ -129,7 +135,10 @@ export function armorBundleEntryEligible(checkpoint: DurableCreationWizardCheckp
   }
   const manualStage = checkpoint.manualCompositionStage;
   if (manualStage !== null && manualStage !== undefined) {
-    return !manualAdvisorWorkPending(manualStage);
+    return (
+      !manualAdvisorWorkPending(manualStage) &&
+      !manualInteractionConfirmationRequired(checkpoint, catalog)
+    );
   }
   const randomStage = checkpoint.randomSymbiontStage;
   if (randomStage !== null && randomStage !== undefined) {

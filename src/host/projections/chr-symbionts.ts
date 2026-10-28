@@ -499,7 +499,7 @@ export function projectChr019(
     current.advisorSkillRecordOrNull?.request.commandId ??
     current.bindingRecordOrNull?.request.commandId ??
     null;
-  const actions: ActionKey[] = armorBundleEntryEligible(checkpoint)
+  const actions: ActionKey[] = armorBundleEntryEligible(checkpoint, catalog)
     ? [CHR_019_ARMOR_ENTRY_ACTION_KEY]
     : [];
   return presentation(

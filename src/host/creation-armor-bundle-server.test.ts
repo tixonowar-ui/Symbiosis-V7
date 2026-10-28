@@ -24,14 +24,14 @@ import type {
   FormActionIntentV2Message,
   HostToClientMessage,
   HostToClientV2Message,
+  JsonObject,
   ProtocolVocabulary,
   RevisionVector,
   SessionReconnectV2Message,
   WireV2Vocabulary,
 } from '@shared/index.js';
 
-import type { RevisionImpact } from '../persistence/index.js';
-import type { openPersistenceDatabase } from '../persistence/index.js';
+import { openPersistenceDatabase, type RevisionImpact } from '../persistence/index.js';
 import {
   loadCreationWizardCheckpoint,
   currentCreationWizardRevisions,
@@ -323,6 +323,100 @@ function refusalCode(message: HostToClientMessage): string {
   return message.refusal.code;
 }
 
+async function setupManualInteraction(prefix: string): Promise<{
+  readonly host: ArmorHost;
+  readonly previewHost: ArmorHost;
+  readonly composed: Snapshot;
+  readonly preview: Snapshot;
+  readonly databasePath: string;
+}> {
+  const directory = await mkdtemp(join(tmpdir(), `${prefix}-`));
+  temporaryDirectories.push(directory);
+  const databasePath = join(directory, 'host.sqlite');
+  const setup = createManualWizardSetup(prefix, 'UNITED', 'MANUAL', databasePath);
+  databases.push(setup.database);
+  const host = await createArmorHost(setup, [], prefix);
+  const initial = await reconnect(host, `${prefix}-initial`);
+  await sendV2(
+    host.socket,
+    cardRoute(`${prefix}-card`, 'TROGR', initial.revisions.projectionRevision),
+  );
+  await sendCommand(
+    host.socket,
+    manualCompositionRequest(setup, current(host), `${prefix}-initial-composition`, [
+      'TROGR',
+      'OWL',
+      'WEAVER',
+      'CRICKET',
+    ]),
+  );
+  const [, composed] = await sendCommand(
+    host.socket,
+    manualCompositionRequest(setup, current(host), `${prefix}-replacement`, [
+      'TROGR',
+      'TEACHER',
+      'WEAVER',
+      'CRICKET',
+    ]),
+  );
+  expect(composed.presentation.base.formId).toBe('CHR-019');
+
+  const previewHost: ArmorHost = { ...host, socket: await openSocket(host.app) };
+  await reconnect(previewHost, `${prefix}-preview-initial`);
+  const preview = await sendV2(
+    previewHost.socket,
+    formAction(
+      `${prefix}-preview`,
+      'CHR-019',
+      'CHR-019::CTA::002',
+      composed.revisions.projectionRevision,
+    ),
+  );
+  expect(preview.presentation.base.formId).toBe('CHR-042');
+  expect(preview.presentation.base.roleFilteredPayload['irreversibleOperationIds']).toEqual([
+    'ABSORPTION',
+  ]);
+  return { host, previewHost, composed, preview, databasePath };
+}
+
+function interactionDiff(preview: Snapshot): JsonObject {
+  const payload = preview.presentation.base.roleFilteredPayload;
+  return {
+    compositionBefore: payload['compositionBefore'],
+    compositionAfter: payload['compositionAfter'],
+    interactionGraph: payload['interactionGraph'],
+    suppressionDestructionAbsorption: payload['suppressionDestructionAbsorption'],
+    slotStatOeDiff: payload['slotStatOeDiff'],
+    irreversibleOperationIds: payload['irreversibleOperationIds'],
+  } as JsonObject;
+}
+
+function interactionConfirmationRequest(
+  host: ArmorHost,
+  commandId: string,
+  diff: JsonObject,
+): WorkflowRequest {
+  const checkpoint = current(host);
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(checkpoint),
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: host.characterDraftId,
+      draftRevision: checkpoint.receipt.result.draftRevision,
+      interactionDiff: diff,
+      sourceFormId: 'CHR-042',
+      stage: 'SYMBIONTS',
+      variant: 'MANUAL_INTERACTION_CONFIRMATION',
+      wizardCheckpointId: host.wizardCheckpointId,
+    },
+    protocolVersion: 1,
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CHAR-CREATION-SET-DECIDE',
+  };
+}
+
 describe('CHR-021 host journey', () => {
   it(
     'enters from CHR-019, rolls quality, safe-returns and checkpoints to CHR-022',
@@ -593,12 +687,9 @@ describe('CHR-021 host journey', () => {
     const beforeRefusal = current(host);
     const refusal = await sendRefusal(
       host.socket,
-      manualCompositionRequest(
-        setup,
-        beforeRefusal,
-        'armor-second-session-stale-composition',
-        ['EEL'],
-      ),
+      manualCompositionRequest(setup, beforeRefusal, 'armor-second-session-stale-composition', [
+        'EEL',
+      ]),
     );
     expect(refusalCode(refusal)).toBe('GUARD_REJECTED');
 
@@ -613,4 +704,132 @@ describe('CHR-021 host journey', () => {
     expect(restored.presentation.base.formId).toBe('CHR-021');
     expect(restored.revisions).toEqual(entered.revisions);
   });
+
+  it('withholds direct armor entry while the exact interaction diff is pending', async () => {
+    const { host, composed, preview } = await setupManualInteraction('armor-pending-interaction');
+    expect(composed.presentation.base.availableActionKeys).not.toContain('CHR-019::CTA::001');
+    expect(preview.presentation.base.availableActionKeys).toEqual([
+      'CHR-042::CTA::001',
+      'CHR-042::CTA::002',
+    ]);
+
+    const before = current(host);
+    const refusal = await sendRefusal(host.socket, {
+      commandId: 'armor-pending-interaction-direct-entry',
+      commandKind: 'workflow-command',
+      expectedRevisions: currentCreationWizardRevisions(before),
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: host.characterDraftId,
+        draftRevision: before.receipt.result.draftRevision,
+        sourceFormId: 'CHR-019',
+        stage: 'SYMBIONTS',
+        variant: 'ARMOR_BUNDLE_ENTRY',
+        wizardCheckpointId: host.wizardCheckpointId,
+      },
+      protocolVersion: 1,
+      role: 'player',
+      workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+    });
+    expect(refusalCode(refusal)).toBe('GUARD_REJECTED');
+    expect(current(host).localCharacter).toEqual(before.localCharacter);
+    expect(current(host).checkpoint).toEqual(before.checkpoint);
+    expect(host.rollRequestAllocations()).toBe(0);
+  });
+
+  it(
+    'commits the exact interaction diff and armor entry atomically with replay and restart',
+    { timeout: 20000 },
+    async () => {
+      const { host, previewHost, preview, databasePath } = await setupManualInteraction(
+        'armor-confirmed-interaction',
+      );
+      const exactDiff = interactionDiff(preview);
+      const changedDiff = { ...exactDiff, irreversibleOperationIds: [] };
+      const beforeRefusal = current(host);
+      const allocationsBeforeRefusal = host.rollRequestAllocations();
+      const stale = await sendRefusal(previewHost.socket, {
+        ...interactionConfirmationRequest(host, 'armor-confirmed-interaction-stale', exactDiff),
+        expectedRevisions: ZERO_REVISIONS,
+      });
+      expect(refusalCode(stale)).toBe('STALE_REVISION');
+      expect(current(host).localCharacter).toEqual(beforeRefusal.localCharacter);
+      expect(current(host).checkpoint).toEqual(beforeRefusal.checkpoint);
+      const changed = await sendRefusal(
+        previewHost.socket,
+        interactionConfirmationRequest(host, 'armor-confirmed-interaction-changed', changedDiff),
+      );
+      expect(refusalCode(changed)).toBe('GUARD_REJECTED');
+      expect(current(host).localCharacter).toEqual(beforeRefusal.localCharacter);
+      expect(current(host).checkpoint).toEqual(beforeRefusal.checkpoint);
+      expect(host.rollRequestAllocations()).toBe(allocationsBeforeRefusal);
+
+      const request = interactionConfirmationRequest(
+        host,
+        'armor-confirmed-interaction-confirm',
+        exactDiff,
+      );
+      const [result, entered] = await sendCommand(previewHost.socket, request);
+      expect(result.messageType).toBe('command.result');
+      expect(result.receipt.result).toMatchObject({
+        sourceFormId: 'CHR-042',
+        variant: 'MANUAL_INTERACTION_CONFIRMATION',
+        nextFormId: 'CHR-021',
+        armorBundleId: 'armor-confirmed-interaction-roll-request-1',
+        qualityRollRequestId: 'armor-confirmed-interaction-roll-request-2',
+      });
+      expect(entered.presentation.base.formId).toBe('CHR-021');
+      expect(entered.presentation.base.roleFilteredPayload).toMatchObject({
+        armorBundleId: 'armor-confirmed-interaction-roll-request-1',
+        qualityRollRequestId: 'armor-confirmed-interaction-roll-request-2',
+      });
+      const committed = current(host);
+      expect(committed.armorBundleStage?.entryRequest.commandId).toBe(request.commandId);
+      expect(committed.armorBundleStage?.entryRequest.payload).toMatchObject({
+        interactionDiff: exactDiff,
+      });
+      expect(committed.armorBundleStage?.entryReceipt.receiptId).toBe(result.receipt.receiptId);
+      const repeated = await sendRefusal(
+        previewHost.socket,
+        interactionConfirmationRequest(host, 'armor-confirmed-interaction-second', exactDiff),
+      );
+      expect(refusalCode(repeated)).toBe('GUARD_REJECTED');
+      expect(current(host).localCharacter).toEqual(committed.localCharacter);
+      expect(current(host).checkpoint).toEqual(committed.checkpoint);
+      expect(host.rollRequestAllocations()).toBe(2);
+
+      const [replay, replayed] = await sendCommand(previewHost.socket, request);
+      expect(replay.messageType).toBe('command.replay');
+      expect(replay.receipt).toEqual(result.receipt);
+      expect(replayed.presentation.base.formId).toBe('CHR-021');
+      const changedReplay = await sendRefusal(previewHost.socket, {
+        ...request,
+        payload: { ...request.payload, interactionDiff: changedDiff },
+      } as WorkflowRequest);
+      expect(refusalCode(changedReplay)).toBe('IDEMPOTENCY_CONFLICT');
+
+      const restored = await reconnect(previewHost, 'armor-confirmed-interaction-reconnect');
+      expect(restored.presentation.base.formId).toBe('CHR-021');
+      expect(restored.presentation.base.roleFilteredPayload).toMatchObject({
+        armorBundleId: 'armor-confirmed-interaction-roll-request-1',
+        qualityRollRequestId: 'armor-confirmed-interaction-roll-request-2',
+      });
+
+      await host.app.close();
+      host.database.close();
+      const reopened = openPersistenceDatabase(databasePath);
+      databases.push(reopened);
+      const restarted = await createArmorHost(
+        { ...host, database: reopened },
+        [],
+        'armor-confirmed-interaction-restarted',
+      );
+      await reconnect(restarted, 'armor-confirmed-interaction-restart');
+      const [durableReplay, durableSnapshot] = await sendCommand(restarted.socket, request);
+      expect(durableReplay.messageType).toBe('command.replay');
+      expect(durableReplay.receipt).toEqual(result.receipt);
+      expect(durableSnapshot.presentation.base.formId).toBe('CHR-021');
+      expect(restarted.rollRequestAllocations()).toBe(0);
+    },
+  );
 });

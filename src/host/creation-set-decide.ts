@@ -137,6 +137,10 @@ import {
   latestArmorBundleRecord,
   validateArmorBundleStageHistory,
 } from './creation-armor-bundle.js';
+import type {
+  ManualInteractionConfirmationReceipt,
+  ManualInteractionConfirmationRequest,
+} from './creation-manual-interaction-contract.js';
 import {
   armorBundleStageIds,
   parseArmorBundleStage,
@@ -712,6 +716,7 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | ManualAdvisorIwRollReceipt
     | ManualAdvisorSkillCheckpointReceipt
     | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt;
 }
@@ -764,6 +769,7 @@ export interface DurableCreationWizardCheckpoint {
     | ManualAdvisorIwRollReceipt
     | ManualAdvisorSkillCheckpointReceipt
     | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt;
   readonly request:
@@ -779,6 +785,7 @@ export interface DurableCreationWizardCheckpoint {
     | ManualAdvisorIwRollCommandRequest
     | ManualAdvisorSkillCheckpointCommandRequest
     | ArmorBundleEntryRequest
+    | ManualInteractionConfirmationRequest
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest;
 }
@@ -802,6 +809,7 @@ export interface DurableCreationWizardCommand {
     | ManualAdvisorIwRollReceipt
     | ManualAdvisorSkillCheckpointReceipt
     | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt;
   readonly request:
@@ -817,6 +825,7 @@ export interface DurableCreationWizardCommand {
     | ManualAdvisorIwRollCommandRequest
     | ManualAdvisorSkillCheckpointCommandRequest
     | ArmorBundleEntryRequest
+    | ManualInteractionConfirmationRequest
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest;
 }
@@ -2671,6 +2680,7 @@ export interface RollValidationCursor {
     | ManualAdvisorIwRollReceipt
     | ManualAdvisorSkillCheckpointReceipt
     | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt;
   readonly latestRequest:
@@ -2685,6 +2695,7 @@ export interface RollValidationCursor {
     | ManualAdvisorIwRollCommandRequest
     | ManualAdvisorSkillCheckpointCommandRequest
     | ArmorBundleEntryRequest
+    | ManualInteractionConfirmationRequest
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest;
   readonly revisions: RevisionVector;
@@ -4188,6 +4199,7 @@ const validatePostIdentityPayload = (
       skillSelectionStage,
     );
     cursor = validateArmorBundleStageHistory(armorBundleStage, {
+      catalog: symbiontCatalog,
       localCharacter,
       checkpoint,
       checkpointView,

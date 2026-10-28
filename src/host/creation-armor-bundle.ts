@@ -33,8 +33,15 @@ import {
 import { manualNavigationRevisionsMatch } from './creation-manual-composition-contract.js';
 import {
   manualAdvisorWorkPending,
+  manualInteractionConfirmationRequired,
+  manualInteractionPreview,
   writeManualCommandPresentation,
 } from './creation-manual-composition-navigation.js';
+import { manualInteractionDiffJson } from './creation-manual-interaction-json.js';
+import {
+  MANUAL_INTERACTION_CONFIRMATION_VARIANT,
+  manualInteractionConfirmationReceipt,
+} from './creation-manual-interaction-contract.js';
 import {
   armorBundleCheckpointReceipt,
   armorBundleEntryReceipt,
@@ -45,13 +52,14 @@ import {
   normalizeArmorBundleQualityRollRequest,
   type ArmorBundleCheckpointReceipt,
   type ArmorBundleCheckpointRequest,
-  type ArmorBundleEntryReceipt,
   type ArmorBundleEntryRequest,
   type ArmorBundleQualityRollRecord,
   type ArmorBundleQualityRollReceipt,
   type ArmorBundleQualityRollRequest,
   type ArmorBundleQualityRecommendation,
   type ArmorBundleStage,
+  type ArmorBundleStageEntryReceipt,
+  type ArmorBundleStageEntryRequest,
 } from './creation-armor-bundle-contract.js';
 
 type DecodedCommandRequest = Parameters<typeof normalizeArmorBundleEntryRequest>[0];
@@ -59,8 +67,8 @@ type DecodedCommandRequest = Parameters<typeof normalizeArmorBundleEntryRequest>
 export type ArmorBundleRecord =
   | {
       readonly kind: 'ENTRY';
-      readonly request: ArmorBundleEntryRequest;
-      readonly receipt: ArmorBundleEntryReceipt;
+      readonly request: ArmorBundleStageEntryRequest;
+      readonly receipt: ArmorBundleStageEntryReceipt;
       readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-021'>;
     }
   | {
@@ -143,8 +151,13 @@ function symbiontWorkComplete(
   return false;
 }
 
-function assertEntryState(checkpoint: DurableCreationWizardCheckpoint): void {
+export function assertEntryState(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+  interaction: 'FORBID' | 'REQUIRE' = 'FORBID',
+): void {
   const raceAndMethod = checkpoint.raceAndMethodStage;
+  const confirmationRequired = manualInteractionConfirmationRequired(checkpoint, catalog);
   if (
     raceAndMethod === null ||
     raceAndMethod.race?.value === undefined ||
@@ -152,7 +165,8 @@ function assertEntryState(checkpoint: DurableCreationWizardCheckpoint): void {
     raceAndMethod.diceInput?.value === undefined ||
     checkpoint.nextStageEnvelope.formId !== 'CHR-019' ||
     (checkpoint.armorBundleStage !== null && checkpoint.armorBundleStage !== undefined) ||
-    !symbiontWorkComplete(checkpoint.manualCompositionStage, checkpoint.randomSymbiontStage)
+    !symbiontWorkComplete(checkpoint.manualCompositionStage, checkpoint.randomSymbiontStage) ||
+    (interaction === 'FORBID' ? confirmationRequired : !confirmationRequired)
   ) {
     return guardSymbiontRejected();
   }
@@ -180,11 +194,11 @@ export function preflightArmorBundleEntry(
     normalized.payload.draftRevision,
     receiptId,
   );
-  assertEntryState(checkpoint);
+  assertEntryState(checkpoint, catalog);
   return { request: normalized, checkpoint };
 }
 
-function freshArmorId(
+export function freshArmorId(
   checkpoint: DurableCreationWizardCheckpoint,
   commandId: string,
   receiptId: string,
@@ -204,7 +218,7 @@ function freshArmorId(
   return value;
 }
 
-function rewriteArmorPresentation(
+export function rewriteArmorPresentation(
   database: Database.Database,
   checkpoint: DurableCreationWizardCheckpoint,
   formId: 'CHR-021' | 'CHR-022',
@@ -639,6 +653,7 @@ export function commitArmorBundleCheckpoint(
 }
 
 export interface ArmorBundleValidationContext {
+  readonly catalog: SymbiontCatalog;
   readonly localCharacter: LocalCharacter;
   readonly checkpoint: LocalCharacterCheckpoint;
   readonly checkpointView: DurableCreationWizardCheckpoint;
@@ -656,8 +671,10 @@ function occupy(context: ArmorBundleValidationContext, id: string): void {
 function advanceCursor(
   context: ArmorBundleValidationContext,
   cursor: RollValidationCursor,
-  request: ArmorBundleEntryRequest | ArmorBundleQualityRollRequest | ArmorBundleCheckpointRequest,
-  receipt: ArmorBundleEntryReceipt | ArmorBundleQualityRollReceipt | ArmorBundleCheckpointReceipt,
+  request:
+    ArmorBundleStageEntryRequest | ArmorBundleQualityRollRequest | ArmorBundleCheckpointRequest,
+  receipt:
+    ArmorBundleStageEntryReceipt | ArmorBundleQualityRollReceipt | ArmorBundleCheckpointReceipt,
   nextStageEnvelope: RollValidationCursor['latestEnvelope'],
 ): RollValidationCursor {
   if (context.commandIds.has(request.commandId)) return guardSymbiontRejected();
@@ -704,18 +721,41 @@ export function validateArmorBundleStageHistory(
   ) {
     return guardSymbiontRejected();
   }
-  const entryReceipt = armorBundleEntryReceipt(
-    {
-      checkpoint: checkpointView,
-      receiptId: stage.entryReceipt.receiptId,
-      revisions: incrementedSymbiontRevisions(entryRequest.expectedRevisions),
-      checkpointRevision: context.cursor.checkpointRevision + 1,
-      draftRevision: context.cursor.draftRevision + 1,
-      armorBundleId: stage.armorBundleId,
-      qualityRollRequestId: stage.qualityRollRequestId,
-    },
-    entryRequest,
-  );
+  const interaction = entryRequest.payload.variant === MANUAL_INTERACTION_CONFIRMATION_VARIANT;
+  const entryCheckpoint = {
+    ...checkpointView,
+    manualCompositionStage: payload.manualCompositionStage ?? null,
+  };
+  if (manualInteractionConfirmationRequired(entryCheckpoint, context.catalog) !== interaction) {
+    return guardSymbiontRejected();
+  }
+  if (
+    interaction &&
+    !isDeepStrictEqual(
+      entryRequest.payload.interactionDiff,
+      manualInteractionDiffJson(
+        context.catalog,
+        manualInteractionPreview(entryCheckpoint, context.catalog),
+      ),
+    )
+  ) {
+    return guardSymbiontRejected();
+  }
+  const facts = {
+    checkpoint: checkpointView,
+    receiptId: stage.entryReceipt.receiptId,
+    revisions: incrementedSymbiontRevisions(entryRequest.expectedRevisions),
+    checkpointRevision: context.cursor.checkpointRevision + 1,
+    draftRevision: context.cursor.draftRevision + 1,
+    armorBundleId: stage.armorBundleId,
+    qualityRollRequestId: stage.qualityRollRequestId,
+  };
+  let entryReceipt: ArmorBundleStageEntryReceipt;
+  if (entryRequest.workflowCommandId === 'UI-CMD-CHAR-CREATION-SET-DECIDE') {
+    entryReceipt = manualInteractionConfirmationReceipt(facts, entryRequest);
+  } else {
+    entryReceipt = armorBundleEntryReceipt(facts, entryRequest);
+  }
   const entryEnvelope = nextSymbiontEnvelope('CHR-021', characterDraftId);
   if (!isDeepStrictEqual(stage.entryReceipt, entryReceipt)) {
     return guardSymbiontRejected();

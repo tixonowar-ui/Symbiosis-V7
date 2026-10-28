@@ -79,3 +79,46 @@ test('FREE MANUAL starting armor bundle rolls one manual D20 and checkpoints act
     await host.close();
   }
 });
+
+test('UNITED confirms the exact interaction diff before entering starting armor', async ({
+  page,
+}) => {
+  const host = await createManualSymbiontBrowserHost({
+    compositionReplacements: [
+      ['TROGR', 'OWL', 'WEAVER', 'CRICKET'],
+      ['TROGR', 'TEACHER', 'WEAVER', 'CRICKET'],
+    ],
+    diceInputMode: 'MANUAL',
+    prefix: 'armor-interaction-e2e',
+    raceChoice: 'UNITED',
+    sampleFaces: [],
+  });
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  try {
+    await page.goto(host.baseURL);
+    await expect(page.locator('[data-chr-019-composition]')).toBeVisible();
+    await expect(page.locator('[data-atlas-action-key="CHR-019::CTA::001"]')).toHaveCount(0);
+    await clickAction(page, 'CHR-019::CTA::002');
+    await expect(page.locator('[data-manual-form="CHR-042"]')).toBeVisible();
+    await expect(page.locator('[data-preview-operation="ABSORPTION"]')).toBeVisible();
+    await expect(page.locator('[data-atlas-action-key="CHR-042::CTA::001"]')).toBeVisible();
+
+    const receiptsBefore = host.receiptAllocations();
+    await clickAction(page, 'CHR-042::CTA::001');
+    await expect(page.locator('[aria-label="Стартовый комплект брони"]')).toBeVisible();
+    expect(host.receiptAllocations()).toBe(receiptsBefore + 1);
+    expect(host.rollRequestAllocations()).toBe(2);
+    await expectNoProtocolError(page, pageErrors);
+
+    const receipts = host.receiptAllocations();
+    await host.restart();
+    await page.goto(host.baseURL);
+    await expect(page.locator('[aria-label="Стартовый комплект брони"]')).toBeVisible();
+    expect(host.receiptAllocations()).toBe(receipts);
+    expect(host.rollRequestAllocations()).toBe(2);
+    await expectNoProtocolError(page, pageErrors);
+  } finally {
+    await host.close();
+  }
+});

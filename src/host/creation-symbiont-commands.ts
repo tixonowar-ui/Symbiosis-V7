@@ -114,7 +114,8 @@ function assertCommon(
     characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
     draftRevision !== checkpoint.receipt.result.draftRevision ||
-    ((checkpoint.armorBundleStage !== null && checkpoint.armorBundleStage !== undefined) &&
+    (checkpoint.armorBundleStage !== null &&
+      checkpoint.armorBundleStage !== undefined &&
       options.allowArmorBundleStage !== true) ||
     occupied.has(request.commandId) ||
     (receiptId !== undefined && (occupied.has(receiptId) || receiptId === request.commandId)) ||

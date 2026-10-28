@@ -104,6 +104,20 @@ export function manualInteractionPreview(
   });
 }
 
+export function manualInteractionConfirmationRequired(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+): boolean {
+  const stage = checkpoint.manualCompositionStage;
+  return (
+    stage !== null &&
+    stage !== undefined &&
+    !manualAdvisorWorkPending(stage) &&
+    stage.compositionRecords.length > 1 &&
+    manualInteractionPreview(checkpoint, catalog).irreversibleOperationIds.length > 0
+  );
+}
+
 function inherited(characterDraftId: string): SymbiontPresentationStage['routeBindings'][number] {
   return { parameterIndex: 0, source: 'inherited', value: characterDraftId };
 }

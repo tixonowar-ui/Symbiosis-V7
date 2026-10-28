@@ -98,6 +98,7 @@ import {
   CHR_018_MANUAL_ADD_ACTION_KEY,
   CHR_018_MANUAL_BINDING_ACTION_KEY,
   CHR_041_MANUAL_IW_ACTION_KEY,
+  CHR_042_MANUAL_CONFIRM_ACTION_KEY,
   decodeChr017ManualProjection,
   decodeChr018Projection,
   decodeChr019ManualProjection,
@@ -105,6 +106,7 @@ import {
   decodeManualAdvisorIwTerminal,
   decodeManualAdvisorSkillTerminal,
   decodeManualCompositionTerminal,
+  decodeManualInteractionConfirmationTerminal,
   expectedChr017ManualActionKeys,
   expectedChr018ActionKeys,
   expectedChr019ManualActionKeys,
@@ -116,6 +118,7 @@ import {
   manualCompositionDraftFromSnapshot,
   manualCompositionPayload,
   manualCompositionSnapshotMatchesReceipt,
+  manualInteractionConfirmationPayload,
   replaceManualBindingSide,
   toggleManualCompositionSpecies,
 } from './forms/chr/manual-symbionts.js';
@@ -129,6 +132,8 @@ import type {
   ManualCompositionDraft,
   ManualCompositionRequest,
   ManualCompositionResult,
+  ManualInteractionConfirmationRequest,
+  ManualInteractionConfirmationResult,
   ManualChr017Projection,
   ManualChr019Projection,
 } from './forms/chr/manual-symbionts.js';
@@ -1172,6 +1177,7 @@ type CheckpointRequest =
   | IdentityCheckpointRequest
   | ManualAdvisorSkillRequest
   | ManualCompositionRequest
+  | ManualInteractionConfirmationRequest
   | SkillSelectionCheckpointRequest
   | StatAssignmentCheckpointRequest
   | SymbiontAdvisorCheckpointRequest;
@@ -1231,6 +1237,7 @@ type CheckpointResult =
   | IdentityCheckpointResult
   | ManualAdvisorSkillResult
   | ManualCompositionResult
+  | ManualInteractionConfirmationResult
   | SkillSelectionCheckpointResult
   | StatAssignmentCheckpointResult
   | SymbiontAdvisorCheckpointResult;
@@ -4099,7 +4106,13 @@ function decodeConfirmedSnapshot(
       if (decoded.ok) {
         const actions = exactSymbiontActionKeys(
           base.availableActionKeys,
-          ['CHR-042::CTA::002'],
+          [
+            ...(base.availableActionKeys.includes(CHR_042_MANUAL_CONFIRM_ACTION_KEY) &&
+            executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID)
+              ? [CHR_042_MANUAL_CONFIRM_ACTION_KEY]
+              : []),
+            'CHR-042::CTA::002',
+          ],
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4937,6 +4950,17 @@ function decodeCheckpointTerminal(
   if (
     pending.request.payload.stage === 'SYMBIONTS' &&
     'variant' in pending.request.payload &&
+    pending.request.payload.variant === 'MANUAL_INTERACTION_CONFIRMATION'
+  ) {
+    return decodeManualInteractionConfirmationTerminal(
+      message,
+      pending.request as ManualInteractionConfirmationRequest,
+      pending.sourceSnapshot,
+    );
+  }
+  if (
+    pending.request.payload.stage === 'SYMBIONTS' &&
+    'variant' in pending.request.payload &&
     (pending.request.payload as { readonly variant: string }).variant === 'ARMOR_BUNDLE_ENTRY'
   ) {
     const receipt = message.receipt;
@@ -5742,7 +5766,8 @@ function armorBundleSnapshotMatchesReceipt(
     projection.draftRevision !== result.draftRevision ||
     projection.armorBundleId !== result.armorBundleId ||
     projection.ownershipState !== 'OWNED_NOT_EQUIPPED' ||
-    (result.variant === 'ARMOR_BUNDLE_ENTRY' &&
+    ((result.variant === 'ARMOR_BUNDLE_ENTRY' ||
+      result.variant === 'MANUAL_INTERACTION_CONFIRMATION') &&
       (projection.qualityRollReceiptIdOrNull !== null ||
         projection.bundleCheckpointReceiptIdOrNull !== null ||
         result.nextFormId !== 'CHR-021')) ||
@@ -5771,7 +5796,9 @@ function checkpointSnapshotMatchesReceipt(
   if (
     result.stage === 'SYMBIONTS' &&
     'variant' in result &&
-    (result.variant === 'ARMOR_BUNDLE_ENTRY' || result.variant === 'ARMOR_BUNDLE_CHECKPOINT')
+    (result.variant === 'ARMOR_BUNDLE_ENTRY' ||
+      result.variant === 'MANUAL_INTERACTION_CONFIRMATION' ||
+      result.variant === 'ARMOR_BUNDLE_CHECKPOINT')
   ) {
     return armorBundleSnapshotMatchesReceipt(snapshot, receipt);
   }
@@ -8640,6 +8667,47 @@ export function connectProjection(
           role: 'player',
           workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
         });
+      }
+      if (
+        activeForm.formId === 'CHR-042' &&
+        lastSnapshot.formId === 'CHR-042' &&
+        actionKey === CHR_042_MANUAL_CONFIRM_ACTION_KEY
+      ) {
+        const request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          payload: manualInteractionConfirmationPayload(lastSnapshot),
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: SET_DECIDE_WORKFLOW_COMMAND_ID,
+        } as const satisfies ManualInteractionConfirmationRequest;
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) {
+          return {
+            ok: false,
+            detail: `interaction confirmation failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        }
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request,
+          skillSelectionDraft: null,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return {
+            ok: false,
+            detail: `interaction confirmation could not be sent: ${diagnostic(error)}`,
+          };
+        }
+        notifyReady();
+        return { ok: true };
       }
       if (activeForm.formId === 'CHR-019' && actionKey === CHR_019_ARMOR_ENTRY_ACTION_KEY) {
         const projection = lastSnapshot.projection as unknown as {

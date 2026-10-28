@@ -95,6 +95,15 @@ import {
   normalizeManualAdvisorIwRollRequest,
   type ManualAdvisorIwRollCommandRequest,
 } from './creation-manual-advisor-contract.js';
+import {
+  commitManualInteractionConfirmation,
+  preflightManualInteractionConfirmation,
+} from './creation-manual-interaction.js';
+import {
+  MANUAL_INTERACTION_CONFIRMATION_VARIANT,
+  normalizeManualInteractionConfirmationRequest,
+  type ManualInteractionConfirmationRequest,
+} from './creation-manual-interaction-contract.js';
 import type { CreationRollCommitCommandRequest } from './creation-set-decide.js';
 import {
   advanceCreationSkillCardPresentation,
@@ -493,7 +502,8 @@ function allocatedReceiptId(
     | CreationWizardCheckpointCommandRequest
     | SymbiontRollCommitCommandRequest
     | AdvisorIntelligenceFloorRollCommandRequest
-    | ManualAdvisorIwRollCommandRequest,
+    | ManualAdvisorIwRollCommandRequest
+    | ManualInteractionConfirmationRequest,
 ): string {
   const value: unknown = allocator();
   if (
@@ -1744,7 +1754,7 @@ function creationWizardBase(
         capabilities.checkpoint,
       );
     case CHR_042_FORM_ID:
-      return projectManualChr042(checkpoint, symbiontCatalog);
+      return projectManualChr042(checkpoint, symbiontCatalog, capabilities.setDecide);
     default:
       throw new Error(
         `durable creation wizard destination ${JSON.stringify(durableFormId)} is not publishable`,
@@ -2602,13 +2612,26 @@ function commandRequestsMatch(saved: CommandRequest, incoming: CommandRequest): 
     saved.commandKind === 'workflow-command' &&
     saved.workflowCommandId === CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID
   ) {
+    const interactionRequest =
+      saved.payload !== null &&
+      typeof saved.payload === 'object' &&
+      !Array.isArray(saved.payload) &&
+      (saved.payload as Record<string, unknown>)['variant'] ===
+        MANUAL_INTERACTION_CONFIRMATION_VARIANT;
     try {
       return isDeepStrictEqual(
-        normalizeCreationSetDecideRequest(saved),
-        normalizeCreationSetDecideRequest(incoming),
+        interactionRequest
+          ? normalizeManualInteractionConfirmationRequest(saved)
+          : normalizeCreationSetDecideRequest(saved),
+        interactionRequest
+          ? normalizeManualInteractionConfirmationRequest(incoming)
+          : normalizeCreationSetDecideRequest(incoming),
       );
     } catch (error: unknown) {
-      if (error instanceof CreationSetDecideApplicationError) {
+      if (
+        error instanceof CreationSetDecideApplicationError ||
+        error instanceof CreationSymbiontApplicationError
+      ) {
         return isDeepStrictEqual(
           normalizeJsonNegativeZero(saved),
           normalizeJsonNegativeZero(incoming),
@@ -3375,6 +3398,129 @@ function handleCommandRequest(
     );
     return;
   }
+  if (
+    message.workflowCommandId === CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID &&
+    message.payload !== null &&
+    typeof message.payload === 'object' &&
+    !Array.isArray(message.payload) &&
+    (message.payload as Record<string, unknown>)['variant'] ===
+      MANUAL_INTERACTION_CONFIRMATION_VARIANT
+  ) {
+    let request: ManualInteractionConfirmationRequest;
+    try {
+      request = normalizeManualInteractionConfirmationRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.identityDraftScope !== null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== CHR_042_FORM_ID ||
+      request.payload.sourceFormId !== CHR_042_FORM_ID ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    if (!isDeepStrictEqual(request.expectedRevisions, revisions)) {
+      finishRefusal(request, {
+        actual: revisions,
+        code: 'STALE_REVISION',
+        expected: request.expectedRevisions,
+      });
+      return;
+    }
+    try {
+      preflightManualInteractionConfirmation(
+        dependencies.database,
+        request,
+        dependencies.symbiontCatalog,
+      );
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+    assertProcessLocalIdUnused(receiptId, 'command receipt allocator', commandJournal);
+    const finalRevisions = currentNavigationRevisions(connection, dependencies);
+    if (
+      !isDeepStrictEqual(finalRevisions, revisions) ||
+      !connection.sessionEstablished ||
+      connection.current !== current ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    try {
+      preflightManualInteractionConfirmation(
+        dependencies.database,
+        request,
+        dependencies.symbiontCatalog,
+      );
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    let durableCheckpoint: DurableCreationWizardCheckpoint;
+    try {
+      durableCheckpoint = commitManualInteractionConfirmation(
+        dependencies.database,
+        request,
+        receiptId,
+        {
+          catalog: dependencies.symbiontCatalog,
+          allocateArmorBundleId: () =>
+            assertProcessLocalIdUnused(
+              dependencies.allocateCreationRollRequestId(),
+              'creation roll-request allocator',
+              commandJournal,
+            ),
+          allocateQualityRollRequestId: () =>
+            assertProcessLocalIdUnused(
+              dependencies.allocateCreationRollRequestId(),
+              'creation roll-request allocator',
+              commandJournal,
+            ),
+        },
+      );
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durableCheckpoint.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durableCheckpoint.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durableCheckpoint),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durableCheckpoint,
+      dependencies,
+      connection,
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
+    return;
+  }
   if (message.workflowCommandId === CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID) {
     let request: CreationSetDecideCommandRequest;
     try {
@@ -4074,7 +4220,8 @@ function handleReconnectV2(
       restored.formId === CHR_019_FORM_ID ||
       restored.formId === CHR_020_FORM_ID ||
       restored.formId === CHR_021_FORM_ID ||
-      restored.formId === CHR_041_FORM_ID)
+      restored.formId === CHR_041_FORM_ID ||
+      restored.formId === CHR_042_FORM_ID)
   ) {
     const checkpoint = loadCreationWizardCheckpoint(
       dependencies.database,

@@ -22,6 +22,12 @@ import type {
   DurableCreationWizardCheckpoint,
 } from './creation-set-decide.js';
 import {
+  MANUAL_INTERACTION_CONFIRMATION_VARIANT,
+  normalizeManualInteractionConfirmationRequest,
+  type ManualInteractionConfirmationReceipt,
+  type ManualInteractionConfirmationRequest,
+} from './creation-manual-interaction-contract.js';
+import {
   CreationSymbiontApplicationError,
   SYMBIONT_STAGE,
   d20SymbiontFaceAt,
@@ -170,12 +176,17 @@ export interface ArmorBundleCheckpointRecord {
   readonly nextStageEnvelope: CreationNextStageEnvelope<typeof CHR_022_FORM_ID>;
 }
 
+export type ArmorBundleStageEntryRequest =
+  ArmorBundleEntryRequest | ManualInteractionConfirmationRequest;
+export type ArmorBundleStageEntryReceipt =
+  ArmorBundleEntryReceipt | ManualInteractionConfirmationReceipt;
+
 export interface ArmorBundleStage {
   readonly anatomyProfile: 'STANDARD_HUMANOID';
   readonly armorBundleId: string;
   readonly diceInputModeSnapshot: 'AUTO' | 'MANUAL';
-  readonly entryRequest: ArmorBundleEntryRequest;
-  readonly entryReceipt: ArmorBundleEntryReceipt;
+  readonly entryRequest: ArmorBundleStageEntryRequest;
+  readonly entryReceipt: ArmorBundleStageEntryReceipt;
   readonly qualityRollRequestId: string;
   readonly qualityRollRecordOrNull: ArmorBundleQualityRollRecord | null;
   readonly checkpointRecordOrNull: ArmorBundleCheckpointRecord | null;
@@ -687,8 +698,9 @@ function nextEnvelopeAt(
   return envelope;
 }
 
-function entryReceiptAt(value: unknown, path: string): ArmorBundleEntryReceipt {
+function entryReceiptAt(value: unknown, path: string): ArmorBundleStageEntryReceipt {
   const shell = receiptShellAt(value, path);
+  const interaction = shell.result['variant'] === MANUAL_INTERACTION_CONFIRMATION_VARIANT;
   exactSymbiontObject(shell.result, `${path}.result`, [
     ...ARMOR_RECEIPT_COMMON_KEYS,
     'sourceFormId',
@@ -696,11 +708,20 @@ function entryReceiptAt(value: unknown, path: string): ArmorBundleEntryReceipt {
     'anatomyProfile',
     'armorBundleId',
     'qualityRollRequestId',
+    ...(interaction ? ['interactionDiff'] : []),
     'nextFormId',
   ]);
   receiptResultCommonAt(shell.result, `${path}.result`);
-  literal(shell.result['sourceFormId'], 'CHR-019', `${path}.result.sourceFormId`);
-  literal(shell.result['variant'], 'ARMOR_BUNDLE_ENTRY', `${path}.result.variant`);
+  literal(
+    shell.result['sourceFormId'],
+    interaction ? 'CHR-042' : 'CHR-019',
+    `${path}.result.sourceFormId`,
+  );
+  literal(
+    shell.result['variant'],
+    interaction ? MANUAL_INTERACTION_CONFIRMATION_VARIANT : 'ARMOR_BUNDLE_ENTRY',
+    `${path}.result.variant`,
+  );
   literal(shell.result['anatomyProfile'], 'STANDARD_HUMANOID', `${path}.result.anatomyProfile`);
   literal(shell.result['nextFormId'], CHR_021_FORM_ID, `${path}.result.nextFormId`);
   nonEmptySymbiontStringAt(shell.result['armorBundleId'], `${path}.result.armorBundleId`);
@@ -708,6 +729,10 @@ function entryReceiptAt(value: unknown, path: string): ArmorBundleEntryReceipt {
     shell.result['qualityRollRequestId'],
     `${path}.result.qualityRollRequestId`,
   );
+  if (interaction) {
+    objectSymbiontAt(shell.result['interactionDiff'], `${path}.result.interactionDiff`);
+    return value as ManualInteractionConfirmationReceipt;
+  }
   return value as ArmorBundleEntryReceipt;
 }
 
@@ -843,15 +868,34 @@ export function parseArmorBundleStage(value: unknown): ArmorBundleStage {
       value: diceInputModeSnapshot as JsonValue,
     });
   }
-  const entryRequest = normalizeArmorBundleEntryRequest(
-    object['entryRequest'] as DecodedCommandRequest,
+  const rawEntryRequest = objectSymbiontAt(
+    object['entryRequest'],
+    '$.armorBundleStage.entryRequest',
   );
+  const rawEntryPayload = objectSymbiontAt(
+    rawEntryRequest['payload'],
+    '$.armorBundleStage.entryRequest.payload',
+  );
+  const entryRequest =
+    rawEntryPayload['variant'] === MANUAL_INTERACTION_CONFIRMATION_VARIANT
+      ? normalizeManualInteractionConfirmationRequest(
+          object['entryRequest'] as DecodedCommandRequest,
+        )
+      : normalizeArmorBundleEntryRequest(object['entryRequest'] as DecodedCommandRequest);
   const entryReceipt = entryReceiptAt(object['entryReceipt'], '$.armorBundleStage.entryReceipt');
   if (
     entryReceipt.commandId !== entryRequest.commandId ||
     entryReceipt.result.characterDraftId !== entryRequest.payload.characterDraftId ||
     entryReceipt.result.checkpointId !== entryRequest.payload.wizardCheckpointId ||
-    entryReceipt.result.armorBundleId !== armorBundleId
+    entryReceipt.result.sourceFormId !== entryRequest.payload.sourceFormId ||
+    entryReceipt.result.variant !== entryRequest.payload.variant ||
+    entryReceipt.result.armorBundleId !== armorBundleId ||
+    (entryRequest.payload.variant === MANUAL_INTERACTION_CONFIRMATION_VARIANT &&
+      (!('interactionDiff' in entryReceipt.result) ||
+        !isDeepStrictEqual(
+          entryReceipt.result.interactionDiff,
+          entryRequest.payload.interactionDiff,
+        )))
   ) {
     throw new CreationSymbiontApplicationError({ code: 'GUARD_REJECTED' });
   }
