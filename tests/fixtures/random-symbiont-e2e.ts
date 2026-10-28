@@ -105,7 +105,7 @@ function exactSelectedSkills(checkpoint: DurableCreationWizardCheckpoint) {
   return selected;
 }
 
-function setupCommittedRandom(
+export function setupCommittedRandom(
   prefix: string,
   raceChoice: 'FREE' | 'UNITED',
   diceInputMode: 'AUTO' | 'MANUAL',
@@ -310,7 +310,14 @@ function setupCommittedRandom(
   if (current.nextStageEnvelope.formId !== 'CHR-017') {
     throw new Error('E2E setup did not reach CHR-017');
   }
-  return { characterDraftId, checkpoint: current, database, deviceId, selectionRequest };
+  return {
+    characterDraftId,
+    checkpoint: current,
+    database,
+    deviceId,
+    selectionRequest,
+    wizardCheckpointId,
+  };
 }
 
 export interface RandomSymbiontBrowserHostOptions {
@@ -324,6 +331,7 @@ export interface RandomSymbiontBrowserHost {
   readonly baseURL: string;
   readonly close: () => Promise<void>;
   readonly receiptAllocations: () => number;
+  readonly restart: () => Promise<void>;
   readonly rollRequestAllocations: () => number;
   readonly sampleCalls: () => number;
 }
@@ -348,7 +356,7 @@ export async function createRandomSymbiontBrowserHost(
     let receiptAllocations = 0;
     let rollRequestAllocations = 0;
     let sampleCalls = 0;
-    app = await createHost({
+    const config = () => ({
       advanceRevisions: runtime.advance,
       allocateCreationBranchUuid: () => `${setup.selectionRequest.commandId}-browser-branch`,
       allocateCreationRollRequestId: () => {
@@ -361,7 +369,7 @@ export async function createRandomSymbiontBrowserHost(
         `${setup.selectionRequest.commandId}-browser-receipt-${String(++receiptAllocations)}`,
       allocateWizardCheckpointId: () => `${setup.selectionRequest.commandId}-browser-wizard`,
       database: setup.database,
-      onFrameError: (error) => {
+      onFrameError: (error: unknown) => {
         throw error;
       },
       projectRoot: PROJECT_ROOT,
@@ -372,10 +380,19 @@ export async function createRandomSymbiontBrowserHost(
       },
       staticRoot: join(PROJECT_ROOT, 'dist/web'),
     });
-    const baseURL = await startHost(app, { interface: '127.0.0.1', port: 0 });
+    let baseURL = '';
+    const listen = async (): Promise<FastifyInstance> => {
+      const created = await createHost(config());
+      app = created;
+      baseURL = await startHost(created, { interface: '127.0.0.1', port: 0 });
+      return created;
+    };
+    await listen();
     let closed = false;
     return {
-      baseURL,
+      get baseURL() {
+        return baseURL;
+      },
       close: async () => {
         if (closed || app === null || database === null) return;
         closed = true;
@@ -392,11 +409,17 @@ export async function createRandomSymbiontBrowserHost(
         }
       },
       receiptAllocations: () => receiptAllocations,
+      restart: async () => {
+        if (closed) throw new Error('cannot restart a closed random host');
+        if (app !== null) await app.close();
+        await listen();
+      },
       rollRequestAllocations: () => rollRequestAllocations,
       sampleCalls: () => sampleCalls,
     };
   } catch (error: unknown) {
-    if (app !== null) await app.close();
+    const activeApp = app as FastifyInstance | null;
+    if (activeApp !== null) await activeApp.close();
     if (database !== null) database.close();
     await rm(directory, { force: true, recursive: true });
     throw error;

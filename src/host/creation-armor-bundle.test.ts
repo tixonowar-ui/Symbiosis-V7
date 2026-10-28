@@ -26,6 +26,14 @@ import {
 } from './creation-set-decide.js';
 import { commitCreationWizardCheckpoint } from './creation-wizard-checkpoint.js';
 import {
+  advanceCreationSymbiontRollProjection,
+  commitCreationSymbiontRoll,
+} from './creation-symbiont-commands.js';
+import type { SymbiontRollCommitCommandRequest } from './creation-symbiont-contract.js';
+import { advanceArmorBundlePresentation } from './creation-manual-composition-navigation.js';
+import { setupCommittedRandom } from '../../tests/fixtures/random-symbiont-e2e.js';
+import { CATALOG } from '../../tests/fixtures/symbiont-stage.js';
+import {
   createManualWizardSetup,
   manualCompositionRequest,
   type ManualWizardSetup,
@@ -129,7 +137,7 @@ function loadCheckpoint(setup: ManualWizardSetup): DurableCreationWizardCheckpoi
 }
 
 function entryRequest(
-  setup: ManualWizardSetup,
+  setup: Pick<ManualWizardSetup, 'characterDraftId' | 'wizardCheckpointId'>,
   current: DurableCreationWizardCheckpoint,
   commandId: string,
 ): ArmorBundleEntryRequest {
@@ -153,7 +161,7 @@ function entryRequest(
 }
 
 function qualityRollRequest(
-  setup: ManualWizardSetup,
+  setup: Pick<ManualWizardSetup, 'characterDraftId' | 'wizardCheckpointId'>,
   current: DurableCreationWizardCheckpoint,
   commandId: string,
   armorBundleId: string,
@@ -185,7 +193,7 @@ function qualityRollRequest(
 }
 
 function bundleCheckpointRequest(
-  setup: ManualWizardSetup,
+  setup: Pick<ManualWizardSetup, 'characterDraftId' | 'wizardCheckpointId'>,
   current: DurableCreationWizardCheckpoint,
   commandId: string,
   armorBundleId: string,
@@ -210,6 +218,111 @@ function bundleCheckpointRequest(
     role: 'player',
     workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
   };
+}
+
+interface RandomWizardSetup {
+  readonly characterDraftId: string;
+  readonly wizardCheckpointId: string;
+  readonly database: ManualWizardSetup['database'];
+}
+
+function randomRollRequest(
+  setup: RandomWizardSetup,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+): SymbiontRollCommitCommandRequest {
+  const stage = current.randomSymbiontStage!;
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(current),
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: setup.characterDraftId,
+      draftRevision: current.receipt.result.draftRevision,
+      manualFaceOrNull: null,
+      pendingRollRequestIdOrNull: stage.pendingRollRequestOrNull?.rollRequestId ?? null,
+      randomSequenceId: stage.randomSequenceId,
+      selectedMonsterSpeciesKeyOrNull: null,
+      sourceFormId: 'CHR-020',
+      stage: 'SYMBIONTS',
+      variant: 'ROLL',
+      wizardCheckpointId: setup.wizardCheckpointId,
+    },
+    protocolVersion: 1,
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  };
+}
+
+function randomBindingRequest(
+  setup: RandomWizardSetup,
+  current: DurableCreationWizardCheckpoint,
+  commandId: string,
+): SymbiontRollCommitCommandRequest {
+  const stage = current.randomSymbiontStage!;
+  return {
+    commandId,
+    commandKind: 'workflow-command',
+    expectedRevisions: currentCreationWizardRevisions(current),
+    messageType: 'command.request',
+    payload: {
+      characterDraftId: setup.characterDraftId,
+      draftRevision: current.receipt.result.draftRevision,
+      physicalRollReceiptIds: stage.rollRecords.map((record) => record.physicalRoll.rollReceiptId),
+      randomSequenceId: stage.randomSequenceId,
+      selectedBindings: [{ speciesKey: 'EEL', side: 'LEFT' }],
+      sourceFormId: 'CHR-020',
+      stage: 'SYMBIONTS',
+      variant: 'BINDING',
+      wizardCheckpointId: setup.wizardCheckpointId,
+    },
+    protocolVersion: 1,
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  };
+}
+
+function setupRandomAtChr019(
+  prefix: string,
+  path: string,
+): { setup: RandomWizardSetup; current: DurableCreationWizardCheckpoint } {
+  const database = openPersistenceDatabase(path);
+  reopenedDatabases.push(database);
+  const setup = setupCommittedRandom(prefix, 'FREE', 'AUTO', database, CATALOG);
+  let nextId = 0;
+  let current = advanceCreationSymbiontRollProjection(
+    database,
+    setup.characterDraftId,
+    setup.wizardCheckpointId,
+    CATALOG,
+  );
+  current = commitCreationSymbiontRoll(
+    database,
+    randomRollRequest(setup, current, `${prefix}-origin-command`),
+    `${prefix}-origin-receipt`,
+    {
+      catalog: CATALOG,
+      allocateRollRequestId: () => `${prefix}-next-request-${String(++nextId)}`,
+      sampleD20: () => 15,
+    },
+  );
+  current = commitCreationSymbiontRoll(
+    database,
+    randomBindingRequest(setup, current, `${prefix}-binding-command`),
+    `${prefix}-binding-receipt`,
+    {
+      catalog: CATALOG,
+      allocateRollRequestId: () => `${prefix}-unused-request`,
+      sampleD20: () => {
+        throw new Error('binding must not sample');
+      },
+    },
+  );
+  if (current.nextStageEnvelope.formId !== 'CHR-019') {
+    throw new Error('random fixture must reach CHR-019');
+  }
+  return { setup, current };
 }
 
 describe('CHR-021 starting armor bundle', () => {
@@ -830,5 +943,85 @@ describe('CHR-021 starting armor bundle', () => {
         setup.catalog,
       )?.receipt,
     ).toEqual(entry.receipt);
+  });
+
+  it('loads a random checkpoint after safe-return, resume, and SQLite restart', () => {
+    const path = temporaryDatabasePath('armor-random-checkpoint-');
+    const { setup, current } = setupRandomAtChr019('armor-random-checkpoint', path);
+    const entry = commitArmorBundleEntry(
+      setup.database,
+      entryRequest(setup, current, 'armor-random-checkpoint-entry-command'),
+      'armor-random-checkpoint-entry-receipt',
+      {
+        catalog: CATALOG,
+        allocateArmorBundleId: () => 'armor-random-checkpoint-bundle',
+        allocateQualityRollRequestId: () => 'armor-random-checkpoint-quality-request',
+      },
+    );
+    const rolled = commitArmorBundleQualityRoll(
+      setup.database,
+      qualityRollRequest(
+        setup,
+        entry,
+        'armor-random-checkpoint-roll-command',
+        'armor-random-checkpoint-bundle',
+        'armor-random-checkpoint-quality-request',
+        FULL_SUIT_SELECTION,
+        null,
+      ),
+      'armor-random-checkpoint-roll-receipt',
+      { catalog: CATALOG, armorCatalog: ARMOR_CATALOG, sampleD20: () => 16 },
+    );
+    const returned = advanceArmorBundlePresentation(
+      setup.database,
+      {
+        characterDraftId: setup.characterDraftId,
+        wizardCheckpointId: setup.wizardCheckpointId,
+        formId: 'CHR-019',
+      },
+      CATALOG,
+    );
+    expect(returned.localCharacter.payloadJson).toBe(rolled.localCharacter.payloadJson);
+    const resumed = advanceArmorBundlePresentation(
+      setup.database,
+      {
+        characterDraftId: setup.characterDraftId,
+        wizardCheckpointId: setup.wizardCheckpointId,
+        formId: 'CHR-021',
+      },
+      CATALOG,
+    );
+    const checkpoint = commitArmorBundleCheckpoint(
+      setup.database,
+      bundleCheckpointRequest(
+        setup,
+        resumed,
+        'armor-random-checkpoint-confirm-command',
+        'armor-random-checkpoint-bundle',
+        'armor-random-checkpoint-roll-receipt',
+      ),
+      'armor-random-checkpoint-confirm-receipt',
+      { catalog: CATALOG },
+    );
+    expect(checkpoint.nextStageEnvelope.formId).toBe('CHR-022');
+    const restored = loadCreationWizardCheckpoint(
+      setup.database,
+      setup.characterDraftId,
+      CATALOG.skillStage,
+      CATALOG,
+    );
+    expect(restored.symbiontPresentationStage?.compositionDraftRevision).toBe(
+      checkpoint.receipt.result.draftRevision,
+    );
+
+    const reopened = reopenDatabase(path);
+    const restarted = loadCreationWizardCheckpoint(
+      reopened,
+      setup.characterDraftId,
+      CATALOG.skillStage,
+      CATALOG,
+    );
+    expect(restarted.armorBundleStage).toEqual(checkpoint.armorBundleStage);
+    expect(restarted.symbiontPresentationStage).toEqual(checkpoint.symbiontPresentationStage);
   });
 });

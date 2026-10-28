@@ -265,7 +265,6 @@ export function projectManualChr019(
   const latest = current.compositionRecords.at(-1)!;
   const interactions = createSymbiontInteractionProjection(current.composition);
   const previewRequired =
-    current.compositionRecords.length > 1 &&
     manualInteractionPreview(checkpoint, catalog).irreversibleOperationIds.length > 0;
   const entryMode = armorBundleEntryMode(checkpoint, catalog);
   const actions: ActionKey[] = [];

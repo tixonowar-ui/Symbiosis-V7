@@ -111,7 +111,12 @@ function optionalText(row: Row, key: string, path: string): string | null {
   if (typeof value !== 'string' || value.length === 0) {
     fail(`${path}.${key} must be a non-empty string or absent`);
   }
-  return value;
+  const playerText = value
+    .replace(/\b[A-Z][A-Z0-9]*-\d+\b/g, '')
+    .replace(/\s+([,.;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return playerText.length === 0 ? null : playerText;
 }
 
 function boolean(row: Row, key: string, path: string): boolean {

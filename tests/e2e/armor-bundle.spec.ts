@@ -200,6 +200,17 @@ test('FREE RANDOM safe-returns and resumes the same armor bundle without a new r
     await expect(page.locator('[data-atlas-action-key^="CHR-021"]')).toHaveCount(0);
     await expect(page.locator('[data-atlas-action-key^="CHR-022"]')).toHaveCount(0);
     await expectNoProtocolError(page, pageErrors);
+
+    await page.reload();
+    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expectNoProtocolError(page, pageErrors);
+    await host.restart();
+    await page.goto(host.baseURL);
+    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expectNoProtocolError(page, pageErrors);
+    expect(host.rollRequestAllocations()).toBe(rollRequests);
+    expect(host.receiptAllocations()).toBe(receipts + 1);
+    expect(host.sampleCalls()).toBe(2);
   } finally {
     await host.close();
   }

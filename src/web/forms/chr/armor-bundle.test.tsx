@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -23,7 +25,9 @@ import {
   type Chr021Projection,
 } from './armor-bundle.js';
 import { ArmorBundleFields } from './armor-bundle-fields.js';
+import { loadArmorBundleCatalog } from '../../../host/armor-bundle-catalog.js';
 
+const PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..', '..');
 const CATALOG = {
   entries: [
     { itemId: 'ITM-ARM-001', name: 'Кожаный доспех', coverageModel: 'ZONE_ELEMENT' },
@@ -707,6 +711,22 @@ describe('ArmorBundleFields', () => {
     expect(selected('ITM-ARM-008', null)).toContain('Гленхейм');
     expect(selected('ITM-ARM-001', 'HEAD')).toContain('Кожаный доспех');
     expect(selected('ITM-ARM-002', 'HEAD')).toContain('Бригантина');
+  });
+
+  it('keeps embedded internal rule ids out of the armor preview DOM', async () => {
+    const armorCatalog = await loadArmorBundleCatalog(PROJECT_ROOT);
+    const container = mount(
+      <ArmorBundleFields
+        draft={{ pieces: [] }}
+        snapshot={snapshot({ payload: { armorCatalog: armorCatalog as unknown as JsonObject } })}
+        onAddPiece={() => undefined}
+        onRemovePiece={() => undefined}
+        onRoll={() => undefined}
+      />,
+    );
+    expect(container.textContent).toContain('Слои разрешены');
+    expect(container.textContent).toContain('физическая совместимость подтверждается мастером');
+    expect(container.textContent).not.toContain('CORE-151');
   });
 
   it('disables zone elements while a full suit is selected and edits only via callbacks', () => {

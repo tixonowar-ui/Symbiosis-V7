@@ -101,6 +101,12 @@ describe('CHR-021 armor bundle item catalog', () => {
     expect(catalog.entries[7]?.decisionPreview.protections).toBe(
       'Иммунитет травмирующим и удушающим приёмам.',
     );
+    for (const index of [5, 6, 7]) {
+      const condition = catalog.entries[index]?.decisionPreview.conditionOrLimitation;
+      expect(condition).toContain('Слои разрешены');
+      expect(condition).toContain('физическая совместимость подтверждается мастером');
+      expect(condition).not.toContain('CORE-151');
+    }
     const json = JSON.stringify(catalog.entries);
     for (const forbidden of ['Rule ID', 'PDF, с.', 'Источник', 'availabilityTrace']) {
       expect(json).not.toContain(forbidden);

@@ -87,15 +87,18 @@ export function manualInteractionPreview(
   const stage = checkpoint.manualCompositionStage;
   const before = stage?.compositionRecords.at(-2);
   const after = stage?.compositionRecords.at(-1);
-  if (stage === null || stage === undefined || before === undefined || after === undefined) {
+  if (stage === null || stage === undefined || after === undefined) {
     return guardSymbiontRejected();
   }
   return deriveManualInteractionPreview(catalog, {
-    before: {
-      raceCode: stage.composition.raceCode,
-      acceptedSpecies: before.acceptedSpecies,
-      selectedBindings: before.request.payload.selectedBindings,
-    },
+    before:
+      before === undefined
+        ? { raceCode: stage.composition.raceCode, acceptedSpecies: [], selectedBindings: [] }
+        : {
+            raceCode: stage.composition.raceCode,
+            acceptedSpecies: before.acceptedSpecies,
+            selectedBindings: before.request.payload.selectedBindings,
+          },
     after: {
       raceCode: stage.composition.raceCode,
       acceptedSpecies: after.acceptedSpecies,
@@ -113,7 +116,6 @@ export function manualInteractionConfirmationRequired(
     stage !== null &&
     stage !== undefined &&
     !manualAdvisorWorkPending(stage) &&
-    stage.compositionRecords.length > 1 &&
     manualInteractionPreview(checkpoint, catalog).irreversibleOperationIds.length > 0
   );
 }

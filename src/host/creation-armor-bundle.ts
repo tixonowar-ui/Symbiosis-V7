@@ -14,7 +14,6 @@ import {
   currentCreationWizardRevisions,
   creationWizardDurableIds,
   loadCreationWizardCheckpoint,
-  validateDurableCreationWizardCheckpoint,
   type CreationNextStageEnvelope,
   type CreationWizardSymbiontPayload,
   type DurableCreationWizardCheckpoint,
@@ -223,12 +222,12 @@ export function rewriteArmorPresentation(
   checkpoint: DurableCreationWizardCheckpoint,
   formId: 'CHR-021' | 'CHR-022',
   projectionRevision: number,
+  draftRevision: number,
 ): void {
   const presentation = checkpoint.symbiontPresentationStage;
   if (presentation === null || presentation === undefined) return;
   const compositionDraftRevision =
-    checkpoint.manualCompositionStage?.compositionDraftRevision ??
-    checkpoint.receipt.result.draftRevision;
+    checkpoint.manualCompositionStage?.compositionDraftRevision ?? draftRevision;
   writeManualCommandPresentation(
     database,
     formId,
@@ -323,13 +322,14 @@ export function commitArmorBundleEntry(
         current.checkpoint,
         'CHR-021',
         revisions.projectionRevision,
+        receipt.result.draftRevision,
       );
       return result;
     },
-    (result, checkpoint) => {
-      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
-        result,
-        checkpoint,
+    () => {
+      validatedCheckpoint = loadCreationWizardCheckpoint(
+        database,
+        normalized.payload.characterDraftId,
         dependencies.catalog.skillStage,
         dependencies.catalog,
       );
@@ -493,13 +493,14 @@ export function commitArmorBundleQualityRoll(
         current.checkpoint,
         'CHR-021',
         revisions.projectionRevision,
+        receipt.result.draftRevision,
       );
       return result;
     },
-    (result, checkpoint) => {
-      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
-        result,
-        checkpoint,
+    () => {
+      validatedCheckpoint = loadCreationWizardCheckpoint(
+        database,
+        normalized.payload.characterDraftId,
         dependencies.catalog.skillStage,
         dependencies.catalog,
       );
@@ -634,13 +635,14 @@ export function commitArmorBundleCheckpoint(
         current.checkpoint,
         'CHR-022',
         revisions.projectionRevision,
+        receipt.result.draftRevision,
       );
       return result;
     },
-    (result, checkpoint) => {
-      validatedCheckpoint = validateDurableCreationWizardCheckpoint(
-        result,
-        checkpoint,
+    () => {
+      validatedCheckpoint = loadCreationWizardCheckpoint(
+        database,
+        normalized.payload.characterDraftId,
         dependencies.catalog.skillStage,
         dependencies.catalog,
       );

@@ -323,7 +323,10 @@ function refusalCode(message: HostToClientMessage): string {
   return message.refusal.code;
 }
 
-async function setupManualInteraction(prefix: string): Promise<{
+async function setupManualInteraction(
+  prefix: string,
+  firstOnly = false,
+): Promise<{
   readonly host: ArmorHost;
   readonly previewHost: ArmorHost;
   readonly composed: Snapshot;
@@ -341,24 +344,28 @@ async function setupManualInteraction(prefix: string): Promise<{
     host.socket,
     cardRoute(`${prefix}-card`, 'TROGR', initial.revisions.projectionRevision),
   );
-  await sendCommand(
+  const [, initialComposed] = await sendCommand(
     host.socket,
     manualCompositionRequest(setup, current(host), `${prefix}-initial-composition`, [
       'TROGR',
-      'OWL',
+      firstOnly ? 'TEACHER' : 'OWL',
       'WEAVER',
       'CRICKET',
     ]),
   );
-  const [, composed] = await sendCommand(
-    host.socket,
-    manualCompositionRequest(setup, current(host), `${prefix}-replacement`, [
-      'TROGR',
-      'TEACHER',
-      'WEAVER',
-      'CRICKET',
-    ]),
-  );
+  let composed = initialComposed;
+  if (!firstOnly) {
+    const [, replaced] = await sendCommand(
+      host.socket,
+      manualCompositionRequest(setup, current(host), `${prefix}-replacement`, [
+        'TROGR',
+        'TEACHER',
+        'WEAVER',
+        'CRICKET',
+      ]),
+    );
+    composed = replaced;
+  }
   expect(composed.presentation.base.formId).toBe('CHR-019');
 
   const previewHost: ArmorHost = { ...host, socket: await openSocket(host.app) };
@@ -779,6 +786,51 @@ describe('CHR-021 host journey', () => {
     expect(current(host).localCharacter).toEqual(before.localCharacter);
     expect(current(host).checkpoint).toEqual(before.checkpoint);
     expect(host.rollRequestAllocations()).toBe(0);
+  });
+
+  it('requires exact confirmation for the first saved interaction and accepts its SET-DECIDE', async () => {
+    const { host, previewHost, composed, preview } = await setupManualInteraction(
+      'armor-first-interaction',
+      true,
+    );
+    expect(composed.presentation.base.availableActionKeys).not.toContain('CHR-019::CTA::001');
+    expect(preview.presentation.base.availableActionKeys).toEqual([
+      'CHR-042::CTA::001',
+      'CHR-042::CTA::002',
+    ]);
+
+    const before = current(host);
+    const refusal = await sendRefusal(host.socket, {
+      commandId: 'armor-first-interaction-direct-entry',
+      commandKind: 'workflow-command',
+      expectedRevisions: currentCreationWizardRevisions(before),
+      messageType: 'command.request',
+      payload: {
+        characterDraftId: host.characterDraftId,
+        draftRevision: before.receipt.result.draftRevision,
+        sourceFormId: 'CHR-019',
+        stage: 'SYMBIONTS',
+        variant: 'ARMOR_BUNDLE_ENTRY',
+        wizardCheckpointId: host.wizardCheckpointId,
+      },
+      protocolVersion: 1,
+      role: 'player',
+      workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+    });
+    expect(refusalCode(refusal)).toBe('GUARD_REJECTED');
+    expect(current(host).localCharacter).toEqual(before.localCharacter);
+    expect(current(host).checkpoint).toEqual(before.checkpoint);
+
+    const [result, entered] = await sendCommand(
+      previewHost.socket,
+      interactionConfirmationRequest(
+        host,
+        'armor-first-interaction-confirm',
+        interactionDiff(preview),
+      ),
+    );
+    expect(result.messageType).toBe('command.result');
+    expect(entered.presentation.base.formId).toBe('CHR-021');
   });
 
   it(

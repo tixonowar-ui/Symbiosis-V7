@@ -112,11 +112,24 @@ function sameInstance(left: ManualInstanceDiff | null, right: ManualInstanceDiff
   );
 }
 
+function validatedPreviewBefore(
+  catalog: SymbiontCatalog,
+  input: ManualCompositionPreviewInput['before'],
+): ValidatedManualComposition {
+  if (input.acceptedSpecies.length === 0) {
+    return Object.freeze({
+      composition: resolveSymbiontComposition(catalog, input),
+      bindings: createSymbiontBindingSnapshot(catalog, [], input.selectedBindings ?? []),
+    });
+  }
+  return validateManualSymbiontComposition(catalog, input);
+}
+
 export function deriveManualInteractionPreview(
   catalog: SymbiontCatalog,
   input: ManualCompositionPreviewInput,
 ): ManualInteractionPreview {
-  const before = validateManualSymbiontComposition(catalog, input.before);
+  const before = validatedPreviewBefore(catalog, input.before);
   const after = validateManualSymbiontComposition(catalog, input.after);
   const beforeBySpecies = new Map(
     before.composition.instances.map((instance) => [instance.speciesKey, instance]),
