@@ -3,7 +3,7 @@
 Снимок состояния после исправления ревью issue #146 (PR #165, ветка
 `codex/146-starting-armor-bundle`). База — `main`, коммит
 `45f6f23d07324f455c50b4a8495aeb4ab2b16834`. Последний проверенный implementation
-HEAD — `a4cf173`; документация этого снимка коммитится следующим коммитом.
+HEAD — `cb9ed78`; документация этого снимка коммитится следующим коммитом.
 Это подтверждение перечисленных проверок, а не приёмка всего продукта.
 
 ## Что завершено
@@ -22,6 +22,11 @@ HEAD — `a4cf173`; документация этого снимка комми�
   сохраняет snapshot/context, composition и receipts без reload и новых IDs.
   MANUAL-грань требует явного ввода, selected item и его source-backed
   характеристики видны до фиксации. [ADR 0056](../adr/0056-armor-interaction-confirmation-and-recovery.md).
+- Follow-up исправления: RANDOM checkpoint после safe-return/resume проходит
+  полную persisted validation и повторное открытие SQLite. Подтверждение
+  взаимодействий работает уже для первой composition record через empty-before
+  preview. Внутренние идентификаторы вроде `CORE-151` удалены из player preview
+  и DOM. [ADR 0057](../adr/0057-armor-initial-interactions-and-presentation-recovery.md).
 - [PR #161](https://github.com/tixonowar-ui/Symbiosis-V7/pull/161) слит:
   штатный Vitest ограничивает параллелизм максимум четырьмя workers с учётом
   доступных CPU. Игровые данные, guards, timeout и состав тестов сохранены.
@@ -35,7 +40,7 @@ HEAD — `a4cf173`; документация этого снимка комми�
 ## Доказательства на этой ветке
 
 - `npm run verify`: контрольные суммы, актуальная TRACEABILITY, typecheck,
-  ESLint, Prettier, **87 файлов / 1600 Vitest-тестов**, кросс-реестровая
+  ESLint, Prettier, **87 файлов / 1603 Vitest-теста**, кросс-реестровая
   валидация — успешно.
 - `npm run import:verify`: **319 файлов** имеют одинаковые относительные пути и
   SHA-256 между двумя импортами, включая media и SQLite.

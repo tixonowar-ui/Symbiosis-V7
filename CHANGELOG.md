@@ -19,6 +19,12 @@
 
 ### Исправлено
 
+- **2026-10-28, issue #146:** RANDOM checkpoint после safe-return/resume
+  сохраняет результирующую presentation revision и проходит полную persisted
+  validation. Подтверждение взаимодействий работает уже для первой composition
+  record через empty-before preview. Внутренние идентификаторы вроде `CORE-151`
+  удалены из player preview и DOM без потери смысла ограничений.
+  [ADR 0057](docs/adr/0057-armor-initial-interactions-and-presentation-recovery.md).
 - **2026-10-28, issue #146:** `CHR-042::CTA::001` подтверждает exact interaction
   diff и атомарно создаёт armorBundle через SET-DECIDE; прямой вход при pending
   diff запрещён. Post-write validation выполняется внутри SQLite-транзакции,

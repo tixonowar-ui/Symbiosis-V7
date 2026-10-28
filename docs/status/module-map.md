@@ -115,9 +115,11 @@ B-specific fixture #147 сам по себе не был playable manual composi
 создаёт `manualCompositionStage` лениво на первом валидном add и добавляет
 полные replacement checkpoints, addressable `CHR-018` с art/tree и bindings,
 Advisor I/W/B/skills с continuity после remove/re-add и exact-diff `CHR-042`.
-#146 добавляет стартовый armorBundle: атомарное подтверждение взаимодействий,
-transactional rollback, RANDOM/MANUAL safe-return/resume и source-backed
-read-only preview брони. Bundle остаётся `OWNED_NOT_EQUIPPED`, `CHR-022`
+#146 добавляет стартовый armorBundle: атомарное подтверждение взаимодействий уже
+с первой composition record, transactional rollback, RANDOM/MANUAL
+safe-return/resume с persisted presentation validation и source-backed
+read-only preview брони без внутренних Rule IDs. Bundle остаётся
+`OWNED_NOT_EQUIPPED`, `CHR-022`
 host-signed и не публикуется. Локальное удаление не сохраняется как неполный
 состав и сбрасывается после reconnect; presentation migration `0005` не хранит
 вторую composition authority. Одиннадцать production Playwright-сценариев проходят
