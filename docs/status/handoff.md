@@ -26,7 +26,7 @@ HEAD — `013e983`; документация этого снимка комми�
   полную persisted validation и повторное открытие SQLite. Подтверждение
   взаимодействий работает уже для первой composition record через empty-before
   preview. Внутренние идентификаторы вроде `CORE-151` удалены из player preview
-  и DOM. [ADR 0056](../adr/0056-armor-interaction-confirmation-and-recovery.md).
+  и DOM. [ADR 0057](../adr/0057-armor-initial-interactions-and-presentation-recovery.md).
 - [PR #161](https://github.com/tixonowar-ui/Symbiosis-V7/pull/161) слит:
   штатный Vitest ограничивает параллелизм максимум четырьмя workers с учётом
   доступных CPU. Игровые данные, guards, timeout и состав тестов сохранены.
