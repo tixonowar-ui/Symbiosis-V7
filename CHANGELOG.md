@@ -9,6 +9,13 @@
 
 ### Добавлено
 
+- **2026-10-30, issue #179:** private HTTP identity и локальный `/state`
+  проверяют реальные TCP endpoint/listener и Origin до чтения store,
+  decode, replay и выделения ID. Чужой transport получает безопасный отказ
+  без локальных форм; обычный same-origin HTTP GET работает без Origin.
+  Семь integration suites переведены с simulated sockets на настоящий TCP
+  без authority adapters. [ADR 0065](docs/adr/0065-host-local-app-transport-boundary.md).
+
 - **2026-10-30, issue #170:** локальный мастерский вход APP-011 и создание
   кампании CMP-001–006. Метаданные, выбранные интерфейс/порт, вместимость,
   секрет передачи и режим будущих бросков сохраняются в отдельном черновике.

@@ -38,7 +38,9 @@ export async function createFiveStartingPositionsBrowserHost(mode: 'AUTO' | 'MAN
   return Object.assign(host, {
     /** A second real socket replays the browser's exact bytes without injecting an unsolicited UI receipt. */
     replay: async (reconnectFrame: string, commandFrame: string) => {
-      const socket = new WebSocket(`${host.baseURL.replace(/^http/, 'ws')}/state`);
+      const socket = new WebSocket(`${host.baseURL.replace(/^http/, 'ws')}/state`, {
+        origin: new URL(host.baseURL).origin,
+      });
       try {
         await new Promise<void>((resolve, reject) => {
           socket.once('open', resolve);

@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { RawData, WebSocket } from 'ws';
+import WebSocket, { type RawData } from 'ws';
 
 import {
   decodeHostMessage,
@@ -45,6 +46,10 @@ import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { loadAppProjectionCatalog, projectApp001Bootstrap } from './projections/app.js';
 import type { App001Projection } from './projections/app.js';
 import { createHost, startHost } from './server.js';
+import {
+  localHostBaseUrl,
+  openLocalHostWebSocket,
+} from '../../tests/fixtures/local-host-websocket.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const ACTUAL_REVISIONS = {
@@ -314,15 +319,17 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('serves the persisted device identity without caching or rotating it', async () => {
-    const first = await app.inject({ method: 'GET', url: '/device-identity' });
-    expect(first.statusCode).toBe(200);
-    expect(first.headers['cache-control']).toBe('no-store');
-    expect(JSON.parse(first.body)).toEqual({ deviceId });
+    const origin = await localHostBaseUrl(app);
+    const first = await fetch(new URL('/device-identity', origin), { headers: { origin } });
+    expect(first.status).toBe(200);
+    expect(first.headers.get('cache-control')).toBe('no-store');
+    const firstBody = await first.text();
+    expect(JSON.parse(firstBody)).toEqual({ deviceId });
 
-    const second = await app.inject({ method: 'GET', url: '/device-identity' });
-    expect(second.statusCode).toBe(200);
-    expect(second.headers['cache-control']).toBe('no-store');
-    expect(second.body).toBe(first.body);
+    const second = await fetch(new URL('/device-identity', origin), { headers: { origin } });
+    expect(second.status).toBe(200);
+    expect(second.headers.get('cache-control')).toBe('no-store');
+    expect(await second.text()).toBe(firstBody);
     expect(loadDeviceId(database)).toBe(deviceId);
   });
 
@@ -345,13 +352,11 @@ describe('configured Fastify and ws host shell', () => {
       staticRoot,
     });
     try {
-      const response = await uninitializedHost.inject({
-        method: 'GET',
-        url: '/device-identity',
-      });
-      expect(response.statusCode).toBe(503);
-      expect(response.headers['cache-control']).toBe('no-store');
-      expect(JSON.parse(response.body)).toEqual({
+      const origin = await localHostBaseUrl(uninitializedHost);
+      const response = await fetch(new URL('/device-identity', origin), { headers: { origin } });
+      expect(response.status).toBe(503);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual({
         error: 'device identity unavailable: device identity is not initialized',
       });
       expect(endpointErrors).toEqual([]);
@@ -379,7 +384,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('closes fail-closed when visibility revision exceeds projection revision', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const closed = new Promise<number>((resolve) => {
       socket.once('close', (code: number) => resolve(code));
     });
@@ -397,7 +402,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('sends a checked APP-001 player snapshot with host revisions', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 1);
     socket.send(clientText(reconnect(), vocabulary));
     const [text] = await response;
@@ -429,7 +434,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('answers v2 reconnect with exactly one adjacent empty-capabilities and APP-001 pair', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionReads = 0;
     try {
@@ -453,7 +458,12 @@ describe('configured Fastify and ws host shell', () => {
             reason: 'RECONNECT',
           },
           base: {
-            availableActionKeys: ['APP-001::CTA::001', 'APP-001::CTA::003', 'APP-001::CTA::004'],
+            availableActionKeys: [
+              'APP-001::CTA::001',
+              'APP-001::CTA::002',
+              'APP-001::CTA::003',
+              'APP-001::CTA::004',
+            ],
             formId: 'APP-001',
             formType: 'screen',
             roleFilteredPayload: app001Bootstrap,
@@ -477,7 +487,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('navigates the full APP-001 to APP-002 to CHR-001 to APP-004 to APP-002 path', async () => {
-    let socket = await app.injectWS('/state');
+    let socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     try {
@@ -692,7 +702,7 @@ describe('configured Fastify and ws host shell', () => {
       expect(revisionWrites).toHaveLength(3);
 
       socket.terminate();
-      socket = await app.injectWS('/state');
+      socket = await openLocalHostWebSocket(app);
       response = receiveFrames(socket, 2);
       socket.send(
         clientTextV2(
@@ -824,7 +834,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('opens APP-004 from the menu and starts a fresh CHR-001 subflow', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     try {
@@ -940,7 +950,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('requires session.reconnect before replaying a navigation result on a new transport', async () => {
-    const firstSocket = await app.injectWS('/state');
+    const firstSocket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     const action = formAction('transport-replay-action', 'APP-001', 'APP-001::CTA::001', 0);
@@ -961,7 +971,7 @@ describe('configured Fastify and ws host shell', () => {
       firstSocket.terminate();
     }
 
-    const replaySocket = await app.injectWS('/state');
+    const replaySocket = await openLocalHostWebSocket(app);
     try {
       let response = receiveFrames(replaySocket, 1);
       replaySocket.send(clientTextV2(action, vocabulary));
@@ -1005,7 +1015,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('rejects a player-local context allocator that reuses the durable device identity', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     contextIdOverride = deviceId;
@@ -1076,7 +1086,7 @@ describe('configured Fastify and ws host shell', () => {
   ])(
     'rejects invalid pre-commit allocator output: $requestId',
     async ({ expectedError, localCharacterId, requestId, wizardCheckpointId }) => {
-      const socket = await app.injectWS('/state');
+      const socket = await openLocalHostWebSocket(app);
       currentRevisions = CLIENT_REVISIONS;
       revisionWrites.length = 0;
       localCharacterIdOverride = localCharacterId;
@@ -1127,7 +1137,7 @@ describe('configured Fastify and ws host shell', () => {
   );
 
   it('refuses APP-002 when the durable device identity disappears after reconnect', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     const errorCount = frameErrors.length;
@@ -1168,7 +1178,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('does not replay a player-local snapshot after its durable device identity is reset', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     const errorCount = frameErrors.length;
@@ -1213,8 +1223,8 @@ describe('configured Fastify and ws host shell', () => {
     }
   });
 
-  it('refuses stale, unavailable, unknown, and foreign-form actions without advancing revisions', async () => {
-    const socket = await app.injectWS('/state');
+  it('refuses stale, unknown, and foreign-form actions without advancing revisions', async () => {
+    const socket = await openLocalHostWebSocket(app);
     currentRevisions = CLIENT_REVISIONS;
     revisionWrites.length = 0;
     try {
@@ -1241,21 +1251,6 @@ describe('configured Fastify and ws host shell', () => {
         revisions: CLIENT_REVISIONS,
       });
 
-      response = receiveFrames(socket, 1);
-      socket.send(
-        clientTextV2(formAction('gm-action', 'APP-001', 'APP-001::CTA::002', 0), vocabulary),
-      );
-      const unavailableText = (await response)[0] ?? '';
-      expect(hostMessageV2(unavailableText, vocabulary)).toMatchObject({
-        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
-        presentationUnchanged: true,
-        revisions: CLIENT_REVISIONS,
-      });
-      expect(unavailableText).not.toContain('contextId');
-      expect(unavailableText).not.toContain('characterDraftId');
-      expect(unavailableText).not.toContain('APP-002');
-      expect(unavailableText).not.toContain('CHR-001');
-
       for (const [requestId, actionKey] of [
         ['unknown-action', 'APP-001::CTA::999'],
         ['foreign-action', 'APP-002::CTA::007'],
@@ -1280,8 +1275,42 @@ describe('configured Fastify and ws host shell', () => {
     }
   });
 
+  it('refuses a foreign-Origin GM action before reading or advancing local state', async () => {
+    const origin = await localHostBaseUrl(app);
+    const endpoint = new URL('/state', origin);
+    endpoint.protocol = 'ws:';
+    const socket = new WebSocket(endpoint, { origin: 'http://foreign-origin.invalid' });
+    await once(socket, 'open');
+    const readsBefore = revisionReads;
+    const allocationsBefore = uuidSequence;
+    currentRevisions = CLIENT_REVISIONS;
+    revisionWrites.length = 0;
+    try {
+      const response = receiveFrames(socket, 1);
+      const closed = once(socket, 'close');
+      socket.send(
+        clientTextV2(formAction('gm-action', 'APP-001', 'APP-001::CTA::002', 0), vocabulary),
+      );
+      const unavailableText = (await response)[0] ?? '';
+      expect(hostMessage(unavailableText, vocabulary)).toMatchObject({
+        messageType: 'protocol.refusal',
+        refusal: { code: 'UNRECOGNIZED', path: '$.localAppConnection', value: null },
+      });
+      expect((await closed)[0]).toBe(1008);
+      for (const forbidden of ['contextId', 'characterDraftId', 'APP-002', 'CHR-001', 'APP-011'])
+        expect(unavailableText).not.toContain(forbidden);
+      expect(revisionReads).toBe(readsBefore);
+      expect(uuidSequence).toBe(allocationsBefore);
+      expect(currentRevisions).toEqual(CLIENT_REVISIONS);
+      expect(revisionWrites).toEqual([]);
+    } finally {
+      currentRevisions = ACTUAL_REVISIONS;
+      socket.terminate();
+    }
+  });
+
   it('refuses a different valid device locator without publishing a v2 pair', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     revisionReads = 0;
     try {
       const response = receiveSettledFrames(socket, 1);
@@ -1307,7 +1336,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('returns a checked protocol refusal for malformed JSON', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 1);
     socket.send('{');
     const [text] = await response;
@@ -1322,7 +1351,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('does not let a client claim the GM projection or receive GM data', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 1);
     socket.send(clientText(reconnect({ projectionRole: 'gm', requestId: 'gm-claim' }), vocabulary));
     const [text] = await response;
@@ -1340,7 +1369,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('refuses each unknown unacknowledged command before the fresh snapshot', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 2);
     socket.send(
       clientText(
@@ -1384,7 +1413,7 @@ describe('configured Fastify and ws host shell', () => {
         trigger: 'Открыть архив read-only',
       },
     } as const satisfies ClientToHostMessage;
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 1);
     socket.send(clientText(message, vocabulary));
     const [text] = await response;
@@ -1438,7 +1467,7 @@ describe('configured Fastify and ws host shell', () => {
       },
     },
   ])('names the unimplemented command reference at $path', async ({ message, path, value }) => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 1);
     socket.send(clientText(message, vocabulary));
     const [text] = await response;
@@ -1464,7 +1493,7 @@ describe('configured Fastify and ws host shell', () => {
       role: 'player',
       workflowCommandId: 'UI-CMD-CAMPAIGN-FINISH',
     } as const satisfies ClientToHostMessage;
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
 
     let response = receiveFrames(socket, 1);
     socket.send(clientText(message, vocabulary));
@@ -1490,7 +1519,7 @@ describe('configured Fastify and ws host shell', () => {
     });
     socket.terminate();
 
-    const reconnectSocket = await app.injectWS('/state');
+    const reconnectSocket = await openLocalHostWebSocket(app);
     const reconnectResponse = receiveFrames(reconnectSocket, 2);
     reconnectSocket.send(
       clientText(reconnect({ unacknowledgedCommandIds: [message.commandId] }), vocabulary),
@@ -1507,7 +1536,7 @@ describe('configured Fastify and ws host shell', () => {
   });
 
   it('rejects binary application frames through the shared refusal contract', async () => {
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     const response = receiveFrames(socket, 1);
     socket.send(Buffer.from('{}', 'utf8'));
     const [text] = await response;

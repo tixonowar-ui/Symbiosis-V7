@@ -66,6 +66,7 @@ import {
 } from './campaign-creation.js';
 import { createCampaignBindManager } from './campaign-bind.js';
 import { isTrustedLocalMasterConnection } from './local-master-trust.js';
+import { isTrustedLocalHttpAppConnection } from './local-app-boundary.js';
 import {
   postSaveRevisions,
   postSaveReceiptView,
@@ -6766,6 +6767,15 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     socket.on('message', (data: RawData, isBinary: boolean) => {
       frames = frames
         .then(async () => {
+          if (!connection.campaign.trusted()) {
+            sendProtocolRefusal(socket, dependencies.vocabulary, {
+              code: 'UNRECOGNIZED',
+              path: '$.localAppConnection',
+              value: null,
+            });
+            socket.close(1008, 'local app connection required');
+            return;
+          }
           await handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
         })
         .catch((error: unknown) => {
@@ -6778,8 +6788,21 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   app.get('/health', async (_request, reply) => {
     await reply.code(204).send();
   });
-  app.get('/device-identity', async (_request, reply) => {
+  app.get('/device-identity', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
+    if (
+      request.raw.socket === undefined ||
+      request.raw.socket.destroyed ||
+      !isTrustedLocalHttpAppConnection({
+        remoteAddress: request.raw.socket.remoteAddress,
+        localAddress: request.raw.socket.localAddress,
+        origin: request.headers.origin,
+        listener: readShellListener(),
+      })
+    ) {
+      await reply.code(403).send({ error: 'LOCAL_APP_ONLY' });
+      return;
+    }
     let deviceId: ReturnType<typeof loadDeviceId>;
     try {
       deviceId = loadDeviceId(config.database);

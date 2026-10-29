@@ -66,6 +66,7 @@ import { IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID } from './identity-checkpoint.j
 import { commitIdentityCheckpoint } from './identity-checkpoint.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
+import { openLocalHostWebSocket } from '../../tests/fixtures/local-host-websocket.js';
 import { createAdvisorSkillOptions, loadSymbiontCatalog } from './symbiont-stage-catalog.js';
 import { commitCreationWizardCheckpoint } from './creation-wizard-checkpoint.js';
 
@@ -303,7 +304,7 @@ async function sendCommandRefusal(
 }
 
 async function openSocket(app: FastifyInstance): Promise<WebSocket> {
-  const socket = await app.injectWS('/state');
+  const socket = await openLocalHostWebSocket(app);
   sockets.push(socket);
   return socket;
 }

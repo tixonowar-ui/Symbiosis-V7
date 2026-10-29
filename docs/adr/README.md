@@ -96,6 +96,7 @@
 | [0062](0062-creation-validation-and-final-save.md)                   | Итог имущества, исправления и финальный save       | принято                                     |
 | [0063](0063-local-character-recovery-and-export.md)                  | Восстановление, локальный лист, варианты и экспорт | Принято                                     |
 | [0064](0064-paused-campaign-creation.md)                             | Локальный мастер и создание paused-кампании        | принято                                     |
+| [0065](0065-host-local-app-transport-boundary.md)                    | Граница транспорта локального приложения           | принято                                     |
 
 ## Перенос решений аудита
 
