@@ -4,6 +4,13 @@ import type { AssignedRouteBinding } from '@shared/wire-v2-protocol.js';
 
 export interface SymbiontPresentationStage {
   readonly formId:
+    | 'CHR-001'
+    | 'CHR-009'
+    | 'CHR-010'
+    | 'CHR-011'
+    | 'CHR-020'
+    | 'CHR-025'
+    | 'CHR-032'
     | 'CHR-015'
     | 'CHR-017'
     | 'CHR-018'
@@ -24,6 +31,13 @@ export interface SymbiontPresentationStage {
 }
 
 const ROUTES = {
+  'CHR-001': '/player/characters/:localCharacterId/create/chr-001',
+  'CHR-009': '/player/characters/:localCharacterId/create/chr-009',
+  'CHR-010': '/player/characters/:localCharacterId/create/chr-010',
+  'CHR-011': '/player/characters/:localCharacterId/create/chr-011',
+  'CHR-020': '/player/characters/:localCharacterId/create/chr-020',
+  'CHR-025': '/player/characters/:localCharacterId/create/chr-025',
+  'CHR-032': '/player/characters/:localCharacterId/create/chr-032',
   'CHR-037': '/player/characters/:localCharacterId/create/chr-037',
   'CHR-038': '/player/characters/:localCharacterId/create/chr-038',
   'CHR-015': '/player/characters/:localCharacterId/create/chr-015',
@@ -96,6 +110,13 @@ export function parseSymbiontPresentationStage(
   );
   const formId = object['formId'];
   if (
+    formId !== 'CHR-001' &&
+    formId !== 'CHR-009' &&
+    formId !== 'CHR-010' &&
+    formId !== 'CHR-011' &&
+    formId !== 'CHR-020' &&
+    formId !== 'CHR-025' &&
+    formId !== 'CHR-032' &&
     formId !== 'CHR-037' &&
     formId !== 'CHR-038' &&
     formId !== 'CHR-015' &&

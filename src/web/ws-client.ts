@@ -1,4 +1,26 @@
 import {
+  decodeCreationCorrectionProjection,
+  expectedCreationCorrectionActionKeys,
+  creationCorrectionPayload,
+  CORRECTION_COMMANDS,
+  type CreationCorrectionProjection,
+  type CreationCorrectionVariant,
+} from './forms/chr/creation-correction.js';
+import {
+  decodeChr032Projection,
+  decodeChr025Projection,
+  expectedChr032ActionKeys,
+  expectedChr025ActionKeys,
+  creationPropertySummaryPayload,
+  creationFinalSavePayload,
+  CREATION_FINAL_SAVE_TRANSITION,
+  decodeCreationFinalizationTerminal,
+  creationFinalizationSnapshotMatchesReceipt,
+  type Chr032Projection,
+  type Chr025Projection,
+  type CreationFinalizationRequest,
+} from './forms/chr/creation-validation.js';
+import {
   CHR_037_CONFIRM_ACTION_KEY,
   CHR_037_RETURN_ACTION_KEY,
   CHR_037_ROLL_ACTION_KEY,
@@ -63,6 +85,7 @@ import type {
 } from '@shared/index.js';
 
 import { isImplementedFormActionKey, presentedFormDefinition } from './forms/index.js';
+import { getAtlasFormModel } from './renderer/atlas-data.js';
 import type { SupportedPresentationFormId } from './forms/index.js';
 import {
   advisorCheckpointPayload,
@@ -273,6 +296,8 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-024',
   'CHR-038',
   'CHR-037',
+  'CHR-032',
+  'CHR-025',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -296,7 +321,19 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
       : isSpeciesKey(bindings[0].value)),
   isFormActionKey: isImplementedFormActionKey,
   isFormId: (value): value is FormId => FORM_ID_SET.has(value),
-  isHostTransition: () => false,
+  isHostTransition: (value) =>
+    value.from === CREATION_FINAL_SAVE_TRANSITION.from &&
+    value.to === CREATION_FINAL_SAVE_TRANSITION.to &&
+    value.kind === CREATION_FINAL_SAVE_TRANSITION.kind &&
+    value.trigger === CREATION_FINAL_SAVE_TRANSITION.trigger &&
+    getAtlasFormModel('CHR-025').actions.items.some(
+      ({ transition }) =>
+        transition !== null &&
+        transition.from === value.from &&
+        transition.to === value.to &&
+        transition.kind === value.kind &&
+        transition.trigger === value.trigger,
+    ),
   isPresentedForm: (formId, formType, routeTemplate, bindings) => {
     const definition = presentedFormDefinition(formId);
     if (definition === null || formType !== definition.type || routeTemplate !== definition.route)
@@ -1682,6 +1719,10 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  submitCreationCorrection(
+    variant: CreationCorrectionVariant,
+    values: JsonObject,
+  ): { readonly ok: true } | { readonly ok: false; readonly detail: string };
   rollFiveStartingPosition(
     positions: readonly FiveStartingPositionSelection[],
     positionId: string,
@@ -2302,7 +2343,7 @@ function decodeRaceConsequencesPreview(
   return shape.ok ? { ok: true, value: value as RaceConsequencesPreviewProjection } : shape;
 }
 
-function decodeRaceConsequenceOptions(
+export function decodeRaceConsequenceOptions(
   value: JsonValue,
   path: string,
 ): DecodeResult<readonly RaceConsequenceOptionProjection[]> {
@@ -3899,527 +3940,580 @@ function decodeConfirmedSnapshot(
     return unrecognized('$.projectionRole', message.projectionRole);
   }
   let projection: DecodeResult<JsonObject>;
-  switch (base.formId) {
-    case 'APP-001':
-      projection = decodeApp001Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      break;
-    case 'APP-002':
-      projection = decodeApp002Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        message.revisions,
-      );
-      break;
-    case 'APP-004':
-      projection = decodeApp004Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        message.revisions,
-      );
-      break;
-    case 'CHR-001':
-      projection = decodeChr001Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      break;
-    case 'CHR-010':
-      projection = decodeChr010Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          CHR_010_INITIAL_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-016':
-      projection = decodeChr016Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          CHR_016_INITIAL_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-036':
-      projection = decodeChr036Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          CHR_036_INITIAL_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-002':
-      projection = decodeChr002Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          CHR_002_INITIAL_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-003':
-      projection = decodeChr003Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          projection.value['setRollReceiptId'] === null &&
-            executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
-            ? CHR_003_PENDING_ACTION_KEYS
-            : NO_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-004':
-      projection = decodeChr004Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          projection.value['confirmationReceiptId'] === null &&
-            executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
-            ? CHR_004_PENDING_ACTION_KEYS
-            : NO_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-005':
-    case 'CHR-006':
-    case 'CHR-007':
-    case 'CHR-008':
-      projection = decodeCharacterSetDecisionProjection(
-        base.formId,
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          expectedCreationSetDecisionActionKeys(
-            base.formId,
-            projection.value,
-            executableWorkflowCommandIds,
+  if (Object.hasOwn(base.roleFilteredPayload, 'correctionContext')) {
+    const decoded = decodeCreationCorrectionProjection(
+      base.roleFilteredPayload,
+      '$.presentation.base.roleFilteredPayload',
+      base.formId,
+    );
+    projection = decoded;
+    if (decoded.ok) {
+      const actions = exactSymbiontActionKeys(
+        base.availableActionKeys,
+        expectedCreationCorrectionActionKeys(decoded.value, {
+          checkpoint: executableWorkflowCommandIds.includes(
+            IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
           ),
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-009':
-      projection = decodeChr009Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
+          setDecide: executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID),
+          rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+        }),
+        '$.presentation.base.availableActionKeys',
       );
-      if (projection.ok) {
-        const forwardAction =
-          projection.value['raceChoice'] === 'PURE'
-            ? ('CHR-009::CTA::001' as const)
-            : ('CHR-009::CTA::002' as const);
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
-            ? [forwardAction]
-            : NO_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-011':
-      projection = decodeChr011Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          CHR_011_SELECTOR_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-012':
-      projection = decodeChr012Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          NO_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-013':
-      projection = decodeChr013Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          CHR_013_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-014': {
-      const decoded = decodeChr014Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-        base.routeBindings[1]?.value,
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const eligible =
-          decoded.value.eligibility === 'ELIGIBLE' &&
-          decoded.value.levelsAndBonuses.length > 0 &&
-          executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID);
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          eligible ? CHR_014_ACTION_KEYS : CHR_014_READ_ONLY_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
-      }
-      break;
+      if (!actions.ok) return actions;
     }
-    case 'CHR-015':
-      projection = decodeChr015Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-        base.routeBindings[0]?.value,
-      );
-      if (projection.ok) {
-        const actions = exactActionKeys(
-          base.availableActionKeys,
-          projection.value['selectionCheckpoint'] === 'EXACT'
-            ? projection.value['pureEquipmentInitializationRequired'] === true
-              ? [CHR_015_CONFIRM_ACTION_KEY]
-              : NO_ACTION_KEYS
-            : projection.value['selectionCheckpoint'] === 'PARTIAL'
-              ? CHR_015_MUTABLE_ACTION_KEYS
-              : CHR_015_INITIAL_ACTION_KEYS,
-          '$.presentation.base.availableActionKeys',
+  } else
+    switch (base.formId) {
+      case 'APP-001':
+        projection = decodeApp001Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    case 'CHR-017': {
-      const manual = base.roleFilteredPayload['symbiontAcquisitionModeOrNull'] === 'MANUAL';
-      const decoded = manual
-        ? decodeChr017ManualProjection(
-            base.roleFilteredPayload,
-            '$.presentation.base.roleFilteredPayload',
-          )
-        : decodeChr017Projection(
-            base.roleFilteredPayload,
-            '$.presentation.base.roleFilteredPayload',
-          );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          isManualChr017Projection(decoded.value)
-            ? expectedChr017ManualActionKeys(decoded.value)
-            : expectedChr017ActionKeys(decoded.value),
-          '$.presentation.base.availableActionKeys',
+        break;
+      case 'APP-002':
+        projection = decodeApp002Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          message.revisions,
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    }
-    case 'CHR-018': {
-      const decoded = decodeChr018Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        if (
-          decoded.value.speciesKey !== base.routeBindings[1]?.value ||
-          decoded.value.characterDraftId !== base.routeBindings[0]?.value
-        ) {
-          return unrecognized(
-            '$.presentation.base.roleFilteredPayload.speciesKey',
-            decoded.value.speciesKey,
-          );
-        }
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr018ActionKeys(
-            decoded.value,
-            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
-          ),
-          '$.presentation.base.availableActionKeys',
+        break;
+      case 'APP-004':
+        projection = decodeApp004Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          message.revisions,
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    }
-    case 'CHR-019': {
-      const duplicate = base.roleFilteredPayload['duplicatePolicy'];
-      const manual = isJsonObject(duplicate) && duplicate['kind'] === 'FORBIDDEN';
-      const decoded = manual
-        ? decodeChr019ManualProjection(
-            base.roleFilteredPayload,
-            '$.presentation.base.roleFilteredPayload',
-          )
-        : decodeChr019Projection(
-            base.roleFilteredPayload,
-            '$.presentation.base.roleFilteredPayload',
-          );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          decoded.value.duplicatePolicy.kind === 'FORBIDDEN'
-            ? expectedChr019ManualActionKeys(base.availableActionKeys)
-            : decoded.value.raceChoice === 'PURE'
-              ? ['CHR-019::CTA::004']
-              : expectedChr019EntryActionKeys(base.availableActionKeys),
-          '$.presentation.base.availableActionKeys',
+        break;
+      case 'CHR-001':
+        projection = decodeChr001Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    }
-    case 'CHR-042': {
-      const decoded = decodeChr042Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          [
-            ...(base.availableActionKeys.includes(CHR_042_MANUAL_CONFIRM_ACTION_KEY) &&
-            executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID)
-              ? [CHR_042_MANUAL_CONFIRM_ACTION_KEY]
-              : []),
-            'CHR-042::CTA::002',
-          ],
-          '$.presentation.base.availableActionKeys',
+        break;
+      case 'CHR-010':
+        projection = decodeChr010Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    }
-    case 'CHR-020': {
-      const decoded = decodeChr020Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr020ActionKeys(
-            decoded.value,
-            executableWorkflowCommandIds,
+        if (projection.ok) {
+          const actions = exactActionKeys(
             base.availableActionKeys,
-          ),
-          '$.presentation.base.availableActionKeys',
+            CHR_010_INITIAL_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-016':
+        projection = decodeChr016Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    }
-    case 'CHR-041': {
-      const decoded = decodeChr041Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr041ActionKeys(decoded.value, executableWorkflowCommandIds),
-          '$.presentation.base.availableActionKeys',
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            CHR_016_INITIAL_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-036':
+        projection = decodeChr036Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
         );
-        if (!actions.ok) return actions;
-      }
-      break;
-    }
-    case 'CHR-037': {
-      const decoded = decodeChr037Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr037ActionKeys(decoded.value, {
-            rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
-            checkpoint: executableWorkflowCommandIds.includes(
-              IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            CHR_036_INITIAL_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-002':
+        projection = decodeChr002Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            CHR_002_INITIAL_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-003':
+        projection = decodeChr003Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            projection.value['setRollReceiptId'] === null &&
+              executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+              ? CHR_003_PENDING_ACTION_KEYS
+              : NO_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-004':
+        projection = decodeChr004Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            projection.value['confirmationReceiptId'] === null &&
+              executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID)
+              ? CHR_004_PENDING_ACTION_KEYS
+              : NO_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-005':
+      case 'CHR-006':
+      case 'CHR-007':
+      case 'CHR-008':
+        projection = decodeCharacterSetDecisionProjection(
+          base.formId,
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            expectedCreationSetDecisionActionKeys(
+              base.formId,
+              projection.value,
+              executableWorkflowCommandIds,
             ),
-          }),
-          '$.presentation.base.availableActionKeys',
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-009':
+        projection = decodeChr009Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
         );
-        if (!actions.ok) return actions;
+        if (projection.ok) {
+          const forwardAction =
+            projection.value['raceChoice'] === 'PURE'
+              ? ('CHR-009::CTA::001' as const)
+              : ('CHR-009::CTA::002' as const);
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
+              ? [forwardAction]
+              : NO_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-011':
+        projection = decodeChr011Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            CHR_011_SELECTOR_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-012':
+        projection = decodeChr012Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            NO_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-013':
+        projection = decodeChr013Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            CHR_013_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-014': {
+        const decoded = decodeChr014Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+          base.routeBindings[1]?.value,
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const eligible =
+            decoded.value.eligibility === 'ELIGIBLE' &&
+            decoded.value.levelsAndBonuses.length > 0 &&
+            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID);
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            eligible ? CHR_014_ACTION_KEYS : CHR_014_READ_ONLY_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
       }
-      break;
-    }
-    case 'CHR-038': {
-      const decoded = decodeChr038Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr038ActionKeys(decoded.value, {
-            rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
-            checkpoint: executableWorkflowCommandIds.includes(
-              IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+      case 'CHR-015':
+        projection = decodeChr015Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+          base.routeBindings[0]?.value,
+        );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            projection.value['selectionCheckpoint'] === 'EXACT'
+              ? projection.value['pureEquipmentInitializationRequired'] === true
+                ? [CHR_015_CONFIRM_ACTION_KEY]
+                : NO_ACTION_KEYS
+              : projection.value['selectionCheckpoint'] === 'PARTIAL'
+                ? CHR_015_MUTABLE_ACTION_KEYS
+                : CHR_015_INITIAL_ACTION_KEYS,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      case 'CHR-017': {
+        const manual = base.roleFilteredPayload['symbiontAcquisitionModeOrNull'] === 'MANUAL';
+        const decoded = manual
+          ? decodeChr017ManualProjection(
+              base.roleFilteredPayload,
+              '$.presentation.base.roleFilteredPayload',
+            )
+          : decodeChr017Projection(
+              base.roleFilteredPayload,
+              '$.presentation.base.roleFilteredPayload',
+            );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            isManualChr017Projection(decoded.value)
+              ? expectedChr017ManualActionKeys(decoded.value)
+              : expectedChr017ActionKeys(decoded.value),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-018': {
+        const decoded = decodeChr018Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          if (
+            decoded.value.speciesKey !== base.routeBindings[1]?.value ||
+            decoded.value.characterDraftId !== base.routeBindings[0]?.value
+          ) {
+            return unrecognized(
+              '$.presentation.base.roleFilteredPayload.speciesKey',
+              decoded.value.speciesKey,
+            );
+          }
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr018ActionKeys(
+              decoded.value,
+              executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
             ),
-          }),
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
       }
-      break;
-    }
-    case 'CHR-023': {
-      const decoded = decodeChr023Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr023ActionKeys(
-            decoded.value,
-            executableWorkflowCommandIds.includes(WEAPON_PROFILE_SUBMIT_WORKFLOW),
-          ),
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
+      case 'CHR-019': {
+        const duplicate = base.roleFilteredPayload['duplicatePolicy'];
+        const manual = isJsonObject(duplicate) && duplicate['kind'] === 'FORBIDDEN';
+        const decoded = manual
+          ? decodeChr019ManualProjection(
+              base.roleFilteredPayload,
+              '$.presentation.base.roleFilteredPayload',
+            )
+          : decodeChr019Projection(
+              base.roleFilteredPayload,
+              '$.presentation.base.roleFilteredPayload',
+            );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            decoded.value.duplicatePolicy.kind === 'FORBIDDEN'
+              ? expectedChr019ManualActionKeys(base.availableActionKeys)
+              : decoded.value.raceChoice === 'PURE'
+                ? ['CHR-019::CTA::004']
+                : expectedChr019EntryActionKeys(base.availableActionKeys),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
       }
-      break;
-    }
-    case 'CHR-024': {
-      const decoded = decodeChr024Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr024ActionKeys(
-            decoded.value,
-            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
-          ),
-          '$.presentation.base.availableActionKeys',
+      case 'CHR-042': {
+        const decoded = decodeChr042Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
         );
-        if (!actions.ok) return actions;
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            [
+              ...(base.availableActionKeys.includes(CHR_042_MANUAL_CONFIRM_ACTION_KEY) &&
+              executableWorkflowCommandIds.includes(SET_DECIDE_WORKFLOW_COMMAND_ID)
+                ? [CHR_042_MANUAL_CONFIRM_ACTION_KEY]
+                : []),
+              'CHR-042::CTA::002',
+            ],
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
       }
-      break;
-    }
-    case 'CHR-022': {
-      const decoded = decodeChr022Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr022ActionKeys(decoded.value, {
-            rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
-            checkpoint: executableWorkflowCommandIds.includes(
-              IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+      case 'CHR-020': {
+        const decoded = decodeChr020Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr020ActionKeys(
+              decoded.value,
+              executableWorkflowCommandIds,
+              base.availableActionKeys,
             ),
-          }),
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
       }
-      break;
-    }
-    case 'CHR-021': {
-      const decoded = decodeChr021Projection(
-        base.roleFilteredPayload,
-        '$.presentation.base.roleFilteredPayload',
-      );
-      projection = decoded;
-      if (decoded.ok) {
-        const actions = exactSymbiontActionKeys(
-          base.availableActionKeys,
-          expectedChr021ActionKeys(decoded.value, {
-            rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
-            checkpoint: executableWorkflowCommandIds.includes(
-              IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+      case 'CHR-041': {
+        const decoded = decodeChr041Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr041ActionKeys(decoded.value, executableWorkflowCommandIds),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-032':
+      case 'CHR-025': {
+        const decoded =
+          base.formId === 'CHR-032'
+            ? decodeChr032Projection(
+                base.roleFilteredPayload,
+                '$.presentation.base.roleFilteredPayload',
+              )
+            : decodeChr025Projection(
+                base.roleFilteredPayload,
+                '$.presentation.base.roleFilteredPayload',
+              );
+        projection = decoded;
+        if (decoded.ok) {
+          const expected =
+            base.formId === 'CHR-032'
+              ? expectedChr032ActionKeys(
+                  decoded.value as Chr032Projection,
+                  executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
+                )
+              : expectedChr025ActionKeys(decoded.value as Chr025Projection, true);
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expected,
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-037': {
+        const decoded = decodeChr037Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr037ActionKeys(decoded.value, {
+              rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+              checkpoint: executableWorkflowCommandIds.includes(
+                IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+              ),
+            }),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-038': {
+        const decoded = decodeChr038Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr038ActionKeys(decoded.value, {
+              rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+              checkpoint: executableWorkflowCommandIds.includes(
+                IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+              ),
+            }),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-023': {
+        const decoded = decodeChr023Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr023ActionKeys(
+              decoded.value,
+              executableWorkflowCommandIds.includes(WEAPON_PROFILE_SUBMIT_WORKFLOW),
             ),
-          }),
-          '$.presentation.base.availableActionKeys',
-        );
-        if (!actions.ok) return actions;
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
       }
-      break;
+      case 'CHR-024': {
+        const decoded = decodeChr024Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr024ActionKeys(
+              decoded.value,
+              executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
+            ),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-022': {
+        const decoded = decodeChr022Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr022ActionKeys(decoded.value, {
+              rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+              checkpoint: executableWorkflowCommandIds.includes(
+                IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+              ),
+            }),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      case 'CHR-021': {
+        const decoded = decodeChr021Projection(
+          base.roleFilteredPayload,
+          '$.presentation.base.roleFilteredPayload',
+        );
+        projection = decoded;
+        if (decoded.ok) {
+          const actions = exactSymbiontActionKeys(
+            base.availableActionKeys,
+            expectedChr021ActionKeys(decoded.value, {
+              rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+              checkpoint: executableWorkflowCommandIds.includes(
+                IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+              ),
+            }),
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
+        break;
+      }
+      default:
+        return unrecognized('$.presentation.base.formId', base.formId);
     }
-    default:
-      return unrecognized('$.presentation.base.formId', base.formId);
-  }
   if (!projection.ok) return projection;
   if (
     base.formId === 'CHR-001' &&
+    !Object.hasOwn(base.roleFilteredPayload, 'correctionContext') &&
     base.availableActionKeys.includes(IDENTITY_CHECKPOINT_ACTION_KEY) &&
     !executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
   ) {
@@ -4427,6 +4521,7 @@ function decodeConfirmedSnapshot(
   }
   if (
     base.formId === 'CHR-001' &&
+    !Object.hasOwn(base.roleFilteredPayload, 'correctionContext') &&
     base.availableActionKeys.includes(IDENTITY_CHECKPOINT_ACTION_KEY)
   ) {
     const value = projection.value;
@@ -4441,7 +4536,7 @@ function decodeConfirmedSnapshot(
   }
   const layers = decodePresentationLayers(
     message,
-    base.formId,
+    base.formId as SupportedPresentationFormId,
     projection.value,
     executableWorkflowCommandIds,
   );
@@ -4670,6 +4765,8 @@ function visibleSnapshotCore(
   skillCardDraft: CharacterSkillCardDraft | null = null,
   manualCompositionDraft: ManualCompositionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
+  if (Object.hasOwn(snapshot.projection, 'correctionContext'))
+    return commandPending ? { ...snapshot, availableActionKeys: [] } : snapshot;
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
       ...snapshot,
@@ -4922,6 +5019,22 @@ function decodeAddressableRouteSnapshot(
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   if (!decoded.ok) return decoded;
+  if (Object.hasOwn(previous.projection, 'correctionContext')) {
+    const p = previous.projection as CreationCorrectionProjection,
+      n = decoded.value.projection as CreationCorrectionProjection;
+    return previous.formId === 'CHR-017' &&
+      decoded.value.formId === 'CHR-018' &&
+      pending.routeTemplate === CHR_018_ROUTE &&
+      p.eligibleSymbiontSpecies.some((v) => v.speciesKey === pending.bindings[0]?.value) &&
+      n.correctionHeadHash === p.correctionHeadHash &&
+      n.summaryReceiptIdOrNull === p.summaryReceiptIdOrNull &&
+      n.characterDraftId === p.characterDraftId &&
+      n.wizardCheckpointId === p.wizardCheckpointId &&
+      n.draftRevision === p.draftRevision
+      ? decoded
+      : unrecognized('$.presentation.base.roleFilteredPayload', n);
+  }
+
   if (previous.formId === 'CHR-017') {
     const source = previous.projection;
     if (
@@ -5014,6 +5127,67 @@ function decodeFormActionSnapshot(
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   if (!decoded.ok) return decoded;
+  if (
+    Object.hasOwn(previous.projection, 'correctionContext') ||
+    Object.hasOwn(decoded.value.projection, 'correctionContext') ||
+    previous.formId === 'CHR-025' ||
+    previous.formId === 'CHR-032' ||
+    (previous.formId === 'CHR-037' && previous.projection['summaryEntryMode'] === 'RESUME')
+  ) {
+    const targets: Partial<Record<ActionKey, string>> = {
+      'CHR-025::CTA::001': 'CHR-001',
+      'CHR-025::CTA::002': 'CHR-010',
+      'CHR-025::CTA::003': 'CHR-009',
+      'CHR-025::CTA::004': 'CHR-015',
+      'CHR-025::CTA::005': 'CHR-019',
+      'CHR-025::CTA::006': 'CHR-032',
+      'CHR-032::CTA::001': 'CHR-025',
+      'CHR-032::CTA::002': 'CHR-021',
+      'CHR-032::CTA::003': 'CHR-022',
+      'CHR-032::CTA::004': 'CHR-038',
+      'CHR-032::CTA::005': 'CHR-037',
+      'CHR-037::CTA::001': 'CHR-032',
+      'CHR-009::CTA::003': 'CHR-010',
+      'CHR-017::CTA::002': 'CHR-019',
+      'CHR-017::CTA::003': 'CHR-020',
+      'CHR-017::CTA::006': 'CHR-015',
+      'CHR-018::CTA::002': 'CHR-017',
+      'CHR-019::CTA::004': 'CHR-017',
+      'CHR-019::CTA::002': 'CHR-042',
+      'CHR-042::CTA::002': 'CHR-019',
+    };
+    const p = previous.projection,
+      n = decoded.value.projection;
+    if (
+      decoded.value.formId !== targets[pending.actionKey] ||
+      decoded.value.layers.length !== 0 ||
+      n['characterDraftId'] !== p['characterDraftId'] ||
+      n['wizardCheckpointId'] !== p['wizardCheckpointId'] ||
+      n['draftRevision'] !== p['draftRevision'] ||
+      (n['correctionHeadHash'] !== undefined &&
+        p['correctionHeadHash'] !== undefined &&
+        n['correctionHeadHash'] !== p['correctionHeadHash']) ||
+      (n['summaryReceiptIdOrNull'] !== undefined &&
+        p['summaryReceiptIdOrNull'] !== undefined &&
+        n['summaryReceiptIdOrNull'] !== p['summaryReceiptIdOrNull'])
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', n);
+    if (previous.formId === 'CHR-037' && decoded.value.formId === 'CHR-032') {
+      const positions = previous.projection as Chr037Projection,
+        summary = decoded.value.projection as Chr032Projection;
+      const rows = summary.fivePositions.map((row) => {
+        const { ownershipState: _ownership, ...rest } = row;
+        return rest;
+      });
+      if (
+        summary.propertyCheckpointReceiptId !== positions.positionsCheckpointReceiptIdOrNull ||
+        !sameJson(rows, positions.positions)
+      )
+        return unrecognized('$.presentation.base.roleFilteredPayload', n);
+    }
+    return decoded;
+  }
+
   if (pending.sourceFormId === 'CHR-014' && pending.actionKey === CHR_014_RETURN_ACTION_KEY) {
     if (previous.formId !== 'CHR-014' || decoded.value.formId !== 'CHR-013') {
       return unrecognized('$.presentation.base.formId', decoded.value.formId);
@@ -5140,7 +5314,8 @@ function decodeFormActionSnapshot(
       previous.layers.length !== 0 ||
       decoded.value.layers.length !== 0 ||
       money.positionsEntryMode !== 'RESUME' ||
-      positions.positionsCheckpointReceiptIdOrNull !== null ||
+      (positions.positionsCheckpointReceiptIdOrNull !== null &&
+        positions.summaryEntryMode !== 'RESUME') ||
       positions.moneyCheckpointReceiptId !== money.moneyCheckpointReceiptIdOrNull ||
       positions.moneyRollRequestId !== money.moneyRollRequestId ||
       positions.moneyRollReceiptId !== money.moneyRollReceiptIdOrNull ||
@@ -5190,7 +5365,10 @@ function decodeFormActionSnapshot(
       previous.layers.length !== 0 ||
       decoded.value.layers.length !== 0 ||
       profile.moneyEntryMode !== 'RESUME' ||
-      money.moneyCheckpointReceiptIdOrNull !== null ||
+      (money.moneyCheckpointReceiptIdOrNull !== null &&
+        (money.positionsEntryMode !== 'RESUME' ||
+          money.positionsOrNull === null ||
+          money.positionsOrNull.some((position) => position.qualityRollReceiptId === null))) ||
       money.weaponProfileFormId !== pending.sourceFormId ||
       money.profileReceiptId !== receiptId ||
       money.moneyRollRequestId !== profile.moneyRollRequestIdOrNull ||
@@ -5378,6 +5556,12 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
+  if ((pending.request.payload as JsonObject)['stage'] === 'FINALIZATION')
+    return decodeCreationFinalizationTerminal(
+      message,
+      pending.request,
+      pending.sourceSnapshot,
+    ) as DecodeResult<CommandReceipt<CheckpointResult>>;
   if (
     (pending.request.payload as { readonly variant?: string }).variant ===
     'FIVE_STARTING_POSITIONS_CHECKPOINT'
@@ -6367,6 +6551,28 @@ function fiveStartingPositionsSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (
+    snapshot.formId === 'CHR-032' &&
+    receipt.result['variant'] === 'FIVE_STARTING_POSITIONS_CHECKPOINT'
+  ) {
+    const p = snapshot.projection as Chr032Projection,
+      r = receipt.result;
+    const rows = p.fivePositions.map((row) => {
+      const { ownershipState: _ownership, ...rest } = row;
+      return rest;
+    });
+    return snapshot.layers.length === 0 &&
+      p.propertyCheckpointReceiptId === receipt.receiptId &&
+      p.commandId === receipt.commandId &&
+      p.characterDraftId === r['characterDraftId'] &&
+      p.wizardCheckpointId === r['checkpointId'] &&
+      p.draftRevision === r['draftRevision'] &&
+      p.summaryEntryMode === 'INITIAL' &&
+      sameJson(rows, r['positions']!) &&
+      sameJson({ ...snapshot.revisions }, { ...receipt.revisions })
+      ? { ok: true, value: snapshot }
+      : unrecognized('$.presentation.base.roleFilteredPayload', p);
+  }
   if (snapshot.formId !== 'CHR-037' || snapshot.layers.length !== 0)
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   const p = snapshot.projection as Chr037Projection,
@@ -6560,6 +6766,10 @@ function checkpointSnapshotMatchesReceipt(
   sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if ((result as JsonObject)['stage'] === 'FINALIZATION')
+    return creationFinalizationSnapshotMatchesReceipt(snapshot, receipt)
+      ? { ok: true, value: snapshot }
+      : unrecognized('$.presentation.base.roleFilteredPayload', snapshot.projection);
   if ((result as { readonly variant?: string }).variant === 'FIVE_STARTING_POSITIONS_CHECKPOINT')
     return fiveStartingPositionsSnapshotMatchesReceipt(snapshot, receipt);
   if ((result as { readonly variant?: string }).variant === 'STARTING_MONEY_CHECKPOINT')
@@ -7616,24 +7826,27 @@ export function connectProjection(
     if (pendingRollCommit !== null) pendingRollCommit = null;
     pendingAddressableRoute = null;
     creationChoiceDraft = null;
+    const correction = Object.hasOwn(next.projection, 'correctionContext');
     onCreationChoiceDraft(creationChoiceDraft);
-    creationRollDraft = creationRollDraftFromSnapshot(next);
+    creationRollDraft = correction ? null : creationRollDraftFromSnapshot(next);
     onCreationRollDraft(creationRollDraft);
-    statAssignmentDraft = creationStatAssignmentDraftFromSnapshot(next);
+    statAssignmentDraft = correction ? null : creationStatAssignmentDraftFromSnapshot(next);
     onStatAssignmentDraft(statAssignmentDraft);
-    skillSelectionDraft = creationSkillSelectionDraftFromSnapshot(next);
+    skillSelectionDraft = correction ? null : creationSkillSelectionDraftFromSnapshot(next);
     onSkillSelectionDraft(skillSelectionDraft);
-    randomSymbiontDraft = randomSymbiontDraftFromSnapshot(next);
+    randomSymbiontDraft = correction ? null : randomSymbiontDraftFromSnapshot(next);
     onRandomSymbiontDraft(randomSymbiontDraft);
-    advisorSkillSelectionDraft = advisorSkillSelectionDraftFromSnapshot(next);
+    advisorSkillSelectionDraft = correction ? null : advisorSkillSelectionDraftFromSnapshot(next);
     onAdvisorSkillSelectionDraft(advisorSkillSelectionDraft);
     skillCardDraft = next.formId === 'CHR-014' ? { formId: 'CHR-014', targetBonus: null } : null;
     onSkillCardDraft(skillCardDraft);
-    manualCompositionDraft = manualCompositionDraftFromSnapshot(
-      next,
-      reconnect ? null : manualCompositionDraft,
-      committedCompositionRevision,
-    );
+    manualCompositionDraft = correction
+      ? null
+      : manualCompositionDraftFromSnapshot(
+          next,
+          reconnect ? null : manualCompositionDraft,
+          committedCompositionRevision,
+        );
     onManualCompositionDraft(manualCompositionDraft);
     armorBundleDraft =
       next.formId === 'CHR-021'
@@ -7647,7 +7860,7 @@ export function connectProjection(
     onStartingWeaponDraft(startingWeaponDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
-    const draft = identitySnapshot(next, playerContextId);
+    const draft = correction ? null : identitySnapshot(next, playerContextId);
     let replay = null;
     if (draft === null) identity = null;
     else if (identity === null || !reconnect)
@@ -8395,7 +8608,9 @@ export function connectProjection(
       }
       if (
         lastSnapshot.formId !== 'CHR-017' ||
-        lastSnapshot.projection.symbiontAcquisitionModeOrNull !== 'MANUAL' ||
+        (lastSnapshot.projection['correctionContext'] === undefined
+          ? lastSnapshot.projection.symbiontAcquisitionModeOrNull
+          : lastSnapshot.projection['creationMode']) !== 'MANUAL' ||
         !lastSnapshot.availableActionKeys.includes(CHR_017_MANUAL_CARD_ACTION_KEY)
       ) {
         return { ok: false, detail: 'no active CHR-017 manual catalog scope' };
@@ -8919,6 +9134,58 @@ export function connectProjection(
       }
       return { ok: true };
     },
+    submitCreationCorrection: (variant, values) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot === null ||
+        !Object.hasOwn(lastSnapshot.projection, 'correctionContext')
+      )
+        return { ok: false, detail: 'no active correction context' };
+      if (commandPending() || pendingFormAction !== null || pendingAddressableRoute !== null)
+        return { ok: false, detail: 'another transition is pending' };
+      if (socket === null || socket.readyState !== WebSocket.OPEN)
+        return { ok: false, detail: 'WebSocket is not open' };
+      const p = lastSnapshot.projection as CreationCorrectionProjection;
+      const [, action, workflow] = CORRECTION_COMMANDS[variant];
+      if (
+        !lastSnapshot.availableActionKeys.includes(action) ||
+        !lastSnapshot.executableWorkflowCommandIds.includes(workflow)
+      )
+        return { ok: false, detail: 'correction action is unavailable' };
+      let request: CreationFinalizationRequest;
+      try {
+        request = {
+          messageType: 'command.request',
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          commandKind: 'workflow-command',
+          commandId: createRequestId('command'),
+          expectedRevisions: { ...lastSnapshot.revisions },
+          role: 'player',
+          workflowCommandId: workflow,
+          payload: creationCorrectionPayload(p, variant, values),
+        };
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
+      pendingCheckpoint = {
+        assignmentDraft: null,
+        receipt: null,
+        request: request as unknown as PendingCheckpoint['request'],
+        skillSelectionDraft: null,
+        sourceSnapshot: lastSnapshot,
+      };
+      try {
+        socket.send(encoded.text);
+      } catch (error: unknown) {
+        pendingCheckpoint = null;
+        return { ok: false, detail: diagnostic(error) };
+      }
+      notifyReady();
+      return { ok: true };
+    },
     rollFiveStartingPosition: (positions, positionId, manualFaceOrNull) => {
       if (
         disposed ||
@@ -9065,10 +9332,99 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
+      if (Object.hasOwn(lastSnapshot.projection, 'correctionContext')) {
+        const navigation: readonly ActionKey[] = [
+          'CHR-009::CTA::003',
+          'CHR-017::CTA::002',
+          'CHR-017::CTA::003',
+          'CHR-017::CTA::006',
+          'CHR-018::CTA::002',
+          'CHR-019::CTA::004',
+          'CHR-019::CTA::002',
+          'CHR-042::CTA::002',
+        ];
+        if (!navigation.includes(actionKey))
+          return { ok: false, detail: 'correction command requires explicit corrected values' };
+        const request = {
+          actionKey,
+          expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+          messageType: 'navigation.form-action',
+          navigationRequestId: createRequestId('navigation'),
+          protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+          sourceFormId: activeForm.formId,
+        } as const satisfies FormActionIntentV2Message;
+        const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
+        pendingFormAction = request;
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingFormAction = null;
+          return { ok: false, detail: diagnostic(error) };
+        }
+        return { ok: true };
+      }
+      if (
+        (activeForm.formId === 'CHR-032' &&
+          actionKey === 'CHR-032::CTA::001' &&
+          lastSnapshot.projection['summaryEntryMode'] === 'INITIAL') ||
+        (activeForm.formId === 'CHR-025' && actionKey === 'CHR-025::CTA::007')
+      ) {
+        const final = activeForm.formId === 'CHR-025';
+        let request: CreationFinalizationRequest;
+        try {
+          const common = {
+            commandId: createRequestId('command'),
+            expectedRevisions: { ...lastSnapshot.revisions },
+            messageType: 'command.request' as const,
+            protocolVersion: WIRE_PROTOCOL_VERSION,
+            role: 'player' as const,
+          };
+          request = final
+            ? {
+                ...common,
+                commandKind: 'operation-command',
+                transition: CREATION_FINAL_SAVE_TRANSITION,
+                payload: creationFinalSavePayload(lastSnapshot.projection as Chr025Projection),
+              }
+            : {
+                ...common,
+                commandKind: 'workflow-command',
+                workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+                payload: creationPropertySummaryPayload(
+                  lastSnapshot.projection as Chr032Projection,
+                ),
+              };
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok)
+          return {
+            ok: false,
+            detail: 'finalization encoding failed: ' + JSON.stringify(encoded.refusal),
+          };
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request: request as unknown as PendingCheckpoint['request'],
+          skillSelectionDraft: null,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return { ok: false, detail: diagnostic(error) };
+        }
+        notifyReady();
+        return { ok: true };
+      }
       if (
         activeForm.formId === 'CHR-037' &&
         lastSnapshot.formId === 'CHR-037' &&
-        actionKey === CHR_037_CONFIRM_ACTION_KEY
+        actionKey === CHR_037_CONFIRM_ACTION_KEY &&
+        lastSnapshot.projection['summaryEntryMode'] !== 'RESUME'
       ) {
         let request: FiveStartingPositionsRequest;
         try {

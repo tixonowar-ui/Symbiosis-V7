@@ -65,6 +65,8 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CHR-031',
   'CHR-038',
   'CHR-037',
+  'CHR-032',
+  'CHR-025',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -83,7 +85,11 @@ afterEach(() => {
   }
 });
 
-function renderAtlas(formId: string, availableActionKeys?: readonly ActionKey[]) {
+function renderAtlas(
+  formId: string,
+  availableActionKeys?: readonly ActionKey[],
+  playerContentOnly = false,
+) {
   const onAction = vi.fn<AtlasFormProps['onAction']>();
   const container = document.createElement('div');
   document.body.append(container);
@@ -101,6 +107,7 @@ function renderAtlas(formId: string, availableActionKeys?: readonly ActionKey[])
             : [])
         }
         formId={formId}
+        playerContentOnly={playerContentOnly}
         onAction={onAction}
       />,
     );
@@ -178,6 +185,18 @@ function fixtureSources({
 }
 
 describe('atlas implemented-form renderer', () => {
+  it.each(['CHR-001', 'CHR-011', 'CHR-025', 'CHR-032'])(
+    'shows only the source title and signed actions for player-only %s',
+    (formId) => {
+      const { container } = renderAtlas(formId, [], true);
+      expect(container.querySelector('h1')?.textContent).toBe(getAtlasFormModel(formId).title);
+      expect(container.querySelector('[data-atlas-metadata]')).toBeNull();
+      expect(container.querySelector('[data-atlas-state]')).toBeNull();
+      expect(container.querySelector('[data-atlas-value]')).toBeNull();
+      expect(buttons(container)).toHaveLength(0);
+      expect(container.textContent).not.toMatch(/QA-FORM|Required fields|CORE-|SYM-\d/);
+    },
+  );
   it('registers and renders APP plus the implemented CHR wizard slice with atlas types', () => {
     expect(IMPLEMENTED_FORM_IDS).toEqual(TEST_IMPLEMENTED_FORM_IDS);
 
@@ -195,7 +214,7 @@ describe('atlas implemented-form renderer', () => {
     }
 
     // APP has nine screens/two dialogs; CHR has 29 screens/two dialogs including five positions.
-    expect(screens).toBe(38);
+    expect(screens).toBe(40);
     expect(dialogs).toBe(4);
   });
 
@@ -362,8 +381,8 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
-    expect(() => getAtlasFormModel('CHR-032')).toThrow(
-      `form "CHR-032" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
+    expect(() => getAtlasFormModel('CHR-040')).toThrow(
+      `form "CHR-040" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 

@@ -178,7 +178,10 @@ for (const mode of ['AUTO', 'MANUAL'] as const) {
       await expect(position(page, 5)).toContainText('Редкое');
       await expect(page.locator('#starting-position-face')).toHaveCount(0);
       await action(page, 'CHR-037::CTA::001');
-      await expect(page.getByText('Пять позиций подтверждены.', { exact: true })).toBeVisible();
+      await expect(page.locator('[data-atlas-form-id="CHR-032"]')).toBeVisible();
+      await expect(
+        page.getByText('Восемь имущественных операций подтверждены', { exact: true }),
+      ).toBeVisible();
       const completed = host.checkpoint();
       const finalReceipts = host.receiptAllocations();
       expect(completed.nextStageEnvelope.formId).toBe('CHR-032');
@@ -187,8 +190,10 @@ for (const mode of ['AUTO', 'MANUAL'] as const) {
       await page.reload();
       await host.restart();
       await page.goto(host.baseURL);
-      await expect(page.getByText('Пять позиций подтверждены.', { exact: true })).toBeVisible();
-      await expect(page.locator('[data-atlas-form-id="CHR-032"]')).toHaveCount(0);
+      await expect(page.locator('[data-atlas-form-id="CHR-032"]')).toBeVisible();
+      await expect(
+        page.getByText('Восемь имущественных операций подтверждены', { exact: true }),
+      ).toBeVisible();
       await expect(page.locator('[data-atlas-action-key^="CHR-037"]')).toHaveCount(0);
       expect(host.checkpoint().fiveStartingPositionsStage).toEqual(
         completed.fiveStartingPositionsStage,

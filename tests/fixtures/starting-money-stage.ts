@@ -86,9 +86,13 @@ export function startingMoneyProfileRequest(
 export async function createStartingMoneyProfileSetup(options: {
   readonly prefix: string;
   readonly diceInputMode?: 'AUTO' | 'MANUAL';
-  readonly raceChoice?: 'FREE' | 'PURE';
+  readonly raceChoice?: 'FREE' | 'UNITED' | 'PURE';
+  readonly prepareManualComposition?: (
+    setup: ReturnType<typeof createManualWizardSetup>,
+  ) => DurableCreationWizardCheckpoint;
   readonly databasePath?: string;
   readonly characterDraftId?: string;
+  readonly massKg?: number;
 }) {
   const { prefix } = options;
   const race = options.raceChoice ?? 'FREE';
@@ -104,6 +108,7 @@ export async function createStartingMoneyProfileSetup(options: {
     mode,
     options.databasePath ?? ':memory:',
     options.characterDraftId,
+    options.massKg,
   );
   try {
     let current: DurableCreationWizardCheckpoint;
@@ -147,23 +152,25 @@ export async function createStartingMoneyProfileSetup(options: {
         setup.catalog,
       );
     } else {
-      current = commitCreationWizardCheckpoint(
-        setup.database,
-        manualCompositionRequest(setup, setup.checkpoint, `${prefix}-composition`, ['EEL']),
-        `${prefix}-composition-receipt`,
-        setup.catalog,
-        () => {
-          throw new Error('manual composition must not allocate a sequence');
-        },
-        {
-          allocateRollRequestId: () => {
-            throw new Error('EEL composition has no Advisor requests');
+      current =
+        options.prepareManualComposition?.(setup) ??
+        commitCreationWizardCheckpoint(
+          setup.database,
+          manualCompositionRequest(setup, setup.checkpoint, `${prefix}-composition`, ['EEL']),
+          `${prefix}-composition-receipt`,
+          setup.catalog,
+          () => {
+            throw new Error('manual composition must not allocate a sequence');
           },
-          sampleD20: () => {
-            throw new Error('EEL composition has no Advisor rolls');
+          {
+            allocateRollRequestId: () => {
+              throw new Error('EEL composition has no Advisor requests');
+            },
+            sampleD20: () => {
+              throw new Error('EEL composition has no Advisor rolls');
+            },
           },
-        },
-      );
+        );
       current = commitArmorBundleEntry(
         setup.database,
         startingMoneyCommand(current, `${prefix}-armor-entry`, {

@@ -105,6 +105,7 @@ function assertCommon(
     readonly allowWeaponProfileStage?: boolean;
     readonly allowStartingMoneyStage?: boolean;
     readonly allowFiveStartingPositionsStage?: boolean;
+    readonly allowFinalizationStage?: boolean;
   } = {},
 ): void {
   const actual = currentRevisions(checkpoint);
@@ -117,6 +118,8 @@ function assertCommon(
   }
   const occupied = creationWizardDurableIds(checkpoint);
   if (
+    checkpoint.localCharacter.lifecycleState !== 'DRAFT' ||
+    (checkpoint.finalizationStage != null && options.allowFinalizationStage !== true) ||
     characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
     draftRevision !== checkpoint.receipt.result.draftRevision ||

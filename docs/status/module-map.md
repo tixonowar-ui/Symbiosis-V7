@@ -4,8 +4,8 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-29`
-- Тестов: 2010 Vitest + 19 Playwright, все зелёные.
-- `npm run verify` — проходит; `npm run test:e2e` — 19/19 без retry.
+- Тестов: 2123 Vitest + 26 Playwright, все зелёные.
+- `npm run verify` — проходит; `npm run test:e2e` — 26/26 без retry.
 - `npm run import` прошёл; воспроизводимость проверяется отдельным CI-гейтом
   на чистом checkout, подробности — в [handoff](handoff.md).
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
@@ -153,23 +153,33 @@ receipt атомарно связывает pending money request; у истор
 каждая с отдельным D20 и immutable receipt. Доступны 62 типа с явным разрешением
 инвентаря и описательная категория GEN-010. Выбор остальных позиций остаётся
 редактируемым после первого броска; уже зафиксированные не заменяются.
-Safe-return к деньгам и SQLite reopen сохраняют весь набор; после checkpoint
-CHR-037 actionless, CHR-032 подписан и не публикуется.
-[ADR 0061](../adr/0061-five-starting-positions.md). Следующая очередь — #155–#156.
+Safe-return к деньгам и SQLite reopen сохраняют весь набор.
+[ADR 0061](../adr/0061-five-starting-positions.md).
+#155 публикует CHR-032 с восемью физическими receipts и CHR-025 с вычисленными
+blockers. Исправления связаны с текущим checkpoint и головой append-only
+журнала; раса, класс, навыки и состав пересчитываются без повторного броска
+принятой базы и без потери имущественных результатов. Активные механики,
+постоянные grants и ledger обучения проверяются по источникам. Кэши RANDOM,
+MANUAL и Советника восстанавливаются при переключениях. Финальный save
+атомарно фиксирует snapshot, receipt и FINAL того же localCharacterId;
+replay и SQLite reopen не создают второго персонажа. После save CHR-025
+доступен только для чтения, CHR-040 подписан и не публикуется.
+[ADR 0062](../adr/0062-creation-validation-and-final-save.md).
+Следующая очередь — #156: финальный лист, post-save recovery и экспорт.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                         | Веха |
-| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                     | M4   |
-| `src/domain/rules`           | **частично** | rolls, stats, skills, composition, Advisor, interactions, профили оружия, деньги и пять позиций | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                   | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                            | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation            | M2   |
-| `src/host`                   | **частично** | creation до actionless CHR-037; деньги и пять независимых стартовых стеков                      | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–024/028/031/036–038/041/042; CHR-032 подписан, не публикуется          | M4   |
-| `src/web`                    | **частично** | creation с пятью позициями; 19 production E2E-сценариев                                         | M5   |
-| `src/web/renderer`           | **частично** | добавлен CHR-037; остальные незарегистрированные формы fail-closed                              | M5   |
-| `src/web/forms`              | **частично** | APP domain; character wizard с выбором стеков и отдельным броском каждой позиции                | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                               | Веха |
+| ---------------------------- | ------------ | ------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                           | M4   |
+| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                         | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                  | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation  | M2   |
+| `src/host`                   | **частично** | creation до FINAL; восемь receipts, исправления и immutable snapshot                  | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–025/028/031/032/036–038/041/042; CHR-040 ещё не публикуется  | M4   |
+| `src/web`                    | **частично** | создание, исправления и финальный save; 26 production E2E-сценариев                   | M5   |
+| `src/web/renderer`           | **частично** | добавлены CHR-032/025; остальные незарегистрированные формы fail-closed               | M5   |
+| `src/web/forms`              | **частично** | APP domain; character wizard с итогом, подписанными исправлениями и финальным save    | M6   |
 
 ## generated/ — вывод конвейера
 
@@ -182,11 +192,11 @@ CHR-037 actionless, CHR-032 подписан и не публикуется.
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                |
-| ------------------- | ------------ | ----------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                        |
-| `tests/e2e`         | **частично** | 19 production-сценариев, включая пять позиций, точный replay, safe-return и SQLite reopen |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                    |
+| Каталог             | Состояние    | Примечание                                                                             |
+| ------------------- | ------------ | -------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                     |
+| `tests/e2e`         | **частично** | 26 production-сценариев: создание, исправления, финальный save, replay и SQLite reopen |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                 |
 
 ---
 

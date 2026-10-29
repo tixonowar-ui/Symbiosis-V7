@@ -57,6 +57,7 @@ export interface Chr037Projection extends JsonObject {
   readonly storyItemCountsAsOnePosition: true;
   readonly ownershipState: 'OWNED_NOT_EQUIPPED';
   readonly positionsCheckpointReceiptIdOrNull: string | null;
+  readonly summaryEntryMode?: 'NONE' | 'RESUME';
   readonly wizardCheckpointId: string;
   readonly draftRevision: number;
   readonly commandId: string;
@@ -198,6 +199,12 @@ export function decodeChr037Projection(
     storyItemCountsAsOnePosition: (field) => field === true,
     ownershipState: (field) => field === 'OWNED_NOT_EQUIPPED',
     positionsCheckpointReceiptIdOrNull: nullableId,
+    ...(Object.hasOwn(value, 'summaryEntryMode')
+      ? {
+          summaryEntryMode: (field: JsonValue | undefined) =>
+            field === 'NONE' || field === 'RESUME',
+        }
+      : {}),
     wizardCheckpointId: isNonEmptyString,
     draftRevision: isRevision,
     commandId: isNonEmptyString,
@@ -206,6 +213,7 @@ export function decodeChr037Projection(
   if (!decoded.ok) return decoded;
   const p = value as Chr037Projection;
   const done = p.positionsCheckpointReceiptIdOrNull !== null;
+  if (p.summaryEntryMode === 'RESUME' && !done) return refused(path, value);
   const ids = [
     p.moneyCheckpointReceiptId,
     p.moneyRollRequestId,
@@ -237,7 +245,8 @@ export function expectedChr037ActionKeys(
   projection: Chr037Projection,
   capabilities: { readonly rollCommit: boolean; readonly checkpoint: boolean },
 ): readonly ActionKey[] {
-  if (projection.positionsCheckpointReceiptIdOrNull !== null) return [];
+  if (projection.positionsCheckpointReceiptIdOrNull !== null)
+    return projection.summaryEntryMode === 'RESUME' ? [CHR_037_CONFIRM_ACTION_KEY] : [];
   return [
     ...(projection.positions.some((p) => p.qualityRollReceiptId === null)
       ? [CHR_037_EDIT_ACTION_KEY, ...(capabilities.rollCommit ? [CHR_037_ROLL_ACTION_KEY] : [])]

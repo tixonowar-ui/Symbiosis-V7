@@ -1,4 +1,5 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import { startingPropertyResumeAvailable } from '../creation-property-summary.js';
 import type { PresentedBaseForm, PresentedLayerForm } from '@shared/wire-v2-protocol.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 
@@ -88,7 +89,10 @@ function context(checkpoint: DurableCreationWizardCheckpoint, catalog: WeaponPro
   const last = stage.records.at(-1);
   const money = startingMoneyStageForCheckpoint(checkpoint);
   const moneyEntryMode =
-    money !== null && money.checkpointRecordOrNull === null ? 'RESUME' : 'NONE';
+    (money !== null && money.checkpointRecordOrNull === null) ||
+    startingPropertyResumeAvailable(checkpoint)
+      ? 'RESUME'
+      : 'NONE';
   const common: JsonObject = {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
     requestId: stage.requestId,

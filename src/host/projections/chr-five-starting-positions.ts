@@ -1,4 +1,5 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import { startingPropertyResumeAvailable } from '../creation-property-summary.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import type { FiveStartingPositionsCatalog } from '../../domain/rules/item-stage/five-starting-positions.js';
 import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js';
@@ -33,7 +34,9 @@ export function projectChr037(
   const missing = snapshots.some((position) => position.qualityRollReceiptId === null);
   const actions: ActionKey[] =
     done !== null
-      ? []
+      ? startingPropertyResumeAvailable(checkpoint)
+        ? ['CHR-037::CTA::001']
+        : []
       : [
           ...(missing
             ? [
@@ -86,6 +89,7 @@ export function projectChr037(
       storyItemCountsAsOnePosition: true,
       ownershipState: 'OWNED_NOT_EQUIPPED',
       positionsCheckpointReceiptIdOrNull: done?.receipt.receiptId ?? null,
+      summaryEntryMode: startingPropertyResumeAvailable(checkpoint) ? 'RESUME' : 'NONE',
       wizardCheckpointId: checkpoint.checkpoint.checkpointId,
       draftRevision: checkpoint.receipt.result.draftRevision,
       commandId: (done?.request ?? stage.rollRecords.at(-1)?.request ?? stage.entryRequest)

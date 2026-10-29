@@ -10,6 +10,7 @@ import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
 import {
   readLocalCharacterSymbiontPresentation,
   writeLocalCharacterSymbiontPresentation,
+  type SymbiontPresentationStage,
 } from './symbiont-presentation.js';
 import { writeLocalCharacterSkillPresentation } from './skill-presentation.js';
 import { createLocalCharacter } from './store.js';
@@ -30,7 +31,7 @@ const route = (formId: string): string =>
     ? '/player/characters/:localCharacterId/create/chr-018/:speciesKey'
     : `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`;
 
-function stage(formId: 'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-041' | 'CHR-042') {
+function stage(formId: SymbiontPresentationStage['formId']) {
   return {
     formId,
     compositionDraftRevision: 7,
@@ -47,7 +48,7 @@ function stage(formId: 'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-041' | 'CHR-042'
 }
 
 describe('local character symbiont presentation', () => {
-  it('round-trips all five host-signed forms and preserves the character snapshot', () => {
+  it('round-trips composition and correction forms while preserving the character snapshot', () => {
     const database = memoryDatabase();
     createLocalCharacter(database, 'character-draft', 'DRAFT', '{"unchanged":true}');
     const before = database
@@ -55,7 +56,20 @@ describe('local character symbiont presentation', () => {
         'SELECT payload_json, stateRevision FROM local_character WHERE local_character_id = ?',
       )
       .get('character-draft');
-    for (const formId of ['CHR-017', 'CHR-018', 'CHR-019', 'CHR-041', 'CHR-042'] as const) {
+    for (const formId of [
+      'CHR-001',
+      'CHR-009',
+      'CHR-010',
+      'CHR-011',
+      'CHR-020',
+      'CHR-025',
+      'CHR-032',
+      'CHR-017',
+      'CHR-018',
+      'CHR-019',
+      'CHR-041',
+      'CHR-042',
+    ] as const) {
       const value = stage(formId);
       writeLocalCharacterSymbiontPresentation(database, value);
       expect(readLocalCharacterSymbiontPresentation(database, 'character-draft')).toEqual(value);
@@ -74,9 +88,17 @@ describe('local character symbiont presentation', () => {
     expect(() =>
       writeLocalCharacterSymbiontPresentation(database, {
         ...stage('CHR-018'),
-        formId: 'CHR-020',
+        formId: 'CHR-026',
       }),
     ).toThrow('formId');
+    expect(() =>
+      writeLocalCharacterSymbiontPresentation(database, {
+        ...stage('CHR-001'),
+        routeBindings: [
+          { parameterIndex: 0, source: 'executor-allocated', value: 'character-draft' },
+        ],
+      }),
+    ).toThrow('inherited');
     expect(() =>
       writeLocalCharacterSymbiontPresentation(database, {
         ...stage('CHR-018'),

@@ -546,6 +546,16 @@ export function randomSymbiontStatus(
 
 export function nextSymbiontEnvelope<
   T extends
+    | 'CHR-001'
+    | 'CHR-009'
+    | 'CHR-010'
+    | 'CHR-011'
+    | 'CHR-015'
+    | 'CHR-017'
+    | 'CHR-018'
+    | 'CHR-025'
+    | 'CHR-040'
+    | 'CHR-042'
     | 'CHR-019'
     | 'CHR-020'
     | 'CHR-021'

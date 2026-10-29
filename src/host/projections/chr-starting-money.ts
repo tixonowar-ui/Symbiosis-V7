@@ -1,4 +1,5 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import { startingPropertyResumeAvailable } from '../creation-property-summary.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 
 import { startingMoneyStageForCheckpoint } from '../creation-starting-money-contract.js';
@@ -39,7 +40,9 @@ export function projectChr038(
   const roll = stage.rollRecordOrNull;
   const done = stage.checkpointRecordOrNull;
   const positions = fiveStartingPositionsStageForCheckpoint(checkpoint);
-  const resumePositions = positions !== null && positions.checkpointRecordOrNull === null;
+  const resumePositions =
+    (positions !== null && positions.checkpointRecordOrNull === null) ||
+    startingPropertyResumeAvailable(checkpoint);
   const recommendation = roll?.wealthRecommendation ?? null;
   const actions: ActionKey[] = [];
   if (done === null) {
