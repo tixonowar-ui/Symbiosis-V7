@@ -25,6 +25,11 @@ import type {
 } from '@shared/index.js';
 
 import { App } from './app.js';
+import {
+  MetadataFields,
+  PostSaveFields,
+  downloadPostSaveFile,
+} from './forms/chr/post-save-fields.js';
 import { WEB_PROTOCOL_VOCABULARY } from './ws-client.js';
 import type { App001Projection } from './ws-client.js';
 
@@ -334,6 +339,7 @@ const APP_004_PROJECTION = {
   campaignAuthority: false,
   draftCharacterIds: [],
   finalCharacterIds: [],
+  libraryEntries: [],
   handoffIdOrNull: null,
   handoffReceiptIdOrNull: null,
   launchContext: 'PLAYER_MENU',
@@ -430,6 +436,170 @@ interface ConnectedClient extends MountedClient {
 }
 
 const mountedClients: MountedClient[] = [];
+
+describe('post-save controls and exact browser download', () => {
+  it('distinguishes same-name variants and final sheets by device, type and a unique actual UUID suffix', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container),
+      onSelectLibrary = vi.fn();
+    mountedClients.push({ container, root });
+    const firstId = '00000000-0000-4000-8000-001100000001';
+    const secondId = '00000000-0000-4000-8000-002200000001';
+    const finalId = '00000000-0000-4000-8000-003300000001';
+    act(() =>
+      root.render(
+        <PostSaveFields
+          formId="APP-004"
+          projection={{
+            libraryEntries: [firstId, secondId, finalId].map((localCharacterId) => ({
+              localCharacterId,
+              lifecycleState: localCharacterId === finalId ? 'FINAL' : 'VARIANT',
+              name: 'Одинаковое имя',
+              selectionFormId: localCharacterId === finalId ? 'CHR-040' : 'CHR-001',
+            })),
+          }}
+          availableActionKeys={[]}
+          onMetadata={vi.fn()}
+          onVariant={vi.fn()}
+          onExport={vi.fn()}
+          onSelectLibrary={onSelectLibrary}
+        />,
+      ),
+    );
+    const buttons = [...container.querySelectorAll('button')];
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'Открыть: Одинаковое имя — это устройство, новый вариант, …100000001',
+      'Открыть: Одинаковое имя — это устройство, новый вариант, …200000001',
+      'Открыть: Одинаковое имя — это устройство, финальный лист, …300000001',
+    ]);
+    act(() => buttons[0]!.click());
+    expect(onSelectLibrary).toHaveBeenNthCalledWith(1, firstId);
+    act(() => buttons[1]!.click());
+    expect(onSelectLibrary).toHaveBeenNthCalledWith(2, secondId);
+    act(() => buttons[2]!.click());
+    expect(onSelectLibrary).toHaveBeenNthCalledWith(3, finalId);
+  });
+  it('edits only local name, description and portrait, and supports clearing the art', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container),
+      onMetadata = vi.fn();
+    mountedClients.push({ container, root });
+    act(() =>
+      root.render(
+        <MetadataFields
+          projection={{
+            name: 'Сохранённое имя',
+            description: 'Описание',
+            artAssetKeyOrLocalFile: {
+              kind: 'asset-key',
+              assetKey: LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[0],
+            },
+          }}
+          enabled
+          onMetadata={onMetadata}
+        />,
+      ),
+    );
+    expect(container.querySelectorAll('input[type="number"]')).toHaveLength(0);
+    const portrait = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Локальный портрет"]',
+    )!;
+    act(() => {
+      portrait.value = LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[1]!;
+      portrait.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const button = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Сохранить локальные имя, описание или арт',
+    )!;
+    act(() => button.click());
+    expect(onMetadata).toHaveBeenLastCalledWith({
+      name: 'Сохранённое имя',
+      description: 'Описание',
+      artAssetKeyOrLocalFile: {
+        kind: 'asset-key',
+        assetKey: LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[1],
+      },
+    });
+    act(() =>
+      [...container.querySelectorAll('button')]
+        .find((b) => b.textContent === 'Удалить локальный арт')!
+        .click(),
+    );
+    act(() => button.click());
+    expect(onMetadata).toHaveBeenLastCalledWith({
+      name: 'Сохранённое имя',
+      description: 'Описание',
+      artAssetKeyOrLocalFile: null,
+    });
+  });
+  it('shows only the GM export control and no player variant control', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container),
+      onExport = vi.fn(),
+      onVariant = vi.fn();
+    mountedClients.push({ container, root });
+    act(() =>
+      root.render(
+        <PostSaveFields
+          formId="APP-010"
+          projection={{
+            ownerContext: 'GM_ARCHIVE_EXPORT',
+            provenance: {},
+            metadata: { name: 'Архив' },
+            schemaVersion: 1,
+            baselineVersion: 'baseline',
+            checksum: 'a'.repeat(64),
+          }}
+          availableActionKeys={['APP-010::CTA::005']}
+          onMetadata={vi.fn()}
+          onVariant={onVariant}
+          onExport={onExport}
+          onSelectLibrary={vi.fn()}
+        />,
+      ),
+    );
+    expect(container.textContent).toContain('Завершённая копия из архива кампании.');
+    expect(container.textContent).not.toContain('Создать вариант');
+    act(() => container.querySelector('button')!.click());
+    expect(onExport).toHaveBeenCalledOnce();
+    expect(onVariant).not.toHaveBeenCalled();
+  });
+  it('downloads the exact UTF-8 bytes without requiring secure-context crypto or reserializing JSON', async () => {
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:export'),
+      revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+    vi.stubGlobal('crypto', {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      const contentText = '{ "name": "Персонаж", "order": [2,1] }\n';
+      await downloadPostSaveFile({
+        fileName: 'character.json',
+        mediaType: 'application/json',
+        contentText,
+        bytesSha256: 'a'.repeat(64),
+      });
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      const blob = createObjectURL.mock.calls[0]![0];
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsText(blob);
+      });
+      expect(content).toBe(contentText);
+      expect(blob.type).toBe('application/json');
+      expect(click).toHaveBeenCalledOnce();
+      expect(document.querySelector('a[download]')).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:export');
+    } finally {
+      click.mockRestore();
+    }
+  });
+});
 
 afterEach(() => {
   for (const mounted of mountedClients.splice(0)) {
@@ -2119,6 +2289,10 @@ describe('APP-001 web entry', () => {
         SET_DECIDE_WORKFLOW_COMMAND_ID,
         ROLL_COMMIT_WORKFLOW_COMMAND_ID,
         'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',
+        'UI-CMD-LOCAL-CHECKPOINT-RESTORE',
+        'UI-CMD-CHAR-LOCAL-METADATA-PATCH',
+        'UI-CMD-CHAR-VARIANT-CREATE',
+        'UI-CMD-CHAR-EXPORT',
       ],
       unacknowledgedCommandIds: [],
     });
@@ -2347,7 +2521,8 @@ describe('APP-001 web entry', () => {
 
     expect(container.querySelector('[data-atlas-form-id="APP-004"]')).not.toBeNull();
     expect(window.location.pathname).toBe('/player/characters');
-    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(11);
+    expect(container.querySelectorAll('[data-host-field]')).toHaveLength(0);
+    expect(container.textContent).toContain('Библиотека пуста.');
     expect(container.querySelectorAll('[data-atlas-action]')).toHaveLength(2);
     for (const actionKey of [
       'APP-004::CTA::002',

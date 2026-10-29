@@ -1,4 +1,24 @@
 import {
+  decodePostSaveProjection,
+  expectedPostSaveActions,
+  isPostSaveForm,
+  LIBRARY_ROUTES,
+  POST_SAVE_ACTIONS,
+  postSavePayload,
+  decodePostSaveTerminal,
+  postSaveDestinationMatches,
+  postSaveReceiptUnchanged,
+} from './forms/chr/post-save.js';
+import {
+  POST_SAVE_COMMAND_IDS,
+  type PostSaveProjection,
+  type PostSaveMetadata,
+  type PostSavePayload,
+  type PostSaveRequest,
+  type PostSaveDraftRequest,
+  type PostSaveCommandResult,
+} from '@shared/local-character-post-save.js';
+import {
   decodeCreationCorrectionProjection,
   expectedCreationCorrectionActionKeys,
   creationCorrectionPayload,
@@ -298,6 +318,9 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-037',
   'CHR-032',
   'CHR-025',
+  'CHR-026',
+  'CHR-039',
+  'CHR-040',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -310,15 +333,22 @@ const CHR_018_ROUTE =
 
 export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
   isAddressableRouteTemplate: (value): value is AddressableRouteTemplate =>
-    value === CHR_014_ROUTE || value === CHR_018_ROUTE,
+    value === CHR_014_ROUTE ||
+    value === CHR_018_ROUTE ||
+    (Object.values(LIBRARY_ROUTES) as readonly string[]).includes(value),
   isClientRouteBindings: (routeTemplate, bindings) =>
-    (routeTemplate === CHR_014_ROUTE || routeTemplate === CHR_018_ROUTE) &&
-    bindings.length === 1 &&
-    bindings[0]?.parameterIndex === 1 &&
-    bindings[0].source === 'client-selected' &&
-    (routeTemplate === CHR_014_ROUTE
-      ? isPublicSkillId(bindings[0].value)
-      : isSpeciesKey(bindings[0].value)),
+    (Object.values(LIBRARY_ROUTES) as readonly string[]).includes(routeTemplate)
+      ? bindings.length === 1 &&
+        bindings[0]?.parameterIndex === 0 &&
+        bindings[0].source === 'client-selected' &&
+        UUID_PATTERN.test(bindings[0].value)
+      : (routeTemplate === CHR_014_ROUTE || routeTemplate === CHR_018_ROUTE) &&
+        bindings.length === 1 &&
+        bindings[0]?.parameterIndex === 1 &&
+        bindings[0].source === 'client-selected' &&
+        (routeTemplate === CHR_014_ROUTE
+          ? isPublicSkillId(bindings[0].value)
+          : isSpeciesKey(bindings[0].value)),
   isFormActionKey: isImplementedFormActionKey,
   isFormId: (value): value is FormId => FORM_ID_SET.has(value),
   isHostTransition: (value) =>
@@ -367,7 +397,8 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID ||
     value === SET_DECIDE_WORKFLOW_COMMAND_ID ||
     value === ROLL_COMMIT_WORKFLOW_COMMAND_ID ||
-    value === WEAPON_PROFILE_SUBMIT_WORKFLOW,
+    value === WEAPON_PROFILE_SUBMIT_WORKFLOW ||
+    (Object.values(POST_SAVE_COMMAND_IDS) as readonly string[]).includes(value),
 };
 
 const NO_KNOWN_REVISIONS = {
@@ -559,6 +590,12 @@ export interface App001Projection extends JsonObject {
 }
 
 export interface App004Projection extends JsonObject {
+  readonly libraryEntries: readonly {
+    readonly localCharacterId: string;
+    readonly lifecycleState: 'DRAFT' | 'FINAL' | 'VARIANT';
+    readonly name: string | null;
+    readonly selectionFormId: 'CHR-026' | 'CHR-040' | 'CHR-001';
+  }[];
   readonly campaignAuthority: false;
   readonly draftCharacterIds: readonly string[];
   readonly finalCharacterIds: readonly string[];
@@ -1719,6 +1756,11 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  submitPostSave(
+    variant: PostSavePayload['variant'],
+    values?: PostSaveMetadata,
+  ): FormActionRequestResult;
+  selectLibraryCharacter(localCharacterId: string): FormActionRequestResult;
   submitCreationCorrection(
     variant: CreationCorrectionVariant,
     values: JsonObject,
@@ -2034,6 +2076,24 @@ function decodeApp004Projection(
 ): DecodeResult<JsonObject> {
   const result = decodeProjection(value, path, {
     campaignAuthority: (field) => field === false,
+    libraryEntries: (field) =>
+      Array.isArray(field) &&
+      field.every(
+        (entry) =>
+          isJsonObject(entry) &&
+          decodeProjection(entry, `${path}.libraryEntries`, {
+            localCharacterId: (id) => typeof id === 'string' && UUID_PATTERN.test(id),
+            lifecycleState: (s) => s === 'DRAFT' || s === 'FINAL' || s === 'VARIANT',
+            name: (n) => n === null || isNonEmptyString(n),
+            selectionFormId: (f) =>
+              f ===
+              (entry['lifecycleState'] === 'DRAFT'
+                ? 'CHR-026'
+                : entry['lifecycleState'] === 'FINAL'
+                  ? 'CHR-040'
+                  : 'CHR-001'),
+          }).ok,
+      ),
     draftCharacterIds: isCanonicalCharacterIdList,
     finalCharacterIds: isCanonicalCharacterIdList,
     handoffIdOrNull: (field) => field === null,
@@ -2049,6 +2109,15 @@ function decodeApp004Projection(
   if (!result.ok) return result;
   const draftIds = value['draftCharacterIds'] as readonly string[];
   const finalIds = value['finalCharacterIds'] as readonly string[];
+  const entries = value['libraryEntries'] as App004Projection['libraryEntries'];
+  if (
+    entries.length !== draftIds.length + finalIds.length ||
+    new Set(entries.map((e) => e.localCharacterId)).size !== entries.length ||
+    entries.some(
+      (e) => !(e.lifecycleState === 'FINAL' ? finalIds : draftIds).includes(e.localCharacterId),
+    )
+  )
+    return unrecognized(`${path}.libraryEntries`, value['libraryEntries']!);
   const draftIdSet = new Set(draftIds);
   const duplicate = finalIds.find((id) => draftIdSet.has(id));
   return duplicate === undefined
@@ -2081,6 +2150,18 @@ function decodeChr001Projection(
   const characterDraftId = value['characterDraftId'];
   return decodeProjection(value, path, {
     age: (field) => field === null || (typeof field === 'number' && Number.isFinite(field)),
+    ...(Object.hasOwn(value, 'identityDraftScope')
+      ? {
+          identityDraftScope: (field: JsonValue) =>
+            isJsonObject(field) &&
+            decodeProjection(field, `${path}.identityDraftScope`, {
+              sourceFormId: (v) => v === 'CHR-001',
+              contextId: (v) => typeof v === 'string' && UUID_PATTERN.test(v),
+              characterDraftId: (v) => v === characterDraftId,
+              wizardCheckpointId: (v) => v === value['wizardCheckpointId'],
+            }).ok,
+        }
+      : {}),
     anatomyProfile: (field) => field === 'STANDARD_HUMANOID',
     artAssetKeyOrLocalFile: isIdentityArt,
     characterDraftId: (field) =>
@@ -3935,12 +4016,35 @@ function decodeConfirmedSnapshot(
   executableWorkflowCommandIds: readonly WorkflowCommandId[],
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const base = message.presentation.base;
-  const expectedRole = base.formId === 'APP-001' ? null : 'player';
+  const expectedRole =
+    base.formId === 'APP-001'
+      ? null
+      : base.formId === 'APP-010' &&
+          base.roleFilteredPayload['ownerContext'] === 'GM_ARCHIVE_EXPORT'
+        ? 'gm'
+        : 'player';
   if (message.projectionRole !== expectedRole) {
     return unrecognized('$.projectionRole', message.projectionRole);
   }
   let projection: DecodeResult<JsonObject>;
-  if (Object.hasOwn(base.roleFilteredPayload, 'correctionContext')) {
+  if (isPostSaveForm(base.formId)) {
+    const decoded = decodePostSaveProjection(
+      base.roleFilteredPayload,
+      '$.presentation.base.roleFilteredPayload',
+      base.formId,
+      message.projectionRole,
+      message.revisions,
+    );
+    projection = decoded;
+    if (decoded.ok) {
+      const actions = exactSymbiontActionKeys(
+        base.availableActionKeys,
+        expectedPostSaveActions(base.formId, decoded.value, executableWorkflowCommandIds),
+        '$.presentation.base.availableActionKeys',
+      );
+      if (!actions.ok) return actions;
+    }
+  } else if (Object.hasOwn(base.roleFilteredPayload, 'correctionContext')) {
     const decoded = decodeCreationCorrectionProjection(
       base.roleFilteredPayload,
       '$.presentation.base.roleFilteredPayload',
@@ -4375,7 +4479,11 @@ function decodeConfirmedSnapshot(
                   decoded.value as Chr032Projection,
                   executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
                 )
-              : expectedChr025ActionKeys(decoded.value as Chr025Projection, true);
+              : expectedChr025ActionKeys(
+                  decoded.value as Chr025Projection,
+                  true,
+                  executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
+                );
           const actions = exactSymbiontActionKeys(
             base.availableActionKeys,
             expected,
@@ -4765,7 +4873,7 @@ function visibleSnapshotCore(
   skillCardDraft: CharacterSkillCardDraft | null = null,
   manualCompositionDraft: ManualCompositionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
-  if (Object.hasOwn(snapshot.projection, 'correctionContext'))
+  if (Object.hasOwn(snapshot.projection, 'correctionContext') || isPostSaveForm(snapshot.formId))
     return commandPending ? { ...snapshot, availableActionKeys: [] } : snapshot;
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
     return {
@@ -5010,6 +5118,23 @@ function decodeAddressableRouteSnapshot(
   if (message.presentation.assignment.reason !== 'ADDRESSABLE_ROUTE') {
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
   }
+  if (previous.formId === 'APP-004') {
+    const selectedId = pending.bindings[0]?.value;
+    const entry = (previous.projection as App004Projection).libraryEntries.find(
+      (e) => e.localCharacterId === selectedId,
+    );
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    return entry !== undefined &&
+      pending.routeTemplate === LIBRARY_ROUTES[entry.selectionFormId] &&
+      decoded.value.formId === entry.selectionFormId &&
+      decoded.value.layers.length === 0 &&
+      (entry.selectionFormId === 'CHR-001'
+        ? decoded.value.projection['characterDraftId']
+        : decoded.value.projection['sourceEntityId']) === selectedId
+      ? decoded
+      : unrecognized('$.presentation.base.roleFilteredPayload', decoded.value.projection);
+  }
   if (
     message.revisions.stateRevision !== previous.revisions.stateRevision ||
     message.revisions.actorVisibilityRevision !== previous.revisions.actorVisibilityRevision ||
@@ -5117,6 +5242,64 @@ function decodeFormActionSnapshot(
   }
   if (message.presentation.assignment.reason !== 'FORM_ACTION') {
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
+  }
+  if (isPostSaveForm(previous.formId) || pending.actionKey === 'CHR-025::CTA::009') {
+    const targets: Partial<Record<ActionKey, FormId>> = {
+      'CHR-026::CTA::001': 'APP-009',
+      'CHR-026::CTA::002': 'APP-004',
+      'APP-009::CTA::002': 'APP-004',
+      'CHR-039::CTA::001': 'CHR-017',
+      'CHR-039::CTA::002': 'CHR-019',
+      'CHR-039::CTA::003': 'CHR-032',
+      'CHR-039::CTA::004': 'CHR-025',
+      'CHR-040::CTA::001': 'APP-010',
+      'CHR-040::CTA::003': 'APP-004',
+      'APP-010::CTA::001': 'APP-004',
+      'APP-010::CTA::002': 'CHR-040',
+      'APP-010::CTA::003': 'CMP-012',
+      'CHR-025::CTA::009': 'CHR-039',
+    };
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    const p = previous.projection,
+      n = decoded.value.projection;
+    const owner = p['sourceEntityId'] ?? p['characterDraftId'];
+    if (
+      p['postSaveScopeId'] !== undefined &&
+      p['postSaveScopeId'] === n['postSaveScopeId'] &&
+      (message.revisions.stateRevision !== previous.revisions.stateRevision ||
+        message.revisions.actorVisibilityRevision !== previous.revisions.actorVisibilityRevision ||
+        message.revisions.projectionRevision !== previous.revisions.projectionRevision + 1)
+    )
+      return unrecognized('$.revisions', { ...message.revisions });
+    if (decoded.value.formId !== targets[pending.actionKey] || decoded.value.layers.length !== 0)
+      return unrecognized('$.presentation.base.formId', decoded.value.formId);
+    if (
+      decoded.value.formId !== 'APP-004' &&
+      (decoded.value.formId as string) !== 'CMP-012' &&
+      (n['sourceEntityId'] ?? n['characterDraftId']) !== owner
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', n);
+    if (
+      previous.formId === 'CHR-039' &&
+      (decoded.value.formId !== p['returnFormId'] ||
+        n['wizardCheckpointId'] !== p['wizardCheckpointId'] ||
+        n['draftRevision'] !== p['draftRevision'])
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', n);
+    if (
+      decoded.value.formId === 'CHR-039' &&
+      (n['returnFormId'] !== previous.formId ||
+        n['wizardCheckpointId'] !== p['wizardCheckpointId'] ||
+        n['draftRevision'] !== p['draftRevision'])
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', n);
+    if (
+      decoded.value.formId === 'APP-010' &&
+      (n['originFormId'] !== previous.formId || n['ownerContext'] !== 'PLAYER_LOCAL')
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', n);
+    return decoded;
   }
   if (
     message.revisions.stateRevision !== previous.revisions.stateRevision ||
@@ -7693,6 +7876,10 @@ export function connectProjection(
   onManualCompositionDraft: (value: ManualCompositionDraft | null) => void = () => {},
   onArmorBundleDraft: (value: ArmorBundleDraft | null) => void = () => {},
   onStartingWeaponDraft: (value: StartingWeaponDraft | null) => void = () => {},
+  onPostSaveDownload: (
+    value: NonNullable<PostSaveCommandResult['downloadOrNull']>,
+  ) => void = () => {},
+  onPostSaveCommitted: (value: PostSaveCommandResult) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -7700,6 +7887,12 @@ export function connectProjection(
   let terminal = false;
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
   let pendingCheckpoint: PendingCheckpoint | null = null;
+  let pendingPostSave: {
+    request: PostSaveRequest | PostSaveDraftRequest;
+    receipt: CommandReceipt<PostSaveCommandResult> | null;
+    source: ConfirmedProjectionSnapshot;
+  } | null = null;
+  const downloadedReceipts = new Set<string>();
   let pendingSetDecision: PendingSetDecision | null = null;
   let pendingRollCommit: PendingRollCommit | null = null;
   let pendingFormAction: FormActionIntentV2Message | null = null;
@@ -7718,7 +7911,10 @@ export function connectProjection(
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
-    pendingCheckpoint !== null || pendingSetDecision !== null || pendingRollCommit !== null;
+    pendingPostSave !== null ||
+    pendingCheckpoint !== null ||
+    pendingSetDecision !== null ||
+    pendingRollCommit !== null;
   const visibleSnapshotBase = (
     snapshot: ConfirmedProjectionSnapshot,
     identityValue: IdentityDraftClient | null,
@@ -7767,6 +7963,7 @@ export function connectProjection(
     if (disposed || terminal) return;
     terminal = true;
     pendingCheckpoint = null;
+    pendingPostSave = null;
     pendingSetDecision = null;
     pendingRollCommit = null;
     pendingFormAction = null;
@@ -7812,6 +8009,19 @@ export function connectProjection(
   };
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
+    const postSaveReceipt = pendingPostSave?.receipt;
+    if (postSaveReceipt !== null && postSaveReceipt !== undefined)
+      onPostSaveCommitted(postSaveReceipt.result);
+    if (
+      postSaveReceipt !== null &&
+      postSaveReceipt !== undefined &&
+      postSaveReceipt.result.downloadOrNull !== null &&
+      !downloadedReceipts.has(postSaveReceipt.receiptId)
+    ) {
+      downloadedReceipts.add(postSaveReceipt.receiptId);
+      onPostSaveDownload(postSaveReceipt.result.downloadOrNull);
+    }
+    pendingPostSave = null;
     const checkpointResult = pendingCheckpoint?.receipt?.result;
     const committedCompositionRevision =
       checkpointResult?.stage === 'SYMBIONTS' &&
@@ -7860,6 +8070,8 @@ export function connectProjection(
     onStartingWeaponDraft(startingWeaponDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
+    else if (next.formId === 'CHR-001' && isJsonObject(next.projection['identityDraftScope']))
+      playerContextId = next.projection['identityDraftScope']['contextId'] as string;
     const draft = correction ? null : identitySnapshot(next, playerContextId);
     let replay = null;
     if (draft === null) identity = null;
@@ -7939,7 +8151,41 @@ export function connectProjection(
         }
         const message = decoded.value;
         if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
-          if (pendingCheckpoint !== null) {
+          if (pendingPostSave !== null) {
+            const receipt = decodePostSaveTerminal(
+              message,
+              pendingPostSave.request,
+              pendingPostSave.source.projection,
+            );
+            if (!receipt.ok) {
+              failProtocol(receipt.refusal, 'Host sent an invalid post-save receipt.');
+              return;
+            }
+            if (
+              receipt.value.result.restoredCheckpointOrNull !== null &&
+              receipt.value.result.restoredCheckpointOrNull.ownerDeviceId !== deviceId
+            ) {
+              failUnexpected(
+                '$.receipt.result.restoredCheckpointOrNull.ownerDeviceId',
+                receipt.value.result.restoredCheckpointOrNull.ownerDeviceId,
+                'Restored checkpoint belongs to another device.',
+              );
+              return;
+            }
+            if (
+              pendingPostSave.receipt !== null &&
+              (message.messageType !== 'command.replay' ||
+                !postSaveReceiptUnchanged(pendingPostSave.receipt, receipt.value))
+            ) {
+              failUnexpected(
+                '$.receipt',
+                message.receipt.receiptId,
+                'Host changed a confirmed post-save receipt.',
+              );
+              return;
+            }
+            pendingPostSave = { ...pendingPostSave, receipt: receipt.value };
+          } else if (pendingCheckpoint !== null) {
             if (pendingCheckpoint.receipt !== null && message.messageType !== 'command.replay') {
               failUnexpected(
                 '$.messageType',
@@ -8042,6 +8288,10 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'command.refusal') {
+          const matchesPostSave =
+            pendingPostSave !== null &&
+            pendingPostSave.receipt === null &&
+            message.commandId === pendingPostSave.request.commandId;
           const matchesCheckpoint =
             pendingCheckpoint !== null &&
             pendingCheckpoint.receipt === null &&
@@ -8055,7 +8305,7 @@ export function connectProjection(
             pendingRollCommit.receipt === null &&
             message.commandId === pendingRollCommit.request.commandId;
           if (
-            (!matchesCheckpoint && !matchesSetDecision && !matchesRollCommit) ||
+            (!matchesPostSave && !matchesCheckpoint && !matchesSetDecision && !matchesRollCommit) ||
             lastSnapshot === null
           ) {
             failUnexpected(
@@ -8066,6 +8316,7 @@ export function connectProjection(
             return;
           }
           if (matchesCheckpoint) pendingCheckpoint = null;
+          if (matchesPostSave) pendingPostSave = null;
           if (matchesSetDecision) pendingSetDecision = null;
           if (matchesRollCommit) pendingRollCommit = null;
           if (!expectingCapabilities) {
@@ -8232,7 +8483,16 @@ export function connectProjection(
           const capabilities = stagedCapabilities!;
           stagedCapabilities = null;
           snapshot = decodeReconnectSnapshot(message, capabilities, requestId);
-          if (snapshot.ok && pendingCheckpoint !== null) {
+          if (snapshot.ok && pendingPostSave !== null) {
+            if (
+              pendingPostSave.receipt === null ||
+              !postSaveDestinationMatches(snapshot.value, pendingPostSave.receipt)
+            )
+              snapshot = unrecognized(
+                '$.presentation.base.roleFilteredPayload',
+                snapshot.value.projection,
+              );
+          } else if (snapshot.ok && pendingCheckpoint !== null) {
             if (pendingCheckpoint.receipt === null) {
               snapshot = unrecognized('$.messageType', message.messageType);
             } else {
@@ -8266,6 +8526,21 @@ export function connectProjection(
               );
             }
           }
+        } else if (pendingPostSave !== null && pendingPostSave.receipt !== null) {
+          snapshot = decodeConfirmedSnapshot(
+            message,
+            pendingPostSave.source.executableWorkflowCommandIds,
+          );
+          if (
+            snapshot.ok &&
+            (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
+              message.presentation.assignment.correlationId !== pendingPostSave.request.commandId ||
+              !postSaveDestinationMatches(snapshot.value, pendingPostSave.receipt))
+          )
+            snapshot = unrecognized(
+              '$.presentation.base.roleFilteredPayload',
+              snapshot.value.projection,
+            );
         } else if (
           pendingCheckpoint !== null &&
           pendingCheckpoint.receipt !== null &&
@@ -8432,15 +8707,18 @@ export function connectProjection(
         SET_DECIDE_WORKFLOW_COMMAND_ID,
         ROLL_COMMIT_WORKFLOW_COMMAND_ID,
         WEAPON_PROFILE_SUBMIT_WORKFLOW,
+        ...Object.values(POST_SAVE_COMMAND_IDS),
       ],
       unacknowledgedCommandIds:
-        pendingCheckpoint !== null
-          ? [pendingCheckpoint.request.commandId]
-          : pendingSetDecision !== null
-            ? [pendingSetDecision.request.commandId]
-            : pendingRollCommit !== null
-              ? [pendingRollCommit.request.commandId]
-              : [],
+        pendingPostSave !== null
+          ? [pendingPostSave.request.commandId]
+          : pendingCheckpoint !== null
+            ? [pendingCheckpoint.request.commandId]
+            : pendingSetDecision !== null
+              ? [pendingSetDecision.request.commandId]
+              : pendingRollCommit !== null
+                ? [pendingRollCommit.request.commandId]
+                : [],
     } as const satisfies SessionReconnectV2Message;
     const encoded = encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok)
@@ -8544,7 +8822,91 @@ export function connectProjection(
     return { ok: true };
   };
 
+  const submitPostSave = (
+    variant: PostSavePayload['variant'],
+    values?: PostSaveMetadata,
+  ): FormActionRequestResult => {
+    if (disposed || terminal || lastSnapshot === null || !isPostSaveForm(lastSnapshot.formId))
+      return { ok: false, detail: 'no active post-save source' };
+    if (commandPending() || pendingFormAction !== null || pendingAddressableRoute !== null)
+      return { ok: false, detail: 'another transition is pending' };
+    if (socket === null || socket.readyState !== WebSocket.OPEN)
+      return { ok: false, detail: 'WebSocket is not open' };
+    if (
+      !lastSnapshot.availableActionKeys.includes(POST_SAVE_ACTIONS[variant]) ||
+      !lastSnapshot.executableWorkflowCommandIds.includes(POST_SAVE_COMMAND_IDS[variant])
+    )
+      return { ok: false, detail: 'post-save action is unavailable' };
+    let request: PostSaveRequest;
+    try {
+      request = {
+        messageType: 'command.request',
+        protocolVersion: WIRE_PROTOCOL_VERSION,
+        commandKind: 'workflow-command',
+        commandId: createRequestId('command'),
+        role: lastSnapshot.projection['ownerContext'] === 'GM_ARCHIVE_EXPORT' ? 'gm' : 'player',
+        expectedRevisions: { ...lastSnapshot.revisions },
+        workflowCommandId: POST_SAVE_COMMAND_IDS[variant],
+        payload: postSavePayload(
+          lastSnapshot.formId,
+          lastSnapshot.projection as PostSaveProjection,
+          variant,
+          values,
+        ),
+      };
+    } catch (error: unknown) {
+      return { ok: false, detail: diagnostic(error) };
+    }
+    const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
+    pendingPostSave = { request, receipt: null, source: lastSnapshot };
+    try {
+      socket.send(encoded.text);
+    } catch (error: unknown) {
+      pendingPostSave = null;
+      return { ok: false, detail: diagnostic(error) };
+    }
+    notifyReady();
+    return { ok: true };
+  };
   return {
+    submitPostSave,
+    selectLibraryCharacter: (localCharacterId) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot?.formId !== 'APP-004' ||
+        commandPending() ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null
+      )
+        return { ok: false, detail: 'library selection is unavailable' };
+      if (socket === null || socket.readyState !== WebSocket.OPEN)
+        return { ok: false, detail: 'WebSocket is not open' };
+      const entry = (lastSnapshot.projection as App004Projection).libraryEntries.find(
+        (e) => e.localCharacterId === localCharacterId,
+      );
+      if (entry === undefined)
+        return { ok: false, detail: 'character is absent from the confirmed library' };
+      const request = {
+        messageType: 'navigation.addressable-route',
+        protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+        routeTemplate: LIBRARY_ROUTES[entry.selectionFormId] as AddressableRouteTemplate,
+        bindings: [{ parameterIndex: 0, source: 'client-selected', value: localCharacterId }],
+        expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+        navigationRequestId: createRequestId('navigation'),
+      } as const satisfies AddressableRouteIntentV2Message;
+      const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
+      pendingAddressableRoute = request;
+      try {
+        socket.send(encoded.text);
+      } catch (error: unknown) {
+        pendingAddressableRoute = null;
+        return { ok: false, detail: diagnostic(error) };
+      }
+      return { ok: true };
+    },
     disconnect: () => {
       if (disposed) return;
       disposed = true;
@@ -9331,6 +9693,52 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (isPostSaveForm(activeForm.formId)) {
+        const variant = (Object.keys(POST_SAVE_ACTIONS) as PostSavePayload['variant'][]).find(
+          (v) => POST_SAVE_ACTIONS[v] === actionKey,
+        );
+        if (variant !== undefined)
+          return variant === 'METADATA_PATCH'
+            ? { ok: false, detail: 'metadata confirmation requires explicit field values' }
+            : submitPostSave(variant);
+      }
+      if (activeForm.formId === 'CHR-025' && actionKey === 'CHR-025::CTA::008') {
+        if (
+          !lastSnapshot.executableWorkflowCommandIds.includes(
+            IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+          )
+        )
+          return { ok: false, detail: 'checkpoint capability unavailable' };
+        const p = lastSnapshot.projection;
+        const request: PostSaveDraftRequest = {
+          messageType: 'command.request',
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          commandKind: 'workflow-command',
+          role: 'player',
+          commandId: createRequestId('command'),
+          expectedRevisions: { ...lastSnapshot.revisions },
+          workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+          payload: {
+            stage: 'LOCAL_CHARACTER_POST_SAVE',
+            variant: 'SAVE_VALID_DRAFT',
+            sourceFormId: 'CHR-025',
+            characterDraftId: p['characterDraftId'] as string,
+            wizardCheckpointId: p['wizardCheckpointId'] as string,
+            draftRevision: p['draftRevision'] as number,
+          },
+        };
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
+        pendingPostSave = { request, receipt: null, source: lastSnapshot };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingPostSave = null;
+          return { ok: false, detail: diagnostic(error) };
+        }
+        notifyReady();
+        return { ok: true };
       }
       if (Object.hasOwn(lastSnapshot.projection, 'correctionContext')) {
         const navigation: readonly ActionKey[] = [

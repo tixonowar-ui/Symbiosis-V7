@@ -51,6 +51,7 @@ import {
 import {
   creationWizardDurableIds,
   loadCreationWizardCheckpoint,
+  validateDurableCreationWizardCheckpoint,
   type DurableCreationWizardCheckpoint,
   type CreationWizardSymbiontPayload,
 } from './creation-set-decide.js';
@@ -1760,6 +1761,7 @@ export function advanceCreationFinalizationPresentation(
 export function validateCreationFinalizationStageHistory(
   stage: CreationFinalizationStage,
   context: ArmorBundleValidationContext,
+  onValidatedState?: (state: CreationFinalizationState, savedAtRevision: number) => void,
 ) {
   const view = context.checkpointView;
   const catalog = canonicalCreationFinalizationCatalog();
@@ -1782,6 +1784,9 @@ export function validateCreationFinalizationStageHistory(
   }
   let cursor = context.cursor;
   let reconstructed = initial;
+  const versions = [
+    { state: initial.state, savedAtRevision: initial.entryReceipt.result.draftRevision },
+  ];
   for (const record of stage.records) {
     const request = normalizeCreationFinalizationRequest(record.request);
     const p = request.payload;
@@ -1846,6 +1851,10 @@ export function validateCreationFinalizationStageHistory(
     );
     const expected = latestCreationFinalizationRecord(reconstructed) as CreationFinalizationRecord;
     if (!isDeepStrictEqual(expected, record)) return guardSymbiontRejected();
+    versions.push({
+      state: reconstructed.state,
+      savedAtRevision: record.receipt.result.draftRevision,
+    });
     context.commandIds.add(request.commandId);
     context.receiptIds.add(record.receipt.receiptId);
     cursor = {
@@ -1858,5 +1867,51 @@ export function validateCreationFinalizationStageHistory(
     };
   }
   if (!isDeepStrictEqual(reconstructed, stage)) return guardSymbiontRejected();
+  for (const version of versions)
+    onValidatedState?.(structuredClone(version.state), version.savedAtRevision);
   return { cursor };
+}
+
+/** Immutable versions emitted only after the complete durable history and deterministic replay pass. */
+export function validatedCreationFinalizationVersions(
+  source: DurableCreationWizardCheckpoint,
+): readonly {
+  readonly state: CreationFinalizationState;
+  readonly savedAtRevision: number;
+}[] {
+  const catalog = canonicalCreationFinalizationCatalog();
+  const checkpoint = validateDurableCreationWizardCheckpoint(
+    source.localCharacter,
+    source.checkpoint,
+    catalog.symbionts.skillStage,
+    catalog.symbionts,
+    source.skillPresentationStage ?? undefined,
+    source.symbiontPresentationStage ?? undefined,
+  );
+  const stage = creationFinalizationStageForCheckpoint(checkpoint, catalog);
+  if (stage === null) return [];
+  const entry = checkpoint.fiveStartingPositionsStage!.checkpointRecordOrNull!;
+  const versions: { state: CreationFinalizationState; savedAtRevision: number }[] = [];
+  validateCreationFinalizationStageHistory(
+    stage,
+    {
+      catalog: catalog.symbionts,
+      localCharacter: checkpoint.localCharacter,
+      checkpoint: checkpoint.checkpoint,
+      checkpointView: checkpoint,
+      commandIds: new Set(),
+      receiptIds: new Set(),
+      occupiedIds: new Set(),
+      cursor: {
+        checkpointRevision: entry.receipt.result.checkpointRevision,
+        draftRevision: entry.receipt.result.draftRevision,
+        revisions: entry.receipt.revisions,
+        latestEnvelope: entry.nextStageEnvelope,
+        latestRequest: entry.request,
+        latestReceipt: entry.receipt,
+      },
+    },
+    (state, savedAtRevision) => versions.push({ state, savedAtRevision }),
+  );
+  return versions;
 }

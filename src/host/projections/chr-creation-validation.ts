@@ -159,6 +159,8 @@ export function projectChr025(
         actions.push(action);
     }
     if (finalSaveCapable && view.validationBlockers.length === 0) actions.push('CHR-025::CTA::007');
+    if (finalSaveCapable && view.validationBlockers.length === 0) actions.push('CHR-025::CTA::008');
+    actions.push('CHR-025::CTA::009');
   }
   const mechanics = view.mechanics;
   return {

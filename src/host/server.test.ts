@@ -743,6 +743,7 @@ describe('configured Fastify and ws host shell', () => {
       });
       if (app004.messageType !== 'projection.snapshot') throw new Error('missing APP-004 snapshot');
       expect(app004.presentation.base.roleFilteredPayload).toEqual({
+        libraryEntries: [],
         campaignAuthority: false,
         draftCharacterIds: [],
         finalCharacterIds: [],

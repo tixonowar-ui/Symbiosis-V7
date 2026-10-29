@@ -26,6 +26,8 @@ import {
   listLocalCharacters,
   loadLocalCharacterCheckpoint,
   readLocalCharacter,
+  initializeVariantCharacterCheckpoint,
+  type VariantInitializationProof,
 } from '../persistence/index.js';
 import type { LocalCharacter, LocalCharacterCheckpoint } from '../persistence/index.js';
 import { canonicalizeIdentityDraftValues } from './identity-draft.js';
@@ -611,6 +613,10 @@ export function commitIdentityCheckpoint(
   database: Database.Database,
   request: DecodedCommandRequest,
   receiptId: string,
+  options?: {
+    readonly bindOwnerToDeviceId: string;
+    readonly variantProof?: VariantInitializationProof;
+  },
 ): DurableIdentityCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
     throw new TypeError(
@@ -655,12 +661,23 @@ export function commitIdentityCheckpoint(
     receipt,
     selectedBranchUuidOrNull: null,
   };
-  const committed = commitNewLocalCharacterCheckpoint(
-    database,
-    characterDraftId,
-    wizardCheckpointId,
-    (create) => create('DRAFT', JSON.stringify(durablePayload)),
-  );
+  const committed =
+    options?.variantProof === undefined
+      ? commitNewLocalCharacterCheckpoint(
+          database,
+          characterDraftId,
+          wizardCheckpointId,
+          (create) => create('DRAFT', JSON.stringify(durablePayload)),
+          options === undefined ? undefined : { bindOwnerToDeviceId: options.bindOwnerToDeviceId },
+        )
+      : initializeVariantCharacterCheckpoint(
+          database,
+          options.variantProof,
+          JSON.stringify(durablePayload),
+          (local, checkpoint) => {
+            validateDurableIdentityCheckpoint(local, checkpoint);
+          },
+        );
   return validateDurableIdentityCheckpoint(committed.result, committed.checkpoint);
 }
 

@@ -25,6 +25,11 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'APP-001',
   'APP-002',
   'APP-004',
+  'APP-009',
+  'APP-010',
+  'CHR-026',
+  'CHR-039',
+  'CHR-040',
   'CHR-001',
   'CHR-002',
   'CHR-003',
@@ -60,6 +65,9 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'CHR-042',
 ]);
 const INHERITED_CHARACTER_CREATION_FORM_IDS: ReadonlySet<string> = new Set([
+  'CHR-026',
+  'CHR-039',
+  'CHR-040',
   'CHR-002',
   'CHR-003',
   'CHR-004',
@@ -201,15 +209,22 @@ export async function loadProtocolVocabulary(
   if (symbiontCardRoute !== '/player/characters/:localCharacterId/create/chr-018/:speciesKey') {
     throw new Error('CHR-018 route is missing or drifted from its exact addressable template');
   }
+  const libraryRoutes = new Set(
+    ['CHR-001', 'CHR-026', 'CHR-040'].map((id) => presentedForms.get(id)?.route),
+  );
 
   return {
     isAddressableRouteTemplate: (value): value is AddressableRouteTemplate =>
-      value === skillCardRoute || value === symbiontCardRoute,
+      value === skillCardRoute || value === symbiontCardRoute || libraryRoutes.has(value),
     isClientRouteBindings: (routeTemplate, bindings) =>
       bindings.length === 1 &&
-      bindings[0]?.parameterIndex === 1 &&
+      bindings[0]?.parameterIndex === (libraryRoutes.has(routeTemplate) ? 0 : 1) &&
       bindings[0].source === 'client-selected' &&
-      ((routeTemplate === skillCardRoute && isPublicSkillId(bindings[0].value)) ||
+      ((libraryRoutes.has(routeTemplate) &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
+          bindings[0].value,
+        )) ||
+        (routeTemplate === skillCardRoute && isPublicSkillId(bindings[0].value)) ||
         (routeTemplate === symbiontCardRoute && PUBLIC_SYMBIONT_SPECIES.has(bindings[0].value))),
     isFormActionKey: (sourceFormId, value): value is ActionKey =>
       actionKeys.get(sourceFormId)?.has(value) === true,
