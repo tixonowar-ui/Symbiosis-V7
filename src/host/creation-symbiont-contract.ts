@@ -544,10 +544,9 @@ export function randomSymbiontStatus(
   return resolved.randomStatus;
 }
 
-export function nextSymbiontEnvelope<T extends 'CHR-019' | 'CHR-020' | 'CHR-041'>(
-  formId: T,
-  characterDraftId: string,
-): CreationNextStageEnvelope<T> {
+export function nextSymbiontEnvelope<
+  T extends 'CHR-019' | 'CHR-020' | 'CHR-021' | 'CHR-022' | 'CHR-041',
+>(formId: T, characterDraftId: string): CreationNextStageEnvelope<T> {
   return {
     formId,
     routeBindings: [{ parameterIndex: 0, source: 'inherited', value: characterDraftId }],

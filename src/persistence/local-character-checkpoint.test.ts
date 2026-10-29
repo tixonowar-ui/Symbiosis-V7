@@ -563,6 +563,37 @@ describe('local character checkpoint store', () => {
     expect(() => loadLocalCharacterCheckpoint(database, 'character')).toThrow(/has no checkpoint/);
   });
 
+  it('rolls back the row, revisions, and previous checkpoint when post-write validation fails', () => {
+    const database = memoryDatabase();
+    createDraft(database, 'character', '{"version":1}');
+    const previous = commitLocalCharacterCheckpoint(
+      database,
+      'character',
+      'checkpoint',
+      () => undefined,
+    ).checkpoint;
+
+    expect(() =>
+      commitLocalCharacterCheckpoint(
+        database,
+        'character',
+        'checkpoint',
+        (update) => update({ payloadJson: '{"version":2}' }, impact(true, true, false)),
+        () => {
+          throw new Error('post-write validation failed');
+        },
+      ),
+    ).toThrow(/post-write validation failed/);
+
+    expect(readLocalCharacter(database, 'character')).toMatchObject({
+      payloadJson: '{"version":1}',
+      stateRevision: 0,
+      projectionRevision: 0,
+      actorVisibilityRevision: 0,
+    });
+    expect(loadLocalCharacterCheckpoint(database, 'character')).toEqual(previous);
+  });
+
   it('rolls back the row, revisions, and previous checkpoint when checkpoint storage fails', () => {
     const database = memoryDatabase();
     createDraft(database, 'character', '{"version":1}');

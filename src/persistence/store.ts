@@ -707,6 +707,7 @@ export const commitLocalCharacterCheckpoint = <T>(
   write: (
     update: LocalCharacterCheckpointWriter,
   ) => T & (T extends PromiseLike<unknown> ? never : unknown),
+  validate?: (result: T, checkpoint: LocalCharacterCheckpoint) => void,
 ): { result: T; checkpoint: LocalCharacterCheckpoint } => {
   if (database.inTransaction) {
     throw new Error('localCharacter checkpoint requires a top-level transaction');
@@ -714,7 +715,10 @@ export const commitLocalCharacterCheckpoint = <T>(
   if (checkpointId === localCharacterId) {
     throw new Error('localCharacter checkpointId must differ from localCharacterId');
   }
-  if (Object.prototype.toString.call(write) === '[object AsyncFunction]') {
+  if (
+    Object.prototype.toString.call(write) === '[object AsyncFunction]' ||
+    Object.prototype.toString.call(validate) === '[object AsyncFunction]'
+  ) {
     throw new TypeError('localCharacter checkpoint callback must be synchronous');
   }
   return database
@@ -769,6 +773,7 @@ export const commitLocalCharacterCheckpoint = <T>(
               projectionRevision=excluded.projectionRevision, actorVisibilityRevision=excluded.actorVisibilityRevision`,
           )
           .run(checkpoint);
+        validate?.(result, checkpoint);
         return { result, checkpoint };
       } finally {
         writerActive = false;

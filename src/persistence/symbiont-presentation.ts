@@ -3,7 +3,8 @@ import type Database from 'better-sqlite3';
 import type { AssignedRouteBinding } from '@shared/wire-v2-protocol.js';
 
 export interface SymbiontPresentationStage {
-  readonly formId: 'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-041' | 'CHR-042';
+  readonly formId:
+    'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-021' | 'CHR-022' | 'CHR-041' | 'CHR-042';
   readonly compositionDraftRevision: number;
   readonly projectionRevision: number;
   readonly routeBindings: readonly AssignedRouteBinding[];
@@ -14,6 +15,8 @@ const ROUTES = {
   'CHR-017': '/player/characters/:localCharacterId/create/chr-017',
   'CHR-018': '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
   'CHR-019': '/player/characters/:localCharacterId/create/chr-019',
+  'CHR-021': '/player/characters/:localCharacterId/create/chr-021',
+  'CHR-022': '/player/characters/:localCharacterId/create/chr-022',
   'CHR-041': '/player/characters/:localCharacterId/create/chr-041',
   'CHR-042': '/player/characters/:localCharacterId/create/chr-042',
 } as const;
@@ -78,6 +81,8 @@ export function parseSymbiontPresentationStage(
     formId !== 'CHR-017' &&
     formId !== 'CHR-018' &&
     formId !== 'CHR-019' &&
+    formId !== 'CHR-021' &&
+    formId !== 'CHR-022' &&
     formId !== 'CHR-041' &&
     formId !== 'CHR-042'
   ) {

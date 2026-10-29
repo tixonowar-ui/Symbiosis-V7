@@ -24,6 +24,8 @@ const ROUTES = {
   'CHR-017': '/player/characters/:localCharacterId/create/chr-017',
   'CHR-018': '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
   'CHR-019': '/player/characters/:localCharacterId/create/chr-019',
+  'CHR-021': '/player/characters/:localCharacterId/create/chr-021',
+  'CHR-022': '/player/characters/:localCharacterId/create/chr-022',
   'CHR-041': '/player/characters/:localCharacterId/create/chr-041',
   'CHR-042': '/player/characters/:localCharacterId/create/chr-042',
 } as const;
@@ -85,21 +87,37 @@ export function manualInteractionPreview(
   const stage = checkpoint.manualCompositionStage;
   const before = stage?.compositionRecords.at(-2);
   const after = stage?.compositionRecords.at(-1);
-  if (stage === null || stage === undefined || before === undefined || after === undefined) {
+  if (stage === null || stage === undefined || after === undefined) {
     return guardSymbiontRejected();
   }
   return deriveManualInteractionPreview(catalog, {
-    before: {
-      raceCode: stage.composition.raceCode,
-      acceptedSpecies: before.acceptedSpecies,
-      selectedBindings: before.request.payload.selectedBindings,
-    },
+    before:
+      before === undefined
+        ? { raceCode: stage.composition.raceCode, acceptedSpecies: [], selectedBindings: [] }
+        : {
+            raceCode: stage.composition.raceCode,
+            acceptedSpecies: before.acceptedSpecies,
+            selectedBindings: before.request.payload.selectedBindings,
+          },
     after: {
       raceCode: stage.composition.raceCode,
       acceptedSpecies: after.acceptedSpecies,
       selectedBindings: after.request.payload.selectedBindings,
     },
   });
+}
+
+export function manualInteractionConfirmationRequired(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+): boolean {
+  const stage = checkpoint.manualCompositionStage;
+  return (
+    stage !== null &&
+    stage !== undefined &&
+    !manualAdvisorWorkPending(stage) &&
+    manualInteractionPreview(checkpoint, catalog).irreversibleOperationIds.length > 0
+  );
 }
 
 function inherited(characterDraftId: string): SymbiontPresentationStage['routeBindings'][number] {
@@ -214,6 +232,84 @@ export function advanceManualSymbiontPresentation(
   return commitPresentation(database, input, catalog);
 }
 
+function assertArmorNavigationCheckpoint(
+  checkpoint: DurableCreationWizardCheckpoint,
+  wizardCheckpointId: string,
+): void {
+  const armor = checkpoint.armorBundleStage;
+  if (
+    checkpoint.checkpoint.checkpointId !== wizardCheckpointId ||
+    armor === null ||
+    armor === undefined ||
+    armor.qualityRollRecordOrNull === null ||
+    armor.checkpointRecordOrNull !== null ||
+    checkpoint.nextStageEnvelope.formId !== 'CHR-021' ||
+    checkpoint.localCharacter.projectionRevision === Number.MAX_SAFE_INTEGER ||
+    (checkpoint.symbiontPresentationStage !== null &&
+      checkpoint.symbiontPresentationStage !== undefined &&
+      checkpoint.symbiontPresentationStage.compositionDraftRevision !==
+        manualCompositionRevision(checkpoint))
+  ) {
+    guardSymbiontRejected();
+  }
+}
+
+export function advanceArmorBundlePresentation(
+  database: Database.Database,
+  input: {
+    readonly characterDraftId: string;
+    readonly wizardCheckpointId: string;
+    readonly formId: 'CHR-019' | 'CHR-021';
+  },
+  catalog: SymbiontCatalog,
+): DurableCreationWizardCheckpoint {
+  const preflight = loadCreationWizardCheckpoint(
+    database,
+    input.characterDraftId,
+    catalog.skillStage,
+    catalog,
+  );
+  assertArmorNavigationCheckpoint(preflight, input.wizardCheckpointId);
+  let validatedCheckpoint: DurableCreationWizardCheckpoint | undefined;
+  commitLocalCharacterCheckpoint(
+    database,
+    input.characterDraftId,
+    input.wizardCheckpointId,
+    (update) => {
+      const current = loadCreationWizardCheckpoint(
+        database,
+        input.characterDraftId,
+        catalog.skillStage,
+        catalog,
+      );
+      assertArmorNavigationCheckpoint(current, input.wizardCheckpointId);
+      writeLocalCharacterSymbiontPresentation(database, {
+        formId: input.formId,
+        compositionDraftRevision: manualCompositionRevision(current),
+        projectionRevision: current.localCharacter.projectionRevision + 1,
+        routeBindings: [inherited(input.characterDraftId)],
+        routeTemplate: ROUTES[input.formId],
+      });
+      return update(
+        { payloadJson: current.localCharacter.payloadJson },
+        { actorVisibilityChanged: false, projectionChanged: true, stateChanged: false },
+      );
+    },
+    () => {
+      validatedCheckpoint = loadCreationWizardCheckpoint(
+        database,
+        input.characterDraftId,
+        catalog.skillStage,
+        catalog,
+      );
+    },
+  );
+  if (validatedCheckpoint === undefined) {
+    throw new Error('armor presentation validation was not executed');
+  }
+  return validatedCheckpoint;
+}
+
 export function handleSymbiontAddressableRoute(
   database: Database.Database,
   input: {
@@ -244,7 +340,7 @@ export function handleSymbiontAddressableRoute(
 
 export function writeManualCommandPresentation(
   database: Database.Database,
-  formId: 'CHR-019' | 'CHR-041',
+  formId: 'CHR-019' | 'CHR-021' | 'CHR-022' | 'CHR-041',
   characterDraftId: string,
   compositionDraftRevision: number,
   projectionRevision: number,

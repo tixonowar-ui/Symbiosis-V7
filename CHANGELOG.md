@@ -7,8 +7,31 @@
 
 ## Не выпущено
 
+### Добавлено
+
+- **2026-10-28, issue #146:** стартовый armorBundle CHR-021 после завершённого
+  random/manual состава. Один D20 качества на весь bundle (AUTO — один sampler
+  в транзакции, MANUAL — одна грань), bundle всегда `OWNED_NOT_EQUIPPED`,
+  `qualityRecommendation` — не механический модификатор и не final qualityTier.
+  Девятый production E2E-сценарий; [ADR 0055](docs/adr/0055-starting-armor-bundle.md).
+  Публикуется CHR-021; после checkpoint actionless `CHR-021/CHECKPOINTED` с
+  host-signed `CHR-022`, который renderer не публикует.
+
 ### Исправлено
 
+- **2026-10-28, issue #146:** RANDOM checkpoint после safe-return/resume
+  сохраняет результирующую presentation revision и проходит полную persisted
+  validation. Подтверждение взаимодействий работает уже для первой composition
+  record через empty-before preview. Внутренние идентификаторы вроде `CORE-151`
+  удалены из player preview и DOM без потери смысла ограничений.
+  [ADR 0057](docs/adr/0057-armor-initial-interactions-and-presentation-recovery.md).
+- **2026-10-28, issue #146:** `CHR-042::CTA::001` подтверждает exact interaction
+  diff и атомарно создаёт armorBundle через SET-DECIDE; прямой вход при pending
+  diff запрещён. Post-write validation выполняется внутри SQLite-транзакции,
+  а команды прежних стадий отклоняются без изменения payload. Safe-return/resume
+  работает для RANDOM и MANUAL без новых IDs и reload. MANUAL-грань требует
+  явного ввода, выбранный предмет и его source-backed характеристики видны до
+  необратимой фиксации. [ADR 0056](docs/adr/0056-armor-interaction-confirmation-and-recovery.md).
 - **2026-10-27:** `AGENTS.md` актуализирован после PR #161 и #163:
   команды и гейты CI, бюджет Vitest и диагностика E2E. Добавлен текущий
   [handoff](docs/status/handoff.md) с подтверждённой базой и границами результата.

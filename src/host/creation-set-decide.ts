@@ -133,6 +133,25 @@ import type {
 } from './creation-manual-composition-contract.js';
 import { validateManualCompositionStageHistory } from './creation-manual-composition.js';
 import type { SymbiontPresentationStage } from '../persistence/symbiont-presentation.js';
+import {
+  latestArmorBundleRecord,
+  validateArmorBundleStageHistory,
+} from './creation-armor-bundle.js';
+import type {
+  ManualInteractionConfirmationReceipt,
+  ManualInteractionConfirmationRequest,
+} from './creation-manual-interaction.js';
+import {
+  armorBundleStageIds,
+  parseArmorBundleStage,
+  type ArmorBundleCheckpointReceipt,
+  type ArmorBundleCheckpointRequest,
+  type ArmorBundleEntryReceipt,
+  type ArmorBundleEntryRequest,
+  type ArmorBundleQualityRollReceipt,
+  type ArmorBundleQualityRollRequest,
+  type ArmorBundleStage,
+} from './creation-armor-bundle-contract.js';
 
 export const CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID =
   'UI-CMD-CHAR-CREATION-SET-DECIDE' as const satisfies WorkflowCommandId;
@@ -175,6 +194,8 @@ export type CreationNextFormId =
   | 'CHR-017'
   | 'CHR-019'
   | 'CHR-020'
+  | 'CHR-021'
+  | 'CHR-022'
   | 'CHR-036'
   | 'CHR-041';
 
@@ -681,9 +702,10 @@ export interface CreationWizardSymbiontPayload extends Omit<
   readonly randomSymbiontStage: RandomSymbiontStage | null;
   readonly advisorIntelligenceFloorStage?: AdvisorIntelligenceFloorStage;
   readonly nextStageEnvelope: CreationNextStageEnvelope<
-    'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041'
+    'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-021' | 'CHR-022' | 'CHR-041'
   >;
   readonly manualCompositionStage?: ManualCompositionStage;
+  readonly armorBundleStage?: ArmorBundleStage;
   readonly receipt:
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
@@ -692,7 +714,11 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | AdvisorIntelligenceFloorRollReceipt
     | ManualCompositionCheckpointReceipt
     | ManualAdvisorIwRollReceipt
-    | ManualAdvisorSkillCheckpointReceipt;
+    | ManualAdvisorSkillCheckpointReceipt
+    | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
+    | ArmorBundleQualityRollReceipt
+    | ArmorBundleCheckpointReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -725,6 +751,7 @@ export interface DurableCreationWizardCheckpoint {
   readonly randomSymbiontStage: RandomSymbiontStage | null;
   readonly advisorIntelligenceFloorStage?: AdvisorIntelligenceFloorStage | null;
   readonly manualCompositionStage?: ManualCompositionStage | null;
+  readonly armorBundleStage?: ArmorBundleStage | null;
   readonly symbiontPresentationStage?: SymbiontPresentationStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
@@ -740,7 +767,11 @@ export interface DurableCreationWizardCheckpoint {
     | AdvisorIntelligenceFloorRollReceipt
     | ManualCompositionCheckpointReceipt
     | ManualAdvisorIwRollReceipt
-    | ManualAdvisorSkillCheckpointReceipt;
+    | ManualAdvisorSkillCheckpointReceipt
+    | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
+    | ArmorBundleQualityRollReceipt
+    | ArmorBundleCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -752,7 +783,11 @@ export interface DurableCreationWizardCheckpoint {
     | AdvisorIntelligenceFloorRollCommandRequest
     | ManualCompositionCheckpointCommandRequest
     | ManualAdvisorIwRollCommandRequest
-    | ManualAdvisorSkillCheckpointCommandRequest;
+    | ManualAdvisorSkillCheckpointCommandRequest
+    | ArmorBundleEntryRequest
+    | ManualInteractionConfirmationRequest
+    | ArmorBundleQualityRollRequest
+    | ArmorBundleCheckpointRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -772,7 +807,11 @@ export interface DurableCreationWizardCommand {
     | AdvisorIntelligenceFloorRollReceipt
     | ManualCompositionCheckpointReceipt
     | ManualAdvisorIwRollReceipt
-    | ManualAdvisorSkillCheckpointReceipt;
+    | ManualAdvisorSkillCheckpointReceipt
+    | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
+    | ArmorBundleQualityRollReceipt
+    | ArmorBundleCheckpointReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -784,7 +823,11 @@ export interface DurableCreationWizardCommand {
     | AdvisorIntelligenceFloorRollCommandRequest
     | ManualCompositionCheckpointCommandRequest
     | ManualAdvisorIwRollCommandRequest
-    | ManualAdvisorSkillCheckpointCommandRequest;
+    | ManualAdvisorSkillCheckpointCommandRequest
+    | ArmorBundleEntryRequest
+    | ManualInteractionConfirmationRequest
+    | ArmorBundleQualityRollRequest
+    | ArmorBundleCheckpointRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -1191,6 +1234,8 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-017',
     'CHR-019',
     'CHR-020',
+    'CHR-021',
+    'CHR-022',
     'CHR-041',
   ] as const);
   const bindings = object['routeBindings'];
@@ -2369,8 +2414,9 @@ const postIdentityPayloadAt = (
       'advisorIntelligenceFloorStage',
     );
     const hasManualCompositionStage = Object.hasOwn(unshaped, 'manualCompositionStage');
+    const hasArmorBundleStage = Object.hasOwn(unshaped, 'armorBundleStage');
     if (
-      (hasAdvisorIntelligenceFloorStage || hasManualCompositionStage) &&
+      (hasAdvisorIntelligenceFloorStage || hasManualCompositionStage || hasArmorBundleStage) &&
       !hasRandomSymbiontStage
     ) {
       throw new Error(`${label} symbiont stages require randomSymbiontStage:null`);
@@ -2378,6 +2424,7 @@ const postIdentityPayloadAt = (
     const optionalSymbiontStages = [
       ...(hasAdvisorIntelligenceFloorStage ? ['advisorIntelligenceFloorStage'] : []),
       ...(hasManualCompositionStage ? ['manualCompositionStage'] : []),
+      ...(hasArmorBundleStage ? ['armorBundleStage'] : []),
     ];
     const object = exactObject(
       value,
@@ -2467,6 +2514,9 @@ const postIdentityPayloadAt = (
     const manualCompositionStage = hasManualCompositionStage
       ? parseManualCompositionStage(object['manualCompositionStage'], symbiontCatalog!)
       : null;
+    const armorBundleStage = hasArmorBundleStage
+      ? parseArmorBundleStage(object['armorBundleStage'])
+      : null;
     const symbiontStageCount = [
       randomSymbiontStage,
       advisorIntelligenceFloorStage,
@@ -2476,12 +2526,14 @@ const postIdentityPayloadAt = (
       throw new Error(`${label} random, manual and legacy symbiont stages cannot coexist`);
     }
     const latestSymbiontRecord =
-      advisorIntelligenceFloorStage?.rollRecordOrNull ??
-      (randomSymbiontStage !== null
-        ? latestRandomSymbiontRecord(randomSymbiontStage)
-        : manualCompositionStage === null
-          ? null
-          : latestManualCompositionRecord(manualCompositionStage));
+      armorBundleStage !== null
+        ? latestArmorBundleRecord(armorBundleStage)
+        : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
+          (randomSymbiontStage !== null
+            ? latestRandomSymbiontRecord(randomSymbiontStage)
+            : manualCompositionStage === null
+              ? null
+              : latestManualCompositionRecord(manualCompositionStage)));
     const receipt =
       receiptResult['stage'] === 'SYMBIONTS'
         ? (latestSymbiontRecord?.receipt ??
@@ -2522,7 +2574,8 @@ const postIdentityPayloadAt = (
       if (
         (randomSymbiontStage !== null ||
           advisorIntelligenceFloorStage !== null ||
-          manualCompositionStage !== null) &&
+          manualCompositionStage !== null ||
+          armorBundleStage !== null) &&
         (latestSymbiontRecord === null
           ? receipt.result.stage !== 'SKILLS'
           : receipt.result.stage !== 'SYMBIONTS' ||
@@ -2533,13 +2586,14 @@ const postIdentityPayloadAt = (
       return {
         ...common,
         nextStageEnvelope: common.nextStageEnvelope as CreationNextStageEnvelope<
-          'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-041'
+          'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-021' | 'CHR-022' | 'CHR-041'
         >,
         pureClassStage: parsePureClassStage(object['pureClassStage'], label),
         receipt,
         randomSymbiontStage,
         ...(hasAdvisorIntelligenceFloorStage ? { advisorIntelligenceFloorStage } : {}),
         ...(hasManualCompositionStage ? { manualCompositionStage } : {}),
+        ...(hasArmorBundleStage ? { armorBundleStage } : {}),
         skillEligibilityStage,
         skillSelectionStage,
         statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
@@ -2624,7 +2678,11 @@ export interface RollValidationCursor {
     | AdvisorIntelligenceFloorRollReceipt
     | ManualCompositionCheckpointReceipt
     | ManualAdvisorIwRollReceipt
-    | ManualAdvisorSkillCheckpointReceipt;
+    | ManualAdvisorSkillCheckpointReceipt
+    | ArmorBundleEntryReceipt
+    | ManualInteractionConfirmationReceipt
+    | ArmorBundleQualityRollReceipt
+    | ArmorBundleCheckpointReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -2635,7 +2693,11 @@ export interface RollValidationCursor {
     | AdvisorIntelligenceFloorRollCommandRequest
     | ManualCompositionCheckpointCommandRequest
     | ManualAdvisorIwRollCommandRequest
-    | ManualAdvisorSkillCheckpointCommandRequest;
+    | ManualAdvisorSkillCheckpointCommandRequest
+    | ArmorBundleEntryRequest
+    | ManualInteractionConfirmationRequest
+    | ArmorBundleQualityRollRequest
+    | ArmorBundleCheckpointRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3269,12 +3331,18 @@ const validateStatRollHistory = (
               ]),
         ]
       : [];
+  const armorRandomReceiptIds =
+    symbiontPayload?.armorBundleStage?.diceInputModeSnapshot === 'AUTO' &&
+    symbiontPayload.armorBundleStage.qualityRollRecordOrNull !== null
+      ? [symbiontPayload.armorBundleStage.qualityRollRecordOrNull.receipt.receiptId]
+      : [];
   if (
     !isDeepStrictEqual(durablePayload.randomReceiptIds, [
       ...expectedRandomReceiptIds,
       ...symbiontRandomReceiptIds,
       ...floorRandomReceiptIds,
       ...manualRandomReceiptIds,
+      ...armorRandomReceiptIds,
     ])
   ) {
     mismatches.push('randomReceiptIds roll provenance');
@@ -4108,10 +4176,50 @@ const validatePostIdentityPayload = (
       occupiedIds,
     }).cursor;
   }
+  const armorBundleStage =
+    'armorBundleStage' in durablePayload ? (durablePayload.armorBundleStage ?? null) : null;
+  if (armorBundleStage !== null) {
+    if (symbiontCatalog === undefined) {
+      throw new Error(`${label} armor bundle stage requires a symbiont catalog`);
+    }
+    if (skillEligibilityStage === null || statAssignmentStage === null) {
+      throw new Error(`${label} armor bundle stage lacks creation prerequisites`);
+    }
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateArmorBundleStageHistory(armorBundleStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
+  const armorPresentation =
+    armorBundleStage !== null &&
+    symbiontPresentationStage !== undefined &&
+    (symbiontPresentationStage.formId === 'CHR-019' ||
+      symbiontPresentationStage.formId === 'CHR-021' ||
+      symbiontPresentationStage.formId === 'CHR-022');
   if (
     symbiontPresentationStage !== undefined &&
+    !armorPresentation &&
     (raceAndMethodStage?.symbiontAcquisition.value !== 'MANUAL' ||
       randomSymbiontStage !== null ||
       advisorIntelligenceFloorStage !== null)
@@ -4162,7 +4270,8 @@ const validatePostIdentityPayload = (
     stateRevision: checkpoint.stateRevision,
   };
   const projectionRevisionMatches =
-    randomSymbiontStage !== null || advisorFloorNavigation
+    (randomSymbiontStage !== null && symbiontPresentationStage === undefined) ||
+    advisorFloorNavigation
       ? currentRevisions.projectionRevision === previousRevisions.projectionRevision ||
         ((randomStartPending || advisorFloorNavigation) &&
           previousRevisions.projectionRevision < Number.MAX_SAFE_INTEGER &&
@@ -4217,6 +4326,7 @@ const validatePostIdentityPayload = (
         : null,
     manualCompositionStage:
       'manualCompositionStage' in durablePayload ? durablePayload.manualCompositionStage : null,
+    armorBundleStage: armorBundleStage,
     symbiontPresentationStage: symbiontPresentationStage ?? null,
     statRollStage,
     statAssignmentStage,
@@ -4760,6 +4870,21 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
       }
     }
   }
+  const armorBundleStage = object['armorBundleStage'];
+  if (
+    armorBundleStage !== null &&
+    typeof armorBundleStage === 'object' &&
+    !Array.isArray(armorBundleStage)
+  ) {
+    const stage = armorBundleStage as Record<string, unknown>;
+    addRequestId(stage['entryRequest']);
+    for (const key of ['qualityRollRecordOrNull', 'checkpointRecordOrNull'] as const) {
+      const record = stage[key];
+      if (record !== null && typeof record === 'object' && !Array.isArray(record)) {
+        addRequestId((record as Record<string, unknown>)['request']);
+      }
+    }
+  }
   return ids;
 };
 
@@ -4859,6 +4984,30 @@ export function loadCreationWizardCommandByCommandId(
       request: manualRecord.request,
     };
   }
+  const armorStage = durableCheckpoint.armorBundleStage;
+  if (armorStage !== null && armorStage !== undefined) {
+    const armorRecords = [
+      {
+        request: armorStage.entryRequest,
+        receipt: armorStage.entryReceipt,
+        nextStageEnvelope: nextStageEnvelope(
+          'CHR-021',
+          armorStage.entryRequest.payload.characterDraftId,
+        ),
+      },
+      ...(armorStage.qualityRollRecordOrNull === null ? [] : [armorStage.qualityRollRecordOrNull]),
+      ...(armorStage.checkpointRecordOrNull === null ? [] : [armorStage.checkpointRecordOrNull]),
+    ];
+    const armorRecord = armorRecords.find(({ request }) => request.commandId === commandId);
+    if (armorRecord !== undefined) {
+      return {
+        durableCheckpoint,
+        nextStageEnvelope: armorRecord.nextStageEnvelope,
+        receipt: armorRecord.receipt,
+        request: armorRecord.request,
+      };
+    }
+  }
   const randomStage = durableCheckpoint.randomSymbiontStage;
   const floorRecord = durableCheckpoint.advisorIntelligenceFloorStage?.rollRecordOrNull;
   const symbiontRecord =
@@ -4942,6 +5091,30 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   checkpoint.manualCompositionStage?.advisorSkillRecordOrNull === undefined
     ? []
     : [checkpoint.manualCompositionStage.advisorSkillRecordOrNull]),
+  ...(checkpoint.armorBundleStage === null || checkpoint.armorBundleStage === undefined
+    ? []
+    : [
+        {
+          request: checkpoint.armorBundleStage.entryRequest,
+          receipt: checkpoint.armorBundleStage.entryReceipt,
+        },
+        ...(checkpoint.armorBundleStage.qualityRollRecordOrNull === null
+          ? []
+          : [
+              {
+                request: checkpoint.armorBundleStage.qualityRollRecordOrNull.request,
+                receipt: checkpoint.armorBundleStage.qualityRollRecordOrNull.receipt,
+              },
+            ]),
+        ...(checkpoint.armorBundleStage.checkpointRecordOrNull === null
+          ? []
+          : [
+              {
+                request: checkpoint.armorBundleStage.checkpointRecordOrNull.request,
+                receipt: checkpoint.armorBundleStage.checkpointRecordOrNull.receipt,
+              },
+            ]),
+      ]),
 ];
 
 const guardRejected = (): never => {
@@ -5453,6 +5626,9 @@ export const creationWizardDurableIds = (
       checkpoint.manualCompositionStage === undefined
         ? []
         : [...manualCompositionStageIds(checkpoint.manualCompositionStage)]),
+      ...(checkpoint.armorBundleStage === null || checkpoint.armorBundleStage === undefined
+        ? []
+        : [...armorBundleStageIds(checkpoint.armorBundleStage)]),
     ].filter((value): value is string => typeof value === 'string'),
   );
 

@@ -17,6 +17,7 @@ import {
   ADVISOR_INTELLIGENCE_FLOOR_PURPOSE,
 } from '../creation-advisor-intelligence-floor-contract.js';
 import { latestManualCompositionRecord } from '../creation-manual-composition-contract.js';
+import { manualInteractionDiffJson } from '../creation-manual-interaction.js';
 import {
   manualAdvisorWorkPending,
   manualCompositionRevision,
@@ -32,7 +33,6 @@ import {
   advisorSelectionValidation,
   advisorSkillOptionsJson,
   modifierBreakdownJson,
-  modifierEffectJson,
   CHR_017_FORM_ID,
   CHR_017_REQUIRED_FIELDS,
   CHR_017_ROUTE,
@@ -43,6 +43,7 @@ import {
   CHR_041_REQUIRED_FIELDS,
   CHR_041_ROUTE,
 } from './chr-symbionts.js';
+import { armorBundleEntryMode, CHR_019_ARMOR_ENTRY_ACTION_KEY } from './chr-armor-bundle.js';
 
 export const CHR_018_FORM_ID = 'CHR-018' as const;
 export const CHR_042_FORM_ID = 'CHR-042' as const;
@@ -264,13 +265,15 @@ export function projectManualChr019(
   const latest = current.compositionRecords.at(-1)!;
   const interactions = createSymbiontInteractionProjection(current.composition);
   const previewRequired =
-    current.compositionRecords.length > 1 &&
     manualInteractionPreview(checkpoint, catalog).irreversibleOperationIds.length > 0;
+  const entryMode = armorBundleEntryMode(checkpoint, catalog);
   const actions: ActionKey[] = [];
   if (previewRequired) actions.push(CHR_019_PREVIEW_ACTION_KEY);
   actions.push(CHR_019_RETURN_ACTION_KEY);
+  if (entryMode !== null) actions.push(CHR_019_ARMOR_ENTRY_ACTION_KEY);
   return presentation(checkpoint, CHR_019_FORM_ID, CHR_019_ROUTE, actions, {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
+    armorBundleEntryMode: entryMode,
     raceChoice: current.composition.raceCode,
     ...compositionJson(catalog, current.composition, latest.bindings),
     interactionGraph: interactions.interactionGraph,
@@ -389,6 +392,7 @@ export function projectManualChr041(
 export function projectManualChr042(
   checkpoint: DurableCreationWizardCheckpoint,
   catalog: SymbiontCatalog,
+  setDecideCapable = false,
 ): PresentedBaseForm {
   const current = stage(checkpoint);
   if (manualAdvisorWorkPending(current)) throw new Error('CHR-042 has pending Advisor work');
@@ -396,46 +400,13 @@ export function projectManualChr042(
   if (preview.irreversibleOperationIds.length === 0) {
     throw new Error('CHR-042 requires a confirmation-required interaction');
   }
-  return presentation(checkpoint, CHR_042_FORM_ID, CHR_042_ROUTE, [CHR_042_RETURN_ACTION_KEY], {
+  const actions: ActionKey[] = [
+    ...(setDecideCapable ? (['CHR-042::CTA::001'] as const) : []),
+    CHR_042_RETURN_ACTION_KEY,
+  ];
+  return presentation(checkpoint, CHR_042_FORM_ID, CHR_042_ROUTE, actions, {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
-    compositionBefore: compositionJson(
-      catalog,
-      preview.compositionBefore.composition,
-      preview.compositionBefore.bindings,
-    ),
-    compositionAfter: compositionJson(
-      catalog,
-      preview.compositionAfter.composition,
-      preview.compositionAfter.bindings,
-    ),
-    interactionGraph: preview.interactionGraph,
-    suppressionDestructionAbsorption: preview.suppressionDestructionAbsorption,
-    slotStatOeDiff: {
-      slotUsageBefore: preview.slotStatOeDiff.slotUsageBefore,
-      slotUsageAfter: preview.slotStatOeDiff.slotUsageAfter,
-      entries: preview.slotStatOeDiff.entries.map((entry) => ({
-        speciesKey: entry.speciesKey,
-        before:
-          entry.before === null
-            ? null
-            : {
-                slotCost: entry.before.slotCost,
-                currentOe: entry.before.currentOe,
-                status: entry.before.status,
-              },
-        after:
-          entry.after === null
-            ? null
-            : {
-                slotCost: entry.after.slotCost,
-                currentOe: entry.after.currentOe,
-                status: entry.after.status,
-              },
-      })),
-      modifierBreakdownBefore: modifierEffectJson(preview.slotStatOeDiff.modifierBreakdownBefore),
-      modifierBreakdownAfter: modifierEffectJson(preview.slotStatOeDiff.modifierBreakdownAfter),
-    },
-    irreversibleOperationIds: preview.irreversibleOperationIds,
+    ...manualInteractionDiffJson(catalog, preview),
     confirmationStatus: 'PREVIEW',
     wizardCheckpointId: checkpoint.checkpoint.checkpointId,
     draftRevision: checkpoint.receipt.result.draftRevision,

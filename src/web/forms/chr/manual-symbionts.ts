@@ -435,6 +435,7 @@ export function expectedChr019ManualActionKeys(
       ? [CHR_019_MANUAL_PREVIEW_ACTION_KEY]
       : []),
     CHR_019_MANUAL_RETURN_ACTION_KEY,
+    ...(available.includes('CHR-019::CTA::001') ? (['CHR-019::CTA::001'] as const) : []),
   ];
 }
 
@@ -645,6 +646,101 @@ export function decodeChr042Projection(
         consequences.value as Chr042Projection['suppressionDestructionAbsorption'],
     },
   };
+}
+
+export const CHR_042_MANUAL_CONFIRM_ACTION_KEY = 'CHR-042::CTA::001' as const;
+
+export interface ManualInteractionConfirmationPayload extends JsonObject {
+  readonly characterDraftId: string;
+  readonly draftRevision: number;
+  readonly interactionDiff: JsonObject;
+  readonly sourceFormId: 'CHR-042';
+  readonly stage: 'SYMBIONTS';
+  readonly variant: 'MANUAL_INTERACTION_CONFIRMATION';
+  readonly wizardCheckpointId: string;
+}
+
+export type ManualInteractionConfirmationRequest = WorkflowCommandRequestMessage<
+  'UI-CMD-CHAR-CREATION-SET-DECIDE',
+  ManualInteractionConfirmationPayload
+>;
+
+export interface ManualInteractionConfirmationResult extends JsonObject {
+  readonly anatomyProfile: 'STANDARD_HUMANOID';
+  readonly armorBundleId: string;
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly characterDraftId: string;
+  readonly checkpointId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly interactionDiff: JsonObject;
+  readonly nextFormId: 'CHR-021';
+  readonly qualityRollRequestId: string;
+  readonly sourceFormId: 'CHR-042';
+  readonly stage: 'SYMBIONTS';
+  readonly variant: 'MANUAL_INTERACTION_CONFIRMATION';
+}
+
+export function manualInteractionConfirmationPayload(
+  snapshot: ConfirmedProjectionSnapshot,
+): ManualInteractionConfirmationPayload {
+  if (snapshot.formId !== 'CHR-042') {
+    throw new Error(`CHR-042 confirmation requires CHR-042, got ${snapshot.formId}`);
+  }
+  const projection = snapshot.projection;
+  return {
+    characterDraftId: projection.characterDraftId,
+    draftRevision: projection.draftRevision,
+    interactionDiff: {
+      compositionBefore: projection.compositionBefore,
+      compositionAfter: projection.compositionAfter,
+      interactionGraph: projection.interactionGraph,
+      suppressionDestructionAbsorption: projection.suppressionDestructionAbsorption,
+      slotStatOeDiff: projection.slotStatOeDiff,
+      irreversibleOperationIds: projection.irreversibleOperationIds,
+    },
+    sourceFormId: 'CHR-042',
+    stage: 'SYMBIONTS',
+    variant: 'MANUAL_INTERACTION_CONFIRMATION',
+    wizardCheckpointId: projection.wizardCheckpointId,
+  };
+}
+
+export function decodeManualInteractionConfirmationTerminal(
+  message: Terminal,
+  request: ManualInteractionConfirmationRequest,
+  source: ConfirmedProjectionSnapshot,
+): DecodeResult<CommandReceipt<ManualInteractionConfirmationResult>> {
+  const receipt = message.receipt;
+  const payload = request.payload;
+  if (
+    source.formId !== 'CHR-042' ||
+    receipt.commandId !== request.commandId ||
+    !validReceipt(receipt, request)
+  ) {
+    return refused('$.receipt.commandId', receipt.commandId);
+  }
+  const result = decodeProjection(receipt.result, '$.receipt.result', {
+    anatomyProfile: (field) => field === 'STANDARD_HUMANOID',
+    armorBundleId: isNonEmptyString,
+    branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+    branchUuid: isNonEmptyString,
+    characterDraftId: (field) => field === payload.characterDraftId,
+    checkpointId: (field) => field === payload.wizardCheckpointId,
+    checkpointOwnerId: (field) => field === payload.characterDraftId,
+    checkpointRevision: (field) => isSafeIntegerAtLeast(field, 1),
+    draftRevision: (field) => field === payload.draftRevision + 1,
+    interactionDiff: (field) => sameJson(field, payload.interactionDiff),
+    nextFormId: (field) => field === 'CHR-021',
+    qualityRollRequestId: isNonEmptyString,
+    sourceFormId: (field) => field === 'CHR-042',
+    stage: (field) => field === 'SYMBIONTS',
+    variant: (field) => field === 'MANUAL_INTERACTION_CONFIRMATION',
+  });
+  if (!result.ok) return result;
+  return { ok: true, value: receipt as CommandReceipt<ManualInteractionConfirmationResult> };
 }
 
 function baselineEntries(projection: JsonObject): readonly ManualCompositionEntry[] {

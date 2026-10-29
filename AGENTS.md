@@ -109,10 +109,10 @@ CPU. Это штатная настройка после #160, отдельны�
 **Портативной сборки пока нет.** `tools/package` — пустой каталог. Не пытайся
 её запускать и не выдумывай команду.
 
-**E2E состоит из восьми реальных сценариев.** Они используют системный Chrome
-(`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную SQLite,
-без mocked projection. `npm run test:e2e` сначала собирает веб-клиент, затем
-запускает все восемь сценариев.
+**E2E состоит из одиннадцати реальных сценариев.** Они используют системный
+Chrome (`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную
+SQLite, без mocked projection. `npm run test:e2e` сначала собирает веб-клиент,
+затем запускает все одиннадцать сценариев.
 
 В CI разрешён один retry. Успешный повтор отмечается как `flaky`, но пока
 не делает CI красным. Trace и screenshot каждой неудачной попытки, включая
@@ -156,11 +156,11 @@ tools/
 
 tests/
   integration/      кросс-слойные тесты. ПУСТО
-  e2e/              Playwright, восемь production-сценариев
+  e2e/              Playwright, одиннадцать production-сценариев
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              54 решения + README. Высший источник правды
+  adr/              57 решений + README. Высший источник правды
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

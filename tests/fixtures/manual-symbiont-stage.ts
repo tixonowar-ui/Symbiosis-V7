@@ -66,8 +66,16 @@ function durableDecision(
     readonly allocateBranchUuid: () => string;
     readonly allocateRollRequestId: () => string;
   },
+  catalog?: Parameters<typeof commitCreationSetDecide>[5],
 ): DurableCreationWizardCheckpoint {
-  const result = commitCreationSetDecide(database, request, receiptId, allocators);
+  const result = commitCreationSetDecide(
+    database,
+    request,
+    receiptId,
+    allocators,
+    undefined,
+    catalog,
+  );
   if (result.kind !== 'DURABLE') throw new Error('expected a durable decision');
   return result.durableCheckpoint;
 }
@@ -101,7 +109,7 @@ export interface ManualWizardSetup {
 
 export function createManualWizardSetup(
   prefix: string,
-  raceChoice: 'FREE' | 'UNITED',
+  raceChoice: 'FREE' | 'UNITED' | 'PURE',
   diceInputMode: 'AUTO' | 'MANUAL',
   databasePath = ':memory:',
   characterDraftId = `${prefix}-character`,
@@ -152,18 +160,20 @@ export function createManualWizardSetup(
     }),
     `${prefix}-race-receipt`,
   );
-  current = durableDecision(
-    database,
-    decision(current, `${prefix}-acquisition-command`, {
-      characterDraftId,
-      draftRevision: current.receipt.result.draftRevision,
-      sourceFormId: 'CHR-016',
-      stage: 'RACE_AND_METHOD',
-      symbiontAcquisitionMode: 'MANUAL',
-      wizardCheckpointId,
-    }),
-    `${prefix}-acquisition-receipt`,
-  );
+  if (raceChoice !== 'PURE') {
+    current = durableDecision(
+      database,
+      decision(current, `${prefix}-acquisition-command`, {
+        characterDraftId,
+        draftRevision: current.receipt.result.draftRevision,
+        sourceFormId: 'CHR-016',
+        stage: 'RACE_AND_METHOD',
+        symbiontAcquisitionMode: 'MANUAL',
+        wizardCheckpointId,
+      }),
+      `${prefix}-acquisition-receipt`,
+    );
+  }
   current = durableDecision(
     database,
     decision(current, `${prefix}-dice-command`, {
@@ -253,6 +263,22 @@ export function createManualWizardSetup(
     `${prefix}-assignment-receipt`,
     CATALOG.skillStage,
   );
+  if (current.nextStageEnvelope.formId === 'CHR-011') {
+    current = durableDecision(
+      database,
+      decision(current, `${prefix}-pure-class-command`, {
+        characterDraftId,
+        draftRevision: current.receipt.result.draftRevision,
+        pureClass: 'SEEKER',
+        sourceFormId: 'CHR-011',
+        stage: 'STAT_ASSIGNMENT',
+        wizardCheckpointId,
+      }),
+      `${prefix}-pure-class-receipt`,
+      undefined,
+      CATALOG.skillStage,
+    );
+  }
   commitCreationWizardCheckpoint(
     database,
     {

@@ -139,10 +139,10 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the nineteen slice actions with their exact source-owned guards', () => {
+  it('loads the twenty-one slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(19);
+    expect(catalog.actions.size).toBe(21);
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:
@@ -237,6 +237,13 @@ describe('APP host projection', () => {
       kind: 'safe-return',
       to: 'CHR-019',
       trigger: 'Вернуться к составу до необратимого результата',
+    });
+    expect(catalog.actions.get('CHR-021::CTA::002')).toEqual({
+      from: 'CHR-021',
+      guard: 'composition checkpoint and any bundle receipt preserved; no request recreated',
+      kind: 'safe-return',
+      to: 'CHR-019',
+      trigger: 'Вернуться к симбионтам без переброса',
     });
     const createCharacterTrigger = 'Открыть «Создание персонажа: идентичность»';
     expect(catalog.actions.get('APP-004::CTA::001')).toEqual({

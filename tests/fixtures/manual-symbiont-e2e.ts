@@ -9,10 +9,16 @@ import type { FastifyInstance } from 'fastify';
 import type { RevisionImpact } from '../../src/persistence/index.js';
 import type { RevisionVector } from '@shared/index.js';
 import { loadCreationWizardCheckpoint } from '../../src/host/creation-set-decide.js';
+import { commitManualComposition } from '../../src/host/creation-manual-composition.js';
 import { loadCreationSkillCatalog } from '../../src/host/creation-skill-catalog.js';
 import { createHost, startHost } from '../../src/host/server.js';
+import type { SymbiontSpeciesKey } from '../../src/domain/index.js';
 import { CATALOG } from './symbiont-stage.js';
-import { createManualWizardSetup, exactManualAdvisorSkills } from './manual-symbiont-stage.js';
+import {
+  createManualWizardSetup,
+  exactManualAdvisorSkills,
+  manualCompositionRequest,
+} from './manual-symbiont-stage.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const CHARACTER_DRAFT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -23,6 +29,7 @@ const ZERO_REVISIONS: RevisionVector = {
 };
 
 export interface ManualSymbiontBrowserHostOptions {
+  readonly compositionReplacements?: readonly (readonly SymbiontSpeciesKey[])[];
   readonly diceInputMode: 'AUTO' | 'MANUAL';
   readonly prefix: string;
   readonly raceChoice: 'FREE' | 'UNITED';
@@ -86,15 +93,42 @@ export async function createManualSymbiontBrowserHost(
     let receiptAllocations = 0;
     let rollRequestAllocations = 0;
     let sampleCalls = 0;
+    const activeDatabase = database;
+    const readCheckpoint = () =>
+      loadCreationWizardCheckpoint(activeDatabase, CHARACTER_DRAFT_ID, CATALOG.skillStage, CATALOG);
+    const allocateRollRequestId = () =>
+      `${setup.selectionRequest.commandId}-browser-roll-request-${String(++rollRequestAllocations)}`;
+    const allocateReceiptId = () =>
+      `${setup.selectionRequest.commandId}-browser-receipt-${String(++receiptAllocations)}`;
+    const sampleD20 = () => {
+      sampleCalls += 1;
+      return options.sampleFaces[sampleCalls - 1] ?? 10;
+    };
+    for (const [index, speciesKeys] of (options.compositionReplacements ?? []).entries()) {
+      commitManualComposition(
+        activeDatabase,
+        manualCompositionRequest(
+          setup,
+          readCheckpoint(),
+          `${options.prefix}-fixture-composition-${String(index + 1)}`,
+          speciesKeys,
+        ),
+        allocateReceiptId(),
+        { catalog: CATALOG, allocateRollRequestId, sampleD20 },
+      );
+      runtime.advance({
+        actorVisibilityChanged: false,
+        projectionChanged: true,
+        stateChanged: true,
+      });
+    }
     const config = () => ({
       advanceRevisions: runtime.advance,
       allocateCreationBranchUuid: () => `${setup.selectionRequest.commandId}-browser-branch`,
-      allocateCreationRollRequestId: () =>
-        `${setup.selectionRequest.commandId}-browser-roll-request-${String(++rollRequestAllocations)}`,
+      allocateCreationRollRequestId: allocateRollRequestId,
       allocateContextId: () => '10000000-0000-4000-8000-000000000001' as const,
       allocateLocalCharacterId: () => '20000000-0000-4000-8000-000000000001' as const,
-      allocateReceiptId: () =>
-        `${setup.selectionRequest.commandId}-browser-receipt-${String(++receiptAllocations)}`,
+      allocateReceiptId,
       allocateWizardCheckpointId: () => `${setup.selectionRequest.commandId}-browser-wizard`,
       database: setup.database,
       onFrameError: (error: unknown) => {
@@ -102,10 +136,7 @@ export async function createManualSymbiontBrowserHost(
       },
       projectRoot: PROJECT_ROOT,
       readRevisions: runtime.read,
-      sampleCreationD20: () => {
-        sampleCalls += 1;
-        return options.sampleFaces[sampleCalls - 1] ?? 10;
-      },
+      sampleCreationD20: sampleD20,
       staticRoot: join(PROJECT_ROOT, 'dist/web'),
     });
     let baseURL = '';
@@ -114,9 +145,6 @@ export async function createManualSymbiontBrowserHost(
       baseURL = await startHost(app, { interface: '127.0.0.1', port: 0 });
     };
     await listen();
-    const activeDatabase = database;
-    const readCheckpoint = () =>
-      loadCreationWizardCheckpoint(activeDatabase, CHARACTER_DRAFT_ID, CATALOG.skillStage, CATALOG);
     let closed = false;
     return {
       advisorRollIds: () => {

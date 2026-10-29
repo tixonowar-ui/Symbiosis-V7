@@ -1,42 +1,70 @@
-# Передача контекста — 2026-10-27
+# Передача контекста — 2026-10-28
 
-Снимок состояния после слияния CI-изменений. База — `main`, коммит
-`bf598d1422302901388833c473519d6beddd9c21`.
+Снимок состояния после исправления ревью issue #146 (PR #165, ветка
+`codex/146-starting-armor-bundle`). База — `main`, коммит
+`45f6f23d07324f455c50b4a8495aeb4ab2b16834`. Последний проверенный implementation
+HEAD — `013e983`; документация этого снимка коммитится следующим коммитом.
 Это подтверждение перечисленных проверок, а не приёмка всего продукта.
 
 ## Что завершено
 
+- [PR #165](https://github.com/tixonowar-ui/Symbiosis-V7/pull/165): стартовый
+  armorBundle CHR-021. Domain-валидация, host loader/contract, durable
+  entry/quality roll/checkpoint, strict web decoder и accessible UI. Bundle
+  всегда `OWNED_NOT_EQUIPPED`; один D20 на весь bundle; recommendation не
+  модификатор и не final qualityTier; PURE не инициализируется. После checkpoint
+  presentation остаётся actionless `CHR-021/CHECKPOINTED` с host-signed
+  `CHR-022`, который renderer не публикует. [ADR 0055](../adr/0055-starting-armor-bundle.md).
+- Замечания ревью исправлены: `CHR-042::CTA::001` подтверждает exact diff через
+  SET-DECIDE и атомарно создаёт armor stage; прямой вход при pending diff
+  запрещён. Post-write validation находится внутри SQLite-транзакции, а команды
+  прежних стадий отклоняются до записи. RANDOM/MANUAL safe-return/resume
+  сохраняет snapshot/context, composition и receipts без reload и новых IDs.
+  MANUAL-грань требует явного ввода, selected item и его source-backed
+  характеристики видны до фиксации. [ADR 0056](../adr/0056-armor-interaction-confirmation-and-recovery.md).
+- Follow-up исправления: RANDOM checkpoint после safe-return/resume проходит
+  полную persisted validation и повторное открытие SQLite. Подтверждение
+  взаимодействий работает уже для первой composition record через empty-before
+  preview. Внутренние идентификаторы вроде `CORE-151` удалены из player preview
+  и DOM. [ADR 0057](../adr/0057-armor-initial-interactions-and-presentation-recovery.md).
 - [PR #161](https://github.com/tixonowar-ui/Symbiosis-V7/pull/161) слит:
   штатный Vitest ограничивает параллелизм максимум четырьмя workers с учётом
-  доступных CPU. Измеренный пик памяти Atlas suites снижен; игровые данные,
-  guards, timeout и состав тестов сохранены. Причина и границы исправления —
-  [Vitest / Atlas memory](vitest-atlas-memory.md).
-- [PR #163](https://github.com/tixonowar-ui/Symbiosis-V7/pull/163) слит после
-  разрешения конфликтов с #161. В changelog сохранены обе записи; итоговый
-  набор — **80 файлов / 1526 Vitest-тестов и 8 Playwright-сценариев**.
-- CI проверяет трассируемость, полный вывод двух импортов и наличие тестов;
-  диагностические материалы E2E сохраняются и после успешного retry.
-  Подробности команд и отчётов — [проверки CI](../process/ci-checks.md).
+  доступных CPU. Игровые данные, guards, timeout и состав тестов сохранены.
+- [PR #163](https://github.com/tixonowar-ui/Symbiosis-V7/pull/163) слит:
+  трассируемость и полный generated-вывод проверяются двумя импортами, пустые
+  тестовые прогоны запрещены, диагностика E2E сохраняется и после retry.
 
-Правила ревью, защита `main` и лимиты размера PR не менялись.
+Правила ревью, защита `main`, конфигурация проверок и лимиты размера PR не
+менялись. `artifacts/**` не изменялись; `generated/**` руками не правились.
 
-## Доказательства
+## Доказательства на этой ветке
 
-- Обычный локальный `npm run verify` на объединённом состоянии прошёл:
-  контрольные суммы, трассируемость, типы, ESLint, Prettier,
-  **80 файлов / 1526 тестов**, кросс-реестровая валидация.
-  Дополнительные настройки параллелизма не требовались.
-- [CI перед слиянием #163](https://github.com/tixonowar-ui/Symbiosis-V7/actions/runs/40530542820)
-  завершился успешно; обязательные `verify`, `markers`, `size` зелёные.
-  Проверены production build и **8 E2E-сценариев**.
-- `import:verify` сравнил **319 файлов** по относительному пути и SHA-256,
-  включая игнорируемые Git изображения и SQLite. Отслеживаемый вывод остался
-  актуальным. Это два последовательных импорта в текущем дереве;
-  каталог между ними не очищается.
-- Отрицательные проверки до слияния подтвердили отказ для устаревшей
-  матрицы, пустой выборки тестов, изменённых media/SQLite и добавленных либо
-  исчезнувших файлов. Контролируемый E2E с первой неудачной попыткой и успешным
-  retry сохранил trace и screenshot первой ошибки, а HTML отметил `flaky`.
+- `npm run verify`: контрольные суммы, актуальная TRACEABILITY, typecheck,
+  ESLint, Prettier, **85 файлов / 1603 Vitest-теста**, кросс-реестровая
+  валидация — успешно.
+- `npm run import:verify`: **319 файлов** имеют одинаковые относительные пути и
+  SHA-256 между двумя импортами, включая media и SQLite.
+- `npm run build`: production Vite build успешен.
+- `npm run test:e2e`: **11/11 production E2E-сценариев** успешно без retry:
+  исходные восемь, MANUAL armor round-trip, UNITED/ABSORPTION exact diff и
+  RANDOM safe-return/resume. Проверены Fastify/WS/SQLite, системный Chrome и
+  production `dist/web`.
+- Отдельные regressions подтверждают unchanged payload/checkpoint после отказа
+  из второй WS-сессии, успешную загрузку после него, changed/stale diff refusal,
+  replay/reconnect/restart с теми же IDs и отсутствие sampler при отказе.
+- `docs/TRACEABILITY.md` перегенерирован и проходит `traceability:verify`.
+
+Локальный `verify` не включает `import:verify` и `test:e2e`; обе команды
+выполнены отдельно. Обязательный CI PR на момент этого снимка ещё должен быть
+перезапущен после push новых коммитов.
+
+## Следующие задачи
+
+- PR #165 остаётся открытым. Merge выполняет только владелец репозитория;
+  разрешения на предыдущие PR не распространяются на этот срез.
+- Очередь #151–#156: стартовое оружие CHR-022, профили оружия, деньги,
+  пять позиций, итог восьми операций, post-save recovery. Она не начата этим
+  срезом. `CHR-022` по #146 остаётся host-signed и не публикуется.
 
 ## Как продолжить
 
@@ -48,29 +76,28 @@ npm run import
 npm run verify
 ```
 
-Для дополнительных проверок импорта и браузерных сценариев:
+Дополнительные проверки:
 
 ```bash
 npm run import:verify
+npm run build
 npm run test:e2e
 ```
 
-Эти две команды не входят в локальный `verify`. E2E сам собирает production
-клиент; нужен системный Chrome (`channel: 'chrome'`). `npm start` запускает
-host, который отдаёт готовый `dist/web`; сборку эта команда не выполняет.
+E2E сам собирает production клиент и требует системный Chrome
+(`channel: 'chrome'`). Тяжёлые команды запускаются последовательно.
 
 ## Что остаётся открытым
 
-- Причины ранее наблюдавшихся E2E timeout ещё не исправлены. При новом
-  проявлении скачать `e2e-diagnostics-<номер попытки workflow>` из Actions
-  и разобрать первую неудачную попытку. Срок хранения — 14 дней.
-- Один retry в CI пока сохраняется; успешный повтор делает тест `flaky`,
-  но не блокирует merge. `failOnFlakyTests` не включён. Решение о нём принимается
-  после разбора нестабильности, без ослабления существующих проверок.
+- Причины ранее наблюдавшихся E2E timeout не объявлены исправленными. При новом
+  проявлении нужно разобрать `e2e-diagnostics-<номер попытки workflow>` и первую
+  неудачную попытку. Срок хранения — 14 дней.
+- Один retry в CI сохраняется; успешный повтор делает тест `flaky`, но не
+  блокирует merge. `failOnFlakyTests` не включён.
 - Product completion, portable-поставка и полный LAN-контур не объявлены
   готовыми. Актуальное состояние модулей — [module-map](module-map.md),
   дальнейший объём — [ROADMAP](../ROADMAP.md) и [backlog](../backlog/).
 
-[Autonomous checkpoint от 25 октября](autonomous-checkpoint.md) сохранён
-как историческая запись среза #135. Его значения HEAD, тестов и статусы
-pending не описывают текущую базу этого handoff.
+[Autonomous checkpoint от 25 октября](autonomous-checkpoint.md) сохранён как
+историческая запись среза #135. Его значения HEAD, тестов и статусы pending не
+описывают текущую базу этого handoff.

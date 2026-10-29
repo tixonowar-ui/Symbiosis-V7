@@ -3,6 +3,7 @@ export * from './entities/roll-request/roll-model.js';
 export * from './rules/creation-critical.js';
 export * from './rules/creation-stat-roll.js';
 export * from './rules/handler-registry.js';
+export * from './rules/item-stage/index.js';
 export * from './rules/stat-assignment.js';
 export * from './rules/skill-stage/index.js';
 export * from './rules/symbiont-stage/index.js';

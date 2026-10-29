@@ -105,14 +105,16 @@ test('FREE RANDOM Eel keeps side local, commits binding only, and restores CHR-0
     await expect(page.locator('[data-symbiont-interactions="empty"]')).toHaveCount(2);
     await expect(page.locator('[data-composition-duplicates="empty"]')).toBeVisible();
     await expectNoExcludedActions(page);
-    await expect(page.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('button')).toHaveCount(1);
+    await expect(page.locator('[data-atlas-action-key="CHR-019::CTA::001"]')).toHaveCount(1);
 
     await page.reload();
     await expect(
       page.getByRole('heading', { name: 'Состав симбионтов только для чтения', exact: true }),
     ).toBeVisible();
     await expect(page.locator('[data-composition-binding="EEL"]')).toContainText('LEFT');
-    await expect(page.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('button')).toHaveCount(1);
+    await expect(page.locator('[data-atlas-action-key="CHR-019::CTA::001"]')).toHaveCount(1);
     await expectNoExcludedActions(page);
     expect(host.sampleCalls()).toBe(beforeBinding.samples);
     expect(host.rollRequestAllocations()).toBe(beforeBinding.rollRequests);
@@ -308,7 +310,8 @@ test('UNITED ADVISER completes I/W, local exact skills, checkpoint, and durable 
     ).toBeVisible();
     await expect(page.locator('[data-symbiont-interactions="ready"]').first()).toBeVisible();
     await expectNoExcludedActions(page);
-    await expect(page.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('button')).toHaveCount(1);
+    await expect(page.locator('[data-atlas-action-key="CHR-019::CTA::001"]')).toHaveCount(1);
 
     await page.reload();
     await expect(
@@ -323,7 +326,8 @@ test('UNITED ADVISER completes I/W, local exact skills, checkpoint, and durable 
       ),
     ).toBeVisible();
     await expectNoExcludedActions(page);
-    await expect(page.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('button')).toHaveCount(1);
+    await expect(page.locator('[data-atlas-action-key="CHR-019::CTA::001"]')).toHaveCount(1);
     expect(host.rollRequestAllocations()).toBe(beforeSkills.rollRequests);
     expect(host.sampleCalls()).toBe(0);
     expect(pageErrors).toEqual([]);
