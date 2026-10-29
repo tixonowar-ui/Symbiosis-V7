@@ -86,8 +86,14 @@ import {
   assertArmorBundleScreenContracts,
   CHR_019_ARMOR_ENTRY_ACTION_KEY,
   CHR_021_FORM_ID,
+  CHR_021_CONFIRM_ACTION_KEY,
   CHR_021_RETURN_ACTION_KEY,
 } from './chr-armor-bundle.js';
+import {
+  assertStartingWeaponScreenContracts,
+  CHR_022_FORM_ID,
+  CHR_022_RETURN_ACTION_KEY,
+} from './chr-starting-weapon.js';
 
 export const APP_FORM_IDS = [
   'APP-001',
@@ -256,6 +262,7 @@ export interface AppNavigationAction {
     | typeof CHR_018_FORM_ID
     | 'CHR-019'
     | typeof CHR_021_FORM_ID
+    | typeof CHR_022_FORM_ID
     | typeof CHR_042_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -318,6 +325,16 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       CHR_021_FORM_ID,
       CHR_021_RETURN_ACTION_KEY,
       'composition checkpoint and any bundle receipt preserved; no request recreated',
+    ],
+    [
+      CHR_021_FORM_ID,
+      CHR_021_CONFIRM_ACTION_KEY,
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT bundle receipt committed; owned not equipped',
+    ],
+    [
+      CHR_022_FORM_ID,
+      CHR_022_RETURN_ACTION_KEY,
+      'armor and weapon receipts preserved; no request recreated',
     ],
     [
       CHR_042_FORM_ID,
@@ -497,6 +514,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertSymbiontScreenContracts(forms, assertScreenContract);
   assertManualSymbiontScreenContracts(forms, assertScreenContract);
   assertArmorBundleScreenContracts(forms, assertScreenContract);
+  assertStartingWeaponScreenContracts(forms, assertScreenContract);
   return result;
 }
 

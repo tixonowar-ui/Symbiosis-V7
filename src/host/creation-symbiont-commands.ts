@@ -99,7 +99,10 @@ function assertCommon(
   wizardCheckpointId: string,
   draftRevision: number,
   receiptId?: string,
-  options: { readonly allowArmorBundleStage?: boolean } = {},
+  options: {
+    readonly allowArmorBundleStage?: boolean;
+    readonly allowStartingWeaponStage?: boolean;
+  } = {},
 ): void {
   const actual = currentRevisions(checkpoint);
   if (!isDeepStrictEqual(request.expectedRevisions, actual)) {
@@ -117,6 +120,7 @@ function assertCommon(
     (checkpoint.armorBundleStage !== null &&
       checkpoint.armorBundleStage !== undefined &&
       options.allowArmorBundleStage !== true) ||
+    (checkpoint.startingWeaponStage != null && options.allowStartingWeaponStage !== true) ||
     occupied.has(request.commandId) ||
     (receiptId !== undefined && (occupied.has(receiptId) || receiptId === request.commandId)) ||
     checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||

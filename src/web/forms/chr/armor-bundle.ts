@@ -104,6 +104,7 @@ export interface Chr021Projection extends JsonObject {
   readonly wizardCheckpointId: string;
   readonly draftRevision: number;
   readonly commandId: string;
+  readonly weaponEntryMode?: 'INITIAL' | 'RESUME' | null;
 }
 
 function isArmorBodyZone(value: JsonValue | undefined): value is ArmorBodyZone {
@@ -272,6 +273,12 @@ export function decodeChr021Projection(
     qualityRollReceiptIdOrNull: (field) => field === rollReceiptId,
     qualityRollRequestId: isNonEmptyString,
     wizardCheckpointId: isNonEmptyString,
+    ...(Object.hasOwn(value, 'weaponEntryMode')
+      ? {
+          weaponEntryMode: (field: JsonValue | undefined) =>
+            field === null || (checkpointed && (field === 'INITIAL' || field === 'RESUME')),
+        }
+      : {}),
   });
   if (!result.ok) return result;
   const ids = new Set(catalog.value.map((entry) => entry.itemId));
@@ -287,7 +294,12 @@ export function expectedChr021ActionKeys(
   projection: Chr021Projection,
   capabilities: { readonly rollCommit: boolean; readonly checkpoint: boolean },
 ): readonly ActionKey[] {
-  if (projection.bundleCheckpointReceiptIdOrNull !== null) return [];
+  if (projection.bundleCheckpointReceiptIdOrNull !== null) {
+    return projection.weaponEntryMode === 'RESUME' ||
+      (projection.weaponEntryMode === 'INITIAL' && capabilities.checkpoint)
+      ? [CHR_021_CONFIRM_ACTION_KEY]
+      : [];
+  }
   if (projection.qualityRollReceiptIdOrNull === null) {
     return capabilities.rollCommit ? [CHR_021_ROLL_ACTION_KEY] : [];
   }
@@ -606,6 +618,23 @@ export function decodeArmorBundleCheckpointTerminal(
 ): DecodeResult<CommandReceipt<ArmorBundleCheckpointPayload>> {
   const receipt = message.receipt;
   const payload = request.payload;
+  const hasWeaponRequest = Object.hasOwn(receipt.result, 'weaponQualityRollRequestId');
+  const weaponRequestId = receipt.result['weaponQualityRollRequestId'];
+  if (
+    hasWeaponRequest &&
+    (!isNonEmptyString(weaponRequestId) ||
+      [
+        payload.armorBundleId,
+        payload.qualityRollReceiptId,
+        payload.characterDraftId,
+        payload.wizardCheckpointId,
+        source.projection.qualityRollRequestId,
+        receipt.commandId,
+        receipt.receiptId,
+      ].includes(weaponRequestId))
+  ) {
+    return refused('$.receipt.result.weaponQualityRollRequestId', weaponRequestId ?? null);
+  }
   if (
     source.formId !== 'CHR-021' ||
     receipt.commandId !== request.commandId ||
@@ -623,6 +652,11 @@ export function decodeArmorBundleCheckpointTerminal(
       qualityRollReceiptId: (field) => field === payload.qualityRollReceiptId,
       sourceFormId: (field) => field === 'CHR-021',
       variant: (field) => field === 'ARMOR_BUNDLE_CHECKPOINT',
+      ...(hasWeaponRequest
+        ? {
+            weaponQualityRollRequestId: (field: JsonValue | undefined) => field === weaponRequestId,
+          }
+        : {}),
     },
     false,
   );

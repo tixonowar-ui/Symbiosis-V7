@@ -155,6 +155,7 @@ export interface ArmorBundleCheckpointReceiptResult extends ArmorBundleReceiptRe
   readonly qualityRecommendation: ArmorBundleQualityRecommendation;
   readonly ownershipState: typeof ARMOR_BUNDLE_OWNERSHIP_STATE;
   readonly nextFormId: typeof CHR_022_FORM_ID;
+  readonly weaponQualityRollRequestId?: string;
 }
 export type ArmorBundleCheckpointReceipt = CommandReceipt<ArmorBundleCheckpointReceiptResult>;
 
@@ -483,6 +484,7 @@ export function armorBundleCheckpointReceipt(
   request: ArmorBundleCheckpointRequest,
   bundle: ValidatedArmorBundle,
   qualityReceipt: ArmorBundleQualityRollReceipt,
+  weaponQualityRollRequestId?: string,
 ): ArmorBundleCheckpointReceipt {
   return {
     commandId: request.commandId,
@@ -499,6 +501,7 @@ export function armorBundleCheckpointReceipt(
       qualityRecommendation: qualityReceipt.result.qualityRecommendation,
       ownershipState: ARMOR_BUNDLE_OWNERSHIP_STATE,
       nextFormId: CHR_022_FORM_ID,
+      ...(weaponQualityRollRequestId === undefined ? {} : { weaponQualityRollRequestId }),
     },
   };
 }
@@ -786,6 +789,7 @@ function qualityReceiptAt(value: unknown, path: string): ArmorBundleQualityRollR
 
 function checkpointReceiptAt(value: unknown, path: string): ArmorBundleCheckpointReceipt {
   const shell = receiptShellAt(value, path);
+  const hasWeaponRequest = Object.hasOwn(shell.result, 'weaponQualityRollRequestId');
   exactSymbiontObject(shell.result, `${path}.result`, [
     ...ARMOR_RECEIPT_COMMON_KEYS,
     'sourceFormId',
@@ -797,8 +801,14 @@ function checkpointReceiptAt(value: unknown, path: string): ArmorBundleCheckpoin
     'qualityRecommendation',
     'ownershipState',
     'nextFormId',
+    ...(hasWeaponRequest ? ['weaponQualityRollRequestId'] : []),
   ]);
   receiptResultCommonAt(shell.result, `${path}.result`);
+  if (hasWeaponRequest)
+    nonEmptySymbiontStringAt(
+      shell.result['weaponQualityRollRequestId'],
+      `${path}.result.weaponQualityRollRequestId`,
+    );
   literal(shell.result['sourceFormId'], CHR_021_FORM_ID, `${path}.result.sourceFormId`);
   literal(shell.result['variant'], 'ARMOR_BUNDLE_CHECKPOINT', `${path}.result.variant`);
   literal(shell.result['nextFormId'], CHR_022_FORM_ID, `${path}.result.nextFormId`);

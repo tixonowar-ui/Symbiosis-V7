@@ -62,6 +62,18 @@ export function projectChr021(
   const rollRecord = stage.qualityRollRecordOrNull;
   const checkpointRecord = stage.checkpointRecordOrNull;
   const actions: ActionKey[] = [];
+  const weapon = checkpoint.startingWeaponStage;
+  const weaponEntryMode =
+    checkpointRecord === null
+      ? null
+      : weapon === null || weapon === undefined
+        ? 'INITIAL'
+        : weapon.checkpointRecordOrNull === null
+          ? 'RESUME'
+          : null;
+  if (weaponEntryMode === 'RESUME' || (weaponEntryMode === 'INITIAL' && checkpointCapable)) {
+    actions.push(CHR_021_CONFIRM_ACTION_KEY);
+  }
   if (checkpointRecord === null) {
     if (rollRecord === null) {
       if (rollCommitCapable) actions.push(CHR_021_ROLL_ACTION_KEY);
@@ -83,6 +95,7 @@ export function projectChr021(
       qualityRollRequestId: stage.qualityRollRequestId,
       qualityRollReceiptIdOrNull: rollRecord?.receipt.receiptId ?? null,
       bundleCheckpointReceiptIdOrNull: checkpointRecord?.receipt.receiptId ?? null,
+      weaponEntryMode,
       nextFormId: checkpoint.nextStageEnvelope.formId,
       armorPieces: pieces.map((piece) => ({
         itemId: piece.itemId,

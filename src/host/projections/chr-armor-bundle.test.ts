@@ -305,7 +305,7 @@ describe('CHR-021 projection', () => {
     expect(projected.roleFilteredPayload['qualityRecommendation']).not.toHaveProperty('modifier');
   });
 
-  it('gates actions by capability and leaves the checkpointed form actionless', () => {
+  it('gates actions by capability and offers explicit weapon entry for a historic checkpoint', () => {
     const { entry, rolled, checkpointed } = armorCheckpoints();
     expect(projectChr021(entry, ARMOR_CATALOG, false, true).availableActionKeys).toEqual([]);
     expect(projectChr021(entry, ARMOR_CATALOG, true, false).availableActionKeys).toEqual([
@@ -317,7 +317,13 @@ describe('CHR-021 projection', () => {
     expect(projectChr021(rolled, ARMOR_CATALOG, false, false).availableActionKeys).toEqual([
       CHR_021_RETURN_ACTION_KEY,
     ]);
-    expect(projectChr021(checkpointed, ARMOR_CATALOG, true, true).availableActionKeys).toEqual([]);
+    expect(projectChr021(checkpointed, ARMOR_CATALOG, true, true).availableActionKeys).toEqual([
+      CHR_021_CONFIRM_ACTION_KEY,
+    ]);
+    expect(projectChr021(checkpointed, ARMOR_CATALOG, true, false).availableActionKeys).toEqual([]);
+    expect(
+      projectChr021(checkpointed, ARMOR_CATALOG, true, true).roleFilteredPayload,
+    ).toMatchObject({ weaponEntryMode: 'INITIAL' });
   });
 
   it('refuses to project without an armor stage', () => {

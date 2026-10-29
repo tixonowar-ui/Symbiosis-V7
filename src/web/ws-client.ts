@@ -152,6 +152,27 @@ import {
   expectedChr021ActionKeys,
   removeArmorPiece,
 } from './forms/chr/armor-bundle.js';
+import {
+  CHR_022_ROLL_ACTION_KEY,
+  CHR_022_CONFIRM_ACTION_KEY,
+  CHR_022_PURE_CONFIRM_ACTION_KEY,
+  decodeChr022Projection,
+  expectedChr022ActionKeys,
+  decodeStartingWeaponTerminal,
+  selectStartingWeapon,
+  startingWeaponDraftFromSnapshot,
+  startingWeaponQualityPayload,
+  startingWeaponCheckpointPayload,
+  startingWeaponEntryPayload,
+} from './forms/chr/starting-weapon.js';
+import type {
+  Chr022Projection,
+  StartingWeaponDraft,
+  StartingWeaponQualityRequest,
+  StartingWeaponCheckpointRequest,
+  StartingWeaponEntryRequest,
+  StartingWeaponSnapshotSource,
+} from './forms/chr/starting-weapon.js';
 import type {
   ArmorBundleCheckpointRequest,
   ArmorBundleDraft,
@@ -202,6 +223,7 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-041',
   'CHR-042',
   'CHR-021',
+  'CHR-022',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -1602,6 +1624,10 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  replaceStartingWeaponSelection(
+    weaponTypeId: string,
+    weaponVariant: string,
+  ): FormActionRequestResult;
   disconnect(): void;
   reconnect(): FormActionRequestResult;
   replaceAdvisorSkillCandidate(
@@ -4155,6 +4181,27 @@ function decodeConfirmedSnapshot(
       }
       break;
     }
+    case 'CHR-022': {
+      const decoded = decodeChr022Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr022ActionKeys(decoded.value, {
+            rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+            checkpoint: executableWorkflowCommandIds.includes(
+              IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+            ),
+          }),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
     case 'CHR-021': {
       const decoded = decodeChr021Projection(
         base.roleFilteredPayload,
@@ -4861,6 +4908,29 @@ function decodeFormActionSnapshot(
     return decoded;
   }
   if (
+    (pending.sourceFormId === 'CHR-022' && pending.actionKey === 'CHR-022::CTA::003') ||
+    (pending.sourceFormId === 'CHR-021' && pending.actionKey === 'CHR-021::CTA::001')
+  ) {
+    const source = previous.projection;
+    const destination = decoded.value.projection;
+    const resume = pending.sourceFormId === 'CHR-021';
+    if (
+      previous.formId !== pending.sourceFormId ||
+      decoded.value.formId !== (resume ? 'CHR-022' : 'CHR-021') ||
+      previous.layers.length !== 0 ||
+      decoded.value.layers.length !== 0 ||
+      destination['characterDraftId'] !== source['characterDraftId'] ||
+      destination['wizardCheckpointId'] !== source['wizardCheckpointId'] ||
+      destination['draftRevision'] !== source['draftRevision'] ||
+      (resume
+        ? source['weaponEntryMode'] !== 'RESUME'
+        : destination['weaponEntryMode'] !== 'RESUME')
+    ) {
+      return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+    }
+    return decoded;
+  }
+  if (
     pending.sourceFormId === 'CHR-017' ||
     pending.sourceFormId === 'CHR-018' ||
     pending.sourceFormId === 'CHR-019' ||
@@ -4955,6 +5025,18 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
+  if (
+    pending.request.payload.stage === 'SYMBIONTS' &&
+    ['STARTING_WEAPON_ENTRY', 'STARTING_WEAPON_CHECKPOINT'].includes(
+      (pending.request.payload as { readonly variant?: string }).variant ?? '',
+    )
+  ) {
+    return decodeStartingWeaponTerminal(
+      message,
+      pending.request as unknown as StartingWeaponEntryRequest | StartingWeaponCheckpointRequest,
+      pending.sourceSnapshot,
+    ) as DecodeResult<CommandReceipt<CheckpointResult>>;
+  }
   if (
     pending.request.payload.stage === 'SYMBIONTS' &&
     'variant' in pending.request.payload &&
@@ -5590,6 +5672,16 @@ function decodeRollCommitTerminal(
 ): DecodeResult<CommandReceipt<RollCommitResult>> {
   if (
     pending.request.payload.stage === 'SYMBIONTS' &&
+    (pending.request.payload as { readonly variant?: string }).variant === 'STARTING_WEAPON_QUALITY'
+  ) {
+    return decodeStartingWeaponTerminal(
+      message,
+      pending.request as unknown as StartingWeaponQualityRequest,
+      pending.sourceSnapshot,
+    ) as DecodeResult<CommandReceipt<RollCommitResult>>;
+  }
+  if (
+    pending.request.payload.stage === 'SYMBIONTS' &&
     (pending.request.payload as { readonly variant?: string }).variant === 'ARMOR_BUNDLE_QUALITY'
   ) {
     return decodeArmorBundleQualityTerminal(
@@ -5751,6 +5843,40 @@ function sameRollCommitReceipt(
   return sameJson(left as unknown as JsonValue, right as unknown as JsonValue);
 }
 
+function startingWeaponSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const result = receipt.result;
+  if (snapshot.formId !== 'CHR-022')
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  const projection = snapshot.projection as Chr022Projection;
+  const entry = result['variant'] === 'STARTING_WEAPON_ENTRY';
+  const checkpoint = result['variant'] === 'STARTING_WEAPON_CHECKPOINT';
+  if (
+    projection.commandId !== receipt.commandId ||
+    projection.characterDraftId !== result['characterDraftId'] ||
+    projection.wizardCheckpointId !== result['checkpointId'] ||
+    projection.draftRevision !== result['draftRevision'] ||
+    projection.weaponQualityRollRequestId !== result['weaponQualityRollRequestId'] ||
+    projection.nextFormId !== result['nextFormId'] ||
+    (entry
+      ? projection.weaponQualityRollReceiptIdOrNull !== null ||
+        projection.weaponCheckpointReceiptIdOrNull !== null
+      : projection.weaponTypeId !== result['weaponTypeId'] ||
+        projection.weaponVariant !== result['weaponVariant'] ||
+        !sameJson(projection.qualityRecommendation, result['qualityRecommendation']!) ||
+        projection.weaponQualityRollReceiptIdOrNull !==
+          (checkpoint ? result['weaponQualityRollReceiptId'] : receipt.receiptId) ||
+        projection.weaponCheckpointReceiptIdOrNull !== (checkpoint ? receipt.receiptId : null)) ||
+    snapshot.revisions.actorVisibilityRevision !== receipt.revisions.actorVisibilityRevision ||
+    snapshot.revisions.stateRevision !== receipt.revisions.stateRevision ||
+    snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision
+  )
+    return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  return { ok: true, value: snapshot };
+}
+
 function armorBundleSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<CheckpointResult>,
@@ -5763,6 +5889,25 @@ function armorBundleSnapshotMatchesReceipt(
     readonly armorBundleId: string;
     readonly nextFormId: string;
   };
+  if (result.variant === 'ARMOR_BUNDLE_CHECKPOINT' && snapshot.formId === 'CHR-022') {
+    const projection = snapshot.projection as Chr022Projection;
+    if (
+      projection.commandId !== receipt.commandId ||
+      projection.characterDraftId !== result.characterDraftId ||
+      projection.wizardCheckpointId !== result.checkpointId ||
+      projection.draftRevision !== result.draftRevision ||
+      projection.nextFormId !== 'CHR-022' ||
+      result.nextFormId !== 'CHR-022' ||
+      projection.weaponQualityRollReceiptIdOrNull !== null ||
+      projection.weaponCheckpointReceiptIdOrNull !== null ||
+      (Object.hasOwn(receipt.result, 'weaponQualityRollRequestId') &&
+        projection.weaponQualityRollRequestId !== receipt.result['weaponQualityRollRequestId']) ||
+      !sameJson({ ...snapshot.revisions }, { ...receipt.revisions })
+    ) {
+      return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+    }
+    return { ok: true, value: snapshot };
+  }
   if (snapshot.formId !== 'CHR-021') {
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   }
@@ -5801,6 +5946,14 @@ function checkpointSnapshotMatchesReceipt(
   sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (
+    result.stage === 'SYMBIONTS' &&
+    ['STARTING_WEAPON_ENTRY', 'STARTING_WEAPON_CHECKPOINT'].includes(
+      (result as { readonly variant?: string }).variant ?? '',
+    )
+  ) {
+    return startingWeaponSnapshotMatchesReceipt(snapshot, receipt);
+  }
   if (
     result.stage === 'SYMBIONTS' &&
     'variant' in result &&
@@ -6155,6 +6308,12 @@ function rollCommitSnapshotMatchesReceipt(
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (
+    result.stage === 'SYMBIONTS' &&
+    (result as { readonly variant?: string }).variant === 'STARTING_WEAPON_QUALITY'
+  ) {
+    return startingWeaponSnapshotMatchesReceipt(snapshot, receipt);
+  }
   if (
     result.stage === 'SYMBIONTS' &&
     (result as { readonly variant?: string }).variant === 'ARMOR_BUNDLE_QUALITY'
@@ -6672,6 +6831,7 @@ export function connectProjection(
   onSkillCardDraft: (value: CharacterSkillCardDraft | null) => void = () => {},
   onManualCompositionDraft: (value: ManualCompositionDraft | null) => void = () => {},
   onArmorBundleDraft: (value: ArmorBundleDraft | null) => void = () => {},
+  onStartingWeaponDraft: (value: StartingWeaponDraft | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -6693,6 +6853,7 @@ export function connectProjection(
   let skillCardDraft: CharacterSkillCardDraft | null = null;
   let manualCompositionDraft: ManualCompositionDraft | null = null;
   let armorBundleDraft: ArmorBundleDraft | null = null;
+  let startingWeaponDraft: StartingWeaponDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
@@ -6828,6 +6989,11 @@ export function connectProjection(
         ? armorBundleDraftFromSnapshot(next.projection as Chr021Projection)
         : null;
     onArmorBundleDraft(armorBundleDraft);
+    startingWeaponDraft =
+      next.formId === 'CHR-022'
+        ? startingWeaponDraftFromSnapshot(next.projection as Chr022Projection)
+        : null;
+    onStartingWeaponDraft(startingWeaponDraft);
     if (next.formId === 'APP-001') playerContextId = null;
     else if (next.formId === 'APP-002') playerContextId = next.projection['contextId'] as string;
     const draft = identitySnapshot(next, playerContextId);
@@ -7800,6 +7966,30 @@ export function connectProjection(
           skillSelectionDraft,
         ),
       });
+      return { ok: true };
+    },
+    replaceStartingWeaponSelection: (weaponTypeId, weaponVariant) => {
+      if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
+      if (
+        lastSnapshot?.formId !== 'CHR-022' ||
+        startingWeaponDraft === null ||
+        !lastSnapshot.availableActionKeys.includes(CHR_022_ROLL_ACTION_KEY)
+      ) {
+        return { ok: false, detail: 'no active editable CHR-022 weapon scope' };
+      }
+      if (commandPending())
+        return { ok: false, detail: 'weapon selection is frozen while delivery is pending' };
+      try {
+        startingWeaponDraft = selectStartingWeapon(
+          lastSnapshot.projection as Chr022Projection,
+          weaponTypeId,
+          weaponVariant,
+        );
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      onStartingWeaponDraft(startingWeaponDraft);
+      notifyReady();
       return { ok: true };
     },
     addArmorBundleSelection: (itemId, bodyZoneOrNull) => {
@@ -8822,18 +9012,25 @@ export function connectProjection(
       if (
         activeForm.formId === 'CHR-021' &&
         lastSnapshot.formId === 'CHR-021' &&
-        actionKey === CHR_021_CONFIRM_ACTION_KEY
+        actionKey === CHR_021_CONFIRM_ACTION_KEY &&
+        (lastSnapshot.projection as Chr021Projection).weaponEntryMode !== 'RESUME'
       ) {
-        let request: ArmorBundleCheckpointRequest;
+        let request: WorkflowCommandRequestMessage<
+          'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+          ArmorBundleCheckpointRequest['payload'] | StartingWeaponEntryRequest['payload']
+        >;
         try {
           request = {
             commandId: createRequestId('command'),
             commandKind: 'workflow-command',
             expectedRevisions: { ...lastSnapshot.revisions },
             messageType: 'command.request',
-            payload: armorBundleCheckpointPayload(
-              lastSnapshot as unknown as ArmorBundleSnapshotSource,
-            ),
+            payload:
+              (lastSnapshot.projection as Chr021Projection).weaponEntryMode === 'INITIAL'
+                ? startingWeaponEntryPayload(lastSnapshot.projection as Chr021Projection)
+                : armorBundleCheckpointPayload(
+                    lastSnapshot as unknown as ArmorBundleSnapshotSource,
+                  ),
             protocolVersion: WIRE_PROTOCOL_VERSION,
             role: 'player',
             workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
@@ -8863,6 +9060,75 @@ export function connectProjection(
             ok: false,
             detail: `armor bundle checkpoint could not be sent: ${diagnostic(error)}`,
           };
+        }
+        notifyReady();
+        return { ok: true };
+      }
+      if (
+        activeForm.formId === 'CHR-022' &&
+        lastSnapshot.formId === 'CHR-022' &&
+        (actionKey === CHR_022_ROLL_ACTION_KEY ||
+          actionKey === CHR_022_CONFIRM_ACTION_KEY ||
+          actionKey === CHR_022_PURE_CONFIRM_ACTION_KEY)
+      ) {
+        const roll = actionKey === CHR_022_ROLL_ACTION_KEY;
+        let request: StartingWeaponQualityRequest | StartingWeaponCheckpointRequest;
+        try {
+          const source = lastSnapshot as unknown as StartingWeaponSnapshotSource;
+          const common = {
+            commandId: createRequestId('command'),
+            commandKind: 'workflow-command' as const,
+            expectedRevisions: { ...lastSnapshot.revisions },
+            messageType: 'command.request' as const,
+            protocolVersion: WIRE_PROTOCOL_VERSION,
+            role: 'player' as const,
+          };
+          request = roll
+            ? {
+                ...common,
+                workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+                payload: startingWeaponQualityPayload(
+                  source,
+                  startingWeaponDraft ?? startingWeaponDraftFromSnapshot(source.projection),
+                  typeof manualFacesOrNull === 'number' ? manualFacesOrNull : null,
+                ),
+              }
+            : {
+                ...common,
+                workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+                payload: startingWeaponCheckpointPayload(source),
+              };
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok)
+          return {
+            ok: false,
+            detail: `starting weapon failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        if (roll) {
+          pendingRollCommit = {
+            receipt: null,
+            request: request as unknown as PendingRollCommit['request'],
+            sourceProjection: lastSnapshot.projection as unknown as Chr003Projection,
+            sourceSnapshot: lastSnapshot,
+          };
+        } else {
+          pendingCheckpoint = {
+            assignmentDraft: null,
+            receipt: null,
+            request: request as unknown as PendingCheckpoint['request'],
+            skillSelectionDraft: null,
+            sourceSnapshot: lastSnapshot,
+          };
+        }
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          if (roll) pendingRollCommit = null;
+          else pendingCheckpoint = null;
+          return { ok: false, detail: `starting weapon could not be sent: ${diagnostic(error)}` };
         }
         notifyReady();
         return { ok: true };
