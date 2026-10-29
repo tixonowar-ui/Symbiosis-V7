@@ -93,6 +93,7 @@ export interface ManufacturingWitnessReceipt extends JsonObject {
   readonly provenance: 'PLAYER_WITNESS';
 }
 export interface WeaponProfileResult extends CommonResult {
+  readonly moneyRollRequestId?: string;
   readonly sourceFormId: 'CHR-023' | 'CHR-024';
   readonly variant: 'WEAPON_PROFILE_SUBMIT' | 'WEAPON_PROFILE_ACKNOWLEDGE';
   readonly outcome: 'INVALID' | 'SUBMITTED' | 'ACKNOWLEDGED';

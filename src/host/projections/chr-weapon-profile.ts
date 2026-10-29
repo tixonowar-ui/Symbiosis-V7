@@ -10,6 +10,7 @@ import {
   type WeaponProfileInputs,
   type WeaponEffectiveProfile,
 } from '../../domain/rules/item-stage/weapon-profile.js';
+import { startingMoneyStageForCheckpoint } from '../creation-starting-money-contract.js';
 import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js';
 
 export const CHR_023_FORM_ID = 'CHR-023' as const;
@@ -85,9 +86,15 @@ function context(checkpoint: DurableCreationWizardCheckpoint, catalog: WeaponPro
     weaponVariant: roll.weaponVariant,
   });
   const last = stage.records.at(-1);
+  const money = startingMoneyStageForCheckpoint(checkpoint);
+  const moneyEntryMode =
+    money !== null && money.checkpointRecordOrNull === null ? 'RESUME' : 'NONE';
   const common: JsonObject = {
     characterDraftId: checkpoint.localCharacter.localCharacterId,
     requestId: stage.requestId,
+    moneyEntryMode,
+    moneyRollRequestIdOrNull: money?.moneyRollRequestId ?? null,
+    moneyRollReceiptIdOrNull: money?.rollRecordOrNull?.receipt.receiptId ?? null,
     weaponTypeId: roll.weaponTypeId,
     weaponVariantId: roll.weaponVariant,
     weaponName: entry.name,
@@ -205,7 +212,9 @@ export function projectChr023(
   };
   return {
     availableActionKeys: submitted
-      ? []
+      ? common['moneyEntryMode'] === 'RESUME'
+        ? [CHR_023_SUBMIT_ACTION_KEY]
+        : []
       : [...(submitCapable ? [CHR_023_SUBMIT_ACTION_KEY] : []), CHR_023_RETURN_ACTION_KEY],
     formId: CHR_023_FORM_ID,
     formType: 'screen',
@@ -234,7 +243,9 @@ export function projectChr024(
   });
   return {
     availableActionKeys: acknowledged
-      ? []
+      ? common['moneyEntryMode'] === 'RESUME'
+        ? [CHR_024_ACKNOWLEDGE_ACTION_KEY]
+        : []
       : [...(checkpointCapable ? [CHR_024_ACKNOWLEDGE_ACTION_KEY] : []), CHR_024_RETURN_ACTION_KEY],
     formId: CHR_024_FORM_ID,
     formType: 'screen',

@@ -69,6 +69,8 @@ export interface Chr022Projection extends JsonObject {
   readonly weaponCheckpointReceiptIdOrNull: string | null;
   readonly weaponProfileEntryMode: 'NONE' | 'INITIAL' | 'RESUME';
   readonly weaponProfileRequestIdOrNull: string | null;
+  readonly moneyRollRequestIdOrNull: string | null;
+  readonly moneyRollReceiptIdOrNull: string | null;
   readonly qualityRecommendation: ArmorBundleQualityRecommendationProjection | null;
   readonly requirementPreview: WeaponRequirementPreview | null;
   readonly ownershipState: 'OWNED_NOT_EQUIPPED';
@@ -176,6 +178,8 @@ export function decodeChr022Projection(
     weaponProfileEntryMode: (field) =>
       field === 'NONE' || field === 'INITIAL' || field === 'RESUME',
     weaponProfileRequestIdOrNull: nullableId,
+    moneyRollRequestIdOrNull: nullableId,
+    moneyRollReceiptIdOrNull: nullableId,
     wizardCheckpointId: isNonEmptyString,
   });
   if (!result.ok) return result;

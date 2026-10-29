@@ -1,3 +1,8 @@
+import {
+  initialStartingMoneyStage,
+  type StartingMoneyStage,
+} from './creation-starting-money-contract.js';
+import { rewriteStartingMoneyPresentation } from './creation-starting-money.js';
 import { isDeepStrictEqual } from 'node:util';
 import type Database from 'better-sqlite3';
 import type { JsonObject } from '@shared/wire-protocol.js';
@@ -55,6 +60,7 @@ export interface WeaponProfileDependencies {
   readonly profileCatalog: WeaponProfileCatalog;
   readonly allocateRequestId: () => string;
   readonly allocateWitnessReceiptId: () => string;
+  readonly allocateMoneyRollRequestId?: () => string;
 }
 export function weaponProfileForm(stage: WeaponProfileStage): 'CHR-023' | 'CHR-024' {
   return stage.kind === 'FORMULA' ? 'CHR-023' : 'CHR-024';
@@ -139,6 +145,7 @@ function profileResult(
   request: Exclude<WeaponProfileRequest, WeaponProfileEntryRequest>,
   catalog: WeaponProfileCatalog,
   witnessReceiptIds: readonly string[],
+  moneyRollRequestId?: string,
 ): WeaponProfileResult {
   const selected = selection(f.checkpoint);
   const entry = findWeaponProfile(catalog, selected);
@@ -160,6 +167,7 @@ function profileResult(
     return {
       ...common,
       outcome: 'ACKNOWLEDGED',
+      ...(moneyRollRequestId === undefined ? {} : { moneyRollRequestId }),
       canonicalProfileVersion: entry.canonicalProfileVersion,
       profileOrNull: jsonObject(canonicalFixedWeaponProfile(catalog, selected)),
       proofOrNull: null,
@@ -206,6 +214,7 @@ function profileResult(
   return {
     ...common,
     outcome: 'SUBMITTED',
+    ...(moneyRollRequestId === undefined ? {} : { moneyRollRequestId }),
     canonicalProfileVersion: null,
     profileOrNull: jsonObject(result.profile),
     proofOrNull: jsonObject(result.proof),
@@ -341,6 +350,7 @@ export function commitWeaponProfile(
       const current = preflightWeaponProfile(database, normalized, dependencies, receiptId);
       const f = facts(current.checkpoint, receiptId);
       let stage: WeaponProfileStage;
+      let moneyStage: StartingMoneyStage | undefined;
       let receipt: AnyWeaponProfileReceipt;
       let presentation: 'CHR-023' | 'CHR-024' | 'CHR-031';
       if (normalized.payload.variant === 'WEAPON_PROFILE_ENTRY') {
@@ -381,7 +391,25 @@ export function commitWeaponProfile(
           : [];
         if (new Set(ids).size !== ids.length) return guardSymbiontRejected();
         const request = normalized as Exclude<WeaponProfileRequest, WeaponProfileEntryRequest>;
-        const result = profileResult(f, stage, request, dependencies.profileCatalog, ids);
+        const moneyRollRequestId =
+          (valid || normalized.payload.variant === 'WEAPON_PROFILE_ACKNOWLEDGE') &&
+          dependencies.allocateMoneyRollRequestId !== undefined
+            ? freshArmorId(
+                current.checkpoint,
+                normalized.commandId,
+                receiptId,
+                dependencies.allocateMoneyRollRequestId,
+                ids,
+              )
+            : undefined;
+        const result = profileResult(
+          f,
+          stage,
+          request,
+          dependencies.profileCatalog,
+          ids,
+          moneyRollRequestId,
+        );
         receipt = {
           commandId: normalized.commandId,
           receiptId,
@@ -399,6 +427,8 @@ export function commitWeaponProfile(
           ),
         };
         stage = { ...stage, records: [...stage.records, record] };
+        if (moneyRollRequestId !== undefined)
+          moneyStage = initialStartingMoneyStage(stage, current.checkpoint.startingWeaponStage!);
         presentation = result.outcome === 'INVALID' ? 'CHR-031' : weaponProfileForm(stage);
       }
       weaponProfileStageIds(stage);
@@ -412,19 +442,29 @@ export function commitWeaponProfile(
           payloadJson: JSON.stringify({
             ...payload,
             weaponProfileStage: stage,
+            ...(moneyStage === undefined ? {} : { startingMoneyStage: moneyStage }),
             receipt,
             nextStageEnvelope,
           }),
         },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
-      rewriteWeaponProfilePresentation(
-        database,
-        current.checkpoint,
-        presentation,
-        receipt.revisions.projectionRevision,
-        receipt.result.draftRevision,
-      );
+      if (moneyStage !== undefined)
+        rewriteStartingMoneyPresentation(
+          database,
+          current.checkpoint,
+          'CHR-038',
+          receipt.revisions.projectionRevision,
+          receipt.result.draftRevision,
+        );
+      else
+        rewriteWeaponProfilePresentation(
+          database,
+          current.checkpoint,
+          presentation,
+          receipt.revisions.projectionRevision,
+          receipt.result.draftRevision,
+        );
       return saved;
     },
     () => {
@@ -593,6 +633,7 @@ export function validateWeaponProfileStageHistory(
       record.request,
       catalog,
       record.receipt.result.independentManufacturingDiceReceipts.map((d) => d.receiptId),
+      record.receipt.result.moneyRollRequestId,
     );
     const expected = {
       commandId: record.request.commandId,

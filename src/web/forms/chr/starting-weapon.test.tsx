@@ -53,6 +53,8 @@ function payload(overrides: JsonObject = {}): JsonObject {
     weaponCheckpointReceiptIdOrNull: null,
     weaponProfileEntryMode: 'NONE',
     weaponProfileRequestIdOrNull: null,
+    moneyRollRequestIdOrNull: null,
+    moneyRollReceiptIdOrNull: null,
     qualityRecommendation: null,
     requirementPreview: null,
     ownershipState: 'OWNED_NOT_EQUIPPED',

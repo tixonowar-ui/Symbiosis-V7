@@ -91,6 +91,7 @@
 | [0057](0057-armor-initial-interactions-and-presentation-recovery.md) | Начальные взаимодействия и presentation recovery | принято                                     |
 | [0058](0058-starting-weapon.md)                                      | Стартовое оружие CHR-022                         | принято                                     |
 | [0059](0059-weapon-profiles-and-pure-entry.md)                       | Профили оружия и пустой состав PURE              | принято; расширяет вход 0055/0058           |
+| [0060](0060-starting-money.md)                                       | Стартовые деньги CHR-038                         | принято                                     |
 
 ## Перенос решений аудита
 
