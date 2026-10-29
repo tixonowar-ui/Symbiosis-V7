@@ -1,3 +1,4 @@
+import { assertCreationValidationScreenContracts } from './chr-creation-validation.js';
 import { assertFiveStartingPositionsScreenContracts } from './chr-five-starting-positions.js';
 import { assertStartingMoneyScreenContracts } from './chr-starting-money.js';
 import { assertWeaponProfileScreenContracts } from './chr-weapon-profile.js';
@@ -269,6 +270,9 @@ export interface AppNavigationAction {
     | 'CHR-023'
     | 'CHR-024'
     | 'CHR-031'
+    | 'CHR-025'
+    | 'CHR-009'
+    | 'CHR-032'
     | 'CHR-037'
     | 'CHR-038'
     | typeof CHR_042_FORM_ID;
@@ -288,6 +292,59 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
   const forms = record(source, 'forms-by-id.json');
   const result = new Map<ActionKey, AppNavigationAction>();
   const expectedActions = [
+    [
+      'CHR-009',
+      'CHR-009::CTA::003',
+      'AQA-004; finalSaveStatus!=COMMITTED; accepted rolled-set or point-buy provenance remains immutable; invalidate only race-dependent class/skills/symbionts/property draft; no reroll or abandoned-set restoration',
+    ],
+    [
+      'CHR-032',
+      'CHR-032::CTA::001',
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT armor+weapon+money+five positions and exactly eight receipts validate',
+    ],
+    [
+      'CHR-025',
+      'CHR-025::CTA::001',
+      'validationBlockers contains IDENTITY_OR_MASS; returnFormId(server-signed)=CHR-001; unrelated draft choices and receipts preserved',
+    ],
+    [
+      'CHR-025',
+      'CHR-025::CTA::002',
+      'AQA-004; returnFormId(server-signed)=CHR-010; finalSaveStatus!=COMMITTED; validationBlockers contains RACE_OR_RACE_DEPENDENCIES or player explicitly edits before save; accepted stat provenance preserved; invalidate only race-dependent draft; no reroll',
+    ],
+    [
+      'CHR-025',
+      'CHR-025::CTA::003',
+      'validationBlockers contains STATS; returnFormId(server-signed)=CHR-009; accepted set/point-buy provenance preserved and no reroll',
+    ],
+    [
+      'CHR-025',
+      'CHR-025::CTA::004',
+      'validationBlockers contains SKILLS; returnFormId(server-signed)=CHR-015; stats and unrelated draft choices preserved',
+    ],
+    [
+      'CHR-025',
+      'CHR-025::CTA::005',
+      'validationBlockers contains SYMBIONT_COMPOSITION; returnFormId(server-signed)=CHR-019; immutable random receipts preserved and no reroll',
+    ],
+    [
+      'CHR-025',
+      'CHR-025::CTA::006',
+      'validationBlockers contains STARTING_PROPERTY; returnFormId(server-signed)=CHR-032; all valid immutable property receipts preserved',
+    ],
+    [
+      'CHR-032',
+      'CHR-032::CTA::002',
+      'existing bundle receipt remains immutable; edits create only still-missing requests',
+    ],
+    ['CHR-032', 'CHR-032::CTA::003', 'existing weapon receipt remains immutable'],
+    ['CHR-032', 'CHR-032::CTA::004', 'existing money receipt remains immutable'],
+    ['CHR-032', 'CHR-032::CTA::005', 'existing per-position receipts remain immutable'],
+    [
+      'CHR-037',
+      'CHR-037::CTA::001',
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT exactly five positions and five immutable receipts',
+    ],
     ['CHR-037', 'CHR-037::CTA::002', 'all committed money/position receipts preserved'],
     [
       'CHR-038',
@@ -574,6 +631,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertWeaponProfileScreenContracts(forms, assertScreenContract);
   assertStartingMoneyScreenContracts(forms, assertScreenContract);
   assertFiveStartingPositionsScreenContracts(forms, assertScreenContract);
+  assertCreationValidationScreenContracts(forms, assertScreenContract);
   return result;
 }
 

@@ -1,3 +1,6 @@
+import { CreationValidationFields } from './forms/chr/creation-validation-fields.js';
+import { CreationCorrectionFields } from './forms/chr/creation-correction-fields.js';
+import { CORRECTION_COMMANDS } from './forms/chr/creation-correction.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
@@ -211,6 +214,12 @@ function displayValue(key: string, value: unknown): string {
 }
 
 function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSnapshot }) {
+  if (
+    snapshot.formId === 'CHR-032' ||
+    snapshot.formId === 'CHR-025' ||
+    Object.hasOwn(snapshot.projection, 'correctionContext')
+  )
+    return null;
   if (snapshot.formId === 'APP-001') {
     const projection = snapshot.projection as App001Projection;
     return (
@@ -2259,6 +2268,10 @@ export function App(): ReactElement {
       (actionKey !== CHR_023_SUBMIT_ACTION_KEY ||
         snapshot?.projection['requestStatus'] !== 'DRAFT'),
   );
+  const correction = snapshot !== null && Object.hasOwn(snapshot.projection, 'correctionContext');
+  const correctionCommandActions = new Set<string>(
+    Object.values(CORRECTION_COMMANDS).map((v) => v[1]),
+  );
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
     creationChoiceDraft?.formId === snapshot?.formId ? creationChoiceDraft : null;
@@ -2278,322 +2291,405 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive || layers.length > 0}>
             <legend>AtlasForm {snapshot.formId}</legend>
-            {snapshot.formId === 'CHR-001' && identityDraft !== null ? (
-              <IdentityFields
-                draft={identityDraft}
-                fileReadPending={characterArtReadPending}
-                onChange={(values) =>
-                  connectionRef.current?.replaceIdentityDraft(values) ?? {
-                    detail: 'projection connection is not ready',
-                    ok: false,
-                  }
-                }
-                onFileReadPendingChange={setCharacterArtReadPending}
-              />
-            ) : null}
-            <DecisionConsequenceOptions snapshot={snapshot} />
-            {snapshot.formId === 'CHR-010' ||
-            snapshot.formId === 'CHR-016' ||
-            snapshot.formId === 'CHR-036' ||
-            snapshot.formId === 'CHR-002' ||
-            snapshot.formId === 'CHR-011' ? (
-              <section
-                aria-label={
-                  snapshot.formId === 'CHR-010'
-                    ? 'Локальный выбор расы'
-                    : 'Локальный выбор этапа создания'
-                }
-                data-character-creation-choice={activeCreationChoice?.value ?? 'null'}
-                data-character-creation-choice-form={snapshot.formId}
-                data-race-choice-draft={
-                  snapshot.formId === 'CHR-010'
-                    ? (activeCreationChoice?.value ?? 'null')
-                    : undefined
-                }
-              >
-                <h2>
-                  {snapshot.formId === 'CHR-010'
-                    ? 'Локальный выбор расы'
-                    : 'Локальный выбор этапа создания'}
-                </h2>
-                <output>{activeCreationChoice?.value ?? 'null'}</output>
-                {activeCreationChoice?.consequence === null ||
-                activeCreationChoice?.consequence === undefined ? null : (
-                  <div data-character-creation-consequence>
-                    <SelectedDecisionConsequences choice={activeCreationChoice} />
-                  </div>
-                )}
-              </section>
-            ) : null}
-            <CharacterCreationRollFields
-              draft={creationRollDraft}
+            <CreationValidationFields snapshot={snapshot} />
+            <CreationCorrectionFields
               snapshot={snapshot}
-              onConfirmationFaceChange={(value) => {
-                const result = connectionRef.current?.replaceConfirmationManualFace(value);
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-              onSetFaceChange={(index, value) => {
-                const result = connectionRef.current?.replaceSetManualFace(index, value);
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-            />
-            <CharacterSetDecisionFields snapshot={snapshot} />
-            <StatAssignmentFields
-              draft={statAssignmentDraft}
-              snapshot={snapshot}
-              onChange={(statCode, value) => {
-                const result = connectionRef.current?.replaceStatAssignmentValue(statCode, value);
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-            />
-            <PureClassFields choice={activeCreationChoice} snapshot={snapshot} />
-            <StatBreakdownFields snapshot={snapshot} />
-            <SkillCatalogFields
-              snapshot={snapshot}
-              onOpenSkill={(skillId) => {
-                const result = connectionRef.current?.requestSkillCard(skillId);
-                setActionNotice(
-                  result === undefined || result.ok
-                    ? null
-                    : `Переход не отправлен: ${result.detail}.`,
-                );
-              }}
-            />
-            <SkillCardFields
-              draft={skillCardDraft}
-              snapshot={snapshot}
-              onLevelChange={(targetBonus) => {
-                const result = connectionRef.current?.replaceSkillCardLevel(targetBonus);
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-            />
-            <SkillSelectionFields
-              draft={skillSelectionDraft}
-              snapshot={snapshot}
-              onCandidateChange={(skillId, targetBonus) => {
-                const result = connectionRef.current?.replaceSkillSelectionCandidate(
-                  skillId,
-                  targetBonus,
-                );
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-            />
-            <ManualSymbiontFields
-              draft={manualCompositionDraft}
-              onBindingSide={(side) => {
-                const result = connectionRef.current?.replaceManualBindingSide(side);
-                setActionNotice(
-                  result === undefined || result.ok
-                    ? null
-                    : `Привязка не сохранена: ${result.detail}.`,
-                );
-              }}
-              onOpenSpecies={(speciesKey) => {
-                const result = connectionRef.current?.requestSymbiontCard(speciesKey);
-                setActionNotice(
-                  result === undefined || result.ok
-                    ? null
-                    : `Карточка не открыта: ${result.detail}.`,
-                );
-              }}
-              onToggleSpecies={(speciesKey, included) => {
-                const result = connectionRef.current?.toggleManualCompositionSpecies(
-                  speciesKey,
-                  included,
-                );
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Состав не изменён: ${result.detail}.`,
-                );
-              }}
-              snapshot={snapshot}
-            />
-            {snapshot.formId !== 'CHR-017' || !isManualChr017Projection(snapshot.projection) ? (
-              <SymbiontCatalogFields snapshot={snapshot} />
-            ) : null}
-            <RandomSymbiontFields
-              draft={randomSymbiontDraft}
-              snapshot={snapshot}
-              onLocalAction={(actionKey) => {
-                const connection = connectionRef.current;
-                if (connection === null) {
-                  const result = {
-                    detail: 'projection connection is not ready',
-                    ok: false,
-                  } as const;
-                  setActionNotice(`Локальное действие не выполнено: ${result.detail}.`);
-                  return result;
-                }
-                const result = connection.requestFormAction(actionKey);
-                setActionNotice(
-                  result.ok ? null : `Локальное действие не выполнено: ${result.detail}.`,
-                );
-                return result;
-              }}
-              onManualFaceChange={(value) => {
-                const result = connectionRef.current?.replaceRandomManualFace(value);
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-              onSideSpeciesChange={(species) => {
-                const result = connectionRef.current?.replaceRandomSideSpecies(species);
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-            />
-            <AdvisorSkillSelectionFields
-              key={intelligenceFloorRollScope ?? 'no-advisor-floor'}
-              draft={advisorSkillSelectionDraft}
-              onAdvisorIw={(faces) => {
-                const connection = connectionRef.current;
-                if (connection === null) {
-                  const result = {
-                    detail: 'projection connection is not ready',
-                    ok: false,
-                  } as const;
-                  setActionNotice(`Броски не отправлены: ${result.detail}.`);
-                  return result;
-                }
-                const result = connection.requestFormAction(CHR_041_MANUAL_IW_ACTION_KEY, faces);
-                setActionNotice(result.ok ? null : `Броски не отправлены: ${result.detail}.`);
-                return result;
-              }}
-              onIntelligenceFloorManualFaceChange={(value) => {
-                intelligenceFloorManualFaceRef.current = {
-                  rollScope: intelligenceFloorRollScope,
-                  face: value,
-                };
-              }}
-              snapshot={snapshot}
-              onCandidateChange={(skillId, targetBonus) => {
-                const result = connectionRef.current?.replaceAdvisorSkillCandidate(
-                  skillId,
-                  targetBonus,
-                );
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Ввод не сохранён: ${result.detail}.`,
-                );
-              }}
-            />
-            <SymbiontCompositionFields snapshot={snapshot} />
-            <ArmorBundleFields
-              draft={armorBundleDraft}
-              snapshot={snapshot}
-              onAddPiece={(itemId, bodyZoneOrNull) => {
-                const result = connectionRef.current?.addArmorBundleSelection(
-                  itemId,
-                  bodyZoneOrNull as 'HEAD' | 'TORSO' | 'ARM_L' | 'ARM_R' | 'LEG_L' | 'LEG_R' | null,
-                );
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Выбор не сохранён: ${result.detail}.`,
-                );
-              }}
-              onRemovePiece={(bodyZoneOrNull) => {
-                const result = connectionRef.current?.removeArmorBundleSelection(
-                  bodyZoneOrNull as 'HEAD' | 'TORSO' | 'ARM_L' | 'ARM_R' | 'LEG_L' | 'LEG_R' | null,
-                );
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Выбор не сохранён: ${result.detail}.`,
-                );
-              }}
-              onRoll={(manualFaceOrNull) => {
-                const connection = connectionRef.current;
-                if (connection === null) {
-                  setActionNotice('Бросок не отправлен: соединение ещё не готово.');
-                  return;
-                }
-                const result = connection.requestFormAction(
-                  CHR_021_ROLL_ACTION_KEY,
-                  manualFaceOrNull,
-                );
-                setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
-              }}
-            />
-            <StartingWeaponFields
-              key={`weapon:${snapshot.formId}:${typeof snapshot.projection['weaponQualityRollRequestId'] === 'string' ? snapshot.projection['weaponQualityRollRequestId'] : ''}`}
-              snapshot={snapshot}
-              draft={startingWeaponDraft}
-              onSelect={(weaponTypeId, weaponVariant) => {
-                const result = connectionRef.current?.replaceStartingWeaponSelection(
-                  weaponTypeId,
-                  weaponVariant,
-                );
-                setActionNotice(
-                  result === undefined || result.ok ? null : `Выбор не сохранён: ${result.detail}.`,
-                );
-              }}
-              onRoll={(manualFaceOrNull) => {
-                const connection = connectionRef.current;
-                if (connection === null) {
-                  setActionNotice('Бросок не отправлен: соединение ещё не готово.');
-                  return;
-                }
-                const result = connection.requestFormAction(
-                  CHR_022_ROLL_ACTION_KEY,
-                  manualFaceOrNull,
-                );
-                setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
-              }}
-            />
-            <WeaponProfileFields
-              snapshot={snapshot}
-              onSubmit={(inputs) => {
-                const result = connectionRef.current?.submitWeaponProfile(inputs);
+              renderRaceConsequences={(consequences) => (
+                <RaceConsequencesFields consequences={consequences} />
+              )}
+              onSubmit={(variant, values) => {
+                const result = connectionRef.current?.submitCreationCorrection(variant, values);
                 setActionNotice(
                   result === undefined
-                    ? 'Заявка не отправлена: соединение ещё не готово.'
+                    ? 'Соединение не готово.'
                     : result.ok
                       ? null
-                      : `Заявка не отправлена: ${result.detail}.`,
+                      : `Исправление не сохранено: ${result.detail}.`,
                 );
               }}
-            />
-            <FiveStartingPositionsFields
-              snapshot={snapshot}
-              onRoll={(positions, positionId, manualFaceOrNull) => {
-                const result = connectionRef.current?.rollFiveStartingPosition(
-                  positions,
-                  positionId,
-                  manualFaceOrNull,
+              onOpenSpecies={(species) => {
+                const result = connectionRef.current?.requestSymbiontCard(
+                  species as Parameters<ProjectionConnection['requestSymbiontCard']>[0],
                 );
                 setActionNotice(
                   result === undefined
-                    ? 'Бросок не отправлен: соединение ещё не готово.'
+                    ? 'Соединение не готово.'
                     : result.ok
                       ? null
-                      : `Бросок не отправлен: ${result.detail}.`,
+                      : `Карточка не открыта: ${result.detail}.`,
                 );
               }}
             />
-            <StartingMoneyFields
-              snapshot={snapshot}
-              onRoll={(manualFaceOrNull) => {
-                const result = connectionRef.current?.requestFormAction(
-                  CHR_038_ROLL_ACTION_KEY,
-                  manualFaceOrNull,
-                );
-                setActionNotice(
-                  result === undefined
-                    ? 'Бросок не отправлен: соединение ещё не готово.'
-                    : result.ok
-                      ? null
-                      : `Бросок не отправлен: ${result.detail}.`,
-                );
-              }}
-            />
+            {!correction ? (
+              <>
+                {snapshot.formId === 'CHR-001' && identityDraft !== null ? (
+                  <IdentityFields
+                    draft={identityDraft}
+                    fileReadPending={characterArtReadPending}
+                    onChange={(values) =>
+                      connectionRef.current?.replaceIdentityDraft(values) ?? {
+                        detail: 'projection connection is not ready',
+                        ok: false,
+                      }
+                    }
+                    onFileReadPendingChange={setCharacterArtReadPending}
+                  />
+                ) : null}
+                <DecisionConsequenceOptions snapshot={snapshot} />
+                {snapshot.formId === 'CHR-010' ||
+                snapshot.formId === 'CHR-016' ||
+                snapshot.formId === 'CHR-036' ||
+                snapshot.formId === 'CHR-002' ||
+                snapshot.formId === 'CHR-011' ? (
+                  <section
+                    aria-label={
+                      snapshot.formId === 'CHR-010'
+                        ? 'Локальный выбор расы'
+                        : 'Локальный выбор этапа создания'
+                    }
+                    data-character-creation-choice={activeCreationChoice?.value ?? 'null'}
+                    data-character-creation-choice-form={snapshot.formId}
+                    data-race-choice-draft={
+                      snapshot.formId === 'CHR-010'
+                        ? (activeCreationChoice?.value ?? 'null')
+                        : undefined
+                    }
+                  >
+                    <h2>
+                      {snapshot.formId === 'CHR-010'
+                        ? 'Локальный выбор расы'
+                        : 'Локальный выбор этапа создания'}
+                    </h2>
+                    <output>{activeCreationChoice?.value ?? 'null'}</output>
+                    {activeCreationChoice?.consequence === null ||
+                    activeCreationChoice?.consequence === undefined ? null : (
+                      <div data-character-creation-consequence>
+                        <SelectedDecisionConsequences choice={activeCreationChoice} />
+                      </div>
+                    )}
+                  </section>
+                ) : null}
+                <CharacterCreationRollFields
+                  draft={creationRollDraft}
+                  snapshot={snapshot}
+                  onConfirmationFaceChange={(value) => {
+                    const result = connectionRef.current?.replaceConfirmationManualFace(value);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                  onSetFaceChange={(index, value) => {
+                    const result = connectionRef.current?.replaceSetManualFace(index, value);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <CharacterSetDecisionFields snapshot={snapshot} />
+                <StatAssignmentFields
+                  draft={statAssignmentDraft}
+                  snapshot={snapshot}
+                  onChange={(statCode, value) => {
+                    const result = connectionRef.current?.replaceStatAssignmentValue(
+                      statCode,
+                      value,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <PureClassFields choice={activeCreationChoice} snapshot={snapshot} />
+                <StatBreakdownFields snapshot={snapshot} />
+                <SkillCatalogFields
+                  snapshot={snapshot}
+                  onOpenSkill={(skillId) => {
+                    const result = connectionRef.current?.requestSkillCard(skillId);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Переход не отправлен: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <SkillCardFields
+                  draft={skillCardDraft}
+                  snapshot={snapshot}
+                  onLevelChange={(targetBonus) => {
+                    const result = connectionRef.current?.replaceSkillCardLevel(targetBonus);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <SkillSelectionFields
+                  draft={skillSelectionDraft}
+                  snapshot={snapshot}
+                  onCandidateChange={(skillId, targetBonus) => {
+                    const result = connectionRef.current?.replaceSkillSelectionCandidate(
+                      skillId,
+                      targetBonus,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <ManualSymbiontFields
+                  draft={manualCompositionDraft}
+                  onBindingSide={(side) => {
+                    const result = connectionRef.current?.replaceManualBindingSide(side);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Привязка не сохранена: ${result.detail}.`,
+                    );
+                  }}
+                  onOpenSpecies={(speciesKey) => {
+                    const result = connectionRef.current?.requestSymbiontCard(speciesKey);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Карточка не открыта: ${result.detail}.`,
+                    );
+                  }}
+                  onToggleSpecies={(speciesKey, included) => {
+                    const result = connectionRef.current?.toggleManualCompositionSpecies(
+                      speciesKey,
+                      included,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Состав не изменён: ${result.detail}.`,
+                    );
+                  }}
+                  snapshot={snapshot}
+                />
+                {snapshot.formId !== 'CHR-017' || !isManualChr017Projection(snapshot.projection) ? (
+                  <SymbiontCatalogFields snapshot={snapshot} />
+                ) : null}
+                <RandomSymbiontFields
+                  draft={randomSymbiontDraft}
+                  snapshot={snapshot}
+                  onLocalAction={(actionKey) => {
+                    const connection = connectionRef.current;
+                    if (connection === null) {
+                      const result = {
+                        detail: 'projection connection is not ready',
+                        ok: false,
+                      } as const;
+                      setActionNotice(`Локальное действие не выполнено: ${result.detail}.`);
+                      return result;
+                    }
+                    const result = connection.requestFormAction(actionKey);
+                    setActionNotice(
+                      result.ok ? null : `Локальное действие не выполнено: ${result.detail}.`,
+                    );
+                    return result;
+                  }}
+                  onManualFaceChange={(value) => {
+                    const result = connectionRef.current?.replaceRandomManualFace(value);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                  onSideSpeciesChange={(species) => {
+                    const result = connectionRef.current?.replaceRandomSideSpecies(species);
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <AdvisorSkillSelectionFields
+                  key={intelligenceFloorRollScope ?? 'no-advisor-floor'}
+                  draft={advisorSkillSelectionDraft}
+                  onAdvisorIw={(faces) => {
+                    const connection = connectionRef.current;
+                    if (connection === null) {
+                      const result = {
+                        detail: 'projection connection is not ready',
+                        ok: false,
+                      } as const;
+                      setActionNotice(`Броски не отправлены: ${result.detail}.`);
+                      return result;
+                    }
+                    const result = connection.requestFormAction(
+                      CHR_041_MANUAL_IW_ACTION_KEY,
+                      faces,
+                    );
+                    setActionNotice(result.ok ? null : `Броски не отправлены: ${result.detail}.`);
+                    return result;
+                  }}
+                  onIntelligenceFloorManualFaceChange={(value) => {
+                    intelligenceFloorManualFaceRef.current = {
+                      rollScope: intelligenceFloorRollScope,
+                      face: value,
+                    };
+                  }}
+                  snapshot={snapshot}
+                  onCandidateChange={(skillId, targetBonus) => {
+                    const result = connectionRef.current?.replaceAdvisorSkillCandidate(
+                      skillId,
+                      targetBonus,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Ввод не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <SymbiontCompositionFields snapshot={snapshot} />
+                <ArmorBundleFields
+                  draft={armorBundleDraft}
+                  snapshot={snapshot}
+                  onAddPiece={(itemId, bodyZoneOrNull) => {
+                    const result = connectionRef.current?.addArmorBundleSelection(
+                      itemId,
+                      bodyZoneOrNull as
+                        'HEAD' | 'TORSO' | 'ARM_L' | 'ARM_R' | 'LEG_L' | 'LEG_R' | null,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Выбор не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                  onRemovePiece={(bodyZoneOrNull) => {
+                    const result = connectionRef.current?.removeArmorBundleSelection(
+                      bodyZoneOrNull as
+                        'HEAD' | 'TORSO' | 'ARM_L' | 'ARM_R' | 'LEG_L' | 'LEG_R' | null,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Выбор не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                  onRoll={(manualFaceOrNull) => {
+                    const connection = connectionRef.current;
+                    if (connection === null) {
+                      setActionNotice('Бросок не отправлен: соединение ещё не готово.');
+                      return;
+                    }
+                    const result = connection.requestFormAction(
+                      CHR_021_ROLL_ACTION_KEY,
+                      manualFaceOrNull,
+                    );
+                    setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
+                  }}
+                />
+                <StartingWeaponFields
+                  key={`weapon:${snapshot.formId}:${typeof snapshot.projection['weaponQualityRollRequestId'] === 'string' ? snapshot.projection['weaponQualityRollRequestId'] : ''}`}
+                  snapshot={snapshot}
+                  draft={startingWeaponDraft}
+                  onSelect={(weaponTypeId, weaponVariant) => {
+                    const result = connectionRef.current?.replaceStartingWeaponSelection(
+                      weaponTypeId,
+                      weaponVariant,
+                    );
+                    setActionNotice(
+                      result === undefined || result.ok
+                        ? null
+                        : `Выбор не сохранён: ${result.detail}.`,
+                    );
+                  }}
+                  onRoll={(manualFaceOrNull) => {
+                    const connection = connectionRef.current;
+                    if (connection === null) {
+                      setActionNotice('Бросок не отправлен: соединение ещё не готово.');
+                      return;
+                    }
+                    const result = connection.requestFormAction(
+                      CHR_022_ROLL_ACTION_KEY,
+                      manualFaceOrNull,
+                    );
+                    setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
+                  }}
+                />
+                <WeaponProfileFields
+                  snapshot={snapshot}
+                  onSubmit={(inputs) => {
+                    const result = connectionRef.current?.submitWeaponProfile(inputs);
+                    setActionNotice(
+                      result === undefined
+                        ? 'Заявка не отправлена: соединение ещё не готово.'
+                        : result.ok
+                          ? null
+                          : `Заявка не отправлена: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <FiveStartingPositionsFields
+                  snapshot={snapshot}
+                  onRoll={(positions, positionId, manualFaceOrNull) => {
+                    const result = connectionRef.current?.rollFiveStartingPosition(
+                      positions,
+                      positionId,
+                      manualFaceOrNull,
+                    );
+                    setActionNotice(
+                      result === undefined
+                        ? 'Бросок не отправлен: соединение ещё не готово.'
+                        : result.ok
+                          ? null
+                          : `Бросок не отправлен: ${result.detail}.`,
+                    );
+                  }}
+                />
+                <StartingMoneyFields
+                  snapshot={snapshot}
+                  onRoll={(manualFaceOrNull) => {
+                    const result = connectionRef.current?.requestFormAction(
+                      CHR_038_ROLL_ACTION_KEY,
+                      manualFaceOrNull,
+                    );
+                    setActionNotice(
+                      result === undefined
+                        ? 'Бросок не отправлен: соединение ещё не готово.'
+                        : result.ok
+                          ? null
+                          : `Бросок не отправлен: ${result.detail}.`,
+                    );
+                  }}
+                />
+              </>
+            ) : null}
             <AtlasForm
-              availableActionKeys={availableActionKeys ?? []}
+              playerContentOnly={
+                correction || snapshot.formId === 'CHR-032' || snapshot.formId === 'CHR-025'
+              }
+              availableActionKeys={
+                correction
+                  ? snapshot.availableActionKeys.filter(
+                      (key) =>
+                        !correctionCommandActions.has(key) &&
+                        ![
+                          'CHR-010::CTA::002',
+                          'CHR-015::CTA::003',
+                          'CHR-018::CTA::003',
+                          'CHR-020::CTA::003',
+                          'CHR-041::CTA::002',
+                          'CHR-017::CTA::001',
+                        ].includes(key),
+                    )
+                  : (availableActionKeys ?? [])
+              }
               formId={snapshot.formId}
               onAction={(selection) => {
                 if (

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   decodeClientMessage,
   decodeClientMessageV2,
+  encodeClientMessage,
   encodeHostMessage,
   encodeHostMessageV2,
   WIRE_PROTOCOL_V2_VERSION,
@@ -891,6 +892,7 @@ function decoderSymbiontReceipt(
 }
 
 type DecoderFormId =
+  | 'CHR-001'
   | 'CHR-002'
   | 'CHR-010'
   | 'CHR-013'
@@ -904,6 +906,8 @@ type DecoderActionKeys = ProjectionSnapshotV2Message['presentation']['base']['av
 
 function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): DecoderActionKeys {
   switch (formId) {
+    case 'CHR-001':
+      return ['CHR-001::CTA::001'];
     case 'CHR-010':
       return ['CHR-010::CTA::004', 'CHR-010::CTA::005', 'CHR-010::CTA::006'];
     case 'CHR-016':
@@ -953,7 +957,13 @@ function projectionBase(
     formId,
     formType: 'screen',
     roleFilteredPayload: projection,
-    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+    routeBindings: [
+      {
+        parameterIndex: 0,
+        source: formId === 'CHR-001' ? 'executor-allocated' : 'inherited',
+        value: CHARACTER_DRAFT_ID,
+      },
+    ],
     routeTemplate: `/player/characters/:localCharacterId/create/${formId.toLowerCase()}`,
   };
 }
@@ -1170,6 +1180,174 @@ function nestedModeAt(projection: Record<string, unknown>, raceIndex: number, mo
     `alternatives[${String(modeIndex)}]`,
   );
 }
+
+describe('signed identity correction', () => {
+  it('permits exactly the source final-save operation while CHR-040 remains unpublished', () => {
+    const transition = {
+      from: 'CHR-025',
+      to: 'CHR-040',
+      kind: 'operation-command',
+      trigger: 'Сохранить финального персонажа',
+    } as const;
+    expect(
+      encodeClientMessage(
+        {
+          messageType: 'command.request',
+          protocolVersion: 1,
+          commandId: 'final-save',
+          commandKind: 'operation-command',
+          role: 'player',
+          expectedRevisions: REVISIONS,
+          transition,
+          payload: { stage: 'FINALIZATION', variant: 'FINAL_SAVE' },
+        },
+        WEB_PROTOCOL_VOCABULARY,
+      ),
+    ).toMatchObject({ ok: true });
+    expect(
+      WEB_PROTOCOL_VOCABULARY.isHostTransition({ ...transition, trigger: 'Другой переход' }),
+    ).toBe(false);
+    expect(WEB_PROTOCOL_VOCABULARY.isHostTransition({ ...transition, to: 'CHR-025' })).toBe(false);
+    expect(WEB_PROTOCOL_VOCABULARY.isHostTransition({ ...transition, from: 'CHR-032' })).toBe(
+      false,
+    );
+    expect(
+      WEB_PROTOCOL_VOCABULARY.isPresentedForm(
+        'CHR-040',
+        'screen',
+        '/player/characters/:localCharacterId/create/chr-040',
+        [],
+      ),
+    ).toBe(false);
+  });
+  it('accepts the allocated route and sends the nested identity with the current correction head', async () => {
+    const identity = {
+      name: 'Ирина',
+      age: 30,
+      sex: 'FEMALE',
+      massKg: 65,
+      description: null,
+      artAssetKeyOrLocalFile: null,
+    };
+    const projection: JsonObject = {
+      characterDraftId: CHARACTER_DRAFT_ID,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      draftRevision: 8,
+      commandId: 'summary-command',
+      summaryReceiptIdOrNull: 'summary-receipt',
+      correctionHeadHash: 'a'.repeat(64),
+      branchCacheDigest: 'b'.repeat(64),
+      finalSaveStatus: 'NOT_COMMITTED',
+      correctionContext: {
+        originFormId: 'CHR-025',
+        returnFormId: 'CHR-025',
+        sourceFormId: 'CHR-001',
+        summaryReceiptId: 'summary-receipt',
+        correctionHeadHash: 'a'.repeat(64),
+      },
+      identity,
+      raceChoice: 'PURE',
+      pureClassOrNull: 'SEEKER',
+      lockedAcquisitionModeOrNull: null,
+      creationMode: null,
+      raceOptions: [
+        { raceCode: 'PURE', label: 'Чистый' },
+        { raceCode: 'UNITED', label: 'Единый' },
+        { raceCode: 'FREE', label: 'Вольный' },
+      ],
+      raceConsequenceOptions: RACE_CONSEQUENCE_OPTIONS,
+      classOptions: [
+        {
+          classCode: 'SEEKER',
+          label: 'Искатель',
+          bonus: 5,
+          unitedDelta: -15,
+          stats: { S: 2, D: 2, Z: 5, I: 7 },
+        },
+        {
+          classCode: 'STALKER',
+          label: 'Сталкер',
+          bonus: 4,
+          unitedDelta: -10,
+          stats: { S: 2, D: 5, M: 5, Z: 5 },
+        },
+        {
+          classCode: 'SOLDIER',
+          label: 'Солдат',
+          bonus: 3,
+          unitedDelta: -20,
+          stats: { S: 5, D: 2, M: 5, Z: 5 },
+        },
+      ].map(({ classCode, label, bonus, unitedDelta, stats }) => ({
+        classCode,
+        label,
+        classConsequences: {
+          statModifiers: Object.entries(stats).map(([statCode, delta]) => ({ statCode, delta })),
+        },
+        mandatoryClassSkill: {
+          skillId: `PURE_${classCode}`,
+          skillLabel: `${label} Последнего Рассвета`,
+          bonus,
+          slotCost: 1,
+        },
+        contextModifiers: [
+          { statCode: 'C', delta: 5, socialTargetRace: 'PURE' },
+          { statCode: 'C', delta: unitedDelta, socialTargetRace: 'UNITED' },
+        ],
+      })),
+      baseStats: { S: 10, D: 10, M: 10, Z: 10, I: 10, W: 10, C: 10 },
+      skillStageStatsOrNull: null,
+      requiredSkillSlots: 0,
+      grantedSkillSlots: 0,
+      skillOptions: [],
+      selectedSkills: [],
+      eligibleSymbiontSpecies: [],
+      acceptedSpecies: [],
+      selectedBindings: [],
+      slotCapacity: 0,
+      lockedBindingSpecies: [],
+      diceInputModeSnapshot: 'MANUAL',
+      pendingRollRequestIds: [],
+      nextRandomKindOrNull: null,
+      monsterChoiceRequired: false,
+      monsterChoiceEditable: false,
+      monsterOptions: [],
+      physicalRolls: [],
+      advisorOrNull: null,
+      compositionHashOrNull: null,
+      interactionsConfirmed: true,
+      compositionConsequencesOrNull: null,
+      interactions: [],
+      nextFormId: 'CHR-025',
+    };
+    const harness = await connectDecoderFixture('CHR-001', projection);
+    expect(harness.states.at(-1)).toMatchObject({ kind: 'ready' });
+    const changedIdentity = {
+      ...identity,
+      massKg: 70,
+      artAssetKeyOrLocalFile: { kind: 'asset-key', assetKey: 'symbiosis_placeholder_free_female' },
+    };
+    expect(
+      harness.connection.submitCreationCorrection('CORRECTION_IDENTITY', {
+        identity: changedIdentity,
+      }),
+    ).toEqual({ ok: true });
+    expect(decoderCommand(harness.socket)).toMatchObject({
+      workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+      payload: {
+        stage: 'FINALIZATION',
+        variant: 'CORRECTION_IDENTITY',
+        sourceFormId: 'CHR-001',
+        characterDraftId: CHARACTER_DRAFT_ID,
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+        draftRevision: 8,
+        summaryReceiptId: 'summary-receipt',
+        correctionHeadHash: 'a'.repeat(64),
+        identity: changedIdentity,
+      },
+    });
+  });
+});
 
 describe('decision consequence projection decoder', () => {
   it.each([

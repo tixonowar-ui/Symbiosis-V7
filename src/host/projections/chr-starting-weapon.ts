@@ -1,4 +1,5 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import { startingPropertyResumeAvailable } from '../creation-property-summary.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 
@@ -58,7 +59,9 @@ export function projectChr022(
   const profileStage = checkpoint.weaponProfileStage;
   const profileOutcome = profileStage?.records.at(-1)?.receipt.result.outcome;
   const money = startingMoneyStageForCheckpoint(checkpoint);
-  const moneyResume = money !== null && money.checkpointRecordOrNull === null;
+  const moneyResume =
+    (money !== null && money.checkpointRecordOrNull === null) ||
+    startingPropertyResumeAvailable(checkpoint);
   const profileEntryMode =
     committed === null ||
     (!moneyResume && (profileOutcome === 'SUBMITTED' || profileOutcome === 'ACKNOWLEDGED'))

@@ -18,6 +18,7 @@ export interface AtlasFormProps {
   readonly formId: string;
   readonly onAction: (selection: AtlasActionSelection) => void;
   readonly projectionContent?: ReactNode;
+  readonly playerContentOnly?: boolean;
 }
 
 interface AtlasFormContentProps {
@@ -25,6 +26,7 @@ interface AtlasFormContentProps {
   readonly model: AtlasFormModel;
   readonly onAction: AtlasFormProps['onAction'];
   readonly projectionContent?: ReactNode;
+  readonly playerContentOnly?: boolean;
 }
 
 function StringList({ values, attribute }: { values: readonly string[]; attribute: string }) {
@@ -83,7 +85,21 @@ function AtlasFormContent({
   model,
   onAction,
   projectionContent,
+  playerContentOnly = false,
 }: AtlasFormContentProps): ReactElement {
+  if (playerContentOnly)
+    return (
+      <>
+        <header>
+          <h1 id={`${model.id}-title`}>{model.title}</h1>
+        </header>
+        {projectionContent}
+        <section aria-labelledby={`${model.id}-actions`}>
+          <h2 id={`${model.id}-actions`}>Доступные действия</h2>
+          <Actions availableActionKeys={availableActionKeys} model={model} onAction={onAction} />
+        </section>
+      </>
+    );
   return (
     <>
       <header>
@@ -148,6 +164,7 @@ export function AtlasForm({
   formId,
   onAction,
   projectionContent,
+  playerContentOnly = false,
 }: AtlasFormProps): ReactElement {
   const model = getAtlasFormModel(formId);
   const content = (
@@ -156,6 +173,7 @@ export function AtlasForm({
       model={model}
       onAction={onAction}
       projectionContent={projectionContent}
+      playerContentOnly={playerContentOnly}
     />
   );
 

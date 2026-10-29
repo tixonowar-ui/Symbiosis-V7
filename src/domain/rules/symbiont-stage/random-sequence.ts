@@ -421,6 +421,38 @@ export function resolveRandomSymbiontSequence(
   catalog: SymbiontCatalog,
   input: RandomSymbiontSequence,
 ): ResolvedRandomSymbiontSequence {
+  return resolveSequence(catalog, input, null);
+}
+
+export interface CreationCorrectionRandomSequence {
+  /** The original committed sequence, kept unchanged in its source branch. */
+  readonly sourceSequenceOrNull: RandomSymbiontSequence | null;
+  /** Only new physical rolls; retained ordinary results are not replayed as new rolls. */
+  readonly sequence: RandomSymbiontSequence;
+}
+
+/** AQA-004 preserves the resolved first ordinary result, including a FREE critical. */
+export function resolveCreationCorrectionRandomSequence(
+  catalog: SymbiontCatalog,
+  input: CreationCorrectionRandomSequence,
+): ResolvedRandomSymbiontSequence {
+  const root = record(input, 'correctionRandomSequence');
+  exactKeys(root, 'correctionRandomSequence', ['sourceSequenceOrNull', 'sequence']);
+  if (input.sourceSequenceOrNull === null) return resolveSequence(catalog, input.sequence, null);
+  const source = resolveRandomSymbiontSequence(catalog, input.sourceSequenceOrNull);
+  if (source.nextRequest.kind !== 'COMMITTED') fail('correction source sequence must be committed');
+  if (source.sequence.diceInputModeSnapshot !== input.sequence.diceInputModeSnapshot)
+    fail('correction cannot change the locked dice input mode');
+  if (source.sequence.randomSequenceId === input.sequence.randomSequenceId)
+    fail('correction branch must have a distinct sequence identity');
+  return resolveSequence(catalog, input.sequence, source);
+}
+
+function resolveSequence(
+  catalog: SymbiontCatalog,
+  input: RandomSymbiontSequence,
+  retainedSource: ResolvedRandomSymbiontSequence | null,
+): ResolvedRandomSymbiontSequence {
   const root = record(input, 'randomSequence');
   exactKeys(root, 'randomSequence', [
     'randomSequenceId',
@@ -442,6 +474,15 @@ export function resolveRandomSymbiontSequence(
     normalizePhysicalRoll(catalog, roll, index),
   );
   const ids = new Set<string>([randomSequenceId]);
+  if (retainedSource !== null) {
+    ids.add(retainedSource.sequence.randomSequenceId);
+    for (const roll of retainedSource.sequence.physicalRolls) {
+      for (const id of [roll.rollRequestId, roll.rollReceiptId]) {
+        if (ids.has(id)) fail(`duplicate retained/sequence identity ${JSON.stringify(id)}`);
+        ids.add(id);
+      }
+    }
+  }
   for (const roll of physicalRolls) {
     for (const id of [roll.rollRequestId, roll.rollReceiptId]) {
       if (ids.has(id)) fail(`duplicate roll/sequence identity ${JSON.stringify(id)}`);
@@ -449,14 +490,46 @@ export function resolveRandomSymbiontSequence(
     }
   }
 
-  let accepted: RandomAcceptedSymbiont[] = [];
+  const retainedOrdinary = retainedSource?.accepted.find((entry) => entry.kind === 'ORDINARY');
+  // An original UNITED monster has no ordinary result. Its new FREE branch starts
+  // empty exactly once; the host's immutable branch cache owns subsequent reuse.
+  if (retainedSource !== null && retainedOrdinary === undefined && raceCode !== 'FREE')
+    fail('a monster source can create only the separate FREE ordinary branch');
+  let accepted: RandomAcceptedSymbiont[] =
+    retainedOrdinary === undefined
+      ? []
+      : [Object.freeze({ ...retainedOrdinary, acceptedIndex: 0 })];
   const duplicateRerollReceipts: DuplicateSymbiontReceipt[] = [];
   let pendingCritical: PendingCritical | null = null;
-  let advisorI: AdvisorRoll | null = null;
-  let advisorW: AdvisorRoll | null = null;
-  let suppressionB: SuppressionRoll | null = null;
+  const retainedAdvisorRoll = (kind: AdvisorRoll['kind']): AdvisorRoll | null => {
+    if (retainedOrdinary?.speciesKey !== 'ADVISER' || retainedSource === null) return null;
+    const roll = retainedSource.sequence.physicalRolls.find(
+      (entry) =>
+        entry.kind === kind && entry.advisorAcceptedIndex === retainedOrdinary.acceptedIndex,
+    );
+    if (roll === undefined || (roll.kind !== 'ADVISOR_I' && roll.kind !== 'ADVISOR_W'))
+      fail('retained Adviser is missing its immutable I/W receipts');
+    return Object.freeze({ ...roll, advisorAcceptedIndex: 0 });
+  };
+  let advisorI: AdvisorRoll | null = retainedAdvisorRoll('ADVISOR_I');
+  let advisorW: AdvisorRoll | null = retainedAdvisorRoll('ADVISOR_W');
+  const priorSuppression =
+    retainedOrdinary?.speciesKey === 'ADVISER'
+      ? retainedSource?.sequence.physicalRolls.find(
+          (entry) =>
+            entry.kind === 'TROGR_SUPPRESSION_B' &&
+            entry.advisorAcceptedIndex === retainedOrdinary.acceptedIndex,
+        )
+      : undefined;
+  let suppressionB: SuppressionRoll | null =
+    priorSuppression?.kind === 'TROGR_SUPPRESSION_B'
+      ? Object.freeze({ ...priorSuppression, advisorAcceptedIndex: 0 })
+      : null;
   let monsterStopped = false;
-  let composition = resolveSymbiontComposition(catalog, { raceCode, acceptedSpecies: [] });
+  let composition = resolveSymbiontComposition(catalog, {
+    raceCode,
+    acceptedSpecies: acceptedForComposition(accepted),
+  });
 
   const ordinaryCount = (): number => accepted.filter((entry) => entry.kind === 'ORDINARY').length;
   const recomputeComposition = (): void => {
@@ -629,7 +702,7 @@ export function resolveRandomSymbiontSequence(
   if (bindingSnapshotOrNull !== null && expectedAfterRolls !== null) {
     fail('binding snapshot cannot be committed while a physical roll is pending');
   }
-  if (!advisorSuppressed() && suppressionB !== null) {
+  if (!advisorSuppressed() && suppressionB !== null && priorSuppression === undefined) {
     fail('suppression B exists without active Trogr suppression');
   }
 
@@ -691,7 +764,7 @@ export function resolveRandomSymbiontSequence(
       ? 'COMMITTED'
       : expectedAfterRolls === null
         ? 'BINDING'
-        : physicalRolls.length === 0
+        : physicalRolls.length === 0 && accepted.length === 0
           ? 'NOT_STARTED'
           : 'PENDING';
   const sequence: RandomSymbiontSequence = Object.freeze({
@@ -702,6 +775,27 @@ export function resolveRandomSymbiontSequence(
     bindingSnapshotOrNull,
   });
   accepted = accepted.map((entry) => Object.freeze(entry));
+  const defaultBindings = bindingSnapshotOrNull ?? bindingsWithoutCommit(catalog, accepted);
+  const retainedBinding =
+    retainedOrdinary === undefined
+      ? undefined
+      : retainedSource?.drawnSpeciesAndBindings.find(
+          (entry) => entry.acceptedIndex === retainedOrdinary.acceptedIndex,
+        );
+  if (
+    bindingSnapshotOrNull !== null &&
+    retainedBinding !== undefined &&
+    JSON.stringify(bindingSnapshotOrNull[0]?.binding) !== JSON.stringify(retainedBinding.binding)
+  )
+    fail('correction cannot replace the retained anatomical binding');
+  const drawnSpeciesAndBindings =
+    retainedBinding === undefined
+      ? defaultBindings
+      : Object.freeze(
+          defaultBindings.map((entry, index) =>
+            index === 0 ? Object.freeze({ ...entry, binding: retainedBinding.binding }) : entry,
+          ),
+        );
   return Object.freeze({
     sequence,
     randomStatus,
@@ -711,6 +805,6 @@ export function resolveRandomSymbiontSequence(
     duplicateRerollReceipts: Object.freeze(duplicateRerollReceipts),
     composition,
     advisorOrNull,
-    drawnSpeciesAndBindings: bindingSnapshotOrNull ?? bindingsWithoutCommit(catalog, accepted),
+    drawnSpeciesAndBindings,
   });
 }

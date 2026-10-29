@@ -764,11 +764,17 @@ describe('CHR-022 real host WS journey', () => {
         })),
       });
       const [positionsResult, completedPositions] = await command(restarted, checkpointPositions);
-      expect(completedPositions.presentation.base.formId).toBe('CHR-037');
-      expect(completedPositions.presentation.base.availableActionKeys).toEqual([]);
-      expect(completedPositions.presentation.base.roleFilteredPayload['nextFormId']).toBe(
-        'CHR-032',
+      expect(completedPositions.presentation.base.formId).toBe('CHR-032');
+      expect(completedPositions.presentation.base.availableActionKeys).toContain(
+        'CHR-032::CTA::001',
       );
+      expect(
+        completedPositions.presentation.base.roleFilteredPayload['propertyRollReceipts'],
+      ).toHaveLength(8);
+      expect(completedPositions.presentation.base.roleFilteredPayload['nextFormId']).toBe(
+        'CHR-025',
+      );
+      expect(positionsResult.receipt.result['nextFormId']).toBe('CHR-032');
       const [positionsReplay] = await command(restarted, checkpointPositions);
       expect(positionsReplay.receipt).toEqual(positionsResult.receipt);
       const refreshedPositions = await reconnect(restarted, `${prefix}-positions-final-refresh`);

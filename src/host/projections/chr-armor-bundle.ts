@@ -1,4 +1,5 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import { startingPropertyResumeAvailable } from '../creation-property-summary.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 
@@ -63,8 +64,9 @@ export function projectChr021(
   const checkpointRecord = stage.checkpointRecordOrNull;
   const actions: ActionKey[] = [];
   const weapon = checkpoint.startingWeaponStage;
-  const weaponEntryMode =
-    checkpointRecord === null
+  const weaponEntryMode = startingPropertyResumeAvailable(checkpoint)
+    ? 'RESUME'
+    : checkpointRecord === null
       ? null
       : weapon === null || weapon === undefined
         ? 'INITIAL'

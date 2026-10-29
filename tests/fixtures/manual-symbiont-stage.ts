@@ -113,6 +113,7 @@ export function createManualWizardSetup(
   diceInputMode: 'AUTO' | 'MANUAL',
   databasePath = ':memory:',
   characterDraftId = `${prefix}-character`,
+  massKg = 75,
 ): ManualWizardSetup {
   const database = openPersistenceDatabase(databasePath);
   const deviceId = bootstrapDeviceIdentity(database);
@@ -130,7 +131,7 @@ export function createManualWizardSetup(
         characterDraftId,
         description: null,
         draftRevision: 0,
-        massKg: 75,
+        massKg,
         name: prefix,
         sex: 'FEMALE',
         stage: 'IDENTITY',
