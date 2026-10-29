@@ -4,8 +4,10 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-29`
-- Тестов: 1676 Vitest + 13 Playwright, все зелёные
-- `npm run verify` — проходит; `npm run build && npm run test:e2e` — 13/13
+- Тестов: 1798 Vitest + 15 Playwright, все зелёные.
+- `npm run verify` — проходит; `npm run test:e2e` — 15/15 без retry.
+- Локальный повторный импорт остановился на `UNKNOWN: open`; границы
+  воспроизводимости и проверка чистого checkout в CI — в [handoff](handoff.md).
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
   native Atlas clone allocation — [issue #160](vitest-atlas-memory.md).
 
@@ -119,35 +121,42 @@ Advisor I/W/B/skills с continuity после remove/re-add и exact-diff `CHR-0
 с первой composition record, transactional rollback, RANDOM/MANUAL
 safe-return/resume с persisted presentation validation и source-backed
 read-only preview брони без внутренних Rule IDs. Bundle остаётся
-`OWNED_NOT_EQUIPPED`, `CHR-022`
-host-signed и не публикуется. Локальное удаление не сохраняется как неполный
+`OWNED_NOT_EQUIPPED`. Локальное удаление не сохраняется как неполный
 состав и сбрасывается после reconnect; presentation migration `0005` не хранит
 вторую composition authority. Одиннадцать production Playwright-сценариев проходят
 RANDOM FREE EEL и UNITED ADVISER, карточки `CHR-014`, ручной FREE
 replacement/restart, UNITED Advisor, TROGR+ADVISER, а также MANUAL/UNITED/RANDOM
-armorBundle через Fastify+WS/SQLite. Следующее equipment и final save остаются
-в #151–#156.
+armorBundle через Fastify+WS/SQLite.
 #151 продолжает этот путь на CHR-022: атомарно создаёт запрос качества оружия,
 публикует совместимый с расой каталог типа/варианта и read-only требования.
 Один D20 сохраняется навсегда, качество остаётся рекомендацией; safe-return к
 броне и resume сохраняют оба результата. Старые armor checkpoints получают
-явный entry без переписывания прежних receipts. Финальный checkpoint оставляет
-CHR-022 actionless, а CHR-023/024 подписаны хостом и ещё не публикуются.
-Следующая очередь — #152–#156.
+явный entry без переписывания прежних receipts.
+#152 публикует CHR-023/024/031 и атомарно связывает profile request с weapon
+checkpoint. Проверка 22 формул требует один общий L/Lw/Ls, все независимые
+значения дайсов и заявленные выходы без RNG. Полный эффективный профиль,
+proof и свидетельства `PLAYER_WITNESS` сохраняются и пересчитываются при
+загрузке; min/max не заменяют достижимость. PURE получает явный пустой состав
+и pending броню на существующем финальном checkpoint навыков, а исторические
+записи требуют явного reconfirm без замены старого receipt. Fixed-профиль
+read-only. INVALID восстанавливает CHR-031 и подписанный возврат; safe-return
+сохраняет броню, оружие и ввод. После успеха профиль actionless, CHR-038
+подписан и не публикуется. [ADR 0059](../adr/0059-weapon-profiles-and-pure-entry.md).
+Следующая очередь — #153–#156.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                             | Веха |
-| ---------------------------- | ------------ | --------------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                         | M4   |
-| `src/domain/rules`           | **частично** | rolls, stats, skills, random/manual composition, Advisor и interaction preview                      | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                       | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                                | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation                | M2   |
-| `src/host`                   | **частично** | creation до actionless CHR-022/CHECKPOINTED; MANUAL editor, Advisor, armorBundle и стартовое оружие | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–022/028/036/041/042; CHR-023/024 host-signed, не публикуются               | M4   |
-| `src/web`                    | **частично** | recovery, stats, skills, random/manual symbiont, armor и weapon UI; 13 Playwright-сценариев         | M5   |
-| `src/web/renderer`           | **частично** | 37 форм: 11 APP и 26 CHR; остальные fail-closed                                                     | M5   |
-| `src/web/forms`              | **частично** | APP domain; публикация APP-001/002/004 и двадцати шести CHR                                         | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                               | Веха |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                           | M4   |
+| `src/domain/rules`           | **частично** | rolls, stats, skills, composition, Advisor, interactions и точная проверка 22 формул оружия           | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                         | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                                  | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation                  | M2   |
+| `src/host`                   | **частично** | creation до actionless профиля оружия; PURE empty checkpoint, immutable formula proof и fixed profile | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–024/028/031/036/041/042; CHR-038 подписан, не публикуется                    | M4   |
+| `src/web`                    | **частично** | recovery, stats, skills, symbionts, armor, weapon и profile UI; 15 production E2E-сценариев           | M5   |
+| `src/web/renderer`           | **частично** | добавлены CHR-023/024/031; остальные незарегистрированные формы fail-closed                           | M5   |
+| `src/web/forms`              | **частично** | APP domain; character wizard с formula inputs, fixed profile и диалогом проверки                      | M6   |
 
 ## generated/ — вывод конвейера
 
@@ -160,11 +169,11 @@ CHR-022 actionless, а CHR-023/024 подписаны хостом и ещё н�
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                            |
-| ------------------- | ------------ | ------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                    |
-| `tests/e2e`         | **частично** | 13 сценариев: исходные восемь, три armorBundle и AUTO/MANUAL CHR-022; production + WS |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                |
+| Каталог             | Состояние    | Примечание                                                                                  |
+| ------------------- | ------------ | ------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                          |
+| `tests/e2e`         | **частично** | 15 production-сценариев, включая formula/INVALID recovery и PURE fixed profile; все зелёные |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                      |
 
 ---
 

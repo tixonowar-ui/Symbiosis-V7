@@ -54,6 +54,14 @@ export function projectChr022(
   if (selected === undefined)
     throw new Error('committed starting weapon is absent from its race catalog');
   const actions: ActionKey[] = [];
+  const profileStage = checkpoint.weaponProfileStage;
+  const profileOutcome = profileStage?.records.at(-1)?.receipt.result.outcome;
+  const profileEntryMode =
+    committed === null || profileOutcome === 'SUBMITTED' || profileOutcome === 'ACKNOWLEDGED'
+      ? 'NONE'
+      : profileStage === null || profileStage === undefined
+        ? 'INITIAL'
+        : 'RESUME';
   if (committed === null) {
     if (roll === null) {
       if (rollCommitCapable) actions.push(CHR_022_ROLL_ACTION_KEY);
@@ -62,6 +70,12 @@ export function projectChr022(
         raceChoice === 'PURE' ? CHR_022_PURE_CONFIRM_ACTION_KEY : CHR_022_CONFIRM_ACTION_KEY,
       );
     }
+    actions.push(CHR_022_RETURN_ACTION_KEY);
+  } else if (profileEntryMode !== 'NONE') {
+    if (checkpointCapable || profileEntryMode === 'RESUME')
+      actions.push(
+        raceChoice === 'PURE' ? CHR_022_PURE_CONFIRM_ACTION_KEY : CHR_022_CONFIRM_ACTION_KEY,
+      );
     actions.push(CHR_022_RETURN_ACTION_KEY);
   }
   const payload: JsonObject = {
@@ -81,6 +95,8 @@ export function projectChr022(
     weaponQualityRollRequestId: stage.weaponQualityRollRequestId,
     weaponQualityRollReceiptIdOrNull: roll?.receipt.receiptId ?? null,
     weaponCheckpointReceiptIdOrNull: committed?.receipt.receiptId ?? null,
+    weaponProfileEntryMode: profileEntryMode,
+    weaponProfileRequestIdOrNull: profileStage?.requestId ?? null,
     qualityRecommendation: roll === null ? null : { ...roll.qualityRecommendation },
     requirementPreview: selected === null ? null : { ...selected.requirementPreview },
     ownershipState: 'OWNED_NOT_EQUIPPED',

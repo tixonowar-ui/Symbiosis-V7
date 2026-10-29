@@ -107,7 +107,7 @@ describe('CHR-022 host projection', () => {
     });
   });
 
-  it('keeps poor quality ownership intact and publishes an actionless signed next stage after checkpoint', () => {
+  it('keeps poor quality ownership intact and publishes explicit profile entry for a historical checkpoint', () => {
     const rolled = projectChr022(checkpoint('ROLLED'), catalog, true, true);
     expect(rolled.availableActionKeys).toEqual(['CHR-022::CTA::001', 'CHR-022::CTA::003']);
     expect(rolled.roleFilteredPayload).toMatchObject({
@@ -122,7 +122,7 @@ describe('CHR-022 host projection', () => {
     expect(rolled.roleFilteredPayload['requirementPreview']).toEqual(selected.requirementPreview);
     const done = projectChr022(checkpoint('CHECKPOINTED'), catalog, true, true);
     expect(done.formId).toBe('CHR-022');
-    expect(done.availableActionKeys).toEqual([]);
+    expect(done.availableActionKeys).toEqual(['CHR-022::CTA::001', 'CHR-022::CTA::003']);
     expect(done.roleFilteredPayload).toMatchObject({
       nextFormId: 'CHR-023',
       weaponCheckpointReceiptIdOrNull: 'final-receipt',

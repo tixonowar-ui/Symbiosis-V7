@@ -2118,6 +2118,7 @@ describe('APP-001 web entry', () => {
         IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
         SET_DECIDE_WORKFLOW_COMMAND_ID,
         ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+        'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',
       ],
       unacknowledgedCommandIds: [],
     });

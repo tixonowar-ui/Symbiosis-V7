@@ -20,6 +20,11 @@ import { ArmorBundleFields } from './forms/chr/armor-bundle-fields.js';
 import { CHR_021_ROLL_ACTION_KEY } from './forms/chr/armor-bundle.js';
 import type { ArmorBundleDraft } from './forms/chr/armor-bundle.js';
 import { StartingWeaponFields } from './forms/chr/starting-weapon-fields.js';
+import {
+  InvalidWeaponProfileFields,
+  WeaponProfileFields,
+} from './forms/chr/weapon-profile-fields.js';
+import { CHR_023_SUBMIT_ACTION_KEY } from './forms/chr/weapon-profile.js';
 import { CHR_022_ROLL_ACTION_KEY } from './forms/chr/starting-weapon.js';
 import type { StartingWeaponDraft } from './forms/chr/starting-weapon.js';
 import { AtlasForm } from './renderer/atlas-form.js';
@@ -2075,6 +2080,8 @@ function SymbiontCompositionFields({
         </p>
         {projection.duplicatePolicy.kind === 'FORBIDDEN' ? (
           <p data-composition-duplicates="empty">Дубликаты запрещены ручным составом.</p>
+        ) : projection.duplicatePolicy.kind === 'NOT_APPLICABLE' ? (
+          <p data-composition-duplicates="empty">Чистый не имеет симбионтов.</p>
         ) : projection.duplicatePolicy.receipts.length === 0 ? (
           <p data-composition-duplicates="empty">Дубликатов и отдельных reroll receipts нет.</p>
         ) : (
@@ -2132,7 +2139,8 @@ function AbandonmentDialogFields({
   layer,
 }: {
   readonly layer: ConfirmedPresentationLayer;
-}): ReactElement {
+}): ReactElement | null {
+  if (layer.formId !== 'CHR-028') return null;
   const projection = layer.projection;
   return (
     <section
@@ -2237,7 +2245,8 @@ export function App(): ReactElement {
       actionKey !== CHR_018_MANUAL_BINDING_ACTION_KEY &&
       actionKey !== CHR_041_MANUAL_IW_ACTION_KEY &&
       actionKey !== CHR_021_ROLL_ACTION_KEY &&
-      actionKey !== CHR_022_ROLL_ACTION_KEY,
+      actionKey !== CHR_022_ROLL_ACTION_KEY &&
+      actionKey !== CHR_023_SUBMIT_ACTION_KEY,
   );
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
@@ -2526,6 +2535,19 @@ export function App(): ReactElement {
                 setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
               }}
             />
+            <WeaponProfileFields
+              snapshot={snapshot}
+              onSubmit={(inputs) => {
+                const result = connectionRef.current?.submitWeaponProfile(inputs);
+                setActionNotice(
+                  result === undefined
+                    ? 'Заявка не отправлена: соединение ещё не готово.'
+                    : result.ok
+                      ? null
+                      : `Заявка не отправлена: ${result.detail}.`,
+                );
+              }}
+            />
             <AtlasForm
               availableActionKeys={availableActionKeys ?? []}
               formId={snapshot.formId}
@@ -2561,7 +2583,13 @@ export function App(): ReactElement {
               <AtlasForm
                 availableActionKeys={layer.availableActionKeys}
                 formId={layer.formId}
-                projectionContent={<AbandonmentDialogFields layer={layer} />}
+                projectionContent={
+                  layer.formId === 'CHR-031' ? (
+                    <InvalidWeaponProfileFields layer={layer} />
+                  ) : (
+                    <AbandonmentDialogFields layer={layer} />
+                  )
+                }
                 onAction={(selection) => {
                   const connection = connectionRef.current;
                   if (connection === null) {

@@ -1,3 +1,7 @@
+import {
+  initializePureComposition,
+  isHistoricPureSkillCheckpoint,
+} from './creation-pure-composition.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -9,6 +13,7 @@ import type { SkillStageCatalog, SymbiontCatalog } from '../domain/index.js';
 import {
   commitLocalCharacterCheckpoint,
   writeLocalCharacterSkillPresentation,
+  writeLocalCharacterSymbiontPresentation,
 } from '../persistence/index.js';
 import {
   creationWizardDurableIds,
@@ -309,6 +314,11 @@ function assertCurrentSkillRequest(
       ? revisions.projectionRevision > latest.revisions.projectionRevision
       : revisions.projectionRevision === latest.revisions.projectionRevision + 1);
   const selectionIsFinal = selection?.request.payload.sourceFormId === 'CHR-015';
+  const historicalPureEntry =
+    sourceFormId === 'CHR-015' &&
+    isHistoricPureSkillCheckpoint(checkpoint) &&
+    checkpoint.symbiontPresentationStage?.formId === 'CHR-015' &&
+    isDeepStrictEqual(request.payload.selectedSkills, selection?.request.payload.selectedSkills);
   const presentation = checkpoint.skillPresentationStage;
   const cardRequestMatches =
     sourceFormId !== 'CHR-014' ||
@@ -344,9 +354,9 @@ function assertCurrentSkillRequest(
     request.payload.characterDraftId !== checkpoint.localCharacter.localCharacterId ||
     request.payload.wizardCheckpointId !== checkpoint.checkpoint.checkpointId ||
     request.payload.draftRevision !== checkpoint.receipt.result.draftRevision ||
-    !stageMatches ||
+    !(stageMatches || historicalPureEntry) ||
     !cardRequestMatches ||
-    !finalRequestMatches ||
+    !(finalRequestMatches || historicalPureEntry) ||
     creationWizardDurableIds(checkpoint).has(request.commandId) ||
     checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||
     checkpoint.receipt.result.draftRevision === Number.MAX_SAFE_INTEGER ||
@@ -552,6 +562,10 @@ function skillPayload(
   receiptId: string,
   symbiontCatalog: SymbiontCatalog | undefined,
   allocateRandomSequenceId: () => string,
+  armorBundleDependencies: {
+    readonly allocateArmorBundleId: () => string;
+    readonly allocateQualityRollRequestId: () => string;
+  },
 ): CreationWizardSkillPayload | CreationWizardSymbiontPayload {
   const statRollStage = checkpoint.statRollStage;
   if (statRollStage === null) return guardRejected();
@@ -656,6 +670,24 @@ function skillPayload(
   } as CreationWizardSkillPayload;
   if (sourceFormId === 'CHR-014') return resultPayload;
   const raceStage = checkpoint.raceAndMethodStage;
+  if (raceStage?.race?.value === 'PURE' && symbiontCatalog !== undefined) {
+    const initialized = initializePureComposition(
+      checkpoint,
+      skillSelectionStage,
+      armorBundleDependencies.allocateArmorBundleId,
+      armorBundleDependencies.allocateQualityRollRequestId,
+    );
+    return {
+      ...resultPayload,
+      randomSymbiontStage: null,
+      pureCompositionStage: initialized.pureCompositionStage,
+      armorBundleStage: initialized.armorBundleStage,
+      receipt: initialized.selection.receipt,
+      skillSelectionStage: isHistoricPureSkillCheckpoint(checkpoint)
+        ? checkpoint.skillSelectionStage!
+        : initialized.selection,
+    };
+  }
   if (symbiontCatalog === undefined || raceStage?.symbiontAcquisition.value !== 'RANDOM') {
     return resultPayload;
   }
@@ -700,6 +732,7 @@ export function commitCreationWizardCheckpoint(
   weaponDependencies?: {
     readonly weaponCatalog: StartingWeaponItemCatalog;
     readonly allocateWeaponQualityRollRequestId: () => string;
+    readonly allocateProfileRequestId?: () => string;
   },
 ): DurableCreationWizardCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
@@ -855,6 +888,10 @@ export function commitCreationWizardCheckpoint(
         receiptId,
         fullSymbiontCatalog(catalog),
         allocateRandomSequenceId,
+        armorBundleDependencies ?? {
+          allocateArmorBundleId: randomUUID,
+          allocateQualityRollRequestId: randomUUID,
+        },
       );
       const result = update(
         { payloadJson: JSON.stringify(nextPayload) },
@@ -874,6 +911,19 @@ export function commitCreationWizardCheckpoint(
             nextPayload.receipt.revisions.projectionRevision,
           ),
         );
+      }
+      if (
+        skillRequest.payload.sourceFormId === 'CHR-015' &&
+        'pureCompositionStage' in nextPayload &&
+        nextPayload.pureCompositionStage != null
+      ) {
+        writeLocalCharacterSymbiontPresentation(database, {
+          formId: 'CHR-017',
+          compositionDraftRevision: nextPayload.receipt.result.draftRevision,
+          projectionRevision: nextPayload.receipt.revisions.projectionRevision,
+          routeBindings: nextPayload.nextStageEnvelope.routeBindings,
+          routeTemplate: '/player/characters/:localCharacterId/create/chr-017',
+        });
       }
       return result;
     },

@@ -61,6 +61,8 @@ import {
   type ArmorBundleStageEntryRequest,
 } from './creation-armor-bundle-contract.js';
 
+import { assertPureCompositionBinding } from './creation-pure-composition.js';
+import type { SkillSelectionCheckpointReceipt } from './creation-skill-selection.js';
 import { initialStartingWeaponStage } from './creation-starting-weapon-contract.js';
 
 type DecodedCommandRequest = Parameters<typeof normalizeArmorBundleEntryRequest>[0];
@@ -70,7 +72,7 @@ export type ArmorBundleRecord =
       readonly kind: 'ENTRY';
       readonly request: ArmorBundleStageEntryRequest;
       readonly receipt: ArmorBundleStageEntryReceipt;
-      readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-021'>;
+      readonly nextStageEnvelope: CreationNextStageEnvelope<'CHR-017' | 'CHR-021'>;
     }
   | {
       readonly kind: 'QUALITY_ROLL';
@@ -98,7 +100,16 @@ export function latestArmorBundleRecord(stage: ArmorBundleStage): ArmorBundleRec
     kind: 'ENTRY',
     request: stage.entryRequest,
     receipt: stage.entryReceipt,
-    nextStageEnvelope: nextSymbiontEnvelope('CHR-021', stage.entryRequest.payload.characterDraftId),
+    nextStageEnvelope: {
+      formId: stage.entryRequest.payload.stage === 'SKILLS' ? 'CHR-017' : 'CHR-021',
+      routeBindings: [
+        {
+          parameterIndex: 0,
+          source: 'inherited',
+          value: stage.entryRequest.payload.characterDraftId,
+        },
+      ],
+    },
   };
 }
 
@@ -349,12 +360,17 @@ function assertQualityRollState(
   request: ArmorBundleQualityRollRequest,
 ): ArmorBundleStage {
   const stage = checkpoint.armorBundleStage;
+  const pureEntry =
+    checkpoint.pureCompositionStage != null &&
+    checkpoint.nextStageEnvelope.formId === 'CHR-017' &&
+    checkpoint.symbiontPresentationStage?.formId === 'CHR-021';
+  if (pureEntry) assertPureCompositionBinding(checkpoint);
   if (
     stage === null ||
     stage === undefined ||
     stage.qualityRollRecordOrNull !== null ||
     stage.checkpointRecordOrNull !== null ||
-    checkpoint.nextStageEnvelope.formId !== 'CHR-021' ||
+    (checkpoint.nextStageEnvelope.formId !== 'CHR-021' && !pureEntry) ||
     request.payload.armorBundleId !== stage.armorBundleId ||
     request.payload.qualityRollRequestId !== stage.qualityRollRequestId ||
     (stage.diceInputModeSnapshot === 'AUTO') !== (request.payload.manualFaceOrNull === null)
@@ -718,69 +734,117 @@ export function validateArmorBundleStageHistory(
   const checkpointView = context.checkpointView;
   const acquisition = checkpointView.raceAndMethodStage;
   const payload = checkpointView.durablePayload as CreationWizardSymbiontPayload;
-  if (
-    acquisition === null ||
-    acquisition.race?.value === undefined ||
-    acquisition.race.value === 'PURE' ||
-    acquisition.diceInput?.value !== stage.diceInputModeSnapshot ||
-    checkpointView.skillSelectionStage === null ||
-    !symbiontWorkComplete(payload.manualCompositionStage, payload.randomSymbiontStage) ||
-    context.cursor.latestEnvelope.formId !== 'CHR-019'
-  ) {
-    return guardSymbiontRejected();
-  }
-  for (const id of armorBundleStageIds(stage)) occupy(context, id);
-
   const characterDraftId = context.localCharacter.localCharacterId;
-  const entryRequest = stage.entryRequest;
-  if (
-    entryRequest.payload.characterDraftId !== characterDraftId ||
-    entryRequest.payload.wizardCheckpointId !== context.checkpoint.checkpointId ||
-    entryRequest.payload.draftRevision !== context.cursor.draftRevision ||
-    !manualNavigationRevisionsMatch(entryRequest.expectedRevisions, context.cursor.revisions)
-  ) {
-    return guardSymbiontRejected();
-  }
-  const interaction = entryRequest.payload.variant === MANUAL_INTERACTION_CONFIRMATION_VARIANT;
-  const entryCheckpoint = {
-    ...checkpointView,
-    manualCompositionStage: payload.manualCompositionStage ?? null,
-  };
-  if (manualInteractionConfirmationRequired(entryCheckpoint, context.catalog) !== interaction) {
-    return guardSymbiontRejected();
-  }
-  if (
-    interaction &&
-    !isDeepStrictEqual(
-      entryRequest.payload.interactionDiff,
-      manualInteractionDiffJson(
-        context.catalog,
-        manualInteractionPreview(entryCheckpoint, context.catalog),
-      ),
+  let cursor = context.cursor;
+  if (stage.entryRequest.payload.stage === 'SKILLS') {
+    assertPureCompositionBinding(checkpointView);
+    if (
+      acquisition?.diceInput?.value !== stage.diceInputModeSnapshot ||
+      cursor.latestEnvelope.formId !== 'CHR-017'
     )
-  ) {
-    return guardSymbiontRejected();
-  }
-  const facts = {
-    checkpoint: checkpointView,
-    receiptId: stage.entryReceipt.receiptId,
-    revisions: incrementedSymbiontRevisions(entryRequest.expectedRevisions),
-    checkpointRevision: context.cursor.checkpointRevision + 1,
-    draftRevision: context.cursor.draftRevision + 1,
-    armorBundleId: stage.armorBundleId,
-    qualityRollRequestId: stage.qualityRollRequestId,
-  };
-  let entryReceipt: ArmorBundleStageEntryReceipt;
-  if (entryRequest.workflowCommandId === 'UI-CMD-CHAR-CREATION-SET-DECIDE') {
-    entryReceipt = manualInteractionConfirmationReceipt(facts, entryRequest);
+      return guardSymbiontRejected();
+    const pure = checkpointView.pureCompositionStage!;
+    for (const id of armorBundleStageIds(stage)) {
+      if (
+        pure.entryMode === 'SKILL_CHECKPOINT' &&
+        (id === stage.entryRequest.commandId || id === stage.entryReceipt.receiptId)
+      )
+        continue;
+      occupy(context, id);
+    }
+    if (pure.entryMode === 'SKILL_RECONFIRM') {
+      const request = stage.entryRequest;
+      const receipt = stage.entryReceipt as SkillSelectionCheckpointReceipt;
+      const skills = checkpointView.skillSelectionStage!;
+      const expected = {
+        commandId: request.commandId,
+        receiptId: receipt.receiptId,
+        result: {
+          ...skills.receipt.result,
+          pureArmorBundleId: stage.armorBundleId,
+          pureArmorQualityRollRequestId: stage.qualityRollRequestId,
+          checkpointRevision: cursor.checkpointRevision + 1,
+          draftRevision: cursor.draftRevision + 1,
+        },
+        revisions: incrementedSymbiontRevisions(request.expectedRevisions),
+      };
+      if (
+        request.payload.characterDraftId !== characterDraftId ||
+        request.payload.wizardCheckpointId !== context.checkpoint.checkpointId ||
+        request.payload.draftRevision !== cursor.draftRevision ||
+        !manualNavigationRevisionsMatch(request.expectedRevisions, cursor.revisions) ||
+        !isDeepStrictEqual(receipt, expected)
+      )
+        return guardSymbiontRejected();
+      cursor = advanceCursor(context, cursor, request, receipt, {
+        formId: 'CHR-017',
+        routeBindings: [{ parameterIndex: 0, source: 'inherited', value: characterDraftId }],
+      });
+    }
   } else {
-    entryReceipt = armorBundleEntryReceipt(facts, entryRequest);
+    if (
+      acquisition === null ||
+      acquisition.race?.value === undefined ||
+      acquisition.race.value === 'PURE' ||
+      acquisition.diceInput?.value !== stage.diceInputModeSnapshot ||
+      checkpointView.skillSelectionStage === null ||
+      !symbiontWorkComplete(payload.manualCompositionStage, payload.randomSymbiontStage) ||
+      context.cursor.latestEnvelope.formId !== 'CHR-019'
+    ) {
+      return guardSymbiontRejected();
+    }
+    for (const id of armorBundleStageIds(stage)) occupy(context, id);
+
+    const entryRequest = stage.entryRequest;
+    if (
+      entryRequest.payload.characterDraftId !== characterDraftId ||
+      entryRequest.payload.wizardCheckpointId !== context.checkpoint.checkpointId ||
+      entryRequest.payload.draftRevision !== context.cursor.draftRevision ||
+      !manualNavigationRevisionsMatch(entryRequest.expectedRevisions, context.cursor.revisions)
+    ) {
+      return guardSymbiontRejected();
+    }
+    const interaction = entryRequest.payload.variant === MANUAL_INTERACTION_CONFIRMATION_VARIANT;
+    const entryCheckpoint = {
+      ...checkpointView,
+      manualCompositionStage: payload.manualCompositionStage ?? null,
+    };
+    if (manualInteractionConfirmationRequired(entryCheckpoint, context.catalog) !== interaction) {
+      return guardSymbiontRejected();
+    }
+    if (
+      interaction &&
+      !isDeepStrictEqual(
+        entryRequest.payload.interactionDiff,
+        manualInteractionDiffJson(
+          context.catalog,
+          manualInteractionPreview(entryCheckpoint, context.catalog),
+        ),
+      )
+    ) {
+      return guardSymbiontRejected();
+    }
+    const facts = {
+      checkpoint: checkpointView,
+      receiptId: stage.entryReceipt.receiptId,
+      revisions: incrementedSymbiontRevisions(entryRequest.expectedRevisions),
+      checkpointRevision: context.cursor.checkpointRevision + 1,
+      draftRevision: context.cursor.draftRevision + 1,
+      armorBundleId: stage.armorBundleId,
+      qualityRollRequestId: stage.qualityRollRequestId,
+    };
+    let entryReceipt: ArmorBundleStageEntryReceipt;
+    if (entryRequest.workflowCommandId === 'UI-CMD-CHAR-CREATION-SET-DECIDE') {
+      entryReceipt = manualInteractionConfirmationReceipt(facts, entryRequest);
+    } else {
+      entryReceipt = armorBundleEntryReceipt(facts, entryRequest as ArmorBundleEntryRequest);
+    }
+    const entryEnvelope = nextSymbiontEnvelope('CHR-021', characterDraftId);
+    if (!isDeepStrictEqual(stage.entryReceipt, entryReceipt)) {
+      return guardSymbiontRejected();
+    }
+    cursor = advanceCursor(context, context.cursor, entryRequest, entryReceipt, entryEnvelope);
   }
-  const entryEnvelope = nextSymbiontEnvelope('CHR-021', characterDraftId);
-  if (!isDeepStrictEqual(stage.entryReceipt, entryReceipt)) {
-    return guardSymbiontRejected();
-  }
-  let cursor = advanceCursor(context, context.cursor, entryRequest, entryReceipt, entryEnvelope);
 
   const rollRecord = stage.qualityRollRecordOrNull;
   if (rollRecord !== null) {

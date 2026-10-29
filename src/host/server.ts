@@ -1,3 +1,20 @@
+import { canonicalWeaponProfileCatalog } from './weapon-profile-catalog.js';
+import {
+  commitWeaponProfile,
+  preflightWeaponProfile,
+  advanceWeaponProfilePresentation,
+  weaponProfileForm,
+} from './creation-weapon-profile.js';
+import {
+  normalizeWeaponProfileRequest,
+  type WeaponProfileRequest,
+} from './creation-weapon-profile-contract.js';
+import { projectChr023, projectChr024, projectChr031 } from './projections/chr-weapon-profile.js';
+import {
+  advancePureCompositionPresentation,
+  isHistoricPureSkillCheckpoint,
+} from './creation-pure-composition.js';
+import { projectPureChr019 } from './projections/chr-symbionts.js';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -338,6 +355,7 @@ interface CreationWizardCapabilities {
   readonly checkpoint: boolean;
   readonly rollCommit: boolean;
   readonly setDecide: boolean;
+  readonly weaponProfileSubmit: boolean;
 }
 interface ConfirmedNavigationContext {
   readonly contextId: string | null;
@@ -371,6 +389,8 @@ interface ConfirmedNavigationContext {
     | 'CHR-020'
     | 'CHR-021'
     | 'CHR-022'
+    | 'CHR-023'
+    | 'CHR-024'
     | 'CHR-041'
     | 'CHR-042';
   readonly identityDraftScope: IdentityDraftScope | null;
@@ -460,6 +480,7 @@ function creationWizardCapabilities(
   workflowCommandIds: ReadonlySet<WorkflowCommandId>,
 ): CreationWizardCapabilities {
   return {
+    weaponProfileSubmit: workflowCommandIds.has('UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT'),
     checkpoint: workflowCommandIds.has(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
     rollCommit: workflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID),
     setDecide: workflowCommandIds.has(CREATION_SET_DECIDE_WORKFLOW_COMMAND_ID),
@@ -517,6 +538,7 @@ function allocatedReceiptId(
   request:
     | ArmorBundleQualityRollRequest
     | StartingWeaponQualityRollRequest
+    | WeaponProfileRequest
     | CreationRollCommitCommandRequest
     | CreationSetDecideCommandRequest
     | CreationWizardCheckpointCommandRequest
@@ -867,6 +889,10 @@ function adoptNavigationContext(
     next.formId === CHR_012_FORM_ID ||
     next.formId === CHR_013_FORM_ID ||
     next.formId === CHR_015_FORM_ID ||
+    next.formId === 'CHR-021' ||
+    next.formId === 'CHR-022' ||
+    next.formId === 'CHR-023' ||
+    next.formId === 'CHR-024' ||
     next.formId === CHR_017_FORM_ID ||
     next.formId === CHR_018_FORM_ID ||
     next.formId === CHR_019_FORM_ID ||
@@ -1479,10 +1505,21 @@ function creationPresentationFormId(
 ): ConfirmedNavigationContext['formId'] {
   const nextFormId = checkpoint.nextStageEnvelope.formId;
   const signed = checkpoint.symbiontPresentationStage;
-  // Profile editors are the next slice. Persist their destination without
-  // publishing an executable profile form or reopening committed selection.
+  if (checkpoint.weaponProfileStage != null) {
+    if (signed?.formId === 'CHR-031') return 'CHR-023';
+    if (
+      signed?.formId === 'CHR-022' ||
+      signed?.formId === 'CHR-023' ||
+      signed?.formId === 'CHR-024'
+    )
+      return signed.formId;
+    return weaponProfileForm(checkpoint.weaponProfileStage);
+  }
+  if (nextFormId === 'CHR-038')
+    throw new Error('money destination lacks a weapon profile checkpoint');
   if (checkpoint.startingWeaponStage !== null && checkpoint.startingWeaponStage !== undefined) {
     if (nextFormId === 'CHR-023' || nextFormId === 'CHR-024') return CHR_022_FORM_ID;
+    if (signed?.formId === 'CHR-031') throw new Error('profile dialog lacks profile stage');
     return signed?.formId ?? CHR_022_FORM_ID;
   }
   if (nextFormId === 'CHR-023' || nextFormId === 'CHR-024') {
@@ -1497,7 +1534,11 @@ function creationPresentationFormId(
   ) {
     return CHR_021_FORM_ID;
   }
-  if (signed !== null && signed !== undefined) return signed.formId;
+  if (signed !== null && signed !== undefined) {
+    if (signed.formId === 'CHR-031') throw new Error('profile dialog lacks profile stage');
+    return signed.formId;
+  }
+  if (isHistoricPureSkillCheckpoint(checkpoint)) return CHR_017_FORM_ID;
   if (
     checkpoint.armorBundleStage !== null &&
     checkpoint.armorBundleStage !== undefined &&
@@ -1734,17 +1775,21 @@ function creationWizardBase(
     }
     case CHR_015_FORM_ID:
       return {
-        availableActionKeys:
-          checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-014'
+        availableActionKeys: isHistoricPureSkillCheckpoint(checkpoint)
+          ? ['CHR-015::CTA::001']
+          : checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-014'
             ? CHR_015_PARTIAL_ACTION_KEYS
             : checkpoint.skillSelectionStage?.request.payload.sourceFormId === 'CHR-015'
               ? CHR_015_CHECKPOINTED_ACTION_KEYS
               : CHR_015_INITIAL_ACTION_KEYS,
         formId: CHR_015_FORM_ID,
         formType: 'screen',
-        roleFilteredPayload: projectChr015(
-          deriveChr015SkillSelectionView(checkpoint, creationSkillCatalog),
-        ),
+        roleFilteredPayload: {
+          ...projectChr015(deriveChr015SkillSelectionView(checkpoint, creationSkillCatalog)),
+          ...(isHistoricPureSkillCheckpoint(checkpoint)
+            ? { pureEquipmentInitializationRequired: true }
+            : {}),
+        },
         routeBindings,
         routeTemplate: CHR_015_ROUTE,
       };
@@ -1782,6 +1827,8 @@ function creationWizardBase(
             capabilities.rollCommit,
           );
     case CHR_019_FORM_ID:
+      if (checkpoint.pureCompositionStage != null)
+        return projectPureChr019(checkpoint, symbiontCatalog);
       return checkpoint.manualCompositionStage !== null &&
         checkpoint.manualCompositionStage !== undefined
         ? projectManualChr019(checkpoint, symbiontCatalog)
@@ -1800,6 +1847,14 @@ function creationWizardBase(
         capabilities.rollCommit,
         capabilities.checkpoint,
       );
+    case 'CHR-023':
+      return projectChr023(
+        checkpoint,
+        canonicalWeaponProfileCatalog(),
+        capabilities.weaponProfileSubmit,
+      );
+    case 'CHR-024':
+      return projectChr024(checkpoint, canonicalWeaponProfileCatalog(), capabilities.checkpoint);
     case CHR_042_FORM_ID:
       return projectManualChr042(checkpoint, symbiontCatalog, capabilities.setDecide);
     default:
@@ -2412,6 +2467,127 @@ function startingWeaponNavigation(
   };
 }
 
+function equipmentProfileNavigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): NavigationSuccess | undefined {
+  const targets = {
+    'CHR-017::CTA::004': 'CHR-021',
+    'CHR-017::CTA::006': 'CHR-015',
+    'CHR-019::CTA::004': 'CHR-017',
+    'CHR-021::CTA::002': 'CHR-019',
+    'CHR-022::CTA::001': 'CHR-023',
+    'CHR-022::CTA::002': 'CHR-024',
+    'CHR-023::CTA::002': 'CHR-022',
+    'CHR-024::CTA::002': 'CHR-022',
+    'CHR-031::CTA::001': 'CHR-023',
+  } as const;
+  if (!Object.hasOwn(targets, message.actionKey) || current.entityLocalCharacterId === null)
+    return undefined;
+  const target = targets[message.actionKey as keyof typeof targets];
+  const checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    current.entityLocalCharacterId,
+    dependencies.skillStageCatalog,
+    dependencies.symbiontCatalog,
+  );
+  if (
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
+    connection.current !== current
+  )
+    return undefined;
+  const pure =
+    message.sourceFormId === 'CHR-017' ||
+    message.sourceFormId === 'CHR-019' ||
+    message.sourceFormId === 'CHR-021';
+  if (pure && checkpoint.raceAndMethodStage?.race?.value !== 'PURE') return undefined;
+  if (!pure && checkpoint.weaponProfileStage == null) return undefined;
+  const source =
+    connection.activeLayer?.presented ??
+    creationWizardBase(
+      checkpoint,
+      creationWizardCapabilities(connection.executableWorkflowCommandIds),
+      dependencies.skillStageCatalog,
+      dependencies.symbiontCatalog,
+      dependencies.symbiontMediaCatalog,
+      dependencies.creationDecisionConsequenceCatalog,
+      dependencies.creationSkillCatalog,
+      dependencies.armorBundleCatalog,
+      dependencies.startingWeaponCatalog,
+    );
+  if (
+    source.formId !== message.sourceFormId ||
+    !source.availableActionKeys.includes(message.actionKey)
+  )
+    return undefined;
+  let committed: DurableCreationWizardCheckpoint;
+  try {
+    if (pure) {
+      if (
+        target !== 'CHR-015' &&
+        target !== 'CHR-017' &&
+        target !== 'CHR-019' &&
+        target !== 'CHR-021'
+      )
+        return undefined;
+      committed = advancePureCompositionPresentation(
+        dependencies.database,
+        {
+          characterDraftId: current.entityLocalCharacterId,
+          wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+          formId: target,
+        },
+        dependencies.symbiontCatalog,
+      );
+    } else {
+      if (target !== 'CHR-022' && target !== 'CHR-023' && target !== 'CHR-024') return undefined;
+      committed = advanceWeaponProfilePresentation(
+        dependencies.database,
+        {
+          characterDraftId: current.entityLocalCharacterId,
+          wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+          formId: target,
+        },
+        dependencies.symbiontCatalog,
+      );
+    }
+  } catch (error: unknown) {
+    if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+    return undefined;
+  }
+  const after = currentCreationWizardRevisions(committed);
+  if (
+    after.projectionRevision !== before.projectionRevision + 1 ||
+    after.stateRevision !== before.stateRevision ||
+    after.actorVisibilityRevision !== before.actorVisibilityRevision ||
+    committed.localCharacter.payloadJson !== checkpoint.localCharacter.payloadJson ||
+    committed.checkpoint.checkpointRevision !== checkpoint.checkpoint.checkpointRevision
+  )
+    throw new Error('equipment navigation changed durable game state');
+  return {
+    nextContext: creationWizardContext(connection, dependencies, committed),
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        committed,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
+      ),
+      'player',
+      after,
+    ),
+  };
+}
+
 function handleFormAction(
   socket: WebSocket,
   message: FormActionIntentV2Message,
@@ -2522,6 +2698,13 @@ function handleFormAction(
     return;
   }
   let success: NavigationSuccess | undefined;
+  if (confirmedPlayerContext(current, dependencies)) {
+    success = equipmentProfileNavigation(message, current, revisions, connection, dependencies);
+    if (success !== undefined) {
+      finish(success.snapshot, success.nextContext, success.nextLayer);
+      return;
+    }
+  }
   if (
     CREATION_SET_DECISION_FORMS.some(
       ({ warningActionKey }) => warningActionKey === message.actionKey,
@@ -3013,6 +3196,10 @@ function sendCreationWizardDestination(
   correlationId: string,
   reason: 'COMMAND_DESTINATION' | 'RECONNECT',
 ): void {
+  const profileLayer =
+    checkpoint.symbiontPresentationStage?.formId === 'CHR-031'
+      ? projectChr031(checkpoint)
+      : undefined;
   sendCheckedV2(
     socket,
     projectionSnapshot(
@@ -3031,10 +3218,12 @@ function sendCreationWizardDestination(
       'player',
       currentCreationWizardRevisions(checkpoint),
       reason,
+      profileLayer === undefined ? [] : [profileLayer],
     ),
     dependencies.vocabulary,
   );
-  connection.activeLayer = null;
+  connection.activeLayer =
+    profileLayer === undefined ? null : { dialogContext: null, presented: profileLayer };
 }
 
 function handleCommandRequest(
@@ -3124,6 +3313,101 @@ function handleCommandRequest(
       path: '$.transition',
       value: { ...message.transition },
     });
+    return;
+  }
+  if (
+    message.workflowCommandId === 'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT' ||
+    (message.payload !== null &&
+      typeof message.payload === 'object' &&
+      !Array.isArray(message.payload) &&
+      ['WEAPON_PROFILE_ENTRY', 'WEAPON_PROFILE_SUBMIT', 'WEAPON_PROFILE_ACKNOWLEDGE'].includes(
+        String((message.payload as Record<string, unknown>)['variant']),
+      ))
+  ) {
+    let request: WeaponProfileRequest;
+    try {
+      request = normalizeWeaponProfileRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== request.payload.sourceFormId ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(request.workflowCommandId)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    const profileDependencies = {
+      catalog: dependencies.symbiontCatalog,
+      profileCatalog: canonicalWeaponProfileCatalog(),
+    };
+    try {
+      preflightWeaponProfile(dependencies.database, request, profileDependencies);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+    assertProcessLocalIdUnused(receiptId, 'weapon profile receipt allocator', commandJournal);
+    if (
+      connection.current !== current ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !isDeepStrictEqual(currentNavigationRevisions(connection, dependencies), revisions)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    let durable: DurableCreationWizardCheckpoint;
+    try {
+      durable = commitWeaponProfile(dependencies.database, request, receiptId, {
+        ...profileDependencies,
+        allocateRequestId: () =>
+          assertProcessLocalIdUnused(
+            dependencies.allocateCreationRollRequestId(),
+            'weapon profile request allocator',
+            commandJournal,
+          ),
+        allocateWitnessReceiptId: () =>
+          assertProcessLocalIdUnused(
+            dependencies.allocateCreationRollRequestId(),
+            'manufacturing witness receipt allocator',
+            commandJournal,
+          ),
+      });
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durable.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durable.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durable),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durable,
+      dependencies,
+      connection,
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
     return;
   }
   if (
@@ -4086,6 +4370,12 @@ function handleCommandRequest(
         },
         {
           weaponCatalog: dependencies.startingWeaponCatalog,
+          allocateProfileRequestId: () =>
+            assertProcessLocalIdUnused(
+              dependencies.allocateCreationRollRequestId(),
+              'weapon profile request allocator',
+              commandJournal,
+            ),
           allocateWeaponQualityRollRequestId: () =>
             assertProcessLocalIdUnused(
               dependencies.allocateCreationRollRequestId(),
@@ -4511,6 +4801,9 @@ function handleReconnectV2(
       restored.formId === CHR_019_FORM_ID ||
       restored.formId === CHR_020_FORM_ID ||
       restored.formId === CHR_021_FORM_ID ||
+      restored.formId === 'CHR-022' ||
+      restored.formId === 'CHR-023' ||
+      restored.formId === 'CHR-024' ||
       restored.formId === CHR_041_FORM_ID ||
       restored.formId === CHR_042_FORM_ID)
   ) {
@@ -4572,6 +4865,19 @@ function handleReconnectV2(
     projectionRole = null;
     revisions = shellRevisions;
   }
+  const restoredProfileCheckpoint =
+    nextContext.entityLocalCharacterId !== null && base.formId === 'CHR-023'
+      ? loadCreationWizardCheckpoint(
+          dependencies.database,
+          nextContext.entityLocalCharacterId,
+          dependencies.skillStageCatalog,
+          dependencies.symbiontCatalog,
+        )
+      : undefined;
+  const restoredProfileLayer =
+    restoredProfileCheckpoint?.symbiontPresentationStage?.formId === 'CHR-031'
+      ? projectChr031(restoredProfileCheckpoint)
+      : undefined;
   const capabilities = {
     executableWorkflowCommandIds,
     messageType: 'session.reconnect.capabilities',
@@ -4587,7 +4893,7 @@ function handleReconnectV2(
         reason: 'RECONNECT',
       },
       base,
-      layers: [],
+      layers: restoredProfileLayer === undefined ? [] : [restoredProfileLayer],
     },
     projectionRole,
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
@@ -4597,7 +4903,10 @@ function handleReconnectV2(
   sendCheckedV2(socket, capabilities, dependencies.vocabulary);
   sendCheckedV2(socket, snapshot, dependencies.vocabulary);
   adoptNavigationContext(connection, dependencies, nextContext);
-  connection.activeLayer = null;
+  connection.activeLayer =
+    restoredProfileLayer === undefined
+      ? null
+      : { dialogContext: null, presented: restoredProfileLayer };
   connection.executableWorkflowCommandIds = executableSet;
   connection.sessionEstablished = true;
 }

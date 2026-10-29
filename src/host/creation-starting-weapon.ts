@@ -49,6 +49,12 @@ import {
   type StartingWeaponReceipt,
 } from './creation-starting-weapon-contract.js';
 
+import {
+  initialWeaponProfileStage,
+  type WeaponProfileStage,
+} from './creation-weapon-profile-contract.js';
+import { rewriteWeaponProfilePresentation } from './creation-weapon-profile.js';
+
 type DecodedRequest = Parameters<typeof normalizeStartingWeaponEntryRequest>[0];
 export interface StartingWeaponEntryDependencies {
   readonly catalog: SymbiontCatalog;
@@ -57,6 +63,7 @@ export interface StartingWeaponEntryDependencies {
 export interface StartingWeaponCheckpointDependencies {
   readonly catalog: SymbiontCatalog;
   readonly weaponCatalog: StartingWeaponCatalog;
+  readonly allocateProfileRequestId?: () => string;
 }
 export interface StartingWeaponQualityRollDependencies extends StartingWeaponCheckpointDependencies {
   readonly sampleD20: () => number;
@@ -178,6 +185,7 @@ function commit(
     receipt: StartingWeaponReceipt;
     nextStageEnvelope: DurableCreationWizardCheckpoint['nextStageEnvelope'];
     random: boolean;
+    profileStage?: WeaponProfileStage;
   },
 ): DurableCreationWizardCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0)
@@ -196,6 +204,7 @@ function commit(
           payloadJson: JSON.stringify({
             ...payload,
             startingWeaponStage: value.stage,
+            ...(value.profileStage === undefined ? {} : { weaponProfileStage: value.profileStage }),
             receipt: value.receipt,
             nextStageEnvelope: value.nextStageEnvelope,
             randomReceiptIds: value.random
@@ -206,13 +215,22 @@ function commit(
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
       );
       // Final destinations remain unpublished, while the durable record keeps the signed route.
-      rewriteArmorPresentation(
-        database,
-        value.checkpoint,
-        'CHR-022',
-        value.receipt.revisions.projectionRevision,
-        value.receipt.result.draftRevision,
-      );
+      if (value.profileStage === undefined)
+        rewriteArmorPresentation(
+          database,
+          value.checkpoint,
+          'CHR-022',
+          value.receipt.revisions.projectionRevision,
+          value.receipt.result.draftRevision,
+        );
+      else
+        rewriteWeaponProfilePresentation(
+          database,
+          value.checkpoint,
+          value.profileStage.kind === 'FORMULA' ? 'CHR-023' : 'CHR-024',
+          value.receipt.revisions.projectionRevision,
+          value.receipt.result.draftRevision,
+        );
       return result;
     },
     () => {
@@ -406,19 +424,33 @@ export function commitStartingWeaponCheckpoint(
     );
     const nextFormId =
       current.checkpoint.raceAndMethodStage!.race!.value === 'PURE' ? 'CHR-024' : 'CHR-023';
+    const profileRequestId =
+      dependencies.allocateProfileRequestId === undefined
+        ? undefined
+        : freshArmorId(
+            current.checkpoint,
+            normalized.commandId,
+            receiptId,
+            dependencies.allocateProfileRequestId,
+          );
     const receipt = startingWeaponCheckpointReceipt(
       facts(current.checkpoint, receiptId),
       normalized,
       current.roll.receipt,
       nextFormId,
+      profileRequestId,
     );
     const nextStageEnvelope = nextSymbiontEnvelope(nextFormId, normalized.payload.characterDraftId);
+    const stage: StartingWeaponStage = {
+      ...current.stage,
+      checkpointRecordOrNull: { request: normalized, receipt, nextStageEnvelope },
+    };
     return {
       checkpoint: current.checkpoint,
-      stage: {
-        ...current.stage,
-        checkpointRecordOrNull: { request: normalized, receipt, nextStageEnvelope },
-      },
+      stage,
+      ...(profileRequestId === undefined
+        ? {}
+        : { profileStage: initialWeaponProfileStage(stage, profileRequestId) }),
       receipt,
       nextStageEnvelope,
       random: false,
@@ -546,6 +578,7 @@ export function validateStartingWeaponStageHistory(
       record.request,
       roll.receipt,
       nextFormId,
+      record.receipt.result.weaponProfileRequestId,
     );
     const envelope = nextSymbiontEnvelope(nextFormId, record.request.payload.characterDraftId);
     if (

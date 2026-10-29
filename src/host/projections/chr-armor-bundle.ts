@@ -96,7 +96,7 @@ export function projectChr021(
       qualityRollReceiptIdOrNull: rollRecord?.receipt.receiptId ?? null,
       bundleCheckpointReceiptIdOrNull: checkpointRecord?.receipt.receiptId ?? null,
       weaponEntryMode,
-      nextFormId: checkpoint.nextStageEnvelope.formId,
+      nextFormId: stage.checkpointRecordOrNull === null ? 'CHR-021' : 'CHR-022',
       armorPieces: pieces.map((piece) => ({
         itemId: piece.itemId,
         name: piece.name,

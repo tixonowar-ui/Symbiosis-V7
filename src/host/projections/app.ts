@@ -1,3 +1,4 @@
+import { assertWeaponProfileScreenContracts } from './chr-weapon-profile.js';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, posix, relative, resolve, sep } from 'node:path';
@@ -263,6 +264,9 @@ export interface AppNavigationAction {
     | 'CHR-019'
     | typeof CHR_021_FORM_ID
     | typeof CHR_022_FORM_ID
+    | 'CHR-023'
+    | 'CHR-024'
+    | 'CHR-031'
     | typeof CHR_042_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -280,6 +284,33 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
   const forms = record(source, 'forms-by-id.json');
   const result = new Map<ActionKey, AppNavigationAction>();
   const expectedActions = [
+    [
+      'CHR-017',
+      'CHR-017::CTA::004',
+      'raceChoice=PURE; composition intentionally empty and checkpointed',
+    ],
+    ['CHR-017', 'CHR-017::CTA::006', 'no irreversible symbiont substep pending'],
+    [
+      'CHR-022',
+      'CHR-022::CTA::001',
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT weapon quality receipt/selection committed; raceChoice=UNITED|FREE; formula-capable profile',
+    ],
+    [
+      'CHR-022',
+      'CHR-022::CTA::002',
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT weapon quality receipt/selection committed; raceChoice=PURE; canonical fixed profile',
+    ],
+    [
+      'CHR-023',
+      'CHR-023::CTA::002',
+      'requestStatus!=SUBMITTED; no partial validated profile committed',
+    ],
+    ['CHR-024', 'CHR-024::CTA::002', 'canonical profile unchanged'],
+    [
+      'CHR-031',
+      'CHR-031::CTA::001',
+      'returnFormId(server-signed)=CHR-023; no partial profile exists',
+    ],
     [
       'APP-001',
       APP_001_PLAYER_ACTION_KEY,
@@ -515,6 +546,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertManualSymbiontScreenContracts(forms, assertScreenContract);
   assertArmorBundleScreenContracts(forms, assertScreenContract);
   assertStartingWeaponScreenContracts(forms, assertScreenContract);
+  assertWeaponProfileScreenContracts(forms, assertScreenContract);
   return result;
 }
 

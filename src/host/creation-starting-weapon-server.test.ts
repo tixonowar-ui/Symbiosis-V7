@@ -28,6 +28,7 @@ import type {
   ProtocolVocabulary,
   RevisionVector,
   WireV2Vocabulary,
+  WorkflowCommandRequestMessage,
 } from '@shared/index.js';
 
 import { openPersistenceDatabase, type RevisionImpact } from '../persistence/index.js';
@@ -55,6 +56,7 @@ const ALL_COMMANDS = [
   'UI-CMD-CHAR-WIZARD-CHECKPOINT',
   'UI-CMD-CHAR-CREATION-SET-DECIDE',
   'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',
 ] as const;
 type WorkflowRequest = Extract<ClientToHostMessage, { readonly commandKind: 'workflow-command' }>;
 type Snapshot = Extract<HostToClientV2Message, { readonly messageType: 'projection.snapshot' }>;
@@ -251,7 +253,12 @@ async function refusal(host: WeaponHost, request: WorkflowRequest): Promise<stri
     throw new Error(`expected refusal: ${JSON.stringify(result)}`);
   return result.refusal.code;
 }
-function request(host: WeaponHost, id: string, payload: JsonObject, roll = false): WorkflowRequest {
+function request(
+  host: WeaponHost,
+  id: string,
+  payload: JsonObject,
+  roll = false,
+): WorkflowCommandRequestMessage {
   const checkpoint = current(host);
   return {
     protocolVersion: 1,
@@ -378,7 +385,7 @@ describe('CHR-022 real host WS journey', () => {
             ...roll,
             commandId: `${prefix}-${suffix}`,
             payload: { ...roll.payload, weaponTypeId, weaponVariant },
-          } as WorkflowRequest),
+          }),
         ).toBe('GUARD_REJECTED');
       }
       expect(current(host).localCharacter).toEqual(pending.localCharacter);
@@ -409,7 +416,7 @@ describe('CHR-022 real host WS journey', () => {
         await refusal(host, {
           ...roll,
           payload: { ...roll.payload, weaponVariant: 'ONE_HAND' },
-        } as WorkflowRequest),
+        }),
       ).toBe('IDEMPOTENCY_CONFLICT');
 
       const returned = await action(
@@ -473,24 +480,60 @@ describe('CHR-022 real host WS journey', () => {
         weaponQualityRollReceiptId: weaponReceiptId,
       });
       const [checkpointResult, completed] = await command(restarted, checkpointRequest);
-      expect(completed.presentation.base.formId).toBe('CHR-022');
-      expect(completed.presentation.base.availableActionKeys).toEqual([]);
+      expect(completed.presentation.base.formId).toBe('CHR-023');
+      expect(completed.presentation.base.availableActionKeys).toContain('CHR-023::CTA::002');
       expect(completed.presentation.base.roleFilteredPayload).toMatchObject({
         nextFormId: 'CHR-023',
-        weaponQualityRollReceiptIdOrNull: weaponReceiptId,
+        weaponQualityRollReceiptId: weaponReceiptId,
       });
       const [checkpointReplay] = await command(restarted, checkpointRequest);
       expect(checkpointReplay.messageType).toBe('command.replay');
       expect(checkpointReplay.receipt).toEqual(checkpointResult.receipt);
       const finalSnapshot = await reconnect(restarted, `${prefix}-final-refresh`);
-      expect(finalSnapshot.presentation.base.formId).toBe('CHR-022');
-      expect(finalSnapshot.presentation.base.availableActionKeys).toEqual([]);
+      expect(finalSnapshot.presentation.base.formId).toBe('CHR-023');
+      expect(finalSnapshot.presentation.base.availableActionKeys).toContain('CHR-023::CTA::002');
       expect(current(restarted).armorBundleStage).toEqual(armor);
-      expect(restarted.allocations()).toBe(0);
+      expect(restarted.allocations()).toBe(1);
       expect(restarted.sampleCalls()).toBe(0);
       expect(JSON.stringify(finalSnapshot.presentation)).not.toMatch(
         /CORE-\d|F-WPN-|Источник|availabilityTrace|randomSequenceId|finalQualityTier/,
       );
+      // Item Registry TWO_HAND 012: L=1,Lw=10,Ls=4 and both R4=2 give S=18,D=15.
+      const profileRequest: WorkflowRequest = {
+        ...request(restarted, `${prefix}-profile-submit`, {
+          sourceFormId: 'CHR-023',
+          variant: 'WEAPON_PROFILE_SUBMIT',
+          requestId: current(restarted).weaponProfileStage!.requestId,
+          weaponTypeId: 'ITM-WPN-012',
+          weaponVariant: 'TWO_HAND',
+          inputs: {
+            commonWitness: { L: 1, Lw: 10, Ls: 4 },
+            independentDice: { R4_RS: 2, R4_RD: 2 },
+            formulaOutputs: { Rs: 18, Rd: 15 },
+          },
+        }),
+        workflowCommandId: 'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',
+      };
+      const [profileResult, submitted] = await command(restarted, profileRequest);
+      expect(submitted.presentation.base.availableActionKeys).toEqual([]);
+      expect(profileResult.receipt.result).toMatchObject({
+        outcome: 'SUBMITTED',
+        approvalStatus: 'PENDING_GM',
+        nextFormId: 'CHR-038',
+      });
+      const committed = current(restarted);
+      const [profileReplay] = await command(restarted, profileRequest);
+      expect(profileReplay.messageType).toBe('command.replay');
+      expect(profileReplay.receipt).toEqual(profileResult.receipt);
+      expect(
+        await refusal(restarted, {
+          ...profileRequest,
+          commandId: `${prefix}-profile-stale`,
+        }),
+      ).toBe('STALE_REVISION');
+      expect(current(restarted).localCharacter).toEqual(committed.localCharacter);
+      expect(current(restarted).checkpoint).toEqual(committed.checkpoint);
+      expect(restarted.sampleCalls()).toBe(0);
     },
   );
 });
