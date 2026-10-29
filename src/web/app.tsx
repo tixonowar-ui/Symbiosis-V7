@@ -1,4 +1,9 @@
 import { CreationValidationFields } from './forms/chr/creation-validation-fields.js';
+import {
+  CampaignCreationFields,
+  type CampaignDraftClientState,
+} from './forms/cmp/campaign-create-fields.js';
+import { isCampaignCreationForm } from './forms/cmp/campaign-create.js';
 import { PostSaveFields, downloadPostSaveFile } from './forms/chr/post-save-fields.js';
 import { isPostSaveForm } from './forms/chr/post-save.js';
 import { CreationCorrectionFields } from './forms/chr/creation-correction-fields.js';
@@ -220,6 +225,7 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     snapshot.formId === 'APP-004' ||
     (snapshot.formId === 'CHR-001' && Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
     isPostSaveForm(snapshot.formId) ||
+    isCampaignCreationForm(snapshot.formId) ||
     snapshot.formId === 'CHR-032' ||
     snapshot.formId === 'CHR-025' ||
     Object.hasOwn(snapshot.projection, 'correctionContext')
@@ -2193,6 +2199,7 @@ export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
+  const [campaignDraft, setCampaignDraft] = useState<CampaignDraftClientState | null>(null);
   const [creationChoiceDraft, setCreationChoiceDraft] =
     useState<CharacterCreationChoiceDraft | null>(null);
   const [creationRollDraft, setCreationRollDraft] = useState<CharacterCreationRollDraft | null>(
@@ -2248,6 +2255,7 @@ export function App(): ReactElement {
               : 'Подтверждённый checkpoint восстановлен.',
           );
       },
+      setCampaignDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2316,6 +2324,21 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive || layers.length > 0}>
             <legend>AtlasForm {snapshot.formId}</legend>
+            <CampaignCreationFields
+              key={`${snapshot.formId}:${typeof snapshot.projection['campaignDraftId'] === 'string' ? snapshot.projection['campaignDraftId'] : ''}`}
+              formId={snapshot.formId}
+              projection={snapshot.projection}
+              state={campaignDraft}
+              onChange={(edit) => {
+                const result = connectionRef.current?.replaceCampaignDraft(edit);
+                setActionNotice(
+                  result?.ok === true
+                    ? null
+                    : 'Черновик кампании не отправлен: соединение не готово.',
+                );
+              }}
+              onBusy={(pending) => connectionRef.current?.setCampaignInputPending(pending)}
+            />
             <PostSaveFields
               formId={snapshot.formId}
               projection={snapshot.projection}
@@ -2740,7 +2763,8 @@ export function App(): ReactElement {
                 snapshot.formId === 'APP-004' ||
                 (snapshot.formId === 'CHR-001' &&
                   Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
-                isPostSaveForm(snapshot.formId)
+                isPostSaveForm(snapshot.formId) ||
+                isCampaignCreationForm(snapshot.formId)
               }
               availableActionKeys={
                 correction

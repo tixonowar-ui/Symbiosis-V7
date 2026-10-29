@@ -1,4 +1,6 @@
 import { wireCodecPrimitives } from './wire-codec.js';
+import { redactProtocolInputRefusal } from './wire-codec.js';
+import { campaignClientValue, campaignHostValue } from './campaign-creation-codec.js';
 import type { DecodeResult, EncodeResult, RevisionVector } from './wire-protocol.js';
 import type {
   AssignedRouteBinding,
@@ -413,6 +415,8 @@ const identityDraftRefusalMessage = (value: unknown): IdentityDraftRefusalV3Mess
 
 const clientValue = (value: unknown): ClientToHostV3Message => {
   const object = base(value);
+  if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('campaign.'))
+    return campaignClientValue(value);
   if (object['messageType'] === 'character.identity-draft.replace') {
     return identityDraftReplace(value);
   }
@@ -421,6 +425,8 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
 
 const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3Message => {
   const object = base(value);
+  if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('campaign.'))
+    return campaignHostValue(value, vocabulary);
   if (object['messageType'] === 'character.identity-draft.result') {
     return identityDraftResult(value, vocabulary);
   }
@@ -433,7 +439,10 @@ const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3
 export const decodeClientMessageV3 = (
   source: string,
   _vocabulary: WireV3Vocabulary,
-): DecodeResult<ClientToHostV3Message> => parse(source, clientValue);
+): DecodeResult<ClientToHostV3Message> => {
+  const result = parse(source, clientValue);
+  return result.ok ? result : { ok: false, refusal: redactProtocolInputRefusal(result.refusal) };
+};
 
 export const decodeHostMessageV3 = (
   source: string,
@@ -443,7 +452,10 @@ export const decodeHostMessageV3 = (
 export const encodeClientMessageV3 = (
   value: ClientToHostV3Message,
   _vocabulary: WireV3Vocabulary,
-): EncodeResult => encode(value, clientValue);
+): EncodeResult => {
+  const result = encode(value, clientValue);
+  return result.ok ? result : { ok: false, refusal: redactProtocolInputRefusal(result.refusal) };
+};
 
 export const encodeHostMessageV3 = (
   value: HostToClientV3Message,

@@ -56,6 +56,17 @@ export interface CampaignCheckpoint extends RevisionTriple {
   snapshotJson: string;
 }
 
+export interface CreatedPausedCampaign extends RevisionTriple {
+  campaignId: string;
+  lifecycleState: 'PAUSED';
+  payloadJson: string;
+}
+
+export type CampaignCheckpointCreator = (
+  lifecycleState: 'PAUSED',
+  payloadJson: string,
+) => CreatedPausedCampaign;
+
 type RevisionRow = RevisionTriple;
 
 interface LocalCharacterRow extends RevisionRow {
@@ -836,6 +847,118 @@ const validateCheckpointAdvance = (
       `campaign ${JSON.stringify(current.campaignId)} stateRevision and snapshot change disagree`,
     );
   }
+};
+
+/** Creation is a zero-copy PAUSED baseline, not an update or a lifecycle transition shortcut. */
+export const commitNewCampaignCheckpoint = <T>(
+  database: Database.Database,
+  campaignId: string,
+  write: (
+    create: CampaignCheckpointCreator,
+  ) => T & (T extends PromiseLike<unknown> ? never : unknown),
+  validate?: (result: T, checkpoint: CampaignCheckpoint) => void,
+): { result: T; checkpoint: CampaignCheckpoint } => {
+  if (database.inTransaction)
+    throw new Error('new campaign checkpoint requires a top-level transaction');
+  if (typeof campaignId !== 'string' || campaignId.length === 0)
+    throw new TypeError('new campaign checkpoint requires a non-empty campaignId');
+  if (
+    Object.prototype.toString.call(write) === '[object AsyncFunction]' ||
+    Object.prototype.toString.call(validate) === '[object AsyncFunction]'
+  )
+    throw new TypeError('new campaign checkpoint callbacks must be synchronous');
+  const label = `campaign ${JSON.stringify(campaignId)}`;
+  return database
+    .transaction(() => {
+      if (
+        readCheckpointRow(database, campaignId) !== undefined ||
+        database.prepare('SELECT 1 FROM campaign WHERE campaign_id = ?').get(campaignId) !==
+          undefined
+      )
+        throw new Error(`${label} already exists; cannot create first checkpoint`);
+      let creatorActive = true;
+      let creatorFailure: { cause: unknown } | undefined;
+      let expected: CampaignCheckpoint | undefined;
+      const failCreator = (cause: unknown): never => {
+        creatorFailure ??= { cause };
+        throw cause;
+      };
+      const verifyCreated = (): CampaignCheckpoint => {
+        if (expected === undefined)
+          throw new Error(`${label} was not created by checkpoint callback`);
+        const current = currentCampaignCheckpoint(database, campaignId);
+        if (REVISION_NAMES.some((name) => current[name] !== 0))
+          throw new Error(`${label} initial revisions must be 0, 0, 0`);
+        if (!checkpointsMatch(expected, current))
+          throw new Error(`${label} changed after creation or contains campaign copies`);
+        return current;
+      };
+      const assertCreatorSucceeded = (): void => {
+        if (creatorFailure !== undefined) throw creatorFailure.cause;
+      };
+      try {
+        const result = write((lifecycleState, payloadJson) => {
+          if (!creatorActive)
+            return failCreator(new Error('campaign checkpoint creator is no longer active'));
+          creatorActive = false;
+          try {
+            if (lifecycleState !== 'PAUSED')
+              throw new Error(`${label} first checkpoint requires PAUSED lifecycle state`);
+            const payload = localCharacterPayloadJson(payloadJson, label);
+            const created: CreatedPausedCampaign = {
+              campaignId,
+              lifecycleState,
+              payloadJson: payload,
+              stateRevision: 0,
+              projectionRevision: 0,
+              actorVisibilityRevision: 0,
+            };
+            expected = {
+              campaignId,
+              snapshotJson: JSON.stringify({
+                campaign: { campaignId, lifecycleState, payloadJson: payload },
+                campaignCharacterCopies: [],
+              }),
+              stateRevision: 0,
+              projectionRevision: 0,
+              actorVisibilityRevision: 0,
+            };
+            database
+              .prepare(
+                'INSERT INTO campaign (campaign_id, lifecycle_state, payload_json) VALUES (?, ?, ?)',
+              )
+              .run(campaignId, lifecycleState, payload);
+            verifyCreated();
+            return created;
+          } catch (cause) {
+            return failCreator(cause);
+          }
+        });
+        assertCreatorSucceeded();
+        if (isPromiseLike(result))
+          throw new TypeError('new campaign checkpoint callbacks must be synchronous');
+        const checkpoint = verifyCreated();
+        const inserted = database
+          .prepare<CampaignCheckpoint>(
+            `INSERT INTO campaign_checkpoint
+         (campaign_id, snapshot_json, stateRevision, projectionRevision, actorVisibilityRevision)
+         VALUES (@campaignId, @snapshotJson, @stateRevision, @projectionRevision, @actorVisibilityRevision)`,
+          )
+          .run(checkpoint);
+        if (inserted.changes !== 1) throw new Error(`${label} first checkpoint was not inserted`);
+        if (isPromiseLike(validate?.(result, { ...checkpoint })))
+          throw new TypeError('new campaign checkpoint callbacks must be synchronous');
+        assertCreatorSucceeded();
+        const current = verifyCreated();
+        const stored = readCheckpointRow(database, campaignId);
+        if (stored === undefined || !checkpointsMatch(checkpointFromRow(stored), current))
+          throw new Error(`${label} first checkpoint does not match its created state`);
+        return { result, checkpoint: current };
+      } finally {
+        creatorActive = false;
+      }
+    })
+    .immediate();
 };
 
 export const commitCampaignCheckpoint = <T>(

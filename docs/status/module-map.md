@@ -3,11 +3,12 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-30`, реализация #156 поверх слитого PR #175 (#155).
-- Подтверждённая база: 114 файлов / 2123 Vitest-теста и 26 Chrome E2E.
-- Для #156 полный `verify` прошёл: 121 файл / 2198 Vitest-тестов;
-  production-сборка и все 30 Chrome E2E прошли без retry. Свежий независимый
-  прогон окончательного commit и CI фиксируются в PR; подробности — в [handoff](handoff.md).
+- Снимок: `2026-10-30`, реализация #170 поверх слитого PR #176 (#156).
+- Подтверждённая база: 121 файл / 2198 Vitest-тестов и 30 Chrome E2E.
+- Текущий срез добавляет local GM launch и CMP-001–006 до PAUSED при нуле PC.
+  Полный `verify` прошёл: 132 файла / 2464 Vitest-теста; все 34 Chrome E2E
+  прошли без retry. Независимый прогон окончательного commit и CI фиксируются в PR;
+  подробности — в [handoff](handoff.md).
 - Артефакты и конвейер не менялись. Воспроизводимость проверяется отдельным
   CI-гейтом на чистом checkout.
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
@@ -181,21 +182,26 @@ Post-save scope фиксирует конкретный вход; receipt cursor
 атомарно и закрывается следующим подтверждённым checkpoint. GM export
 поддержан через отдельный доверенный архивный fixture; CMP-012 и campaign
 runtime этим не реализованы.
-[ADR 0063](../adr/0063-local-character-recovery-and-export.md) пока предложен.
-Следующая очередь — #170 → #171 → #172 → #173 → #174 → #113. Для #113
+[ADR 0063](../adr/0063-local-character-recovery-and-export.md) принят в PR #176.
+Срез #170 реализует APP-011 и CMP-001–006: отдельный durable GM context,
+черновик, write-only секрет, actual bind/baseline preflight и атомарный
+CREATE. QR реально декодируется; восстановление сохраняет campaign/receipt.
+Admission, Start, игровой clock и сцены ещё не реализованы.
+
+После #170 очередь — #171 → #172 → #173 → #174 → #113. Для #113
 исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                                        | Веха |
 | ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                    | M4   |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity/campaign drafts                          | M4   |
 | `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
 | `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0006`, включая локальный post-save aggregate                              | M2   |
-| `src/host`                   | **частично** | создание до FINAL, recovery, кэш, metadata, local variant/export и GM archive fixture          | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004/009/010, CHR-001–026/028/031/032/036–042; только реализованные пути            | M4   |
-| `src/web`                    | **частично** | создание и локальный post-save; 30 production E2E-сценариев в наборе                           | M5   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0007`, включая локальный post-save и paused campaign                      | M2   |
+| `src/host`                   | **частично** | character FINAL/post-save, GM launch, durable campaign draft и CREATE PAUSED                   | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004/009/010/011, CHR-001–026/028/031/032/036–042, CMP-001–006                      | M4   |
+| `src/web`                    | **частично** | character/post-save и GM campaign creation; production E2E с настоящим host                    | M5   |
 | `src/web/renderer`           | **частично** | добавлены CHR-026/039/040 и APP-009/010; незарегистрированные формы fail-closed                | M5   |
 | `src/web/forms`              | **частично** | character wizard, финальный лист, recovery, библиотека, локальные варианты и экспорт           | M6   |
 

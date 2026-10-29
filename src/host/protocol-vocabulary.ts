@@ -22,6 +22,13 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'APP-011',
+  'CMP-001',
+  'CMP-002',
+  'CMP-003',
+  'CMP-004',
+  'CMP-005',
+  'CMP-006',
   'APP-001',
   'APP-002',
   'APP-004',
@@ -263,6 +270,19 @@ export async function loadProtocolVocabulary(
           bindings[0]?.parameterIndex === 0 &&
           bindings[0].source === 'inherited' &&
           bindings[0].value.length > 0
+        );
+      }
+      if (/^CMP-00[1-6]$/u.test(formId)) {
+        const binding = bindings[0];
+        return (
+          bindings.length === 1 &&
+          binding?.parameterIndex === 0 &&
+          binding.source === 'inherited' &&
+          (formId === 'CMP-006'
+            ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(binding.value)
+            : /^draft:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
+                binding.value,
+              ))
         );
       }
       return bindings.length === 0;

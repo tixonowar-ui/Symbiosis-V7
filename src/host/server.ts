@@ -60,6 +60,13 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import {
+  createCampaignCreationRuntime,
+  type CampaignConnection,
+  type CampaignHostMessage,
+} from './campaign-creation.js';
+import { createCampaignBindManager } from './campaign-bind.js';
+import { isTrustedLocalMasterConnection } from './local-master-trust.js';
+import {
   postSaveRevisions,
   postSaveReceiptView,
   openPlayerPostSave,
@@ -109,6 +116,7 @@ import {
   encodeHostMessage,
   encodeHostMessageV2,
   encodeHostMessageV3,
+  redactProtocolInputRefusal,
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_V2_VERSION,
   WIRE_PROTOCOL_V3_VERSION,
@@ -118,6 +126,7 @@ import type {
   AddressableRouteRefusalV2Message,
   ClientToHostMessage,
   ClientToHostV2Message,
+  ClientToHostV3Message,
   CommandRefusalMessage,
   CommandReceipt,
   CommandReplayMessage,
@@ -511,6 +520,7 @@ type AddressableNavigationJournal = Map<
   }
 >;
 interface ConnectionNavigation {
+  readonly campaign: CampaignConnection;
   activeLayer: ActiveCreationLayer | null;
   current: ConfirmedNavigationContext | null;
   executableWorkflowCommandIds: ReadonlySet<WorkflowCommandId>;
@@ -522,6 +532,7 @@ interface LibraryRevisionRuntime {
   readonly read: () => number;
 }
 interface NavigationDependencies {
+  readonly campaignCreation: ReturnType<typeof createCampaignCreationRuntime>;
   readonly archivedCharacterExport?: ArchivedCharacterExportDependencies;
   readonly localCharacterExportBaseline: LocalCharacterExportBaseline;
   readonly advanceRevisions: HostServerConfig['advanceRevisions'];
@@ -946,6 +957,8 @@ function currentNavigationRevisions(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
 ): RevisionVector {
+  if (connection.campaign.gmLocalContextId !== null)
+    return dependencies.campaignCreation.currentVector(connection.campaign);
   const current = connection.current;
   if (current?.postSaveScopeId !== undefined)
     return postSaveRevisions(postSavePresentationHead(current, dependencies));
@@ -3664,7 +3677,7 @@ function sendProtocolRefusal(
     {
       messageType: 'protocol.refusal',
       protocolVersion: WIRE_PROTOCOL_VERSION,
-      refusal,
+      refusal: redactProtocolInputRefusal(refusal),
       relatedCommandId: null,
     },
     vocabulary,
@@ -6066,8 +6079,10 @@ function handleReconnectV2(
   );
   const executableWorkflowCommandIds = [
     ...new Set(
-      message.supportedWorkflowCommandIds.filter((commandId): commandId is WorkflowCommandId =>
-        dependencies.vocabulary.isWorkflowCommandId(commandId),
+      message.supportedWorkflowCommandIds.filter(
+        (commandId): commandId is WorkflowCommandId =>
+          commandId !== 'UI-CMD-CAMPAIGN-CREATE' &&
+          dependencies.vocabulary.isWorkflowCommandId(commandId),
       ),
     ),
   ];
@@ -6273,7 +6288,9 @@ function handleReconnectV2(
     revisions = shellRevisions;
   } else {
     base = {
-      availableActionKeys: APP_001_ACTION_KEYS,
+      availableActionKeys: APP_001_ACTION_KEYS.filter(
+        (key) => key !== 'APP-001::CTA::002' || connection.campaign.trusted(),
+      ),
       formId: 'APP-001',
       formType: 'screen',
       roleFilteredPayload: projectApp001Bootstrap(dependencies.catalog),
@@ -6396,7 +6413,7 @@ function handleClientMessageV2(
 
 function handleClientMessageV3(
   socket: WebSocket,
-  message: IdentityDraftReplaceV3Message,
+  message: Extract<ClientToHostV3Message, { messageType: 'character.identity-draft.replace' }>,
   dependencies: NavigationDependencies,
   connection: ConnectionNavigation,
 ): void {
@@ -6415,14 +6432,14 @@ function messageProtocolVersion(source: string): unknown {
   return undefined;
 }
 
-function handleFrame(
+async function handleFrame(
   socket: WebSocket,
   data: RawData,
   isBinary: boolean,
   dependencies: NavigationDependencies,
   commandJournal: CommandJournal,
   connection: ConnectionNavigation,
-): void {
+): Promise<void> {
   if (isBinary) {
     sendProtocolRefusal(socket, dependencies.vocabulary, {
       actualType: 'object',
@@ -6439,6 +6456,9 @@ function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
+    if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
+    if (decoded.value.messageType !== 'character.identity-draft.replace')
+      throw new Error('Unhandled campaign protocol');
     handleClientMessageV3(socket, decoded.value, dependencies, connection);
     return;
   }
@@ -6448,6 +6468,7 @@ function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
+    if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
     handleClientMessageV2(socket, decoded.value, dependencies, commandJournal, connection);
     return;
   }
@@ -6456,7 +6477,85 @@ function handleFrame(
     sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
     return;
   }
+  if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
   handleClientMessage(socket, decoded.value, dependencies, commandJournal, connection);
+}
+
+async function handleCampaignMessage(
+  socket: WebSocket,
+  message: ClientToHostMessage | ClientToHostV2Message | ClientToHostV3Message,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+): Promise<boolean> {
+  const launch =
+    message.messageType === 'navigation.form-action' &&
+    message.sourceFormId === 'APP-001' &&
+    message.actionKey === 'APP-001::CTA::002';
+  const command =
+    message.messageType === 'command.request' &&
+    message.commandKind === 'workflow-command' &&
+    message.workflowCommandId === 'UI-CMD-CAMPAIGN-CREATE';
+  if (
+    connection.campaign.gmLocalContextId === null &&
+    !message.messageType.startsWith('campaign.') &&
+    !launch &&
+    !command
+  )
+    return false;
+  const shellBase = (): PresentedBaseForm => ({
+    availableActionKeys: APP_001_ACTION_KEYS.filter(
+      (key) => key !== 'APP-001::CTA::002' || connection.campaign.trusted(),
+    ),
+    formId: 'APP-001',
+    formType: 'screen',
+    routeTemplate: '/',
+    routeBindings: [],
+    roleFilteredPayload: projectApp001Bootstrap(dependencies.catalog),
+  });
+  return dependencies.campaignCreation.handle(
+    message,
+    connection.campaign,
+    {
+      get formId() {
+        return connection.current?.formId ?? null;
+      },
+      get revisions() {
+        return checkedRevisions(dependencies.readRevisions());
+      },
+      get ready() {
+        return connection.sessionEstablished && dependencies.catalog.app001.bootState === 'READY';
+      },
+      advance: () =>
+        advanceProjection(
+          checkedRevisions(dependencies.readRevisions()),
+          dependencies.advanceRevisions,
+        ),
+      base: shellBase,
+      enter: () => {
+        connection.current = null;
+        connection.activeLayer = null;
+        connection.sessionEstablished = true;
+        connection.executableWorkflowCommandIds = new Set();
+      },
+      exit: () => {
+        connection.current = {
+          contextId: null,
+          deviceId: loadDeviceId(dependencies.database),
+          entityLocalCharacterId: null,
+          entityRevisions: null,
+          formId: 'APP-001',
+          identityDraftScope: null,
+        };
+        connection.activeLayer = null;
+        connection.executableWorkflowCommandIds = new Set();
+      },
+    },
+    (result: CampaignHostMessage) => {
+      if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+      else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+      else sendChecked(socket, result, dependencies.vocabulary);
+    },
+  );
 }
 
 function rawDataText(data: RawData): string {
@@ -6587,8 +6686,24 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   );
 
   const app = Fastify({ logger: false });
+  const readShellListener = (): { address: string; port: number } | null => {
+    const listener = app.server.address();
+    return app.server.listening && listener !== null && typeof listener !== 'string'
+      ? { address: listener.address, port: listener.port }
+      : null;
+  };
+  const campaignBind = createCampaignBindManager({ readShellListener });
+  app.addHook('onClose', async () => {
+    await campaignBind.close();
+  });
   const commandJournal: CommandJournal = new Map();
   const dependencies: NavigationDependencies = {
+    campaignCreation: createCampaignCreationRuntime({
+      database: config.database,
+      projectRoot,
+      baseline: localCharacterExportBaseline,
+      bind: campaignBind,
+    }),
     localCharacterExportBaseline,
     ...(config.readArchivedCharacterExportAuthority === undefined
       ? {}
@@ -6627,20 +6742,36 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   };
   await app.register(websocket);
 
-  app.get('/state', { websocket: true }, (socket) => {
+  app.get('/state', { websocket: true }, (socket, request) => {
     const connection: ConnectionNavigation = {
+      campaign: {
+        gmLocalContextId: null,
+        executableCreate: false,
+        trusted: () =>
+          request.raw.socket !== undefined &&
+          !request.raw.socket.destroyed &&
+          isTrustedLocalMasterConnection({
+            remoteAddress: request.raw.socket.remoteAddress,
+            localAddress: request.raw.socket.localAddress,
+            origin: request.headers.origin,
+            listener: readShellListener(),
+          }),
+      },
       activeLayer: null,
       current: null,
       executableWorkflowCommandIds: new Set(),
       sessionEstablished: false,
     };
+    let frames = Promise.resolve();
     socket.on('message', (data: RawData, isBinary: boolean) => {
-      try {
-        handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
-      } catch (error: unknown) {
-        config.onFrameError(error);
-        socket.close(1011, 'host frame processing failed');
-      }
+      frames = frames
+        .then(async () => {
+          await handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
+        })
+        .catch((error: unknown) => {
+          config.onFrameError(error);
+          socket.close(1011, 'host frame processing failed');
+        });
     });
   });
 

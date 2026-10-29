@@ -70,6 +70,12 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CHR-026',
   'CHR-039',
   'CHR-040',
+  'CMP-001',
+  'CMP-002',
+  'CMP-003',
+  'CMP-004',
+  'CMP-005',
+  'CMP-006',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -217,7 +223,7 @@ describe('atlas implemented-form renderer', () => {
     }
 
     // APP has nine screens/two dialogs; CHR includes the three new post-save screens.
-    expect(screens).toBe(43);
+    expect(screens).toBe(49);
     expect(dialogs).toBe(4);
   });
 

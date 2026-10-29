@@ -1,4 +1,28 @@
 import {
+  CAMPAIGN_CREATE_ACTION_KEY,
+  GM_CONTEXT_STORAGE_KEY,
+  campaignCreateDestinationMatches,
+  campaignDraftResultMatches,
+  campaignEditFromProjection,
+  campaignEditIsSendable,
+  decodeCampaignCreateReceipt,
+  decodeCampaignProjection,
+  expectedCampaignActions,
+  isCampaignCreationForm,
+  isCampaignEditableForm,
+  sameCampaignRevisions,
+  type CampaignEdit,
+} from './forms/cmp/campaign-create.js';
+import type { CampaignDraftClientState } from './forms/cmp/campaign-create-fields.js';
+import {
+  CAMPAIGN_CREATE_COMMAND_ID,
+  type CampaignCreateRequest,
+  type CampaignCreateResult,
+  type CampaignDraftReplaceV3Message,
+  type CampaignDraftRefusal,
+  type CampaignLocalContextResumeV3Message,
+} from '@shared/campaign-creation.js';
+import {
   decodePostSaveProjection,
   expectedPostSaveActions,
   isPostSaveForm,
@@ -381,6 +405,17 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
         (formId === 'CHR-014' ? isPublicSkillId(selected.value) : isSpeciesKey(selected.value))
       );
     }
+    if (isCampaignCreationForm(formId) && formId !== 'APP-011') {
+      const binding = bindings[0];
+      return (
+        bindings.length === 1 &&
+        binding?.parameterIndex === 0 &&
+        binding.source === 'inherited' &&
+        (formId === 'CMP-006'
+          ? UUID_PATTERN.test(binding.value)
+          : binding.value.startsWith('draft:') && UUID_PATTERN.test(binding.value.slice(6)))
+      );
+    }
     if (formId !== 'CHR-001' && !INHERITED_CHARACTER_WIZARD_FORM_IDS.has(formId)) {
       return bindings.length === 0;
     }
@@ -394,6 +429,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    value === CAMPAIGN_CREATE_COMMAND_ID ||
     value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID ||
     value === SET_DECIDE_WORKFLOW_COMMAND_ID ||
     value === ROLL_COMMIT_WORKFLOW_COMMAND_ID ||
@@ -1756,6 +1792,8 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  replaceCampaignDraft(edit: CampaignEdit): FormActionRequestResult;
+  setCampaignInputPending(pending: boolean): void;
   submitPostSave(
     variant: PostSavePayload['variant'],
     values?: PostSaveMetadata,
@@ -4019,15 +4057,61 @@ function decodeConfirmedSnapshot(
   const expectedRole =
     base.formId === 'APP-001'
       ? null
-      : base.formId === 'APP-010' &&
-          base.roleFilteredPayload['ownerContext'] === 'GM_ARCHIVE_EXPORT'
+      : isCampaignCreationForm(base.formId)
         ? 'gm'
-        : 'player';
+        : base.formId === 'APP-010' &&
+            base.roleFilteredPayload['ownerContext'] === 'GM_ARCHIVE_EXPORT'
+          ? 'gm'
+          : 'player';
   if (message.projectionRole !== expectedRole) {
     return unrecognized('$.projectionRole', message.projectionRole);
   }
+  if (
+    message.projectionRole !== 'gm' &&
+    executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID)
+  )
+    return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (isPostSaveForm(base.formId)) {
+  if (isCampaignCreationForm(base.formId)) {
+    projection = decodeCampaignProjection(
+      base.roleFilteredPayload,
+      '$.presentation.base.roleFilteredPayload',
+      base.formId,
+    );
+    if (projection.ok) {
+      const p = projection.value;
+      const invalidRevisions =
+        base.formId === 'APP-011'
+          ? message.revisions.stateRevision !== 0 || message.revisions.actorVisibilityRevision !== 0
+          : base.formId === 'CMP-006'
+            ? message.revisions.stateRevision !== 0 ||
+              message.revisions.projectionRevision !== 0 ||
+              message.revisions.actorVisibilityRevision !== 0
+            : p['draftRevision'] !== message.revisions.stateRevision ||
+              message.revisions.projectionRevision < message.revisions.stateRevision ||
+              message.revisions.actorVisibilityRevision !== 0;
+      if (invalidRevisions) return unrecognized('$.revisions', null);
+      const expectedBinding =
+        base.formId === 'APP-011'
+          ? null
+          : base.formId === 'CMP-006'
+            ? p['campaignId']
+            : `draft:${p['campaignDraftId'] as string}`;
+      if (
+        message.presentation.layers.length !== 0 ||
+        (expectedBinding === null
+          ? base.routeBindings.length !== 0
+          : base.routeBindings[0]?.value !== expectedBinding)
+      )
+        return unrecognized('$.presentation.base.routeBindings', null);
+      const actions = exactSymbiontActionKeys(
+        base.availableActionKeys,
+        expectedCampaignActions(base.formId, p, executableWorkflowCommandIds),
+        '$.presentation.base.availableActionKeys',
+      );
+      if (!actions.ok) return actions;
+    }
+  } else if (isPostSaveForm(base.formId)) {
     const decoded = decodePostSaveProjection(
       base.roleFilteredPayload,
       '$.presentation.base.roleFilteredPayload',
@@ -4072,6 +4156,16 @@ function decodeConfirmedSnapshot(
           base.roleFilteredPayload,
           '$.presentation.base.roleFilteredPayload',
         );
+        if (projection.ok) {
+          const actions = exactActionKeys(
+            base.availableActionKeys,
+            base.availableActionKeys.includes('APP-001::CTA::002')
+              ? ['APP-001::CTA::001', 'APP-001::CTA::002', 'APP-001::CTA::003', 'APP-001::CTA::004']
+              : ['APP-001::CTA::001', 'APP-001::CTA::003', 'APP-001::CTA::004'],
+            '$.presentation.base.availableActionKeys',
+          );
+          if (!actions.ok) return actions;
+        }
         break;
       case 'APP-002':
         projection = decodeApp002Projection(
@@ -5242,6 +5336,64 @@ function decodeFormActionSnapshot(
   }
   if (message.presentation.assignment.reason !== 'FORM_ACTION') {
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
+  }
+  if (isCampaignCreationForm(previous.formId) || pending.actionKey === 'APP-001::CTA::002') {
+    const targets: Partial<Record<ActionKey, string>> = {
+      'APP-001::CTA::002': 'APP-011',
+      'APP-011::CTA::001': 'APP-001',
+      'APP-011::CTA::006': 'CMP-001',
+      'CMP-001::CTA::001': 'CMP-002',
+      'CMP-001::CTA::002': 'APP-011',
+      'CMP-002::CTA::001': 'CMP-001',
+      'CMP-002::CTA::002': 'CMP-003',
+      'CMP-003::CTA::001': 'CMP-002',
+      'CMP-003::CTA::002': 'CMP-004',
+      'CMP-004::CTA::001': 'CMP-003',
+      'CMP-004::CTA::002': 'CMP-005',
+      'CMP-005::CTA::002': 'CMP-004',
+    };
+    const decoded = decodeConfirmedSnapshot(
+      message,
+      pending.actionKey === 'APP-011::CTA::001'
+        ? previous.executableWorkflowCommandIds.filter((id) => id !== CAMPAIGN_CREATE_COMMAND_ID)
+        : previous.executableWorkflowCommandIds,
+    );
+    if (!decoded.ok) return decoded;
+    if (
+      pending.sourceFormId !== previous.formId ||
+      decoded.value.formId !== targets[pending.actionKey] ||
+      decoded.value.layers.length !== 0
+    )
+      return unrecognized('$.presentation.base.formId', decoded.value.formId);
+    const source = previous.projection,
+      target = decoded.value.projection;
+    if (pending.actionKey === 'APP-001::CTA::002')
+      return decoded.value.revisions.stateRevision === 0 &&
+        decoded.value.revisions.actorVisibilityRevision === 0
+        ? decoded
+        : unrecognized('$.revisions', null);
+    if (pending.actionKey === 'APP-011::CTA::001') return decoded;
+    if (
+      target['gmLocalContextId'] !== source['gmLocalContextId'] ||
+      target['hostDeviceId'] !== source['hostDeviceId'] ||
+      target['masterAuthorityRevision'] !== source['masterAuthorityRevision']
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', null);
+    if (pending.actionKey === 'APP-011::CTA::006')
+      return target['draftRevision'] === 0 &&
+        sameCampaignRevisions(decoded.value.revisions, NO_KNOWN_REVISIONS)
+        ? decoded
+        : unrecognized('$.revisions', null);
+    // MENU owns an independent persisted vector, unavailable after a browser restart.
+    if (pending.actionKey === 'CMP-001::CTA::002') return decoded;
+    return target['campaignDraftId'] === source['campaignDraftId'] &&
+      target['draftRevision'] === source['draftRevision'] &&
+      sameCampaignRevisions(decoded.value.revisions, {
+        ...previous.revisions,
+        projectionRevision: previous.revisions.projectionRevision + 1,
+      })
+      ? decoded
+      : unrecognized('$.revisions', null);
   }
   if (isPostSaveForm(previous.formId) || pending.actionKey === 'CHR-025::CTA::009') {
     const targets: Partial<Record<ActionKey, FormId>> = {
@@ -7627,7 +7779,35 @@ function diagnostic(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function createRequestId(prefix: 'command' | 'identity' | 'navigation' | 'reconnect'): string {
+function unavailableContextStorage(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'SecurityError' || error.name === 'QuotaExceededError')
+  );
+}
+
+function readGmContextTicket(): string | null {
+  try {
+    return window.sessionStorage?.getItem(GM_CONTEXT_STORAGE_KEY) ?? null;
+  } catch (error: unknown) {
+    if (!unavailableContextStorage(error)) throw error;
+    return null;
+  }
+}
+
+function storeGmContextTicket(contextId: string | null): void {
+  try {
+    if (contextId === null) window.sessionStorage?.removeItem(GM_CONTEXT_STORAGE_KEY);
+    else window.sessionStorage?.setItem(GM_CONTEXT_STORAGE_KEY, contextId);
+  } catch (error: unknown) {
+    if (!unavailableContextStorage(error)) throw error;
+    // This optional locator is not authority; the connection retains its signed context in memory.
+  }
+}
+
+function createRequestId(
+  prefix: 'command' | 'identity' | 'navigation' | 'reconnect' | 'campaign-draft',
+): string {
   const entropy = crypto.getRandomValues(new Uint32Array(4));
   return `${prefix}-${[...entropy].map((value) => value.toString(16).padStart(8, '0')).join('')}`;
 }
@@ -7880,12 +8060,27 @@ export function connectProjection(
     value: NonNullable<PostSaveCommandResult['downloadOrNull']>,
   ) => void = () => {},
   onPostSaveCommitted: (value: PostSaveCommandResult) => void = () => {},
+  onCampaignDraft: (value: CampaignDraftClientState | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
   let identity: IdentityDraftClient | null = null;
   let terminal = false;
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
+  let gmLocalContextId: string | null = null;
+  let campaignEdit: CampaignEdit | null = null;
+  let campaignEditVersion = 0;
+  let campaignSecretClearSequence = 0;
+  let campaignInputPending = false;
+  let campaignRefusal: CampaignDraftRefusal | null = null;
+  let campaignTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingCampaignDraft: { request: CampaignDraftReplaceV3Message; editVersion: number } | null =
+    null;
+  let pendingCampaignCreate: {
+    request: CampaignCreateRequest;
+    receipt: CommandReceipt<CampaignCreateResult> | null;
+    source: ConfirmedProjectionSnapshot;
+  } | null = null;
   let pendingCheckpoint: PendingCheckpoint | null = null;
   let pendingPostSave: {
     request: PostSaveRequest | PostSaveDraftRequest;
@@ -7911,6 +8106,9 @@ export function connectProjection(
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
+    pendingCampaignDraft !== null ||
+    pendingCampaignCreate !== null ||
+    campaignInputPending ||
     pendingPostSave !== null ||
     pendingCheckpoint !== null ||
     pendingSetDecision !== null ||
@@ -7923,8 +8121,8 @@ export function connectProjection(
     roll: CharacterCreationRollDraft | null = null,
     assignment: CharacterStatAssignmentDraft | null = null,
     skills: CharacterSkillSelectionDraft | null = null,
-  ): ConfirmedProjectionSnapshot =>
-    visibleSnapshotCore(
+  ): ConfirmedProjectionSnapshot => {
+    const visible = visibleSnapshotCore(
       snapshot,
       identityValue,
       pending,
@@ -7937,6 +8135,61 @@ export function connectProjection(
       skillCardDraft,
       manualCompositionDraft,
     );
+    if (!isCampaignCreationForm(snapshot.formId)) return visible;
+    const continueKey = (
+      {
+        'CMP-001': 'CMP-001::CTA::001',
+        'CMP-002': 'CMP-002::CTA::002',
+        'CMP-003': 'CMP-003::CTA::002',
+        'CMP-004': 'CMP-004::CTA::002',
+        'CMP-005': CAMPAIGN_CREATE_ACTION_KEY,
+      } as const
+    )[snapshot.formId as 'CMP-001' | 'CMP-002' | 'CMP-003' | 'CMP-004' | 'CMP-005'];
+    return {
+      ...visible,
+      availableActionKeys:
+        pending || campaignInputPending
+          ? []
+          : campaignEdit !== null
+            ? visible.availableActionKeys.filter((key) => key !== continueKey)
+            : visible.availableActionKeys,
+    };
+  };
+  const publishCampaignDraft = () =>
+    onCampaignDraft(
+      lastSnapshot !== null && isCampaignEditableForm(lastSnapshot.formId)
+        ? {
+            values:
+              campaignEdit?.variant === 'SECRET' ||
+              campaignEdit?.variant !==
+                campaignEditFromProjection(lastSnapshot.formId, lastSnapshot.projection)?.variant
+                ? null
+                : campaignEdit,
+            dirty: campaignEdit !== null || campaignInputPending,
+            pending: pendingCampaignDraft !== null,
+            lastRefusal: campaignRefusal,
+            secretClearSequence: campaignSecretClearSequence,
+          }
+        : null,
+    );
+  const clearCampaignDraft = () => {
+    if (campaignTimer !== null) clearTimeout(campaignTimer);
+    campaignTimer = null;
+    campaignEdit = null;
+    pendingCampaignDraft = null;
+    campaignInputPending = false;
+    campaignRefusal = null;
+    campaignSecretClearSequence += 1;
+  };
+  const discardDisconnectedCampaignInput = () => {
+    if (campaignTimer !== null) clearTimeout(campaignTimer);
+    campaignTimer = null;
+    if (pendingCampaignDraft?.request.variant === 'SECRET' || campaignEdit?.variant === 'SECRET')
+      clearCampaignDraft();
+    else if (pendingCampaignDraft === null) campaignEdit = null;
+    campaignInputPending = false;
+    publishCampaignDraft();
+  };
   const visibleLast = () =>
     lastSnapshot === null
       ? null
@@ -7963,6 +8216,9 @@ export function connectProjection(
     if (disposed || terminal) return;
     terminal = true;
     pendingCheckpoint = null;
+    clearCampaignDraft();
+    publishCampaignDraft();
+    pendingCampaignCreate = null;
     pendingPostSave = null;
     pendingSetDecision = null;
     pendingRollCommit = null;
@@ -8008,7 +8264,94 @@ export function connectProjection(
     return true;
   };
 
+  const flushCampaignDraft = (): void => {
+    campaignTimer = null;
+    if (
+      disposed ||
+      terminal ||
+      lastSnapshot === null ||
+      !isCampaignEditableForm(lastSnapshot.formId) ||
+      campaignEdit === null ||
+      pendingCampaignDraft !== null ||
+      campaignInputPending ||
+      pendingFormAction !== null ||
+      pendingAddressableRoute !== null ||
+      pendingCampaignCreate !== null ||
+      socket?.readyState !== WebSocket.OPEN ||
+      !campaignEditIsSendable(campaignEdit)
+    )
+      return;
+    if (
+      campaignEdit.variant !== 'SECRET' &&
+      sameJson(
+        campaignEdit,
+        campaignEditFromProjection(lastSnapshot.formId, lastSnapshot.projection),
+      )
+    ) {
+      campaignEdit = null;
+      publishCampaignDraft();
+      notifyReady();
+      return;
+    }
+    const request = {
+      messageType: 'campaign.draft.replace',
+      protocolVersion: 3,
+      draftUpdateId: createRequestId('campaign-draft'),
+      scope: {
+        gmLocalContextId: lastSnapshot.projection['gmLocalContextId'],
+        campaignDraftId: lastSnapshot.projection['campaignDraftId'],
+        sourceFormId: lastSnapshot.formId,
+      },
+      expectedDraftRevision: lastSnapshot.projection['draftRevision'],
+      expectedRevisions: { ...lastSnapshot.revisions },
+      ...campaignEdit,
+    } as CampaignDraftReplaceV3Message;
+    const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok) {
+      campaignRefusal = { code: 'DRAFT_UNAVAILABLE' };
+      publishCampaignDraft();
+      notifyReady();
+      return;
+    }
+    pendingCampaignDraft = { request, editVersion: campaignEditVersion };
+    try {
+      socket.send(encoded.text);
+    } catch {
+      clearCampaignDraft();
+      campaignRefusal = { code: 'DRAFT_UNAVAILABLE' };
+    }
+    publishCampaignDraft();
+    notifyReady();
+  };
+
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
+    const previous = lastSnapshot;
+    const campaignLaunch =
+      previous?.formId === 'APP-001' && next.formId === 'APP-011' && !reconnect;
+    const campaignExit = previous?.formId === 'APP-011' && next.formId === 'APP-001' && !reconnect;
+    const sameCampaignDraft =
+      previous !== null &&
+      previous.formId === next.formId &&
+      previous.projection['campaignDraftId'] !== undefined &&
+      previous.projection['campaignDraftId'] === next.projection['campaignDraftId'];
+    if (!sameCampaignDraft && pendingCampaignDraft === null) clearCampaignDraft();
+    if (isCampaignCreationForm(next.formId)) {
+      gmLocalContextId = next.projection['gmLocalContextId'] as string;
+      try {
+        storeGmContextTicket(gmLocalContextId);
+      } catch {
+        failUnexpected(
+          '$.gmLocalContextId',
+          null,
+          'The GM context ticket could not be stored for this tab.',
+        );
+        return;
+      }
+    } else if (next.formId === 'APP-001') {
+      gmLocalContextId = null;
+      storeGmContextTicket(null);
+    }
+    pendingCampaignCreate = null;
     const postSaveReceipt = pendingPostSave?.receipt;
     if (postSaveReceipt !== null && postSaveReceipt !== undefined)
       onPostSaveCommitted(postSaveReceipt.result);
@@ -8079,6 +8422,7 @@ export function connectProjection(
       identity = new IdentityDraftClient(draft, () => createRequestId('identity'));
     else replay = identity.resumeAfterSnapshot(draft);
     onIdentityDraft(identity?.state ?? null);
+    publishCampaignDraft();
     onState({
       kind: 'ready',
       snapshot: visibleSnapshotBase(
@@ -8092,6 +8436,24 @@ export function connectProjection(
       ),
     });
     sendIdentity(replay);
+    if ((campaignLaunch || campaignExit) && deviceId !== null) {
+      const oldSocket = socket;
+      openTransport(deviceId);
+      oldSocket?.close(1000, 'launch capability negotiation');
+    } else if (
+      reconnect &&
+      pendingCampaignDraft !== null &&
+      socket?.readyState === WebSocket.OPEN
+    ) {
+      const encoded = encodeClientMessageV3(pendingCampaignDraft.request, WEB_PROTOCOL_VOCABULARY);
+      if (encoded.ok) socket.send(encoded.text);
+      else
+        failUnexpected(
+          '$.campaign.draft.replace',
+          null,
+          'The pending campaign draft could not be replayed.',
+        );
+    }
   };
 
   const attachSocket = (
@@ -8151,7 +8513,26 @@ export function connectProjection(
         }
         const message = decoded.value;
         if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
-          if (pendingPostSave !== null) {
+          if (pendingCampaignCreate !== null) {
+            const receipt = decodeCampaignCreateReceipt(
+              message.receipt,
+              pendingCampaignCreate.request,
+              pendingCampaignCreate.source.projection,
+            );
+            if (!receipt.ok) {
+              failProtocol(receipt.refusal, 'Host sent an invalid campaign creation receipt.');
+              return;
+            }
+            if (
+              pendingCampaignCreate.receipt !== null &&
+              (message.messageType !== 'command.replay' ||
+                JSON.stringify(pendingCampaignCreate.receipt) !== JSON.stringify(receipt.value))
+            ) {
+              failUnexpected('$.receipt', null, 'Host changed a campaign creation receipt.');
+              return;
+            }
+            pendingCampaignCreate = { ...pendingCampaignCreate, receipt: receipt.value };
+          } else if (pendingPostSave !== null) {
             const receipt = decodePostSaveTerminal(
               message,
               pendingPostSave.request,
@@ -8288,6 +8669,10 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'command.refusal') {
+          const matchesCampaignCreate =
+            pendingCampaignCreate !== null &&
+            pendingCampaignCreate.receipt === null &&
+            message.commandId === pendingCampaignCreate.request.commandId;
           const matchesPostSave =
             pendingPostSave !== null &&
             pendingPostSave.receipt === null &&
@@ -8305,7 +8690,11 @@ export function connectProjection(
             pendingRollCommit.receipt === null &&
             message.commandId === pendingRollCommit.request.commandId;
           if (
-            (!matchesPostSave && !matchesCheckpoint && !matchesSetDecision && !matchesRollCommit) ||
+            (!matchesCampaignCreate &&
+              !matchesPostSave &&
+              !matchesCheckpoint &&
+              !matchesSetDecision &&
+              !matchesRollCommit) ||
             lastSnapshot === null
           ) {
             failUnexpected(
@@ -8316,6 +8705,7 @@ export function connectProjection(
             return;
           }
           if (matchesCheckpoint) pendingCheckpoint = null;
+          if (matchesCampaignCreate) pendingCampaignCreate = null;
           if (matchesPostSave) pendingPostSave = null;
           if (matchesSetDecision) pendingSetDecision = null;
           if (matchesRollCommit) pendingRollCommit = null;
@@ -8338,6 +8728,8 @@ export function connectProjection(
         }
         if (message.messageType === 'protocol.refusal') {
           terminal = true;
+          clearCampaignDraft();
+          publishCampaignDraft();
           onState({
             kind: 'host-refusal',
             refusal: message.refusal,
@@ -8367,6 +8759,81 @@ export function connectProjection(
             message.messageType,
             'A wire v3 frame interrupted the staged reconnect pair.',
           );
+          return;
+        }
+        if (
+          message.messageType === 'campaign.draft.result' ||
+          message.messageType === 'campaign.draft.refusal'
+        ) {
+          const pending = pendingCampaignDraft;
+          if (
+            pending === null ||
+            lastSnapshot === null ||
+            message.draftUpdateId !== pending.request.draftUpdateId ||
+            message.scope.gmLocalContextId !== pending.request.scope.gmLocalContextId ||
+            message.scope.campaignDraftId !== pending.request.scope.campaignDraftId ||
+            message.scope.sourceFormId !== pending.request.scope.sourceFormId
+          ) {
+            failUnexpected(
+              '$.campaign.draft',
+              null,
+              'Campaign draft response does not match its pending scope.',
+            );
+            return;
+          }
+          if (message.messageType === 'campaign.draft.refusal') {
+            pendingCampaignDraft = null;
+            campaignRefusal = message.refusal;
+            if (pending.request.variant === 'SECRET') {
+              campaignEdit = null;
+              campaignSecretClearSequence += 1;
+            }
+            publishCampaignDraft();
+            notifyReady();
+            return;
+          }
+          const candidate = decodeConfirmedSnapshot(
+            {
+              protocolVersion: 2,
+              messageType: 'projection.snapshot',
+              projectionRole: 'gm',
+              revisions: message.revisions,
+              presentation: {
+                assignment: { correlationId: message.draftUpdateId, reason: 'FORM_ACTION' },
+                ...message.presentation,
+              },
+            },
+            lastSnapshot.executableWorkflowCommandIds,
+          );
+          if (!candidate.ok) {
+            failProtocol(candidate.refusal, 'Host sent an invalid campaign draft view.');
+            return;
+          }
+          if (
+            !campaignDraftResultMatches(message, pending.request, candidate.value.projection) ||
+            candidate.value.projection['hostDeviceId'] !== deviceId ||
+            candidate.value.projection['gmLocalContextId'] !== gmLocalContextId ||
+            (lastSnapshot.projection['campaignDraftId'] ===
+              candidate.value.projection['campaignDraftId'] &&
+              (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).some(
+                (axis) => candidate.value.revisions[axis] < lastSnapshot!.revisions[axis],
+              ))
+          ) {
+            failUnexpected(
+              '$.campaign.draft.result',
+              null,
+              'Campaign draft event or current view is not bound to the pending update.',
+            );
+            return;
+          }
+          pendingCampaignDraft = null;
+          campaignRefusal = null;
+          if (pending.request.variant === 'SECRET') {
+            campaignEdit = null;
+            campaignSecretClearSequence += 1;
+          } else if (campaignEditVersion === pending.editVersion) campaignEdit = null;
+          adoptSnapshot(candidate.value, false);
+          if (campaignEdit !== null) flushCampaignDraft();
           return;
         }
         if (message.messageType === 'character.identity-draft.result') {
@@ -8483,7 +8950,33 @@ export function connectProjection(
           const capabilities = stagedCapabilities!;
           stagedCapabilities = null;
           snapshot = decodeReconnectSnapshot(message, capabilities, requestId);
-          if (snapshot.ok && pendingPostSave !== null) {
+          if (
+            snapshot.ok &&
+            isCampaignCreationForm(snapshot.value.formId) &&
+            (snapshot.value.projection['gmLocalContextId'] !== gmLocalContextId ||
+              snapshot.value.projection['hostDeviceId'] !== deviceId)
+          )
+            snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
+          if (snapshot.ok && pendingCampaignCreate !== null) {
+            if (
+              pendingCampaignCreate.receipt === null ||
+              !campaignCreateDestinationMatches(
+                snapshot.value.formId,
+                snapshot.value.projection,
+                snapshot.value.revisions,
+                pendingCampaignCreate.receipt,
+              )
+            )
+              snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
+          } else if (snapshot.ok && pendingCampaignDraft !== null) {
+            if (
+              snapshot.value.projection['campaignDraftId'] !==
+                pendingCampaignDraft.request.scope.campaignDraftId ||
+              snapshot.value.projection['gmLocalContextId'] !==
+                pendingCampaignDraft.request.scope.gmLocalContextId
+            )
+              snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
+          } else if (snapshot.ok && pendingPostSave !== null) {
             if (
               pendingPostSave.receipt === null ||
               !postSaveDestinationMatches(snapshot.value, pendingPostSave.receipt)
@@ -8526,6 +9019,25 @@ export function connectProjection(
               );
             }
           }
+        } else if (pendingCampaignCreate !== null && pendingCampaignCreate.receipt !== null) {
+          snapshot = decodeConfirmedSnapshot(
+            message,
+            pendingCampaignCreate.source.executableWorkflowCommandIds,
+          );
+          if (
+            snapshot.ok &&
+            (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
+              message.presentation.assignment.correlationId !==
+                pendingCampaignCreate.request.commandId ||
+              snapshot.value.projection['hostDeviceId'] !== deviceId ||
+              !campaignCreateDestinationMatches(
+                snapshot.value.formId,
+                snapshot.value.projection,
+                snapshot.value.revisions,
+                pendingCampaignCreate.receipt,
+              ))
+          )
+            snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
         } else if (pendingPostSave !== null && pendingPostSave.receipt !== null) {
           snapshot = decodeConfirmedSnapshot(
             message,
@@ -8594,6 +9106,17 @@ export function connectProjection(
         }
         if (!snapshot.ok) {
           failProtocol(snapshot.refusal, 'Host sent an invalid projection snapshot.');
+          return;
+        }
+        if (
+          isCampaignCreationForm(snapshot.value.formId) &&
+          snapshot.value.projection['hostDeviceId'] !== deviceId
+        ) {
+          failUnexpected(
+            '$.presentation.base.roleFilteredPayload.hostDeviceId',
+            null,
+            'Campaign context belongs to another device.',
+          );
           return;
         }
         adoptSnapshot(snapshot.value, reconnecting);
@@ -8670,6 +9193,7 @@ export function connectProjection(
       pendingFormAction = null;
       pendingAddressableRoute = null;
       stagedCapabilities = null;
+      discardDisconnectedCampaignInput();
       onState({
         code: null,
         detail: 'WebSocket transport reported an error.',
@@ -8684,6 +9208,7 @@ export function connectProjection(
       pendingFormAction = null;
       pendingAddressableRoute = null;
       stagedCapabilities = null;
+      discardDisconnectedCampaignInput();
       const reason = event.reason.length === 0 ? 'no close reason' : event.reason;
       onState({
         code: event.code,
@@ -8710,17 +9235,34 @@ export function connectProjection(
         ...Object.values(POST_SAVE_COMMAND_IDS),
       ],
       unacknowledgedCommandIds:
-        pendingPostSave !== null
-          ? [pendingPostSave.request.commandId]
-          : pendingCheckpoint !== null
-            ? [pendingCheckpoint.request.commandId]
-            : pendingSetDecision !== null
-              ? [pendingSetDecision.request.commandId]
-              : pendingRollCommit !== null
-                ? [pendingRollCommit.request.commandId]
-                : [],
+        pendingCampaignCreate !== null
+          ? [pendingCampaignCreate.request.commandId]
+          : pendingPostSave !== null
+            ? [pendingPostSave.request.commandId]
+            : pendingCheckpoint !== null
+              ? [pendingCheckpoint.request.commandId]
+              : pendingSetDecision !== null
+                ? [pendingSetDecision.request.commandId]
+                : pendingRollCommit !== null
+                  ? [pendingRollCommit.request.commandId]
+                  : [],
     } as const satisfies SessionReconnectV2Message;
-    const encoded = encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY);
+    const gmResume: CampaignLocalContextResumeV3Message | null =
+      gmLocalContextId === null
+        ? null
+        : {
+            messageType: 'campaign.local-context.resume',
+            protocolVersion: 3,
+            gmLocalContextId,
+            reconnectRequestId: requestId,
+            knownRevisions: reconnect.knownRevisions,
+            supportedWorkflowCommandIds: [CAMPAIGN_CREATE_COMMAND_ID],
+            unacknowledgedCommandIds: reconnect.unacknowledgedCommandIds,
+          };
+    const encoded =
+      gmResume === null
+        ? encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY)
+        : encodeClientMessageV3(gmResume, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok)
       throw new Error(
         `session.reconnect failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
@@ -8753,6 +9295,9 @@ export function connectProjection(
     }
     if (disposed) return;
     deviceId = identity.value;
+    const ticket = readGmContextTicket();
+    if (ticket !== null && UUID_PATTERN.test(ticket)) gmLocalContextId = ticket;
+    else if (ticket !== null) storeGmContextTicket(null);
     openTransport(deviceId);
   };
 
@@ -8870,6 +9415,61 @@ export function connectProjection(
     return { ok: true };
   };
   return {
+    replaceCampaignDraft: (edit) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot === null ||
+        !isCampaignEditableForm(lastSnapshot.formId) ||
+        gmLocalContextId !== lastSnapshot.projection['gmLocalContextId'] ||
+        socket?.readyState !== WebSocket.OPEN
+      )
+        return { ok: false, detail: 'no confirmed editable campaign draft' };
+      if (
+        pendingFormAction !== null ||
+        pendingCampaignCreate !== null ||
+        pendingAddressableRoute !== null
+      )
+        return { ok: false, detail: 'campaign navigation is awaiting confirmation' };
+      const expectedVariant = (
+        {
+          'CMP-001': 'METADATA',
+          'CMP-002': 'HOST',
+          'CMP-003': 'SECRET',
+          'CMP-004': 'MODE',
+        } as const
+      )[lastSnapshot.formId];
+      if (edit.variant !== expectedVariant)
+        return { ok: false, detail: 'campaign values do not belong to this form' };
+      campaignEdit = edit;
+      if (
+        edit.variant === 'SECRET' &&
+        edit.values.masterTransferPassword === '' &&
+        edit.values.masterTransferPasswordConfirmation === '' &&
+        pendingCampaignDraft === null
+      )
+        campaignEdit = null;
+      campaignEditVersion += 1;
+      campaignRefusal = null;
+      if (campaignTimer !== null) clearTimeout(campaignTimer);
+      campaignTimer = campaignEdit === null ? null : setTimeout(flushCampaignDraft, 250);
+      publishCampaignDraft();
+      notifyReady();
+      return { ok: true };
+    },
+    setCampaignInputPending: (pending) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot === null ||
+        !isCampaignEditableForm(lastSnapshot.formId)
+      )
+        return;
+      campaignInputPending = pending;
+      publishCampaignDraft();
+      notifyReady();
+      if (!pending && campaignEdit !== null && campaignTimer === null) flushCampaignDraft();
+    },
     submitPostSave,
     selectLibraryCharacter: (localCharacterId) => {
       if (
@@ -8910,6 +9510,8 @@ export function connectProjection(
     disconnect: () => {
       if (disposed) return;
       disposed = true;
+      clearCampaignDraft();
+      pendingCampaignCreate = null;
       pendingFormAction = null;
       pendingAddressableRoute = null;
       stagedCapabilities = null;
@@ -9693,6 +10295,44 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (activeForm.formId === 'CMP-005' && actionKey === CAMPAIGN_CREATE_ACTION_KEY) {
+        const p = lastSnapshot.projection;
+        if (
+          !lastSnapshot.executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
+          p['validationStatus'] !== 'READY_TO_CREATE' ||
+          p['gmLocalContextId'] !== gmLocalContextId ||
+          gmLocalContextId === null
+        )
+          return { ok: false, detail: 'campaign creation capability or preflight is unavailable' };
+        const request: CampaignCreateRequest = {
+          messageType: 'command.request',
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          commandKind: 'workflow-command',
+          workflowCommandId: CAMPAIGN_CREATE_COMMAND_ID,
+          commandId: createRequestId('command'),
+          role: 'gm',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          payload: {
+            stage: 'CAMPAIGN_CREATE',
+            sourceFormId: 'CMP-005',
+            gmLocalContextId,
+            campaignDraftId: p['campaignDraftId'] as string,
+            draftRevision: p['draftRevision'] as number,
+            preflightLeaseId: (p['hostBindPreflight'] as JsonObject)['leaseIdOrNull'] as string,
+          },
+        };
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: 'campaign creation could not be encoded' };
+        pendingCampaignCreate = { request, receipt: null, source: lastSnapshot };
+        try {
+          socket.send(encoded.text);
+        } catch {
+          pendingCampaignCreate = null;
+          return { ok: false, detail: 'campaign creation could not be sent' };
+        }
+        notifyReady();
+        return { ok: true };
       }
       if (isPostSaveForm(activeForm.formId)) {
         const variant = (Object.keys(POST_SAVE_ACTIONS) as PostSavePayload['variant'][]).find(
@@ -10918,6 +11558,10 @@ export function connectProjection(
         };
       }
       pendingFormAction = request;
+      if (isCampaignCreationForm(activeForm.formId)) {
+        clearCampaignDraft();
+        publishCampaignDraft();
+      }
       try {
         socket.send(encoded.text);
       } catch (error: unknown) {

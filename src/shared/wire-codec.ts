@@ -561,12 +561,12 @@ const parse = <T>(text: string, reader: (value: unknown) => T): DecodeResult<T> 
   let value: unknown;
   try {
     value = JSON.parse(text) as unknown;
-  } catch (error: unknown) {
+  } catch {
     return {
       ok: false,
       refusal: {
         code: 'MALFORMED_JSON',
-        detail: error instanceof Error ? error.message : 'JSON.parse failed',
+        detail: 'Invalid JSON syntax; input is not reflected',
         path: '$',
       },
     };
@@ -599,6 +599,14 @@ export const encodeHostMessage = (
   value: HostToClientMessage,
   vocabulary: ProtocolVocabulary,
 ): EncodeResult => encode(value, (candidate) => hostValue(candidate, vocabulary));
+
+/** @internal Validation machinery shared by closed, version-specific codecs. */
+export function redactProtocolInputRefusal(refusal: DecodeRefusal): DecodeRefusal {
+  if (refusal.code === 'UNRECOGNIZED') return { ...refusal, value: null };
+  if (refusal.code === 'MALFORMED_JSON')
+    return { ...refusal, detail: 'Invalid JSON syntax; input is not reflected' };
+  return refusal;
+}
 
 /** @internal Validation machinery shared by closed, version-specific codecs. */
 export const wireCodecPrimitives = {

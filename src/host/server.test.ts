@@ -453,12 +453,7 @@ describe('configured Fastify and ws host shell', () => {
             reason: 'RECONNECT',
           },
           base: {
-            availableActionKeys: [
-              'APP-001::CTA::001',
-              'APP-001::CTA::002',
-              'APP-001::CTA::003',
-              'APP-001::CTA::004',
-            ],
+            availableActionKeys: ['APP-001::CTA::001', 'APP-001::CTA::003', 'APP-001::CTA::004'],
             formId: 'APP-001',
             formType: 'screen',
             roleFilteredPayload: app001Bootstrap,
@@ -640,7 +635,7 @@ describe('configured Fastify and ws host shell', () => {
         refusal: {
           code: 'UNRECOGNIZED',
           path: '$.messageType',
-          value: 'character.identity-draft.replace',
+          value: null,
         },
       });
       expect(revisionWrites).toHaveLength(2);
@@ -654,7 +649,7 @@ describe('configured Fastify and ws host shell', () => {
       );
       expect(hostMessage((await response)[0] ?? '', vocabulary)).toMatchObject({
         messageType: 'protocol.refusal',
-        refusal: { code: 'UNRECOGNIZED', path: '$.values.sex', value: 'OTHER' },
+        refusal: { code: 'UNRECOGNIZED', path: '$.values.sex', value: null },
       });
       expect(revisionWrites).toHaveLength(2);
       response = receiveFrames(socket, 1);
@@ -1274,7 +1269,7 @@ describe('configured Fastify and ws host shell', () => {
         );
         expect(hostMessage((await response)[0] ?? '', vocabulary)).toMatchObject({
           messageType: 'protocol.refusal',
-          refusal: { code: 'UNRECOGNIZED', path: '$.actionKey', value: actionKey },
+          refusal: { code: 'UNRECOGNIZED', path: '$.actionKey', value: null },
         });
       }
       expect(currentRevisions).toEqual(CLIENT_REVISIONS);
@@ -1300,7 +1295,7 @@ describe('configured Fastify and ws host shell', () => {
         refusal: {
           code: 'UNRECOGNIZED',
           path: '$.deviceId',
-          value: foreignDeviceId,
+          value: null,
         },
         relatedCommandId: null,
       });
@@ -1335,7 +1330,7 @@ describe('configured Fastify and ws host shell', () => {
     expect(hostMessage(text, vocabulary)).toEqual({
       messageType: 'protocol.refusal',
       protocolVersion: 1,
-      refusal: { code: 'UNRECOGNIZED', path: '$.projectionRole', value: 'gm' },
+      refusal: { code: 'UNRECOGNIZED', path: '$.projectionRole', value: null },
       relatedCommandId: null,
     });
     for (const forbidden of gmOnlyFields) {
@@ -1413,10 +1408,10 @@ describe('configured Fastify and ws host shell', () => {
         payload: {},
         protocolVersion: WIRE_PROTOCOL_VERSION,
         role: 'player',
-        workflowCommandId: 'UI-CMD-CAMPAIGN-CREATE',
+        workflowCommandId: 'UI-CMD-CAMPAIGN-FINISH',
       } as const satisfies ClientToHostMessage,
       path: '$.workflowCommandId',
-      value: 'UI-CMD-CAMPAIGN-CREATE',
+      value: 'UI-CMD-CAMPAIGN-FINISH',
     },
     {
       message: {
@@ -1467,7 +1462,7 @@ describe('configured Fastify and ws host shell', () => {
       payload: {},
       protocolVersion: WIRE_PROTOCOL_VERSION,
       role: 'player',
-      workflowCommandId: 'UI-CMD-CAMPAIGN-CREATE',
+      workflowCommandId: 'UI-CMD-CAMPAIGN-FINISH',
     } as const satisfies ClientToHostMessage;
     const socket = await app.injectWS('/state');
 

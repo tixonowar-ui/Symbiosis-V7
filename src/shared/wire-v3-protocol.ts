@@ -1,5 +1,11 @@
 import type { RevisionVector } from './wire-protocol.js';
 import type {
+  CampaignDraftReplaceV3Message,
+  CampaignLocalContextResumeV3Message,
+  CampaignDraftResultV3Message,
+  CampaignDraftRefusalV3Message,
+} from './campaign-creation.js';
+import type {
   PresentedBaseForm,
   PresentedLayerForm,
   WireV2Vocabulary,
@@ -106,8 +112,15 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
   readonly refusal: IdentityDraftRefusal;
 }
 
-export type ClientToHostV3Message = IdentityDraftReplaceV3Message;
-export type HostToClientV3Message = IdentityDraftRefusalV3Message | IdentityDraftResultV3Message;
+export type ClientToHostV3Message =
+  | IdentityDraftReplaceV3Message
+  | CampaignDraftReplaceV3Message
+  | CampaignLocalContextResumeV3Message;
+export type HostToClientV3Message =
+  | IdentityDraftRefusalV3Message
+  | IdentityDraftResultV3Message
+  | CampaignDraftResultV3Message
+  | CampaignDraftRefusalV3Message;
 
 /** V3 identity presentations use the same generated Atlas vocabulary as V2 snapshots. */
 export type WireV3Vocabulary = WireV2Vocabulary;
