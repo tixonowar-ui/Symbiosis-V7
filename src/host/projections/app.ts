@@ -1,4 +1,5 @@
 import { assertCreationValidationScreenContracts } from './chr-creation-validation.js';
+import { assertCampaignCreateScreenContracts } from './cmp-create.js';
 import { assertPostSaveScreenContracts } from './chr-post-save.js';
 import { assertFiveStartingPositionsScreenContracts } from './chr-five-starting-positions.js';
 import { assertStartingMoneyScreenContracts } from './chr-starting-money.js';
@@ -666,6 +667,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertFiveStartingPositionsScreenContracts(forms, assertScreenContract);
   assertCreationValidationScreenContracts(forms, assertScreenContract);
   assertPostSaveScreenContracts(forms, assertScreenContract);
+  assertCampaignCreateScreenContracts(forms, assertScreenContract);
   return result;
 }
 

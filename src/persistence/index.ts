@@ -1,6 +1,50 @@
 export { bootstrapDeviceIdentity, loadDeviceId, resetDeviceIdentity } from './device-identity.js';
 export type { DeviceBindingsInvalidator, DeviceId } from './device-identity.js';
 export {
+  CampaignCreationStoreError,
+  campaignCreationHash,
+  readLocalGmProfile,
+  ensureLocalGmProfile,
+  readLocalGmContext,
+  readActiveLocalGmContext,
+  readCampaignCreationLibraryState,
+  readPausedCampaign,
+  createLocalGmContext,
+  readCampaignCreationCursor,
+  createCampaignDraft,
+  readCampaignDraft,
+  readCampaignDraftUpdate,
+  commitCampaignDraftUpdate,
+  navigateCampaignDraft,
+  readCampaignDraftCancellation,
+  readCampaignDraftCancellationById,
+  cancelCampaignDraft,
+  readCampaignPrivateOwner,
+  readCampaignCreationCommand,
+  commitCampaignCreation,
+} from './campaign-creation.js';
+export type {
+  LocalGmProfile,
+  LocalGmContext,
+  StoredCampaignDraft,
+  CampaignCreationCursor,
+  RedactedCampaignDraftRequest,
+  CampaignDraftUpdateEvent,
+  StoredCampaignDraftUpdate,
+  CampaignSecretUpdate,
+  CampaignDraftUpdateInput,
+  CampaignDraftUpdateOutcome,
+  CampaignDraftNavigationInput,
+  CampaignDraftCancelInput,
+  StoredCampaignCancellation,
+  StoredPausedCampaign,
+  CampaignCreationInput,
+  StoredCampaignCreationCommand,
+  CampaignPrivateOwner,
+  CampaignSourceValidator,
+  CampaignTrustedValidator,
+} from './campaign-creation.js';
+export {
   readArchivedCampaignCharacterSource,
   readPostSaveHeadById,
   readPostSaveCommandById,
@@ -47,6 +91,7 @@ export {
 export type { SymbiontPresentationStage } from './symbiont-presentation.js';
 export {
   advanceRevisions,
+  commitNewCampaignCheckpoint,
   commitLocalCharacterCheckpoint,
   commitNewLocalCharacterCheckpoint,
   listLocalCharacters,
@@ -56,6 +101,8 @@ export {
 } from './store.js';
 export type {
   CampaignCheckpoint,
+  CampaignCheckpointCreator,
+  CreatedPausedCampaign,
   LocalCharacter,
   LocalCharacterCheckpoint,
   LocalCharacterCheckpointCreator,

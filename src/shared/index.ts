@@ -11,9 +11,11 @@ export {
   decodeHostMessage,
   encodeClientMessage,
   encodeHostMessage,
+  redactProtocolInputRefusal,
 } from './wire-codec.js';
 export * from './wire-protocol.js';
 export * from './wire-v2-codec.js';
 export * from './wire-v2-protocol.js';
 export * from './wire-v3-codec.js';
 export * from './wire-v3-protocol.js';
+export * from './campaign-creation.js';

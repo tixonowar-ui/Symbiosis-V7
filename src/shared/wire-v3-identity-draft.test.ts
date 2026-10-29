@@ -261,7 +261,7 @@ describe('wire v3 identity draft contracts', () => {
     ).toEqual({
       code: 'UNRECOGNIZED',
       path: '$.values.artAssetKeyOrLocalFile.kind',
-      value: 'future',
+      value: null,
     });
     expect(
       refuseClient({
@@ -292,7 +292,7 @@ describe('wire v3 identity draft contracts', () => {
     expect(refuseClient({ ...replace, values: { ...values, sex } })).toEqual({
       code: 'UNRECOGNIZED',
       path: '$.values.sex',
-      value: sex,
+      value: null,
     });
   });
   it('rejects a non-string non-null sex before the handler', () => {
@@ -438,7 +438,7 @@ describe('wire v3 identity draft contracts', () => {
     expect(refuseClient({ ...replace, protocolVersion: 2 })).toEqual({
       code: 'UNRECOGNIZED',
       path: '$.protocolVersion',
-      value: 2,
+      value: null,
     });
   });
 });

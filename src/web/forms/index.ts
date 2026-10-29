@@ -5,15 +5,27 @@ import { APP_FORM_IDS } from './app/index.js';
 import type { AppFormId } from './app/index.js';
 import { CHR_FORM_IDS } from './chr/index.js';
 import type { ChrFormId } from './chr/index.js';
+import { CMP_CREATE_FORM_IDS } from './cmp/campaign-create.js';
 
-export const IMPLEMENTED_FORM_IDS = [...APP_FORM_IDS, ...CHR_FORM_IDS] as const;
-export type ImplementedFormId = AppFormId | ChrFormId;
+export const IMPLEMENTED_FORM_IDS = [
+  ...APP_FORM_IDS,
+  ...CHR_FORM_IDS,
+  ...CMP_CREATE_FORM_IDS,
+] as const;
+export type ImplementedFormId = AppFormId | ChrFormId | (typeof CMP_CREATE_FORM_IDS)[number];
 export type SupportedPresentationFormId =
   | 'APP-001'
   | 'APP-002'
   | 'APP-004'
   | 'APP-009'
   | 'APP-010'
+  | 'APP-011'
+  | 'CMP-001'
+  | 'CMP-002'
+  | 'CMP-003'
+  | 'CMP-004'
+  | 'CMP-005'
+  | 'CMP-006'
   | 'CHR-001'
   | 'CHR-002'
   | 'CHR-003'
@@ -58,6 +70,13 @@ const SUPPORTED = new Set<FormId>([
   'APP-004',
   'APP-009',
   'APP-010',
+  'APP-011',
+  'CMP-001',
+  'CMP-002',
+  'CMP-003',
+  'CMP-004',
+  'CMP-005',
+  'CMP-006',
   'CHR-001',
   'CHR-002',
   'CHR-003',

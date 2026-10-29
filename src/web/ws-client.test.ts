@@ -3465,7 +3465,7 @@ describe('CHR-010 web protocol vocabulary', () => {
     ).toBe(false);
   });
 
-  it('recognizes six source actions and only the two implemented workflow commands', () => {
+  it('recognizes six source actions and the implemented workflow vocabulary', () => {
     for (let index = 1; index <= 6; index += 1) {
       const actionKey = `CHR-010::CTA::${String(index).padStart(3, '0')}`;
       expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey('CHR-010', actionKey), actionKey).toBe(true);
@@ -3474,7 +3474,8 @@ describe('CHR-010 web protocol vocabulary', () => {
     expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CHAR-CREATION-SET-DECIDE')).toBe(
       true,
     );
-    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-CREATE')).toBe(false);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-CREATE')).toBe(true);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-START')).toBe(false);
   });
 });
 

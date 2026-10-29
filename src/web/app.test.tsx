@@ -4540,8 +4540,8 @@ describe('APP-001 web entry', () => {
       },
     },
     {
-      expectedPath: null,
-      label: 'partial action set',
+      expectedPath: '$.presentation.base.availableActionKeys',
+      label: 'arbitrary partial action set',
       send: (socket: FakeWebSocket) => {
         const value = snapshot();
         deliverPair(socket, capabilities(), {
@@ -4549,6 +4549,23 @@ describe('APP-001 web entry', () => {
           presentation: {
             ...value.presentation,
             base: { ...value.presentation.base, availableActionKeys: APP_001_ACTION_KEYS.slice(1) },
+          },
+        });
+      },
+    },
+    {
+      expectedPath: null,
+      label: 'ordinary player shell without local GM launch',
+      send: (socket: FakeWebSocket) => {
+        const value = snapshot();
+        deliverPair(socket, capabilities(), {
+          ...value,
+          presentation: {
+            ...value.presentation,
+            base: {
+              ...value.presentation.base,
+              availableActionKeys: APP_001_ACTION_KEYS.filter((key) => key !== 'APP-001::CTA::002'),
+            },
           },
         });
       },
