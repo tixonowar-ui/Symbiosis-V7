@@ -1,82 +1,74 @@
 # Передача контекста — 2026-10-30
 
-Срез issue #170, ветка `codex/170-paused-campaign-create`.
-База — `752d288cb73768407286037508e784c224ed9975`: PR #176 слит,
-issue #156 закрыта. Независимый прогон базы подтвердил 121 файл /
-2198 Vitest-тестов и 30 production E2E. Это не проверка текущего среза.
+Срез issue #179, ветка `codex/179-local-app-boundary`.
+База — `5ca1b4c8a105d25355e8c90a1caaa0438014d461`: PR #178 слит,
+issue #170 закрыта. Независимые проверки базы подтвердили 132 файла /
+2464 Vitest-теста и 34 production E2E без retry. Это не проверка нового среза.
 
-## Что реализовано в #170
+## Что исправлено в #179
 
-- APP-001 → APP-011 доступен локальному мастеру по реальному TCP peer,
-  bound listener и точному Origin. Role/device/URL/Host/proxy header не дают
-  полномочий. Проверка повторяется перед каждым GM чтением, записью и KDF.
-- Durable profile/context и точный active-context pointer сохраняют владельца
-  устройства. Новая вкладка через явный Master переиспользует context;
-  автоматический resume возвращает тот же draft или CMP-006 без выбора
-  «последней» строки. Reset не перепривязывает чужие данные.
-- CMP-001–004 сохраняют метаданные, реальный интерфейс/порт, вместимость,
-  секрет передачи и MANUAL/AUTO. Нормативные CTA не подменяются CREATE.
-  Каждый этап имеет закрытый v3 DTO под прежней protocolVersion.
-- Секрет write-only: сохраняется только scrypt-верификатор с отдельной солью.
-  Exact replay проверяет proof конкретного update, KEEP не создаёт новую
-  соль. Пароль/confirmation очищаются из DOM и не попадают в journal,
-  read projection, receipt, QR или протокольную диагностику.
-- CMP-005 проверяет baseline, source revisions и фактический bind. Порт
-  удерживается через commit; совпадающий реальный UI listener может дать
-  общую lease, чужой занятый порт даёт явный отказ. Ошибка закрывает только
-  собственную reservation, сохраняя подтверждённый draft.
-- CREATE атомарно записывает кампанию PAUSED, полный checkpoint при нуле
-  копий PC, private credential, неизменяемый receipt и destination cursor.
-  Same ID/payload повторяет результат; иной payload отвергается. Ответ,
-  потерянный после commit, не создаёт второй campaign ID, QR или checkpoint.
-- CMP-006 публикует настоящий QR публичного locator. CreatedAt — исходная
-  аудиторская UTC-метка; игровые часы, сцены, группы и Start не создаются.
-  Восстановление занятого endpoint даёт диагностику при сохранённой PAUSED.
-- Cancel атомарно закрывает draft и удаляет private proofs. Его durable
-  повтор возвращает текущий подписанный экран без отката нового draft.
+Перед #171 реальный TCP reproducer прошёл с чужим Origin через public
+`/device-identity` и обычный `/state` до host-local APP-004. UUID устройства
+работал как locator без доказательства права читать локальный namespace.
+GM-specific proof уже действовал; обычный player path требовал общей границы.
 
-Технические решения — [ADR 0064](../adr/0064-paused-campaign-creation.md).
-Forward-only миграция `0007` дополняет `0001`–`0006`; старые schema guards
-обновлены явно. Данные в `artifacts/` и importer не меняются. Добавлены
-`qrcode-generator` и dev-only `jsqr`: обе библиотеки без install scripts и
-транзитивных зависимостей; причина выбора зафиксирована в ADR.
+- `/state` проверяет действительный TCP peer/local endpoint, живой listener и
+  канонический Origin до каждого frame всех версий, JSON decode, private
+  reads, replay, ID allocation, KDF и mutation. GM authority и owner/revision
+  проверки сохраняются отдельно.
+- Неподтверждённый frame получает только protocol refusal с null input value
+  и закрытие 1008. Role/device ID, Host/proxy headers и URL не дают обхода.
+- `/device-identity` отказывает HTTP 403/no-store до чтения store. Переданный
+  Origin строгий. Origin-less read-only HTTP GET разрешён только реальному
+  host-local TCP peer; это не исключение для WebSocket.
+- Статика, поставленные media и health остаются публичными. Будущий campaign
+  transport #171 использует отдельный закрытый handler и собственные proofs.
+- Все 55 simulated private WS connections в семи integration suites заменены
+  настоящими TCP/Origin connections. HTTP identity проверяется fetch.
+  Production authority adapters, test flags и fake peer metadata не добавлены.
 
-## Проверки и ревью
+[ADR 0065](../adr/0065-host-local-app-transport-boundary.md) принят.
+SQLite schema, artifacts/generated, зависимости, CI и конфигурация проверок
+не меняются. Переход на реальный transport сохраняет игровые assertions.
 
-- `npm run import` прошёл; tracked generated-данные не изменились.
-- Полный `npm run verify` прошёл: **132 файла / 2464 Vitest-теста**, типы,
-  ESLint, Prettier, трассируемость, контрольные суммы и валидация.
-  Лог: `reports/170-verify-root-final.log`.
-- Полная production-сборка и **34/34 Chrome E2E** прошли без retry: прежние
-  30 сценариев и четыре новых campaign create/cancel/recovery/failure.
-  Лог: `reports/170-e2e-root-final.log`.
-- Проверены MANUAL/AUTO, очистка секрета, cancel, actual QR decode, exact
-  CREATE replay, SQLite restart, новый вход без ticket и занятый порт.
-- Независимое чтение выявило и помогло исправить обход player role boundary,
-  потерю доступа без browser ticket, cleanup до commit, KDF replay allocation,
-  смешение concurrent view/revisions и неизвестный pending CREATE.
-- Независимый actual TCP probe удержал завершение настоящего scrypt и
-  подтвердил отказ второго устаревшего Master launch. Чужой Origin не получил
-  GM CTA или resume. Проверка: `reports/170-independent-tcp-probe.log`.
-- Прочитан весь новый production code и изменённые integration paths;
-  тестовые сценарии — выборочно. Код превышает измеренную границу чтения
-  в 6000 строк, поэтому полного построчного чтения всего test diff не заявляем.
-- Полные результаты `verify`/E2E, свежий независимый прогон окончательного
-  commit и CI фиксируются перед merge. Целевые проверки их не заменяют.
+## Проверки
 
-## Следующие задачи
+- До fix exact TCP probe: HTTP 200, APP-001/002/004 доступны чужому Origin.
+  После fix: HTTP 403, один protocol refusal, опубликованных форм нет.
+  Логи: `reports/179-local-player-exposure-before.log` и `-after.log`.
+- Семь real-TCP host suites: **94/94 теста**, исходные assertions поведения
+  сохранены; отрицательный GM case выделен в отдельное чужое соединение.
+- Новый actual TCP/HTTP/WS suite: **30/30**, все wire versions, malformed и
+  binary input, missing/null/foreign Origin, поддельные Host/proxy headers,
+  безопасный отказ и zero private SQL/revision/ID/RNG/KDF effects.
+- Чистые proof predicates: **7/7** вместе с прежним master trust suite.
+- Полный `npm run verify` прошёл: **134 файла / 2499 Vitest-тестов**, типы,
+  ESLint, Prettier, checksums, traceability и validate.
+  Лог: `reports/179-verify-root.log`.
+- Production-сборка и **34/34 Chrome E2E** прошли без retry;
+  Node replay fixtures тоже передают настоящий Origin своего listener.
+  Лог: `reports/179-e2e-root.log`. После уточнения этих двух fixture headers
+  общий typecheck повторно прошёл: `reports/179-final-typecheck.log`.
+- Независимый final-SHA прогон и CI фиксируются в PR перед merge.
 
-1. Закончить обязательные проверки #170, merge и отдельно проверить закрытие.
-2. #171 → #172 → #173 → #174: подключение, допуск персонажей, Start и базовый
-   lifecycle кампании. #172 использует уже слитый экспорт #156.
-   Для #171 найден конфликт preliminary review и финальных admission-команд:
-   [#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177).
-   Поправка источника ожидает решения владельца; runtime этих решений не начат.
-3. #113: мастерский NPC/ENM/GM и нормативная поставка арта. Разрешены шесть
-   портретов НПС; заглушка чудовища получена, арт мыслящего врага сгенерирован.
-   Изображения ещё должны войти в поставку и importer, временные отчёты
-   не заменяют эту работу. Runtime #113 пока не начат.
+## Дальнейшая очередь
+
+#171 имеет отдельный source blocker [#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177):
+заявленное предварительное GM review противоречит финальным admission-командам
+поставленного Atlas. Предложены две отдельные request-команды и IN_REVIEW,
+без copies/seats; решение владельца ожидается, нормативные файлы не изменены.
+
+Read-only подготовка #171 сохранена в reports: source audit, topology/trust
+и store API proposal. Выбранная для обсуждения архитектура — собственный local
+Node/SQLite устройства и отдельный bridge к единственному campaign writer.
+Provisional input controllerSeat из ADR 0027/0030 отделён от admitted seats и
+campaign capacity. Реализация этих новых contracts пока не начата.
+
+После #171 идут #172 → #173 → #174. #113 требует отдельной санкции source
+поставки и явной границы runtime; вопросы о массе/поле/переиспользовании
+портретов и недостающем enemy art уже решены, повторять их не нужно.
+Подготовленные арты ещё должны войти в manifest/importer.
 
 Пользователь разрешил последовательные merge до закрытия всех issues.
-Перед каждым merge обязательны независимое ревью и свежие `verify`/E2E
-на окончательном HEAD; закрытие issue проверяется отдельно после merge.
+Перед каждым merge обязательны независимое ревью и свежие verify/E2E
+на окончательном HEAD; фактическое закрытие issue проверяется отдельно.

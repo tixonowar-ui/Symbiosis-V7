@@ -327,7 +327,9 @@ export async function createCreationFinalizationBrowserHost(options: {
         await listen();
       },
       replay: async (reconnectFrame: string, commandFrame: string) => {
-        const socket = new WebSocket(baseURL.replace(/^http/, 'ws') + '/state');
+        const socket = new WebSocket(baseURL.replace(/^http/, 'ws') + '/state', {
+          origin: new URL(baseURL).origin,
+        });
         try {
           await new Promise<void>((resolve, reject) => {
             socket.once('open', resolve);

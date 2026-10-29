@@ -39,6 +39,7 @@ import {
 } from './creation-set-decide.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
+import { openLocalHostWebSocket } from '../../tests/fixtures/local-host-websocket.js';
 import { CHR_018_ROUTE } from './projections/chr-manual-symbionts.js';
 import {
   CHR_021_CONFIRM_ACTION_KEY,
@@ -181,7 +182,7 @@ function snapshot(value: string | HostToClientV2Message): Snapshot {
 }
 
 async function openSocket(app: FastifyInstance): Promise<WebSocket> {
-  const socket = await app.injectWS('/state');
+  const socket = await openLocalHostWebSocket(app);
   sockets.push(socket);
   return socket;
 }

@@ -49,6 +49,7 @@ import { CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID } from './creation-roll-commit
 import { IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID } from './identity-checkpoint.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
+import { openLocalHostWebSocket } from '../../tests/fixtures/local-host-websocket.js';
 import { loadSkillStageCatalog } from './skill-stage-catalog.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -389,7 +390,7 @@ async function createJourneyHarness(
     staticRoot,
   });
   await startHost(app, { interface: '127.0.0.1', port: 0 });
-  const socket = await app.injectWS('/state');
+  const socket = await openLocalHostWebSocket(app);
 
   let frames = receiveFrames(socket, 2);
   socket.send(clientTextV2(reconnect(deviceId, `${suffix}-reconnect`), vocabulary));
@@ -1165,7 +1166,7 @@ describe('durable character creation decisions', () => {
         staticRoot,
       });
       await startHost(app, { interface: '127.0.0.1', port: 0 });
-      socket = await app.injectWS('/state');
+      socket = await openLocalHostWebSocket(app);
       frames = receiveFrames(socket, 7);
       socket.send(
         clientTextV2(
@@ -1290,7 +1291,7 @@ describe('durable character creation decisions', () => {
       const sampleCalls = harness.sampleCalls();
       const receiptAllocations = harness.receiptAllocations();
       const shellWrites = harness.runtime.writes.length;
-      refreshSocket = await harness.app.injectWS('/state');
+      refreshSocket = await openLocalHostWebSocket(harness.app);
       const frames = receiveFrames(refreshSocket, 2);
       refreshSocket.send(
         clientTextV2(reconnect(harness.deviceId, 'no-reroll-refresh-reconnect'), vocabulary),
@@ -1376,7 +1377,7 @@ describe('durable character creation decisions', () => {
         staticRoot,
       });
       await startHost(restartedApp, { interface: '127.0.0.1', port: 0 });
-      restartedSocket = await restartedApp.injectWS('/state');
+      restartedSocket = await openLocalHostWebSocket(restartedApp);
       let frames = receiveFrames(restartedSocket, 4);
       restartedSocket.send(
         clientTextV2(
@@ -1420,7 +1421,7 @@ describe('durable character creation decisions', () => {
       expect(restartReceipts).toBe(0);
       expect(restartRuntime.writes).toHaveLength(0);
 
-      secondReconnectSocket = await restartedApp.injectWS('/state');
+      secondReconnectSocket = await openLocalHostWebSocket(restartedApp);
       frames = receiveFrames(secondReconnectSocket, 2);
       secondReconnectSocket.send(
         clientTextV2(reconnect(harness.deviceId, 'no-reroll-second-reconnect'), vocabulary),
@@ -1840,7 +1841,7 @@ describe('durable character creation decisions', () => {
         derived: { assignmentMode: 'ROLLED_BIJECTION', decision: 'ACCEPT_SET' },
       });
 
-      limitedSocket = await harness.app.injectWS('/state');
+      limitedSocket = await openLocalHostWebSocket(harness.app);
       let frames = receiveFrames(limitedSocket, 2);
       limitedSocket.send(
         clientTextV2(
@@ -1955,7 +1956,7 @@ describe('durable character creation decisions', () => {
       });
       expect(harness.receiptAllocations()).toBe(allocationsAfterAssignment);
 
-      recoverySocket = await harness.app.injectWS('/state');
+      recoverySocket = await openLocalHostWebSocket(harness.app);
       frames = receiveFrames(recoverySocket, 2);
       recoverySocket.send(
         clientTextV2(reconnect(harness.deviceId, 'accept-set-assignment-reconnect'), vocabulary),
@@ -2099,7 +2100,7 @@ describe('durable character creation decisions', () => {
         staticRoot,
       });
       await startHost(restartedApp, { interface: '127.0.0.1', port: 0 });
-      restartedSocket = await restartedApp.injectWS('/state');
+      restartedSocket = await openLocalHostWebSocket(restartedApp);
       frames = receiveFrames(restartedSocket, 3);
       restartedSocket.send(
         clientTextV2(
@@ -2306,7 +2307,7 @@ describe('durable character creation decisions', () => {
       });
       expect(restartReceiptAllocations).toBe(1);
 
-      selectionRecoverySocket = await restartedApp.injectWS('/state');
+      selectionRecoverySocket = await openLocalHostWebSocket(restartedApp);
       frames = receiveFrames(selectionRecoverySocket, 3);
       selectionRecoverySocket.send(
         clientTextV2(
@@ -2556,7 +2557,7 @@ describe('durable character creation decisions', () => {
         [{ ...clientBinding, source: 'inherited' as const }],
       ];
       for (const [index, bindings] of invalidBindings.entries()) {
-        const socket = await currentApp.injectWS('/state');
+        const socket = await openLocalHostWebSocket(currentApp);
         const refusal = await sendRawV2(
           socket,
           addressableRouteIntent(
@@ -2577,7 +2578,7 @@ describe('durable character creation decisions', () => {
       expect(currentReceiptAllocations()).toBe(allocationsBeforeInvalid);
 
       await restart('skill-card-restart-open');
-      currentSocket = await currentApp.injectWS('/state');
+      currentSocket = await openLocalHostWebSocket(currentApp);
       let frames = receiveFrames(currentSocket, 2);
       currentSocket.send(
         clientTextV2(reconnect(harness.deviceId, 'skill-card-restart-open-reconnect'), vocabulary),
@@ -2667,7 +2668,7 @@ describe('durable character creation decisions', () => {
       expect(currentReceiptAllocations()).toBe(1);
 
       await restart('skill-card-restart-partial');
-      currentSocket = await currentApp.injectWS('/state');
+      currentSocket = await openLocalHostWebSocket(currentApp);
       frames = receiveFrames(currentSocket, 3);
       currentSocket.send(
         clientTextV2(
@@ -2692,7 +2693,7 @@ describe('durable character creation decisions', () => {
         revisions: additionResult.receipt.revisions,
       });
 
-      const coldSocket = await currentApp.injectWS('/state');
+      const coldSocket = await openLocalHostWebSocket(currentApp);
       frames = receiveFrames(coldSocket, 2);
       coldSocket.send(
         clientTextV2(reconnect(harness.deviceId, 'skill-card-restart-partial-cold'), vocabulary),
@@ -3002,7 +3003,7 @@ describe('durable character creation decisions', () => {
         staticRoot,
       });
       await startHost(restartedApp, { interface: '127.0.0.1', port: 0 });
-      restartedSocket = await restartedApp.injectWS('/state');
+      restartedSocket = await openLocalHostWebSocket(restartedApp);
       const frames = receiveFrames(restartedSocket, 4);
       restartedSocket.send(
         clientTextV2(
@@ -3113,7 +3114,9 @@ describe('durable character creation decisions', () => {
           recovered = hostMessageV2(values[1] ?? '', vocabulary);
         } else {
           recoverySocket =
-            recoveryPath === 'reconnect' ? harness.socket : await harness.app.injectWS('/state');
+            recoveryPath === 'reconnect'
+              ? harness.socket
+              : await openLocalHostWebSocket(harness.app);
           const replayIds = recoveryPath === 'replay' ? [request.commandId] : [];
           const frames = receiveFrames(recoverySocket, replayIds.length === 0 ? 2 : 3);
           recoverySocket.send(
@@ -3363,7 +3366,7 @@ describe('durable character creation decisions', () => {
       const committed = await commitNonCriticalSet(harness, vocabulary, 'decision-capability');
       const checkpoint = loadCreationWizardCheckpoint(harness.database, harness.characterDraftId);
       const allocations = harness.receiptAllocations();
-      limitedSocket = await harness.app.injectWS('/state');
+      limitedSocket = await openLocalHostWebSocket(harness.app);
       const frames = receiveFrames(limitedSocket, 2);
       limitedSocket.send(
         clientTextV2(
@@ -3464,7 +3467,7 @@ describe('durable character creation decisions', () => {
         before,
       );
 
-      retrySocket = await harness.app.injectWS('/state');
+      retrySocket = await openLocalHostWebSocket(harness.app);
       let frames = receiveFrames(retrySocket, 2);
       retrySocket.send(clientTextV2(reconnect(harness.deviceId, `${suffix}-retry`), vocabulary));
       const reconnected = await frames;
@@ -3514,7 +3517,7 @@ describe('durable character creation decisions', () => {
     let limitedSocket: WebSocket | undefined;
     try {
       const journey = await advanceToChr003(harness, vocabulary, 'capability-chr003');
-      limitedSocket = await harness.app.injectWS('/state');
+      limitedSocket = await openLocalHostWebSocket(harness.app);
       const frames = receiveFrames(limitedSocket, 2);
       limitedSocket.send(
         clientTextV2(
@@ -3604,7 +3607,7 @@ describe('durable character creation decisions', () => {
         revisions: setResult.receipt.revisions,
       });
 
-      limitedSocket = await harness.app.injectWS('/state');
+      limitedSocket = await openLocalHostWebSocket(harness.app);
       const frames = receiveFrames(limitedSocket, 2);
       limitedSocket.send(
         clientTextV2(
@@ -3948,7 +3951,7 @@ describe('durable character creation decisions', () => {
         loadCreationWizardCheckpoint(harness.database, harness.characterDraftId, skillCatalog),
       ).toEqual(checkpointBeforeClass);
 
-      limitedSocket = await harness.app.injectWS('/state');
+      limitedSocket = await openLocalHostWebSocket(harness.app);
       let frames = receiveFrames(limitedSocket, 2);
       limitedSocket.send(
         clientTextV2(
@@ -4109,7 +4112,7 @@ describe('durable character creation decisions', () => {
       });
       expect(harness.receiptAllocations()).toBe(allocationsAfterClass);
 
-      recoverySocket = await harness.app.injectWS('/state');
+      recoverySocket = await openLocalHostWebSocket(harness.app);
       frames = receiveFrames(recoverySocket, 2);
       recoverySocket.send(
         clientTextV2(reconnect(harness.deviceId, 'pure-assignment-reconnect'), vocabulary),

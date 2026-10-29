@@ -44,6 +44,7 @@ import {
 } from './identity-checkpoint.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { createHost, startHost } from './server.js';
+import { openLocalHostWebSocket } from '../../tests/fixtures/local-host-websocket.js';
 import { loadSkillStageCatalog } from './skill-stage-catalog.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -261,7 +262,7 @@ describe('first durable identity checkpoint server path', () => {
     try {
       // Open an independent APP-004 connection before the draft assignment. It stays live
       // while the other connection commits, proving the database read is not host-start frozen.
-      let librarySocket = await app.injectWS('/state');
+      let librarySocket = await openLocalHostWebSocket(app);
       sockets.push(librarySocket);
       let frames = receiveFrames(librarySocket, 2);
       librarySocket.send(clientTextV2(reconnect(deviceId, 'library-reconnect'), vocabulary));
@@ -289,7 +290,7 @@ describe('first durable identity checkpoint server path', () => {
         revisions: { ...ZERO_REVISIONS, projectionRevision: 2 },
       });
 
-      const creatorSocket = await app.injectWS('/state');
+      const creatorSocket = await openLocalHostWebSocket(app);
       sockets.push(creatorSocket);
       frames = receiveFrames(creatorSocket, 2);
       creatorSocket.send(clientTextV2(reconnect(deviceId, 'creator-reconnect'), vocabulary));
@@ -623,7 +624,7 @@ describe('first durable identity checkpoint server path', () => {
       // library before restoring the signed command destination on another connection.
       runtime = revisionRuntime();
       app = await start();
-      librarySocket = await app.injectWS('/state');
+      librarySocket = await openLocalHostWebSocket(app);
       sockets.push(librarySocket);
       frames = receiveFrames(librarySocket, 2);
       librarySocket.send(clientTextV2(reconnect(deviceId, 'restart-library'), vocabulary));
@@ -650,7 +651,7 @@ describe('first durable identity checkpoint server path', () => {
         },
       });
 
-      const recoverySocket = await app.injectWS('/state');
+      const recoverySocket = await openLocalHostWebSocket(app);
       sockets.push(recoverySocket);
       frames = receiveFrames(recoverySocket, 3);
       recoverySocket.send(
@@ -687,7 +688,7 @@ describe('first durable identity checkpoint server path', () => {
 
       // Once the replay was delivered and the command is acknowledged, transport reconnect
       // still restores the live host's entity-bound CHR-010 assignment.
-      const completedReconnect = await app.injectWS('/state');
+      const completedReconnect = await openLocalHostWebSocket(app);
       sockets.push(completedReconnect);
       frames = receiveFrames(completedReconnect, 2);
       completedReconnect.send(clientTextV2(reconnect(deviceId, 'completed-reconnect'), vocabulary));
@@ -773,8 +774,8 @@ describe('first durable identity checkpoint server path', () => {
       staticRoot,
     });
     await startHost(app, { interface: '127.0.0.1', port: 0 });
-    const creatorSocket = await app.injectWS('/state');
-    const parallelSocket = await app.injectWS('/state');
+    const creatorSocket = await openLocalHostWebSocket(app);
+    const parallelSocket = await openLocalHostWebSocket(app);
     try {
       let frames = receiveFrames(creatorSocket, 2);
       creatorSocket.send(clientTextV2(reconnect(deviceId, 'failure-reconnect'), vocabulary));
@@ -936,7 +937,7 @@ describe('first durable identity checkpoint server path', () => {
       staticRoot,
     });
     await startHost(app, { interface: '127.0.0.1', port: 0 });
-    const socket = await app.injectWS('/state');
+    const socket = await openLocalHostWebSocket(app);
     try {
       let frames = receiveFrames(socket, 2);
       socket.send(clientTextV2(reconnect(deviceId, 'refusal-reconnect'), vocabulary));
