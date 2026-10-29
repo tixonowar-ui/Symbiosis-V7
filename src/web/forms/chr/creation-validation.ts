@@ -176,6 +176,61 @@ const object = (
 ): boolean => isJsonObject(v) && decodeProjection(v, '$.field', fields).ok;
 const array = (v: JsonValue | undefined, predicate: (entry: JsonValue) => boolean): boolean =>
   Array.isArray(v) && v.every(predicate);
+export const startingPropertyFields: Parameters<typeof decodeProjection>[2] = {
+  armorBundle: (v) =>
+    object(v, {
+      armorBundleId: isNonEmptyString,
+      armorPieces: (a) =>
+        array(a, (p) =>
+          object(p, {
+            itemId: isNonEmptyString,
+            name: creationValidationPublicText,
+            coverageModel: creationValidationPublicText,
+            bodyZone: nullableId,
+          }),
+        ),
+      distinctBodyZones: (a) => array(a, isNonEmptyString),
+      qualityRecommendation: quality,
+      ownershipState: owned,
+    }),
+  weapon: (v) =>
+    object(v, {
+      weaponTypeId: isNonEmptyString,
+      weaponVariant: isNonEmptyString,
+      name: creationValidationPublicText,
+      qualityRecommendation: quality,
+      profileFacts: (a) =>
+        array(a, (f) =>
+          object(f, {
+            label: creationValidationPublicText,
+            value: (x) => bool(x) || finite(x) || creationValidationPublicText(x),
+          }),
+        ),
+      profileStatus: (x) => x === 'SUBMITTED' || x === 'ACKNOWLEDGED',
+      ownershipState: owned,
+    }),
+  moneyRecommendation: (v) =>
+    object(v, { wealthRecommendation: quality, gmFinalizationRequired: (x) => x === true }),
+  fivePositions: (v) =>
+    Array.isArray(v) &&
+    v.length === 5 &&
+    v.every((p) => isJsonObject(p) && p['ownershipState'] === 'OWNED_NOT_EQUIPPED'),
+  propertyRollReceipts: (v) =>
+    Array.isArray(v) &&
+    v.length === 8 &&
+    v.every((r: JsonValue) =>
+      object(r, {
+        block: (b) => ['ARMOR_BUNDLE', 'WEAPON', 'MONEY', 'POSITION'].includes(b as string),
+        positionIdOrNull: nullableId,
+        rollRequestId: isNonEmptyString,
+        rollReceiptId: isNonEmptyString,
+        rawFace: isFace,
+      }),
+    ),
+  exactOperationCount: (v) => v === 8,
+  ownershipStateAll: owned,
+};
+
 export function decodeChr032Projection(
   value: unknown,
   path: string,
@@ -184,58 +239,7 @@ export function decodeChr032Projection(
   const decoded = decodeProjection(value, path, {
     ...commonFields,
     propertyCheckpointReceiptId: isNonEmptyString,
-    armorBundle: (v) =>
-      object(v, {
-        armorBundleId: isNonEmptyString,
-        armorPieces: (a) =>
-          array(a, (p) =>
-            object(p, {
-              itemId: isNonEmptyString,
-              name: creationValidationPublicText,
-              coverageModel: creationValidationPublicText,
-              bodyZone: nullableId,
-            }),
-          ),
-        distinctBodyZones: (a) => array(a, isNonEmptyString),
-        qualityRecommendation: quality,
-        ownershipState: owned,
-      }),
-    weapon: (v) =>
-      object(v, {
-        weaponTypeId: isNonEmptyString,
-        weaponVariant: isNonEmptyString,
-        name: creationValidationPublicText,
-        qualityRecommendation: quality,
-        profileFacts: (a) =>
-          array(a, (f) =>
-            object(f, {
-              label: creationValidationPublicText,
-              value: (x) => bool(x) || finite(x) || creationValidationPublicText(x),
-            }),
-          ),
-        profileStatus: (x) => x === 'SUBMITTED' || x === 'ACKNOWLEDGED',
-        ownershipState: owned,
-      }),
-    moneyRecommendation: (v) =>
-      object(v, { wealthRecommendation: quality, gmFinalizationRequired: (x) => x === true }),
-    fivePositions: (v) =>
-      Array.isArray(v) &&
-      v.length === 5 &&
-      v.every((p) => isJsonObject(p) && p['ownershipState'] === 'OWNED_NOT_EQUIPPED'),
-    propertyRollReceipts: (v) =>
-      Array.isArray(v) &&
-      v.length === 8 &&
-      v.every((r: JsonValue) =>
-        object(r, {
-          block: (b) => ['ARMOR_BUNDLE', 'WEAPON', 'MONEY', 'POSITION'].includes(b as string),
-          positionIdOrNull: nullableId,
-          rollRequestId: isNonEmptyString,
-          rollReceiptId: isNonEmptyString,
-          rawFace: isFace,
-        }),
-      ),
-    exactOperationCount: (v) => v === 8,
-    ownershipStateAll: owned,
+    ...startingPropertyFields,
     massAndMandatoryRowsStatus: (v) =>
       object(v, { valid: bool, massApprovalStatus: (x) => x === 'PENDING_GM' }),
     summaryEntryMode: (v) => v === 'INITIAL' || v === 'RESUME',
@@ -367,6 +371,7 @@ export function expectedChr032ActionKeys(
 export function expectedChr025ActionKeys(
   p: Chr025Projection,
   finalSave: boolean,
+  checkpoint = true,
 ): readonly ActionKey[] {
   if (p.finalSaveStatus === 'COMMITTED') return [];
   return [
@@ -379,6 +384,8 @@ export function expectedChr025ActionKeys(
       )
       .map(([, action]) => action),
     ...(finalSave && p.validationBlockers.length === 0 ? [CHR_025_FINAL_SAVE_ACTION_KEY] : []),
+    ...(checkpoint && p.validationBlockers.length === 0 ? ['CHR-025::CTA::008' as const] : []),
+    'CHR-025::CTA::009',
   ];
 }
 export type CreationFinalizationRequest =
@@ -555,9 +562,20 @@ export function creationFinalizationSnapshotMatchesReceipt(
 ): boolean {
   const p = snapshot.projection,
     r = receipt.result;
+  if (r['nextFormId'] === 'CHR-040')
+    return (
+      snapshot.formId === 'CHR-040' &&
+      snapshot.layers.length === 0 &&
+      p['localCharacterUuid'] === r['characterDraftId'] &&
+      p['finalSaveReceiptId'] === receipt.receiptId &&
+      p['finalSnapshotVersion'] === r['draftRevision'] &&
+      isJsonObject(p['provenance']) &&
+      p['provenance']['sourceChecksum'] === r['mechanicsSnapshotHashOrNull'] &&
+      sameJson({ ...snapshot.revisions }, { ...receipt.revisions })
+    );
   return (
     snapshot.layers.length === 0 &&
-    snapshot.formId === (r['nextFormId'] === 'CHR-040' ? 'CHR-025' : r['nextFormId']) &&
+    snapshot.formId === r['nextFormId'] &&
     p['characterDraftId'] === r['characterDraftId'] &&
     p['wizardCheckpointId'] === r['checkpointId'] &&
     p['draftRevision'] === r['draftRevision'] &&

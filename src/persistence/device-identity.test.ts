@@ -74,7 +74,7 @@ describe('device identity migration', () => {
       )
       .run('preserved', 'DRAFT', '{ "source": "v2" }');
 
-    expect(applyMigrations(database)).toBe(5);
+    expect(applyMigrations(database)).toBe(6);
     expect(
       database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
     ).toEqual([
@@ -83,6 +83,7 @@ describe('device identity migration', () => {
       { version: 3, name: 'device-identity' },
       { version: 4, name: 'skill-presentation' },
       { version: 5, name: 'symbiont-presentation' },
+      { version: 6, name: 'local-character-post-save' },
     ]);
     expect(
       database
@@ -155,7 +156,7 @@ describe('device identity store', () => {
     databases.splice(databases.indexOf(firstDatabase), 1);
     const restartedDatabase = new Database(carrier);
     configurePersistenceDatabase(restartedDatabase);
-    expect(applyMigrations(restartedDatabase)).toBe(5);
+    expect(applyMigrations(restartedDatabase)).toBe(6);
     databases.push(restartedDatabase);
 
     expect(bootstrapDeviceIdentity(restartedDatabase)).toBe(firstBootstrap);

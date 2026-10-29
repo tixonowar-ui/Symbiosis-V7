@@ -59,6 +59,42 @@ import { projectPureChr019 } from './projections/chr-symbionts.js';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import {
+  postSaveRevisions,
+  postSaveReceiptView,
+  openPlayerPostSave,
+  projectLocalPostSave,
+  loadPlayerPostSave,
+  navigateLocalPostSave,
+  validatePostSaveSource,
+  normalizePostSaveRequest,
+  commitLocalPostSave,
+  metadataForFinal,
+  readProvisionalVariant,
+  type LocalPostSaveDependencies,
+} from './local-character-post-save.js';
+import {
+  loadLocalCharacterExportBaseline,
+  type LocalCharacterExportBaseline,
+} from './local-character-export.js';
+import { commitIdentityCheckpoint } from './identity-checkpoint.js';
+import {
+  readLocalCharacterOwner,
+  readPostSaveCommandById,
+  readPostSaveCursor,
+  writePostSaveCursor,
+  readPostSaveRestoreCommand,
+  type PostSaveHead,
+  type VariantInitializationProof,
+} from '../persistence/index.js';
+import type { PostSaveCommandResult, PostSaveRequest } from '@shared/local-character-post-save.js';
+import {
+  createArchivedCharacterExportContext,
+  projectArchivedCharacterExport,
+  commitArchivedCharacterExport,
+  type ArchivedCharacterExportAuthority,
+  type ArchivedCharacterExportDependencies,
+} from './local-character-archive-export.js';
 
 import websocket from '@fastify/websocket';
 import Fastify from 'fastify';
@@ -357,6 +393,8 @@ import {
 import { loadSymbiontMediaCatalog } from './symbiont-media.js';
 
 export interface HostServerConfig {
+  /** Explicit export-fixture adapter; normal startup supplies no campaign authority. */
+  readonly readArchivedCharacterExportAuthority?: () => ArchivedCharacterExportAuthority | null;
   readonly advanceRevisions: (impact: RevisionImpact) => RevisionVector;
   readonly allocateCreationBranchUuid: () => string;
   readonly allocateCreationRollRequestId: () => string;
@@ -399,6 +437,14 @@ interface CreationWizardCapabilities {
   readonly weaponProfileSubmit: boolean;
 }
 interface ConfirmedNavigationContext {
+  readonly postSaveScopeId?: string | undefined;
+  readonly postSaveReplayCommandId?: string | undefined;
+  readonly variantInitializationProof?: VariantInitializationProof | undefined;
+  readonly restoredPostSaveCursor?: {
+    readonly scopeId: string;
+    readonly commandId: string;
+    readonly formId: string;
+  };
   readonly contextId: string | null;
   readonly deviceId: string;
   readonly entityLocalCharacterId: string | null;
@@ -407,6 +453,11 @@ interface ConfirmedNavigationContext {
     | 'APP-001'
     | 'APP-002'
     | 'APP-004'
+    | 'APP-009'
+    | 'APP-010'
+    | 'CHR-026'
+    | 'CHR-039'
+    | 'CHR-040'
     | typeof CHR_002_FORM_ID
     | typeof CHR_003_FORM_ID
     | typeof CHR_004_FORM_ID
@@ -471,6 +522,8 @@ interface LibraryRevisionRuntime {
   readonly read: () => number;
 }
 interface NavigationDependencies {
+  readonly archivedCharacterExport?: ArchivedCharacterExportDependencies;
+  readonly localCharacterExportBaseline: LocalCharacterExportBaseline;
   readonly advanceRevisions: HostServerConfig['advanceRevisions'];
   readonly allocateCreationBranchUuid: HostServerConfig['allocateCreationBranchUuid'];
   readonly allocateCreationRollRequestId: HostServerConfig['allocateCreationRollRequestId'];
@@ -681,7 +734,7 @@ function advanceProjection(
 function projectionSnapshot(
   correlationId: string,
   base: PresentedBaseForm,
-  projectionRole: 'player' | null,
+  projectionRole: 'player' | 'gm' | null,
   revisions: RevisionVector,
   reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'] = 'FORM_ACTION',
   layers: readonly PresentedLayerForm[] = [],
@@ -756,8 +809,13 @@ function app004Navigation(
   dependencies: NavigationDependencies,
 ): NavigationSuccess {
   const after = advanceProjection(before, dependencies.advanceRevisions);
+  const entries = listLocalCharacters(dependencies.database).filter(
+    (entry) =>
+      readLocalCharacterOwner(dependencies.database, entry.localCharacterId)?.ownerDeviceId ===
+      current.deviceId,
+  );
   const projected = projectApp004(dependencies.catalog, 'player', {
-    libraryEntries: listLocalCharacters(dependencies.database),
+    libraryEntries: entries,
     localCharacterLibraryRevision: dependencies.libraryRevision.read(),
     projectionRevision: after.projectionRevision,
     stateRevision: after.stateRevision,
@@ -766,6 +824,9 @@ function app004Navigation(
   return {
     nextContext: {
       ...current,
+      postSaveScopeId: undefined,
+      postSaveReplayCommandId: undefined,
+      variantInitializationProof: undefined,
       entityLocalCharacterId: null,
       entityRevisions: null,
       formId: 'APP-004',
@@ -777,7 +838,41 @@ function app004Navigation(
         availableActionKeys: APP_004_VERTICAL_ACTION_KEYS,
         formId: 'APP-004',
         formType: 'screen',
-        roleFilteredPayload: projected.projection,
+        roleFilteredPayload: {
+          ...projected.projection,
+          libraryEntries: entries
+            .filter((e) => ['DRAFT', 'FINAL', 'VARIANT'].includes(e.lifecycleState))
+            .map((e) => {
+              let name: string | null = null;
+              try {
+                const d = postSaveDependencies(dependencies);
+                if (e.lifecycleState === 'VARIANT') {
+                  name = readProvisionalVariant(d, e.localCharacterId, 'library-inspection')
+                    .metadata.name;
+                } else {
+                  const checkpoint = d.loadCheckpoint(e.localCharacterId);
+                  name =
+                    e.lifecycleState === 'FINAL'
+                      ? metadataForFinal(d, checkpoint).values.name
+                      : (checkpoint.finalizationStage?.state.identity.name ??
+                        checkpoint.identityStage.request.payload.name);
+                }
+              } catch {
+                /* An owned corrupt draft remains addressable only through the recovery diagnostic. */
+              }
+              return {
+                localCharacterId: e.localCharacterId,
+                lifecycleState: e.lifecycleState,
+                name,
+                selectionFormId:
+                  e.lifecycleState === 'VARIANT'
+                    ? 'CHR-001'
+                    : e.lifecycleState === 'FINAL'
+                      ? 'CHR-040'
+                      : 'CHR-026',
+              };
+            }),
+        },
         routeBindings: [],
         routeTemplate: APP_004_ROUTE,
       },
@@ -852,6 +947,8 @@ function currentNavigationRevisions(
   dependencies: NavigationDependencies,
 ): RevisionVector {
   const current = connection.current;
+  if (current?.postSaveScopeId !== undefined)
+    return postSaveRevisions(postSavePresentationHead(current, dependencies));
   if (current === null || current.entityLocalCharacterId === null) {
     return checkedRevisions(dependencies.readRevisions());
   }
@@ -861,6 +958,71 @@ function currentNavigationRevisions(
     projectionRevision: localCharacter.projectionRevision,
     stateRevision: localCharacter.stateRevision,
   });
+}
+
+function postSaveDependencies(dependencies: NavigationDependencies): LocalPostSaveDependencies {
+  return {
+    database: dependencies.database,
+    symbiontCatalog: dependencies.symbiontCatalog,
+    baseline: dependencies.localCharacterExportBaseline,
+    loadCheckpoint: (id) =>
+      loadCreationWizardCheckpoint(
+        dependencies.database,
+        id,
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+      ),
+    resumeForm: (checkpoint) => creationPresentationFormId(checkpoint),
+  };
+}
+function postSavePresentationHead(
+  current: ConfirmedNavigationContext,
+  dependencies: NavigationDependencies,
+): PostSaveHead {
+  if (current.postSaveScopeId === undefined) throw new Error('post-save presentation has no scope');
+  const head = loadPlayerPostSave(postSaveDependencies(dependencies), current.postSaveScopeId);
+  if (current.postSaveReplayCommandId === undefined) return head;
+  const known = readPostSaveCommandById(
+    dependencies.database,
+    current.postSaveReplayCommandId,
+    current.deviceId,
+  );
+  if (known === null || known.head.scope.scopeId !== head.scope.scopeId)
+    throw new Error('replay presentation has no bound receipt');
+  validatePostSaveSource(postSaveDependencies(dependencies), head);
+  return postSaveReceiptView(
+    head,
+    known.command.receipt as unknown as CommandReceipt<PostSaveCommandResult>,
+  );
+}
+function postSaveNavigation(
+  head: PostSaveHead,
+  current: ConfirmedPlayerContext,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+  correlationId: string,
+  reason: 'ADDRESSABLE_ROUTE' | 'FORM_ACTION' | 'COMMAND_DESTINATION' | 'RECONNECT',
+  replayCommandId?: string,
+): NavigationSuccess {
+  const base = projectLocalPostSave(
+    postSaveDependencies(dependencies),
+    head,
+    connection.executableWorkflowCommandIds,
+    replayCommandId !== undefined,
+  );
+  return {
+    nextContext: {
+      ...current,
+      formId: base.formId as ConfirmedNavigationContext['formId'],
+      identityDraftScope: null,
+      variantInitializationProof: undefined,
+      entityLocalCharacterId: head.scope.entityId,
+      entityRevisions: postSaveRevisions(head),
+      postSaveScopeId: head.scope.scopeId,
+      postSaveReplayCommandId: replayCommandId,
+    },
+    snapshot: projectionSnapshot(correlationId, base, 'player', postSaveRevisions(head), reason),
+  };
 }
 
 function sendChecked(
@@ -920,7 +1082,30 @@ function adoptNavigationContext(
   }
   connection.current = next;
   connection.activeLayer = null;
+  const restoredCursor = next.restoredPostSaveCursor;
+  if (next.postSaveReplayCommandId !== undefined) {
+    // Delivering an older receipt must not replace the newer durable navigation cursor.
+  } else if (
+    restoredCursor !== undefined &&
+    restoredCursor.formId === next.formId &&
+    next.entityLocalCharacterId !== null
+  ) {
+    writePostSaveCursor(
+      dependencies.database,
+      loadPlayerPostSave(postSaveDependencies(dependencies), restoredCursor.scopeId).scope,
+      restoredCursor.commandId,
+    );
+  } else
+    writePostSaveCursor(
+      dependencies.database,
+      next.postSaveScopeId === undefined
+        ? null
+        : loadPlayerPostSave(postSaveDependencies(dependencies), next.postSaveScopeId).scope,
+    );
+  if (next.formId === 'APP-004' || next.formId === 'APP-002')
+    dependencies.identitySessions.delete(next.deviceId);
   if (
+    next.postSaveScopeId !== undefined ||
     next.identityDraftScope !== null ||
     next.formId === CHR_010_FORM_ID ||
     next.formId === CHR_016_FORM_ID ||
@@ -974,12 +1159,10 @@ function identityDraftBase(
       : CHR_001_INITIAL_ACTION_KEYS,
     formId: CHR_001_FORM_ID,
     formType: 'screen',
-    roleFilteredPayload: projectChr001(
-      scope.characterDraftId,
-      scope.wizardCheckpointId,
-      draftRevision,
-      values,
-    ),
+    roleFilteredPayload: {
+      ...projectChr001(scope.characterDraftId, scope.wizardCheckpointId, draftRevision, values),
+      identityDraftScope: { ...scope },
+    },
     routeBindings: [
       { parameterIndex: 0, source: 'executor-allocated', value: scope.characterDraftId },
     ],
@@ -2106,6 +2289,101 @@ function handleAddressableRoute(
     );
     return;
   }
+  const libraryCurrent = connection.current;
+  if (
+    libraryCurrent?.formId === 'APP-004' &&
+    connection.sessionEstablished &&
+    confirmedPlayerContext(libraryCurrent, dependencies)
+  ) {
+    const binding = message.bindings[0];
+    const id = binding?.value;
+    if (
+      binding?.parameterIndex !== 0 ||
+      typeof id !== 'string' ||
+      message.bindings.length !== 1 ||
+      readLocalCharacterOwner(dependencies.database, id)?.ownerDeviceId !== libraryCurrent.deviceId
+    ) {
+      finish(addressableRouteRefusal(message, { code: 'INVALID_BINDINGS' }, revisions));
+      return;
+    }
+    try {
+      const row = readLocalCharacter(dependencies.database, id);
+      const expected =
+        row.lifecycleState === 'VARIANT'
+          ? CHR_001_ROUTE
+          : row.lifecycleState === 'FINAL'
+            ? '/player/characters/:localCharacterId/create/chr-040'
+            : row.lifecycleState === 'DRAFT'
+              ? '/player/characters/:localCharacterId/create/chr-026'
+              : null;
+      if (message.routeTemplate !== expected) throw new Error('library selection target differs');
+      if (row.lifecycleState === 'VARIANT') {
+        const checkpointId = allocatedWizardCheckpointId(
+          dependencies.allocateWizardCheckpointId,
+          id,
+        );
+        const variant = readProvisionalVariant(
+          postSaveDependencies(dependencies),
+          id,
+          checkpointId,
+        );
+        const scope = {
+          characterDraftId: id,
+          wizardCheckpointId: checkpointId,
+          contextId: libraryCurrent.contextId,
+          sourceFormId: 'CHR-001' as const,
+        };
+        dependencies.identityDraft.registerScope(scope, {
+          ...variant.metadata,
+          age: null,
+          sex: null,
+          massKg: null,
+        });
+        const after = advanceProjection(revisions, dependencies.advanceRevisions);
+        const next = {
+          ...libraryCurrent,
+          postSaveScopeId: undefined,
+          identityDraftScope: scope,
+          entityLocalCharacterId: null,
+          entityRevisions: null,
+          variantInitializationProof: variant.proof,
+          formId: 'CHR-001' as const,
+        };
+        finish(
+          projectionSnapshot(
+            message.navigationRequestId,
+            identityDraftBase(
+              scope,
+              0,
+              { ...variant.metadata, age: null, sex: null, massKg: null },
+              connection.executableWorkflowCommandIds.has(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
+            ),
+            'player',
+            after,
+            'ADDRESSABLE_ROUTE',
+          ),
+          next,
+        );
+      } else {
+        const d = postSaveDependencies(dependencies);
+        let head = openPlayerPostSave(d, id, 'APP-004', 'APP-004', message.navigationRequestId);
+        const target = row.lifecycleState === 'FINAL' ? 'CHR-040' : 'CHR-026';
+        if (head.presentation['formId'] !== target) head = navigateLocalPostSave(d, head, target);
+        const success = postSaveNavigation(
+          head,
+          libraryCurrent,
+          connection,
+          dependencies,
+          message.navigationRequestId,
+          'ADDRESSABLE_ROUTE',
+        );
+        finish(success.snapshot, success.nextContext);
+      }
+    } catch {
+      finish(addressableRouteRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    }
+    return;
+  }
   if (message.routeTemplate === CHR_018_ROUTE) {
     const current = connection.current;
     const binding = message.bindings[0];
@@ -2955,6 +3233,147 @@ function handleFormAction(
     return;
   }
   let success: NavigationSuccess | undefined;
+  if (confirmedPlayerContext(current, dependencies) && current.postSaveScopeId !== undefined) {
+    try {
+      const d = postSaveDependencies(dependencies);
+      const head = postSavePresentationHead(current, dependencies);
+      const base = projectLocalPostSave(
+        d,
+        head,
+        connection.executableWorkflowCommandIds,
+        current.postSaveReplayCommandId !== undefined,
+      );
+      if (!base.availableActionKeys.includes(message.actionKey))
+        throw new Error('post-save action is unavailable');
+      if (action.to === 'APP-004') {
+        success = app004Navigation(
+          message,
+          current,
+          checkedRevisions(dependencies.readRevisions()),
+          dependencies,
+        );
+      } else if (current.formId === 'CHR-026' && action.to === 'APP-009') {
+        success = postSaveNavigation(
+          navigateLocalPostSave(d, head, 'APP-009'),
+          current,
+          connection,
+          dependencies,
+          message.navigationRequestId,
+          'FORM_ACTION',
+        );
+      } else if (current.formId === 'CHR-040' && action.to === 'APP-010') {
+        let target = openPlayerPostSave(
+          d,
+          head.scope.entityId,
+          'CHR-040',
+          'CHR-040',
+          message.navigationRequestId,
+        );
+        target = navigateLocalPostSave(d, target, 'APP-010');
+        success = postSaveNavigation(
+          target,
+          current,
+          connection,
+          dependencies,
+          message.navigationRequestId,
+          'FORM_ACTION',
+        );
+      } else if (
+        current.formId === 'APP-010' &&
+        action.to === 'CHR-040' &&
+        head.scope.sourceBinding['returnFormId'] === 'CHR-040'
+      ) {
+        const target =
+          current.postSaveReplayCommandId === undefined
+            ? navigateLocalPostSave(d, head, 'CHR-040')
+            : openPlayerPostSave(
+                d,
+                head.scope.entityId,
+                'CHR-040',
+                'CHR-040',
+                message.navigationRequestId,
+              );
+        success = postSaveNavigation(
+          target,
+          current,
+          connection,
+          dependencies,
+          message.navigationRequestId,
+          'FORM_ACTION',
+        );
+      } else if (
+        current.formId === 'CHR-039' &&
+        action.to === head.scope.sourceBinding['returnFormId']
+      ) {
+        const checkpoint = validatePostSaveSource(d, head);
+        if (checkpoint === null || creationPresentationFormId(checkpoint) !== action.to)
+          throw new Error('cache return differs from signed wizard destination');
+        success = {
+          nextContext: creationWizardContext(connection, dependencies, checkpoint),
+          snapshot: projectionSnapshot(
+            message.navigationRequestId,
+            creationWizardBase(
+              checkpoint,
+              creationWizardCapabilities(connection.executableWorkflowCommandIds),
+              dependencies.skillStageCatalog,
+              dependencies.symbiontCatalog,
+              dependencies.symbiontMediaCatalog,
+              dependencies.creationDecisionConsequenceCatalog,
+              dependencies.creationSkillCatalog,
+              dependencies.armorBundleCatalog,
+              dependencies.startingWeaponCatalog,
+            ),
+            'player',
+            currentCreationWizardRevisions(checkpoint),
+          ),
+        };
+      }
+    } catch {
+      success = undefined;
+    }
+    if (success === undefined)
+      finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    else finish(success.snapshot, success.nextContext);
+    return;
+  }
+  if (
+    confirmedPlayerContext(current, dependencies) &&
+    message.actionKey === 'CHR-025::CTA::009' &&
+    current.entityLocalCharacterId !== null
+  ) {
+    try {
+      const d = postSaveDependencies(dependencies);
+      const checkpoint = d.loadCheckpoint(current.entityLocalCharacterId);
+      if (
+        checkpoint.localCharacter.lifecycleState !== 'DRAFT' ||
+        creationPresentationFormId(checkpoint) !== 'CHR-025'
+      )
+        throw new Error('cache source is not current');
+      const head = navigateLocalPostSave(
+        d,
+        openPlayerPostSave(
+          d,
+          current.entityLocalCharacterId,
+          'CHR-025',
+          'CHR-025',
+          message.navigationRequestId,
+        ),
+        'CHR-039',
+      );
+      success = postSaveNavigation(
+        head,
+        current,
+        connection,
+        dependencies,
+        message.navigationRequestId,
+        'FORM_ACTION',
+      );
+      finish(success.snapshot, success.nextContext);
+    } catch {
+      finish(formActionRefusal(message, { code: 'NAVIGATION_UNAVAILABLE' }, revisions));
+    }
+    return;
+  }
   if (confirmedPlayerContext(current, dependencies) && current.entityLocalCharacterId !== null) {
     const checkpoint = loadCreationWizardCheckpoint(
       dependencies.database,
@@ -3473,6 +3892,31 @@ function sendCreationWizardDestination(
   correlationId: string,
   reason: 'COMMAND_DESTINATION' | 'RECONNECT',
 ): void {
+  if (checkpoint.localCharacter.lifecycleState === 'FINAL') {
+    const current = creationWizardContext(connection, dependencies, checkpoint);
+    if (!confirmedPlayerContext(current, dependencies))
+      throw new Error('final sheet has no confirmed player owner');
+    const d = postSaveDependencies(dependencies);
+    let head = openPlayerPostSave(
+      d,
+      checkpoint.localCharacter.localCharacterId,
+      'CHR-040',
+      'CHR-040',
+      checkpoint.receipt.commandId,
+    );
+    if (head.presentation['formId'] !== 'CHR-040') head = navigateLocalPostSave(d, head, 'CHR-040');
+    const success = postSaveNavigation(
+      head,
+      current,
+      connection,
+      dependencies,
+      correlationId,
+      reason,
+    );
+    adoptNavigationContext(connection, dependencies, success.nextContext);
+    sendCheckedV2(socket, success.snapshot, dependencies.vocabulary);
+    return;
+  }
   const profileLayer =
     checkpoint.symbiontPresentationStage?.formId === 'CHR-031'
       ? projectChr031(checkpoint)
@@ -3503,6 +3947,217 @@ function sendCreationWizardDestination(
     profileLayer === undefined ? null : { dialogContext: null, presented: profileLayer };
 }
 
+function handleArchivedExportCommand(
+  socket: WebSocket,
+  message: CommandRequest,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+  head: PostSaveHead,
+): void {
+  const revisions = postSaveRevisions(head);
+  let durable = false;
+  try {
+    const d = dependencies.archivedCharacterExport;
+    if (
+      d === undefined ||
+      !connection.sessionEstablished ||
+      !connection.executableWorkflowCommandIds.has('UI-CMD-CHAR-EXPORT') ||
+      connection.current?.formId !== 'APP-010'
+    )
+      throw new Error('archive export authority is unavailable');
+    const known = readPostSaveCommandById(
+      dependencies.database,
+      message.commandId,
+      loadDeviceId(dependencies.database),
+    );
+    const committed = commitArchivedCharacterExport(
+      d,
+      message as unknown as PostSaveRequest,
+      known?.command.receiptId ?? dependencies.allocateReceiptId(),
+    );
+    durable = true;
+    const receipt = committed.command.receipt as unknown as CommandReceipt<PostSaveCommandResult>;
+    const base = projectArchivedCharacterExport(d, committed.head);
+    sendChecked(
+      socket,
+      committed.replayed ? commandReplay(receipt) : commandResult(receipt),
+      dependencies.vocabulary,
+    );
+    sendCheckedV2(
+      socket,
+      projectionSnapshot(
+        message.commandId,
+        base,
+        'gm',
+        postSaveRevisions(committed.head),
+        'COMMAND_DESTINATION',
+      ),
+      dependencies.vocabulary,
+    );
+  } catch (error: unknown) {
+    if (durable) throw error;
+    sendChecked(
+      socket,
+      commandRefusal(message.commandId, { code: 'GUARD_REJECTED' }, revisions),
+      dependencies.vocabulary,
+    );
+  }
+}
+
+function handleLocalPostSaveCommand(
+  socket: WebSocket,
+  message: CommandRequest,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+  prior: ReturnType<typeof readPostSaveCommandById>,
+): void {
+  const before = currentNavigationRevisions(connection, dependencies);
+  let durable = false;
+  try {
+    const request = normalizePostSaveRequest(message);
+    const current = connection.current;
+    if (
+      current === null ||
+      !connection.sessionEstablished ||
+      !confirmedPlayerContext(current, dependencies)
+    )
+      throw new Error('post-save has no active player context');
+    const d = postSaveDependencies(dependencies);
+    let head: PostSaveHead;
+    let receipt: CommandReceipt<PostSaveCommandResult>;
+    let replayed: boolean;
+    if (prior !== null) {
+      if (!isDeepStrictEqual(prior.command.request, request)) {
+        sendChecked(
+          socket,
+          commandRefusal(
+            message.commandId,
+            {
+              code: 'IDEMPOTENCY_CONFLICT',
+              commandId: message.commandId,
+              detail: 'PAYLOAD_MISMATCH',
+            },
+            before,
+          ),
+          dependencies.vocabulary,
+        );
+        return;
+      }
+      head = prior.head;
+      receipt = prior.command.receipt as unknown as CommandReceipt<PostSaveCommandResult>;
+      replayed = true;
+      if (
+        receipt.result.stage !== 'LOCAL_CHARACTER_POST_SAVE' ||
+        receipt.result.sourceEntityId !== head.scope.entityId ||
+        receipt.result.postSaveScopeId !== head.scope.scopeId
+      )
+        throw new Error('post-save receipt binding differs');
+      if (receipt.result.variant !== 'RESTORE') validatePostSaveSource(d, head);
+      if (head.scope.entityKind === 'LOCAL_FINAL') head = postSaveReceiptView(head, receipt);
+    } else {
+      const p = request.payload;
+      if (
+        current.formId !== p.sourceFormId ||
+        !connection.executableWorkflowCommandIds.has(request.workflowCommandId) ||
+        !isDeepStrictEqual(before, request.expectedRevisions) ||
+        (p.variant === 'SAVE_VALID_DRAFT'
+          ? current.entityLocalCharacterId !== p.characterDraftId ||
+            current.postSaveScopeId !== undefined
+          : current.postSaveScopeId !== p.postSaveScopeId ||
+            current.entityLocalCharacterId !== p.sourceEntityId)
+      )
+        throw new Error('post-save command is not current');
+      const receiptId = dependencies.allocateReceiptId();
+      if (
+        typeof receiptId !== 'string' ||
+        receiptId.trim().length === 0 ||
+        receiptId === message.commandId
+      )
+        throw new Error('invalid post-save receipt ID');
+      if (p.variant === 'VARIANT_CREATE' || p.variant === 'METADATA_PATCH')
+        dependencies.libraryRevision.preflightIncrement();
+      const committed = commitLocalPostSave(d, request, receiptId, () =>
+        allocatedId(dependencies.allocateLocalCharacterId, 'variant character'),
+      );
+      durable = true;
+      head = committed.head;
+      receipt = committed.command.receipt as unknown as CommandReceipt<PostSaveCommandResult>;
+      replayed = committed.replayed;
+      if (!replayed && (p.variant === 'VARIANT_CREATE' || p.variant === 'METADATA_PATCH'))
+        dependencies.libraryRevision.commitIncrement();
+    }
+    const result = receipt.result;
+    if (result.variant === 'RESTORE') {
+      const checkpoint = d.loadCheckpoint(result.targetEntityId);
+      const proof = result.restoredCheckpointOrNull;
+      if (
+        proof === null ||
+        proof.ownerId !== checkpoint.localCharacter.localCharacterId ||
+        proof.ownerDeviceId !== current.deviceId ||
+        checkpoint.localCharacter.lifecycleState !== 'DRAFT' ||
+        proof.checkpointId !== checkpoint.checkpoint.checkpointId ||
+        proof.checkpointRevision !== checkpoint.checkpoint.checkpointRevision ||
+        proof.checkpointSha256 !== checkpoint.checkpoint.snapshotSha256 ||
+        proof.resumeFormId !== creationPresentationFormId(checkpoint) ||
+        proof.resumeFormId !== result.nextFormId ||
+        !isDeepStrictEqual(
+          proof.layerFormIds,
+          checkpoint.symbiontPresentationStage?.formId === 'CHR-031' ? ['CHR-031'] : [],
+        ) ||
+        !isDeepStrictEqual(result.targetRevisions, currentCreationWizardRevisions(checkpoint))
+      )
+        throw new Error('restored checkpoint proof differs');
+      adoptNavigationContext(connection, dependencies, {
+        ...creationWizardContext(connection, dependencies, checkpoint),
+        restoredPostSaveCursor: {
+          scopeId: head.scope.scopeId,
+          commandId: request.commandId,
+          formId: result.nextFormId,
+        },
+      });
+      durable = true;
+      sendChecked(
+        socket,
+        replayed ? commandReplay(receipt) : commandResult(receipt),
+        dependencies.vocabulary,
+      );
+      sendCreationWizardDestination(
+        socket,
+        checkpoint,
+        dependencies,
+        connection,
+        request.commandId,
+        'COMMAND_DESTINATION',
+      );
+      return;
+    }
+    const success = postSaveNavigation(
+      head,
+      current,
+      connection,
+      dependencies,
+      request.commandId,
+      'COMMAND_DESTINATION',
+      replayed && head.scope.entityKind === 'LOCAL_FINAL' ? request.commandId : undefined,
+    );
+    adoptNavigationContext(connection, dependencies, success.nextContext);
+    durable = true;
+    sendChecked(
+      socket,
+      replayed ? commandReplay(receipt) : commandResult(receipt),
+      dependencies.vocabulary,
+    );
+    sendCheckedV2(socket, success.snapshot, dependencies.vocabulary);
+  } catch (error: unknown) {
+    if (durable) throw error;
+    sendChecked(
+      socket,
+      commandRefusal(message.commandId, { code: 'GUARD_REJECTED' }, before),
+      dependencies.vocabulary,
+    );
+  }
+}
+
 function handleCommandRequest(
   socket: WebSocket,
   message: CommandRequest,
@@ -3510,6 +4165,28 @@ function handleCommandRequest(
   dependencies: NavigationDependencies,
   commandJournal: CommandJournal,
 ): void {
+  if (connection.current?.postSaveScopeId !== undefined) {
+    const head = loadPlayerPostSave(
+      postSaveDependencies(dependencies),
+      connection.current.postSaveScopeId,
+    );
+    if (head.scope.ownerContext === 'GM_ARCHIVE_EXPORT') {
+      handleArchivedExportCommand(socket, message, connection, dependencies, head);
+      return;
+    }
+  }
+  const priorPostSave = readPostSaveCommandById(
+    dependencies.database,
+    message.commandId,
+    loadDeviceId(dependencies.database),
+  );
+  if (
+    priorPostSave !== null ||
+    (message.payload as JsonObject)['stage'] === 'LOCAL_CHARACTER_POST_SAVE'
+  ) {
+    handleLocalPostSaveCommand(socket, message, connection, dependencies, priorPostSave);
+    return;
+  }
   const known = knownCommandById(message.commandId, commandJournal, dependencies);
   if (known !== undefined) {
     if (!commandRequestsMatch(known.request, message)) {
@@ -5024,11 +5701,17 @@ function handleCommandRequest(
   }
   let durableCheckpoint: DurableCreationWizardCheckpoint;
   try {
-    durableCheckpoint = commitCreationWizardCheckpoint(
+    const identity = commitIdentityCheckpoint(dependencies.database, request, receiptId, {
+      bindOwnerToDeviceId: current.deviceId,
+      ...(current.variantInitializationProof === undefined
+        ? {}
+        : { variantProof: current.variantInitializationProof }),
+    });
+    durableCheckpoint = loadCreationWizardCheckpoint(
       dependencies.database,
-      request,
-      receiptId,
+      identity.localCharacter.localCharacterId,
       dependencies.skillStageCatalog,
+      dependencies.symbiontCatalog,
     );
   } catch (error: unknown) {
     if (!(error instanceof CreationWizardCheckpointApplicationError)) throw error;
@@ -5200,6 +5883,79 @@ function loadAcknowledgedSkillDestination(
   return candidates[0];
 }
 
+function handleArchivedExportReconnect(
+  socket: WebSocket,
+  message: Extract<ClientToHostV2Message, { readonly messageType: 'session.reconnect' }>,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+): boolean {
+  const d = dependencies.archivedCharacterExport;
+  if (d === undefined || d.readAuthority() === null) return false;
+  const deviceId = loadDeviceId(dependencies.database);
+  let head = createArchivedCharacterExportContext(d);
+  const executable = message.supportedWorkflowCommandIds.includes('UI-CMD-CHAR-EXPORT')
+    ? ['UI-CMD-CHAR-EXPORT' as const]
+    : [];
+  for (const commandId of message.unacknowledgedCommandIds) {
+    const known = readPostSaveCommandById(dependencies.database, commandId, deviceId);
+    if (
+      known === null ||
+      known.head.scope.ownerContext !== 'GM_ARCHIVE_EXPORT' ||
+      known.head.scope.scopeId !== head.scope.scopeId
+    )
+      throw new Error('unacknowledged archive command does not belong to the trusted source');
+    const replay = commitArchivedCharacterExport(
+      d,
+      known.command.request as unknown as PostSaveRequest,
+      known.command.receiptId,
+    );
+    head = replay.head;
+    sendChecked(
+      socket,
+      commandReplay(replay.command.receipt as unknown as CommandReceipt),
+      dependencies.vocabulary,
+    );
+  }
+  const projected = projectArchivedCharacterExport(d, head);
+  const base = {
+    ...projected,
+    availableActionKeys: executable.length === 0 ? [] : projected.availableActionKeys,
+  };
+  const revisions = postSaveRevisions(head);
+  sendCheckedV2(
+    socket,
+    {
+      messageType: 'session.reconnect.capabilities',
+      protocolVersion: WIRE_PROTOCOL_V2_VERSION,
+      reconnectRequestId: message.reconnectRequestId,
+      executableWorkflowCommandIds: executable,
+      revisions,
+    },
+    dependencies.vocabulary,
+  );
+  sendCheckedV2(
+    socket,
+    projectionSnapshot(message.reconnectRequestId, base, 'gm', revisions, 'RECONNECT'),
+    dependencies.vocabulary,
+  );
+  adoptNavigationContext(connection, dependencies, {
+    contextId: allocatedId(
+      dependencies.allocateContextId,
+      'archive export context',
+      UUID_V4_PATTERN,
+    ),
+    deviceId,
+    entityLocalCharacterId: head.scope.entityId,
+    entityRevisions: revisions,
+    formId: 'APP-010',
+    identityDraftScope: null,
+    postSaveScopeId: head.scope.scopeId,
+  });
+  connection.executableWorkflowCommandIds = new Set(executable);
+  connection.sessionEstablished = true;
+  return true;
+}
+
 function handleReconnectV2(
   socket: WebSocket,
   message: Extract<ClientToHostV2Message, { readonly messageType: 'session.reconnect' }>,
@@ -5216,6 +5972,7 @@ function handleReconnectV2(
     });
     return;
   }
+  if (handleArchivedExportReconnect(socket, message, dependencies, connection)) return;
 
   const warningContext = connection.activeLayer?.dialogContext ?? null;
   if (warningContext !== null) {
@@ -5229,9 +5986,79 @@ function handleReconnectV2(
   }
 
   const shellRevisions = checkedRevisions(dependencies.readRevisions());
+  const postSaveReplays = message.unacknowledgedCommandIds
+    .map((id) => readPostSaveCommandById(dependencies.database, id, deviceId))
+    .filter((entry) => entry !== null);
+  if (postSaveReplays.length > 1)
+    throw new Error('reconnect has multiple pending post-save commands');
+  let postSaveHead =
+    postSaveReplays[0]?.head ?? readPostSaveCursor(dependencies.database, deviceId);
+  if (postSaveHead?.scope.ownerContext === 'GM_ARCHIVE_EXPORT') {
+    sendProtocolRefusal(socket, dependencies.vocabulary, {
+      code: 'UNRECOGNIZED',
+      path: '$.ownerContext',
+      value: 'archive authority is unavailable',
+    });
+    return;
+  }
+  let postRestoreDestination: DurableCreationWizardCheckpoint | undefined;
+  let restoreCursor: ConfirmedNavigationContext['restoredPostSaveCursor'];
+  let replayViewCommandId: string | undefined;
+  const storedRestore = readPostSaveRestoreCommand(dependencies.database, deviceId);
+  if (storedRestore !== null && postSaveReplays.length === 0) postSaveReplays.push(storedRestore);
+  for (const entry of postSaveReplays) {
+    const receipt = entry.command.receipt as unknown as CommandReceipt<PostSaveCommandResult>;
+    if (
+      receipt.result.stage !== 'LOCAL_CHARACTER_POST_SAVE' ||
+      receipt.result.postSaveScopeId !== entry.head.scope.scopeId ||
+      receipt.result.sourceEntityId !== entry.head.scope.entityId
+    )
+      throw new Error('reconnect post-save receipt binding differs');
+    if (receipt.result.variant === 'RESTORE') {
+      const checkpoint = postSaveDependencies(dependencies).loadCheckpoint(
+        receipt.result.targetEntityId,
+      );
+      const proof = receipt.result.restoredCheckpointOrNull;
+      if (
+        proof === null ||
+        proof.ownerDeviceId !== deviceId ||
+        proof.ownerId !== checkpoint.localCharacter.localCharacterId ||
+        proof.checkpointId !== checkpoint.checkpoint.checkpointId ||
+        proof.checkpointRevision !== checkpoint.checkpoint.checkpointRevision ||
+        proof.checkpointSha256 !== checkpoint.checkpoint.snapshotSha256 ||
+        proof.resumeFormId !== creationPresentationFormId(checkpoint) ||
+        !isDeepStrictEqual(
+          proof.layerFormIds,
+          checkpoint.symbiontPresentationStage?.formId === 'CHR-031' ? ['CHR-031'] : [],
+        ) ||
+        !isDeepStrictEqual(
+          receipt.result.targetRevisions,
+          currentCreationWizardRevisions(checkpoint),
+        )
+      )
+        throw new Error('reconnect restore proof differs');
+      postRestoreDestination = checkpoint;
+      restoreCursor = {
+        scopeId: entry.head.scope.scopeId,
+        commandId: entry.command.commandId,
+        formId: receipt.result.nextFormId,
+      };
+      postSaveHead = null;
+    } else {
+      validatePostSaveSource(postSaveDependencies(dependencies), entry.head);
+      if (entry.head.scope.entityKind === 'LOCAL_FINAL') {
+        postSaveHead = postSaveReceiptView(entry.head, receipt);
+        replayViewCommandId = entry.command.commandId;
+      }
+    }
+    if (message.unacknowledgedCommandIds.includes(entry.command.commandId))
+      sendChecked(socket, commandReplay(receipt), dependencies.vocabulary);
+  }
   const replayDestinations = replayUnacknowledgedCommands(
     socket,
-    message.unacknowledgedCommandIds,
+    message.unacknowledgedCommandIds.filter(
+      (id) => !postSaveReplays.some((entry) => entry.command.commandId === id),
+    ),
     shellRevisions,
     dependencies.vocabulary,
     commandJournal,
@@ -5247,7 +6074,7 @@ function handleReconnectV2(
   const executableSet = new Set(executableWorkflowCommandIds);
   const creationCapabilities = creationWizardCapabilities(executableSet);
   const restored = dependencies.identitySessions.get(deviceId);
-  let replayDestination: DurableCreationWizardCheckpoint | undefined;
+  let replayDestination: DurableCreationWizardCheckpoint | undefined = postRestoreDestination;
   for (const destination of replayDestinations) {
     if (
       replayDestination !== undefined &&
@@ -5264,20 +6091,68 @@ function handleReconnectV2(
     }
   }
   const acknowledgedRandomDestination =
-    replayDestination === undefined && restored === undefined
+    replayDestination === undefined && restored === undefined && postSaveHead === null
       ? loadAcknowledgedRandomDestination(dependencies)
       : undefined;
   const acknowledgedSkillDestination =
     replayDestination === undefined &&
     restored === undefined &&
+    postSaveHead === null &&
     acknowledgedRandomDestination === undefined
       ? loadAcknowledgedSkillDestination(dependencies)
       : undefined;
+  const selectedFinal =
+    replayDestination?.localCharacter.lifecycleState === 'FINAL'
+      ? replayDestination
+      : acknowledgedRandomDestination?.localCharacter.lifecycleState === 'FINAL'
+        ? acknowledgedRandomDestination
+        : acknowledgedSkillDestination?.localCharacter.lifecycleState === 'FINAL'
+          ? acknowledgedSkillDestination
+          : restored?.entityLocalCharacterId != null &&
+              restored.postSaveScopeId === undefined &&
+              readLocalCharacter(dependencies.database, restored.entityLocalCharacterId)
+                .lifecycleState === 'FINAL'
+            ? postSaveDependencies(dependencies).loadCheckpoint(restored.entityLocalCharacterId)
+            : undefined;
+  if (postSaveHead === null && selectedFinal !== undefined) {
+    const d = postSaveDependencies(dependencies);
+    postSaveHead = openPlayerPostSave(
+      d,
+      selectedFinal.localCharacter.localCharacterId,
+      'CHR-040',
+      'CHR-040',
+      selectedFinal.receipt.commandId,
+    );
+    if (postSaveHead.presentation['formId'] !== 'CHR-040')
+      postSaveHead = navigateLocalPostSave(d, postSaveHead, 'CHR-040');
+  }
   let base: PresentedBaseForm;
   let nextContext: ConfirmedNavigationContext;
   let projectionRole: 'player' | null;
   let revisions: RevisionVector;
-  if (replayDestination !== undefined) {
+  if (postSaveHead !== null) {
+    base = projectLocalPostSave(
+      postSaveDependencies(dependencies),
+      postSaveHead,
+      executableSet,
+      replayViewCommandId !== undefined,
+    );
+    const current = {
+      contextId:
+        restored?.contextId ??
+        allocatedId(dependencies.allocateContextId, 'post-save player context', UUID_V4_PATTERN),
+      deviceId,
+      entityLocalCharacterId: postSaveHead.scope.entityId,
+      entityRevisions: postSaveRevisions(postSaveHead),
+      formId: base.formId as ConfirmedNavigationContext['formId'],
+      identityDraftScope: null,
+      postSaveScopeId: postSaveHead.scope.scopeId,
+      postSaveReplayCommandId: replayViewCommandId,
+    };
+    nextContext = current;
+    projectionRole = 'player';
+    revisions = postSaveRevisions(postSaveHead);
+  } else if (replayDestination !== undefined) {
     base = creationWizardBase(
       replayDestination,
       creationCapabilities,
@@ -5289,7 +6164,10 @@ function handleReconnectV2(
       dependencies.armorBundleCatalog,
       dependencies.startingWeaponCatalog,
     );
-    nextContext = creationWizardContext(connection, dependencies, replayDestination);
+    nextContext = {
+      ...creationWizardContext(connection, dependencies, replayDestination),
+      ...(restoreCursor === undefined ? {} : { restoredPostSaveCursor: restoreCursor }),
+    };
     projectionRole = 'player';
     revisions = currentCreationWizardRevisions(replayDestination);
   } else if (acknowledgedRandomDestination !== undefined) {
@@ -5661,6 +6539,11 @@ function sendGeneratedMediaFile(
 }
 
 export async function createHost(config: HostServerConfig): Promise<FastifyInstance> {
+  if (
+    config.readArchivedCharacterExportAuthority !== undefined &&
+    typeof config.readArchivedCharacterExportAuthority !== 'function'
+  )
+    throw new TypeError('archive export authority reader must be a function');
   for (const [name, value] of Object.entries({
     advanceRevisions: config.advanceRevisions,
     allocateCreationBranchUuid: config.allocateCreationBranchUuid,
@@ -5678,6 +6561,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   if (typeof config.onFrameError !== 'function')
     throw new TypeError('host onFrameError configuration must be a function');
   const projectRoot = resolve(config.projectRoot);
+  const localCharacterExportBaseline = await loadLocalCharacterExportBaseline(projectRoot);
   const staticRoot = await realpath(resolve(config.staticRoot));
   const [
     catalog,
@@ -5705,6 +6589,16 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   const app = Fastify({ logger: false });
   const commandJournal: CommandJournal = new Map();
   const dependencies: NavigationDependencies = {
+    localCharacterExportBaseline,
+    ...(config.readArchivedCharacterExportAuthority === undefined
+      ? {}
+      : {
+          archivedCharacterExport: {
+            database: config.database,
+            baseline: localCharacterExportBaseline,
+            readAuthority: config.readArchivedCharacterExportAuthority,
+          },
+        }),
     advanceRevisions: config.advanceRevisions,
     allocateCreationBranchUuid: config.allocateCreationBranchUuid,
     allocateCreationRollRequestId: config.allocateCreationRollRequestId,

@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 
 import { MAX_SAFE_REVISION, V1_LIFECYCLE_STATES } from './migrations/0001-initial.js';
+import { loadDeviceId } from './device-identity.js';
+import { retirePostSaveRestoreCursor } from './local-character-post-save.js';
 
 export interface RevisionTriple {
   stateRevision: number;
@@ -583,6 +585,7 @@ export const commitNewLocalCharacterCheckpoint = <T>(
   write: (
     create: LocalCharacterCheckpointCreator,
   ) => T & (T extends PromiseLike<unknown> ? never : unknown),
+  options?: { readonly bindOwnerToDeviceId: string },
 ): { result: T; checkpoint: LocalCharacterCheckpoint } => {
   if (database.inTransaction) {
     throw new Error('localCharacter checkpoint requires a top-level transaction');
@@ -632,6 +635,17 @@ export const commitNewLocalCharacterCheckpoint = <T>(
               lifecycleState,
               payloadJson,
             );
+            if (options !== undefined) {
+              if (loadDeviceId(database) !== options.bindOwnerToDeviceId) {
+                throw new Error('new localCharacter owner differs from the stored device identity');
+              }
+              database
+                .prepare(
+                  `INSERT INTO local_character_owner
+                (local_character_id, owner_device_id, variant_birth_command_id) VALUES (?, ?, NULL)`,
+                )
+                .run(localCharacterId, options.bindOwnerToDeviceId);
+            }
             created = draftCheckpointState(localCharacter);
             return localCharacter;
           } catch (cause) {
@@ -774,6 +788,11 @@ export const commitLocalCharacterCheckpoint = <T>(
           )
           .run(checkpoint);
         validate?.(result, checkpoint);
+        if (
+          before.snapshotJson !== current.snapshotJson ||
+          REVISION_NAMES.some((name) => before[name] !== current[name])
+        )
+          retirePostSaveRestoreCursor(database, localCharacterId);
         return { result, checkpoint };
       } finally {
         writerActive = false;

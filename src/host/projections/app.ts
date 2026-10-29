@@ -1,4 +1,5 @@
 import { assertCreationValidationScreenContracts } from './chr-creation-validation.js';
+import { assertPostSaveScreenContracts } from './chr-post-save.js';
 import { assertFiveStartingPositionsScreenContracts } from './chr-five-starting-positions.js';
 import { assertStartingMoneyScreenContracts } from './chr-starting-money.js';
 import { assertWeaponProfileScreenContracts } from './chr-weapon-profile.js';
@@ -275,6 +276,11 @@ export interface AppNavigationAction {
     | 'CHR-032'
     | 'CHR-037'
     | 'CHR-038'
+    | 'CHR-026'
+    | 'CHR-039'
+    | 'CHR-040'
+    | 'APP-009'
+    | 'APP-010'
     | typeof CHR_042_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -493,6 +499,32 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       trigger: string(match['label'], `${label}.${actionKey}.label`),
     });
   }
+  for (const [formId, numbers] of [
+    ['CHR-025', [8, 9]],
+    ['CHR-026', [1, 2]],
+    ['CHR-039', [1, 2, 3, 4]],
+    ['CHR-040', [1, 3, 4]],
+    ['APP-009', [2, 3]],
+    ['APP-010', [1, 2, 3, 4, 5]],
+  ] as const) {
+    const actions = array(
+      record(record(forms[formId], formId)['actions'], formId)['ctaAvailabilityByAction'],
+      formId,
+    );
+    for (const number of numbers) {
+      const key = `${formId}::CTA::${String(number).padStart(3, '0')}` as ActionKey;
+      const matches = actions.map((a) => record(a, key)).filter((a) => a['actionKey'] === key);
+      if (matches.length !== 1) throw new Error(`post-save action ${key} is missing or duplicated`);
+      const action = matches[0]!;
+      result.set(key, {
+        from: formId,
+        guard: string(action['guard'], key),
+        kind: string(action['kind'], key),
+        to: string(action['targetFormId'], key),
+        trigger: string(action['label'], key),
+      });
+    }
+  }
   return result;
 }
 
@@ -540,6 +572,7 @@ export function assertScreenContract(
   requiredFields: readonly string[],
   route: string,
   formType: 'dialog' | 'screen' = 'screen',
+  expectedRoles: readonly InteractiveRole[] = ['player'],
 ): void {
   const form = record(forms[formId], `forms-by-id.json[${JSON.stringify(formId)}]`);
   const actualFields = strings(form['requiredFields'], `${formId}.requiredFields`);
@@ -548,7 +581,7 @@ export function assertScreenContract(
     string(form['id'], `${formId}.id`) !== formId ||
     string(form['type'], `${formId}.type`) !== formType ||
     string(form['route'], `${formId}.route`) !== route ||
-    !sameStrings(actualRoles, ['player']) ||
+    !sameStrings(actualRoles, expectedRoles) ||
     !sameStrings(actualFields, requiredFields)
   ) {
     throw new Error(`${formId} does not match its source-owned player ${formType} contract`);
@@ -632,6 +665,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertStartingMoneyScreenContracts(forms, assertScreenContract);
   assertFiveStartingPositionsScreenContracts(forms, assertScreenContract);
   assertCreationValidationScreenContracts(forms, assertScreenContract);
+  assertPostSaveScreenContracts(forms, assertScreenContract);
   return result;
 }
 

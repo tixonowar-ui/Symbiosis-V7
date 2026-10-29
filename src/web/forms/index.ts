@@ -12,6 +12,8 @@ export type SupportedPresentationFormId =
   | 'APP-001'
   | 'APP-002'
   | 'APP-004'
+  | 'APP-009'
+  | 'APP-010'
   | 'CHR-001'
   | 'CHR-002'
   | 'CHR-003'
@@ -42,6 +44,9 @@ export type SupportedPresentationFormId =
   | 'CHR-037'
   | 'CHR-032'
   | 'CHR-025'
+  | 'CHR-026'
+  | 'CHR-039'
+  | 'CHR-040'
   | 'CHR-010'
   | 'CHR-016'
   | 'CHR-036';
@@ -51,6 +56,8 @@ const SUPPORTED = new Set<FormId>([
   'APP-001',
   'APP-002',
   'APP-004',
+  'APP-009',
+  'APP-010',
   'CHR-001',
   'CHR-002',
   'CHR-003',
@@ -81,6 +88,9 @@ const SUPPORTED = new Set<FormId>([
   'CHR-037',
   'CHR-032',
   'CHR-025',
+  'CHR-026',
+  'CHR-039',
+  'CHR-040',
   'CHR-010',
   'CHR-016',
   'CHR-036',

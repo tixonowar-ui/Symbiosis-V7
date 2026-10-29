@@ -3,11 +3,13 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-29`
-- Тестов: 2123 Vitest + 26 Playwright, все зелёные.
-- `npm run verify` — проходит; `npm run test:e2e` — 26/26 без retry.
-- `npm run import` прошёл; воспроизводимость проверяется отдельным CI-гейтом
-  на чистом checkout, подробности — в [handoff](handoff.md).
+- Снимок: `2026-10-30`, реализация #156 поверх слитого PR #175 (#155).
+- Подтверждённая база: 114 файлов / 2123 Vitest-теста и 26 Chrome E2E.
+- Для #156 полный `verify` прошёл: 121 файл / 2198 Vitest-тестов;
+  production-сборка и все 30 Chrome E2E прошли без retry. Свежий независимый
+  прогон окончательного commit и CI фиксируются в PR; подробности — в [handoff](handoff.md).
+- Артефакты и конвейер не менялись. Воспроизводимость проверяется отдельным
+  CI-гейтом на чистом checkout.
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
   native Atlas clone allocation — [issue #160](vitest-atlas-memory.md).
 
@@ -162,24 +164,40 @@ blockers. Исправления связаны с текущим checkpoint и 
 постоянные grants и ledger обучения проверяются по источникам. Кэши RANDOM,
 MANUAL и Советника восстанавливаются при переключениях. Финальный save
 атомарно фиксирует snapshot, receipt и FINAL того же localCharacterId;
-replay и SQLite reopen не создают второго персонажа. После save CHR-025
-доступен только для чтения, CHR-040 подписан и не публикуется.
+replay и SQLite reopen не создают второго персонажа.
 [ADR 0062](../adr/0062-creation-validation-and-final-save.md).
-Следующая очередь — #156: финальный лист, post-save recovery и экспорт.
+#156 публикует финальный лист CHR-040: его механика и история создания
+неизменны, локальные имя, описание и арт версионируются отдельно. CHR-026 и
+APP-009 восстанавливают только доказанный полный checkpoint, включая его
+подписанный экран и слой CHR-031. Диагностика повреждённого незавершённого
+intent появляется после его фактического удаления. CHR-039 показывает
+неизменяемые версии веток и возвращает к исходному шагу без активации ветки.
+Подписанный выбор строки APP-004 связан с владельцем устройства; null в
+публичном localOwnerIdOrNull обычной библиотеки сохраняется. APP-010 создаёт
+вариант с новым UUID и только тремя полями метаданных либо экспортирует
+канонические UTF-8 байты с baseline, provenance и SHA-256. Первый IDENTITY
+checkpoint варианта проверяет birth receipt и инициализирует обычный DRAFT.
+Post-save scope фиксирует конкретный вход; receipt cursor записывается
+атомарно и закрывается следующим подтверждённым checkpoint. GM export
+поддержан через отдельный доверенный архивный fixture; CMP-012 и campaign
+runtime этим не реализованы.
+[ADR 0063](../adr/0063-local-character-recovery-and-export.md) пока предложен.
+Следующая очередь — #170 → #171 → #172 → #173 → #174 → #113. Для #113
+исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                               | Веха |
-| ---------------------------- | ------------ | ------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                           | M4   |
-| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                         | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                  | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation  | M2   |
-| `src/host`                   | **частично** | creation до FINAL; восемь receipts, исправления и immutable snapshot                  | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–025/028/031/032/036–038/041/042; CHR-040 ещё не публикуется  | M4   |
-| `src/web`                    | **частично** | создание, исправления и финальный save; 26 production E2E-сценариев                   | M5   |
-| `src/web/renderer`           | **частично** | добавлены CHR-032/025; остальные незарегистрированные формы fail-closed               | M5   |
-| `src/web/forms`              | **частично** | APP domain; character wizard с итогом, подписанными исправлениями и финальным save    | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                        | Веха |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                    | M4   |
+| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
+| `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0006`, включая локальный post-save aggregate                              | M2   |
+| `src/host`                   | **частично** | создание до FINAL, recovery, кэш, metadata, local variant/export и GM archive fixture          | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004/009/010, CHR-001–026/028/031/032/036–042; только реализованные пути            | M4   |
+| `src/web`                    | **частично** | создание и локальный post-save; 30 production E2E-сценариев в наборе                           | M5   |
+| `src/web/renderer`           | **частично** | добавлены CHR-026/039/040 и APP-009/010; незарегистрированные формы fail-closed                | M5   |
+| `src/web/forms`              | **частично** | character wizard, финальный лист, recovery, библиотека, локальные варианты и экспорт           | M6   |
 
 ## generated/ — вывод конвейера
 
@@ -192,11 +210,11 @@ replay и SQLite reopen не создают второго персонажа. �
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                             |
-| ------------------- | ------------ | -------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                     |
-| `tests/e2e`         | **частично** | 26 production-сценариев: создание, исправления, финальный save, replay и SQLite reopen |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                 |
+| Каталог             | Состояние    | Примечание                                                                                                                   |
+| ------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                           |
+| `tests/e2e`         | **частично** | 30 production-сценариев, включая recovery/cache, metadata/export/variant и GM archive fixture; полный новый прогон ожидается |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                       |
 
 ---
 

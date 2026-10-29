@@ -142,6 +142,7 @@ export function createManualWizardSetup(
       workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
     },
     `${prefix}-identity-receipt`,
+    { bindOwnerToDeviceId: deviceId },
   );
   let current = loadCreationWizardCheckpoint(
     database,

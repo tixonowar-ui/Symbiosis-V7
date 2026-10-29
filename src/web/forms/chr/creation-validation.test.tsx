@@ -253,6 +253,8 @@ describe('production finalization host/web contract', () => {
         'CHR-025::CTA::001',
         'CHR-025::CTA::002',
         'CHR-025::CTA::007',
+        'CHR-025::CTA::008',
+        'CHR-025::CTA::009',
       ]);
       const summaryTerminal = decodeCreationFinalizationTerminal(
         {

@@ -114,8 +114,14 @@ describe('persistence schema', () => {
       'device_identity',
       'local_character',
       'local_character_checkpoint',
+      'local_character_metadata_revision',
+      'local_character_owner',
+      'local_character_post_save_command',
+      'local_character_post_save_cursor',
+      'local_character_post_save_head',
       'local_character_skill_presentation',
       'local_character_symbiont_presentation',
+      'local_character_write_intent',
       'schema_migration',
     ]);
     for (const table of ['local_character', 'campaign', 'campaign_checkpoint']) {
@@ -130,12 +136,12 @@ describe('persistence schema', () => {
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
 
     insertCampaign(database, 'preserved');
-    expect(applyMigrations(database)).toBe(5);
+    expect(applyMigrations(database)).toBe(6);
     expect(
       database.prepare('SELECT payload_json FROM campaign WHERE campaign_id = ?').get('preserved'),
     ).toEqual({ payload_json: '{}' });
     expect(database.prepare('SELECT count(*) AS count FROM schema_migration').get()).toEqual({
-      count: 5,
+      count: 6,
     });
 
     database

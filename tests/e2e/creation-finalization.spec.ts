@@ -86,7 +86,7 @@ for (const [race, mode] of [
         );
       }
       await action(page, 'CHR-025::CTA::007');
-      await expect(page.getByText('Персонаж окончательно сохранён', { exact: true })).toBeVisible();
+      await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
       const saved = host.checkpoint();
       const receipts = host.receiptAllocations();
       expect(saved.localCharacter.lifecycleState).toBe('FINAL');
@@ -110,13 +110,13 @@ for (const [race, mode] of [
       expect(host.checkpoint().localCharacter).toEqual(saved.localCharacter);
       expect(host.receiptAllocations()).toBe(receipts);
       await page.reload();
-      await expect(page.getByText('Персонаж окончательно сохранён', { exact: true })).toBeVisible();
+      await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
       await host.restart();
       await page.goto(host.baseURL);
-      await expect(page.getByText('Персонаж окончательно сохранён', { exact: true })).toBeVisible();
+      await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
       expect(host.checkpoint().finalizationStage).toEqual(saved.finalizationStage);
       await expect(page.locator('[data-atlas-action-key^="CHR-025"]')).toHaveCount(0);
-      await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toHaveCount(0);
+      await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
       expect(host.sampleCalls()).toBe(0);
       expect(host.rollAllocations()).toBe(0);
       expect(await page.locator('body').innerText()).not.toMatch(
@@ -171,7 +171,7 @@ test('original UNITED Adviser repairs a permanent body requirement before final 
     await page.getByRole('button', { name: 'Подтвердить навыки Советника', exact: true }).click();
     await expect(page.locator('[data-atlas-form-id="CHR-025"]')).toBeVisible();
     await action(page, 'CHR-025::CTA::007');
-    await expect(page.getByText('Персонаж окончательно сохранён', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
     expect(host.checkpoint().localCharacter.lifecycleState).toBe('FINAL');
     expect(host.checkpoint().manualCompositionStage).toEqual(original.manualCompositionStage);
     expect(host.checkpoint().fiveStartingPositionsStage).toEqual(
@@ -181,7 +181,7 @@ test('original UNITED Adviser repairs a permanent body requirement before final 
     expect(host.rollAllocations()).toBe(0);
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(page.getByText('Персонаж окончательно сохранён', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
     expect(host.sampleCalls()).toBe(0);
   } finally {
     await host.close();
@@ -217,7 +217,7 @@ test('CHR-025 mass blocker has a signed identity correction path and final save 
     await page.goto(host.baseURL);
     await expect(page.locator('[data-atlas-action-key="CHR-025::CTA::007"]')).toBeVisible();
     await action(page, 'CHR-025::CTA::007');
-    await expect(page.getByText('Персонаж окончательно сохранён', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-040"]')).toBeVisible();
     expect(host.checkpoint().finalizationStage!.finalMechanicsSnapshotOrNull!.identity.massKg).toBe(
       110,
     );

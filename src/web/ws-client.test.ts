@@ -892,6 +892,10 @@ function decoderSymbiontReceipt(
 }
 
 type DecoderFormId =
+  | 'APP-004'
+  | 'APP-009'
+  | 'APP-010'
+  | 'CHR-026'
   | 'CHR-001'
   | 'CHR-002'
   | 'CHR-010'
@@ -906,6 +910,14 @@ type DecoderActionKeys = ProjectionSnapshotV2Message['presentation']['base']['av
 
 function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): DecoderActionKeys {
   switch (formId) {
+    case 'APP-004':
+      return ['APP-004::CTA::001', 'APP-004::CTA::008'];
+    case 'APP-009':
+      return ['APP-009::CTA::003', 'APP-009::CTA::002'];
+    case 'APP-010':
+      return ['APP-010::CTA::004', 'APP-010::CTA::005', 'APP-010::CTA::002'];
+    case 'CHR-026':
+      return ['CHR-026::CTA::001', 'CHR-026::CTA::002'];
     case 'CHR-001':
       return ['CHR-001::CTA::001'];
     case 'CHR-010':
@@ -952,6 +964,15 @@ function projectionBase(
   projection: JsonObject,
   availableActionKeys?: DecoderActionKeys,
 ): ProjectionSnapshotV2Message['presentation']['base'] {
+  if (formId.startsWith('APP-'))
+    return {
+      availableActionKeys: availableActionKeys ?? defaultDecoderActions(formId, projection),
+      formId,
+      formType: 'screen',
+      roleFilteredPayload: projection,
+      routeBindings: [],
+      routeTemplate: formId === 'APP-004' ? '/player/characters' : `/local/${formId.toLowerCase()}`,
+    };
   return {
     availableActionKeys: availableActionKeys ?? defaultDecoderActions(formId, projection),
     formId,
@@ -1001,6 +1022,10 @@ async function connectDecoderFixture(
   formId: DecoderFormId,
   projection: JsonObject,
   availableActionKeys?: DecoderActionKeys,
+  postSave?: {
+    revisions?: ProjectionSnapshotV2Message['revisions'];
+    onDownload?: Parameters<typeof connectProjection>[12];
+  },
 ): Promise<DecoderHarness> {
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
@@ -1033,6 +1058,11 @@ async function connectDecoderFixture(
     (draft) => skillDrafts.push(draft),
     (draft) => randomDrafts.push(draft),
     (draft) => advisorDrafts.push(draft),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    postSave?.onDownload,
   );
   decoderConnections.push(connection);
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1050,11 +1080,19 @@ async function connectDecoderFixture(
       'UI-CMD-CHAR-WIZARD-CHECKPOINT',
       'UI-CMD-CHAR-CREATION-SET-DECIDE',
       'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+      ...(postSave === undefined
+        ? []
+        : ([
+            'UI-CMD-LOCAL-CHECKPOINT-RESTORE',
+            'UI-CMD-CHAR-LOCAL-METADATA-PATCH',
+            'UI-CMD-CHAR-VARIANT-CREATE',
+            'UI-CMD-CHAR-EXPORT',
+          ] as const)),
     ],
     messageType: 'session.reconnect.capabilities',
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
     reconnectRequestId: reconnect.value.reconnectRequestId,
-    revisions: REVISIONS,
+    revisions: postSave?.revisions ?? REVISIONS,
   };
   const snapshot: ProjectionSnapshotV2Message = {
     messageType: 'projection.snapshot',
@@ -1065,7 +1103,7 @@ async function connectDecoderFixture(
     },
     projectionRole: 'player',
     protocolVersion: WIRE_PROTOCOL_V2_VERSION,
-    revisions: REVISIONS,
+    revisions: postSave?.revisions ?? REVISIONS,
   };
   socket.message(checkedHostTextV2(capabilities));
   socket.message(checkedHostTextV2(snapshot));
@@ -1182,7 +1220,7 @@ function nestedModeAt(projection: Record<string, unknown>, raceIndex: number, mo
 }
 
 describe('signed identity correction', () => {
-  it('permits exactly the source final-save operation while CHR-040 remains unpublished', () => {
+  it('permits exactly the source final-save operation and the bound CHR-040 destination', () => {
     const transition = {
       from: 'CHR-025',
       to: 'CHR-040',
@@ -1207,6 +1245,14 @@ describe('signed identity correction', () => {
     expect(
       WEB_PROTOCOL_VOCABULARY.isHostTransition({ ...transition, trigger: 'Другой переход' }),
     ).toBe(false);
+    expect(
+      WEB_PROTOCOL_VOCABULARY.isPresentedForm(
+        'CHR-040',
+        'screen',
+        '/player/characters/:localCharacterId/create/chr-040',
+        [{ parameterIndex: 0, source: 'inherited', value: CHARACTER_DRAFT_ID }],
+      ),
+    ).toBe(true);
     expect(WEB_PROTOCOL_VOCABULARY.isHostTransition({ ...transition, to: 'CHR-025' })).toBe(false);
     expect(WEB_PROTOCOL_VOCABULARY.isHostTransition({ ...transition, from: 'CHR-032' })).toBe(
       false,
@@ -2986,6 +3032,387 @@ describe('CHR-041 Advisor local selection and checkpoint replay', () => {
     });
     expect(advisorDrafts.at(-1)).toBeNull();
     expect(resumed.sent).toHaveLength(1);
+  });
+});
+
+describe('post-save command and navigation correlation', () => {
+  it('edits cold provisional identity only with an exact host-signed identity scope', async () => {
+    const scope = {
+      contextId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      sourceFormId: 'CHR-001',
+      characterDraftId: CHARACTER_DRAFT_ID,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+    };
+    const projection = {
+      name: 'Вариант',
+      age: null,
+      sex: null,
+      massKg: null,
+      description: 'Описание',
+      artAssetKeyOrLocalFile: null,
+      anatomyProfile: 'STANDARD_HUMANOID',
+      characterDraftId: CHARACTER_DRAFT_ID,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      commandId: null,
+      draftRevision: 0,
+      massApprovalStatus: 'PENDING_GM',
+      identityDraftScope: scope,
+    };
+    const h = await connectDecoderFixture('CHR-001', projection, []);
+    expect(h.states.at(-1)?.kind).toBe('ready');
+    expect(
+      h.connection.replaceIdentityDraft({
+        name: 'Вариант',
+        age: 30,
+        sex: 'MALE',
+        massKg: 70,
+        description: 'Описание',
+        artAssetKeyOrLocalFile: null,
+      }),
+    ).toEqual({ ok: true });
+    expect(JSON.parse(h.socket.sent.at(-1)!) as unknown).toMatchObject({
+      messageType: 'character.identity-draft.replace',
+      scope,
+      values: { name: 'Вариант', age: 30, sex: 'MALE', massKg: 70 },
+    });
+    for (const changed of [
+      { ...scope, characterDraftId: 'foreign' },
+      { ...scope, wizardCheckpointId: 'other' },
+      { ...scope, contextId: null },
+      { ...scope, privateRule: 'CORE-159' },
+    ]) {
+      const bad = await connectDecoderFixture(
+        'CHR-001',
+        { ...projection, identityDraftScope: changed },
+        [],
+      );
+      expect(bad.states.at(-1)?.kind).toBe('protocol-error');
+    }
+  });
+  const common = {
+    postSaveScopeId: 'post-save-scope',
+    sourceBindingHash: 'a'.repeat(64),
+    sourceEntityId: CHARACTER_DRAFT_ID,
+  };
+  const postRevisions = { stateRevision: 10, projectionRevision: 15, actorVisibilityRevision: 0 };
+  const restore = {
+    ...common,
+    checkpointOwnerId: CHARACTER_DRAFT_ID,
+    checkpointEntityKind: 'CHARACTER_DRAFT',
+    lastCompleteCheckpointId: WIZARD_CHECKPOINT_ID,
+    checkpointRevision: 4,
+    branchCacheHashOrNull: 'b'.repeat(64),
+    randomReceiptIds: ['old-roll'],
+    resumeFormId: 'CHR-010',
+    restoreReceiptIdOrNull: null,
+    corruptTailIgnored: false,
+    restoreStatus: 'READY',
+    commandId: 'old-command',
+  } as const;
+  function restored(command: DecoderWorkflowCommand): CommandReceipt {
+    return {
+      commandId: command.commandId,
+      receiptId: 'restore-receipt',
+      revisions: postRevisions,
+      result: {
+        ...common,
+        stage: 'LOCAL_CHARACTER_POST_SAVE',
+        variant: 'RESTORE',
+        sourceFormId: 'APP-009',
+        sourceRevisions: postRevisions,
+        nextFormId: 'CHR-010',
+        targetEntityId: CHARACTER_DRAFT_ID,
+        targetRevisions: REVISIONS,
+        localMetadataRevision: null,
+        createdVariantUuidOrNull: null,
+        downloadOrNull: null,
+        restoredCheckpointOrNull: {
+          ownerId: CHARACTER_DRAFT_ID,
+          ownerDeviceId: '123e4567-e89b-42d3-a456-426614174000',
+          corruptTailIgnored: true,
+          restoreStatus: 'CORRUPT',
+          checkpointId: WIZARD_CHECKPOINT_ID,
+          checkpointRevision: 4,
+          checkpointSha256: 'c'.repeat(64),
+          layerFormIds: [],
+          resumeFormId: 'CHR-010',
+        },
+      },
+    };
+  }
+  it('adopts lower creation revisions only after the matching restore receipt and destination', async () => {
+    const h = await connectDecoderFixture('APP-009', restore, undefined, {
+      revisions: postRevisions,
+    });
+    expect(h.states.at(-1)?.kind).toBe('ready');
+    expect(h.connection.requestFormAction('APP-009::CTA::003')).toEqual({ ok: true });
+    const command = decoderCommand(h.socket);
+    expect(command.payload).toEqual({
+      ...common,
+      stage: 'LOCAL_CHARACTER_POST_SAVE',
+      variant: 'RESTORE',
+      sourceFormId: 'APP-009',
+      expectedMetadataRevisionOrNull: null,
+    });
+    expect(h.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { availableActionKeys: [] } });
+    expect(h.connection.submitPostSave('RESTORE').ok).toBe(false);
+    h.socket.message(decoderTerminalText(restored(command)));
+    h.socket.message(
+      decoderSnapshotText(
+        'CHR-010',
+        CHR_010_PROJECTION,
+        { correlationId: command.commandId, reason: 'COMMAND_DESTINATION' },
+        REVISIONS,
+      ),
+    );
+    expect(h.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'CHR-010', revisions: REVISIONS },
+    });
+  });
+  it.each(['missing-receipt', 'wrong-correlation', 'wrong-device', 'wrong-checkpoint'] as const)(
+    'rejects restored scope replacement with %s',
+    async (mutation) => {
+      const h = await connectDecoderFixture('APP-009', restore, undefined, {
+        revisions: postRevisions,
+      });
+      h.connection.submitPostSave('RESTORE');
+      const command = decoderCommand(h.socket),
+        r = restored(command);
+      if (mutation !== 'missing-receipt') {
+        const result = r.result;
+        h.socket.message(
+          decoderTerminalText(
+            mutation === 'wrong-device'
+              ? {
+                  ...r,
+                  result: {
+                    ...result,
+                    restoredCheckpointOrNull: {
+                      ...(result['restoredCheckpointOrNull'] as JsonObject),
+                      ownerDeviceId: 'other-device',
+                    },
+                  },
+                }
+              : r,
+          ),
+        );
+      }
+      h.socket.message(
+        decoderSnapshotText(
+          'CHR-010',
+          mutation === 'wrong-checkpoint'
+            ? { ...CHR_010_PROJECTION, wizardCheckpointId: 'other' }
+            : CHR_010_PROJECTION,
+          {
+            correlationId: mutation === 'wrong-correlation' ? 'other' : command.commandId,
+            reason: 'COMMAND_DESTINATION',
+          },
+          REVISIONS,
+        ),
+      );
+      expect(h.states.at(-1)?.kind).toBe('protocol-error');
+    },
+  );
+  it('reconciles the same restore receipt after a lost destination without rolling again', async () => {
+    const h = await connectDecoderFixture('APP-009', restore, undefined, {
+      revisions: postRevisions,
+    });
+    expect(h.connection.submitPostSave('RESTORE')).toEqual({ ok: true });
+    const r = restored(decoderCommand(h.socket));
+    h.socket.message(decoderTerminalText(r));
+    const resumed = reconnectDecoderFixture(h, 'CHR-010', CHR_010_PROJECTION, REVISIONS, r);
+    expect(h.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'CHR-010', revisions: REVISIONS },
+    });
+    expect(resumed.sent).toHaveLength(1);
+  });
+  const exporting = {
+    ...common,
+    ownerContext: 'PLAYER_LOCAL',
+    sourceKind: 'LOCAL_FINAL',
+    originFormId: 'CHR-040',
+    returnFormId: 'CHR-040',
+    activeLocalOwnerIdOrNull: '123e4567-e89b-42d3-a456-426614174000',
+    masterAuthorityRevisionOrNull: null,
+    sourceSnapshotId: 'final-receipt',
+    sourceUuid: CHARACTER_DRAFT_ID,
+    schemaVersion: 1,
+    baselineVersion: 'sha256:baseline',
+    checksum: 'd'.repeat(64),
+    provenance: {
+      registryVersion: '1.2',
+      catalogVersion: '1.2',
+      builtAgainstTuple: 'Rules v1.6',
+      sourceUuid: CHARACTER_DRAFT_ID,
+      sourceSnapshotId: 'final-receipt',
+      metadataRevision: 0,
+      sourceChecksum: 'e'.repeat(64),
+      finalSaveReceiptId: 'final-receipt',
+      finalSnapshotVersion: 30,
+    },
+    localMetadataRevision: 0,
+    metadata: { name: 'Герой', description: null, artAssetKeyOrLocalFile: null },
+    stateRevision: 10,
+    projectionRevision: 15,
+  } as const;
+  it.each(['destination', 'reconnect'] as const)(
+    'downloads exact receipt bytes once after %s, despite receipt replay',
+    async (delivery) => {
+      const onDownload = vi.fn();
+      const h = await connectDecoderFixture('APP-010', exporting, undefined, {
+        revisions: postRevisions,
+        onDownload,
+      });
+      expect(h.states.at(-1)?.kind).toBe('ready');
+      expect(h.connection.submitPostSave('EXPORT')).toEqual({ ok: true });
+      const command = decoderCommand(h.socket);
+      const download = {
+        fileName: 'character.json',
+        mediaType: 'application/json',
+        contentText: '{"name":"Герой"}\n',
+        bytesSha256: 'f'.repeat(64),
+      };
+      const r: CommandReceipt = {
+        commandId: command.commandId,
+        receiptId: 'export-receipt',
+        revisions: postRevisions,
+        result: {
+          ...common,
+          stage: 'LOCAL_CHARACTER_POST_SAVE',
+          variant: 'EXPORT',
+          sourceFormId: 'APP-010',
+          sourceRevisions: postRevisions,
+          nextFormId: 'APP-010',
+          targetEntityId: CHARACTER_DRAFT_ID,
+          targetRevisions: postRevisions,
+          localMetadataRevision: 0,
+          createdVariantUuidOrNull: null,
+          restoredCheckpointOrNull: null,
+          downloadOrNull: download,
+        },
+      };
+      h.socket.message(decoderTerminalText(r));
+      h.socket.message(decoderTerminalText(r, true));
+      expect(onDownload).not.toHaveBeenCalled();
+      const finalSocket =
+        delivery === 'reconnect'
+          ? reconnectDecoderFixture(h, 'APP-010', exporting, postRevisions, r, [
+              'APP-010::CTA::002',
+            ])
+          : h.socket;
+      if (delivery === 'destination')
+        h.socket.message(
+          decoderSnapshotText(
+            'APP-010',
+            exporting,
+            { correlationId: command.commandId, reason: 'COMMAND_DESTINATION' },
+            postRevisions,
+          ),
+        );
+      expect(h.states.at(-1)?.kind).toBe('ready');
+      expect(onDownload).toHaveBeenCalledExactlyOnceWith(download);
+      finalSocket.message(decoderTerminalText(r, true));
+      expect(h.states.at(-1)?.kind).toBe('protocol-error');
+      expect(onDownload).toHaveBeenCalledTimes(1);
+    },
+  );
+  it('rejects changed replay and stale same-scope navigation', async () => {
+    const h = await connectDecoderFixture('APP-009', restore, undefined, {
+      revisions: postRevisions,
+    });
+    h.connection.submitPostSave('RESTORE');
+    const r = restored(decoderCommand(h.socket));
+    h.socket.message(decoderTerminalText(r));
+    h.socket.message(decoderTerminalText({ ...r, receiptId: 'changed' }, true));
+    expect(h.states.at(-1)?.kind).toBe('protocol-error');
+    const saved = {
+      ...common,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      lastCompleteCheckpointId: WIZARD_CHECKPOINT_ID,
+      lastCompleteCheckpointRevision: 4,
+      resumeFormId: 'CHR-010',
+      branchCacheHash: 'b'.repeat(64),
+      randomReceiptIds: ['old-roll'],
+      corruptTailIgnored: false,
+      restoreStatus: 'READY',
+      draftRevision: 10,
+      commandId: 'old-command',
+    };
+    const n = await connectDecoderFixture('CHR-026', saved, undefined, {
+      revisions: postRevisions,
+    });
+    expect(n.connection.requestFormAction('CHR-026::CTA::001')).toEqual({ ok: true });
+    const intent = JSON.parse(n.socket.sent.at(-1)!) as { navigationRequestId: string };
+    n.socket.message(
+      decoderSnapshotText(
+        'APP-009',
+        restore,
+        { correlationId: intent.navigationRequestId, reason: 'FORM_ACTION' },
+        postRevisions,
+      ),
+    );
+    expect(n.states.at(-1)?.kind).toBe('protocol-error');
+  });
+  it('opens only a signed owned library row with selected binding index zero', async () => {
+    const library = {
+      campaignAuthority: false,
+      draftCharacterIds: [CHARACTER_DRAFT_ID],
+      finalCharacterIds: [],
+      libraryEntries: [
+        {
+          localCharacterId: CHARACTER_DRAFT_ID,
+          lifecycleState: 'DRAFT',
+          name: 'Черновик',
+          selectionFormId: 'CHR-026',
+        },
+      ],
+      handoffIdOrNull: null,
+      handoffReceiptIdOrNull: null,
+      launchContext: 'PLAYER_MENU',
+      localCharacterLibraryRevision: 1,
+      localOwnerIdOrNull: null,
+      projectionRevision: 15,
+      returnContext: 'PLAYER_MENU',
+      stateRevision: 10,
+    };
+    const h = await connectDecoderFixture('APP-004', library, undefined, {
+      revisions: postRevisions,
+    });
+    expect(h.states.at(-1)?.kind).toBe('ready');
+    expect(h.connection.selectLibraryCharacter('foreign').ok).toBe(false);
+    expect(h.connection.selectLibraryCharacter(CHARACTER_DRAFT_ID)).toEqual({ ok: true });
+    const intent = JSON.parse(h.socket.sent.at(-1)!) as { navigationRequestId: string };
+    expect(intent).toMatchObject({
+      routeTemplate: '/player/characters/:localCharacterId/create/chr-026',
+      bindings: [{ parameterIndex: 0, source: 'client-selected', value: CHARACTER_DRAFT_ID }],
+    });
+    const saved = {
+      ...common,
+      characterDraftId: CHARACTER_DRAFT_ID,
+      lastCompleteCheckpointId: WIZARD_CHECKPOINT_ID,
+      lastCompleteCheckpointRevision: 4,
+      resumeFormId: 'CHR-010',
+      branchCacheHash: 'b'.repeat(64),
+      randomReceiptIds: [],
+      corruptTailIgnored: false,
+      restoreStatus: 'READY',
+      draftRevision: 10,
+      commandId: 'old-command',
+    };
+    h.socket.message(
+      decoderSnapshotText(
+        'CHR-026',
+        saved,
+        { correlationId: intent.navigationRequestId, reason: 'ADDRESSABLE_ROUTE' },
+        REVISIONS,
+      ),
+    );
+    expect(h.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'CHR-026', revisions: REVISIONS },
+    });
   });
 });
 

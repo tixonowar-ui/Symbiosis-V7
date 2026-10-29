@@ -283,9 +283,13 @@ export function createIdentityDraftRuntime(catalogKeys: ReadonlySet<string>) {
         ? null
         : { draftRevision: state.draftRevision, values: copy(state.values) };
     },
-    registerScope: (scope: IdentityDraftScope) => {
+    registerScope: (scope: IdentityDraftScope, initial?: IdentityDraftValues) => {
       const key = scopeKey(scope);
-      if (!drafts.has(key)) drafts.set(key, { draftRevision: 0, values: initialValues() });
+      if (!drafts.has(key)) {
+        const checked = canonicalizeIdentityDraftValues(initial ?? initialValues(), catalogKeys);
+        if (!checked.ok) throw new Error('identity scope initial values are invalid');
+        drafts.set(key, { draftRevision: 0, values: checked.value });
+      }
     },
     unregisterScope: (scope: IdentityDraftScope) => drafts.delete(scopeKey(scope)),
   };

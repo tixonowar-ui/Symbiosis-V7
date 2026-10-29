@@ -1,4 +1,6 @@
 import { CreationValidationFields } from './forms/chr/creation-validation-fields.js';
+import { PostSaveFields, downloadPostSaveFile } from './forms/chr/post-save-fields.js';
+import { isPostSaveForm } from './forms/chr/post-save.js';
 import { CreationCorrectionFields } from './forms/chr/creation-correction-fields.js';
 import { CORRECTION_COMMANDS } from './forms/chr/creation-correction.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -215,6 +217,9 @@ function displayValue(key: string, value: unknown): string {
 
 function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSnapshot }) {
   if (
+    snapshot.formId === 'APP-004' ||
+    (snapshot.formId === 'CHR-001' && Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
+    isPostSaveForm(snapshot.formId) ||
     snapshot.formId === 'CHR-032' ||
     snapshot.formId === 'CHR-025' ||
     Object.hasOwn(snapshot.projection, 'correctionContext')
@@ -2226,6 +2231,23 @@ export function App(): ReactElement {
       setManualCompositionDraft,
       setArmorBundleDraft,
       setStartingWeaponDraft,
+      (file) => {
+        void downloadPostSaveFile(file)
+          .then(() => setActionNotice('Экспортированный файл передан браузеру.'))
+          .catch(() => setActionNotice('Не удалось сохранить экспортированный файл.'));
+      },
+      (result) => {
+        if (result.variant === 'VARIANT_CREATE')
+          setActionNotice('Новый вариант сохранён в локальной библиотеке.');
+        else if (result.variant === 'METADATA_PATCH')
+          setActionNotice('Локальные имя, описание и арт сохранены.');
+        else if (result.variant === 'RESTORE')
+          setActionNotice(
+            result.restoredCheckpointOrNull?.corruptTailIgnored === true
+              ? 'Восстановлен полный checkpoint; повреждённый незавершённый хвост отброшен.'
+              : 'Подтверждённый checkpoint восстановлен.',
+          );
+      },
     );
     connectionRef.current = connection;
     return () => {
@@ -2265,6 +2287,9 @@ export function App(): ReactElement {
       actionKey !== CHR_038_ROLL_ACTION_KEY &&
       actionKey !== CHR_037_EDIT_ACTION_KEY &&
       actionKey !== CHR_037_ROLL_ACTION_KEY &&
+      actionKey !== 'CHR-040::CTA::004' &&
+      actionKey !== 'APP-010::CTA::004' &&
+      actionKey !== 'APP-010::CTA::005' &&
       (actionKey !== CHR_023_SUBMIT_ACTION_KEY ||
         snapshot?.projection['requestStatus'] !== 'DRAFT'),
   );
@@ -2291,6 +2316,43 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive || layers.length > 0}>
             <legend>AtlasForm {snapshot.formId}</legend>
+            <PostSaveFields
+              formId={snapshot.formId}
+              projection={snapshot.projection}
+              availableActionKeys={snapshot.availableActionKeys}
+              onMetadata={(values) => {
+                const result = connectionRef.current?.submitPostSave('METADATA_PATCH', values);
+                setActionNotice(
+                  result?.ok === true
+                    ? null
+                    : `Изменения не отправлены: ${result?.detail ?? 'соединение не готово'}`,
+                );
+              }}
+              onVariant={() => {
+                const result = connectionRef.current?.submitPostSave('VARIANT_CREATE');
+                setActionNotice(
+                  result?.ok === true
+                    ? null
+                    : `Вариант не создан: ${result?.detail ?? 'соединение не готово'}`,
+                );
+              }}
+              onExport={() => {
+                const result = connectionRef.current?.submitPostSave('EXPORT');
+                setActionNotice(
+                  result?.ok === true
+                    ? null
+                    : `Экспорт не отправлен: ${result?.detail ?? 'соединение не готово'}`,
+                );
+              }}
+              onSelectLibrary={(id) => {
+                const result = connectionRef.current?.selectLibraryCharacter(id);
+                setActionNotice(
+                  result?.ok === true
+                    ? null
+                    : `Персонаж не открыт: ${result?.detail ?? 'соединение не готово'}`,
+                );
+              }}
+            />
             <CreationValidationFields snapshot={snapshot} />
             <CreationCorrectionFields
               snapshot={snapshot}
@@ -2672,7 +2734,13 @@ export function App(): ReactElement {
             ) : null}
             <AtlasForm
               playerContentOnly={
-                correction || snapshot.formId === 'CHR-032' || snapshot.formId === 'CHR-025'
+                correction ||
+                snapshot.formId === 'CHR-032' ||
+                snapshot.formId === 'CHR-025' ||
+                snapshot.formId === 'APP-004' ||
+                (snapshot.formId === 'CHR-001' &&
+                  Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
+                isPostSaveForm(snapshot.formId)
               }
               availableActionKeys={
                 correction
