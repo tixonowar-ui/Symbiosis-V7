@@ -552,6 +552,7 @@ export function nextSymbiontEnvelope<
     | 'CHR-022'
     | 'CHR-023'
     | 'CHR-024'
+    | 'CHR-032'
     | 'CHR-037'
     | 'CHR-038'
     | 'CHR-041',

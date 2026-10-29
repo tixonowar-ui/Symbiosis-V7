@@ -1,3 +1,4 @@
+import { initialFiveStartingPositionsStage } from './creation-five-starting-positions-contract.js';
 import { isDeepStrictEqual } from 'node:util';
 import type Database from 'better-sqlite3';
 import type { SymbiontCatalog } from '../domain/index.js';
@@ -188,7 +189,7 @@ export function preflightStartingMoney(
 export function rewriteStartingMoneyPresentation(
   database: Database.Database,
   checkpoint: DurableCreationWizardCheckpoint,
-  formId: 'CHR-022' | 'CHR-023' | 'CHR-024' | 'CHR-038',
+  formId: 'CHR-022' | 'CHR-023' | 'CHR-024' | 'CHR-037' | 'CHR-038',
   projectionRevision: number,
   draftRevision = checkpoint.receipt.result.draftRevision,
 ): void {
@@ -271,6 +272,9 @@ export function commitStartingMoney(
           payloadJson: JSON.stringify({
             ...payload,
             startingMoneyStage: stage,
+            ...(stage.checkpointRecordOrNull === null
+              ? {}
+              : { fiveStartingPositionsStage: initialFiveStartingPositionsStage(stage) }),
             receipt,
             nextStageEnvelope: nextSymbiontEnvelope(
               receipt.result.nextFormId,
@@ -288,7 +292,7 @@ export function commitStartingMoney(
       rewriteStartingMoneyPresentation(
         database,
         current.checkpoint,
-        'CHR-038',
+        stage.checkpointRecordOrNull === null ? 'CHR-038' : 'CHR-037',
         receipt.revisions.projectionRevision,
         receipt.result.draftRevision,
       );

@@ -32,6 +32,19 @@ function fixture(
       checkpointRecordOrNull: { receipt: { receiptId: 'weapon-checkpoint' } },
     },
     weaponProfileStage: { kind: pure ? 'FIXED' : 'FORMULA' },
+    ...(done
+      ? {
+          fiveStartingPositionsStage: {
+            slots: Array.from({ length: 5 }, (_, i) => ({
+              positionId: `position-${String(i)}`,
+              qualityRollRequestId: `quality-${String(i)}`,
+            })),
+            draftSelections: [],
+            rollRecords: [],
+            checkpointRecordOrNull: null,
+          },
+        }
+      : {}),
     startingMoneyStage: {
       moneyRollRequestId: 'money-request',
       profileReceiptId: 'profile-receipt',
@@ -104,9 +117,9 @@ describe('CHR-038 starting money projection', () => {
       );
     }
   });
-  it('keeps the same result actionless after checkpoint and signs only the unpublished next stage', () => {
+  it('keeps the same result after checkpoint and resumes its five-position stage', () => {
     const view = projectChr038(fixture(20, true, true), true, true);
-    expect(view.availableActionKeys).toEqual([]);
+    expect(view.availableActionKeys).toEqual(['CHR-038::CTA::001']);
     expect(view.roleFilteredPayload).toMatchObject({
       moneyRollFaceOrNull: 20,
       moneyRollReceiptIdOrNull: 'roll-receipt',
@@ -114,6 +127,7 @@ describe('CHR-038 starting money projection', () => {
       weaponProfileFormId: 'CHR-024',
       gmFinalizationRequired: true,
       nextFormId: 'CHR-037',
+      positionsEntryMode: 'RESUME',
     });
     expect(view.formId).toBe('CHR-038');
     expect(projectChr038(fixture(1), true, false).availableActionKeys).toEqual([

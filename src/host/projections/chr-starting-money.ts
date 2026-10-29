@@ -2,6 +2,10 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 
 import { startingMoneyStageForCheckpoint } from '../creation-starting-money-contract.js';
+import {
+  fiveStartingPositionSnapshots,
+  fiveStartingPositionsStageForCheckpoint,
+} from '../creation-five-starting-positions-contract.js';
 import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js';
 
 export const CHR_038_FORM_ID = 'CHR-038' as const;
@@ -34,6 +38,8 @@ export function projectChr038(
     throw new Error('starting money projection requires confirmed weapon and profile receipts');
   const roll = stage.rollRecordOrNull;
   const done = stage.checkpointRecordOrNull;
+  const positions = fiveStartingPositionsStageForCheckpoint(checkpoint);
+  const resumePositions = positions !== null && positions.checkpointRecordOrNull === null;
   const recommendation = roll?.wealthRecommendation ?? null;
   const actions: ActionKey[] = [];
   if (done === null) {
@@ -42,6 +48,7 @@ export function projectChr038(
     } else if (checkpointCapable) actions.push(CHR_038_CONFIRM_ACTION_KEY);
     actions.push(CHR_038_RETURN_ACTION_KEY);
   }
+  if (resumePositions) actions.push(CHR_038_CONFIRM_ACTION_KEY);
   return {
     availableActionKeys: actions,
     formId: CHR_038_FORM_ID,
@@ -70,6 +77,30 @@ export function projectChr038(
       weaponCheckpointReceiptId: weapon.checkpointRecordOrNull.receipt.receiptId,
       weaponProfileFormId: profile.kind === 'FORMULA' ? 'CHR-023' : 'CHR-024',
       moneyCheckpointReceiptIdOrNull: done?.receipt.receiptId ?? null,
+      positionsEntryMode: resumePositions ? 'RESUME' : 'NONE',
+      positionsOrNull:
+        positions === null
+          ? null
+          : fiveStartingPositionSnapshots(positions).map((position) => ({
+              positionId: position.positionId,
+              qualityRollRequestId: position.qualityRollRequestId,
+              itemTypeIdOrStoryType: position.itemTypeIdOrStoryType,
+              quantity: position.quantity,
+              storyDescriptionOrNull: position.storyDescriptionOrNull,
+              name: position.name,
+              kind: position.kind,
+              qualityRollReceiptId: position.qualityRollReceiptId,
+              qualityRollFaceOrNull: position.qualityRollFaceOrNull,
+              qualityRecommendation:
+                position.qualityRecommendation === null
+                  ? null
+                  : {
+                      kind: position.qualityRecommendation.kind,
+                      label: position.qualityRecommendation.label,
+                      range: position.qualityRecommendation.range,
+                      rawFace: position.qualityRecommendation.rawFace,
+                    },
+            })),
       wizardCheckpointId: checkpoint.checkpoint.checkpointId,
       draftRevision: checkpoint.receipt.result.draftRevision,
       commandId: (done?.request ?? roll?.request ?? stage.entryRequest).commandId,

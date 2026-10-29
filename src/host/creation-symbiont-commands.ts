@@ -104,6 +104,7 @@ function assertCommon(
     readonly allowStartingWeaponStage?: boolean;
     readonly allowWeaponProfileStage?: boolean;
     readonly allowStartingMoneyStage?: boolean;
+    readonly allowFiveStartingPositionsStage?: boolean;
   } = {},
 ): void {
   const actual = currentRevisions(checkpoint);
@@ -125,6 +126,8 @@ function assertCommon(
     (checkpoint.startingWeaponStage != null && options.allowStartingWeaponStage !== true) ||
     (checkpoint.weaponProfileStage != null && options.allowWeaponProfileStage !== true) ||
     (checkpoint.startingMoneyStage != null && options.allowStartingMoneyStage !== true) ||
+    (checkpoint.fiveStartingPositionsStage != null &&
+      options.allowFiveStartingPositionsStage !== true) ||
     occupied.has(request.commandId) ||
     (receiptId !== undefined && (occupied.has(receiptId) || receiptId === request.commandId)) ||
     checkpoint.checkpoint.checkpointRevision === Number.MAX_SAFE_INTEGER ||

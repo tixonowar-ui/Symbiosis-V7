@@ -1,68 +1,60 @@
 # Передача контекста — 2026-10-29
 
-Срез issue #153, ветка `codex/153-starting-money`.
-База — `main`, коммит `c5c53b8b9e7e761c2e64834fb5b5214a47ccae2c`:
-PR #167 с профилями оружия слит, issue #152 закрыта. Предыдущие #146 и #151
-также закрыты по проверенным реализациям.
+Срез issue #154, ветка `codex/154-five-starting-positions`.
+База — `main`, коммит `b3d9c316af3e6836c0f0a575a2b4274e5331e525`:
+PR #168 со стартовыми деньгами слит, issue #153 закрыта.
 
 ## Что реализовано
 
-- `CHR-038`: один отдельный D20 рекомендации достатка после завершённого
-  формульного либо fixed профиля оружия. [ADR 0060](../adr/0060-starting-money.md).
-- Шкала CORE-172/Q-CORE-052: 1–4 «нет денег», 5–9 «малая сумма», 10–14
-  «обычная», 15–18 «крупная», 19 «исключительная», 20 «редкое состояние».
-  Каталог сверяет источник; domain не содержит RNG и не вычисляет сумму.
-  `gmFinalizationRequired=true` остаётся явным ограничением; нет master approval,
-  critical chain, creation penalty, XP или изменения валюты.
-- Новый успешный profile commit атомарно связывает один pending money request
-  с profile/weapon receipts. Это техническая связь продолжения: денежный
-  бросок и рекомендация ещё не выполняются. INVALID не создаёт money stage.
-- Для исторического profile receipt адрес запроса детерминирован: namespace
-  `symbiosis.starting-money.v1`, character ID и profile receipt ID хешируются
-  SHA-256. Read/reconnect не записывают stage и не вызывают allocator/RNG.
-  Первый money roll атомарно материализует stage. Повторный submit/acknowledge
-  профиля и изменение старого receipt не используются.
-- AUTO вызывает sampler один раз после guards в транзакции; MANUAL принимает
-  явную грань. После committed display request, face и receipt immutable.
-  AUTO money receipt входит в `randomReceiptIds`, formula witness receipts
-  остаются вне истории физических бросков.
-- Safe-return ведёт строго `CHR-038 → CHR-022`, далее через подписанную ветвь
-  `CHR-023/024` возвращается тот же money stage. Меняется только presentation.
-  Старый initial terminal profile отличается от явного safe-return по signed
-  projection revision; restart сохраняет выбранное представление.
-- Loader проверяет profile binding, режим, physical roll, рекомендацию,
-  историю и уникальность IDs. Post-write validation выполняется внутри
-  SQLite-транзакции. Checkpoint подписывает `CHR-037`, текущий `CHR-038`
-  actionless; пять произвольных позиций и итоговые деньги вне среза.
+- `CHR-037`: пять позиций после денег, каждая с типом, положительным целым
+  количеством и отдельным addressed D20. [ADR 0061](../adr/0061-five-starting-positions.md).
+- Каталог содержит 62 типа с `Можно в инвентарь=true` и описательную категорию
+  GEN-010. Две строки UNKNOWN не становятся разрешёнными. Story item занимает
+  одну позицию, требует описание и не создаёт механики. Источники quantity,
+  шкалы качества, доступных типов и границ проверяются при загрузке каталога.
+- Pending position/request IDs детерминированно связаны с money checkpoint.
+  Новый money checkpoint сохраняет stage атомарно; исторический выводит
+  адреса без записи и материализует stage первым roll. Borrowed entry не
+  дублирует money receipt в истории.
+- Каждый ROLL-COMMIT валидирует полный draft из пяти позиций до RNG, затем
+  фиксирует одну выбранную. Остальные сохраняются как редактируемый draft.
+  Тип, количество и описание ранее брошенных позиций immutable. Совпадающий
+  тип допустим в нескольких позициях без объединения стеков.
+- AUTO вызывает sampler один раз на позицию, MANUAL принимает грань 1..20.
+  Все количества сохраняются, включая рекомендацию 1–4. Состояние
+  `OWNED_NOT_EQUIPPED`; нет XP, критической цепочки или автоматической экипировки.
+- Safe-return `CHR-037 → CHR-038 → CHR-037` меняет только presentation.
+  Restart сохраняет выбранный экран, pending draft и все receipts. Final
+  checkpoint требует пять точных связей position/request/receipt и подписывает
+  `CHR-032`, сохраняя текущий `CHR-037` actionless.
 
 ## Проверки и ревью
 
-- Targeted domain/catalog: **41/41** тест. Focused money core: **27/27**.
-  Регрессии предыдущих weapon/profile: **30/30**. Production E2E: **17/17**;
-  WebSocket AUTO/MANUAL: **2/2**.
+- Domain/catalog: 84 теста; durable core: 33 теста, включая порядок бросков
+  4,1,3,0,2, SQLite rollback и reopen в четырёх состояниях.
+- Реальный WS AUTO/MANUAL: 2 сценария с пятью независимыми командами, exact
+  replay, changed payload, stale второй сессией и запретом replacement.
+- Новые production E2E AUTO/MANUAL и обе регрессии денег: 4/4. Проверены
+  story quantity>1, редактирование pending позиции, точный повтор browser
+  command через второй WS, safe-return, mid-roll SQLite reopen и финальный экран.
+- Независимые чтения сверили источники/ADR и durable core/dispatch/history;
+  подтверждённых дефектов в этих путях не найдено. Проверка host→web round-trip
+  перенесена в web test, чтобы browser globals не попадали в node tsconfig.
+- `npm run import` прошёл; tracked generated-вывод не изменён.
 - `npm run verify` прошёл: TypeScript, ESLint, Prettier, traceability,
-  **102 файла / 1880 Vitest-тестов** и кросс-реестровая валидация.
-  Production build и **17/17 Chrome E2E** прошли без retry.
-- Независимое чтение money contract/core и atomic profile linkage выявило два
-  пограничных дефекта: пустой receipt ID мог расходовать AUTO sampler до отказа,
-  а allocated ID `null` ошибочно подменялся derived адресом. Оба исправлены
-  проверкой до использования и покрыты регрессиями. Прочитанные пути включают
-  durable corruption, legacy address, immutable terminal history и binding.
-- `npm run import` прошёл. Дополнительный `import:verify` выполнил первый
-  импорт, но второй вновь остановился на локальном
-  `UNKNOWN: open generated/spec/atlas/forms-by-id.json`, как на базе #152.
-  Tracked generated-вывод не изменён; локальная воспроизводимость не
-  подтверждена. Отдельный CI-гейт проверяет её на чистом checkout.
-- CI проверяется отдельно на конкретном HEAD PR перед merge.
+  **107 файлов / 2010 Vitest-тестов** и кросс-реестровая валидация.
+  Последнее уточнение decoder дополнительно проверено typecheck и ESLint.
+- Production build и **19/19 Chrome E2E** прошли без retry.
+- CI, включая воспроизводимость двух импортов на чистом checkout, проверяется
+  отдельно на конкретном HEAD PR перед merge.
 - Артефакты, importer, зависимости, outer protocol, SQL-схема, CI и
   конфигурация проверок не меняются. TRACEABILITY перегенерирована,
-  AGENTS обновлён после регистрации формы.
+  AGENTS и module-map обновлены.
 
 ## Следующие задачи
 
-1. #154 — пять произвольных позиций `CHR-037`.
-2. #155 — итог восьми имущественных операций и финальная валидация/сохранение.
-3. #156 — восстановление, кэш веток, финальный лист, варианты и экспорт.
+1. #155 — итог восьми имущественных операций и финальная валидация/сохранение.
+2. #156 — восстановление, кэш веток, финальный лист, варианты и экспорт.
 
 Это продолжение V1 «Локальный персонаж». Campaign/combat runtime, мастерские
 сущности, звук и portable Windows-поставка остаются последующими срезами.

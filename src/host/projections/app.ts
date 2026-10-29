@@ -1,3 +1,4 @@
+import { assertFiveStartingPositionsScreenContracts } from './chr-five-starting-positions.js';
 import { assertStartingMoneyScreenContracts } from './chr-starting-money.js';
 import { assertWeaponProfileScreenContracts } from './chr-weapon-profile.js';
 import { createHash } from 'node:crypto';
@@ -268,6 +269,7 @@ export interface AppNavigationAction {
     | 'CHR-023'
     | 'CHR-024'
     | 'CHR-031'
+    | 'CHR-037'
     | 'CHR-038'
     | typeof CHR_042_FORM_ID;
   readonly guard: string;
@@ -286,6 +288,12 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
   const forms = record(source, 'forms-by-id.json');
   const result = new Map<ActionKey, AppNavigationAction>();
   const expectedActions = [
+    ['CHR-037', 'CHR-037::CTA::002', 'all committed money/position receipts preserved'],
+    [
+      'CHR-038',
+      'CHR-038::CTA::001',
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT receipt committed; GM finalization flag retained',
+    ],
     [
       'CHR-038',
       'CHR-038::CTA::002',
@@ -565,6 +573,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertStartingWeaponScreenContracts(forms, assertScreenContract);
   assertWeaponProfileScreenContracts(forms, assertScreenContract);
   assertStartingMoneyScreenContracts(forms, assertScreenContract);
+  assertFiveStartingPositionsScreenContracts(forms, assertScreenContract);
   return result;
 }
 

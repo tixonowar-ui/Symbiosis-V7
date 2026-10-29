@@ -1,4 +1,17 @@
 import {
+  commitFiveStartingPositions,
+  preflightFiveStartingPositions,
+  advanceFiveStartingPositionsPresentation,
+} from './creation-five-starting-positions.js';
+import {
+  fiveStartingPositionsStageForCheckpoint,
+  fiveStartingPositionsPresentationForm,
+  normalizeFiveStartingPositionsRequest,
+  type FiveStartingPositionsRequest,
+} from './creation-five-starting-positions-contract.js';
+import { canonicalFiveStartingPositionsCatalog } from './five-starting-positions-catalog.js';
+import { projectChr037 } from './projections/chr-five-starting-positions.js';
+import {
   commitStartingMoney,
   preflightStartingMoney,
   advanceStartingMoneyPresentation,
@@ -404,6 +417,7 @@ interface ConfirmedNavigationContext {
     | 'CHR-022'
     | 'CHR-023'
     | 'CHR-024'
+    | 'CHR-037'
     | 'CHR-038'
     | 'CHR-041'
     | 'CHR-042';
@@ -553,6 +567,7 @@ function allocatedReceiptId(
     | ArmorBundleQualityRollRequest
     | StartingWeaponQualityRollRequest
     | WeaponProfileRequest
+    | FiveStartingPositionsRequest
     | StartingMoneyRequest
     | CreationRollCommitCommandRequest
     | CreationSetDecideCommandRequest
@@ -906,6 +921,7 @@ function adoptNavigationContext(
     next.formId === CHR_015_FORM_ID ||
     next.formId === 'CHR-021' ||
     next.formId === 'CHR-022' ||
+    next.formId === 'CHR-037' ||
     next.formId === 'CHR-038' ||
     next.formId === 'CHR-023' ||
     next.formId === 'CHR-024' ||
@@ -1519,10 +1535,13 @@ function inferredCreationSkillPresentationFormId(
 function creationPresentationFormId(
   checkpoint: DurableCreationWizardCheckpoint,
 ): ConfirmedNavigationContext['formId'] {
+  const positionsForm = fiveStartingPositionsPresentationForm(checkpoint);
+  if (positionsForm !== null) return positionsForm;
   const moneyForm = startingMoneyPresentationForm(checkpoint);
   if (moneyForm !== null) return moneyForm;
   const nextFormId = checkpoint.nextStageEnvelope.formId;
-  if (nextFormId === 'CHR-037') throw new Error('item destination lacks money checkpoint');
+  if (nextFormId === 'CHR-037' || nextFormId === 'CHR-032')
+    throw new Error('item destination lacks money checkpoint');
   const signed = checkpoint.symbiontPresentationStage;
   if (checkpoint.weaponProfileStage != null) {
     if (signed?.formId === 'CHR-031') return 'CHR-023';
@@ -1863,6 +1882,13 @@ function creationWizardBase(
       return projectChr022(
         checkpoint,
         startingWeaponCatalog,
+        capabilities.rollCommit,
+        capabilities.checkpoint,
+      );
+    case 'CHR-037':
+      return projectChr037(
+        checkpoint,
+        canonicalFiveStartingPositionsCatalog(),
         capabilities.rollCommit,
         capabilities.checkpoint,
       );
@@ -2496,6 +2522,8 @@ function equipmentProfileNavigation(
   dependencies: NavigationDependencies,
 ): NavigationSuccess | undefined {
   const targets = {
+    'CHR-037::CTA::002': 'CHR-038',
+    'CHR-038::CTA::001': 'CHR-037',
     'CHR-038::CTA::002': 'CHR-022',
     'CHR-023::CTA::001': 'CHR-038',
     'CHR-024::CTA::001': 'CHR-038',
@@ -2558,7 +2586,21 @@ function equipmentProfileNavigation(
     ].includes(message.actionKey);
   let committed: DurableCreationWizardCheckpoint;
   try {
-    if (moneyNavigation) {
+    if (
+      fiveStartingPositionsStageForCheckpoint(checkpoint) !== null &&
+      ['CHR-037::CTA::002', 'CHR-038::CTA::001'].includes(message.actionKey)
+    ) {
+      if (target !== 'CHR-037' && target !== 'CHR-038') return undefined;
+      committed = advanceFiveStartingPositionsPresentation(
+        dependencies.database,
+        {
+          characterDraftId: current.entityLocalCharacterId,
+          wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+          formId: target,
+        },
+        dependencies.symbiontCatalog,
+      );
+    } else if (moneyNavigation) {
       if (
         target !== 'CHR-022' &&
         target !== 'CHR-023' &&
@@ -3363,6 +3405,92 @@ function handleCommandRequest(
       path: '$.transition',
       value: { ...message.transition },
     });
+    return;
+  }
+  if (
+    message.payload !== null &&
+    typeof message.payload === 'object' &&
+    !Array.isArray(message.payload) &&
+    ['FIVE_STARTING_POSITIONS_ROLL', 'FIVE_STARTING_POSITIONS_CHECKPOINT'].includes(
+      String((message.payload as Record<string, unknown>)['variant']),
+    )
+  ) {
+    let request: FiveStartingPositionsRequest;
+    try {
+      request = normalizeFiveStartingPositionsRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== request.payload.sourceFormId ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(request.workflowCommandId)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    const positionsDependencies = {
+      catalog: dependencies.symbiontCatalog,
+      positionsCatalog: canonicalFiveStartingPositionsCatalog(),
+      sampleD20: dependencies.sampleCreationD20,
+    };
+    try {
+      preflightFiveStartingPositions(dependencies.database, request, positionsDependencies);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+    assertProcessLocalIdUnused(receiptId, 'five positions receipt allocator', commandJournal);
+    if (
+      connection.current !== current ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !isDeepStrictEqual(currentNavigationRevisions(connection, dependencies), revisions)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    let durable: DurableCreationWizardCheckpoint;
+    try {
+      durable = commitFiveStartingPositions(
+        dependencies.database,
+        request,
+        receiptId,
+        positionsDependencies,
+      );
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durable.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durable.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durable),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durable,
+      dependencies,
+      connection,
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
     return;
   }
   if (
@@ -4939,6 +5067,7 @@ function handleReconnectV2(
       restored.formId === CHR_020_FORM_ID ||
       restored.formId === CHR_021_FORM_ID ||
       restored.formId === 'CHR-022' ||
+      restored.formId === 'CHR-037' ||
       restored.formId === 'CHR-038' ||
       restored.formId === 'CHR-023' ||
       restored.formId === 'CHR-024' ||

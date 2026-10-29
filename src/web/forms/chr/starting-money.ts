@@ -16,6 +16,10 @@ import {
   isNonEmptyString,
   sameJson,
 } from './random-symbionts.js';
+import {
+  decodeFiveStartingPositionSnapshots,
+  type FiveStartingPositionProjection,
+} from './five-starting-positions.js';
 
 export const CHR_038_ROLL_ACTION_KEY = 'CHR-038::CTA::003' as const satisfies ActionKey;
 export const CHR_038_CONFIRM_ACTION_KEY = 'CHR-038::CTA::001' as const satisfies ActionKey;
@@ -39,6 +43,8 @@ export interface Chr038Projection extends JsonObject {
   readonly weaponCheckpointReceiptId: string;
   readonly weaponProfileFormId: 'CHR-023' | 'CHR-024';
   readonly moneyCheckpointReceiptIdOrNull: string | null;
+  readonly positionsEntryMode: 'NONE' | 'RESUME';
+  readonly positionsOrNull: readonly FiveStartingPositionProjection[] | null;
   readonly wizardCheckpointId: string;
   readonly draftRevision: number;
   readonly commandId: string;
@@ -81,6 +87,11 @@ export function decodeChr038Projection(
       ? { ok: true as const, value: null }
       : decodeWealthRecommendation(value['wealthRecommendation'], `${path}.wealthRecommendation`);
   if (!recommendation.ok) return recommendation;
+  const positions =
+    value['positionsOrNull'] === null
+      ? { ok: true as const, value: null }
+      : decodeFiveStartingPositionSnapshots(value['positionsOrNull'], `${path}.positionsOrNull`);
+  if (!positions.ok) return positions;
   const decoded = decodeProjection(value, path, {
     characterDraftId: isNonEmptyString,
     moneyRollRequestId: isNonEmptyString,
@@ -93,6 +104,8 @@ export function decodeChr038Projection(
     weaponCheckpointReceiptId: isNonEmptyString,
     weaponProfileFormId: (field) => field === 'CHR-023' || field === 'CHR-024',
     moneyCheckpointReceiptIdOrNull: nullableId,
+    positionsEntryMode: (field) => field === 'NONE' || field === 'RESUME',
+    positionsOrNull: (field) => field === value['positionsOrNull'],
     wizardCheckpointId: isNonEmptyString,
     draftRevision: isRevision,
     commandId: isNonEmptyString,
@@ -108,12 +121,19 @@ export function decodeChr038Projection(
     projection.weaponCheckpointReceiptId,
     ...(rolled ? [projection.moneyRollReceiptIdOrNull] : []),
     ...(checkpointed ? [projection.moneyCheckpointReceiptIdOrNull] : []),
+    ...(positions.value ?? []).flatMap((position) => [
+      position.positionId,
+      position.qualityRollRequestId,
+      ...(position.qualityRollReceiptId === null ? [] : [position.qualityRollReceiptId]),
+    ]),
   ];
   if (
     rolled !== (projection.moneyRollFaceOrNull !== null) ||
     rolled !== (recommendation.value !== null) ||
     (rolled && projection.moneyRollFaceOrNull !== recommendation.value?.rawFace) ||
     (checkpointed && !rolled) ||
+    checkpointed !== (positions.value !== null) ||
+    (!checkpointed && projection.positionsEntryMode !== 'NONE') ||
     projection.nextFormId !== (checkpointed ? 'CHR-037' : 'CHR-038') ||
     new Set(ids).size !== ids.length
   )
@@ -124,7 +144,8 @@ export function expectedChr038ActionKeys(
   projection: Chr038Projection,
   capabilities: { readonly rollCommit: boolean; readonly checkpoint: boolean },
 ): readonly ActionKey[] {
-  if (projection.moneyCheckpointReceiptIdOrNull !== null) return [];
+  if (projection.moneyCheckpointReceiptIdOrNull !== null)
+    return projection.positionsEntryMode === 'RESUME' ? [CHR_038_CONFIRM_ACTION_KEY] : [];
   return [
     ...(projection.moneyRollReceiptIdOrNull === null
       ? capabilities.rollCommit

@@ -91,19 +91,15 @@ test('CHR-038 binds one new MANUAL money request to a submitted formula profile 
     expect(host.checkpoint().weaponProfileStage).toEqual(profile);
     expect(host.rollRequestAllocations()).toBe(allocations);
     await action(page, 'CHR-038::CTA::001');
-    await expect(
-      page.getByText('Рекомендация денег подтверждена.', { exact: false }),
-    ).toBeVisible();
+    await expect(page.getByLabel('Пять произвольных позиций', { exact: true })).toBeVisible();
     const completed = host.checkpoint();
     const finalReceipts = host.receiptAllocations();
     expect(completed.nextStageEnvelope.formId).toBe('CHR-037');
     await page.reload();
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(
-      page.getByText('Рекомендация денег подтверждена.', { exact: false }),
-    ).toBeVisible();
-    await expect(page.locator('[data-atlas-form-id="CHR-037"]')).toHaveCount(0);
+    await expect(page.getByLabel('Пять произвольных позиций', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-037"]')).toBeVisible();
     await expect(page.locator('[data-atlas-action-key^="CHR-038"]')).toHaveCount(0);
     expect(host.checkpoint().startingMoneyStage).toEqual(completed.startingMoneyStage);
     expect(host.checkpoint().weaponProfileStage).toEqual(profile);
@@ -178,16 +174,12 @@ test('CHR-038 restores a legacy PURE profile without writes and commits exactly 
     expect(host.receiptAllocations()).toBe(receipts);
     expect(host.sampleCalls()).toBe(1);
     await action(page, 'CHR-038::CTA::001');
-    await expect(
-      page.getByText('Рекомендация денег подтверждена.', { exact: false }),
-    ).toBeVisible();
+    await expect(page.getByLabel('Пять произвольных позиций', { exact: true })).toBeVisible();
     await page.reload();
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(
-      page.getByText('Рекомендация денег подтверждена.', { exact: false }),
-    ).toBeVisible();
-    await expect(page.locator('[data-atlas-form-id="CHR-037"]')).toHaveCount(0);
+    await expect(page.getByLabel('Пять произвольных позиций', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-037"]')).toBeVisible();
     await expect(page.locator('[data-atlas-action-key^="CHR-038"]')).toHaveCount(0);
     expect(host.sampleCalls()).toBe(1);
     expect(host.rollRequestAllocations()).toBe(0);

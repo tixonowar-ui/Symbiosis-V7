@@ -12,6 +12,7 @@ export interface SymbiontPresentationStage {
     | 'CHR-022'
     | 'CHR-023'
     | 'CHR-024'
+    | 'CHR-037'
     | 'CHR-038'
     | 'CHR-031'
     | 'CHR-041'
@@ -23,6 +24,7 @@ export interface SymbiontPresentationStage {
 }
 
 const ROUTES = {
+  'CHR-037': '/player/characters/:localCharacterId/create/chr-037',
   'CHR-038': '/player/characters/:localCharacterId/create/chr-038',
   'CHR-015': '/player/characters/:localCharacterId/create/chr-015',
   'CHR-023': '/player/characters/:localCharacterId/create/chr-023',
@@ -94,6 +96,7 @@ export function parseSymbiontPresentationStage(
   );
   const formId = object['formId'];
   if (
+    formId !== 'CHR-037' &&
     formId !== 'CHR-038' &&
     formId !== 'CHR-015' &&
     formId !== 'CHR-023' &&
