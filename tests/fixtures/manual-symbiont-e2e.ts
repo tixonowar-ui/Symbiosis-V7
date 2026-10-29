@@ -32,7 +32,7 @@ export interface ManualSymbiontBrowserHostOptions {
   readonly compositionReplacements?: readonly (readonly SymbiontSpeciesKey[])[];
   readonly diceInputMode: 'AUTO' | 'MANUAL';
   readonly prefix: string;
-  readonly raceChoice: 'FREE' | 'UNITED';
+  readonly raceChoice: 'FREE' | 'UNITED' | 'PURE';
   readonly sampleFaces: readonly number[];
 }
 

@@ -35,6 +35,7 @@ import type { CreationSkillCatalog } from '../creation-skill-catalog.js';
 import type { SelectedSkillCommandInput } from '../creation-skill-selection.js';
 import { createAdvisorSkillOptions } from '../symbiont-stage-catalog.js';
 import { armorBundleEntryMode, CHR_019_ARMOR_ENTRY_ACTION_KEY } from './chr-armor-bundle.js';
+import { assertPureCompositionBinding } from '../creation-pure-composition.js';
 import { deriveCreationSkillStageResult } from '../creation-stat-assignment.js';
 
 export const CHR_017_FORM_ID = 'CHR-017' as const;
@@ -152,7 +153,13 @@ export function projectChr017(
   return presentation(
     CHR_017_FORM_ID,
     CHR_017_ROUTE,
-    acquisition === 'RANDOM' ? [RANDOM_START_ACTION] : [],
+    acquisition === 'RANDOM'
+      ? [RANDOM_START_ACTION]
+      : raceChoice === 'PURE'
+        ? checkpoint.pureCompositionStage == null
+          ? ['CHR-017::CTA::006']
+          : ['CHR-017::CTA::004']
+        : [],
     {
       characterDraftId: checkpoint.localCharacter.localCharacterId,
       raceChoice,
@@ -170,6 +177,9 @@ export function projectChr017(
       slotCapacity: playerCatalog.slotCapacity,
       selectedSpeciesOrNull: null,
       pureNoSymbiontRoute: raceChoice === 'PURE',
+      ...(raceChoice === 'PURE'
+        ? { pureCompositionCheckpointed: checkpoint.pureCompositionStage != null }
+        : {}),
       wizardCheckpointId: checkpoint.checkpoint.checkpointId,
       draftRevision: checkpoint.receipt.result.draftRevision,
     },
@@ -480,6 +490,40 @@ function projectManualChr041(
       wizardCheckpointId: checkpoint.checkpoint.checkpointId,
       draftRevision: checkpoint.receipt.result.draftRevision,
       commandId: record?.request.commandId ?? null,
+    },
+    checkpoint,
+  );
+}
+
+export function projectPureChr019(
+  checkpoint: DurableCreationWizardCheckpoint,
+  catalog: SymbiontCatalog,
+): PresentedBaseForm {
+  assertPureCompositionBinding(checkpoint);
+  const source = createSymbiontPlayerCatalog(catalog, 'PURE');
+  if (source.slotCapacity !== 0 || source.eligibleSymbiontSpecies.length !== 0)
+    throw new Error('PURE empty composition contract drift');
+  return presentation(
+    CHR_019_FORM_ID,
+    CHR_019_ROUTE,
+    ['CHR-019::CTA::004'],
+    {
+      characterDraftId: checkpoint.localCharacter.localCharacterId,
+      raceChoice: 'PURE',
+      symbiontInstancesDraft: [],
+      speciesKeys: [],
+      bindings: [],
+      slotUsageAndCapacity: { used: 0, capacity: source.slotCapacity },
+      interactionGraph: { kind: 'NO_INTERACTIONS' },
+      duplicatePolicy: { kind: 'NOT_APPLICABLE' },
+      suppressionDestructionAbsorptionPreview: { kind: 'NONE' },
+      compositionValidation: 'VALID',
+      randomReceiptIds: [],
+      irreversibleBoundaryStatus: 'NOT_CROSSED',
+      wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+      draftRevision: checkpoint.receipt.result.draftRevision,
+      commandId: checkpoint.armorBundleStage!.entryRequest.commandId,
+      symbiontModifierBreakdown: { bySpecies: [], total: { kind: 'NO_STAT_MODIFIERS' } },
     },
     checkpoint,
   );

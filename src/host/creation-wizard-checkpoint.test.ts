@@ -58,6 +58,15 @@ import {
   IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
   type IdentityCheckpointCommandRequest,
 } from './identity-checkpoint.js';
+import {
+  advancePureCompositionPresentation,
+  assertPureCompositionBinding,
+  parsePureCompositionStage,
+} from './creation-pure-composition.js';
+import { commitArmorBundleQualityRoll } from './creation-armor-bundle.js';
+import { loadArmorBundleCatalog } from './armor-bundle-catalog.js';
+import { projectChr021 } from './projections/chr-armor-bundle.js';
+import { loadSymbiontCatalog } from './symbiont-stage-catalog.js';
 import { loadSkillStageCatalog } from './skill-stage-catalog.js';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '..', '..');
@@ -1731,5 +1740,241 @@ describe('SKILLS wizard checkpoint', () => {
       commandId: 'skill-selection-command',
       selectionValidation: { kind: 'EXACT' },
     });
+  });
+});
+
+describe('PURE composition checkpoint prerequisite', () => {
+  it('atomically binds one empty composition and pending armor request to the skill receipt', async () => {
+    const fullCatalog = await loadSymbiontCatalog(PROJECT_ROOT);
+    const store = database();
+    skillEligibility(store, 'PURE');
+    const ready = advanceCreationSkillSelectionProjection(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    const request = skillRequest(
+      ready,
+      'CHR-015',
+      'pure-skill-command',
+      exactSelectedSkills(ready),
+    );
+    let allocations = 0;
+    const committed = commitCreationWizardCheckpoint(
+      store,
+      request,
+      'pure-skill-receipt',
+      fullCatalog,
+      undefined,
+      undefined,
+      {
+        allocateArmorBundleId: () => {
+          allocations++;
+          return 'pure-armor-bundle';
+        },
+        allocateQualityRollRequestId: () => {
+          allocations++;
+          return 'pure-armor-request';
+        },
+      },
+    );
+    expect(allocations).toBe(2);
+    expect(committed.pureCompositionStage).toEqual({
+      kind: 'PURE_EMPTY',
+      entryMode: 'SKILL_CHECKPOINT',
+      skillCheckpointReceiptId: 'pure-skill-receipt',
+      armorBundleId: 'pure-armor-bundle',
+      qualityRollRequestId: 'pure-armor-request',
+    });
+    expect(committed.skillSelectionStage?.receipt.result).toMatchObject({
+      pureArmorBundleId: 'pure-armor-bundle',
+      pureArmorQualityRollRequestId: 'pure-armor-request',
+    });
+    expect(committed.randomSymbiontStage).toBeNull();
+    expect(committed.manualCompositionStage).toBeNull();
+    expect(committed.nextStageEnvelope.formId).toBe('CHR-017');
+    const armorCatalog = await loadArmorBundleCatalog(PROJECT_ROOT);
+    const pendingArmorProjection = projectChr021(committed, armorCatalog, true, true);
+    expect(pendingArmorProjection.roleFilteredPayload['nextFormId']).toBe('CHR-021');
+    expect(pendingArmorProjection.availableActionKeys).toEqual(['CHR-021::CTA::003']);
+    const entered = advancePureCompositionPresentation(
+      store,
+      {
+        characterDraftId: 'character-draft',
+        wizardCheckpointId: 'wizard-checkpoint',
+        formId: 'CHR-021',
+      },
+      fullCatalog,
+    );
+    expect(entered.localCharacter.stateRevision).toBe(committed.localCharacter.stateRevision);
+    expect(entered.localCharacter.payloadJson).toBe(committed.localCharacter.payloadJson);
+    expect(
+      loadCreationWizardCheckpoint(store, 'character-draft', catalog, fullCatalog).armorBundleStage,
+    ).toEqual(committed.armorBundleStage);
+    expect(
+      loadCreationWizardCommandByCommandId(store, request.commandId, catalog, fullCatalog)?.receipt,
+    ).toEqual(committed.skillSelectionStage?.receipt);
+    expect(() =>
+      assertPureCompositionBinding({
+        ...committed,
+        pureCompositionStage: {
+          ...committed.pureCompositionStage!,
+          qualityRollRequestId: 'forged-request',
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      parsePureCompositionStage({ ...committed.pureCompositionStage!, extra: true }),
+    ).toThrow();
+    const rolled = commitArmorBundleQualityRoll(
+      store,
+      {
+        commandId: 'pure-armor-roll',
+        commandKind: 'workflow-command',
+        messageType: 'command.request',
+        protocolVersion: 1,
+        role: 'player',
+        workflowCommandId: 'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+        expectedRevisions: currentCreationWizardRevisions(entered),
+        payload: {
+          stage: 'SYMBIONTS',
+          sourceFormId: 'CHR-021',
+          variant: 'ARMOR_BUNDLE_QUALITY',
+          ...common(entered),
+          armorBundleId: 'pure-armor-bundle',
+          qualityRollRequestId: 'pure-armor-request',
+          armorPieces: [{ itemId: 'ITM-ARM-001', bodyZoneOrNull: 'HEAD' }],
+          manualFaceOrNull: 1,
+        },
+      },
+      'pure-armor-roll-receipt',
+      { catalog: fullCatalog, armorCatalog, sampleD20: () => 1 },
+    );
+    for (const formId of ['CHR-019', 'CHR-017', 'CHR-021'] as const) {
+      const navigated = advancePureCompositionPresentation(
+        store,
+        { characterDraftId: 'character-draft', wizardCheckpointId: 'wizard-checkpoint', formId },
+        fullCatalog,
+      );
+      expect(navigated.armorBundleStage).toEqual(rolled.armorBundleStage);
+      expect(navigated.localCharacter.stateRevision).toBe(rolled.localCharacter.stateRevision);
+    }
+    expect(allocations).toBe(2);
+  });
+
+  it('explicitly initializes an old PURE checkpoint without replacing its original skill receipt', async () => {
+    const fullCatalog = await loadSymbiontCatalog(PROJECT_ROOT);
+    const store = database();
+    skillEligibility(store, 'PURE');
+    const ready = advanceCreationSkillSelectionProjection(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    const old = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(ready, 'CHR-015', 'old-pure-skill', exactSelectedSkills(ready)),
+      'old-pure-receipt',
+      catalog,
+    );
+    expect(old.pureCompositionStage ?? null).toBeNull();
+    const original = old.skillSelectionStage;
+    const returned = advancePureCompositionPresentation(
+      store,
+      {
+        characterDraftId: 'character-draft',
+        wizardCheckpointId: 'wizard-checkpoint',
+        formId: 'CHR-015',
+      },
+      fullCatalog,
+    );
+    expect(returned.localCharacter.payloadJson).toBe(old.localCharacter.payloadJson);
+    const request = skillRequest(
+      returned,
+      'CHR-015',
+      'pure-reconfirm',
+      exactSelectedSkills(returned),
+    );
+    const committed = commitCreationWizardCheckpoint(
+      store,
+      request,
+      'pure-reconfirm-receipt',
+      fullCatalog,
+      undefined,
+      undefined,
+      {
+        allocateArmorBundleId: () => 'historic-armor',
+        allocateQualityRollRequestId: () => 'historic-quality',
+      },
+    );
+    expect(committed.pureCompositionStage?.entryMode).toBe('SKILL_RECONFIRM');
+    expect(committed.skillSelectionStage).toEqual(original);
+    expect(committed.armorBundleStage?.entryReceipt.commandId).toBe('pure-reconfirm');
+    expect(committed.symbiontPresentationStage?.formId).toBe('CHR-017');
+    expect(
+      loadCreationWizardCheckpoint(store, 'character-draft', catalog, fullCatalog)
+        .pureCompositionStage,
+    ).toEqual(committed.pureCompositionStage);
+    expect(
+      loadCreationWizardCommandByCommandId(store, 'old-pure-skill', catalog, fullCatalog)?.receipt,
+    ).toEqual(original?.receipt);
+  });
+
+  it('rejects stale or changed PURE confirmation before allocation or any write', async () => {
+    const fullCatalog = await loadSymbiontCatalog(PROJECT_ROOT);
+    const store = database();
+    skillEligibility(store, 'PURE');
+    const ready = advanceCreationSkillSelectionProjection(
+      store,
+      'character-draft',
+      'wizard-checkpoint',
+      catalog,
+    );
+    const old = commitCreationWizardCheckpoint(
+      store,
+      skillRequest(ready, 'CHR-015', 'old-pure-skill', exactSelectedSkills(ready)),
+      'old-pure-receipt',
+      catalog,
+    );
+    const returned = advancePureCompositionPresentation(
+      store,
+      {
+        characterDraftId: 'character-draft',
+        wizardCheckpointId: 'wizard-checkpoint',
+        formId: 'CHR-015',
+      },
+      fullCatalog,
+    );
+    let allocations = 0;
+    const dependencies = {
+      allocateArmorBundleId: () => {
+        allocations++;
+        return 'unused-armor';
+      },
+      allocateQualityRollRequestId: () => {
+        allocations++;
+        return 'unused-quality';
+      },
+    };
+    const stale = skillRequest(old, 'CHR-015', 'stale-pure', exactSelectedSkills(old));
+    const changed = skillRequest(returned, 'CHR-015', 'changed-pure', []);
+    for (const request of [stale, changed])
+      expect(() =>
+        commitCreationWizardCheckpoint(
+          store,
+          request,
+          'unused-receipt',
+          fullCatalog,
+          undefined,
+          undefined,
+          dependencies,
+        ),
+      ).toThrow();
+    expect(allocations).toBe(0);
+    expect(
+      loadCreationWizardCheckpoint(store, 'character-draft', catalog, fullCatalog).localCharacter,
+    ).toEqual(returned.localCharacter);
   });
 });

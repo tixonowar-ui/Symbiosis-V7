@@ -16,6 +16,12 @@ import {
   type ValidatedArmorBundle,
   type ValidatedArmorBundlePiece,
 } from '../domain/index.js';
+import {
+  normalizeSkillCheckpointRequest,
+  parseSkillCheckpointReceipt,
+  type SkillSelectionStage,
+  type SkillSelectionCheckpointReceipt,
+} from './creation-skill-selection.js';
 import { EMPTY_IDENTITY_BRANCH_CACHE_HASH } from './identity-checkpoint.js';
 import type {
   CreationNextStageEnvelope,
@@ -178,9 +184,9 @@ export interface ArmorBundleCheckpointRecord {
 }
 
 export type ArmorBundleStageEntryRequest =
-  ArmorBundleEntryRequest | ManualInteractionConfirmationRequest;
+  ArmorBundleEntryRequest | ManualInteractionConfirmationRequest | SkillSelectionStage['request'];
 export type ArmorBundleStageEntryReceipt =
-  ArmorBundleEntryReceipt | ManualInteractionConfirmationReceipt;
+  ArmorBundleEntryReceipt | ManualInteractionConfirmationReceipt | SkillSelectionCheckpointReceipt;
 
 export interface ArmorBundleStage {
   readonly anatomyProfile: 'STANDARD_HUMANOID';
@@ -701,8 +707,18 @@ function nextEnvelopeAt(
   return envelope;
 }
 
+function guardPureEntry(): never {
+  throw new CreationSymbiontApplicationError({ code: 'GUARD_REJECTED' });
+}
+
 function entryReceiptAt(value: unknown, path: string): ArmorBundleStageEntryReceipt {
   const shell = receiptShellAt(value, path);
+  if (shell.result['stage'] === 'SKILLS') {
+    const receipt = parseSkillCheckpointReceipt(value, path);
+    if (receipt.result.sourceFormId !== 'CHR-015' || !('pureArmorBundleId' in receipt.result))
+      return guardPureEntry();
+    return receipt as SkillSelectionCheckpointReceipt;
+  }
   const interaction = shell.result['variant'] === MANUAL_INTERACTION_CONFIRMATION_VARIANT;
   exactSymbiontObject(shell.result, `${path}.result`, [
     ...ARMOR_RECEIPT_COMMON_KEYS,
@@ -887,11 +903,15 @@ export function parseArmorBundleStage(value: unknown): ArmorBundleStage {
     '$.armorBundleStage.entryRequest.payload',
   );
   const entryRequest =
-    rawEntryPayload['variant'] === MANUAL_INTERACTION_CONFIRMATION_VARIANT
-      ? normalizeManualInteractionConfirmationRequest(
+    rawEntryPayload['stage'] === 'SKILLS'
+      ? (normalizeSkillCheckpointRequest(
           object['entryRequest'] as DecodedCommandRequest,
-        )
-      : normalizeArmorBundleEntryRequest(object['entryRequest'] as DecodedCommandRequest);
+        ) as SkillSelectionStage['request'])
+      : rawEntryPayload['variant'] === MANUAL_INTERACTION_CONFIRMATION_VARIANT
+        ? normalizeManualInteractionConfirmationRequest(
+            object['entryRequest'] as DecodedCommandRequest,
+          )
+        : normalizeArmorBundleEntryRequest(object['entryRequest'] as DecodedCommandRequest);
   const entryReceipt = entryReceiptAt(object['entryReceipt'], '$.armorBundleStage.entryReceipt');
   if (
     entryReceipt.commandId !== entryRequest.commandId ||
@@ -899,7 +919,9 @@ export function parseArmorBundleStage(value: unknown): ArmorBundleStage {
     entryReceipt.result.checkpointId !== entryRequest.payload.wizardCheckpointId ||
     entryReceipt.result.sourceFormId !== entryRequest.payload.sourceFormId ||
     entryReceipt.result.variant !== entryRequest.payload.variant ||
-    entryReceipt.result.armorBundleId !== armorBundleId ||
+    (entryReceipt.result.stage === 'SKILLS'
+      ? entryReceipt.result.pureArmorBundleId
+      : entryReceipt.result.armorBundleId) !== armorBundleId ||
     (entryRequest.payload.variant === MANUAL_INTERACTION_CONFIRMATION_VARIANT &&
       (!('interactionDiff' in entryReceipt.result) ||
         !isDeepStrictEqual(
@@ -913,7 +935,11 @@ export function parseArmorBundleStage(value: unknown): ArmorBundleStage {
     object['qualityRollRequestId'],
     '$.armorBundleStage.qualityRollRequestId',
   );
-  if (entryReceipt.result.qualityRollRequestId !== qualityRollRequestId) {
+  if (
+    (entryReceipt.result.stage === 'SKILLS'
+      ? entryReceipt.result.pureArmorQualityRollRequestId
+      : entryReceipt.result.qualityRollRequestId) !== qualityRollRequestId
+  ) {
     throw new CreationSymbiontApplicationError({ code: 'GUARD_REJECTED' });
   }
 

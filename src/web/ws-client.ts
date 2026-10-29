@@ -165,6 +165,26 @@ import {
   startingWeaponCheckpointPayload,
   startingWeaponEntryPayload,
 } from './forms/chr/starting-weapon.js';
+import {
+  CHR_023_SUBMIT_ACTION_KEY,
+  CHR_024_ACKNOWLEDGE_ACTION_KEY,
+  CHR_031_RETURN_ACTION_KEY,
+  WEAPON_PROFILE_SUBMIT_WORKFLOW,
+  decodeChr023Projection,
+  decodeChr024Projection,
+  decodeChr031Projection,
+  decodeWeaponProfileTerminal,
+  expectedChr023ActionKeys,
+  expectedChr024ActionKeys,
+  weaponProfileAcknowledgePayload,
+  weaponProfileEntryPayload,
+  weaponProfileSubmitPayload,
+  type Chr023Projection,
+  type Chr024Projection,
+  type Chr031Projection,
+  type WeaponProfileInputs,
+  type WeaponProfileRequest,
+} from './forms/chr/weapon-profile.js';
 import type {
   Chr022Projection,
   StartingWeaponDraft,
@@ -224,6 +244,8 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-042',
   'CHR-021',
   'CHR-022',
+  'CHR-023',
+  'CHR-024',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -280,7 +302,8 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
     value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID ||
     value === SET_DECIDE_WORKFLOW_COMMAND_ID ||
-    value === ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+    value === ROLL_COMMIT_WORKFLOW_COMMAND_ID ||
+    value === WEAPON_PROFILE_SUBMIT_WORKFLOW,
 };
 
 const NO_KNOWN_REVISIONS = {
@@ -1579,12 +1602,20 @@ type ConfirmedSymbiontProjectionSnapshot<
 export type ConfirmedProjectionSnapshot =
   ConfirmedProjectionSnapshotBase | ConfirmedSymbiontProjectionSnapshot<SymbiontPresentationFormId>;
 
-export interface ConfirmedPresentationLayer {
+interface ConfirmedAbandonmentLayer {
   readonly availableActionKeys: readonly ActionKey[];
   readonly formId: 'CHR-028';
   readonly path: '@dialog/chr-028';
   readonly projection: Chr028Projection;
 }
+interface ConfirmedInvalidWeaponProfileLayer {
+  readonly availableActionKeys: readonly ActionKey[];
+  readonly formId: 'CHR-031';
+  readonly path: '@dialog/chr-031';
+  readonly projection: Chr031Projection;
+}
+export type ConfirmedPresentationLayer =
+  ConfirmedAbandonmentLayer | ConfirmedInvalidWeaponProfileLayer;
 
 export type WebClientState =
   | { readonly kind: 'awaiting-snapshot' }
@@ -1624,6 +1655,7 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  submitWeaponProfile(inputs: WeaponProfileInputs): FormActionRequestResult;
   replaceStartingWeaponSelection(
     weaponTypeId: string,
     weaponVariant: string,
@@ -3367,6 +3399,12 @@ function decodeChr015Projection(
     selectedSkillIds: (field) => field === value['selectedSkillIds'],
     selectedSkills: (field) => field === selectedValue,
     selectionCheckpoint: (field) => field === selectionCheckpoint,
+    ...(Object.hasOwn(value, 'pureEquipmentInitializationRequired')
+      ? {
+          pureEquipmentInitializationRequired: (field: JsonValue | undefined) =>
+            field === true && selectionCheckpoint === 'EXACT',
+        }
+      : {}),
     selectionValidation: (field) => field === value['selectionValidation'],
     skillOptions: (field) => field === value['skillOptions'],
     wizardCheckpointId: (field) => isNonEmptyString(field) && field !== characterDraftId,
@@ -3732,6 +3770,43 @@ function decodePresentationLayers(
 ): DecodeResult<readonly ConfirmedPresentationLayer[]> {
   const layers = message.presentation.layers;
   if (layers.length === 0) return { ok: true, value: [] };
+  if (baseFormId === 'CHR-023' && layers.length === 1 && layers[0]?.formId === 'CHR-031') {
+    const layer = layers[0];
+    const decoded = decodeChr031Projection(
+      layer.roleFilteredPayload,
+      '$.presentation.layers[0].roleFilteredPayload',
+    );
+    if (!decoded.ok) return decoded;
+    if (
+      layer.routeBindings.length !== 0 ||
+      decoded.value.characterDraftId !== baseProjection['characterDraftId'] ||
+      decoded.value.requestId !== baseProjection['requestId'] ||
+      decoded.value.weaponTypeId !== baseProjection['weaponTypeId'] ||
+      decoded.value.draftRevision !== baseProjection['draftRevision'] ||
+      baseProjection['requestStatus'] !== 'DRAFT'
+    )
+      return unrecognized(
+        '$.presentation.layers[0].roleFilteredPayload',
+        layer.roleFilteredPayload,
+      );
+    const actions = exactActionKeys(
+      layer.availableActionKeys,
+      [CHR_031_RETURN_ACTION_KEY],
+      '$.presentation.layers[0].availableActionKeys',
+    );
+    if (!actions.ok) return actions;
+    return {
+      ok: true,
+      value: [
+        {
+          formId: 'CHR-031',
+          path: '@dialog/chr-031',
+          projection: decoded.value,
+          availableActionKeys: [...layer.availableActionKeys],
+        },
+      ],
+    };
+  }
   if (!isCreationSetDecisionFormId(baseFormId) || layers.length !== 1) {
     return unrecognized(
       '$.presentation.layers',
@@ -4037,7 +4112,9 @@ function decodeConfirmedSnapshot(
         const actions = exactActionKeys(
           base.availableActionKeys,
           projection.value['selectionCheckpoint'] === 'EXACT'
-            ? NO_ACTION_KEYS
+            ? projection.value['pureEquipmentInitializationRequired'] === true
+              ? [CHR_015_CONFIRM_ACTION_KEY]
+              : NO_ACTION_KEYS
             : projection.value['selectionCheckpoint'] === 'PARTIAL'
               ? CHR_015_MUTABLE_ACTION_KEYS
               : CHR_015_INITIAL_ACTION_KEYS,
@@ -4116,7 +4193,9 @@ function decodeConfirmedSnapshot(
           base.availableActionKeys,
           decoded.value.duplicatePolicy.kind === 'FORBIDDEN'
             ? expectedChr019ManualActionKeys(base.availableActionKeys)
-            : expectedChr019EntryActionKeys(base.availableActionKeys),
+            : decoded.value.raceChoice === 'PURE'
+              ? ['CHR-019::CTA::004']
+              : expectedChr019EntryActionKeys(base.availableActionKeys),
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4175,6 +4254,44 @@ function decodeConfirmedSnapshot(
         const actions = exactSymbiontActionKeys(
           base.availableActionKeys,
           expectedChr041ActionKeys(decoded.value, executableWorkflowCommandIds),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-023': {
+      const decoded = decodeChr023Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr023ActionKeys(
+            decoded.value,
+            executableWorkflowCommandIds.includes(WEAPON_PROFILE_SUBMIT_WORKFLOW),
+          ),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
+    case 'CHR-024': {
+      const decoded = decodeChr024Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr024ActionKeys(
+            decoded.value,
+            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID),
+          ),
           '$.presentation.base.availableActionKeys',
         );
         if (!actions.ok) return actions;
@@ -4380,7 +4497,11 @@ function creationSkillSelectionDraftFromSnapshot(
 ): CharacterSkillSelectionDraft | null {
   if (snapshot.formId !== 'CHR-015') return null;
   const projection = snapshot.projection as Chr015Projection;
-  if (projection.selectionCheckpoint === 'EXACT') return null;
+  if (
+    projection.selectionCheckpoint === 'EXACT' &&
+    projection['pureEquipmentInitializationRequired'] !== true
+  )
+    return null;
   return {
     candidateSkillIdOrNull: null,
     candidateTargetBonusOrNull: null,
@@ -4930,6 +5051,84 @@ function decodeFormActionSnapshot(
     }
     return decoded;
   }
+  if (pending.sourceFormId === 'CHR-031' && pending.actionKey === CHR_031_RETURN_ACTION_KEY) {
+    if (
+      previous.formId !== 'CHR-023' ||
+      previous.layers.length !== 1 ||
+      previous.layers[0]?.formId !== 'CHR-031' ||
+      decoded.value.formId !== 'CHR-023' ||
+      decoded.value.layers.length !== 0 ||
+      !sameJson(previous.projection, decoded.value.projection)
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', decoded.value.projection);
+    return decoded;
+  }
+  if (
+    (pending.sourceFormId === 'CHR-023' && pending.actionKey === 'CHR-023::CTA::002') ||
+    (pending.sourceFormId === 'CHR-024' && pending.actionKey === 'CHR-024::CTA::002') ||
+    (pending.sourceFormId === 'CHR-022' &&
+      (pending.actionKey === 'CHR-022::CTA::001' || pending.actionKey === 'CHR-022::CTA::002'))
+  ) {
+    const returning = pending.sourceFormId !== 'CHR-022';
+    const weapon = (returning ? decoded.value.projection : previous.projection) as Chr022Projection;
+    const profile = (returning ? previous.projection : decoded.value.projection) as
+      Chr023Projection | Chr024Projection;
+    if (
+      previous.formId !== pending.sourceFormId ||
+      previous.layers.length !== 0 ||
+      decoded.value.layers.length !== 0 ||
+      (returning
+        ? decoded.value.formId !== 'CHR-022'
+        : decoded.value.formId !== (weapon.raceChoice === 'PURE' ? 'CHR-024' : 'CHR-023')) ||
+      weapon.weaponProfileEntryMode !== 'RESUME' ||
+      weapon.weaponProfileRequestIdOrNull !== profile.requestId ||
+      weapon.weaponTypeId !== profile.weaponTypeId ||
+      weapon.weaponVariant !== profile.weaponVariantId ||
+      weapon.weaponQualityRollRequestId !== profile.weaponQualityRollRequestId ||
+      weapon.weaponQualityRollReceiptIdOrNull !== profile.weaponQualityRollReceiptId ||
+      weapon.weaponCheckpointReceiptIdOrNull !== profile.weaponCheckpointReceiptId ||
+      weapon.characterDraftId !== profile.characterDraftId ||
+      weapon.wizardCheckpointId !== profile.wizardCheckpointId ||
+      weapon.draftRevision !== profile.draftRevision
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', decoded.value.projection);
+    return decoded;
+  }
+  if (
+    (previous.projection['raceChoice'] === 'PURE' &&
+      (pending.sourceFormId === 'CHR-017' || pending.sourceFormId === 'CHR-019')) ||
+    (pending.sourceFormId === 'CHR-021' &&
+      pending.actionKey === 'CHR-021::CTA::002' &&
+      decoded.value.projection['raceChoice'] === 'PURE')
+  ) {
+    const source = previous.projection;
+    const destination = decoded.value.projection;
+    const target =
+      pending.actionKey === 'CHR-017::CTA::004'
+        ? 'CHR-021'
+        : pending.actionKey === 'CHR-017::CTA::006'
+          ? 'CHR-015'
+          : pending.actionKey === 'CHR-019::CTA::004'
+            ? 'CHR-017'
+            : pending.actionKey === 'CHR-021::CTA::002'
+              ? 'CHR-019'
+              : null;
+    if (
+      target === null ||
+      previous.formId !== pending.sourceFormId ||
+      decoded.value.formId !== target ||
+      previous.layers.length !== 0 ||
+      decoded.value.layers.length !== 0 ||
+      destination['characterDraftId'] !== source['characterDraftId'] ||
+      destination['wizardCheckpointId'] !== source['wizardCheckpointId'] ||
+      destination['draftRevision'] !== source['draftRevision'] ||
+      (target === 'CHR-021' && source['pureCompositionCheckpointed'] !== true) ||
+      (target === 'CHR-015' && destination['pureEquipmentInitializationRequired'] !== true) ||
+      (target === 'CHR-017' && destination['pureCompositionCheckpointed'] !== true)
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', destination);
+    return decoded;
+  }
   if (
     pending.sourceFormId === 'CHR-017' ||
     pending.sourceFormId === 'CHR-018' ||
@@ -5025,6 +5224,17 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
+  if (
+    ['WEAPON_PROFILE_ENTRY', 'WEAPON_PROFILE_SUBMIT', 'WEAPON_PROFILE_ACKNOWLEDGE'].includes(
+      (pending.request.payload as { readonly variant?: string }).variant ?? '',
+    )
+  ) {
+    return decodeWeaponProfileTerminal(
+      message,
+      pending.request as unknown as WeaponProfileRequest,
+      pending.sourceSnapshot,
+    ) as DecodeResult<CommandReceipt<CheckpointResult>>;
+  }
   if (
     pending.request.payload.stage === 'SYMBIONTS' &&
     ['STARTING_WEAPON_ENTRY', 'STARTING_WEAPON_CHECKPOINT'].includes(
@@ -5210,7 +5420,8 @@ function decodeCheckpointTerminal(
     } else {
       const draft = pending.skillSelectionDraft;
       if (
-        (source as Chr015Projection).selectionCheckpoint === 'EXACT' ||
+        ((source as Chr015Projection).selectionCheckpoint === 'EXACT' &&
+          source['pureEquipmentInitializationRequired'] !== true) ||
         draft === null ||
         draft.selectionValidation.kind !== 'EXACT'
       ) {
@@ -5262,6 +5473,18 @@ function decodeCheckpointTerminal(
       sourceFormId: (field) => field === sourceFormId,
       stage: (field) => field === 'SKILLS',
       usedSlotCount: (field) => field === usedSlotCount,
+      ...(Object.hasOwn(receipt.result, 'pureArmorBundleId') ||
+      Object.hasOwn(receipt.result, 'pureArmorQualityRollRequestId')
+        ? {
+            pureArmorBundleId: (field: JsonValue | undefined) =>
+              sourceFormId === 'CHR-015' && field !== undefined && isNonEmptyString(field),
+            pureArmorQualityRollRequestId: (field: JsonValue | undefined) =>
+              sourceFormId === 'CHR-015' &&
+              field !== undefined &&
+              isNonEmptyString(field) &&
+              field !== receipt.result['pureArmorBundleId'],
+          }
+        : {}),
     });
     if (!result.ok) return result;
     const ids = [
@@ -5848,6 +6071,29 @@ function startingWeaponSnapshotMatchesReceipt(
   receipt: CommandReceipt,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if (
+    result['variant'] === 'STARTING_WEAPON_CHECKPOINT' &&
+    (snapshot.formId === 'CHR-023' || snapshot.formId === 'CHR-024')
+  ) {
+    const projection = snapshot.projection as Chr023Projection | Chr024Projection;
+    if (
+      projection.commandId !== receipt.commandId ||
+      projection.characterDraftId !== result['characterDraftId'] ||
+      projection.wizardCheckpointId !== result['checkpointId'] ||
+      projection.draftRevision !== result['draftRevision'] ||
+      projection.weaponTypeId !== result['weaponTypeId'] ||
+      projection.weaponVariantId !== result['weaponVariant'] ||
+      projection.weaponCheckpointReceiptId !== receipt.receiptId ||
+      projection.weaponQualityRollRequestId !== result['weaponQualityRollRequestId'] ||
+      projection.weaponQualityRollReceiptId !== result['weaponQualityRollReceiptId'] ||
+      projection.requestId !== result['weaponProfileRequestId'] ||
+      projection.nextFormId !== result['nextFormId'] ||
+      !sameJson({ ...snapshot.revisions }, { ...receipt.revisions }) ||
+      snapshot.layers.length !== 0
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+    return { ok: true, value: snapshot };
+  }
   if (snapshot.formId !== 'CHR-022')
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   const projection = snapshot.projection as Chr022Projection;
@@ -5874,6 +6120,86 @@ function startingWeaponSnapshotMatchesReceipt(
     snapshot.revisions.projectionRevision !== receipt.revisions.projectionRevision
   )
     return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  return { ok: true, value: snapshot };
+}
+
+function weaponProfileSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const result = receipt.result;
+  if (snapshot.formId !== 'CHR-023' && snapshot.formId !== 'CHR-024')
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  const projection = snapshot.projection as Chr023Projection | Chr024Projection;
+  if (
+    projection.commandId !== receipt.commandId ||
+    projection.characterDraftId !== result['characterDraftId'] ||
+    projection.wizardCheckpointId !== result['checkpointId'] ||
+    projection.draftRevision !== result['draftRevision'] ||
+    projection.requestId !== result['requestId'] ||
+    (result['variant'] !== 'WEAPON_PROFILE_ENTRY' &&
+      (projection.weaponTypeId !== result['weaponTypeId'] ||
+        projection.weaponVariantId !== result['weaponVariant'])) ||
+    projection.nextFormId !== result['nextFormId'] ||
+    !sameJson({ ...snapshot.revisions }, { ...receipt.revisions })
+  )
+    return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  if (result['variant'] === 'WEAPON_PROFILE_ENTRY') {
+    if (
+      projection.weaponCheckpointReceiptId !== result['weaponCheckpointReceiptId'] ||
+      snapshot.layers.length !== 0 ||
+      (snapshot.formId === 'CHR-023'
+        ? (projection as Chr023Projection).requestStatus !== 'DRAFT'
+        : (projection as Chr024Projection).acknowledgedReceiptIdOrNull !== null)
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  } else if (result['outcome'] === 'INVALID') {
+    const layer = snapshot.layers[0];
+    if (
+      snapshot.formId !== 'CHR-023' ||
+      snapshot.layers.length !== 1 ||
+      layer?.formId !== 'CHR-031' ||
+      !sameJson(layer.projection.invalidFieldSet, result['invalidFieldSet']!) ||
+      !sameJson(layer.projection.humanExplanations, result['humanExplanations']!) ||
+      (projection as Chr023Projection).requestStatus !== 'DRAFT'
+    )
+      return unrecognized(
+        '$.presentation.layers',
+        snapshot.layers.map((entry) => entry.formId),
+      );
+  } else if (result['outcome'] === 'SUBMITTED') {
+    if (
+      snapshot.formId !== 'CHR-023' ||
+      snapshot.layers.length !== 0 ||
+      (projection as Chr023Projection).profileReceiptIdOrNull !== receipt.receiptId ||
+      !sameJson(
+        (projection as Chr023Projection).proposedWeaponProfile,
+        isJsonObject(result['profileOrNull']) ? (result['profileOrNull']['facts'] ?? null) : null,
+      ) ||
+      !sameJson(
+        (projection as Chr023Projection).reachabilityProof,
+        result['proofOrNull'] ?? null,
+      ) ||
+      !sameJson(
+        (projection as Chr023Projection).independentManufacturingDiceReceipts,
+        result['independentManufacturingDiceReceipts']!,
+      )
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  } else if (result['outcome'] === 'ACKNOWLEDGED') {
+    if (
+      snapshot.formId !== 'CHR-024' ||
+      snapshot.layers.length !== 0 ||
+      (projection as Chr024Projection).acknowledgedReceiptIdOrNull !== receipt.receiptId ||
+      (projection as Chr024Projection).canonicalProfileVersion !==
+        result['canonicalProfileVersion'] ||
+      !sameJson(
+        (projection as Chr024Projection).fixedProfile,
+        isJsonObject(result['profileOrNull']) ? (result['profileOrNull']['facts'] ?? null) : null,
+      )
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  } else return unrecognized('$.receipt.result.outcome', result['outcome'] ?? null);
   return { ok: true, value: snapshot };
 }
 
@@ -5947,6 +6273,13 @@ function checkpointSnapshotMatchesReceipt(
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
   if (
+    ['WEAPON_PROFILE_ENTRY', 'WEAPON_PROFILE_SUBMIT', 'WEAPON_PROFILE_ACKNOWLEDGE'].includes(
+      (result as { readonly variant?: string }).variant ?? '',
+    )
+  ) {
+    return weaponProfileSnapshotMatchesReceipt(snapshot, receipt);
+  }
+  if (
     result.stage === 'SYMBIONTS' &&
     ['STARTING_WEAPON_ENTRY', 'STARTING_WEAPON_CHECKPOINT'].includes(
       (result as { readonly variant?: string }).variant ?? '',
@@ -5981,6 +6314,27 @@ function checkpointSnapshotMatchesReceipt(
     );
   }
   if (result.stage === 'SKILLS') {
+    if (
+      result.sourceFormId === 'CHR-015' &&
+      result.nextFormId === 'CHR-017' &&
+      snapshot.formId === 'CHR-017'
+    ) {
+      const projection = snapshot.projection;
+      if (
+        sourceSnapshot.formId !== 'CHR-015' ||
+        snapshot.layers.length !== 0 ||
+        projection.characterDraftId !== result.characterDraftId ||
+        projection.wizardCheckpointId !== result.checkpointId ||
+        projection.draftRevision !== result.draftRevision ||
+        !sameJson({ ...snapshot.revisions }, { ...receipt.revisions }) ||
+        (projection.raceChoice === 'PURE' &&
+          (projection['pureCompositionCheckpointed'] !== true ||
+            !isNonEmptyString(result['pureArmorBundleId'] ?? null) ||
+            !isNonEmptyString(result['pureArmorQualityRollRequestId'] ?? null)))
+      )
+        return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+      return { ok: true, value: snapshot };
+    }
     if (snapshot.formId !== 'CHR-015') {
       return unrecognized('$.presentation.base.formId', snapshot.formId);
     }
@@ -6685,7 +7039,8 @@ function skillSelectionCheckpointPayload(
 ): SkillSelectionCheckpointPayload {
   if (
     snapshot.formId !== 'CHR-015' ||
-    snapshot.projection['selectionCheckpoint'] === 'EXACT' ||
+    (snapshot.projection['selectionCheckpoint'] === 'EXACT' &&
+      snapshot.projection['pureEquipmentInitializationRequired'] !== true) ||
     draft === null ||
     draft.selectionValidation.kind !== 'EXACT'
   ) {
@@ -7567,6 +7922,7 @@ export function connectProjection(
         IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
         SET_DECIDE_WORKFLOW_COMMAND_ID,
         ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+        WEAPON_PROFILE_SUBMIT_WORKFLOW,
       ],
       unacknowledgedCommandIds:
         pendingCheckpoint !== null
@@ -7761,6 +8117,7 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
+
       const request = {
         bindings: [{ parameterIndex: 1, source: 'client-selected', value: speciesKey }],
         expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
@@ -8266,6 +8623,61 @@ export function connectProjection(
       }
       return { ok: true };
     },
+    submitWeaponProfile: (inputs) => {
+      if (
+        disposed ||
+        terminal ||
+        socket === null ||
+        socket.readyState !== WebSocket.OPEN ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null ||
+        commandPending()
+      )
+        return { ok: false, detail: 'weapon profile delivery is unavailable' };
+      if (
+        lastSnapshot?.formId !== 'CHR-023' ||
+        lastSnapshot.layers.length !== 0 ||
+        !lastSnapshot.availableActionKeys.includes(CHR_023_SUBMIT_ACTION_KEY) ||
+        !lastSnapshot.executableWorkflowCommandIds.includes(WEAPON_PROFILE_SUBMIT_WORKFLOW)
+      )
+        return { ok: false, detail: 'no active editable weapon profile request' };
+      let request: WeaponProfileRequest;
+      try {
+        request = {
+          commandId: createRequestId('command'),
+          commandKind: 'workflow-command',
+          expectedRevisions: { ...lastSnapshot.revisions },
+          messageType: 'command.request',
+          protocolVersion: WIRE_PROTOCOL_VERSION,
+          role: 'player',
+          workflowCommandId: WEAPON_PROFILE_SUBMIT_WORKFLOW,
+          payload: weaponProfileSubmitPayload(lastSnapshot.projection as Chr023Projection, inputs),
+        };
+      } catch (error: unknown) {
+        return { ok: false, detail: diagnostic(error) };
+      }
+      const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok)
+        return {
+          ok: false,
+          detail: `weapon profile failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+        };
+      pendingCheckpoint = {
+        assignmentDraft: null,
+        receipt: null,
+        request: request as unknown as PendingCheckpoint['request'],
+        skillSelectionDraft: null,
+        sourceSnapshot: lastSnapshot,
+      };
+      try {
+        socket.send(encoded.text);
+      } catch (error: unknown) {
+        pendingCheckpoint = null;
+        return { ok: false, detail: diagnostic(error) };
+      }
+      notifyReady();
+      return { ok: true };
+    },
     requestFormAction: (actionKey, manualFacesOrNull) => {
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (lastSnapshot === null)
@@ -8297,6 +8709,64 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (
+        (activeForm.formId === 'CHR-024' &&
+          lastSnapshot.formId === 'CHR-024' &&
+          actionKey === CHR_024_ACKNOWLEDGE_ACTION_KEY) ||
+        (activeForm.formId === 'CHR-022' &&
+          lastSnapshot.formId === 'CHR-022' &&
+          (actionKey === CHR_022_CONFIRM_ACTION_KEY ||
+            actionKey === CHR_022_PURE_CONFIRM_ACTION_KEY) &&
+          (lastSnapshot.projection as Chr022Projection).weaponProfileEntryMode === 'INITIAL')
+      ) {
+        let request: WeaponProfileRequest;
+        try {
+          const common = {
+            commandId: createRequestId('command'),
+            commandKind: 'workflow-command' as const,
+            expectedRevisions: { ...lastSnapshot.revisions },
+            messageType: 'command.request' as const,
+            protocolVersion: WIRE_PROTOCOL_VERSION,
+            role: 'player' as const,
+            workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+          };
+          request =
+            lastSnapshot.formId === 'CHR-024'
+              ? {
+                  ...common,
+                  payload: weaponProfileAcknowledgePayload(
+                    lastSnapshot.projection as Chr024Projection,
+                  ),
+                }
+              : {
+                  ...common,
+                  payload: weaponProfileEntryPayload(lastSnapshot.projection as Chr022Projection),
+                };
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok)
+          return {
+            ok: false,
+            detail: `weapon profile failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
+          };
+        pendingCheckpoint = {
+          assignmentDraft: null,
+          receipt: null,
+          request: request as unknown as PendingCheckpoint['request'],
+          skillSelectionDraft: null,
+          sourceSnapshot: lastSnapshot,
+        };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          pendingCheckpoint = null;
+          return { ok: false, detail: diagnostic(error) };
+        }
+        notifyReady();
+        return { ok: true };
       }
       if (
         activeForm.formId === 'CHR-018' &&
@@ -9067,6 +9537,7 @@ export function connectProjection(
       if (
         activeForm.formId === 'CHR-022' &&
         lastSnapshot.formId === 'CHR-022' &&
+        (lastSnapshot.projection as Chr022Projection).weaponProfileEntryMode !== 'RESUME' &&
         (actionKey === CHR_022_ROLL_ACTION_KEY ||
           actionKey === CHR_022_CONFIRM_ACTION_KEY ||
           actionKey === CHR_022_PURE_CONFIRM_ACTION_KEY)

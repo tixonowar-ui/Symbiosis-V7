@@ -90,18 +90,16 @@ for (const mode of ['MANUAL', 'AUTO'] as const) {
         'Отсутствует/непригоден',
       );
       await clickAction(page, 'CHR-022::CTA::001');
-      await expect(page.getByText('Оружие подтверждено.', { exact: false })).toBeVisible();
+      await expect(page.getByLabel('Формульный профиль оружия', { exact: true })).toBeVisible();
       await expect(page.locator('[data-atlas-action-key^="CHR-022"]')).toHaveCount(0);
-      await expect(
-        page.locator('[data-atlas-form-id="CHR-023"], [data-atlas-form-id="CHR-024"]'),
-      ).toHaveCount(0);
+      await expect(page.locator('[data-atlas-form-id="CHR-024"]')).toHaveCount(0);
       await page.reload();
-      await expect(page.getByText('Оружие подтверждено.', { exact: false })).toBeVisible();
+      await expect(page.getByLabel('Формульный профиль оружия', { exact: true })).toBeVisible();
       await host.restart();
       await page.goto(host.baseURL);
-      await expect(page.getByText('Оружие подтверждено.', { exact: false })).toBeVisible();
+      await expect(page.getByLabel('Формульный профиль оружия', { exact: true })).toBeVisible();
       expect(host.receiptAllocations()).toBe(receipts + 1);
-      expect(host.rollRequestAllocations()).toBe(allocationsAtEntry);
+      expect(host.rollRequestAllocations()).toBe(allocationsAtEntry + 1);
       expect(host.sampleCalls()).toBe(mode === 'AUTO' ? 2 : 0);
       expect(await page.locator('body').innerText()).not.toMatch(
         /(?:CORE|AQ2|F-WPN)-\d+|Источник|availabilityTrace|qualityTier/,

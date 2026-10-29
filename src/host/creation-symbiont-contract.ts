@@ -545,7 +545,8 @@ export function randomSymbiontStatus(
 }
 
 export function nextSymbiontEnvelope<
-  T extends 'CHR-019' | 'CHR-020' | 'CHR-021' | 'CHR-022' | 'CHR-023' | 'CHR-024' | 'CHR-041',
+  T extends
+    'CHR-019' | 'CHR-020' | 'CHR-021' | 'CHR-022' | 'CHR-023' | 'CHR-024' | 'CHR-038' | 'CHR-041',
 >(formId: T, characterDraftId: string): CreationNextStageEnvelope<T> {
   return {
     formId,

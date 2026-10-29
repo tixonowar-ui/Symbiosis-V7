@@ -4,7 +4,17 @@ import type { AssignedRouteBinding } from '@shared/wire-v2-protocol.js';
 
 export interface SymbiontPresentationStage {
   readonly formId:
-    'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-021' | 'CHR-022' | 'CHR-041' | 'CHR-042';
+    | 'CHR-015'
+    | 'CHR-017'
+    | 'CHR-018'
+    | 'CHR-019'
+    | 'CHR-021'
+    | 'CHR-022'
+    | 'CHR-023'
+    | 'CHR-024'
+    | 'CHR-031'
+    | 'CHR-041'
+    | 'CHR-042';
   readonly compositionDraftRevision: number;
   readonly projectionRevision: number;
   readonly routeBindings: readonly AssignedRouteBinding[];
@@ -12,6 +22,10 @@ export interface SymbiontPresentationStage {
 }
 
 const ROUTES = {
+  'CHR-015': '/player/characters/:localCharacterId/create/chr-015',
+  'CHR-023': '/player/characters/:localCharacterId/create/chr-023',
+  'CHR-024': '/player/characters/:localCharacterId/create/chr-024',
+  'CHR-031': '@dialog/chr-031',
   'CHR-017': '/player/characters/:localCharacterId/create/chr-017',
   'CHR-018': '/player/characters/:localCharacterId/create/chr-018/:speciesKey',
   'CHR-019': '/player/characters/:localCharacterId/create/chr-019',
@@ -78,6 +92,10 @@ export function parseSymbiontPresentationStage(
   );
   const formId = object['formId'];
   if (
+    formId !== 'CHR-015' &&
+    formId !== 'CHR-023' &&
+    formId !== 'CHR-024' &&
+    formId !== 'CHR-031' &&
     formId !== 'CHR-017' &&
     formId !== 'CHR-018' &&
     formId !== 'CHR-019' &&

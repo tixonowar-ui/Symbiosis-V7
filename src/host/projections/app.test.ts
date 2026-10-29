@@ -139,10 +139,25 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the twenty-three slice actions with their exact source-owned guards', () => {
+  it('loads the thirty slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(23);
+    expect(catalog.actions.size).toBe(30);
+    expect(catalog.actions.get('CHR-017::CTA::004')).toMatchObject({
+      from: 'CHR-017',
+      to: 'CHR-021',
+      guard: 'raceChoice=PURE; composition intentionally empty and checkpointed',
+    });
+    expect(catalog.actions.get('CHR-023::CTA::002')).toMatchObject({
+      from: 'CHR-023',
+      to: 'CHR-022',
+      guard: 'requestStatus!=SUBMITTED; no partial validated profile committed',
+    });
+    expect(catalog.actions.get('CHR-031::CTA::001')).toMatchObject({
+      from: 'CHR-031',
+      to: 'CHR-023',
+      guard: 'returnFormId(server-signed)=CHR-023; no partial profile exists',
+    });
     expect(catalog.actions.get('CHR-021::CTA::001')).toMatchObject({
       from: 'CHR-021',
       to: 'CHR-022',

@@ -67,6 +67,8 @@ export interface Chr022Projection extends JsonObject {
   readonly weaponQualityRollRequestId: string;
   readonly weaponQualityRollReceiptIdOrNull: string | null;
   readonly weaponCheckpointReceiptIdOrNull: string | null;
+  readonly weaponProfileEntryMode: 'NONE' | 'INITIAL' | 'RESUME';
+  readonly weaponProfileRequestIdOrNull: string | null;
   readonly qualityRecommendation: ArmorBundleQualityRecommendationProjection | null;
   readonly requirementPreview: WeaponRequirementPreview | null;
   readonly ownershipState: 'OWNED_NOT_EQUIPPED';
@@ -171,6 +173,9 @@ export function decodeChr022Projection(
     weaponQualityRollRequestId: isNonEmptyString,
     weaponQualityRollReceiptIdOrNull: nullableId,
     weaponCheckpointReceiptIdOrNull: nullableId,
+    weaponProfileEntryMode: (field) =>
+      field === 'NONE' || field === 'INITIAL' || field === 'RESUME',
+    weaponProfileRequestIdOrNull: nullableId,
     wizardCheckpointId: isNonEmptyString,
   });
   if (!result.ok) return result;
@@ -192,6 +197,13 @@ export function decodeChr022Projection(
         preview.value !== null) ||
     rolled !== (recommendation.value !== null) ||
     (checkpointed && !rolled) ||
+    (!checkpointed &&
+      (projection.weaponProfileEntryMode !== 'NONE' ||
+        projection.weaponProfileRequestIdOrNull !== null)) ||
+    (projection.weaponProfileEntryMode === 'INITIAL' &&
+      projection.weaponProfileRequestIdOrNull !== null) ||
+    (projection.weaponProfileEntryMode === 'RESUME' &&
+      projection.weaponProfileRequestIdOrNull === null) ||
     projection.nextFormId !==
       (checkpointed ? (projection.raceChoice === 'PURE' ? 'CHR-024' : 'CHR-023') : 'CHR-022')
   )
@@ -202,7 +214,19 @@ export function expectedChr022ActionKeys(
   projection: Chr022Projection,
   capabilities: { readonly rollCommit: boolean; readonly checkpoint: boolean },
 ): readonly ActionKey[] {
-  if (projection.weaponCheckpointReceiptIdOrNull !== null) return [];
+  if (projection.weaponCheckpointReceiptIdOrNull !== null)
+    return projection.weaponProfileEntryMode === 'NONE'
+      ? []
+      : [
+          ...(capabilities.checkpoint || projection.weaponProfileEntryMode === 'RESUME'
+            ? [
+                projection.raceChoice === 'PURE'
+                  ? CHR_022_PURE_CONFIRM_ACTION_KEY
+                  : CHR_022_CONFIRM_ACTION_KEY,
+              ]
+            : []),
+          CHR_022_RETURN_ACTION_KEY,
+        ];
   return [
     ...(projection.weaponQualityRollReceiptIdOrNull === null
       ? capabilities.rollCommit
@@ -457,6 +481,9 @@ export function decodeStartingWeaponTerminal(
           physicalRoll: (field: JsonValue | undefined) => field === roll,
         }
       : {
+          ...(Object.hasOwn(result, 'weaponProfileRequestId')
+            ? { weaponProfileRequestId: isNonEmptyString }
+            : {}),
           weaponQualityRollReceiptId: (field: JsonValue | undefined) =>
             field === payload.weaponQualityRollReceiptId,
         }),

@@ -119,6 +119,7 @@ export interface StartingWeaponQualityRollResult extends SelectionResult {
 }
 export interface StartingWeaponCheckpointResult extends SelectionResult {
   readonly variant: 'STARTING_WEAPON_CHECKPOINT';
+  readonly weaponProfileRequestId?: string;
   readonly weaponQualityRollReceiptId: string;
   readonly nextFormId: 'CHR-023' | 'CHR-024';
 }
@@ -314,6 +315,7 @@ export function startingWeaponCheckpointReceipt(
   request: StartingWeaponCheckpointRequest,
   qualityReceipt: StartingWeaponQualityRollReceipt,
   nextFormId: 'CHR-023' | 'CHR-024',
+  weaponProfileRequestId?: string,
 ): StartingWeaponCheckpointReceipt {
   return {
     commandId: request.commandId,
@@ -323,6 +325,7 @@ export function startingWeaponCheckpointReceipt(
       ...receiptCommon(facts),
       sourceFormId: 'CHR-022',
       variant: 'STARTING_WEAPON_CHECKPOINT',
+      ...(weaponProfileRequestId === undefined ? {} : { weaponProfileRequestId }),
       weaponQualityRollRequestId: request.payload.weaponQualityRollRequestId,
       weaponQualityRollReceiptId: request.payload.weaponQualityRollReceiptId,
       weaponTypeId: qualityReceipt.result.weaponTypeId,

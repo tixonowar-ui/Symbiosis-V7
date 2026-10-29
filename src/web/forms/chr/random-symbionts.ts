@@ -124,6 +124,7 @@ export interface Chr017Projection extends JsonObject {
   readonly eligibleSymbiontSpecies: readonly SymbiontSpeciesProjection[];
   readonly manualCompositionDraft: readonly [];
   readonly pureNoSymbiontRoute: boolean;
+  readonly pureCompositionCheckpointed?: boolean;
   readonly raceChoice: 'FREE' | 'PURE' | 'UNITED';
   readonly selectedSpeciesOrNull: null;
   readonly slotCapacity: number;
@@ -297,15 +298,17 @@ export interface Chr019Projection extends JsonObject {
   readonly commandId: string | null;
   readonly compositionValidation: 'VALID';
   readonly draftRevision: number;
-  readonly duplicatePolicy: {
-    readonly kind: 'REROLL_WITH_SEPARATE_RECEIPTS';
-    readonly receipts: readonly DuplicateSymbiontReceiptProjection[];
-  };
+  readonly duplicatePolicy:
+    | { readonly kind: 'NOT_APPLICABLE' }
+    | {
+        readonly kind: 'REROLL_WITH_SEPARATE_RECEIPTS';
+        readonly receipts: readonly DuplicateSymbiontReceiptProjection[];
+      };
   readonly interactionGraph:
     | { readonly kind: 'NO_INTERACTIONS' }
     | { readonly entries: readonly SymbiontInteractionProjection[]; readonly kind: 'INTERACTIONS' };
-  readonly irreversibleBoundaryStatus: 'CROSSED';
-  readonly raceChoice: 'FREE' | 'UNITED';
+  readonly irreversibleBoundaryStatus: 'CROSSED' | 'NOT_CROSSED';
+  readonly raceChoice: 'FREE' | 'UNITED' | 'PURE';
   readonly randomReceiptIds: readonly string[];
   readonly slotUsageAndCapacity: { readonly capacity: number; readonly used: number };
   readonly speciesKeys: readonly SymbiontSpeciesKey[];
@@ -795,12 +798,23 @@ export function decodeChr017Projection(
     decodeSymbiontSpecies,
   );
   if (!eligibleSymbiontSpecies.ok) return eligibleSymbiontSpecies;
+  if (
+    value['raceChoice'] === 'PURE' &&
+    (eligibleSymbiontSpecies.value.length !== 0 || value['slotCapacity'] !== 0)
+  )
+    return refused(path, value);
   const result = decodeProjection(value, path, {
     characterDraftId: isNonEmptyString,
     draftRevision: (field) => isSafeIntegerAtLeast(field, 0),
     eligibleSymbiontSpecies: (field) => field === value['eligibleSymbiontSpecies'],
     manualCompositionDraft: (field) => Array.isArray(field) && field.length === 0,
     pureNoSymbiontRoute: (field) => field === (value['raceChoice'] === 'PURE'),
+    ...(Object.hasOwn(value, 'pureCompositionCheckpointed')
+      ? {
+          pureCompositionCheckpointed: (field: JsonValue | undefined) =>
+            value['raceChoice'] === 'PURE' && typeof field === 'boolean',
+        }
+      : {}),
     raceChoice: (field) => field === 'FREE' || field === 'PURE' || field === 'UNITED',
     selectedSpeciesOrNull: (field) => field === null,
     slotCapacity: (field) => isSafeIntegerAtLeast(field, 0),
@@ -820,6 +834,8 @@ export function decodeChr017Projection(
 }
 
 export function expectedChr017ActionKeys(projection: Chr017Projection): readonly ActionKey[] {
+  if (projection.raceChoice === 'PURE' && projection.pureCompositionCheckpointed !== undefined)
+    return projection.pureCompositionCheckpointed ? ['CHR-017::CTA::004'] : ['CHR-017::CTA::006'];
   return projection.symbiontAcquisitionModeOrNull === 'RANDOM'
     ? [CHR_017_RANDOM_START_ACTION_KEY]
     : NO_ACTION_KEYS;
@@ -1418,6 +1434,7 @@ export function decodeChr019Projection(
   path: string,
   mode: 'MANUAL' | 'RANDOM' = 'RANDOM',
 ): DecodeResult<Chr019Projection | ManualChr019Projection> {
+  const pure = value['raceChoice'] === 'PURE';
   const bindings = decodeArray(value['bindings'], `${path}.bindings`, decodeSymbiontBinding);
   if (!bindings.ok) return bindings;
   const symbiontInstancesDraft = decodeArray<SymbiontInstanceProjection>(
@@ -1469,13 +1486,17 @@ export function decodeChr019Projection(
   if (!suppressionPreview.ok) return suppressionPreview;
   const duplicatePolicy = value['duplicatePolicy'];
   if (!isJsonObject(duplicatePolicy)) return refused(`${path}.duplicatePolicy`, duplicatePolicy!);
-  const duplicateKind = mode === 'MANUAL' ? 'FORBIDDEN' : 'REROLL_WITH_SEPARATE_RECEIPTS';
+  const duplicateKind = pure
+    ? 'NOT_APPLICABLE'
+    : mode === 'MANUAL'
+      ? 'FORBIDDEN'
+      : 'REROLL_WITH_SEPARATE_RECEIPTS';
   if (duplicatePolicy['kind'] !== duplicateKind) {
     return refused(`${path}.duplicatePolicy.kind`, duplicatePolicy['kind']!);
   }
   const duplicateResult = decodeProjection(duplicatePolicy, `${path}.duplicatePolicy`, {
     kind: (field) => field === duplicateKind,
-    ...(mode === 'RANDOM'
+    ...(mode === 'RANDOM' && !pure
       ? {
           receipts: (field: JsonValue | undefined) =>
             Array.isArray(field) && field.every(isJsonObject),
@@ -1484,7 +1505,7 @@ export function decodeChr019Projection(
   });
   if (!duplicateResult.ok) return duplicateResult;
   const duplicateReceipts =
-    mode === 'RANDOM'
+    mode === 'RANDOM' && !pure
       ? decodeArray(
           duplicatePolicy['receipts'],
           `${path}.duplicatePolicy.receipts`,
@@ -1519,8 +1540,8 @@ export function decodeChr019Projection(
     duplicatePolicy: (field) => field === duplicatePolicy,
     interactionGraph: (field) => field === value['interactionGraph'],
     irreversibleBoundaryStatus: (field) =>
-      field === (mode === 'MANUAL' ? 'NOT_CROSSED' : 'CROSSED'),
-    raceChoice: (field) => field === 'FREE' || field === 'UNITED',
+      field === (pure || mode === 'MANUAL' ? 'NOT_CROSSED' : 'CROSSED'),
+    raceChoice: (field) => field === 'FREE' || field === 'UNITED' || field === 'PURE',
     randomReceiptIds: (field) =>
       Array.isArray(field) && field.every(isNonEmptyString) && new Set(field).size === field.length,
     slotUsageAndCapacity: (field) => field === slots,
@@ -1539,11 +1560,28 @@ export function decodeChr019Projection(
   ) {
     return refused(`${path}.speciesKeys`, speciesKeys);
   }
+  if (
+    pure &&
+    (mode === 'MANUAL' ||
+      speciesKeys.length !== 0 ||
+      bindings.value.length !== 0 ||
+      symbiontInstancesDraft.value.length !== 0 ||
+      slots['used'] !== 0 ||
+      slots['capacity'] !== 0 ||
+      (value['randomReceiptIds'] as readonly string[]).length !== 0 ||
+      interactionGraph.value.kind !== 'NO_INTERACTIONS' ||
+      suppressionPreview.value.kind !== 'NONE' ||
+      modifier.value.bySpecies.length !== 0 ||
+      modifier.value.total.kind !== 'NO_STAT_MODIFIERS' ||
+      Object.hasOwn(value, 'armorBundleEntryMode'))
+  )
+    return refused(path, value);
   const decoded = {
     ...(value as Chr019Projection),
     bindings: bindings.value,
-    duplicatePolicy:
-      mode === 'MANUAL'
+    duplicatePolicy: pure
+      ? { kind: 'NOT_APPLICABLE' }
+      : mode === 'MANUAL'
         ? { kind: 'FORBIDDEN' }
         : { kind: 'REROLL_WITH_SEPARATE_RECEIPTS', receipts: duplicateReceipts.value },
     interactionGraph: interactionGraph.value as Chr019Projection['interactionGraph'],

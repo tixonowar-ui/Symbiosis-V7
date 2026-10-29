@@ -143,9 +143,7 @@ export function StartingWeaponFields({
         </>
       )}
       {projection.weaponCheckpointReceiptIdOrNull === null ? null : (
-        <p role="status">
-          Оружие подтверждено. Настройка профиля будет доступна на следующем этапе.
-        </p>
+        <p role="status">Оружие подтверждено. Продолжите к его профилю.</p>
       )}
     </section>
   );

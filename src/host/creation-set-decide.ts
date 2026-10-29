@@ -1,3 +1,20 @@
+import {
+  parsePureCompositionStage,
+  assertPureCompositionBinding,
+  type PureCompositionStage,
+} from './creation-pure-composition.js';
+import {
+  parseWeaponProfileStage,
+  weaponProfileStageIds,
+  type WeaponProfileStage,
+  type AnyWeaponProfileReceipt,
+  type WeaponProfileRequest,
+} from './creation-weapon-profile-contract.js';
+import {
+  latestWeaponProfileRecord,
+  weaponProfileRecords,
+  validateWeaponProfileStageHistory,
+} from './creation-weapon-profile.js';
 import { isDeepStrictEqual } from 'node:util';
 
 import type Database from 'better-sqlite3';
@@ -211,6 +228,7 @@ export type CreationNextFormId =
   | 'CHR-022'
   | 'CHR-023'
   | 'CHR-024'
+  | 'CHR-038'
   | 'CHR-036'
   | 'CHR-041';
 
@@ -717,11 +735,21 @@ export interface CreationWizardSymbiontPayload extends Omit<
   readonly randomSymbiontStage: RandomSymbiontStage | null;
   readonly advisorIntelligenceFloorStage?: AdvisorIntelligenceFloorStage;
   readonly nextStageEnvelope: CreationNextStageEnvelope<
-    'CHR-017' | 'CHR-019' | 'CHR-020' | 'CHR-021' | 'CHR-022' | 'CHR-023' | 'CHR-024' | 'CHR-041'
+    | 'CHR-017'
+    | 'CHR-019'
+    | 'CHR-020'
+    | 'CHR-021'
+    | 'CHR-022'
+    | 'CHR-023'
+    | 'CHR-024'
+    | 'CHR-038'
+    | 'CHR-041'
   >;
   readonly manualCompositionStage?: ManualCompositionStage;
   readonly armorBundleStage?: ArmorBundleStage;
   readonly startingWeaponStage?: StartingWeaponStage;
+  readonly weaponProfileStage?: WeaponProfileStage;
+  readonly pureCompositionStage?: PureCompositionStage;
   readonly receipt:
     | SkillSelectionCheckpointReceipt
     | SymbiontPhysicalRollReceipt
@@ -735,7 +763,8 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
-    | StartingWeaponReceipt;
+    | StartingWeaponReceipt
+    | AnyWeaponProfileReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -770,6 +799,8 @@ export interface DurableCreationWizardCheckpoint {
   readonly manualCompositionStage?: ManualCompositionStage | null;
   readonly armorBundleStage?: ArmorBundleStage | null;
   readonly startingWeaponStage?: StartingWeaponStage | null;
+  readonly weaponProfileStage?: WeaponProfileStage | null;
+  readonly pureCompositionStage?: PureCompositionStage | null;
   readonly symbiontPresentationStage?: SymbiontPresentationStage | null;
   readonly receipt:
     | CreationRollCommitReceipt
@@ -790,7 +821,8 @@ export interface DurableCreationWizardCheckpoint {
     | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
-    | StartingWeaponReceipt;
+    | StartingWeaponReceipt
+    | AnyWeaponProfileReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -807,7 +839,8 @@ export interface DurableCreationWizardCheckpoint {
     | ManualInteractionConfirmationRequest
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest
-    | StartingWeaponRequest;
+    | StartingWeaponRequest
+    | WeaponProfileRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -832,7 +865,8 @@ export interface DurableCreationWizardCommand {
     | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
-    | StartingWeaponReceipt;
+    | StartingWeaponReceipt
+    | AnyWeaponProfileReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -849,7 +883,8 @@ export interface DurableCreationWizardCommand {
     | ManualInteractionConfirmationRequest
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest
-    | StartingWeaponRequest;
+    | StartingWeaponRequest
+    | WeaponProfileRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -1260,6 +1295,7 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-022',
     'CHR-023',
     'CHR-024',
+    'CHR-038',
     'CHR-041',
   ] as const);
   const bindings = object['routeBindings'];
@@ -2440,6 +2476,13 @@ const postIdentityPayloadAt = (
     const hasManualCompositionStage = Object.hasOwn(unshaped, 'manualCompositionStage');
     const hasArmorBundleStage = Object.hasOwn(unshaped, 'armorBundleStage');
     const hasStartingWeaponStage = Object.hasOwn(unshaped, 'startingWeaponStage');
+    const hasWeaponProfileStage = Object.hasOwn(unshaped, 'weaponProfileStage');
+    const hasPureCompositionStage = Object.hasOwn(unshaped, 'pureCompositionStage');
+    if (
+      (hasWeaponProfileStage && !hasStartingWeaponStage) ||
+      (hasPureCompositionStage && !hasArmorBundleStage)
+    )
+      throw new Error(`${label} equipment stage lacks its prerequisite`);
     if (hasStartingWeaponStage && !hasArmorBundleStage)
       throw new Error(`${label} starting weapon stage requires armor bundle`);
     if (
@@ -2453,6 +2496,8 @@ const postIdentityPayloadAt = (
       ...(hasManualCompositionStage ? ['manualCompositionStage'] : []),
       ...(hasArmorBundleStage ? ['armorBundleStage'] : []),
       ...(hasStartingWeaponStage ? ['startingWeaponStage'] : []),
+      ...(hasWeaponProfileStage ? ['weaponProfileStage'] : []),
+      ...(hasPureCompositionStage ? ['pureCompositionStage'] : []),
     ];
     const object = exactObject(
       value,
@@ -2554,7 +2599,25 @@ const postIdentityPayloadAt = (
       startingWeaponStage === null
     )
       throw new Error(`${label} armor checkpoint lacks its allocated weapon stage`);
+    const weaponProfileStage = hasWeaponProfileStage
+      ? parseWeaponProfileStage(object['weaponProfileStage'], startingWeaponStage)
+      : null;
+    if (
+      startingWeaponStage?.checkpointRecordOrNull?.receipt.result.weaponProfileRequestId !==
+        undefined &&
+      weaponProfileStage === null
+    )
+      throw new Error(`${label} weapon checkpoint lacks its allocated profile stage`);
+    const pureCompositionStage = hasPureCompositionStage
+      ? parsePureCompositionStage(object['pureCompositionStage'])
+      : null;
+    if (
+      skillSelectionStage?.receipt.result.pureArmorBundleId !== undefined &&
+      pureCompositionStage === null
+    )
+      throw new Error(`${label} skill checkpoint lacks its allocated PURE composition`);
     const symbiontStageCount = [
+      pureCompositionStage,
       randomSymbiontStage,
       advisorIntelligenceFloorStage,
       manualCompositionStage,
@@ -2563,16 +2626,18 @@ const postIdentityPayloadAt = (
       throw new Error(`${label} random, manual and legacy symbiont stages cannot coexist`);
     }
     const latestSymbiontRecord =
-      startingWeaponStage !== null
-        ? latestStartingWeaponRecord(startingWeaponStage)
-        : armorBundleStage !== null
-          ? latestArmorBundleRecord(armorBundleStage)
-          : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
-            (randomSymbiontStage !== null
-              ? latestRandomSymbiontRecord(randomSymbiontStage)
-              : manualCompositionStage === null
-                ? null
-                : latestManualCompositionRecord(manualCompositionStage)));
+      weaponProfileStage !== null
+        ? latestWeaponProfileRecord(weaponProfileStage)
+        : startingWeaponStage !== null
+          ? latestStartingWeaponRecord(startingWeaponStage)
+          : armorBundleStage !== null
+            ? latestArmorBundleRecord(armorBundleStage)
+            : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
+              (randomSymbiontStage !== null
+                ? latestRandomSymbiontRecord(randomSymbiontStage)
+                : manualCompositionStage === null
+                  ? null
+                  : latestManualCompositionRecord(manualCompositionStage)));
     const receipt =
       receiptResult['stage'] === 'SYMBIONTS'
         ? (latestSymbiontRecord?.receipt ??
@@ -2580,11 +2645,13 @@ const postIdentityPayloadAt = (
             throw new Error(`${label} SYMBIONTS payload lacks a latest symbiont receipt`);
           })())
         : receiptResult['stage'] === 'SKILLS'
-          ? (skillSelectionStage?.receipt ??
-            skillEligibilityStage?.receipt ??
-            (() => {
-              throw new Error(`${label} SKILLS payload lacks a skill stage receipt`);
-            })())
+          ? pureCompositionStage?.entryMode === 'SKILL_RECONFIRM'
+            ? armorBundleStage!.entryReceipt
+            : (skillSelectionStage?.receipt ??
+              skillEligibilityStage?.receipt ??
+              (() => {
+                throw new Error(`${label} SKILLS payload lacks a skill stage receipt`);
+              })())
           : receiptResult['stage'] === 'STAT_ASSIGNMENT'
             ? parseStatAssignmentReceipt(object['receipt'], label)
             : receiptResult['stage'] !== 'STAT_ROLLS'
@@ -2617,8 +2684,7 @@ const postIdentityPayloadAt = (
           armorBundleStage !== null) &&
         (latestSymbiontRecord === null
           ? receipt.result.stage !== 'SKILLS'
-          : receipt.result.stage !== 'SYMBIONTS' ||
-            !isDeepStrictEqual(receipt, latestSymbiontRecord.receipt))
+          : !isDeepStrictEqual(receipt, latestSymbiontRecord.receipt))
       ) {
         throw new Error(`${label} symbiont payload must carry its latest stage receipt`);
       }
@@ -2632,6 +2698,7 @@ const postIdentityPayloadAt = (
           | 'CHR-022'
           | 'CHR-023'
           | 'CHR-024'
+          | 'CHR-038'
           | 'CHR-041'
         >,
         pureClassStage: parsePureClassStage(object['pureClassStage'], label),
@@ -2641,6 +2708,8 @@ const postIdentityPayloadAt = (
         ...(hasManualCompositionStage ? { manualCompositionStage } : {}),
         ...(hasArmorBundleStage ? { armorBundleStage } : {}),
         ...(hasStartingWeaponStage ? { startingWeaponStage } : {}),
+        ...(hasWeaponProfileStage ? { weaponProfileStage } : {}),
+        ...(hasPureCompositionStage ? { pureCompositionStage } : {}),
         skillEligibilityStage,
         skillSelectionStage,
         statAssignmentStage: parseStatAssignmentStage(object['statAssignmentStage'], label),
@@ -2730,7 +2799,8 @@ export interface RollValidationCursor {
     | ManualInteractionConfirmationReceipt
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
-    | StartingWeaponReceipt;
+    | StartingWeaponReceipt
+    | AnyWeaponProfileReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -2746,7 +2816,8 @@ export interface RollValidationCursor {
     | ManualInteractionConfirmationRequest
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest
-    | StartingWeaponRequest;
+    | StartingWeaponRequest
+    | WeaponProfileRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3652,6 +3723,13 @@ const skillCheckpointAtCursor = (
   skillSelectionStage,
   randomSymbiontStage:
     'randomSymbiontStage' in durablePayload ? durablePayload.randomSymbiontStage : null,
+  pureCompositionStage:
+    'pureCompositionStage' in durablePayload ? durablePayload.pureCompositionStage : null,
+  armorBundleStage: 'armorBundleStage' in durablePayload ? durablePayload.armorBundleStage : null,
+  startingWeaponStage:
+    'startingWeaponStage' in durablePayload ? durablePayload.startingWeaponStage : null,
+  weaponProfileStage:
+    'weaponProfileStage' in durablePayload ? durablePayload.weaponProfileStage : null,
   statAssignmentStage,
   statRollStage,
 });
@@ -3839,6 +3917,12 @@ const validateSkillHistory = (
       nextFormId,
       sourceFormId: recordSource,
       stage: 'SKILLS',
+      ...(recordReceipt.result.pureArmorBundleId === undefined
+        ? {}
+        : {
+            pureArmorBundleId: recordReceipt.result.pureArmorBundleId,
+            pureArmorQualityRollRequestId: recordReceipt.result.pureArmorQualityRollRequestId,
+          }),
     };
     if (recordReceipt.commandId !== recordRequest.commandId) {
       mismatches.push(`${label} request/receipt commandId`);
@@ -4298,6 +4382,60 @@ const validatePostIdentityPayload = (
       occupiedIds,
     }).cursor;
   }
+  const weaponProfileStage =
+    'weaponProfileStage' in durablePayload ? (durablePayload.weaponProfileStage ?? null) : null;
+  if (weaponProfileStage !== null) {
+    if (
+      symbiontCatalog === undefined ||
+      startingWeaponStage === null ||
+      skillEligibilityStage === null ||
+      statAssignmentStage === null
+    )
+      throw new Error(`${label} weapon profile stage lacks prerequisites`);
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateWeaponProfileStageHistory(weaponProfileStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
+  const pureCompositionStage =
+    'pureCompositionStage' in durablePayload ? (durablePayload.pureCompositionStage ?? null) : null;
+  if (pureCompositionStage !== null)
+    assertPureCompositionBinding({
+      ...skillCheckpointAtCursor(
+        durablePayload as CreationWizardSymbiontPayload,
+        localCharacter,
+        checkpoint,
+        identityStage,
+        raceAndMethodStage,
+        statRollStage!,
+        statAssignmentStage!,
+        pureClassStage,
+        cursor,
+        skillEligibilityStage,
+        skillSelectionStage,
+      ),
+      pureCompositionStage,
+      armorBundleStage,
+    });
   previousCheckpointRevision = cursor.checkpointRevision;
   previousRevisions = cursor.revisions;
   const armorPresentation =
@@ -4306,9 +4444,31 @@ const validatePostIdentityPayload = (
     (symbiontPresentationStage.formId === 'CHR-019' ||
       symbiontPresentationStage.formId === 'CHR-021' ||
       symbiontPresentationStage.formId === 'CHR-022');
+  const purePresentation =
+    raceAndMethodStage?.race?.value === 'PURE' &&
+    symbiontPresentationStage !== undefined &&
+    ((pureCompositionStage !== null &&
+      ['CHR-017', 'CHR-019', 'CHR-021', 'CHR-022'].includes(symbiontPresentationStage.formId)) ||
+      (pureCompositionStage === null &&
+        armorBundleStage === null &&
+        symbiontPresentationStage.formId === 'CHR-015'));
+  const profilePresentation =
+    weaponProfileStage !== null &&
+    symbiontPresentationStage !== undefined &&
+    ['CHR-023', 'CHR-024', 'CHR-031'].includes(symbiontPresentationStage.formId);
+  if (
+    profilePresentation &&
+    (symbiontPresentationStage.formId === 'CHR-031'
+      ? weaponProfileStage.records.at(-1)?.receipt.result.outcome !== 'INVALID'
+      : symbiontPresentationStage.formId !==
+        (weaponProfileStage.kind === 'FORMULA' ? 'CHR-023' : 'CHR-024'))
+  )
+    mismatches.push('weapon profile presentation authority');
   if (
     symbiontPresentationStage !== undefined &&
     !armorPresentation &&
+    !purePresentation &&
+    !profilePresentation &&
     (raceAndMethodStage?.symbiontAcquisition.value !== 'MANUAL' ||
       randomSymbiontStage !== null ||
       advisorIntelligenceFloorStage !== null)
@@ -4417,6 +4577,8 @@ const validatePostIdentityPayload = (
       'manualCompositionStage' in durablePayload ? durablePayload.manualCompositionStage : null,
     armorBundleStage: armorBundleStage,
     startingWeaponStage,
+    weaponProfileStage,
+    pureCompositionStage,
     symbiontPresentationStage: symbiontPresentationStage ?? null,
     statRollStage,
     statAssignmentStage,
@@ -4989,6 +5151,15 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
         addRequestId((record as Record<string, unknown>)['request']);
     }
   }
+  const profileStage = object['weaponProfileStage'];
+  if (profileStage !== null && typeof profileStage === 'object' && !Array.isArray(profileStage)) {
+    const stage = profileStage as Record<string, unknown>;
+    addRequestId(stage['entryRequest']);
+    if (Array.isArray(stage['records']))
+      for (const record of stage['records'])
+        if (record !== null && typeof record === 'object' && !Array.isArray(record))
+          addRequestId((record as Record<string, unknown>)['request']);
+  }
   return ids;
 };
 
@@ -5087,6 +5258,12 @@ export function loadCreationWizardCommandByCommandId(
       receipt: manualRecord.receipt,
       request: manualRecord.request,
     };
+  }
+  if (durableCheckpoint.weaponProfileStage != null) {
+    const record = weaponProfileRecords(durableCheckpoint.weaponProfileStage).find(
+      ({ request }) => request.commandId === commandId,
+    );
+    if (record !== undefined) return { durableCheckpoint, ...record };
   }
   if (durableCheckpoint.startingWeaponStage != null) {
     const record = startingWeaponRecords(durableCheckpoint.startingWeaponStage).find(
@@ -5201,6 +5378,9 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   checkpoint.manualCompositionStage?.advisorSkillRecordOrNull === undefined
     ? []
     : [checkpoint.manualCompositionStage.advisorSkillRecordOrNull]),
+  ...(checkpoint.weaponProfileStage == null
+    ? []
+    : weaponProfileRecords(checkpoint.weaponProfileStage)),
   ...(checkpoint.startingWeaponStage == null
     ? []
     : startingWeaponRecords(checkpoint.startingWeaponStage)),
@@ -5739,6 +5919,9 @@ export const creationWizardDurableIds = (
       checkpoint.manualCompositionStage === undefined
         ? []
         : [...manualCompositionStageIds(checkpoint.manualCompositionStage)]),
+      ...(checkpoint.weaponProfileStage == null
+        ? []
+        : [...weaponProfileStageIds(checkpoint.weaponProfileStage)]),
       ...(checkpoint.startingWeaponStage == null
         ? []
         : [...startingWeaponStageIds(checkpoint.startingWeaponStage)]),

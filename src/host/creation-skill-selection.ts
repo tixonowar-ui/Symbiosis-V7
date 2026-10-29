@@ -137,6 +137,8 @@ export interface SkillSelectionCheckpointReceiptResult
   extends SkillReceiptResultCommon, SkillSelectionDerived {
   readonly sourceFormId: 'CHR-014' | 'CHR-015';
   readonly nextFormId: 'CHR-015' | 'CHR-017';
+  readonly pureArmorBundleId?: string;
+  readonly pureArmorQualityRollRequestId?: string;
 }
 
 export type SkillEligibilityCheckpointReceipt =
@@ -185,6 +187,8 @@ export interface SkillEligibilityPlan {
 export interface SkillSelectionPlan {
   readonly derived: SkillSelectionDerived;
   readonly nextFormId: 'CHR-015' | 'CHR-017';
+  readonly pureArmorBundleId?: string;
+  readonly pureArmorQualityRollRequestId?: string;
 }
 
 export class CreationSkillSelectionApplicationError extends Error {
@@ -430,13 +434,24 @@ export function prepareSkillSelection(
   const eligibility = checkpoint.skillEligibilityStage;
   const existingSelection = checkpoint.skillSelectionStage;
   const durableFormId = checkpoint.nextStageEnvelope.formId;
+  const historicalPureEntry =
+    checkpoint.raceAndMethodStage?.race?.value === 'PURE' &&
+    checkpoint.raceAndMethodStage.symbiontAcquisition.choiceLockStatus === 'NOT_APPLICABLE' &&
+    existingSelection?.request.payload.sourceFormId === 'CHR-015' &&
+    durableFormId === 'CHR-017' &&
+    (checkpoint.pureCompositionStage ?? null) === null &&
+    (checkpoint.armorBundleStage ?? null) === null &&
+    isDeepStrictEqual(
+      existingSelection.request.payload.selectedSkills,
+      request.payload.selectedSkills,
+    );
   if (
     eligibility === null ||
     request.payload.sourceFormId !== 'CHR-015' ||
     (durableFormId === 'CHR-013' && existingSelection !== null) ||
     (durableFormId === 'CHR-015' &&
       existingSelection?.request.payload.sourceFormId !== 'CHR-014') ||
-    (durableFormId !== 'CHR-013' && durableFormId !== 'CHR-015')
+    (durableFormId !== 'CHR-013' && durableFormId !== 'CHR-015' && !historicalPureEntry)
   ) {
     return guardRejected();
   }
@@ -663,7 +678,10 @@ const envelopeAt = <T extends 'CHR-013' | 'CHR-015' | 'CHR-017'>(
   };
 };
 
-const receiptAt = (value: unknown, label: string): SkillCheckpointReceipt => {
+export const parseSkillCheckpointReceipt = (
+  value: unknown,
+  label: string,
+): SkillCheckpointReceipt => {
   const object = exactObject(value, `${label}.receipt`, [
     'commandId',
     'receiptId',
@@ -699,6 +717,10 @@ const receiptAt = (value: unknown, label: string): SkillCheckpointReceipt => {
     'branchUuid',
     'nextFormId',
     ...derivedKeys,
+    ...(sourceFormId === 'CHR-015' &&
+    ('pureArmorBundleId' in unshapedResult || 'pureArmorQualityRollRequestId' in unshapedResult)
+      ? ['pureArmorBundleId', 'pureArmorQualityRollRequestId']
+      : []),
   ]);
   const common = {
     branchCacheHash: literal(
@@ -751,6 +773,30 @@ const receiptAt = (value: unknown, label: string): SkillCheckpointReceipt => {
           }
         : {
             ...common,
+            ...(result['pureArmorBundleId'] === undefined
+              ? {}
+              : {
+                  pureArmorBundleId: nonEmptyStringAt(
+                    result['pureArmorBundleId'],
+                    `${label}.receipt.result.pureArmorBundleId`,
+                  ),
+                  pureArmorQualityRollRequestId: nonEmptyStringAt(
+                    result['pureArmorQualityRollRequestId'],
+                    `${label}.receipt.result.pureArmorQualityRollRequestId`,
+                  ),
+                }),
+            ...(result['pureArmorBundleId'] === undefined
+              ? {}
+              : {
+                  pureArmorBundleId: nonEmptyStringAt(
+                    result['pureArmorBundleId'],
+                    `${label}.receipt.result.pureArmorBundleId`,
+                  ),
+                  pureArmorQualityRollRequestId: nonEmptyStringAt(
+                    result['pureArmorQualityRollRequestId'],
+                    `${label}.receipt.result.pureArmorQualityRollRequestId`,
+                  ),
+                }),
             ...selectionDerivedAt(
               {
                 learnedSkills: result['learnedSkills'],
@@ -778,7 +824,7 @@ export function parseSkillEligibilityStage(value: unknown, label: string): Skill
   if (request.payload.sourceFormId !== 'CHR-012') {
     throw new Error(`${path} request must originate from CHR-012`);
   }
-  const receipt = receiptAt(object['receipt'], path);
+  const receipt = parseSkillCheckpointReceipt(object['receipt'], path);
   if (receipt.result.sourceFormId !== 'CHR-012') {
     throw new Error(`${path} receipt must originate from CHR-012`);
   }
@@ -804,7 +850,7 @@ const selectionRecordAt = (
   if (request.payload.sourceFormId !== sourceFormId) {
     throw new Error(`${path} request must originate from ${sourceFormId}`);
   }
-  const receipt = receiptAt(object['receipt'], path);
+  const receipt = parseSkillCheckpointReceipt(object['receipt'], path);
   if (receipt.result.sourceFormId !== sourceFormId) {
     throw new Error(`${path} receipt must originate from ${sourceFormId}`);
   }
