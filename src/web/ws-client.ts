@@ -1,3 +1,15 @@
+import {
+  decodeChr038Projection,
+  expectedChr038ActionKeys,
+  decodeStartingMoneyTerminal,
+  startingMoneyRollPayload,
+  startingMoneyCheckpointPayload,
+  CHR_038_ROLL_ACTION_KEY,
+  CHR_038_CONFIRM_ACTION_KEY,
+  CHR_038_RETURN_ACTION_KEY,
+  type Chr038Projection,
+  type StartingMoneyRequest,
+} from './forms/chr/starting-money.js';
 import { FORM_IDS } from '@generated/types/atlas.js';
 import type { ActionKey, FormId } from '@generated/types/atlas.js';
 import {
@@ -246,6 +258,7 @@ const INHERITED_CHARACTER_WIZARD_FORM_IDS: ReadonlySet<FormId> = new Set([
   'CHR-022',
   'CHR-023',
   'CHR-024',
+  'CHR-038',
   'CHR-010',
   'CHR-016',
   'CHR-036',
@@ -4260,6 +4273,27 @@ function decodeConfirmedSnapshot(
       }
       break;
     }
+    case 'CHR-038': {
+      const decoded = decodeChr038Projection(
+        base.roleFilteredPayload,
+        '$.presentation.base.roleFilteredPayload',
+      );
+      projection = decoded;
+      if (decoded.ok) {
+        const actions = exactSymbiontActionKeys(
+          base.availableActionKeys,
+          expectedChr038ActionKeys(decoded.value, {
+            rollCommit: executableWorkflowCommandIds.includes(ROLL_COMMIT_WORKFLOW_COMMAND_ID),
+            checkpoint: executableWorkflowCommandIds.includes(
+              IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+            ),
+          }),
+          '$.presentation.base.availableActionKeys',
+        );
+        if (!actions.ok) return actions;
+      }
+      break;
+    }
     case 'CHR-023': {
       const decoded = decodeChr023Projection(
         base.roleFilteredPayload,
@@ -5051,6 +5085,56 @@ function decodeFormActionSnapshot(
     }
     return decoded;
   }
+  if (pending.sourceFormId === 'CHR-038' && pending.actionKey === CHR_038_RETURN_ACTION_KEY) {
+    const money = previous.projection as Chr038Projection;
+    const weapon = decoded.value.projection as Chr022Projection;
+    if (
+      previous.formId !== 'CHR-038' ||
+      decoded.value.formId !== 'CHR-022' ||
+      previous.layers.length !== 0 ||
+      decoded.value.layers.length !== 0 ||
+      money.moneyCheckpointReceiptIdOrNull !== null ||
+      weapon.weaponProfileEntryMode !== 'RESUME' ||
+      weapon.moneyRollRequestIdOrNull !== money.moneyRollRequestId ||
+      weapon.moneyRollReceiptIdOrNull !== money.moneyRollReceiptIdOrNull ||
+      weapon.weaponCheckpointReceiptIdOrNull !== money.weaponCheckpointReceiptId ||
+      weapon.nextFormId !== money.weaponProfileFormId ||
+      weapon.characterDraftId !== money.characterDraftId ||
+      weapon.wizardCheckpointId !== money.wizardCheckpointId ||
+      weapon.draftRevision !== money.draftRevision
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', decoded.value.projection);
+    return decoded;
+  }
+  if (
+    (pending.sourceFormId === 'CHR-023' && pending.actionKey === CHR_023_SUBMIT_ACTION_KEY) ||
+    (pending.sourceFormId === 'CHR-024' && pending.actionKey === CHR_024_ACKNOWLEDGE_ACTION_KEY)
+  ) {
+    const profile = previous.projection as Chr023Projection | Chr024Projection;
+    const money = decoded.value.projection as Chr038Projection;
+    const receiptId =
+      pending.sourceFormId === 'CHR-023'
+        ? (profile as Chr023Projection).profileReceiptIdOrNull
+        : (profile as Chr024Projection).acknowledgedReceiptIdOrNull;
+    if (
+      previous.formId !== pending.sourceFormId ||
+      decoded.value.formId !== 'CHR-038' ||
+      previous.layers.length !== 0 ||
+      decoded.value.layers.length !== 0 ||
+      profile.moneyEntryMode !== 'RESUME' ||
+      money.moneyCheckpointReceiptIdOrNull !== null ||
+      money.weaponProfileFormId !== pending.sourceFormId ||
+      money.profileReceiptId !== receiptId ||
+      money.moneyRollRequestId !== profile.moneyRollRequestIdOrNull ||
+      money.moneyRollReceiptIdOrNull !== profile.moneyRollReceiptIdOrNull ||
+      money.weaponCheckpointReceiptId !== profile.weaponCheckpointReceiptId ||
+      money.characterDraftId !== profile.characterDraftId ||
+      money.wizardCheckpointId !== profile.wizardCheckpointId ||
+      money.draftRevision !== profile.draftRevision
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', decoded.value.projection);
+    return decoded;
+  }
   if (pending.sourceFormId === 'CHR-031' && pending.actionKey === CHR_031_RETURN_ACTION_KEY) {
     if (
       previous.formId !== 'CHR-023' ||
@@ -5082,6 +5166,8 @@ function decodeFormActionSnapshot(
         : decoded.value.formId !== (weapon.raceChoice === 'PURE' ? 'CHR-024' : 'CHR-023')) ||
       weapon.weaponProfileEntryMode !== 'RESUME' ||
       weapon.weaponProfileRequestIdOrNull !== profile.requestId ||
+      weapon.moneyRollRequestIdOrNull !== profile.moneyRollRequestIdOrNull ||
+      weapon.moneyRollReceiptIdOrNull !== profile.moneyRollReceiptIdOrNull ||
       weapon.weaponTypeId !== profile.weaponTypeId ||
       weapon.weaponVariant !== profile.weaponVariantId ||
       weapon.weaponQualityRollRequestId !== profile.weaponQualityRollRequestId ||
@@ -5224,6 +5310,15 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
+  if (
+    (pending.request.payload as { readonly variant?: string }).variant ===
+    'STARTING_MONEY_CHECKPOINT'
+  )
+    return decodeStartingMoneyTerminal(
+      message,
+      pending.request as unknown as StartingMoneyRequest,
+      pending.sourceSnapshot,
+    ) as DecodeResult<CommandReceipt<CheckpointResult>>;
   if (
     ['WEAPON_PROFILE_ENTRY', 'WEAPON_PROFILE_SUBMIT', 'WEAPON_PROFILE_ACKNOWLEDGE'].includes(
       (pending.request.payload as { readonly variant?: string }).variant ?? '',
@@ -5893,6 +5988,12 @@ function decodeRollCommitTerminal(
   >,
   pending: PendingRollCommit,
 ): DecodeResult<CommandReceipt<RollCommitResult>> {
+  if ((pending.request.payload as { readonly variant?: string }).variant === 'STARTING_MONEY_ROLL')
+    return decodeStartingMoneyTerminal(
+      message,
+      pending.request as unknown as StartingMoneyRequest,
+      pending.sourceSnapshot,
+    ) as DecodeResult<CommandReceipt<RollCommitResult>>;
   if (
     pending.request.payload.stage === 'SYMBIONTS' &&
     (pending.request.payload as { readonly variant?: string }).variant === 'STARTING_WEAPON_QUALITY'
@@ -6123,11 +6224,61 @@ function startingWeaponSnapshotMatchesReceipt(
   return { ok: true, value: snapshot };
 }
 
-function weaponProfileSnapshotMatchesReceipt(
+function startingMoneySnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
+  if (snapshot.formId !== 'CHR-038' || snapshot.layers.length !== 0)
+    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  const projection = snapshot.projection as Chr038Projection;
   const result = receipt.result;
+  const roll = result['variant'] === 'STARTING_MONEY_ROLL';
+  if (
+    projection.characterDraftId !== result['characterDraftId'] ||
+    projection.wizardCheckpointId !== result['checkpointId'] ||
+    projection.draftRevision !== result['draftRevision'] ||
+    projection.commandId !== receipt.commandId ||
+    projection.moneyRollRequestId !== result['moneyRollRequestId'] ||
+    projection.diceInputModeSnapshot !== result['diceInputModeSnapshot'] ||
+    projection.profileReceiptId !== result['profileReceiptId'] ||
+    projection.weaponCheckpointReceiptId !== result['weaponCheckpointReceiptId'] ||
+    !sameJson(projection.wealthRecommendation, result['wealthRecommendation'] ?? null) ||
+    projection.moneyRollReceiptIdOrNull !==
+      (roll ? receipt.receiptId : result['moneyRollReceiptId']) ||
+    projection.moneyCheckpointReceiptIdOrNull !== (roll ? null : receipt.receiptId) ||
+    projection.nextFormId !== result['nextFormId'] ||
+    !sameJson({ ...snapshot.revisions }, { ...receipt.revisions })
+  )
+    return unrecognized('$.presentation.base.roleFilteredPayload', projection);
+  return { ok: true, value: snapshot };
+}
+
+function weaponProfileSnapshotMatchesReceipt(
+  snapshot: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt,
+  source: ConfirmedProjectionSnapshot,
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const result = receipt.result;
+  if (snapshot.formId === 'CHR-038') {
+    const money = snapshot.projection as Chr038Projection;
+    if (
+      (result['outcome'] !== 'SUBMITTED' && result['outcome'] !== 'ACKNOWLEDGED') ||
+      snapshot.layers.length !== 0 ||
+      money.commandId !== receipt.commandId ||
+      money.profileReceiptId !== receipt.receiptId ||
+      money.weaponCheckpointReceiptId !== source.projection['weaponCheckpointReceiptId'] ||
+      money.weaponProfileFormId !== source.formId ||
+      money.characterDraftId !== result['characterDraftId'] ||
+      money.wizardCheckpointId !== result['checkpointId'] ||
+      money.draftRevision !== result['draftRevision'] ||
+      money.moneyRollRequestId !== result['moneyRollRequestId'] ||
+      money.moneyRollReceiptIdOrNull !== null ||
+      money.nextFormId !== 'CHR-038' ||
+      !sameJson({ ...snapshot.revisions }, { ...receipt.revisions })
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', money);
+    return { ok: true, value: snapshot };
+  }
   if (snapshot.formId !== 'CHR-023' && snapshot.formId !== 'CHR-024')
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   const projection = snapshot.projection as Chr023Projection | Chr024Projection;
@@ -6272,12 +6423,14 @@ function checkpointSnapshotMatchesReceipt(
   sourceSnapshot: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if ((result as { readonly variant?: string }).variant === 'STARTING_MONEY_CHECKPOINT')
+    return startingMoneySnapshotMatchesReceipt(snapshot, receipt);
   if (
     ['WEAPON_PROFILE_ENTRY', 'WEAPON_PROFILE_SUBMIT', 'WEAPON_PROFILE_ACKNOWLEDGE'].includes(
       (result as { readonly variant?: string }).variant ?? '',
     )
   ) {
-    return weaponProfileSnapshotMatchesReceipt(snapshot, receipt);
+    return weaponProfileSnapshotMatchesReceipt(snapshot, receipt, sourceSnapshot);
   }
   if (
     result.stage === 'SYMBIONTS' &&
@@ -6662,6 +6815,8 @@ function rollCommitSnapshotMatchesReceipt(
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
+  if ((result as { readonly variant?: string }).variant === 'STARTING_MONEY_ROLL')
+    return startingMoneySnapshotMatchesReceipt(snapshot, receipt);
   if (
     result.stage === 'SYMBIONTS' &&
     (result as { readonly variant?: string }).variant === 'STARTING_WEAPON_QUALITY'
@@ -8711,9 +8866,75 @@ export function connectProjection(
         return { ok: false, detail: 'WebSocket is not open' };
       }
       if (
+        activeForm.formId === 'CHR-038' &&
+        lastSnapshot.formId === 'CHR-038' &&
+        (actionKey === CHR_038_ROLL_ACTION_KEY || actionKey === CHR_038_CONFIRM_ACTION_KEY)
+      ) {
+        const roll = actionKey === CHR_038_ROLL_ACTION_KEY;
+        let request: StartingMoneyRequest;
+        try {
+          const common = {
+            commandId: createRequestId('command'),
+            commandKind: 'workflow-command' as const,
+            expectedRevisions: { ...lastSnapshot.revisions },
+            messageType: 'command.request' as const,
+            protocolVersion: WIRE_PROTOCOL_VERSION,
+            role: 'player' as const,
+          };
+          const projection = lastSnapshot.projection as Chr038Projection;
+          request = roll
+            ? {
+                ...common,
+                workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
+                payload: startingMoneyRollPayload(
+                  projection,
+                  typeof manualFacesOrNull === 'number' ? manualFacesOrNull : null,
+                ),
+              }
+            : {
+                ...common,
+                workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+                payload: startingMoneyCheckpointPayload(projection),
+              };
+        } catch (error: unknown) {
+          return { ok: false, detail: diagnostic(error) };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok)
+          return {
+            ok: false,
+            detail: 'starting money failed checked encoding: ' + JSON.stringify(encoded.refusal),
+          };
+        if (roll)
+          pendingRollCommit = {
+            receipt: null,
+            request: request as unknown as PendingRollCommit['request'],
+            sourceProjection: lastSnapshot.projection as unknown as Chr003Projection,
+            sourceSnapshot: lastSnapshot,
+          };
+        else
+          pendingCheckpoint = {
+            assignmentDraft: null,
+            receipt: null,
+            request: request as unknown as PendingCheckpoint['request'],
+            skillSelectionDraft: null,
+            sourceSnapshot: lastSnapshot,
+          };
+        try {
+          socket.send(encoded.text);
+        } catch (error: unknown) {
+          if (roll) pendingRollCommit = null;
+          else pendingCheckpoint = null;
+          return { ok: false, detail: diagnostic(error) };
+        }
+        notifyReady();
+        return { ok: true };
+      }
+      if (
         (activeForm.formId === 'CHR-024' &&
           lastSnapshot.formId === 'CHR-024' &&
-          actionKey === CHR_024_ACKNOWLEDGE_ACTION_KEY) ||
+          actionKey === CHR_024_ACKNOWLEDGE_ACTION_KEY &&
+          (lastSnapshot.projection as Chr024Projection).acknowledgedReceiptIdOrNull === null) ||
         (activeForm.formId === 'CHR-022' &&
           lastSnapshot.formId === 'CHR-022' &&
           (actionKey === CHR_022_CONFIRM_ACTION_KEY ||

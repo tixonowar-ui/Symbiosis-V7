@@ -1,3 +1,16 @@
+import {
+  commitStartingMoney,
+  preflightStartingMoney,
+  advanceStartingMoneyPresentation,
+} from './creation-starting-money.js';
+import {
+  startingMoneyStageForCheckpoint,
+  startingMoneyPresentationForm,
+  normalizeStartingMoneyRequest,
+  type StartingMoneyRequest,
+} from './creation-starting-money-contract.js';
+import { canonicalStartingMoneyCatalog } from './starting-money-catalog.js';
+import { projectChr038 } from './projections/chr-starting-money.js';
 import { canonicalWeaponProfileCatalog } from './weapon-profile-catalog.js';
 import {
   commitWeaponProfile,
@@ -391,6 +404,7 @@ interface ConfirmedNavigationContext {
     | 'CHR-022'
     | 'CHR-023'
     | 'CHR-024'
+    | 'CHR-038'
     | 'CHR-041'
     | 'CHR-042';
   readonly identityDraftScope: IdentityDraftScope | null;
@@ -539,6 +553,7 @@ function allocatedReceiptId(
     | ArmorBundleQualityRollRequest
     | StartingWeaponQualityRollRequest
     | WeaponProfileRequest
+    | StartingMoneyRequest
     | CreationRollCommitCommandRequest
     | CreationSetDecideCommandRequest
     | CreationWizardCheckpointCommandRequest
@@ -891,6 +906,7 @@ function adoptNavigationContext(
     next.formId === CHR_015_FORM_ID ||
     next.formId === 'CHR-021' ||
     next.formId === 'CHR-022' ||
+    next.formId === 'CHR-038' ||
     next.formId === 'CHR-023' ||
     next.formId === 'CHR-024' ||
     next.formId === CHR_017_FORM_ID ||
@@ -1503,7 +1519,10 @@ function inferredCreationSkillPresentationFormId(
 function creationPresentationFormId(
   checkpoint: DurableCreationWizardCheckpoint,
 ): ConfirmedNavigationContext['formId'] {
+  const moneyForm = startingMoneyPresentationForm(checkpoint);
+  if (moneyForm !== null) return moneyForm;
   const nextFormId = checkpoint.nextStageEnvelope.formId;
+  if (nextFormId === 'CHR-037') throw new Error('item destination lacks money checkpoint');
   const signed = checkpoint.symbiontPresentationStage;
   if (checkpoint.weaponProfileStage != null) {
     if (signed?.formId === 'CHR-031') return 'CHR-023';
@@ -1847,6 +1866,8 @@ function creationWizardBase(
         capabilities.rollCommit,
         capabilities.checkpoint,
       );
+    case 'CHR-038':
+      return projectChr038(checkpoint, capabilities.rollCommit, capabilities.checkpoint);
     case 'CHR-023':
       return projectChr023(
         checkpoint,
@@ -2475,6 +2496,9 @@ function equipmentProfileNavigation(
   dependencies: NavigationDependencies,
 ): NavigationSuccess | undefined {
   const targets = {
+    'CHR-038::CTA::002': 'CHR-022',
+    'CHR-023::CTA::001': 'CHR-038',
+    'CHR-024::CTA::001': 'CHR-038',
     'CHR-017::CTA::004': 'CHR-021',
     'CHR-017::CTA::006': 'CHR-015',
     'CHR-019::CTA::004': 'CHR-017',
@@ -2523,9 +2547,35 @@ function equipmentProfileNavigation(
     !source.availableActionKeys.includes(message.actionKey)
   )
     return undefined;
+  const moneyNavigation =
+    startingMoneyStageForCheckpoint(checkpoint) !== null &&
+    [
+      'CHR-038::CTA::002',
+      'CHR-022::CTA::001',
+      'CHR-022::CTA::002',
+      'CHR-023::CTA::001',
+      'CHR-024::CTA::001',
+    ].includes(message.actionKey);
   let committed: DurableCreationWizardCheckpoint;
   try {
-    if (pure) {
+    if (moneyNavigation) {
+      if (
+        target !== 'CHR-022' &&
+        target !== 'CHR-023' &&
+        target !== 'CHR-024' &&
+        target !== 'CHR-038'
+      )
+        return undefined;
+      committed = advanceStartingMoneyPresentation(
+        dependencies.database,
+        {
+          characterDraftId: current.entityLocalCharacterId,
+          wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+          formId: target,
+        },
+        dependencies.symbiontCatalog,
+      );
+    } else if (pure) {
       if (
         target !== 'CHR-015' &&
         target !== 'CHR-017' &&
@@ -3316,6 +3366,87 @@ function handleCommandRequest(
     return;
   }
   if (
+    message.payload !== null &&
+    typeof message.payload === 'object' &&
+    !Array.isArray(message.payload) &&
+    ['STARTING_MONEY_ROLL', 'STARTING_MONEY_CHECKPOINT'].includes(
+      String((message.payload as Record<string, unknown>)['variant']),
+    )
+  ) {
+    let request: StartingMoneyRequest;
+    try {
+      request = normalizeStartingMoneyRequest(message);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(message, error.refusal);
+      return;
+    }
+    const current = connection.sessionEstablished ? connection.current : null;
+    if (
+      current === null ||
+      current.entityLocalCharacterId !== request.payload.characterDraftId ||
+      current.formId !== request.payload.sourceFormId ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !connection.executableWorkflowCommandIds.has(request.workflowCommandId)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    const moneyDependencies = {
+      catalog: dependencies.symbiontCatalog,
+      moneyCatalog: canonicalStartingMoneyCatalog(),
+      sampleD20: dependencies.sampleCreationD20,
+    };
+    try {
+      preflightStartingMoney(dependencies.database, request, moneyDependencies);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const receiptId = allocatedReceiptId(dependencies.allocateReceiptId, request);
+    assertProcessLocalIdUnused(receiptId, 'weapon profile receipt allocator', commandJournal);
+    if (
+      connection.current !== current ||
+      connection.activeLayer !== null ||
+      !confirmedPlayerContext(current, dependencies) ||
+      !isDeepStrictEqual(currentNavigationRevisions(connection, dependencies), revisions)
+    ) {
+      finishRefusal(request, { code: 'GUARD_REJECTED' });
+      return;
+    }
+    let durable: DurableCreationWizardCheckpoint;
+    try {
+      durable = commitStartingMoney(dependencies.database, request, receiptId, moneyDependencies);
+    } catch (error: unknown) {
+      if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+      finishRefusal(request, error.refusal);
+      return;
+    }
+    const terminal = commandResult(durable.receipt);
+    commandJournal.set(request.commandId, {
+      durableCharacterId: durable.localCharacter.localCharacterId,
+      request,
+      terminal,
+    });
+    adoptNavigationContext(
+      connection,
+      dependencies,
+      creationWizardContext(connection, dependencies, durable),
+    );
+    sendChecked(socket, terminal, dependencies.vocabulary);
+    sendCreationWizardDestination(
+      socket,
+      durable,
+      dependencies,
+      connection,
+      request.commandId,
+      'COMMAND_DESTINATION',
+    );
+    return;
+  }
+  if (
     message.workflowCommandId === 'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT' ||
     (message.payload !== null &&
       typeof message.payload === 'object' &&
@@ -3370,6 +3501,12 @@ function handleCommandRequest(
     try {
       durable = commitWeaponProfile(dependencies.database, request, receiptId, {
         ...profileDependencies,
+        allocateMoneyRollRequestId: () =>
+          assertProcessLocalIdUnused(
+            dependencies.allocateCreationRollRequestId(),
+            'starting money request allocator',
+            commandJournal,
+          ),
         allocateRequestId: () =>
           assertProcessLocalIdUnused(
             dependencies.allocateCreationRollRequestId(),
@@ -4802,6 +4939,7 @@ function handleReconnectV2(
       restored.formId === CHR_020_FORM_ID ||
       restored.formId === CHR_021_FORM_ID ||
       restored.formId === 'CHR-022' ||
+      restored.formId === 'CHR-038' ||
       restored.formId === 'CHR-023' ||
       restored.formId === 'CHR-024' ||
       restored.formId === CHR_041_FORM_ID ||

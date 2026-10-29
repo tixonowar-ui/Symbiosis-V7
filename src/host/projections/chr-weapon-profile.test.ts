@@ -46,13 +46,14 @@ function fixture(
     outcome === 'DRAFT'
       ? null
       : {
+          nextStageEnvelope: { formId: outcome === 'INVALID' ? 'CHR-023' : 'CHR-038' },
           profileOrNull: profile,
           request: {
             commandId: 'profile-command',
             payload:
               kind === 'FORMULA'
-                ? { variant: 'WEAPON_PROFILE_SUBMIT', inputs }
-                : { variant: 'WEAPON_PROFILE_ACKNOWLEDGE' },
+                ? { variant: 'WEAPON_PROFILE_SUBMIT', inputs, characterDraftId: 'character' }
+                : { variant: 'WEAPON_PROFILE_ACKNOWLEDGE', characterDraftId: 'character' },
           },
           receipt: {
             receiptId: 'profile-receipt',
@@ -89,6 +90,7 @@ function fixture(
       routeBindings: [{ parameterIndex: 0, source: 'inherited', value: 'character' }],
     },
     startingWeaponStage: {
+      diceInputModeSnapshot: 'MANUAL',
       weaponQualityRollRequestId: 'quality-request',
       qualityRollRecordOrNull: {
         weaponTypeId: entry.weaponTypeId,
@@ -98,6 +100,7 @@ function fixture(
       checkpointRecordOrNull: { receipt: { receiptId: 'weapon-checkpoint' } },
     },
     weaponProfileStage: {
+      weaponCheckpointReceiptId: 'weapon-checkpoint',
       requestId: 'profile-request',
       kind,
       entryRequest: { commandId: 'entry-command' },
@@ -151,9 +154,9 @@ describe('CHR-023/024/031 source-backed profile projections', () => {
       'CHR-023::CTA::002',
     ]);
   });
-  it('preserves the complete submitted profile and addressed witness receipts while hiding later actions', () => {
+  it('preserves the complete submitted profile and addressed witness receipts with a receipt-preserving continuation', () => {
     const submitted = projectChr023(fixture('FORMULA', 'SUBMITTED'), catalog, true);
-    expect(submitted.availableActionKeys).toEqual([]);
+    expect(submitted.availableActionKeys).toEqual(['CHR-023::CTA::001']);
     expect(submitted.roleFilteredPayload).toMatchObject({
       requestStatus: 'SUBMITTED',
       nextFormId: 'CHR-038',
@@ -194,7 +197,7 @@ describe('CHR-023/024/031 source-backed profile projections', () => {
     const pending = projectChr024(fixture('FIXED'), catalog, true);
     expect(pending.availableActionKeys).toEqual(['CHR-024::CTA::001', 'CHR-024::CTA::002']);
     const done = projectChr024(fixture('FIXED', 'ACKNOWLEDGED'), catalog, true);
-    expect(done.availableActionKeys).toEqual([]);
+    expect(done.availableActionKeys).toEqual(['CHR-024::CTA::001']);
     expect(done.roleFilteredPayload['fixedProfile']).toEqual(
       pending.roleFilteredPayload['fixedProfile'],
     );

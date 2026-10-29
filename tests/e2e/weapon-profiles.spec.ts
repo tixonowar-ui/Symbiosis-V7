@@ -68,22 +68,24 @@ test('CHR-023 proves one complete profile, restores CHR-031 and submits without 
     await page
       .getByRole('button', { name: 'Проверить и отправить заявку профиля оружия', exact: true })
       .click();
+    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toBeVisible();
+    await action(page, 'CHR-038::CTA::002');
+    await action(page, 'CHR-022::CTA::001');
     await expect(
       page.getByText('Заявка отправлена и ожидает решения мастера.', { exact: false }),
     ).toBeVisible();
     await expect(page.getByLabel('Полный профиль оружия', { exact: true })).toContainText(
       'Лёгкий арбалет',
     );
-    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toHaveCount(0);
-    await expect(page.locator('[data-atlas-action-key^="CHR-023"]')).toHaveCount(0);
+    await expect(page.locator('#weapon-profile-commonWitness-L')).toHaveCount(0);
+    await action(page, 'CHR-023::CTA::001');
+    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toBeVisible();
     const receipts = host.receiptAllocations();
     const witnessIds = host.rollRequestAllocations();
     await page.reload();
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(
-      page.getByText('Заявка отправлена и ожидает решения мастера.', { exact: false }),
-    ).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toBeVisible();
     expect(host.receiptAllocations()).toBe(receipts);
     expect(host.rollRequestAllocations()).toBe(witnessIds);
     expect(host.sampleCalls()).toBe(0);
@@ -145,18 +147,20 @@ test('CHR-024 PURE enters from an explicit empty-composition checkpoint and ackn
     expect(host.receiptAllocations()).toBe(receiptCount);
     expect(host.rollRequestAllocations()).toBe(allocations);
     await action(page, 'CHR-024::CTA::001');
+    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toBeVisible();
+    await action(page, 'CHR-038::CTA::002');
+    await action(page, 'CHR-022::CTA::002');
     await expect(
       page.getByText('Фиксированный профиль подтверждён.', { exact: true }),
     ).toBeVisible();
+    await action(page, 'CHR-024::CTA::001');
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(
-      page.getByText('Фиксированный профиль подтверждён.', { exact: true }),
-    ).toBeVisible();
-    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-form-id="CHR-038"]')).toBeVisible();
+    await expect(page.locator('[data-atlas-form-id="CHR-037"]')).toHaveCount(0);
     await expect(page.locator('[data-atlas-action-key^="CHR-024"]')).toHaveCount(0);
     expect(host.sampleCalls()).toBe(2);
-    expect(host.rollRequestAllocations()).toBe(allocations);
+    expect(host.rollRequestAllocations()).toBe(allocations + 1);
     expect(await page.locator('body').innerText()).not.toMatch(
       /(?:CORE|F-WPN|AQ2)-\d+|Источник|availabilityTrace|definitionId/,
     );

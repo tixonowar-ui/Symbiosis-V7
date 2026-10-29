@@ -15,6 +15,19 @@ import {
   weaponProfileRecords,
   validateWeaponProfileStageHistory,
 } from './creation-weapon-profile.js';
+import {
+  initialStartingMoneyStage,
+  parseStartingMoneyStage,
+  startingMoneyStageIds,
+  type StartingMoneyStage,
+  type StartingMoneyReceipt,
+  type StartingMoneyRequest,
+} from './creation-starting-money-contract.js';
+import {
+  latestStartingMoneyRecord,
+  startingMoneyRecords,
+  validateStartingMoneyStageHistory,
+} from './creation-starting-money.js';
 import { isDeepStrictEqual } from 'node:util';
 
 import type Database from 'better-sqlite3';
@@ -228,6 +241,7 @@ export type CreationNextFormId =
   | 'CHR-022'
   | 'CHR-023'
   | 'CHR-024'
+  | 'CHR-037'
   | 'CHR-038'
   | 'CHR-036'
   | 'CHR-041';
@@ -742,6 +756,7 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | 'CHR-022'
     | 'CHR-023'
     | 'CHR-024'
+    | 'CHR-037'
     | 'CHR-038'
     | 'CHR-041'
   >;
@@ -749,6 +764,7 @@ export interface CreationWizardSymbiontPayload extends Omit<
   readonly armorBundleStage?: ArmorBundleStage;
   readonly startingWeaponStage?: StartingWeaponStage;
   readonly weaponProfileStage?: WeaponProfileStage;
+  readonly startingMoneyStage?: StartingMoneyStage;
   readonly pureCompositionStage?: PureCompositionStage;
   readonly receipt:
     | SkillSelectionCheckpointReceipt
@@ -764,7 +780,8 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
-    | AnyWeaponProfileReceipt;
+    | AnyWeaponProfileReceipt
+    | StartingMoneyReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -800,6 +817,7 @@ export interface DurableCreationWizardCheckpoint {
   readonly armorBundleStage?: ArmorBundleStage | null;
   readonly startingWeaponStage?: StartingWeaponStage | null;
   readonly weaponProfileStage?: WeaponProfileStage | null;
+  readonly startingMoneyStage?: StartingMoneyStage | null;
   readonly pureCompositionStage?: PureCompositionStage | null;
   readonly symbiontPresentationStage?: SymbiontPresentationStage | null;
   readonly receipt:
@@ -822,7 +840,8 @@ export interface DurableCreationWizardCheckpoint {
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
-    | AnyWeaponProfileReceipt;
+    | AnyWeaponProfileReceipt
+    | StartingMoneyReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -840,7 +859,8 @@ export interface DurableCreationWizardCheckpoint {
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest
     | StartingWeaponRequest
-    | WeaponProfileRequest;
+    | WeaponProfileRequest
+    | StartingMoneyRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -866,7 +886,8 @@ export interface DurableCreationWizardCommand {
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
-    | AnyWeaponProfileReceipt;
+    | AnyWeaponProfileReceipt
+    | StartingMoneyReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -884,7 +905,8 @@ export interface DurableCreationWizardCommand {
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest
     | StartingWeaponRequest
-    | WeaponProfileRequest;
+    | WeaponProfileRequest
+    | StartingMoneyRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -1295,6 +1317,7 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-022',
     'CHR-023',
     'CHR-024',
+    'CHR-037',
     'CHR-038',
     'CHR-041',
   ] as const);
@@ -2477,9 +2500,11 @@ const postIdentityPayloadAt = (
     const hasArmorBundleStage = Object.hasOwn(unshaped, 'armorBundleStage');
     const hasStartingWeaponStage = Object.hasOwn(unshaped, 'startingWeaponStage');
     const hasWeaponProfileStage = Object.hasOwn(unshaped, 'weaponProfileStage');
+    const hasStartingMoneyStage = Object.hasOwn(unshaped, 'startingMoneyStage');
     const hasPureCompositionStage = Object.hasOwn(unshaped, 'pureCompositionStage');
     if (
       (hasWeaponProfileStage && !hasStartingWeaponStage) ||
+      (hasStartingMoneyStage && !hasWeaponProfileStage) ||
       (hasPureCompositionStage && !hasArmorBundleStage)
     )
       throw new Error(`${label} equipment stage lacks its prerequisite`);
@@ -2497,6 +2522,7 @@ const postIdentityPayloadAt = (
       ...(hasArmorBundleStage ? ['armorBundleStage'] : []),
       ...(hasStartingWeaponStage ? ['startingWeaponStage'] : []),
       ...(hasWeaponProfileStage ? ['weaponProfileStage'] : []),
+      ...(hasStartingMoneyStage ? ['startingMoneyStage'] : []),
       ...(hasPureCompositionStage ? ['pureCompositionStage'] : []),
     ];
     const object = exactObject(
@@ -2608,6 +2634,18 @@ const postIdentityPayloadAt = (
       weaponProfileStage === null
     )
       throw new Error(`${label} weapon checkpoint lacks its allocated profile stage`);
+    const startingMoneyStage = hasStartingMoneyStage
+      ? parseStartingMoneyStage(
+          object['startingMoneyStage'],
+          weaponProfileStage,
+          startingWeaponStage,
+        )
+      : null;
+    if (
+      weaponProfileStage?.records.at(-1)?.receipt.result.moneyRollRequestId !== undefined &&
+      startingMoneyStage === null
+    )
+      throw new Error(`${label} weapon profile lacks its allocated money stage`);
     const pureCompositionStage = hasPureCompositionStage
       ? parsePureCompositionStage(object['pureCompositionStage'])
       : null;
@@ -2626,18 +2664,20 @@ const postIdentityPayloadAt = (
       throw new Error(`${label} random, manual and legacy symbiont stages cannot coexist`);
     }
     const latestSymbiontRecord =
-      weaponProfileStage !== null
-        ? latestWeaponProfileRecord(weaponProfileStage)
-        : startingWeaponStage !== null
-          ? latestStartingWeaponRecord(startingWeaponStage)
-          : armorBundleStage !== null
-            ? latestArmorBundleRecord(armorBundleStage)
-            : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
-              (randomSymbiontStage !== null
-                ? latestRandomSymbiontRecord(randomSymbiontStage)
-                : manualCompositionStage === null
-                  ? null
-                  : latestManualCompositionRecord(manualCompositionStage)));
+      startingMoneyStage !== null
+        ? latestStartingMoneyRecord(startingMoneyStage)
+        : weaponProfileStage !== null
+          ? latestWeaponProfileRecord(weaponProfileStage)
+          : startingWeaponStage !== null
+            ? latestStartingWeaponRecord(startingWeaponStage)
+            : armorBundleStage !== null
+              ? latestArmorBundleRecord(armorBundleStage)
+              : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
+                (randomSymbiontStage !== null
+                  ? latestRandomSymbiontRecord(randomSymbiontStage)
+                  : manualCompositionStage === null
+                    ? null
+                    : latestManualCompositionRecord(manualCompositionStage)));
     const receipt =
       receiptResult['stage'] === 'SYMBIONTS'
         ? (latestSymbiontRecord?.receipt ??
@@ -2698,6 +2738,7 @@ const postIdentityPayloadAt = (
           | 'CHR-022'
           | 'CHR-023'
           | 'CHR-024'
+          | 'CHR-037'
           | 'CHR-038'
           | 'CHR-041'
         >,
@@ -2709,6 +2750,7 @@ const postIdentityPayloadAt = (
         ...(hasArmorBundleStage ? { armorBundleStage } : {}),
         ...(hasStartingWeaponStage ? { startingWeaponStage } : {}),
         ...(hasWeaponProfileStage ? { weaponProfileStage } : {}),
+        ...(hasStartingMoneyStage ? { startingMoneyStage } : {}),
         ...(hasPureCompositionStage ? { pureCompositionStage } : {}),
         skillEligibilityStage,
         skillSelectionStage,
@@ -2800,7 +2842,8 @@ export interface RollValidationCursor {
     | ArmorBundleQualityRollReceipt
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
-    | AnyWeaponProfileReceipt;
+    | AnyWeaponProfileReceipt
+    | StartingMoneyReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -2817,7 +2860,8 @@ export interface RollValidationCursor {
     | ArmorBundleQualityRollRequest
     | ArmorBundleCheckpointRequest
     | StartingWeaponRequest
-    | WeaponProfileRequest;
+    | WeaponProfileRequest
+    | StartingMoneyRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3461,6 +3505,11 @@ const validateStatRollHistory = (
     symbiontPayload.startingWeaponStage.qualityRollRecordOrNull !== null
       ? [symbiontPayload.startingWeaponStage.qualityRollRecordOrNull.receipt.receiptId]
       : [];
+  const moneyRandomReceiptIds =
+    symbiontPayload?.startingMoneyStage?.diceInputModeSnapshot === 'AUTO' &&
+    symbiontPayload.startingMoneyStage.rollRecordOrNull !== null
+      ? [symbiontPayload.startingMoneyStage.rollRecordOrNull.receipt.receiptId]
+      : [];
   if (
     !isDeepStrictEqual(durablePayload.randomReceiptIds, [
       ...expectedRandomReceiptIds,
@@ -3469,6 +3518,7 @@ const validateStatRollHistory = (
       ...manualRandomReceiptIds,
       ...armorRandomReceiptIds,
       ...weaponRandomReceiptIds,
+      ...moneyRandomReceiptIds,
     ])
   ) {
     mismatches.push('randomReceiptIds roll provenance');
@@ -3730,6 +3780,8 @@ const skillCheckpointAtCursor = (
     'startingWeaponStage' in durablePayload ? durablePayload.startingWeaponStage : null,
   weaponProfileStage:
     'weaponProfileStage' in durablePayload ? durablePayload.weaponProfileStage : null,
+  startingMoneyStage:
+    'startingMoneyStage' in durablePayload ? durablePayload.startingMoneyStage : null,
   statAssignmentStage,
   statRollStage,
 });
@@ -4416,6 +4468,57 @@ const validatePostIdentityPayload = (
       occupiedIds,
     }).cursor;
   }
+  const startingMoneyStage =
+    'startingMoneyStage' in durablePayload ? (durablePayload.startingMoneyStage ?? null) : null;
+  if (startingMoneyStage !== null) {
+    if (
+      symbiontCatalog === undefined ||
+      weaponProfileStage === null ||
+      startingWeaponStage === null ||
+      skillEligibilityStage === null ||
+      statAssignmentStage === null
+    )
+      throw new Error(`${label} starting money stage lacks prerequisites`);
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateStartingMoneyStageHistory(startingMoneyStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
+  const completedProfile = weaponProfileStage?.records.at(-1);
+  const profileIsComplete =
+    completedProfile !== undefined &&
+    completedProfile.receipt.result.outcome !== 'INVALID' &&
+    completedProfile.nextStageEnvelope.formId === 'CHR-038';
+  const moneyPresentationStage =
+    startingMoneyStage ??
+    (profileIsComplete && weaponProfileStage !== null && startingWeaponStage !== null
+      ? initialStartingMoneyStage(weaponProfileStage, startingWeaponStage)
+      : null);
+  if (startingMoneyStage === null && moneyPresentationStage !== null) {
+    // A legacy continuation has a stable receipt-derived address; reading it creates no stage.
+    for (const id of startingMoneyStageIds(moneyPresentationStage)) {
+      if (occupiedIds.has(id)) mismatches.push('derived money request identity');
+    }
+  }
   const pureCompositionStage =
     'pureCompositionStage' in durablePayload ? (durablePayload.pureCompositionStage ?? null) : null;
   if (pureCompositionStage !== null)
@@ -4456,6 +4559,21 @@ const validatePostIdentityPayload = (
     weaponProfileStage !== null &&
     symbiontPresentationStage !== undefined &&
     ['CHR-023', 'CHR-024', 'CHR-031'].includes(symbiontPresentationStage.formId);
+  const moneyPresentation =
+    profileIsComplete &&
+    moneyPresentationStage !== null &&
+    symbiontPresentationStage !== undefined &&
+    (symbiontPresentationStage.formId === 'CHR-038' ||
+      (moneyPresentationStage.checkpointRecordOrNull === null &&
+        (symbiontPresentationStage.formId === 'CHR-022' ||
+          symbiontPresentationStage.formId ===
+            (weaponProfileStage?.kind === 'FORMULA' ? 'CHR-023' : 'CHR-024'))));
+  if (
+    symbiontPresentationStage !== undefined &&
+    ((moneyPresentationStage !== null && !moneyPresentation) ||
+      (symbiontPresentationStage.formId === 'CHR-038' && !moneyPresentation))
+  )
+    mismatches.push('starting money presentation authority');
   if (
     profilePresentation &&
     (symbiontPresentationStage.formId === 'CHR-031'
@@ -4469,6 +4587,7 @@ const validatePostIdentityPayload = (
     !armorPresentation &&
     !purePresentation &&
     !profilePresentation &&
+    !moneyPresentation &&
     (raceAndMethodStage?.symbiontAcquisition.value !== 'MANUAL' ||
       randomSymbiontStage !== null ||
       advisorIntelligenceFloorStage !== null)
@@ -4578,6 +4697,7 @@ const validatePostIdentityPayload = (
     armorBundleStage: armorBundleStage,
     startingWeaponStage,
     weaponProfileStage,
+    startingMoneyStage,
     pureCompositionStage,
     symbiontPresentationStage: symbiontPresentationStage ?? null,
     statRollStage,
@@ -5160,6 +5280,15 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
         if (record !== null && typeof record === 'object' && !Array.isArray(record))
           addRequestId((record as Record<string, unknown>)['request']);
   }
+  const moneyStage = object['startingMoneyStage'];
+  if (moneyStage !== null && typeof moneyStage === 'object' && !Array.isArray(moneyStage)) {
+    const stage = moneyStage as Record<string, unknown>;
+    for (const key of ['rollRecordOrNull', 'checkpointRecordOrNull']) {
+      const record = stage[key];
+      if (record !== null && typeof record === 'object' && !Array.isArray(record))
+        addRequestId((record as Record<string, unknown>)['request']);
+    }
+  }
   return ids;
 };
 
@@ -5258,6 +5387,12 @@ export function loadCreationWizardCommandByCommandId(
       receipt: manualRecord.receipt,
       request: manualRecord.request,
     };
+  }
+  if (durableCheckpoint.startingMoneyStage != null) {
+    const record = startingMoneyRecords(durableCheckpoint.startingMoneyStage).find(
+      ({ request }) => request.commandId === commandId,
+    );
+    if (record !== undefined) return { durableCheckpoint, ...record };
   }
   if (durableCheckpoint.weaponProfileStage != null) {
     const record = weaponProfileRecords(durableCheckpoint.weaponProfileStage).find(
@@ -5378,6 +5513,9 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   checkpoint.manualCompositionStage?.advisorSkillRecordOrNull === undefined
     ? []
     : [checkpoint.manualCompositionStage.advisorSkillRecordOrNull]),
+  ...(checkpoint.startingMoneyStage == null
+    ? []
+    : startingMoneyRecords(checkpoint.startingMoneyStage)),
   ...(checkpoint.weaponProfileStage == null
     ? []
     : weaponProfileRecords(checkpoint.weaponProfileStage)),
@@ -5919,6 +6057,9 @@ export const creationWizardDurableIds = (
       checkpoint.manualCompositionStage === undefined
         ? []
         : [...manualCompositionStageIds(checkpoint.manualCompositionStage)]),
+      ...(checkpoint.startingMoneyStage == null
+        ? []
+        : [...startingMoneyStageIds(checkpoint.startingMoneyStage)]),
       ...(checkpoint.weaponProfileStage == null
         ? []
         : [...weaponProfileStageIds(checkpoint.weaponProfileStage)]),

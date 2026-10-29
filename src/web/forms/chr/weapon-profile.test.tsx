@@ -45,6 +45,9 @@ function common(typeId: string): JsonObject {
   return {
     characterDraftId: 'character',
     requestId: 'profile-request',
+    moneyEntryMode: 'NONE',
+    moneyRollRequestIdOrNull: null,
+    moneyRollReceiptIdOrNull: null,
     weaponTypeId: typeId,
     weaponVariantId: entry.weaponVariant,
     weaponName: entry.name,

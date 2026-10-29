@@ -221,7 +221,7 @@ async function action(
   host: WeaponHost,
   view: Snapshot,
   id: string,
-  source: 'CHR-021' | 'CHR-022',
+  source: 'CHR-021' | 'CHR-022' | 'CHR-023' | 'CHR-038',
   actionKey: ActionKey,
 ): Promise<Snapshot> {
   return navigation(host, {
@@ -454,7 +454,11 @@ describe('CHR-022 real host WS journey', () => {
       host.database.close();
       const reopened = openPersistenceDatabase(databasePath);
       databases.push(reopened);
-      const restarted = await start({ ...setup, database: reopened }, [], `${prefix}-restarted`);
+      const restarted = await start(
+        { ...setup, database: reopened },
+        mode === 'AUTO' ? [20] : [],
+        `${prefix}-restarted`,
+      );
       const restoredReturn = await reconnect(restarted, `${prefix}-restart`);
       expect(restoredReturn.presentation.base.formId).toBe('CHR-021');
       const resumed = await action(
@@ -515,7 +519,11 @@ describe('CHR-022 real host WS journey', () => {
         workflowCommandId: 'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',
       };
       const [profileResult, submitted] = await command(restarted, profileRequest);
-      expect(submitted.presentation.base.availableActionKeys).toEqual([]);
+      expect(submitted.presentation.base.formId).toBe('CHR-038');
+      expect(submitted.presentation.base.availableActionKeys).toEqual([
+        'CHR-038::CTA::003',
+        'CHR-038::CTA::002',
+      ]);
       expect(profileResult.receipt.result).toMatchObject({
         outcome: 'SUBMITTED',
         approvalStatus: 'PENDING_GM',
@@ -530,10 +538,129 @@ describe('CHR-022 real host WS journey', () => {
           ...profileRequest,
           commandId: `${prefix}-profile-stale`,
         }),
-      ).toBe('STALE_REVISION');
+      ).toBe('GUARD_REJECTED'); // The active form is now CHR-038, before revision validation.
       expect(current(restarted).localCharacter).toEqual(committed.localCharacter);
       expect(current(restarted).checkpoint).toEqual(committed.checkpoint);
       expect(restarted.sampleCalls()).toBe(0);
+
+      const moneyRequestId = committed.startingMoneyStage!.moneyRollRequestId;
+      const moneyAllocations = restarted.allocations();
+      const moneySessionB = { ...restarted, socket: await openSocket(restarted.app) };
+      await reconnect(moneySessionB, `${prefix}-money-second-session`);
+      const moneyPayload = {
+        sourceFormId: 'CHR-038',
+        variant: 'STARTING_MONEY_ROLL',
+        moneyRollRequestId: moneyRequestId,
+        manualFaceOrNull: mode === 'MANUAL' ? 5 : null,
+      };
+      const staleMoneyRoll = request(
+        moneySessionB,
+        `${prefix}-money-stale-session`,
+        moneyPayload,
+        true,
+      );
+      const moneyReturn = await action(
+        restarted,
+        submitted,
+        `${prefix}-money-return`,
+        'CHR-038',
+        'CHR-038::CTA::002',
+      );
+      const profileReturn = await action(
+        restarted,
+        moneyReturn,
+        `${prefix}-money-profile-return`,
+        'CHR-022',
+        'CHR-022::CTA::001',
+      );
+      const moneyResume = await action(
+        restarted,
+        profileReturn,
+        `${prefix}-money-resume`,
+        'CHR-023',
+        'CHR-023::CTA::001',
+      );
+      expect(moneyResume.presentation.base.formId).toBe('CHR-038');
+      const beforeStaleMoney = current(restarted);
+      expect(beforeStaleMoney.localCharacter.payloadJson).toBe(
+        committed.localCharacter.payloadJson,
+      );
+      expect(await refusal(moneySessionB, staleMoneyRoll)).toBe('STALE_REVISION');
+      expect(current(restarted).localCharacter).toEqual(beforeStaleMoney.localCharacter);
+      expect(current(restarted).checkpoint).toEqual(beforeStaleMoney.checkpoint);
+      expect(restarted.sampleCalls()).toBe(0);
+      expect(restarted.allocations()).toBe(moneyAllocations);
+
+      const moneyRoll = request(restarted, `${prefix}-money-roll`, moneyPayload, true);
+      const [moneyResult, moneyRolled] = await command(restarted, moneyRoll);
+      expect(moneyResult.messageType).toBe('command.result');
+      const afterMoney = current(restarted);
+      const moneyReceiptId = afterMoney.startingMoneyStage!.rollRecordOrNull!.receipt.receiptId;
+      expect(moneyRolled.presentation.base.formId).toBe('CHR-038');
+      expect(moneyRolled.presentation.base.availableActionKeys).toEqual([
+        'CHR-038::CTA::001',
+        'CHR-038::CTA::002',
+      ]);
+      expect(moneyRolled.presentation.base.roleFilteredPayload).toMatchObject({
+        moneyRollRequestId: moneyRequestId,
+        moneyRollReceiptIdOrNull: moneyReceiptId,
+        moneyRollFaceOrNull: mode === 'AUTO' ? 20 : 5,
+        wealthRecommendation: { kind: mode === 'AUTO' ? 'RARE_FORTUNE' : 'SMALL' },
+        gmFinalizationRequired: true,
+      });
+      expect(afterMoney.weaponProfileStage).toEqual(committed.weaponProfileStage);
+      expect(afterMoney.startingWeaponStage).toEqual(committed.startingWeaponStage);
+      expect(afterMoney.armorBundleStage).toEqual(armor);
+      expect(restarted.sampleCalls()).toBe(Number(mode === 'AUTO'));
+      expect(restarted.allocations()).toBe(moneyAllocations);
+      const [moneyReplay] = await command(restarted, moneyRoll);
+      expect(moneyReplay.messageType).toBe('command.replay');
+      expect(moneyReplay.receipt).toEqual(moneyResult.receipt);
+      expect(
+        await refusal(restarted, {
+          ...moneyRoll,
+          payload: { ...moneyRoll.payload, manualFaceOrNull: 19 },
+        }),
+      ).toBe('IDEMPOTENCY_CONFLICT');
+      expect(
+        await refusal(moneySessionB, {
+          ...staleMoneyRoll,
+          commandId: `${prefix}-money-late-session`,
+        }),
+      ).toBe('STALE_REVISION');
+      expect(current(restarted).localCharacter).toEqual(afterMoney.localCharacter);
+      expect(current(restarted).checkpoint).toEqual(afterMoney.checkpoint);
+      expect(restarted.sampleCalls()).toBe(Number(mode === 'AUTO'));
+      expect(restarted.allocations()).toBe(moneyAllocations);
+
+      const moneyCheckpoint = request(restarted, `${prefix}-money-checkpoint`, {
+        sourceFormId: 'CHR-038',
+        variant: 'STARTING_MONEY_CHECKPOINT',
+        moneyRollRequestId: moneyRequestId,
+        moneyRollReceiptId: moneyReceiptId,
+      });
+      const [moneyCheckpointResult, moneyCompleted] = await command(restarted, moneyCheckpoint);
+      expect(moneyCompleted.presentation.base.formId).toBe('CHR-038');
+      expect(moneyCompleted.presentation.base.availableActionKeys).toEqual([]);
+      expect(moneyCompleted.presentation.base.roleFilteredPayload).toMatchObject({
+        nextFormId: 'CHR-037',
+        moneyRollRequestId: moneyRequestId,
+        moneyRollReceiptIdOrNull: moneyReceiptId,
+        gmFinalizationRequired: true,
+      });
+      expect(current(restarted).nextStageEnvelope.formId).toBe('CHR-037');
+      const [moneyCheckpointReplay] = await command(restarted, moneyCheckpoint);
+      expect(moneyCheckpointReplay.messageType).toBe('command.replay');
+      expect(moneyCheckpointReplay.receipt).toEqual(moneyCheckpointResult.receipt);
+      const moneyRefresh = await reconnect(restarted, `${prefix}-money-final-refresh`);
+      expect(moneyRefresh.presentation.base.formId).toBe('CHR-038');
+      expect(moneyRefresh.presentation.base.availableActionKeys).toEqual([]);
+      expect(current(restarted).weaponProfileStage).toEqual(committed.weaponProfileStage);
+      expect(restarted.sampleCalls()).toBe(Number(mode === 'AUTO'));
+      expect(restarted.allocations()).toBe(moneyAllocations);
+      expect(JSON.stringify(moneyRefresh.presentation)).not.toMatch(
+        /CORE-\d|AQ2-\d|Источник|availabilityTrace|finalAmount|masterApproval|criticalChain/,
+      );
     },
   );
 });

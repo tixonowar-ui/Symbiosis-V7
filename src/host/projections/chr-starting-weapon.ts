@@ -2,6 +2,7 @@ import type { ActionKey } from '@generated/types/atlas.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 
+import { startingMoneyStageForCheckpoint } from '../creation-starting-money-contract.js';
 import type { DurableCreationWizardCheckpoint } from '../creation-set-decide.js';
 import type { StartingWeaponItemCatalog } from '../starting-weapon-catalog.js';
 
@@ -56,8 +57,11 @@ export function projectChr022(
   const actions: ActionKey[] = [];
   const profileStage = checkpoint.weaponProfileStage;
   const profileOutcome = profileStage?.records.at(-1)?.receipt.result.outcome;
+  const money = startingMoneyStageForCheckpoint(checkpoint);
+  const moneyResume = money !== null && money.checkpointRecordOrNull === null;
   const profileEntryMode =
-    committed === null || profileOutcome === 'SUBMITTED' || profileOutcome === 'ACKNOWLEDGED'
+    committed === null ||
+    (!moneyResume && (profileOutcome === 'SUBMITTED' || profileOutcome === 'ACKNOWLEDGED'))
       ? 'NONE'
       : profileStage === null || profileStage === undefined
         ? 'INITIAL'
@@ -97,6 +101,8 @@ export function projectChr022(
     weaponCheckpointReceiptIdOrNull: committed?.receipt.receiptId ?? null,
     weaponProfileEntryMode: profileEntryMode,
     weaponProfileRequestIdOrNull: profileStage?.requestId ?? null,
+    moneyRollRequestIdOrNull: money?.moneyRollRequestId ?? null,
+    moneyRollReceiptIdOrNull: money?.rollRecordOrNull?.receipt.receiptId ?? null,
     qualityRecommendation: roll === null ? null : { ...roll.qualityRecommendation },
     requirementPreview: selected === null ? null : { ...selected.requirementPreview },
     ownershipState: 'OWNED_NOT_EQUIPPED',

@@ -57,6 +57,9 @@ export interface ManufacturingWitnessReceipt extends JsonObject {
 interface WeaponProfileProjectionCommon extends JsonObject {
   readonly characterDraftId: string;
   readonly requestId: string;
+  readonly moneyEntryMode: 'NONE' | 'RESUME';
+  readonly moneyRollRequestIdOrNull: string | null;
+  readonly moneyRollReceiptIdOrNull: string | null;
   readonly weaponTypeId: string;
   readonly weaponVariantId: StartingWeaponVariant;
   readonly weaponName: string;
@@ -182,6 +185,9 @@ function decodeWitnessReceipt(
   return result.ok ? { ok: true, value: value as ManufacturingWitnessReceipt } : result;
 }
 const commonValidators = {
+  moneyEntryMode: (field: JsonValue | undefined) => field === 'NONE' || field === 'RESUME',
+  moneyRollRequestIdOrNull: nullableId,
+  moneyRollReceiptIdOrNull: nullableId,
   characterDraftId: isNonEmptyString,
   requestId: isNonEmptyString,
   weaponTypeId: isNonEmptyString,
@@ -302,6 +308,13 @@ export function decodeChr023Projection(
     }
   }
   if (
+    (projection.moneyEntryMode === 'RESUME' &&
+      (!submitted || projection.moneyRollRequestIdOrNull === null)) ||
+    (projection.moneyRollReceiptIdOrNull !== null &&
+      projection.moneyRollRequestIdOrNull === null) ||
+    (!submitted &&
+      (projection.moneyRollRequestIdOrNull !== null ||
+        projection.moneyRollReceiptIdOrNull !== null)) ||
     submitted !== (projection.profileReceiptIdOrNull !== null) ||
     submitted !== (projection.reachabilityProof !== null) ||
     submitted !== (facts.value !== null && facts.value.length > 0) ||
@@ -352,6 +365,14 @@ export function decodeChr024Projection(
   if (!decoded.ok) return decoded;
   const projection = value as Chr024Projection;
   if (
+    (projection.moneyEntryMode === 'RESUME' &&
+      (projection.acknowledgedReceiptIdOrNull === null ||
+        projection.moneyRollRequestIdOrNull === null)) ||
+    (projection.moneyRollReceiptIdOrNull !== null &&
+      projection.moneyRollRequestIdOrNull === null) ||
+    (projection.acknowledgedReceiptIdOrNull === null &&
+      (projection.moneyRollRequestIdOrNull !== null ||
+        projection.moneyRollReceiptIdOrNull !== null)) ||
     facts.value.length === 0 ||
     projection.nextFormId !==
       (projection.acknowledgedReceiptIdOrNull === null ? 'CHR-024' : 'CHR-038')
@@ -407,7 +428,9 @@ export function expectedChr023ActionKeys(
   submitCapable: boolean,
 ): readonly ActionKey[] {
   return projection.requestStatus === 'SUBMITTED'
-    ? []
+    ? projection.moneyEntryMode === 'RESUME'
+      ? [CHR_023_SUBMIT_ACTION_KEY]
+      : []
     : [...(submitCapable ? [CHR_023_SUBMIT_ACTION_KEY] : []), CHR_023_RETURN_ACTION_KEY];
 }
 export function expectedChr024ActionKeys(
@@ -415,7 +438,9 @@ export function expectedChr024ActionKeys(
   checkpointCapable: boolean,
 ): readonly ActionKey[] {
   return projection.acknowledgedReceiptIdOrNull !== null
-    ? []
+    ? projection.moneyEntryMode === 'RESUME'
+      ? [CHR_024_ACKNOWLEDGE_ACTION_KEY]
+      : []
     : [...(checkpointCapable ? [CHR_024_ACKNOWLEDGE_ACTION_KEY] : []), CHR_024_RETURN_ACTION_KEY];
 }
 
@@ -570,6 +595,16 @@ export function decodeWeaponProfileTerminal(
   const fixed = payload.variant === 'WEAPON_PROFILE_ACKNOWLEDGE';
   const decoded = decodeProjection(result, '$.receipt.result', {
     ...common,
+    ...(Object.hasOwn(result, 'moneyRollRequestId')
+      ? {
+          moneyRollRequestId: (field: JsonValue | undefined) =>
+            !invalid &&
+            isNonEmptyString(field) &&
+            field !== payload.requestId &&
+            field !== receipt.receiptId &&
+            field !== request.commandId,
+        }
+      : {}),
     requestId: (field) => field === payload.requestId,
     weaponTypeId: (field) => field === source.projection['weaponTypeId'],
     weaponVariant: (field) => field === source.projection['weaponVariantId'],

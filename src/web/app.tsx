@@ -20,6 +20,8 @@ import { ArmorBundleFields } from './forms/chr/armor-bundle-fields.js';
 import { CHR_021_ROLL_ACTION_KEY } from './forms/chr/armor-bundle.js';
 import type { ArmorBundleDraft } from './forms/chr/armor-bundle.js';
 import { StartingWeaponFields } from './forms/chr/starting-weapon-fields.js';
+import { StartingMoneyFields } from './forms/chr/starting-money-fields.js';
+import { CHR_038_ROLL_ACTION_KEY } from './forms/chr/starting-money.js';
 import {
   InvalidWeaponProfileFields,
   WeaponProfileFields,
@@ -2246,7 +2248,9 @@ export function App(): ReactElement {
       actionKey !== CHR_041_MANUAL_IW_ACTION_KEY &&
       actionKey !== CHR_021_ROLL_ACTION_KEY &&
       actionKey !== CHR_022_ROLL_ACTION_KEY &&
-      actionKey !== CHR_023_SUBMIT_ACTION_KEY,
+      actionKey !== CHR_038_ROLL_ACTION_KEY &&
+      (actionKey !== CHR_023_SUBMIT_ACTION_KEY ||
+        snapshot?.projection['requestStatus'] !== 'DRAFT'),
   );
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
@@ -2545,6 +2549,22 @@ export function App(): ReactElement {
                     : result.ok
                       ? null
                       : `Заявка не отправлена: ${result.detail}.`,
+                );
+              }}
+            />
+            <StartingMoneyFields
+              snapshot={snapshot}
+              onRoll={(manualFaceOrNull) => {
+                const result = connectionRef.current?.requestFormAction(
+                  CHR_038_ROLL_ACTION_KEY,
+                  manualFaceOrNull,
+                );
+                setActionNotice(
+                  result === undefined
+                    ? 'Бросок не отправлен: соединение ещё не готово.'
+                    : result.ok
+                      ? null
+                      : `Бросок не отправлен: ${result.detail}.`,
                 );
               }}
             />

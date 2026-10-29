@@ -1,3 +1,4 @@
+import { assertStartingMoneyScreenContracts } from './chr-starting-money.js';
 import { assertWeaponProfileScreenContracts } from './chr-weapon-profile.js';
 import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -267,6 +268,7 @@ export interface AppNavigationAction {
     | 'CHR-023'
     | 'CHR-024'
     | 'CHR-031'
+    | 'CHR-038'
     | typeof CHR_042_FORM_ID;
   readonly guard: string;
   readonly kind: string;
@@ -284,6 +286,21 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
   const forms = record(source, 'forms-by-id.json');
   const result = new Map<ActionKey, AppNavigationAction>();
   const expectedActions = [
+    [
+      'CHR-038',
+      'CHR-038::CTA::002',
+      'weapon/money receipts preserved; server-signed weapon branch restored',
+    ],
+    [
+      'CHR-023',
+      'CHR-023::CTA::001',
+      'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT guards; OP-REQ-PLAYER and OP-REQ-VALIDATE PASS; full reachable profile and PENDING_GM request committed; otherwise server routes CHR-031',
+    ],
+    [
+      'CHR-024',
+      'CHR-024::CTA::001',
+      'UI-CMD-CHAR-WIZARD-CHECKPOINT canonical fixed profile acknowledged',
+    ],
     [
       'CHR-017',
       'CHR-017::CTA::004',
@@ -547,6 +564,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertArmorBundleScreenContracts(forms, assertScreenContract);
   assertStartingWeaponScreenContracts(forms, assertScreenContract);
   assertWeaponProfileScreenContracts(forms, assertScreenContract);
+  assertStartingMoneyScreenContracts(forms, assertScreenContract);
   return result;
 }
 
