@@ -676,19 +676,20 @@ describe('CHR-021 host journey', () => {
         workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
       });
       expect(checkpointResult.messageType).toBe('command.result');
-      expect(checkpointed.presentation.base.formId).toBe('CHR-021');
-      expect(checkpointed.presentation.base.availableActionKeys).toEqual([]);
-      const checkpointReceiptId = (
-        checkpointed.presentation.base.roleFilteredPayload as {
-          readonly bundleCheckpointReceiptIdOrNull: string;
-        }
-      ).bundleCheckpointReceiptIdOrNull;
+      expect(checkpointed.presentation.base.formId).toBe('CHR-022');
+      expect(checkpointed.presentation.base.availableActionKeys).toContain('CHR-022::CTA::004');
+      const savedArmor = current(host).armorBundleStage!;
+      const checkpointReceiptId = savedArmor.checkpointRecordOrNull!.receipt.receiptId;
       expect(checkpointReceiptId).toMatch(/^armor-host-receipt-[0-9]+$/u);
       expect(checkpointed.presentation.base.roleFilteredPayload).toMatchObject({
         ownershipState: 'OWNED_NOT_EQUIPPED',
-        qualityRecommendation: { kind: 'GOOD', rawFace: 16 },
-        qualityRollReceiptIdOrNull: rollReceiptId,
+        weaponQualityRollReceiptIdOrNull: null,
+        weaponQualityRollRequestId: 'armor-host-roll-request-3',
         nextFormId: 'CHR-022',
+      });
+      expect(savedArmor.qualityRollRecordOrNull).toMatchObject({
+        qualityRecommendation: { kind: 'GOOD', rawFace: 16 },
+        receipt: { receiptId: rollReceiptId },
         armorPieces: [
           { itemId: 'ITM-ARM-001', bodyZone: 'HEAD' },
           { itemId: 'ITM-ARM-002', bodyZone: 'TORSO' },

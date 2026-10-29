@@ -89,6 +89,7 @@
 | [0055](0055-starting-armor-bundle.md)                                | Стартовый armorBundle CHR-021                    | принято                                     |
 | [0056](0056-armor-interaction-confirmation-and-recovery.md)          | Подтверждение взаимодействий и recovery          | принято; начальная запись и recovery 0057   |
 | [0057](0057-armor-initial-interactions-and-presentation-recovery.md) | Начальные взаимодействия и presentation recovery | принято                                     |
+| [0058](0058-starting-weapon.md)                                      | Стартовое оружие CHR-022                         | принято                                     |
 
 ## Перенос решений аудита
 

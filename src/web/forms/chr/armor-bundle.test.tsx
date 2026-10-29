@@ -488,6 +488,41 @@ describe('CHR-021 web decoder', () => {
         rolled,
       ).ok,
     ).toBe(true);
+    const weaponEntryTerminal = {
+      ...checkpointTerminal,
+      receipt: {
+        ...checkpointTerminal.receipt,
+        result: {
+          ...checkpointTerminal.receipt.result,
+          weaponQualityRollRequestId: 'weapon-request',
+        },
+      },
+    } as unknown as CommandResultMessage;
+    expect(
+      decodeArmorBundleCheckpointTerminal(weaponEntryTerminal, checkpointRequest, rolled).ok,
+    ).toBe(true);
+    for (const weaponQualityRollRequestId of [
+      '',
+      'bundle-1',
+      'quality-request-1',
+      'receipt-2',
+      'receipt-3',
+      'checkpoint-command',
+    ]) {
+      expect(
+        decodeArmorBundleCheckpointTerminal(
+          {
+            ...weaponEntryTerminal,
+            receipt: {
+              ...weaponEntryTerminal.receipt,
+              result: { ...weaponEntryTerminal.receipt.result, weaponQualityRollRequestId },
+            },
+          },
+          checkpointRequest,
+          rolled,
+        ).ok,
+      ).toBe(false);
+    }
     expect(
       decodeArmorBundleCheckpointTerminal(
         {

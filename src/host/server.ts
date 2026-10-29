@@ -144,9 +144,24 @@ import {
   type ArmorBundleQualityRollRequest,
 } from './creation-armor-bundle-contract.js';
 import { loadArmorBundleCatalog } from './armor-bundle-catalog.js';
+import { loadStartingWeaponCatalog } from './starting-weapon-catalog.js';
+import {
+  commitStartingWeaponQualityRoll,
+  preflightStartingWeaponQualityRoll,
+} from './creation-starting-weapon.js';
+import {
+  normalizeStartingWeaponQualityRollRequest,
+  type StartingWeaponQualityRollRequest,
+} from './creation-starting-weapon-contract.js';
+import {
+  CHR_022_FORM_ID,
+  CHR_022_RETURN_ACTION_KEY,
+  projectChr022,
+} from './projections/chr-starting-weapon.js';
 import {
   CHR_019_ARMOR_ENTRY_ACTION_KEY,
   CHR_021_FORM_ID,
+  CHR_021_CONFIRM_ACTION_KEY,
   CHR_021_RETURN_ACTION_KEY,
   projectChr021,
 } from './projections/chr-armor-bundle.js';
@@ -277,6 +292,7 @@ import {
 } from './projections/chr-manual-symbionts.js';
 import {
   advanceArmorBundlePresentation,
+  advanceStartingWeaponPresentation,
   advanceManualSymbiontPresentation,
   handleSymbiontAddressableRoute,
 } from './creation-manual-composition-navigation.js';
@@ -398,6 +414,7 @@ interface NavigationDependencies {
   readonly allocateReceiptId: HostServerConfig['allocateReceiptId'];
   readonly allocateWizardCheckpointId: HostServerConfig['allocateWizardCheckpointId'];
   readonly armorBundleCatalog: Awaited<ReturnType<typeof loadArmorBundleCatalog>>;
+  readonly startingWeaponCatalog: Awaited<ReturnType<typeof loadStartingWeaponCatalog>>;
   readonly catalog: AppProjectionCatalog;
   readonly creationDecisionConsequenceCatalog: Awaited<
     ReturnType<typeof loadCreationDecisionConsequenceCatalog>
@@ -499,6 +516,7 @@ function allocatedReceiptId(
   allocator: () => string,
   request:
     | ArmorBundleQualityRollRequest
+    | StartingWeaponQualityRollRequest
     | CreationRollCommitCommandRequest
     | CreationSetDecideCommandRequest
     | CreationWizardCheckpointCommandRequest
@@ -1165,6 +1183,7 @@ function creationWarningNavigation(
     dependencies.creationDecisionConsequenceCatalog,
     dependencies.creationSkillCatalog,
     dependencies.armorBundleCatalog,
+    dependencies.startingWeaponCatalog,
   );
   const nextContext = creationWizardContext(connection, dependencies, checkpoint);
   return {
@@ -1245,6 +1264,7 @@ function creationSkillSelectionNavigation(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
         CHR_015_FORM_ID,
       ),
       'player',
@@ -1315,6 +1335,7 @@ function creationSkillCatalogNavigation(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
       ),
       'player',
       after,
@@ -1391,6 +1412,7 @@ function creationSymbiontRollNavigation(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
       ),
       'player',
       after,
@@ -1457,8 +1479,17 @@ function creationPresentationFormId(
 ): ConfirmedNavigationContext['formId'] {
   const nextFormId = checkpoint.nextStageEnvelope.formId;
   const signed = checkpoint.symbiontPresentationStage;
-  // After the bundle checkpoint the form stays actionless on CHR-021 while
-  // CHR-022 remains a host-signed, unpublished next stage.
+  // Profile editors are the next slice. Persist their destination without
+  // publishing an executable profile form or reopening committed selection.
+  if (checkpoint.startingWeaponStage !== null && checkpoint.startingWeaponStage !== undefined) {
+    if (nextFormId === 'CHR-023' || nextFormId === 'CHR-024') return CHR_022_FORM_ID;
+    return signed?.formId ?? CHR_022_FORM_ID;
+  }
+  if (nextFormId === 'CHR-023' || nextFormId === 'CHR-024') {
+    throw new Error('weapon profile destination lacks a validated starting weapon stage');
+  }
+  // Historic armor checkpoints need an explicit entry command, never a
+  // replacement request allocated during restore.
   if (
     checkpoint.armorBundleStage !== null &&
     checkpoint.armorBundleStage !== undefined &&
@@ -1488,7 +1519,7 @@ function creationPresentationFormId(
   ) {
     return nextFormId;
   }
-  return inferredCreationSkillPresentationFormId(checkpoint) ?? checkpoint.nextStageEnvelope.formId;
+  return inferredCreationSkillPresentationFormId(checkpoint) ?? nextFormId;
 }
 
 function creationWizardBase(
@@ -1500,6 +1531,7 @@ function creationWizardBase(
   consequenceCatalog: NavigationDependencies['creationDecisionConsequenceCatalog'],
   creationSkillCatalog: NavigationDependencies['creationSkillCatalog'],
   armorBundleCatalog: NavigationDependencies['armorBundleCatalog'],
+  startingWeaponCatalog: NavigationDependencies['startingWeaponCatalog'],
   requestedPresentationFormId?:
     typeof CHR_013_FORM_ID | typeof CHR_015_FORM_ID | 'CHR-017' | 'CHR-019' | 'CHR-041' | 'CHR-042',
 ): PresentedBaseForm {
@@ -1761,6 +1793,13 @@ function creationWizardBase(
         capabilities.rollCommit,
         capabilities.checkpoint,
       );
+    case CHR_022_FORM_ID:
+      return projectChr022(
+        checkpoint,
+        startingWeaponCatalog,
+        capabilities.rollCommit,
+        capabilities.checkpoint,
+      );
     case CHR_042_FORM_ID:
       return projectManualChr042(checkpoint, symbiontCatalog, capabilities.setDecide);
     default:
@@ -2000,6 +2039,7 @@ function handleAddressableRoute(
           dependencies.creationDecisionConsequenceCatalog,
           dependencies.creationSkillCatalog,
           dependencies.armorBundleCatalog,
+          dependencies.startingWeaponCatalog,
         ),
         'player',
         after,
@@ -2090,6 +2130,7 @@ function handleAddressableRoute(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
       ),
       'player',
       after,
@@ -2181,6 +2222,7 @@ function manualSymbiontNavigation(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
         targetFormId,
       ),
       'player',
@@ -2272,6 +2314,97 @@ function armorBundleNavigation(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
+      ),
+      'player',
+      after,
+    ),
+  };
+}
+
+function startingWeaponNavigation(
+  message: FormActionIntentV2Message,
+  current: ConfirmedPlayerContext,
+  before: RevisionVector,
+  connection: ConnectionNavigation,
+  dependencies: NavigationDependencies,
+): NavigationSuccess | undefined {
+  const targetFormId =
+    message.actionKey === CHR_022_RETURN_ACTION_KEY
+      ? 'CHR-021'
+      : message.actionKey === CHR_021_CONFIRM_ACTION_KEY
+        ? 'CHR-022'
+        : null;
+  if (
+    targetFormId === null ||
+    current.entityLocalCharacterId === null ||
+    current.formId !== message.sourceFormId ||
+    connection.activeLayer !== null
+  ) {
+    return undefined;
+  }
+  const characterDraftId = current.entityLocalCharacterId;
+  const checkpoint = loadCreationWizardCheckpoint(
+    dependencies.database,
+    characterDraftId,
+    dependencies.skillStageCatalog,
+    dependencies.symbiontCatalog,
+  );
+  const weapon = checkpoint.startingWeaponStage;
+  if (
+    !isDeepStrictEqual(currentCreationWizardRevisions(checkpoint), before) ||
+    connection.current !== current ||
+    !confirmedPlayerContext(current, dependencies) ||
+    weapon === null ||
+    weapon === undefined ||
+    weapon.checkpointRecordOrNull !== null ||
+    checkpoint.nextStageEnvelope.formId !== CHR_022_FORM_ID ||
+    (checkpoint.symbiontPresentationStage !== null &&
+      checkpoint.symbiontPresentationStage !== undefined &&
+      checkpoint.symbiontPresentationStage.formId !== message.sourceFormId)
+  ) {
+    return undefined;
+  }
+  let committed: DurableCreationWizardCheckpoint;
+  try {
+    committed = advanceStartingWeaponPresentation(
+      dependencies.database,
+      {
+        characterDraftId,
+        wizardCheckpointId: checkpoint.checkpoint.checkpointId,
+        formId: targetFormId,
+      },
+      dependencies.symbiontCatalog,
+    );
+  } catch (error: unknown) {
+    if (!(error instanceof CreationSymbiontApplicationError)) throw error;
+    return undefined;
+  }
+  const after = currentCreationWizardRevisions(committed);
+  if (
+    after.actorVisibilityRevision !== before.actorVisibilityRevision ||
+    after.stateRevision !== before.stateRevision ||
+    after.projectionRevision !== before.projectionRevision + 1 ||
+    committed.checkpoint.checkpointRevision !== checkpoint.checkpoint.checkpointRevision ||
+    committed.receipt.result.draftRevision !== checkpoint.receipt.result.draftRevision ||
+    committed.localCharacter.payloadJson !== checkpoint.localCharacter.payloadJson
+  ) {
+    throw new Error('weapon navigation changed more than the projection revision');
+  }
+  return {
+    nextContext: creationWizardContext(connection, dependencies, committed),
+    snapshot: projectionSnapshot(
+      message.navigationRequestId,
+      creationWizardBase(
+        committed,
+        creationWizardCapabilities(connection.executableWorkflowCommandIds),
+        dependencies.skillStageCatalog,
+        dependencies.symbiontCatalog,
+        dependencies.symbiontMediaCatalog,
+        dependencies.creationDecisionConsequenceCatalog,
+        dependencies.creationSkillCatalog,
+        dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
       ),
       'player',
       after,
@@ -2581,6 +2714,16 @@ function handleFormAction(
         success = armorBundleNavigation(message, current, revisions, connection, dependencies);
       }
       break;
+    case CHR_022_RETURN_ACTION_KEY:
+    case CHR_021_CONFIRM_ACTION_KEY:
+      if (
+        ((current.formId === CHR_022_FORM_ID && action.to === CHR_021_FORM_ID) ||
+          (current.formId === CHR_021_FORM_ID && action.to === CHR_022_FORM_ID)) &&
+        confirmedPlayerContext(current, dependencies)
+      ) {
+        success = startingWeaponNavigation(message, current, revisions, connection, dependencies);
+      }
+      break;
     case CHR_021_RETURN_ACTION_KEY:
       if (
         action.to === CHR_019_FORM_ID &&
@@ -2759,22 +2902,29 @@ function commandRequestsMatch(saved: CommandRequest, incoming: CommandRequest): 
     const armorQualityRequest =
       symbiontRequest &&
       (saved.payload as Record<string, unknown>)['variant'] === 'ARMOR_BUNDLE_QUALITY';
+    const weaponQualityRequest =
+      symbiontRequest &&
+      (saved.payload as Record<string, unknown>)['variant'] === 'STARTING_WEAPON_QUALITY';
     try {
       return isDeepStrictEqual(
         advisorIwRequest
           ? normalizeManualAdvisorIwRollRequest(saved)
           : armorQualityRequest
             ? normalizeArmorBundleQualityRollRequest(saved)
-            : symbiontRequest
-              ? normalizeSymbiontRollCommitRequest(saved)
-              : normalizeCreationRollCommitRequest(saved),
+            : weaponQualityRequest
+              ? normalizeStartingWeaponQualityRollRequest(saved)
+              : symbiontRequest
+                ? normalizeSymbiontRollCommitRequest(saved)
+                : normalizeCreationRollCommitRequest(saved),
         advisorIwRequest
           ? normalizeManualAdvisorIwRollRequest(incoming)
           : armorQualityRequest
             ? normalizeArmorBundleQualityRollRequest(incoming)
-            : symbiontRequest
-              ? normalizeSymbiontRollCommitRequest(incoming)
-              : normalizeCreationRollCommitRequest(incoming),
+            : weaponQualityRequest
+              ? normalizeStartingWeaponQualityRollRequest(incoming)
+              : symbiontRequest
+                ? normalizeSymbiontRollCommitRequest(incoming)
+                : normalizeCreationRollCommitRequest(incoming),
       );
     } catch (error: unknown) {
       if (
@@ -2876,6 +3026,7 @@ function sendCreationWizardDestination(
         dependencies.creationDecisionConsequenceCatalog,
         dependencies.creationSkillCatalog,
         dependencies.armorBundleCatalog,
+        dependencies.startingWeaponCatalog,
       ),
       'player',
       currentCreationWizardRevisions(checkpoint),
@@ -3214,11 +3365,17 @@ function handleCommandRequest(
     typeof message.payload === 'object' &&
     !Array.isArray(message.payload) &&
     (message.payload as Record<string, unknown>)['stage'] === 'SYMBIONTS' &&
-    (message.payload as Record<string, unknown>)['variant'] === 'ARMOR_BUNDLE_QUALITY'
+    ((message.payload as Record<string, unknown>)['variant'] === 'ARMOR_BUNDLE_QUALITY' ||
+      (message.payload as Record<string, unknown>)['variant'] === 'STARTING_WEAPON_QUALITY')
   ) {
-    let request: ArmorBundleQualityRollRequest;
+    const weaponRoll =
+      (message.payload as Record<string, unknown>)['variant'] === 'STARTING_WEAPON_QUALITY';
+    const rollFormId = weaponRoll ? CHR_022_FORM_ID : CHR_021_FORM_ID;
+    let request: ArmorBundleQualityRollRequest | StartingWeaponQualityRollRequest;
     try {
-      request = normalizeArmorBundleQualityRollRequest(message);
+      request = weaponRoll
+        ? normalizeStartingWeaponQualityRollRequest(message)
+        : normalizeArmorBundleQualityRollRequest(message);
     } catch (error: unknown) {
       if (!(error instanceof CreationSymbiontApplicationError)) throw error;
       finishRefusal(message, error.refusal);
@@ -3229,8 +3386,8 @@ function handleCommandRequest(
       current === null ||
       current.identityDraftScope !== null ||
       current.entityLocalCharacterId !== request.payload.characterDraftId ||
-      current.formId !== CHR_021_FORM_ID ||
-      request.payload.sourceFormId !== CHR_021_FORM_ID ||
+      current.formId !== rollFormId ||
+      request.payload.sourceFormId !== rollFormId ||
       connection.activeLayer !== null ||
       !confirmedPlayerContext(current, dependencies) ||
       !connection.executableWorkflowCommandIds.has(CREATION_ROLL_COMMIT_WORKFLOW_COMMAND_ID)
@@ -3247,11 +3404,18 @@ function handleCommandRequest(
       return;
     }
     try {
-      preflightArmorBundleQualityRoll(dependencies.database, request, {
-        catalog: dependencies.symbiontCatalog,
-        armorCatalog: dependencies.armorBundleCatalog,
-        sampleD20: dependencies.sampleCreationD20,
-      });
+      if (weaponRoll)
+        preflightStartingWeaponQualityRoll(dependencies.database, request, {
+          catalog: dependencies.symbiontCatalog,
+          weaponCatalog: dependencies.startingWeaponCatalog,
+          sampleD20: dependencies.sampleCreationD20,
+        });
+      else
+        preflightArmorBundleQualityRoll(dependencies.database, request, {
+          catalog: dependencies.symbiontCatalog,
+          armorCatalog: dependencies.armorBundleCatalog,
+          sampleD20: dependencies.sampleCreationD20,
+        });
     } catch (error: unknown) {
       if (!(error instanceof CreationSymbiontApplicationError)) throw error;
       finishRefusal(request, error.refusal);
@@ -3273,11 +3437,17 @@ function handleCommandRequest(
     }
     let durableCheckpoint: DurableCreationWizardCheckpoint;
     try {
-      durableCheckpoint = commitArmorBundleQualityRoll(dependencies.database, request, receiptId, {
-        catalog: dependencies.symbiontCatalog,
-        armorCatalog: dependencies.armorBundleCatalog,
-        sampleD20: dependencies.sampleCreationD20,
-      });
+      durableCheckpoint = weaponRoll
+        ? commitStartingWeaponQualityRoll(dependencies.database, request, receiptId, {
+            catalog: dependencies.symbiontCatalog,
+            weaponCatalog: dependencies.startingWeaponCatalog,
+            sampleD20: dependencies.sampleCreationD20,
+          })
+        : commitArmorBundleQualityRoll(dependencies.database, request, receiptId, {
+            catalog: dependencies.symbiontCatalog,
+            armorCatalog: dependencies.armorBundleCatalog,
+            sampleD20: dependencies.sampleCreationD20,
+          });
     } catch (error: unknown) {
       if (!(error instanceof CreationSymbiontApplicationError)) throw error;
       finishRefusal(request, error.refusal);
@@ -3810,7 +3980,9 @@ function handleCommandRequest(
               ? 'CHR-019'
               : request.payload.sourceFormId === 'CHR-021'
                 ? 'CHR-021'
-                : CHR_041_FORM_ID
+                : request.payload.sourceFormId === 'CHR-022'
+                  ? 'CHR-022'
+                  : CHR_041_FORM_ID
           : request.payload.sourceFormId === 'CHR-012'
             ? CHR_012_FORM_ID
             : request.payload.sourceFormId === 'CHR-014'
@@ -3848,6 +4020,7 @@ function handleCommandRequest(
         dependencies.database,
         request,
         dependencies.symbiontCatalog,
+        dependencies.startingWeaponCatalog,
       );
     } catch (error: unknown) {
       if (!(error instanceof CreationWizardCheckpointApplicationError)) throw error;
@@ -3873,6 +4046,7 @@ function handleCommandRequest(
         dependencies.database,
         request,
         dependencies.symbiontCatalog,
+        dependencies.startingWeaponCatalog,
       );
     } catch (error: unknown) {
       if (!(error instanceof CreationWizardCheckpointApplicationError)) throw error;
@@ -3907,6 +4081,15 @@ function handleCommandRequest(
             assertProcessLocalIdUnused(
               dependencies.allocateCreationRollRequestId(),
               'creation roll-request allocator',
+              commandJournal,
+            ),
+        },
+        {
+          weaponCatalog: dependencies.startingWeaponCatalog,
+          allocateWeaponQualityRollRequestId: () =>
+            assertProcessLocalIdUnused(
+              dependencies.allocateCreationRollRequestId(),
+              'creation weapon roll-request allocator',
               commandJournal,
             ),
         },
@@ -4270,6 +4453,7 @@ function handleReconnectV2(
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
       dependencies.armorBundleCatalog,
+      dependencies.startingWeaponCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, replayDestination);
     projectionRole = 'player';
@@ -4284,6 +4468,7 @@ function handleReconnectV2(
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
       dependencies.armorBundleCatalog,
+      dependencies.startingWeaponCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, acknowledgedRandomDestination);
     projectionRole = 'player';
@@ -4298,6 +4483,7 @@ function handleReconnectV2(
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
       dependencies.armorBundleCatalog,
+      dependencies.startingWeaponCatalog,
     );
     nextContext = creationWizardContext(connection, dependencies, acknowledgedSkillDestination);
     projectionRole = 'player';
@@ -4343,6 +4529,7 @@ function handleReconnectV2(
       dependencies.creationDecisionConsequenceCatalog,
       dependencies.creationSkillCatalog,
       dependencies.armorBundleCatalog,
+      dependencies.startingWeaponCatalog,
       restored.formId === CHR_015_FORM_ID ? CHR_015_FORM_ID : undefined,
     );
     nextContext = creationWizardContext(
@@ -4635,14 +4822,21 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     throw new TypeError('host onFrameError configuration must be a function');
   const projectRoot = resolve(config.projectRoot);
   const staticRoot = await realpath(resolve(config.staticRoot));
-  const [catalog, symbiontCatalog, vocabulary, symbiontMediaCatalog, armorBundleCatalog] =
-    await Promise.all([
-      loadAppProjectionCatalog(projectRoot),
-      loadSymbiontCatalog(projectRoot),
-      loadProtocolVocabulary(projectRoot),
-      loadSymbiontMediaCatalog(projectRoot),
-      loadArmorBundleCatalog(projectRoot),
-    ]);
+  const [
+    catalog,
+    symbiontCatalog,
+    vocabulary,
+    symbiontMediaCatalog,
+    armorBundleCatalog,
+    startingWeaponCatalog,
+  ] = await Promise.all([
+    loadAppProjectionCatalog(projectRoot),
+    loadSymbiontCatalog(projectRoot),
+    loadProtocolVocabulary(projectRoot),
+    loadSymbiontMediaCatalog(projectRoot),
+    loadArmorBundleCatalog(projectRoot),
+    loadStartingWeaponCatalog(projectRoot),
+  ]);
   const skillStageCatalog = symbiontCatalog.skillStage;
   const creationSkillCatalog = await loadCreationSkillCatalog(projectRoot, skillStageCatalog);
   const creationDecisionConsequenceCatalog = await loadCreationDecisionConsequenceCatalog(
@@ -4662,6 +4856,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     allocateReceiptId: config.allocateReceiptId,
     allocateWizardCheckpointId: config.allocateWizardCheckpointId,
     armorBundleCatalog,
+    startingWeaponCatalog,
     catalog,
     creationDecisionConsequenceCatalog,
     creationSkillCatalog,

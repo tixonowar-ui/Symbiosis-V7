@@ -19,6 +19,9 @@ import { ManualAdvisorIwFields, ManualSymbiontFields } from './forms/chr/manual-
 import { ArmorBundleFields } from './forms/chr/armor-bundle-fields.js';
 import { CHR_021_ROLL_ACTION_KEY } from './forms/chr/armor-bundle.js';
 import type { ArmorBundleDraft } from './forms/chr/armor-bundle.js';
+import { StartingWeaponFields } from './forms/chr/starting-weapon-fields.js';
+import { CHR_022_ROLL_ACTION_KEY } from './forms/chr/starting-weapon.js';
+import type { StartingWeaponDraft } from './forms/chr/starting-weapon.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection } from './ws-client.js';
 import type {
@@ -2181,6 +2184,7 @@ export function App(): ReactElement {
   const [manualCompositionDraft, setManualCompositionDraft] =
     useState<ManualCompositionDraft | null>(null);
   const [armorBundleDraft, setArmorBundleDraft] = useState<ArmorBundleDraft | null>(null);
+  const [startingWeaponDraft, setStartingWeaponDraft] = useState<StartingWeaponDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
 
@@ -2197,6 +2201,7 @@ export function App(): ReactElement {
       setSkillCardDraft,
       setManualCompositionDraft,
       setArmorBundleDraft,
+      setStartingWeaponDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2231,7 +2236,8 @@ export function App(): ReactElement {
       actionKey !== CHR_017_MANUAL_CARD_ACTION_KEY &&
       actionKey !== CHR_018_MANUAL_BINDING_ACTION_KEY &&
       actionKey !== CHR_041_MANUAL_IW_ACTION_KEY &&
-      actionKey !== CHR_021_ROLL_ACTION_KEY,
+      actionKey !== CHR_021_ROLL_ACTION_KEY &&
+      actionKey !== CHR_022_ROLL_ACTION_KEY,
   );
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
@@ -2489,6 +2495,32 @@ export function App(): ReactElement {
                 }
                 const result = connection.requestFormAction(
                   CHR_021_ROLL_ACTION_KEY,
+                  manualFaceOrNull,
+                );
+                setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);
+              }}
+            />
+            <StartingWeaponFields
+              key={`weapon:${snapshot.formId}:${typeof snapshot.projection['weaponQualityRollRequestId'] === 'string' ? snapshot.projection['weaponQualityRollRequestId'] : ''}`}
+              snapshot={snapshot}
+              draft={startingWeaponDraft}
+              onSelect={(weaponTypeId, weaponVariant) => {
+                const result = connectionRef.current?.replaceStartingWeaponSelection(
+                  weaponTypeId,
+                  weaponVariant,
+                );
+                setActionNotice(
+                  result === undefined || result.ok ? null : `Выбор не сохранён: ${result.detail}.`,
+                );
+              }}
+              onRoll={(manualFaceOrNull) => {
+                const connection = connectionRef.current;
+                if (connection === null) {
+                  setActionNotice('Бросок не отправлен: соединение ещё не готово.');
+                  return;
+                }
+                const result = connection.requestFormAction(
+                  CHR_022_ROLL_ACTION_KEY,
                   manualFaceOrNull,
                 );
                 setActionNotice(result.ok ? null : `Бросок не отправлен: ${result.detail}.`);

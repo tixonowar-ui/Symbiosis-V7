@@ -9,6 +9,14 @@
 
 ### Добавлено
 
+- **2026-10-29, issue #151:** стартовое оружие CHR-022 после подтверждённой
+  брони. Точный source-backed тип/вариант, preview требований и один immutable
+  D20 качества; AUTO/MANUAL, safe-return/resume, replay и restart сохраняют
+  оба имущественных результата. Старые armor checkpoints продолжаются явной
+  командой без замены прежнего receipt. Recommendation не меняет механику,
+  владение остаётся `OWNED_NOT_EQUIPPED`; профили CHR-023/024 не публикуются.
+  [ADR 0058](docs/adr/0058-starting-weapon.md).
+
 - **2026-10-28, issue #146:** стартовый armorBundle CHR-021 после завершённого
   random/manual состава. Один D20 качества на весь bundle (AUTO — один sampler
   в транзакции, MANUAL — одна грань), bundle всегда `OWNED_NOT_EQUIPPED`,

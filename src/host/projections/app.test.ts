@@ -139,10 +139,22 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the twenty-one slice actions with their exact source-owned guards', () => {
+  it('loads the twenty-three slice actions with their exact source-owned guards', () => {
     expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(21);
+    expect(catalog.actions.size).toBe(23);
+    expect(catalog.actions.get('CHR-021::CTA::001')).toMatchObject({
+      from: 'CHR-021',
+      to: 'CHR-022',
+      kind: 'workflow-command',
+      guard: 'UI-CMD-CHAR-WIZARD-CHECKPOINT bundle receipt committed; owned not equipped',
+    });
+    expect(catalog.actions.get('CHR-022::CTA::003')).toMatchObject({
+      from: 'CHR-022',
+      to: 'CHR-021',
+      kind: 'safe-return',
+      guard: 'armor and weapon receipts preserved; no request recreated',
+    });
     expect(catalog.actions.get('APP-001::CTA::001')).toEqual({
       from: 'APP-001',
       guard:

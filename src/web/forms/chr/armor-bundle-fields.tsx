@@ -130,7 +130,12 @@ export function ArmorBundleFields(props: ArmorBundleFieldsProps): ReactElement |
         </div>
       ) : null}
       {projection.bundleCheckpointReceiptIdOrNull !== null ? (
-        <p role="status">Комплект подтверждён. Следующий этап будет доступен позже.</p>
+        <p role="status">
+          Комплект подтверждён.{' '}
+          {projection.weaponEntryMode === 'INITIAL' || projection.weaponEntryMode === 'RESUME'
+            ? 'Можно продолжить выбор оружия.'
+            : 'Следующий этап будет доступен позже.'}
+        </p>
       ) : null}
       {editable && draft !== null ? (
         <div aria-label="Выбор комплекта">

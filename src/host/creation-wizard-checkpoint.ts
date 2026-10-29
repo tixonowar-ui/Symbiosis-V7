@@ -59,6 +59,19 @@ import {
   type ArmorBundleEntryRequest,
 } from './creation-armor-bundle-contract.js';
 import {
+  commitStartingWeaponEntry,
+  commitStartingWeaponCheckpoint,
+  preflightStartingWeaponEntry,
+  preflightStartingWeaponCheckpoint,
+} from './creation-starting-weapon.js';
+import {
+  normalizeStartingWeaponEntryRequest,
+  normalizeStartingWeaponCheckpointRequest,
+  type StartingWeaponEntryRequest,
+  type StartingWeaponCheckpointRequest,
+} from './creation-starting-weapon-contract.js';
+import type { StartingWeaponItemCatalog } from './starting-weapon-catalog.js';
+import {
   CreationStatAssignmentApplicationError,
   normalizeStatAssignmentCheckpointRequest,
   prepareStatAssignment,
@@ -126,7 +139,9 @@ export type CreationWizardCheckpointCommandRequest =
   | ManualCompositionCheckpointCommandRequest
   | ManualAdvisorSkillCheckpointCommandRequest
   | ArmorBundleEntryRequest
-  | ArmorBundleCheckpointRequest;
+  | ArmorBundleCheckpointRequest
+  | StartingWeaponEntryRequest
+  | StartingWeaponCheckpointRequest;
 
 export type CreationWizardCheckpointPreflight =
   | {
@@ -152,7 +167,9 @@ export type CreationWizardCheckpointPreflight =
         | ManualCompositionCheckpointCommandRequest
         | ManualAdvisorSkillCheckpointCommandRequest
         | ArmorBundleEntryRequest
-        | ArmorBundleCheckpointRequest;
+        | ArmorBundleCheckpointRequest
+        | StartingWeaponEntryRequest
+        | StartingWeaponCheckpointRequest;
       readonly checkpoint: DurableCreationWizardCheckpoint;
     };
 
@@ -196,6 +213,9 @@ const CHECKPOINT_STAGE_NORMALIZERS = {
         ? (request.payload as Record<string, unknown>)['variant']
         : undefined;
     if (variant === 'ARMOR_BUNDLE_ENTRY') return normalizeArmorBundleEntryRequest(request);
+    if (variant === 'STARTING_WEAPON_ENTRY') return normalizeStartingWeaponEntryRequest(request);
+    if (variant === 'STARTING_WEAPON_CHECKPOINT')
+      return normalizeStartingWeaponCheckpointRequest(request);
     if (variant === 'ARMOR_BUNDLE_CHECKPOINT')
       return normalizeArmorBundleCheckpointRequest(request);
     if (sourceFormId === 'CHR-018') return normalizeManualCompositionCheckpointRequest(request);
@@ -341,6 +361,7 @@ export function preflightCreationWizardCheckpoint(
   database: Database.Database,
   request: DecodedCommandRequest,
   catalog?: CreationCatalog,
+  weaponCatalog?: StartingWeaponItemCatalog,
 ): CreationWizardCheckpointPreflight {
   const normalized = normalizeCreationWizardCheckpointRequest(request);
   if (normalized.payload.stage === 'IDENTITY') {
@@ -360,6 +381,18 @@ export function preflightCreationWizardCheckpoint(
     }
     try {
       const variant = 'variant' in normalized.payload ? normalized.payload.variant : undefined;
+      if (variant === 'STARTING_WEAPON_ENTRY' || variant === 'STARTING_WEAPON_CHECKPOINT') {
+        if (weaponCatalog === undefined)
+          throw new Error('weapon checkpoint requires weapon catalog');
+        const preflight =
+          variant === 'STARTING_WEAPON_ENTRY'
+            ? preflightStartingWeaponEntry(database, normalized, symbiontCatalog)
+            : preflightStartingWeaponCheckpoint(database, normalized, {
+                catalog: symbiontCatalog,
+                weaponCatalog,
+              });
+        return { checkpoint: preflight.checkpoint, request: preflight.request, stage: 'SYMBIONTS' };
+      }
       const preflight =
         variant === 'ARMOR_BUNDLE_ENTRY'
           ? preflightArmorBundleEntry(database, normalized, symbiontCatalog)
@@ -664,13 +697,22 @@ export function commitCreationWizardCheckpoint(
     readonly allocateArmorBundleId: () => string;
     readonly allocateQualityRollRequestId: () => string;
   },
+  weaponDependencies?: {
+    readonly weaponCatalog: StartingWeaponItemCatalog;
+    readonly allocateWeaponQualityRollRequestId: () => string;
+  },
 ): DurableCreationWizardCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
     throw new TypeError(
       `creation wizard checkpoint receiptId must be a non-empty string, got ${JSON.stringify(receiptId)}`,
     );
   }
-  const preflight = preflightCreationWizardCheckpoint(database, request, catalog);
+  const preflight = preflightCreationWizardCheckpoint(
+    database,
+    request,
+    catalog,
+    weaponDependencies?.weaponCatalog,
+  );
   if (preflight.stage === 'IDENTITY') {
     try {
       const durable = commitIdentityCheckpoint(database, preflight.request, receiptId);
@@ -700,7 +742,21 @@ export function commitCreationWizardCheckpoint(
       if (variant === 'ARMOR_BUNDLE_CHECKPOINT') {
         return commitArmorBundleCheckpoint(database, preflight.request, receiptId, {
           catalog: fullSymbiontCatalog(catalog)!,
+          ...(weaponDependencies === undefined
+            ? {}
+            : {
+                allocateWeaponQualityRollRequestId:
+                  weaponDependencies.allocateWeaponQualityRollRequestId,
+              }),
         });
+      }
+      if (variant === 'STARTING_WEAPON_ENTRY' || variant === 'STARTING_WEAPON_CHECKPOINT') {
+        if (weaponDependencies === undefined)
+          throw new Error('weapon checkpoint requires weapon dependencies');
+        const dependencies = { catalog: fullSymbiontCatalog(catalog)!, ...weaponDependencies };
+        return variant === 'STARTING_WEAPON_ENTRY'
+          ? commitStartingWeaponEntry(database, preflight.request, receiptId, dependencies)
+          : commitStartingWeaponCheckpoint(database, preflight.request, receiptId, dependencies);
       }
       if (
         preflight.request.payload.sourceFormId === 'CHR-018' ||

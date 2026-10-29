@@ -15,7 +15,7 @@ async function expectNoProtocolError(page: Page, pageErrors: readonly string[]):
   expect(pageErrors).toEqual([]);
 }
 
-test('FREE MANUAL starting armor bundle rolls one manual D20 and checkpoints actionless', async ({
+test('FREE MANUAL starting armor bundle rolls one manual D20 and enters the weapon stage', async ({
   page,
 }) => {
   const host = await createManualSymbiontBrowserHost({
@@ -80,15 +80,16 @@ test('FREE MANUAL starting armor bundle rolls one manual D20 and checkpoints act
     await expect(page.locator('[aria-label="Зафиксированный комплект"]')).toBeVisible();
 
     await clickAction(page, 'CHR-021::CTA::001');
-    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expect(page.locator('[aria-label="Стартовое оружие"]')).toBeVisible();
     await expect(page.locator('[data-atlas-action-key^="CHR-021"]')).toHaveCount(0);
-    await expect(page.locator('[data-atlas-action-key^="CHR-022"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key^="CHR-023"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key^="CHR-024"]')).toHaveCount(0);
     await expect(page.locator('#armor-quality-face')).toHaveCount(0);
 
     const receipts = host.receiptAllocations();
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expect(page.locator('[aria-label="Стартовое оружие"]')).toBeVisible();
     expect(host.receiptAllocations()).toBe(receipts);
     expect(host.sampleCalls()).toBe(0);
     await expectNoProtocolError(page, pageErrors);
@@ -196,19 +197,20 @@ test('FREE RANDOM safe-returns and resumes the same armor bundle without a new r
     expect(host.sampleCalls()).toBe(2);
 
     await clickAction(page, 'CHR-021::CTA::001');
-    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expect(page.locator('[aria-label="Стартовое оружие"]')).toBeVisible();
     await expect(page.locator('[data-atlas-action-key^="CHR-021"]')).toHaveCount(0);
-    await expect(page.locator('[data-atlas-action-key^="CHR-022"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key^="CHR-023"]')).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key^="CHR-024"]')).toHaveCount(0);
     await expectNoProtocolError(page, pageErrors);
 
     await page.reload();
-    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expect(page.locator('[aria-label="Стартовое оружие"]')).toBeVisible();
     await expectNoProtocolError(page, pageErrors);
     await host.restart();
     await page.goto(host.baseURL);
-    await expect(page.locator('text=Комплект подтверждён')).toBeVisible();
+    await expect(page.locator('[aria-label="Стартовое оружие"]')).toBeVisible();
     await expectNoProtocolError(page, pageErrors);
-    expect(host.rollRequestAllocations()).toBe(rollRequests);
+    expect(host.rollRequestAllocations()).toBe(rollRequests + 1);
     expect(host.receiptAllocations()).toBe(receipts + 1);
     expect(host.sampleCalls()).toBe(2);
   } finally {

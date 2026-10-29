@@ -61,6 +61,8 @@ import {
   type ArmorBundleStageEntryRequest,
 } from './creation-armor-bundle-contract.js';
 
+import { initialStartingWeaponStage } from './creation-starting-weapon-contract.js';
+
 type DecodedCommandRequest = Parameters<typeof normalizeArmorBundleEntryRequest>[0];
 
 export type ArmorBundleRecord =
@@ -114,6 +116,7 @@ export interface ArmorBundleQualityRollDependencies {
 
 export interface ArmorBundleCheckpointDependencies {
   readonly catalog: SymbiontCatalog;
+  readonly allocateWeaponQualityRollRequestId?: () => string;
 }
 
 interface ArmorBundleEntryPreflight {
@@ -592,6 +595,15 @@ export function commitArmorBundleCheckpoint(
         'CHR-022',
         normalized.payload.characterDraftId,
       );
+      const weaponQualityRollRequestId =
+        dependencies.allocateWeaponQualityRollRequestId === undefined
+          ? undefined
+          : freshArmorId(
+              current.checkpoint,
+              normalized.commandId,
+              receiptId,
+              dependencies.allocateWeaponQualityRollRequestId,
+            );
       const receipt = armorBundleCheckpointReceipt(
         {
           checkpoint: current.checkpoint,
@@ -606,6 +618,7 @@ export function commitArmorBundleCheckpoint(
           distinctBodyZones: qualityRollRecord.distinctBodyZones,
         },
         qualityRollRecord.receipt,
+        weaponQualityRollRequestId,
       );
       const record = {
         armorPieces: qualityRollRecord.armorPieces,
@@ -619,6 +632,10 @@ export function commitArmorBundleCheckpoint(
         checkpointRecordOrNull: record,
       };
       armorBundleStageIds(armorBundleStage);
+      const startingWeaponStage =
+        weaponQualityRollRequestId === undefined
+          ? undefined
+          : initialStartingWeaponStage(armorBundleStage, weaponQualityRollRequestId);
       const result = update(
         {
           payloadJson: JSON.stringify({
@@ -626,6 +643,7 @@ export function commitArmorBundleCheckpoint(
             nextStageEnvelope,
             receipt,
             armorBundleStage,
+            ...(startingWeaponStage === undefined ? {} : { startingWeaponStage }),
           }),
         },
         { actorVisibilityChanged: false, projectionChanged: true, stateChanged: true },
@@ -835,6 +853,7 @@ export function validateArmorBundleStageHistory(
         distinctBodyZones: checkpointRecord.distinctBodyZones,
       },
       rollRecord.receipt,
+      checkpointRecord.receipt.result.weaponQualityRollRequestId,
     );
     const nextStageEnvelope = nextSymbiontEnvelope('CHR-022', characterDraftId);
     if (
