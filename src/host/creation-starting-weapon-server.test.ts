@@ -221,7 +221,7 @@ async function action(
   host: WeaponHost,
   view: Snapshot,
   id: string,
-  source: 'CHR-021' | 'CHR-022' | 'CHR-023' | 'CHR-038',
+  source: 'CHR-021' | 'CHR-022' | 'CHR-023' | 'CHR-037' | 'CHR-038',
   actionKey: ActionKey,
 ): Promise<Snapshot> {
   return navigation(host, {
@@ -456,7 +456,7 @@ describe('CHR-022 real host WS journey', () => {
       databases.push(reopened);
       const restarted = await start(
         { ...setup, database: reopened },
-        mode === 'AUTO' ? [20] : [],
+        mode === 'AUTO' ? [20, 1, 5, 10, 19, 20] : [],
         `${prefix}-restarted`,
       );
       const restoredReturn = await reconnect(restarted, `${prefix}-restart`);
@@ -640,25 +640,149 @@ describe('CHR-022 real host WS journey', () => {
         moneyRollReceiptId: moneyReceiptId,
       });
       const [moneyCheckpointResult, moneyCompleted] = await command(restarted, moneyCheckpoint);
-      expect(moneyCompleted.presentation.base.formId).toBe('CHR-038');
-      expect(moneyCompleted.presentation.base.availableActionKeys).toEqual([]);
+      expect(moneyCompleted.presentation.base.formId).toBe('CHR-037');
+      expect(moneyCompleted.presentation.base.availableActionKeys).toEqual([
+        'CHR-037::CTA::003',
+        'CHR-037::CTA::004',
+        'CHR-037::CTA::002',
+      ]);
       expect(moneyCompleted.presentation.base.roleFilteredPayload).toMatchObject({
         nextFormId: 'CHR-037',
         moneyRollRequestId: moneyRequestId,
-        moneyRollReceiptIdOrNull: moneyReceiptId,
-        gmFinalizationRequired: true,
+        moneyRollReceiptId: moneyReceiptId,
+        distinctPositionCount: 5,
       });
       expect(current(restarted).nextStageEnvelope.formId).toBe('CHR-037');
       const [moneyCheckpointReplay] = await command(restarted, moneyCheckpoint);
       expect(moneyCheckpointReplay.messageType).toBe('command.replay');
       expect(moneyCheckpointReplay.receipt).toEqual(moneyCheckpointResult.receipt);
       const moneyRefresh = await reconnect(restarted, `${prefix}-money-final-refresh`);
-      expect(moneyRefresh.presentation.base.formId).toBe('CHR-038');
-      expect(moneyRefresh.presentation.base.availableActionKeys).toEqual([]);
+      expect(moneyRefresh.presentation.base.formId).toBe('CHR-037');
+      expect(moneyRefresh.presentation.base.availableActionKeys).toContain('CHR-037::CTA::004');
       expect(current(restarted).weaponProfileStage).toEqual(committed.weaponProfileStage);
       expect(restarted.sampleCalls()).toBe(Number(mode === 'AUTO'));
       expect(restarted.allocations()).toBe(moneyAllocations);
       expect(JSON.stringify(moneyRefresh.presentation)).not.toMatch(
+        /CORE-\d|AQ2-\d|Источник|availabilityTrace|finalAmount|masterApproval|criticalChain/,
+      );
+      const moneyFinal = current(restarted).startingMoneyStage;
+      const slots = current(restarted).fiveStartingPositionsStage!.slots;
+      const positions = slots.map((slot, index) => ({
+        positionId: slot.positionId,
+        itemTypeIdOrStoryType: index === 4 ? 'GEN-010' : 'ITM-WPN-012',
+        quantity: index === 4 ? 3 : 1,
+        storyDescriptionOrNull: index === 4 ? 'Три памятных камня' : null,
+      }));
+      const positionSessionB = { ...restarted, socket: await openSocket(restarted.app) };
+      await reconnect(positionSessionB, `${prefix}-positions-second-session`);
+      const payloadFor = (index: number) => ({
+        sourceFormId: 'CHR-037',
+        variant: 'FIVE_STARTING_POSITIONS_ROLL',
+        moneyCheckpointReceiptId: moneyFinal!.checkpointRecordOrNull!.receipt.receiptId,
+        positions: positions.map((p) => ({ ...p })),
+        positionId: slots[index]!.positionId,
+        qualityRollRequestId: slots[index]!.qualityRollRequestId,
+        manualFaceOrNull: mode === 'MANUAL' ? [1, 5, 10, 19, 20][index]! : null,
+      });
+      const stalePosition = request(
+        positionSessionB,
+        `${prefix}-positions-stale`,
+        payloadFor(0),
+        true,
+      );
+      for (let index = 0; index < 5; index++) {
+        if (index === 1) positions[1]!.quantity = 2; // Only an uncommitted local-draft stack changes.
+        const rollRequest = request(
+          restarted,
+          `${prefix}-position-${String(index)}`,
+          payloadFor(index),
+          true,
+        );
+        const [result, rolledPositions] = await command(restarted, rollRequest);
+        expect(rolledPositions.presentation.base.formId).toBe('CHR-037');
+        const afterPosition = current(restarted);
+        expect(afterPosition.fiveStartingPositionsStage!.rollRecords).toHaveLength(index + 1);
+        expect(afterPosition.startingMoneyStage).toEqual(moneyFinal);
+        expect(afterPosition.weaponProfileStage).toEqual(committed.weaponProfileStage);
+        expect(afterPosition.startingWeaponStage).toEqual(committed.startingWeaponStage);
+        expect(afterPosition.armorBundleStage).toEqual(armor);
+        const [replay] = await command(restarted, rollRequest);
+        expect(replay.messageType).toBe('command.replay');
+        expect(replay.receipt).toEqual(result.receipt);
+        expect(
+          await refusal(restarted, {
+            ...rollRequest,
+            payload: { ...rollRequest.payload, manualFaceOrNull: 18 },
+          }),
+        ).toBe('IDEMPOTENCY_CONFLICT');
+        expect(current(restarted).localCharacter).toEqual(afterPosition.localCharacter);
+        expect(restarted.sampleCalls()).toBe(mode === 'AUTO' ? index + 2 : 0);
+        expect(restarted.allocations()).toBe(moneyAllocations);
+        if (index === 0) {
+          expect(await refusal(positionSessionB, stalePosition)).toBe('STALE_REVISION');
+          const invalid = payloadFor(1);
+          invalid.positions[0]!.quantity = 9;
+          expect(
+            await refusal(
+              restarted,
+              request(restarted, `${prefix}-replace-position`, invalid, true),
+            ),
+          ).toBe('GUARD_REJECTED');
+          expect(current(restarted).localCharacter).toEqual(afterPosition.localCharacter);
+          expect(restarted.sampleCalls()).toBe(Number(mode === 'AUTO') * 2);
+          const returned = await action(
+            restarted,
+            rolledPositions,
+            `${prefix}-positions-return`,
+            'CHR-037',
+            'CHR-037::CTA::002',
+          );
+          expect(returned.presentation.base.formId).toBe('CHR-038');
+          const resumedPositions = await action(
+            restarted,
+            returned,
+            `${prefix}-positions-resume`,
+            'CHR-038',
+            'CHR-038::CTA::001',
+          );
+          expect(resumedPositions.presentation.base.formId).toBe('CHR-037');
+          expect(current(restarted).fiveStartingPositionsStage).toEqual(
+            afterPosition.fiveStartingPositionsStage,
+          );
+        }
+      }
+      const rolledStage = current(restarted).fiveStartingPositionsStage!;
+      const checkpointPositions = request(restarted, `${prefix}-positions-checkpoint`, {
+        sourceFormId: 'CHR-037',
+        variant: 'FIVE_STARTING_POSITIONS_CHECKPOINT',
+        moneyCheckpointReceiptId: rolledStage.moneyCheckpointReceiptId,
+        positionReceipts: slots.map((slot) => ({
+          ...slot,
+          qualityRollReceiptId: rolledStage.rollRecords.find(
+            (r) => r.position.positionId === slot.positionId,
+          )!.receipt.receiptId,
+        })),
+      });
+      const [positionsResult, completedPositions] = await command(restarted, checkpointPositions);
+      expect(completedPositions.presentation.base.formId).toBe('CHR-037');
+      expect(completedPositions.presentation.base.availableActionKeys).toEqual([]);
+      expect(completedPositions.presentation.base.roleFilteredPayload['nextFormId']).toBe(
+        'CHR-032',
+      );
+      const [positionsReplay] = await command(restarted, checkpointPositions);
+      expect(positionsReplay.receipt).toEqual(positionsResult.receipt);
+      const refreshedPositions = await reconnect(restarted, `${prefix}-positions-final-refresh`);
+      expect(refreshedPositions.presentation.base).toEqual(completedPositions.presentation.base);
+      expect(refreshedPositions.presentation.layers).toEqual(
+        completedPositions.presentation.layers,
+      );
+      expect(refreshedPositions.presentation.assignment).toEqual({
+        correlationId: `${prefix}-positions-final-refresh`,
+        reason: 'RECONNECT',
+      });
+      expect(restarted.sampleCalls()).toBe(mode === 'AUTO' ? 6 : 0);
+      expect(restarted.allocations()).toBe(moneyAllocations);
+      expect(JSON.stringify(completedPositions.presentation)).not.toMatch(
         /CORE-\d|AQ2-\d|Источник|availabilityTrace|finalAmount|masterApproval|criticalChain/,
       );
     },

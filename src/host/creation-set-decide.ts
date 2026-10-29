@@ -28,6 +28,19 @@ import {
   startingMoneyRecords,
   validateStartingMoneyStageHistory,
 } from './creation-starting-money.js';
+import {
+  initialFiveStartingPositionsStage,
+  parseFiveStartingPositionsStage,
+  fiveStartingPositionsStageIds,
+  type FiveStartingPositionsStage,
+  type FiveStartingPositionsReceipt,
+  type FiveStartingPositionsRequest,
+} from './creation-five-starting-positions-contract.js';
+import {
+  latestFiveStartingPositionsRecord,
+  fiveStartingPositionsRecords,
+  validateFiveStartingPositionsStageHistory,
+} from './creation-five-starting-positions.js';
 import { isDeepStrictEqual } from 'node:util';
 
 import type Database from 'better-sqlite3';
@@ -241,6 +254,7 @@ export type CreationNextFormId =
   | 'CHR-022'
   | 'CHR-023'
   | 'CHR-024'
+  | 'CHR-032'
   | 'CHR-037'
   | 'CHR-038'
   | 'CHR-036'
@@ -756,6 +770,7 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | 'CHR-022'
     | 'CHR-023'
     | 'CHR-024'
+    | 'CHR-032'
     | 'CHR-037'
     | 'CHR-038'
     | 'CHR-041'
@@ -765,6 +780,7 @@ export interface CreationWizardSymbiontPayload extends Omit<
   readonly startingWeaponStage?: StartingWeaponStage;
   readonly weaponProfileStage?: WeaponProfileStage;
   readonly startingMoneyStage?: StartingMoneyStage;
+  readonly fiveStartingPositionsStage?: FiveStartingPositionsStage;
   readonly pureCompositionStage?: PureCompositionStage;
   readonly receipt:
     | SkillSelectionCheckpointReceipt
@@ -781,7 +797,8 @@ export interface CreationWizardSymbiontPayload extends Omit<
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
     | AnyWeaponProfileReceipt
-    | StartingMoneyReceipt;
+    | StartingMoneyReceipt
+    | FiveStartingPositionsReceipt;
 }
 
 export type CreationWizardPostIdentityPayload =
@@ -818,6 +835,7 @@ export interface DurableCreationWizardCheckpoint {
   readonly startingWeaponStage?: StartingWeaponStage | null;
   readonly weaponProfileStage?: WeaponProfileStage | null;
   readonly startingMoneyStage?: StartingMoneyStage | null;
+  readonly fiveStartingPositionsStage?: FiveStartingPositionsStage | null;
   readonly pureCompositionStage?: PureCompositionStage | null;
   readonly symbiontPresentationStage?: SymbiontPresentationStage | null;
   readonly receipt:
@@ -841,7 +859,8 @@ export interface DurableCreationWizardCheckpoint {
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
     | AnyWeaponProfileReceipt
-    | StartingMoneyReceipt;
+    | StartingMoneyReceipt
+    | FiveStartingPositionsReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -860,7 +879,8 @@ export interface DurableCreationWizardCheckpoint {
     | ArmorBundleCheckpointRequest
     | StartingWeaponRequest
     | WeaponProfileRequest
-    | StartingMoneyRequest;
+    | StartingMoneyRequest
+    | FiveStartingPositionsRequest;
 }
 
 export interface DurableCreationWizardCommand {
@@ -887,7 +907,8 @@ export interface DurableCreationWizardCommand {
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
     | AnyWeaponProfileReceipt
-    | StartingMoneyReceipt;
+    | StartingMoneyReceipt
+    | FiveStartingPositionsReceipt;
   readonly request:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -906,7 +927,8 @@ export interface DurableCreationWizardCommand {
     | ArmorBundleCheckpointRequest
     | StartingWeaponRequest
     | WeaponProfileRequest
-    | StartingMoneyRequest;
+    | StartingMoneyRequest
+    | FiveStartingPositionsRequest;
 }
 
 export interface CreationSetAbandonmentDialogContext {
@@ -1317,6 +1339,7 @@ const nextStageEnvelopeAt = (value: unknown, path: string): CreationNextStageEnv
     'CHR-022',
     'CHR-023',
     'CHR-024',
+    'CHR-032',
     'CHR-037',
     'CHR-038',
     'CHR-041',
@@ -2501,10 +2524,12 @@ const postIdentityPayloadAt = (
     const hasStartingWeaponStage = Object.hasOwn(unshaped, 'startingWeaponStage');
     const hasWeaponProfileStage = Object.hasOwn(unshaped, 'weaponProfileStage');
     const hasStartingMoneyStage = Object.hasOwn(unshaped, 'startingMoneyStage');
+    const hasFiveStartingPositionsStage = Object.hasOwn(unshaped, 'fiveStartingPositionsStage');
     const hasPureCompositionStage = Object.hasOwn(unshaped, 'pureCompositionStage');
     if (
       (hasWeaponProfileStage && !hasStartingWeaponStage) ||
       (hasStartingMoneyStage && !hasWeaponProfileStage) ||
+      (hasFiveStartingPositionsStage && !hasStartingMoneyStage) ||
       (hasPureCompositionStage && !hasArmorBundleStage)
     )
       throw new Error(`${label} equipment stage lacks its prerequisite`);
@@ -2523,6 +2548,7 @@ const postIdentityPayloadAt = (
       ...(hasStartingWeaponStage ? ['startingWeaponStage'] : []),
       ...(hasWeaponProfileStage ? ['weaponProfileStage'] : []),
       ...(hasStartingMoneyStage ? ['startingMoneyStage'] : []),
+      ...(hasFiveStartingPositionsStage ? ['fiveStartingPositionsStage'] : []),
       ...(hasPureCompositionStage ? ['pureCompositionStage'] : []),
     ];
     const object = exactObject(
@@ -2646,6 +2672,9 @@ const postIdentityPayloadAt = (
       startingMoneyStage === null
     )
       throw new Error(`${label} weapon profile lacks its allocated money stage`);
+    const fiveStartingPositionsStage = hasFiveStartingPositionsStage
+      ? parseFiveStartingPositionsStage(object['fiveStartingPositionsStage'], startingMoneyStage)
+      : null;
     const pureCompositionStage = hasPureCompositionStage
       ? parsePureCompositionStage(object['pureCompositionStage'])
       : null;
@@ -2664,20 +2693,22 @@ const postIdentityPayloadAt = (
       throw new Error(`${label} random, manual and legacy symbiont stages cannot coexist`);
     }
     const latestSymbiontRecord =
-      startingMoneyStage !== null
-        ? latestStartingMoneyRecord(startingMoneyStage)
-        : weaponProfileStage !== null
-          ? latestWeaponProfileRecord(weaponProfileStage)
-          : startingWeaponStage !== null
-            ? latestStartingWeaponRecord(startingWeaponStage)
-            : armorBundleStage !== null
-              ? latestArmorBundleRecord(armorBundleStage)
-              : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
-                (randomSymbiontStage !== null
-                  ? latestRandomSymbiontRecord(randomSymbiontStage)
-                  : manualCompositionStage === null
-                    ? null
-                    : latestManualCompositionRecord(manualCompositionStage)));
+      fiveStartingPositionsStage !== null
+        ? latestFiveStartingPositionsRecord(fiveStartingPositionsStage)
+        : startingMoneyStage !== null
+          ? latestStartingMoneyRecord(startingMoneyStage)
+          : weaponProfileStage !== null
+            ? latestWeaponProfileRecord(weaponProfileStage)
+            : startingWeaponStage !== null
+              ? latestStartingWeaponRecord(startingWeaponStage)
+              : armorBundleStage !== null
+                ? latestArmorBundleRecord(armorBundleStage)
+                : (advisorIntelligenceFloorStage?.rollRecordOrNull ??
+                  (randomSymbiontStage !== null
+                    ? latestRandomSymbiontRecord(randomSymbiontStage)
+                    : manualCompositionStage === null
+                      ? null
+                      : latestManualCompositionRecord(manualCompositionStage)));
     const receipt =
       receiptResult['stage'] === 'SYMBIONTS'
         ? (latestSymbiontRecord?.receipt ??
@@ -2738,6 +2769,7 @@ const postIdentityPayloadAt = (
           | 'CHR-022'
           | 'CHR-023'
           | 'CHR-024'
+          | 'CHR-032'
           | 'CHR-037'
           | 'CHR-038'
           | 'CHR-041'
@@ -2751,6 +2783,7 @@ const postIdentityPayloadAt = (
         ...(hasStartingWeaponStage ? { startingWeaponStage } : {}),
         ...(hasWeaponProfileStage ? { weaponProfileStage } : {}),
         ...(hasStartingMoneyStage ? { startingMoneyStage } : {}),
+        ...(hasFiveStartingPositionsStage ? { fiveStartingPositionsStage } : {}),
         ...(hasPureCompositionStage ? { pureCompositionStage } : {}),
         skillEligibilityStage,
         skillSelectionStage,
@@ -2843,7 +2876,8 @@ export interface RollValidationCursor {
     | ArmorBundleCheckpointReceipt
     | StartingWeaponReceipt
     | AnyWeaponProfileReceipt
-    | StartingMoneyReceipt;
+    | StartingMoneyReceipt
+    | FiveStartingPositionsReceipt;
   readonly latestRequest:
     | CreationRollCommitCommandRequest
     | DurableCreationSetDecideCommandRequest
@@ -2861,7 +2895,8 @@ export interface RollValidationCursor {
     | ArmorBundleCheckpointRequest
     | StartingWeaponRequest
     | WeaponProfileRequest
-    | StartingMoneyRequest;
+    | StartingMoneyRequest
+    | FiveStartingPositionsRequest;
   readonly revisions: RevisionVector;
 }
 
@@ -3510,6 +3545,12 @@ const validateStatRollHistory = (
     symbiontPayload.startingMoneyStage.rollRecordOrNull !== null
       ? [symbiontPayload.startingMoneyStage.rollRecordOrNull.receipt.receiptId]
       : [];
+  const fivePositionsRandomReceiptIds =
+    symbiontPayload?.fiveStartingPositionsStage?.diceInputModeSnapshot === 'AUTO'
+      ? symbiontPayload.fiveStartingPositionsStage.rollRecords.map(
+          (record) => record.receipt.receiptId,
+        )
+      : [];
   if (
     !isDeepStrictEqual(durablePayload.randomReceiptIds, [
       ...expectedRandomReceiptIds,
@@ -3519,6 +3560,7 @@ const validateStatRollHistory = (
       ...armorRandomReceiptIds,
       ...weaponRandomReceiptIds,
       ...moneyRandomReceiptIds,
+      ...fivePositionsRandomReceiptIds,
     ])
   ) {
     mismatches.push('randomReceiptIds roll provenance');
@@ -3782,6 +3824,10 @@ const skillCheckpointAtCursor = (
     'weaponProfileStage' in durablePayload ? durablePayload.weaponProfileStage : null,
   startingMoneyStage:
     'startingMoneyStage' in durablePayload ? durablePayload.startingMoneyStage : null,
+  fiveStartingPositionsStage:
+    'fiveStartingPositionsStage' in durablePayload
+      ? durablePayload.fiveStartingPositionsStage
+      : null,
   statAssignmentStage,
   statRollStage,
 });
@@ -4503,6 +4549,52 @@ const validatePostIdentityPayload = (
       occupiedIds,
     }).cursor;
   }
+  const fiveStartingPositionsStage =
+    'fiveStartingPositionsStage' in durablePayload
+      ? (durablePayload.fiveStartingPositionsStage ?? null)
+      : null;
+  if (fiveStartingPositionsStage !== null) {
+    if (
+      symbiontCatalog === undefined ||
+      startingMoneyStage?.checkpointRecordOrNull == null ||
+      skillEligibilityStage === null ||
+      statAssignmentStage === null
+    )
+      throw new Error(label + ' five starting positions lack prerequisites');
+    const checkpointView = skillCheckpointAtCursor(
+      durablePayload as CreationWizardSymbiontPayload,
+      localCharacter,
+      checkpoint,
+      identityStage,
+      raceAndMethodStage,
+      statRollStage!,
+      statAssignmentStage,
+      pureClassStage,
+      cursor,
+      skillEligibilityStage,
+      skillSelectionStage,
+    );
+    cursor = validateFiveStartingPositionsStageHistory(fiveStartingPositionsStage, {
+      catalog: symbiontCatalog,
+      localCharacter,
+      checkpoint,
+      checkpointView,
+      cursor,
+      commandIds,
+      receiptIds,
+      occupiedIds,
+    }).cursor;
+  }
+  const fivePositionsPresentationStage =
+    fiveStartingPositionsStage ??
+    (startingMoneyStage?.checkpointRecordOrNull == null
+      ? null
+      : initialFiveStartingPositionsStage(startingMoneyStage));
+  if (fiveStartingPositionsStage === null && fivePositionsPresentationStage !== null) {
+    // Legacy reads expose stable pending slots but do not reserve them as durable records.
+    for (const id of fiveStartingPositionsStageIds(fivePositionsPresentationStage))
+      if (occupiedIds.has(id)) mismatches.push('derived five starting positions identity');
+  }
   const completedProfile = weaponProfileStage?.records.at(-1);
   const profileIsComplete =
     completedProfile !== undefined &&
@@ -4560,6 +4652,7 @@ const validatePostIdentityPayload = (
     symbiontPresentationStage !== undefined &&
     ['CHR-023', 'CHR-024', 'CHR-031'].includes(symbiontPresentationStage.formId);
   const moneyPresentation =
+    fivePositionsPresentationStage === null &&
     profileIsComplete &&
     moneyPresentationStage !== null &&
     symbiontPresentationStage !== undefined &&
@@ -4568,8 +4661,21 @@ const validatePostIdentityPayload = (
         (symbiontPresentationStage.formId === 'CHR-022' ||
           symbiontPresentationStage.formId ===
             (weaponProfileStage?.kind === 'FORMULA' ? 'CHR-023' : 'CHR-024'))));
+  const fivePositionsPresentation =
+    fivePositionsPresentationStage !== null &&
+    symbiontPresentationStage !== undefined &&
+    (symbiontPresentationStage.formId === 'CHR-037' ||
+      (symbiontPresentationStage.formId === 'CHR-038' &&
+        fivePositionsPresentationStage.checkpointRecordOrNull === null));
   if (
     symbiontPresentationStage !== undefined &&
+    ((fivePositionsPresentationStage !== null && !fivePositionsPresentation) ||
+      (symbiontPresentationStage.formId === 'CHR-037' && !fivePositionsPresentation))
+  )
+    mismatches.push('five starting positions presentation authority');
+  if (
+    symbiontPresentationStage !== undefined &&
+    fivePositionsPresentationStage === null &&
     ((moneyPresentationStage !== null && !moneyPresentation) ||
       (symbiontPresentationStage.formId === 'CHR-038' && !moneyPresentation))
   )
@@ -4588,6 +4694,7 @@ const validatePostIdentityPayload = (
     !purePresentation &&
     !profilePresentation &&
     !moneyPresentation &&
+    !fivePositionsPresentation &&
     (raceAndMethodStage?.symbiontAcquisition.value !== 'MANUAL' ||
       randomSymbiontStage !== null ||
       advisorIntelligenceFloorStage !== null)
@@ -4698,6 +4805,7 @@ const validatePostIdentityPayload = (
     startingWeaponStage,
     weaponProfileStage,
     startingMoneyStage,
+    fiveStartingPositionsStage,
     pureCompositionStage,
     symbiontPresentationStage: symbiontPresentationStage ?? null,
     statRollStage,
@@ -5280,6 +5388,21 @@ const rawCommandIds = (payloadJson: string): readonly string[] => {
         if (record !== null && typeof record === 'object' && !Array.isArray(record))
           addRequestId((record as Record<string, unknown>)['request']);
   }
+  const fivePositionsStage = object['fiveStartingPositionsStage'];
+  if (
+    fivePositionsStage !== null &&
+    typeof fivePositionsStage === 'object' &&
+    !Array.isArray(fivePositionsStage)
+  ) {
+    const stage = fivePositionsStage as Record<string, unknown>;
+    const records = [
+      ...(Array.isArray(stage['rollRecords']) ? (stage['rollRecords'] as readonly unknown[]) : []),
+      ...(stage['checkpointRecordOrNull'] == null ? [] : [stage['checkpointRecordOrNull']]),
+    ];
+    for (const record of records)
+      if (record !== null && typeof record === 'object' && !Array.isArray(record))
+        addRequestId((record as Record<string, unknown>)['request']);
+  }
   const moneyStage = object['startingMoneyStage'];
   if (moneyStage !== null && typeof moneyStage === 'object' && !Array.isArray(moneyStage)) {
     const stage = moneyStage as Record<string, unknown>;
@@ -5387,6 +5510,12 @@ export function loadCreationWizardCommandByCommandId(
       receipt: manualRecord.receipt,
       request: manualRecord.request,
     };
+  }
+  if (durableCheckpoint.fiveStartingPositionsStage != null) {
+    const record = fiveStartingPositionsRecords(durableCheckpoint.fiveStartingPositionsStage).find(
+      ({ request }) => request.commandId === commandId,
+    );
+    if (record !== undefined) return { durableCheckpoint, ...record };
   }
   if (durableCheckpoint.startingMoneyStage != null) {
     const record = startingMoneyRecords(durableCheckpoint.startingMoneyStage).find(
@@ -5513,6 +5642,9 @@ const storedWizardRecords = (checkpoint: DurableCreationWizardCheckpoint) => [
   checkpoint.manualCompositionStage?.advisorSkillRecordOrNull === undefined
     ? []
     : [checkpoint.manualCompositionStage.advisorSkillRecordOrNull]),
+  ...(checkpoint.fiveStartingPositionsStage == null
+    ? []
+    : fiveStartingPositionsRecords(checkpoint.fiveStartingPositionsStage)),
   ...(checkpoint.startingMoneyStage == null
     ? []
     : startingMoneyRecords(checkpoint.startingMoneyStage)),
@@ -6057,6 +6189,9 @@ export const creationWizardDurableIds = (
       checkpoint.manualCompositionStage === undefined
         ? []
         : [...manualCompositionStageIds(checkpoint.manualCompositionStage)]),
+      ...(checkpoint.fiveStartingPositionsStage == null
+        ? []
+        : [...fiveStartingPositionsStageIds(checkpoint.fiveStartingPositionsStage)]),
       ...(checkpoint.startingMoneyStage == null
         ? []
         : [...startingMoneyStageIds(checkpoint.startingMoneyStage)]),

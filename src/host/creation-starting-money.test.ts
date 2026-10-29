@@ -440,7 +440,13 @@ describe('starting money durable continuation', () => {
         expect(moneyDependencies.sampleD20).toHaveBeenCalledTimes(phase === 'PENDING' ? 0 : 1);
         if (phase === 'CHECKPOINTED') {
           expect(restored.nextStageEnvelope.formId).toBe('CHR-037');
-          expect(projectChr038(restored, true, true).availableActionKeys).toEqual([]);
+          expect(projectChr038(restored, true, true).availableActionKeys).toEqual([
+            'CHR-038::CTA::001',
+          ]);
+          expect(projectChr038(restored, true, true).roleFilteredPayload).toMatchObject({
+            positionsEntryMode: 'RESUME',
+            nextFormId: 'CHR-037',
+          });
           expect(() =>
             advanceStartingMoneyPresentation(
               database,

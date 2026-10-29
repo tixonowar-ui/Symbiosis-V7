@@ -29,6 +29,8 @@ function pending(mode: 'AUTO' | 'MANUAL' = 'MANUAL'): Chr038Projection {
     weaponCheckpointReceiptId: 'weapon-checkpoint',
     weaponProfileFormId: 'CHR-023',
     moneyCheckpointReceiptIdOrNull: null,
+    positionsEntryMode: 'NONE',
+    positionsOrNull: null,
     wizardCheckpointId: 'wizard',
     draftRevision: 10,
     commandId: 'entry-command',
@@ -46,12 +48,25 @@ function rolled(face: number): Chr038Projection {
   };
 }
 describe('CHR-038 strict projection', () => {
-  it('distinguishes pending, committed and terminal states and never publishes CHR-037', () => {
+  it('distinguishes pending, committed and resume states', () => {
     const start = pending();
     const roll = rolled(1);
     const done: Chr038Projection = {
       ...roll,
       moneyCheckpointReceiptIdOrNull: 'money-checkpoint',
+      positionsEntryMode: 'RESUME',
+      positionsOrNull: Array.from({ length: 5 }, (_, i) => ({
+        positionId: `position-${String(i)}`,
+        qualityRollRequestId: `quality-${String(i)}`,
+        itemTypeIdOrStoryType: null,
+        quantity: null,
+        storyDescriptionOrNull: null,
+        name: null,
+        kind: null,
+        qualityRollReceiptId: null,
+        qualityRollFaceOrNull: null,
+        qualityRecommendation: null,
+      })),
       commandId: 'checkpoint-command',
       nextFormId: 'CHR-037',
     };
@@ -65,7 +80,9 @@ describe('CHR-038 strict projection', () => {
       'CHR-038::CTA::001',
       'CHR-038::CTA::002',
     ]);
-    expect(expectedChr038ActionKeys(done, { rollCommit: true, checkpoint: true })).toEqual([]);
+    expect(expectedChr038ActionKeys(done, { rollCommit: true, checkpoint: true })).toEqual([
+      'CHR-038::CTA::001',
+    ]);
     expect(expectedChr038ActionKeys(start, { rollCommit: false, checkpoint: false })).toEqual([
       'CHR-038::CTA::002',
     ]);

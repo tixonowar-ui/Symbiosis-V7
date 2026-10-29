@@ -4,10 +4,10 @@
 Обновляется в каждом PR, меняющем состояние модуля.
 
 - Снимок: `2026-10-29`
-- Тестов: 1880 Vitest + 17 Playwright, все зелёные.
-- `npm run verify` — проходит; `npm run test:e2e` — 17/17 без retry.
-- Импорт прошёл, но второй прогон `import:verify` встретил локальный
-  `UNKNOWN: open`; границы результата — в [handoff](handoff.md).
+- Тестов: 2010 Vitest + 19 Playwright, все зелёные.
+- `npm run verify` — проходит; `npm run test:e2e` — 19/19 без retry.
+- `npm run import` прошёл; воспроизводимость проверяется отдельным CI-гейтом
+  на чистом checkout, подробности — в [handoff](handoff.md).
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
   native Atlas clone allocation — [issue #160](vitest-atlas-memory.md).
 
@@ -147,23 +147,29 @@ read-only. INVALID восстанавливает CHR-031 и подписанн�
 receipt атомарно связывает pending money request; у исторического профиля
 адрес продолжения детерминирован и материализуется первым money roll без
 повторного submit и без записи при чтении. Safe-return через CHR-022 и свою
-ветвь профиля, replay и restart сохраняют результаты. После money checkpoint
-CHR-038 actionless, CHR-037 подписан и не публикуется.
-[ADR 0060](../adr/0060-starting-money.md). Следующая очередь — #154–#156.
+ветвь профиля, replay и restart сохраняют результаты.
+[ADR 0060](../adr/0060-starting-money.md).
+#154 публикует CHR-037: ровно пять позиций с положительным целым количеством,
+каждая с отдельным D20 и immutable receipt. Доступны 62 типа с явным разрешением
+инвентаря и описательная категория GEN-010. Выбор остальных позиций остаётся
+редактируемым после первого броска; уже зафиксированные не заменяются.
+Safe-return к деньгам и SQLite reopen сохраняют весь набор; после checkpoint
+CHR-037 actionless, CHR-032 подписан и не публикуется.
+[ADR 0061](../adr/0061-five-starting-positions.md). Следующая очередь — #155–#156.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                   | Веха |
-| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                               | M4   |
-| `src/domain/rules`           | **частично** | rolls, stats, skills, composition, Advisor, interactions, 22 формулы оружия и шкала денег | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                             | M3   |
-| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                      | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation      | M2   |
-| `src/host`                   | **частично** | creation до actionless CHR-038; PURE, профили оружия и отдельный immutable money D20      | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–024/028/031/036/038/041/042; CHR-037 подписан, не публикуется    | M4   |
-| `src/web`                    | **частично** | recovery, stats, skills, symbionts, armor, weapon/profile и money UI; 17 production E2E   | M5   |
-| `src/web/renderer`           | **частично** | добавлен CHR-038; остальные незарегистрированные формы fail-closed                        | M5   |
-| `src/web/forms`              | **частично** | APP domain; character wizard с профилем оружия и рекомендацией достатка                   | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                         | Веха |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity-draft                                     | M4   |
+| `src/domain/rules`           | **частично** | rolls, stats, skills, composition, Advisor, interactions, профили оружия, деньги и пять позиций | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                   | M3   |
+| `src/persistence`            | **частично** | CRUD, wizard/roll/skills/random/manual checkpoint, library, identity                            | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0005`: checkpoint, device identity, skill/symbiont presentation            | M2   |
+| `src/host`                   | **частично** | creation до actionless CHR-037; деньги и пять независимых стартовых стеков                      | M4   |
+| `src/host/projections`       | **частично** | APP-001/002/004, CHR-001–024/028/031/036–038/041/042; CHR-032 подписан, не публикуется          | M4   |
+| `src/web`                    | **частично** | creation с пятью позициями; 19 production E2E-сценариев                                         | M5   |
+| `src/web/renderer`           | **частично** | добавлен CHR-037; остальные незарегистрированные формы fail-closed                              | M5   |
+| `src/web/forms`              | **частично** | APP domain; character wizard с выбором стеков и отдельным броском каждой позиции                | M6   |
 
 ## generated/ — вывод конвейера
 
@@ -176,11 +182,11 @@ CHR-038 actionless, CHR-037 подписан и не публикуется.
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                   |
-| ------------------- | ------------ | -------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                           |
-| `tests/e2e`         | **частично** | 17 production-сценариев, включая AUTO/MANUAL money, safe-return и SQLite reopen; все зелёные |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                       |
+| Каталог             | Состояние    | Примечание                                                                                |
+| ------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                        |
+| `tests/e2e`         | **частично** | 19 production-сценариев, включая пять позиций, точный replay, safe-return и SQLite reopen |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                    |
 
 ---
 
