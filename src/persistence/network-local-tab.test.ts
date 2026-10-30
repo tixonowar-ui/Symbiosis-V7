@@ -17,6 +17,13 @@ import { migration0006 } from './migrations/0006-local-character-post-save.js';
 import { migration0007 } from './migrations/0007-campaign-creation.js';
 import { migration0008 } from './migrations/0008-network-installation-identity.js';
 import { migration0009 } from './migrations/0009-device-admission.js';
+import { migration0010 } from './migrations/0010-network-application.js';
+import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
+import {
+  ensureLocalGmProfile,
+  createLocalGmContext,
+  readCampaignCreationCursor,
+} from './campaign-creation.js';
 import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 import {
   commitLocalNetworkTabEntry,
@@ -66,7 +73,7 @@ function request(ownerDeviceId: string): LocalNetworkTabEntryInput {
     networkScopeId: randomUUID(),
   };
 }
-function legacyDatabase(version: 8 | 9): Database.Database {
+function legacyDatabase(version: 8 | 9 | 10): Database.Database {
   const db = new Database(':memory:');
   db.pragma('foreign_keys=ON');
   databases.push(db);
@@ -79,7 +86,8 @@ function legacyDatabase(version: 8 | 9): Database.Database {
     migration0006,
     migration0007,
     migration0008,
-    ...(version === 9 ? [migration0009] : []),
+    ...(version >= 9 ? [migration0009] : []),
+    ...(version === 10 ? [migration0010] : []),
   ]);
   return db;
 }
@@ -553,7 +561,7 @@ describe('durable local network tab entry', () => {
     ).run();
     const registry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
       campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(10);
+    expect(applyMigrations(db)).toBe(11);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<=8 ORDER BY version').all(),
     ).toEqual(registry);
@@ -572,7 +580,7 @@ describe('durable local network tab entry', () => {
       .prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id')
       .all();
     const closes = db.prepare('SELECT * FROM local_network_tab_close').all();
-    expect(applyMigrations(db)).toBe(10);
+    expect(applyMigrations(db)).toBe(11);
     expect(
       db.prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id').all(),
     ).toEqual(entries);
@@ -589,6 +597,7 @@ describe('durable local network tab entry', () => {
     'missing-entry',
     'missing-close',
     'missing-pointer',
+    'missing-review-table',
     'old-version',
     'future-version',
   ] as const)('refuses %s without creating fallback storage', (fault) => {
@@ -597,9 +606,10 @@ describe('durable local network tab entry', () => {
     else if (fault === 'missing-entry') db.exec('DROP TABLE local_network_tab_entry');
     else if (fault === 'missing-close') db.exec('DROP TABLE local_network_tab_close');
     else if (fault === 'missing-pointer') db.exec('DROP TABLE local_network_active_tab');
+    else if (fault === 'missing-review-table') db.exec('DROP TABLE gm_request_queue_event');
     else if (fault === 'old-version')
       db.prepare('DELETE FROM schema_migration WHERE version>=9').run();
-    else db.prepare('UPDATE schema_migration SET version=11 WHERE version=10').run();
+    else db.prepare('UPDATE schema_migration SET version=12 WHERE version=11').run();
     const before = db.serialize();
     expectCode(() => readActiveLocalNetworkTab(db, device), 'CORRUPT_STORAGE');
     expectCode(() => commitLocalNetworkTabEntry(db, input, allow), 'CORRUPT_STORAGE');
@@ -965,5 +975,46 @@ describe('audited closure of a never-admitted network tab', () => {
     );
     expect(db.serialize().equals(after)).toBe(true);
     expect(commitLocalNetworkTabClose(db, close, allow)).toEqual(closed);
+  });
+});
+
+describe('forward request-review migration', () => {
+  it('upgrades a real schema10 and preserves every previous cursor, entry and migration byte', () => {
+    const db = legacyDatabase(10);
+    const device = bootstrapDeviceIdentity(db);
+    const profile = ensureLocalGmProfile(
+      db,
+      { ownerDeviceId: device, masterProfileId: 'migration-profile' },
+      allow,
+    );
+    createLocalGmContext(
+      db,
+      {
+        gmLocalContextId: 'migration-context',
+        masterProfileId: profile.masterProfileId,
+        ownerDeviceId: device,
+      },
+      allow,
+    );
+    const input = request(device);
+    const entry = commitLocalNetworkTabEntry(db, input, allow);
+    const before = {
+      cursor: db.prepare('SELECT * FROM campaign_creation_cursor').all(),
+      entry: db.prepare('SELECT * FROM local_network_tab_entry').all(),
+      registry: db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
+    };
+    expect(applyMigrations(db)).toBe(11);
+    expect(db.prepare('SELECT * FROM campaign_creation_cursor').all()).toEqual(before.cursor);
+    expect(db.prepare('SELECT * FROM local_network_tab_entry').all()).toEqual(before.entry);
+    expect(
+      db.prepare('SELECT * FROM schema_migration WHERE version<=10 ORDER BY version').all(),
+    ).toEqual(before.registry);
+    expect(readCampaignCreationCursor(db, 'migration-context').kind).toBe('MENU');
+    expect(readLocalNetworkTabEntryByCommandId(db, device, input.entryCommandId)).toEqual(entry);
+    for (const table of DEVICE_REQUEST_REVIEW_TABLES)
+      expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
+    const stable = db.serialize();
+    expect(applyMigrations(db)).toBe(11);
+    expect(db.serialize().equals(stable)).toBe(true);
   });
 });

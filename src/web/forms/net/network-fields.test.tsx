@@ -3,7 +3,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import { campaignQrMatrix } from '../cmp/campaign-qr.js';
-import { NetworkFields, type NetworkFieldsProps } from './network-fields.js';
+import {
+  NetworkFields,
+  type NetworkFieldsProps,
+  NetworkGmRequestFields,
+  type NetworkGmRequestFieldsProps,
+} from './network-fields.js';
 import {
   decodeNetworkQrPixels,
   NetworkQrError,
@@ -11,6 +16,7 @@ import {
   NETWORK_QR_MAX_FILE_BYTES,
 } from './network-qr.js';
 import type { NetworkEdit } from './network-application.js';
+import type { Net017Projection } from '@shared/network-application.js';
 
 const DEVICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const SCOPE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -385,5 +391,189 @@ describe('NET-002 offline QR decoder', () => {
       vi.fn(() => Promise.reject(new Error('PRIVATE_FILENAME_AND_STACK'))),
     );
     await expect(readNetworkQrFile(file)).rejects.toEqual(new NetworkQrError('IMAGE_UNAVAILABLE'));
+  });
+});
+
+describe('NET-017 separate GM request fields', () => {
+  const queue = (): Net017Projection => ({
+    contextId: CONTEXT,
+    campaignId: CAMPAIGN,
+    stateRevision: 8,
+    projectionRevision: 10,
+    requestQueueRevision: 3,
+    selectedRequestIdOrNull: REQUEST,
+    activePlayerCapacity: 1,
+    occupiedActivePcCount: 1,
+    decisionReason: '',
+    commandId: null,
+    returnContext: {
+      originFormId: 'CMP-006',
+      campaignId: CAMPAIGN,
+      creationReceiptId: 'create-receipt',
+    },
+    requests: [
+      {
+        requestId: REQUEST,
+        requestOwnerDeviceId: DEVICE,
+        requestStatus: 'PENDING',
+        requestRevision: 4,
+        connectionState: 'CONNECTED_TECHNICAL',
+        requestedCandidateCount: 2,
+        gmMessageOrNull: null,
+        decisionReceiptIdOrNull: null,
+        batchCharacterSummaries: [1, 2].map((index) => ({
+          sourceUuid: 'source-' + String(index),
+          snapshotChecksum: String(index).repeat(64),
+          name: 'Тёзка',
+          sourceSnapshotId: 'snapshot-' + String(index),
+          localControllerSeatId: SEAT,
+        })),
+      },
+    ],
+  });
+  function mountQueue(props: Partial<NetworkGmRequestFieldsProps> = {}) {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push({ root, container });
+    const full: NetworkGmRequestFieldsProps = {
+      projection: queue(),
+      state: null,
+      onChange: vi.fn(),
+      ...props,
+    };
+    act(() => root.render(<NetworkGmRequestFields {...full} />));
+    return {
+      container,
+      props: full,
+      rerender: (next: Partial<NetworkGmRequestFieldsProps>) =>
+        act(() => root.render(<NetworkGmRequestFields {...full} {...next} />)),
+    };
+  }
+  it('shows duplicate names with immutable source references and a capacity forecast without dispatching actions', () => {
+    const shown = mountQueue();
+    expect(shown.container.querySelectorAll('li')).toHaveLength(2);
+    expect(shown.container.textContent).toContain('source-1');
+    expect(shown.container.textContent).toContain('source-2');
+    expect(shown.container.textContent).toContain('snapshot-1');
+    expect(shown.container.textContent).toContain('3 из 1');
+    expect(shown.container.textContent).toContain('не ограничивает предварительное рассмотрение');
+    expect(shown.container.querySelector('button,a,form,iframe')).toBeNull();
+    expect(shown.props.onChange).not.toHaveBeenCalled();
+  });
+  it('reports only editable values for a selected request and reason, with no client authority or command IDs', async () => {
+    const p = queue();
+    const second = {
+      ...p.requests[0]!,
+      requestId: 'second-request',
+      requestOwnerDeviceId: SESSION,
+    };
+    const change = vi.fn();
+    const shown = mountQueue({
+      projection: {
+        ...p,
+        requests: [...p.requests, second],
+        decisionReason: 'Причина прежней заявки',
+      },
+      onChange: change,
+    });
+    const radio = shown.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Выбрать заявку second-request"]',
+    )!;
+    await act(() => radio.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(shown.props.onChange).toHaveBeenLastCalledWith({
+      selectedRequestIdOrNull: 'second-request',
+      decisionReason: '',
+    });
+    shown.rerender({ projection: { ...p, decisionReason: 'Первая причина' } });
+    const input = shown.container.querySelector<HTMLTextAreaElement>('textarea')!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        input,
+        '  Причина с пробелами  ',
+      );
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(shown.props.onChange).toHaveBeenLastCalledWith({
+      selectedRequestIdOrNull: REQUEST,
+      decisionReason: '  Причина с пробелами  ',
+    });
+    expect(JSON.stringify(change.mock.calls)).not.toMatch(
+      /commandId|controllerSeat|networkScopeId|authoritativeGmActorId/u,
+    );
+  });
+  it('keeps terminal request reasons and receipt refs read-only and blocks local or host in-flight editing', () => {
+    const p = queue();
+    const shown = mountQueue({
+      projection: {
+        ...p,
+        requests: [
+          {
+            ...p.requests[0]!,
+            requestStatus: 'REJECTED',
+            gmMessageOrNull: 'Подтверждённая причина',
+            decisionReceiptIdOrNull: 'decision-receipt',
+          },
+        ],
+      },
+    });
+    expect(shown.container.textContent).toContain('Подтверждённая причина');
+    expect(shown.container.textContent).toContain('decision-receipt');
+    expect(shown.container.querySelector('textarea')!.disabled).toBe(true);
+    shown.rerender({ projection: { ...p, commandId: 'pending' } });
+    expect(shown.container.querySelector('fieldset')!.disabled).toBe(true);
+    shown.rerender({
+      state: {
+        values: { selectedRequestIdOrNull: REQUEST, decisionReason: '' },
+        dirty: false,
+        pending: true,
+      },
+    });
+    expect(shown.container.querySelector('fieldset')!.disabled).toBe(true);
+    expect(shown.container.textContent).toContain('Сохранение выбора');
+  });
+  it('shows an authoritative empty queue without restoring a removed selection or calling the server', () => {
+    const p = queue();
+    const shown = mountQueue({
+      projection: { ...p, requests: [], selectedRequestIdOrNull: null },
+      state: {
+        values: { selectedRequestIdOrNull: REQUEST, decisionReason: 'Старый ввод' },
+        dirty: true,
+        pending: false,
+      },
+    });
+    expect(shown.container.textContent).toContain('Входящих заявок пока нет');
+    expect(shown.container.textContent).toContain('Выбранной заявки больше нет');
+    expect(shown.container.querySelector('input[type="radio"]')).toBeNull();
+    expect(shown.container.querySelector('textarea')!.disabled).toBe(true);
+    expect(shown.props.onChange).not.toHaveBeenCalled();
+  });
+  it('does not render a GM queue through the existing player NetworkFields entry point', () => {
+    const shown = mount({ formId: 'NET-017', projection: queue() });
+    expect(shown.container.textContent).toBe('');
+    expect(shown.props.onChange).not.toHaveBeenCalled();
+  });
+  it('labels the owner-only IN_REVIEW result accurately without an available cancellation input', () => {
+    const shown = mount({
+      formId: 'NET-005',
+      projection: {
+        ...bound,
+        sessionId: SESSION,
+        requestId: REQUEST,
+        requestOwnerDeviceId: DEVICE,
+        batchCharacterSummaries: [summary(1)],
+        requestStatus: 'IN_REVIEW',
+        gmMessage: null,
+        requestRevision: 1,
+        cancelReason: '',
+        commandId: null,
+      },
+    });
+    expect(shown.container.textContent).toContain('Мастер принял заявку к рассмотрению');
+    expect(shown.container.textContent).not.toContain('Получено предложение по допуску');
+    expect(shown.container.querySelector('textarea')).toBeNull();
+    expect(shown.container.innerHTML).not.toMatch(
+      /decisionReceiptIdOrNull|requestQueueRevision|gmQueue|privateKey/u,
+    );
   });
 });

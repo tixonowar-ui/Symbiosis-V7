@@ -1,14 +1,28 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
 import { loadProtocolVocabulary } from '../host/protocol-vocabulary.js';
-import { decodeClientMessageV3, decodeHostMessageV3 } from './wire-v3-codec.js';
+import {
+  decodeClientMessageV3,
+  decodeHostMessageV3,
+  encodeClientMessageV3,
+  encodeHostMessageV3,
+} from './wire-v3-codec.js';
 import {
   isNetworkApplicationProjection,
   networkWorkflowPayloadValue,
+  networkGmRequestProjectionValue,
+  networkGmRequestDraftValues,
+  networkGmRequestWorkflowPayloadValue,
+  networkGmRequestDecisionReceiptValue,
 } from './network-application-codec.js';
 import {
   NETWORK_APPLICATION_FORM_IDS,
   type NetworkApplicationFormId,
+  type Net017Projection,
+  type NetworkGmRequestCandidateSummary,
+  type NetworkGmRequestDecisionReceipt,
+  type NetworkGmRequestDraftReplaceV3Message,
+  type NetworkGmRequestDraftResultV3Message,
 } from './network-application.js';
 import type { JsonObject, JsonValue } from './wire-protocol.js';
 import type { WireV2Vocabulary } from './wire-v2-protocol.js';
@@ -265,7 +279,7 @@ describe('closed #171 public projection boundary', () => {
         requestOwnerDeviceId: id(9),
       }),
     ).toBe(false);
-    for (const status of ['IN_REVIEW', 'REJECTED', 'PROPOSED', 'CANCELLED'])
+    for (const status of ['CANCELLED', 'ACCEPTED', 'ACTIVE', 'PRIVATE_STATUS'])
       expect(
         isNetworkApplicationProjection('NET-005', {
           ...fixtures['NET-005'],
@@ -373,11 +387,597 @@ describe('network wire-v3 application drafts', () => {
       networkWorkflowPayloadValue('UI-CMD-DEVICE-REQUEST-CANCEL', { ...payload, role: 'gm' }),
     ).toThrow();
     expect(() =>
-      // A rejected proposal is negative input, not a claim of an existing Atlas reference.
+      // Approved GM workflows still cannot enter the separate player payload decoder.
       networkWorkflowPayloadValue(
         ['UI', 'CMD', 'DEVICE', 'REQUEST', 'ACCEPT', 'TO', 'REVIEW'].join('-'),
         payload,
       ),
     ).toThrow();
+  });
+});
+
+const gmBatch: readonly NetworkGmRequestCandidateSummary[] = [
+  {
+    sourceUuid: 'historical-v8-source',
+    snapshotChecksum: 'b'.repeat(64),
+    name: 'Одинаковое имя',
+    sourceSnapshotId: 'snapshot:one',
+    localControllerSeatId: id(4),
+  },
+  {
+    sourceUuid: 'another-source',
+    snapshotChecksum: 'c'.repeat(64),
+    name: 'Одинаковое имя',
+    sourceSnapshotId: 'snapshot:two',
+    localControllerSeatId: id(4),
+  },
+];
+const gmProjection: Net017Projection = {
+  contextId: id(20),
+  campaignId: id(5),
+  stateRevision: 1,
+  projectionRevision: 2,
+  requestQueueRevision: 1,
+  requests: [
+    {
+      requestId: 'request:one',
+      requestOwnerDeviceId: id(3),
+      requestStatus: 'PENDING',
+      requestRevision: 0,
+      connectionState: 'CONNECTED_TECHNICAL',
+      batchCharacterSummaries: gmBatch,
+      requestedCandidateCount: 2,
+      gmMessageOrNull: null,
+      decisionReceiptIdOrNull: null,
+    },
+  ],
+  selectedRequestIdOrNull: 'request:one',
+  activePlayerCapacity: 3,
+  occupiedActivePcCount: 2,
+  decisionReason: '',
+  commandId: null,
+  returnContext: {
+    originFormId: 'CMP-006',
+    campaignId: id(5),
+    creationReceiptId: 'created:receipt',
+  },
+};
+const reviewReceipt: NetworkGmRequestDecisionReceipt = {
+  receiptId: 'review:receipt',
+  commandId: 'review:command',
+  workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+  campaignId: id(5),
+  requestId: 'request:one',
+  requestOwnerDeviceId: id(3),
+  beforeRequestStatus: 'PENDING',
+  afterRequestStatus: 'IN_REVIEW',
+  beforeRequestRevision: 0,
+  requestRevision: 1,
+  decisionReasonOrNull: null,
+  candidateSnapshotChecksums: gmBatch.map((row) => row.snapshotChecksum),
+  authoritativeGmActorId: 'authoritative:gm',
+  timestamp: '2026-10-30T12:00:00.000Z',
+};
+const withoutField = (value: object, key: string) =>
+  Object.fromEntries(Object.entries(value).filter(([field]) => field !== key));
+
+describe('Atlas 1.6 separate GM request-review values', () => {
+  it('accepts all four own request statuses without admitting a foreign owner or widening player capabilities', () => {
+    for (const requestStatus of ['PENDING', 'IN_REVIEW', 'REJECTED', 'PROPOSED']) {
+      const payload = { ...fixtures['NET-005'], requestStatus, gmMessage: 'Публичный ответ' };
+      expect(isNetworkApplicationProjection('NET-005', payload)).toBe(true);
+      expect(
+        isNetworkApplicationProjection('NET-005', { ...payload, requestOwnerDeviceId: id(9) }),
+      ).toBe(false);
+      expect(
+        isNetworkApplicationProjection('NET-005', { ...payload, requests: gmProjection.requests }),
+      ).toBe(false);
+    }
+    expect(NETWORK_APPLICATION_FORM_IDS).not.toContain('NET-017');
+    expect(isNetworkApplicationProjection('NET-005', gmProjection)).toBe(false);
+    expect(() => networkGmRequestProjectionValue(fixtures['NET-005'])).toThrow();
+  });
+  it('accepts a genuinely empty queue and preserves duplicate display names without reserving capacity', () => {
+    expect(networkGmRequestProjectionValue(gmProjection)).toEqual(gmProjection);
+    // Two candidates exceed one remaining slot, but preliminary review is not admission.
+    expect(gmProjection.requests[0]!.requestedCandidateCount).toBe(2);
+    const empty = { ...gmProjection, requests: [], selectedRequestIdOrNull: null };
+    expect(networkGmRequestProjectionValue(empty)).toEqual(empty);
+    expect(() =>
+      networkGmRequestProjectionValue({ ...empty, selectedRequestIdOrNull: 'request:one' }),
+    ).toThrow();
+  });
+  it('rejects every missing top-level field and every player, private, or authority substitution', () => {
+    for (const key of Object.keys(gmProjection))
+      expect(() => networkGmRequestProjectionValue(withoutField(gmProjection, key))).toThrow();
+    for (const key of [
+      'networkScopeId',
+      'deviceId',
+      'controllerSeat',
+      'actorVisibilityRevision',
+      'draftRevision',
+      'role',
+      'masterAuthorityRevision',
+      'canonicalWitnessText',
+      'privateKeyPkcs8Base64',
+    ]) {
+      expect(() =>
+        networkGmRequestProjectionValue({ ...gmProjection, [key]: 'private-marker' }),
+      ).toThrow();
+    }
+    for (const key of [
+      'stateRevision',
+      'projectionRevision',
+      'requestQueueRevision',
+      'occupiedActivePcCount',
+    ]) {
+      for (const value of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1])
+        expect(() => networkGmRequestProjectionValue({ ...gmProjection, [key]: value })).toThrow();
+    }
+  });
+  it('closes each queue row and candidate summary, rejecting cancelled rows, changed counts and duplicate IDs', () => {
+    const row = gmProjection.requests[0]!;
+    for (const key of Object.keys(row))
+      expect(() =>
+        networkGmRequestProjectionValue({ ...gmProjection, requests: [withoutField(row, key)] }),
+      ).toThrow();
+    for (const change of [
+      { requestStatus: 'CANCELLED' },
+      { requestRevision: -1 },
+      { connectionState: 'IN_REVIEW' },
+      { requestedCandidateCount: 1 },
+      { requestedCandidateCount: 0 },
+      { privateSecret: 'private' },
+    ]) {
+      expect(() =>
+        networkGmRequestProjectionValue({ ...gmProjection, requests: [{ ...row, ...change }] }),
+      ).toThrow();
+    }
+    expect(() =>
+      networkGmRequestProjectionValue({ ...gmProjection, requests: [row, row] }),
+    ).toThrow();
+    for (const batch of [[], [...gmBatch, ...gmBatch], [gmBatch[0], gmBatch[0]]])
+      expect(() =>
+        networkGmRequestProjectionValue({
+          ...gmProjection,
+          requests: [
+            { ...row, batchCharacterSummaries: batch, requestedCandidateCount: batch.length },
+          ],
+        }),
+      ).toThrow();
+    for (const key of Object.keys(gmBatch[0]!)) {
+      const batch = [withoutField(gmBatch[0]!, key), gmBatch[1]!];
+      expect(() =>
+        networkGmRequestProjectionValue({
+          ...gmProjection,
+          requests: [{ ...row, batchCharacterSummaries: batch }],
+        }),
+      ).toThrow();
+    }
+    for (const change of [
+      { snapshotChecksum: 'B'.repeat(64) },
+      { localControllerSeatId: 'invented-seat' },
+      { campaignCharacterId: id(50) },
+      { candidateSnapshotChecksum: hash },
+      { sourceChecksum: hash },
+    ]) {
+      expect(() =>
+        networkGmRequestProjectionValue({
+          ...gmProjection,
+          requests: [
+            { ...row, batchCharacterSummaries: [{ ...gmBatch[0], ...change }, gmBatch[1]] },
+          ],
+        }),
+      ).toThrow();
+    }
+  });
+  it('accepts only the three closed host return contexts bound to this campaign', () => {
+    for (const returnContext of [
+      gmProjection.returnContext,
+      { originFormId: 'GM-002', campaignId: id(5) },
+      { originFormId: 'CMP-009', campaignId: id(5) },
+    ]) {
+      expect(
+        networkGmRequestProjectionValue({ ...gmProjection, returnContext }).returnContext,
+      ).toEqual(returnContext);
+    }
+    for (const returnContext of [
+      { originFormId: 'CMP-006', campaignId: id(5) },
+      { ...gmProjection.returnContext, campaignId: id(9) },
+      { ...gmProjection.returnContext, returnTo: 'NET-021' },
+      { originFormId: 'GM-002', campaignId: id(5), creationReceiptId: 'extra' },
+      { originFormId: 'CMP-007', campaignId: id(5) },
+    ]) {
+      expect(() => networkGmRequestProjectionValue({ ...gmProjection, returnContext })).toThrow();
+    }
+  });
+  it('keeps draft values nonexecuting and preserves exact reason bytes until the reject command validates them', () => {
+    for (const decisionReason of ['', '  ', '  Публичная причина\nвторая строка  ']) {
+      const values = { selectedRequestIdOrNull: null, decisionReason };
+      expect(networkGmRequestDraftValues(values)).toEqual(values);
+    }
+    for (const values of [
+      { selectedRequestIdOrNull: null },
+      { selectedRequestIdOrNull: '', decisionReason: '' },
+      { selectedRequestIdOrNull: null, decisionReason: 1 },
+      { selectedRequestIdOrNull: null, decisionReason: '', contextId: id(20) },
+    ]) {
+      expect(() => networkGmRequestDraftValues(values)).toThrow();
+    }
+  });
+  it('accepts exactly the two source payloads, rejecting guessed scope/authority and blank rejection', () => {
+    const accept = { campaignId: id(5), requestId: 'request:one', requestRevision: 0 };
+    const reject = { ...accept, reason: '  Публичная причина  ' };
+    expect(
+      networkGmRequestWorkflowPayloadValue('UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', accept),
+    ).toEqual(accept);
+    expect(networkGmRequestWorkflowPayloadValue('UI-CMD-DEVICE-REQUEST-REJECT', reject)).toEqual(
+      reject,
+    );
+    for (const [workflow, value] of [
+      ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', accept],
+      ['UI-CMD-DEVICE-REQUEST-REJECT', reject],
+    ] as const) {
+      for (const key of Object.keys(value))
+        expect(() =>
+          networkGmRequestWorkflowPayloadValue(workflow, withoutField(value, key)),
+        ).toThrow();
+      for (const key of [
+        'networkScopeId',
+        'contextId',
+        'role',
+        'authoritativeGmActorId',
+        'masterAuthorityRevision',
+        'requestedControllerSeat',
+      ])
+        expect(() =>
+          networkGmRequestWorkflowPayloadValue(workflow, { ...value, [key]: id(50) }),
+        ).toThrow();
+      for (const requestRevision of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1])
+        expect(() =>
+          networkGmRequestWorkflowPayloadValue(workflow, { ...value, requestRevision }),
+        ).toThrow();
+    }
+    expect(() =>
+      networkGmRequestWorkflowPayloadValue('UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', reject),
+    ).toThrow();
+    expect(() =>
+      networkGmRequestWorkflowPayloadValue('UI-CMD-DEVICE-REQUEST-REJECT', {
+        ...reject,
+        reason: ' \n\t',
+      }),
+    ).toThrow();
+    expect(() =>
+      networkGmRequestWorkflowPayloadValue('UI-CMD-DEVICE-REQUEST-CANCEL', reject),
+    ).toThrow();
+  });
+  it('binds receipt transition, one request revision and ordered exact submitted export digests', () => {
+    expect(networkGmRequestDecisionReceiptValue(reviewReceipt, gmBatch)).toEqual(reviewReceipt);
+    for (const beforeRequestStatus of ['PENDING', 'IN_REVIEW']) {
+      const rejected = {
+        ...reviewReceipt,
+        workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+        beforeRequestStatus,
+        afterRequestStatus: 'REJECTED',
+        decisionReasonOrNull: '  Публичная причина  ',
+      };
+      expect(networkGmRequestDecisionReceiptValue(rejected, gmBatch)).toEqual(rejected);
+    }
+    for (const key of Object.keys(reviewReceipt))
+      expect(() =>
+        networkGmRequestDecisionReceiptValue(withoutField(reviewReceipt, key), gmBatch),
+      ).toThrow();
+    for (const change of [
+      { beforeRequestStatus: 'IN_REVIEW' },
+      { afterRequestStatus: 'PROPOSED' },
+      { decisionReasonOrNull: 'not applicable' },
+      { requestRevision: 0 },
+      { requestRevision: 2 },
+      { beforeRequestRevision: Number.MAX_SAFE_INTEGER, requestRevision: Number.MAX_SAFE_INTEGER },
+      { candidateSnapshotChecksums: [] },
+      { candidateSnapshotChecksums: [hash, hash] },
+      { candidateSnapshotChecksums: [...reviewReceipt.candidateSnapshotChecksums].reverse() },
+      { candidateSnapshotChecksums: [gmBatch[0]!.snapshotChecksum] },
+      { campaignCharacterId: id(50) },
+      { controllerSeat: id(4) },
+    ]) {
+      expect(() =>
+        networkGmRequestDecisionReceiptValue({ ...reviewReceipt, ...change }, gmBatch),
+      ).toThrow();
+    }
+    for (const beforeRequestStatus of ['REJECTED', 'CANCELLED', 'PROPOSED'])
+      expect(() =>
+        networkGmRequestDecisionReceiptValue(
+          {
+            ...reviewReceipt,
+            workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+            beforeRequestStatus,
+            afterRequestStatus: 'REJECTED',
+            decisionReasonOrNull: 'reason',
+          },
+          gmBatch,
+        ),
+      ).toThrow();
+    expect(() =>
+      networkGmRequestDecisionReceiptValue(
+        {
+          ...reviewReceipt,
+          workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+          afterRequestStatus: 'REJECTED',
+          decisionReasonOrNull: '  ',
+        },
+        gmBatch,
+      ),
+    ).toThrow();
+  });
+});
+
+const gmDraftScope = {
+  gmLocalContextId: id(20),
+  campaignId: id(5),
+  sourceFormId: 'NET-017',
+} as const;
+const gmDraftMessage: NetworkGmRequestDraftReplaceV3Message = {
+  messageType: 'network.gm-request-draft.replace',
+  protocolVersion: 3,
+  draftUpdateId: 'gm-edit:one',
+  scope: gmDraftScope,
+  expectedRevisions: { stateRevision: 1, projectionRevision: 2, actorVisibilityRevision: 0 },
+  expectedRequestQueueRevision: 1,
+  values: {
+    selectedRequestIdOrNull: 'request:one',
+    decisionReason: '  Публичная причина\nвторая строка  ',
+  },
+};
+function gmWireResult(
+  formId: 'NET-017' | 'CMP-006' = 'NET-017',
+): NetworkGmRequestDraftResultV3Message {
+  const revisions = { stateRevision: 4, projectionRevision: 8, actorVisibilityRevision: 0 };
+  const payload: JsonObject =
+    formId === 'NET-017'
+      ? { ...gmProjection, ...{ stateRevision: 4, projectionRevision: 8, requestQueueRevision: 3 } }
+      : {
+          gmLocalContextId: id(20),
+          hostDeviceId: id(60),
+          masterAuthorityRevision: 0,
+          routeIdentityKind: 'CAMPAIGN',
+          campaignId: id(5),
+          sourceCampaignDraftId: 'created-draft',
+          status: 'PAUSED',
+          createdAt: '2026-10-30T12:00:00.000Z',
+          hostAddress: '127.0.0.1',
+          hostPort: 41337,
+          networkInterface: 'Loopback',
+          qrPayload: 'http://127.0.0.1:41337/?campaignId=' + id(5),
+          activePlayerCapacity: 3,
+          creationReceiptId: 'created:receipt',
+          creationCommandId: 'created:command',
+          hostBindRecovery: { status: 'RESERVED', reasonCode: null },
+        };
+  return {
+    messageType: 'network.gm-request-draft.result',
+    protocolVersion: 3,
+    draftUpdateId: gmDraftMessage.draftUpdateId,
+    scope: gmDraftScope,
+    changed: true,
+    appliedRevisions: gmDraftMessage.expectedRevisions,
+    appliedRequestQueueRevision: 1,
+    revisions,
+    requestQueueRevision: 3,
+    projectionRole: 'gm',
+    presentation: {
+      base: {
+        formId,
+        formType: 'screen',
+        availableActionKeys: [],
+        routeTemplate:
+          formId === 'NET-017'
+            ? '/master/campaigns/:campaignId/network/net-017'
+            : '/master/campaigns/:campaignId/campaign/cmp-006',
+        routeBindings: [{ parameterIndex: 0, source: 'inherited', value: id(5) }],
+        roleFilteredPayload: payload,
+      },
+      layers: [],
+    },
+  };
+}
+const decodeGmClient = (value: unknown) => decodeClientMessageV3(JSON.stringify(value), vocabulary);
+const decodeGmHost = (value: unknown) => decodeHostMessageV3(JSON.stringify(value), vocabulary);
+
+describe('separate GM request-review wire v3 family', () => {
+  it('round-trips exact GM draft values without a player scope or a separate draft revision', () => {
+    const encoded = encodeClientMessageV3(gmDraftMessage, vocabulary);
+    expect(encoded.ok).toBe(true);
+    const decoded = decodeGmClient(gmDraftMessage);
+    expect(decoded).toEqual({ ok: true, value: gmDraftMessage });
+    expect(gmDraftMessage.values.decisionReason).toBe('  Публичная причина\nвторая строка  ');
+    for (const key of Object.keys(gmDraftMessage))
+      expect(decodeGmClient(withoutField(gmDraftMessage, key)).ok).toBe(false);
+    for (const key of Object.keys(gmDraftScope))
+      expect(decodeGmClient({ ...gmDraftMessage, scope: withoutField(gmDraftScope, key) }).ok).toBe(
+        false,
+      );
+    for (const key of ['networkScopeId', 'controllerSeat', 'contextId', 'masterAuthorityRevision'])
+      expect(
+        decodeGmClient({ ...gmDraftMessage, scope: { ...gmDraftScope, [key]: id(40) } }).ok,
+      ).toBe(false);
+    for (const value of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1])
+      expect(decodeGmClient({ ...gmDraftMessage, expectedRequestQueueRevision: value }).ok).toBe(
+        false,
+      );
+    expect(decodeGmClient({ ...gmDraftMessage, expectedDraftRevision: 0 }).ok).toBe(false);
+    expect(
+      decodeGmClient({ ...gmDraftMessage, scope: { ...gmDraftScope, sourceFormId: 'NET-005' } }).ok,
+    ).toBe(false);
+    expect(
+      decodeGmClient({ ...gmDraftMessage, values: { ...gmDraftMessage.values, role: 'gm' } }).ok,
+    ).toBe(false);
+  });
+  it('does not parse GM messages as player drafts or accept a different outer protocol version', () => {
+    expect(decodeGmClient({ ...gmDraftMessage, messageType: 'network.draft.replace' }).ok).toBe(
+      false,
+    );
+    expect(decodeGmClient({ ...draft, messageType: 'network.gm-request-draft.replace' }).ok).toBe(
+      false,
+    );
+    for (const version of [1, 2, 4])
+      expect(decodeGmClient({ ...gmDraftMessage, protocolVersion: version }).ok).toBe(false);
+    const failed = decodeGmClient({
+      ...gmDraftMessage,
+      scope: { ...gmDraftScope, privateKey: 'private-gm-sentinel' },
+    });
+    expect(failed.ok).toBe(false);
+    expect(JSON.stringify(failed)).not.toContain('private-gm-sentinel');
+    expect(decodeGmClient(gmWireResult()).ok).toBe(false);
+    expect(decodeGmHost(gmDraftMessage).ok).toBe(false);
+  });
+  it.each(['NET-017', 'CMP-006'] as const)(
+    'keeps old applied facts while delivering current same-scope %s',
+    (form) => {
+      const value = gmWireResult(form),
+        decoded = decodeGmHost(value);
+      expect(decoded).toEqual({ ok: true, value });
+      expect(encodeHostMessageV3(value, vocabulary).ok).toBe(true);
+      expect(value.appliedRevisions.projectionRevision).toBe(2);
+      expect(value.revisions.projectionRevision).toBe(8);
+      for (const key of Object.keys(value))
+        expect(decodeGmHost(withoutField(value, key)).ok).toBe(false);
+      expect(decodeGmHost({ ...value, scope: { ...value.scope, campaignId: id(9) } }).ok).toBe(
+        false,
+      );
+      expect(
+        decodeGmHost({ ...value, scope: { ...value.scope, gmLocalContextId: id(9) } }).ok,
+      ).toBe(false);
+      expect(
+        decodeGmHost({
+          ...value,
+          presentation: {
+            ...value.presentation,
+            base: {
+              ...value.presentation.base,
+              routeBindings: [{ parameterIndex: 0, source: 'inherited', value: id(9) }],
+            },
+          },
+        }).ok,
+      ).toBe(false);
+      const payload = value.presentation.base.roleFilteredPayload;
+      for (const key of Object.keys(payload))
+        expect(
+          decodeGmHost({
+            ...value,
+            presentation: {
+              ...value.presentation,
+              base: { ...value.presentation.base, roleFilteredPayload: withoutField(payload, key) },
+            },
+          }).ok,
+        ).toBe(false);
+      expect(
+        decodeGmHost({
+          ...value,
+          presentation: {
+            ...value.presentation,
+            base: {
+              ...value.presentation.base,
+              roleFilteredPayload: { ...payload, canonicalWitnessText: 'private-gm-sentinel' },
+            },
+          },
+        }).ok,
+      ).toBe(false);
+    },
+  );
+  it('rejects current vector/queue regression, mismatched inner vectors and other projection families', () => {
+    const value = gmWireResult();
+    for (const change of [
+      { changed: 'yes' },
+      { projectionRole: 'player' },
+      { requestQueueRevision: 0 },
+      { revisions: { ...value.revisions, stateRevision: 0 } },
+      { revisions: { ...value.revisions, projectionRevision: 1 } },
+      { appliedRevisions: { ...value.appliedRevisions, actorVisibilityRevision: 1 } },
+      { appliedRequestQueueRevision: 4 },
+      { draftRevision: 1 },
+    ])
+      expect(decodeGmHost({ ...value, ...change }).ok).toBe(false);
+    for (const change of [
+      { stateRevision: 3 },
+      { projectionRevision: 7 },
+      { requestQueueRevision: 2 },
+    ])
+      expect(
+        decodeGmHost({
+          ...value,
+          presentation: {
+            ...value.presentation,
+            base: {
+              ...value.presentation.base,
+              roleFilteredPayload: { ...value.presentation.base.roleFilteredPayload, ...change },
+            },
+          },
+        }).ok,
+      ).toBe(false);
+    expect(
+      decodeGmHost({
+        ...value,
+        presentation: { ...value.presentation, layers: [value.presentation.base] },
+      }).ok,
+    ).toBe(false);
+    expect(decodeGmHost({ ...value, presentation: result().presentation }).ok).toBe(false);
+    expect(
+      decodeGmHost({
+        ...value,
+        presentation: {
+          ...value.presentation,
+          base: { ...value.presentation.base, formId: 'APP-011' },
+        },
+      }).ok,
+    ).toBe(false);
+  });
+  it('keeps refusal codes closed and binds stale actual revisions to the current envelope', () => {
+    const revisions = { stateRevision: 4, projectionRevision: 8, actorVisibilityRevision: 0 };
+    const message = {
+      messageType: 'network.gm-request-draft.refusal',
+      protocolVersion: 3,
+      draftUpdateId: gmDraftMessage.draftUpdateId,
+      scope: gmDraftScope,
+      revisions,
+      presentationUnchanged: true,
+    };
+    const refusals = [
+      { code: 'INVALID_FIELD', field: 'selectedRequestIdOrNull', reason: 'INVALID_VALUE' },
+      { code: 'INVALID_FIELD', field: 'decisionReason', reason: 'INVALID_VALUE' },
+      { code: 'STALE_REVISION', expected: gmDraftMessage.expectedRevisions, actual: revisions },
+      { code: 'STALE_QUEUE', expected: 1, actual: 3 },
+      { code: 'IDEMPOTENCY_CONFLICT' },
+      { code: 'DRAFT_UNAVAILABLE' },
+      { code: 'REVISION_OVERFLOW' },
+    ];
+    for (const refusal of refusals) {
+      const value = { ...message, refusal };
+      expect(decodeGmHost(value)).toEqual({ ok: true, value });
+      for (const key of Object.keys(refusal))
+        expect(decodeGmHost({ ...message, refusal: withoutField(refusal, key) }).ok).toBe(false);
+      expect(
+        decodeGmHost({ ...message, refusal: { ...refusal, detail: 'private-gm-sentinel' } }).ok,
+      ).toBe(false);
+    }
+    for (const refusal of [
+      { code: 'STALE_DRAFT', expected: 0, actual: 1 },
+      { code: 'STALE_QUEUE', expected: -1, actual: 3 },
+      {
+        code: 'STALE_REVISION',
+        expected: gmDraftMessage.expectedRevisions,
+        actual: gmDraftMessage.expectedRevisions,
+      },
+      { code: 'INVALID_FIELD', field: 'controllerSeat', reason: 'INVALID_VALUE' },
+      { code: 'INVALID_FIELD', field: 'decisionReason', reason: 'INVALID_VERIFIER' },
+    ])
+      expect(decodeGmHost({ ...message, refusal }).ok).toBe(false);
+    expect(
+      decodeGmHost({
+        ...message,
+        presentationUnchanged: false,
+        refusal: { code: 'DRAFT_UNAVAILABLE' },
+      }).ok,
+    ).toBe(false);
   });
 });

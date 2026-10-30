@@ -2,7 +2,10 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { loadDeviceId } from '../persistence/device-identity.js';
-import type { CampaignPrivateOwner } from '../persistence/campaign-creation.js';
+import {
+  readHostedCampaignCreationOrigin,
+  type CampaignPrivateOwner,
+} from '../persistence/campaign-creation.js';
 import {
   readHostedCurrentPausedCampaign,
   type CurrentPausedCampaignHeader,
@@ -12,6 +15,11 @@ import {
   readHostedNetworkCommand,
   readHostedTechnicalSession,
   readHostedDeviceRequest,
+  readGmDeviceRequestQueue,
+  readHostedDeviceRequestCurrent,
+  commitHostedRequestLaneBinding,
+  type HostedRequestReviewCurrent,
+  type HostedCandidateBaselineGuard,
   readHostedConnectionAttempt,
   type HostedNetworkCommand,
   type HostedNetworkInput,
@@ -26,6 +34,7 @@ import {
   NetworkApplicationStoreError,
   type NetworkPreparedBatch,
   type NetworkCampaignProof,
+  type PeerLaneBindingReceipt,
 } from '../persistence/network-local-application.js';
 import type { CampaignPeerServerChannel } from './campaign-peer-channel.js';
 import { loadNetworkInstallation } from './network-installation.js';
@@ -48,6 +57,7 @@ import {
 import {
   encodeDeviceAdmissionPeerResponse,
   deviceAdmissionSubmitSemanticBody,
+  deviceAdmissionRequestReviewCurrent,
   DeviceAdmissionPeerResponseError,
   DEVICE_ADMISSION_PEER_REFUSAL_CODES,
   type DeviceAdmissionPeerResponse,
@@ -61,9 +71,16 @@ import { validateFinalAdmissionCandidate } from './device-admission-candidate.js
 import {
   canonicalPostSaveJson,
   postSaveSha256,
+  resolveStoredLocalCharacterExportBaseline,
+  isStoredLocalCharacterExportBaselineCompatible,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 
+export interface DeviceAdmissionPeerRequestConnectionFact {
+  readonly requestId: string;
+  readonly requestOwnerDeviceId: string;
+  readonly connected: boolean;
+}
 export interface DeviceAdmissionPeerRuntimeLimits extends DeviceAdmissionPeerCommandLimits {
   readonly timeoutMs: number;
   readonly maxActiveTransfers: number;
@@ -149,24 +166,6 @@ function shortReceipt(r: HostedNetworkReceipt): DeviceAdmissionPeerReceipt {
     ? { ...common, operation: r.operation, session: sessionHeader(r.session) }
     : { ...common, operation: r.operation, request: requestHeader(r.request) };
 }
-function ack(
-  operation: Ack['operation'],
-  delivery: Ack['delivery'],
-  saved: HostedNetworkCommand,
-): Ack {
-  const current: DeviceAdmissionPeerCurrent =
-    'requestId' in saved.current
-      ? { kind: 'REQUEST', request: requestHeader(saved.current) }
-      : { kind: 'SESSION', session: sessionHeader(saved.current) };
-  return {
-    schemaVersion: 1,
-    operation,
-    outcome: 'ACK',
-    delivery,
-    receipt: shortReceipt(saved.receipt),
-    current,
-  };
-}
 function responseRefusal(operation: Operation, error: unknown): DeviceAdmissionPeerResponse {
   let code: DeviceAdmissionPeerRefusalCode = 'UNAVAILABLE';
   if (error instanceof Refusal && DEVICE_ADMISSION_PEER_REFUSAL_CODES.includes(error.code))
@@ -232,6 +231,15 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
   const validateOwner = (owner: CampaignPrivateOwner): void => {
     validateMasterSecretVerifier(owner.verifier);
   };
+  function requireCompatibleBaseline(id: string): void {
+    if (!isStoredLocalCharacterExportBaselineCompatible(d.baseline, id))
+      return fail('INCOMPATIBLE_BASELINE');
+    resolveStoredLocalCharacterExportBaseline(d.baseline, id);
+  }
+  const validateCandidateBaseline: HostedCandidateBaselineGuard = (s) => {
+    requireCompatibleBaseline(s.campaign.baselineVersion);
+    requireCompatibleBaseline(s.candidateBaselineVersion);
+  };
   function source(c: Connection): {
     principal: HostedNetworkPrincipal;
     campaign: CurrentPausedCampaignHeader;
@@ -248,8 +256,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       c.handle.campaignId,
       validateOwner,
     );
-    if (campaign.baselineVersion !== d.baseline.baselineVersion)
-      return fail('INCOMPATIBLE_BASELINE');
+    requireCompatibleBaseline(campaign.baselineVersion);
     return {
       principal: {
         hostOwnerDeviceId: host.ownerDeviceId,
@@ -259,6 +266,141 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       campaign,
     };
   }
+  function requestCurrent(
+    review: HostedRequestReviewCurrent,
+  ): Extract<DeviceAdmissionPeerCurrent, { kind: 'REQUEST_REVIEW' }> {
+    const current = deviceAdmissionRequestReviewCurrent(review.proof);
+    if (
+      current.request.requestRevision !== review.requestRevision ||
+      current.request.status !== review.requestStatus ||
+      !same(review.proof.submittedReceipt.request, requestHeader(review.submittedRequest))
+    )
+      return fail('UNAVAILABLE');
+    return current;
+  }
+  function acknowledged(
+    c: Connection,
+    operation: Ack['operation'],
+    delivery: Ack['delivery'],
+    saved: HostedNetworkCommand,
+  ): Ack {
+    const current: DeviceAdmissionPeerCurrent =
+      saved.receipt.operation === 'OPEN'
+        ? { kind: 'SESSION', session: sessionHeader(saved.receipt.session) }
+        : requestCurrent(
+            readHostedDeviceRequestCurrent(
+              d.database,
+              source(c).principal,
+              saved.receipt.request.requestId,
+              validateOwner,
+            ),
+          );
+    return {
+      schemaVersion: 1,
+      operation,
+      outcome: 'ACK',
+      delivery,
+      receipt: shortReceipt(saved.receipt),
+      current,
+    };
+  }
+  function bindLane(
+    c: Connection,
+    command: Extract<DeviceAdmissionPeerCommand, { operation: 'DEVICE_REQUEST_BIND_LANE' }>,
+    body: string,
+  ): Ack {
+    const p = source(c).principal;
+    readHostedTechnicalSession(d.database, p, command.technicalSessionId, validateOwner);
+    const lease = d.executor.bindScope(c.handle, {
+      kind: 'SESSION',
+      id: command.technicalSessionId,
+    });
+    const old = readHostedDeviceRequestCurrent(d.database, p, command.requestId, validateOwner);
+    const binding = {
+      campaignId: p.campaignId,
+      requestOwnerDeviceId: p.peerIdentity.ownerDeviceId,
+      requestId: command.requestId,
+      technicalSessionId: command.technicalSessionId,
+      submitCommandId: command.submitCommandId,
+      batchSha256: command.batchSha256,
+      localControllerSeatId: command.localControllerSeatId,
+    };
+    const prior = old.proof.laneProvenance;
+    let receipt: PeerLaneBindingReceipt;
+    let delivery: Ack['delivery'];
+    if (prior?.kind === 'BIND_LANE') {
+      receipt = prior.receipt;
+      delivery = 'REPLAY';
+      if (
+        receipt.commandId !== command.commandId ||
+        receipt.semanticBodySha256 !== postSaveSha256(body) ||
+        !same(receipt.binding, binding)
+      )
+        return fail('IDEMPOTENCY_CONFLICT');
+    } else {
+      if (
+        prior !== null ||
+        old.submittedRequest.submitCommandId !== command.submitCommandId ||
+        old.submittedRequest.technicalSessionId !== command.technicalSessionId ||
+        old.submittedRequest.batch.batchSha256 !== command.batchSha256 ||
+        readHostedNetworkCommand(d.database, p, command.commandId, validateOwner) !== null
+      )
+        return fail('IDEMPOTENCY_CONFLICT');
+      receipt = {
+        operation: 'BIND_LANE',
+        commandId: command.commandId,
+        receiptId: randomUUID(),
+        semanticBodySha256: postSaveSha256(body),
+        binding,
+      };
+      delivery = 'COMMITTED';
+    }
+    const response = (review: HostedRequestReviewCurrent): Ack => {
+      const current = requestCurrent({
+        ...review,
+        proof: { ...review.proof, laneProvenance: { kind: 'BIND_LANE', receipt } },
+      });
+      return {
+        schemaVersion: 1,
+        operation: command.operation,
+        outcome: 'ACK',
+        delivery,
+        receipt,
+        current,
+      };
+    };
+    encodeDeviceAdmissionPeerResponse(response(old));
+    const result = commitHostedRequestLaneBinding(
+      d.database,
+      p,
+      { request: command, receiptId: receipt.receiptId },
+      validateOwner,
+      guard(c, lease, p, () => {
+        const fresh = readHostedDeviceRequestCurrent(
+          d.database,
+          p,
+          command.requestId,
+          validateOwner,
+        );
+        if (
+          fresh.proof.laneProvenance !== null &&
+          !same(fresh.proof.laneProvenance, { kind: 'BIND_LANE', receipt })
+        )
+          return fail('IDEMPOTENCY_CONFLICT');
+        encodeDeviceAdmissionPeerResponse(response(fresh));
+      }),
+    );
+    if (!same(result.receipt, receipt)) return fail('UNAVAILABLE');
+    return {
+      schemaVersion: 1,
+      operation: command.operation,
+      outcome: 'ACK',
+      delivery,
+      receipt: result.receipt,
+      current: requestCurrent(result.current),
+    };
+  }
+
   function drop(stage: Stage): void {
     if (stage.disposed) return;
     stage.disposed = true;
@@ -297,7 +439,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     delivery: Ack['delivery'],
   ): Ack {
     const p = source(c).principal,
-      preview = ack(operation, delivery, known),
+      preview = acknowledged(c, operation, delivery, known),
       previewText = encodeDeviceAdmissionPeerResponse(preview);
     const result = commitHostedNetworkCommand(
       d.database,
@@ -308,12 +450,14 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         const fresh = readHostedNetworkCommand(d.database, p, known.input.commandId, validateOwner);
         if (
           fresh === null ||
-          encodeDeviceAdmissionPeerResponse(ack(operation, delivery, fresh)) !== previewText
+          encodeDeviceAdmissionPeerResponse(acknowledged(c, operation, delivery, fresh)) !==
+            previewText
         )
           return fail('UNAVAILABLE');
       }),
+      validateCandidateBaseline,
     );
-    return ack(operation, delivery, result);
+    return acknowledged(c, operation, delivery, result);
   }
   function newCommand(
     c: Connection,
@@ -336,12 +480,14 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         const actual = readHostedNetworkCommand(d.database, p, input.commandId, validateOwner);
         if (
           actual !== null &&
-          encodeDeviceAdmissionPeerResponse(ack(operation, 'COMMITTED', actual)) !== previewText
+          encodeDeviceAdmissionPeerResponse(acknowledged(c, operation, 'COMMITTED', actual)) !==
+            previewText
         )
           return fail('UNAVAILABLE');
       }),
+      validateCandidateBaseline,
     );
-    return ack(operation, 'COMMITTED', result);
+    return acknowledged(c, operation, 'COMMITTED', result);
   }
   function knownOpen(
     c: Connection,
@@ -578,8 +724,8 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       return fail('STALE_REVISION');
     if (command.candidates.length > campaign.activePlayerCapacity - campaign.activePcCount)
       return fail('CAPACITY_EXCEEDED');
-    if (command.candidates.some((x) => x.descriptor.baselineVersion !== d.baseline.baselineVersion))
-      return fail('INCOMPATIBLE_BASELINE');
+    for (const candidate of command.candidates)
+      requireCompatibleBaseline(candidate.descriptor.baselineVersion);
     // Reserve both accumulated chunks and the one complete Buffer used by final canonical validation.
     const reserved = command.submitBodyByteLength * 2;
     if (
@@ -707,6 +853,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
           return fail('IDEMPOTENCY_CONFLICT');
         return savedResponse(c, command.operation, existing, stage.lease, 'REPLAY');
       }
+      if (batch.schemaVersion !== 2) return fail('INVALID_CANDIDATE');
       const receiptId = randomUUID();
       const header: PeerRequestHeader = {
         requestId: batch.requestId,
@@ -730,7 +877,22 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
           semanticBodySha256: postSaveSha256(semanticBodyJson),
           request: header,
         },
-        current: { kind: 'REQUEST', request: header },
+        current: deviceAdmissionRequestReviewCurrent({
+          submittedReceipt: {
+            operation: 'SUBMIT',
+            commandId: stage.begin.commandId,
+            receiptId,
+            semanticBodySha256: postSaveSha256(semanticBodyJson),
+            request: header,
+          },
+          cancelledReceiptOrNull: null,
+          decisions: [],
+          laneProvenance: {
+            kind: 'SUBMITTED_BATCH',
+            batchSha256: batch.batchSha256,
+            localControllerSeatId: batch.localControllerSeatId,
+          },
+        }),
       };
       return newCommand(
         c,
@@ -777,6 +939,9 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       return savedResponse(c, command.operation, known, lease, 'REPLAY');
     }
     const old = readHostedDeviceRequest(d.database, p, command.requestId, validateOwner);
+    const review = readHostedDeviceRequestCurrent(d.database, p, command.requestId, validateOwner);
+    if (review.requestStatus !== 'PENDING' || review.requestRevision !== command.requestRevision)
+      return fail('STALE_REVISION');
     if (
       old.technicalSessionId !== command.technicalSessionId ||
       old.requestRevision !== command.requestRevision ||
@@ -802,7 +967,16 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         semanticBodySha256: postSaveSha256(body),
         request: header,
       },
-      current: { kind: 'REQUEST', request: header },
+      current: deviceAdmissionRequestReviewCurrent({
+        ...review.proof,
+        cancelledReceiptOrNull: {
+          operation: 'CANCEL',
+          commandId: command.commandId,
+          receiptId,
+          semanticBodySha256: postSaveSha256(body),
+          request: header,
+        },
+      }),
     };
     return newCommand(
       c,
@@ -842,6 +1016,8 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
           return bounded(chunk(c, command));
         case 'DEVICE_REQUEST_COMMIT':
           return bounded(submit(c, command));
+        case 'DEVICE_REQUEST_BIND_LANE':
+          return bounded(bindLane(c, command, body));
         case 'DEVICE_REQUEST_CANCEL':
           return bounded(cancel(c, command, body));
       }
@@ -890,6 +1066,60 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     })();
     return c.task;
   }
+  /** Read-only host facts: queue identities come from storage, never a browser principal. */
+  function requestConnectionFacts(
+    campaignId: string,
+    authoritativeRequestIds: readonly string[],
+  ): readonly DeviceAdmissionPeerRequestConnectionFact[] {
+    if (
+      !Array.isArray(authoritativeRequestIds) ||
+      authoritativeRequestIds.some((id) => typeof id !== 'string' || id.length === 0) ||
+      new Set(authoritativeRequestIds).size !== authoritativeRequestIds.length
+    )
+      throw new NetworkApplicationStoreError('INVALID_INPUT');
+    const read = () => {
+      const origin = readHostedCampaignCreationOrigin(d.database, campaignId, validateOwner);
+      const queue = readGmDeviceRequestQueue(
+        d.database,
+        {
+          ownerDeviceId: loadDeviceId(d.database),
+          gmLocalContextId: origin.command.request.payload.gmLocalContextId,
+          campaignId,
+        },
+        validateOwner,
+      );
+      return Object.freeze(
+        [...authoritativeRequestIds].sort().map((requestId) => {
+          const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
+          if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
+          const expected = stored.submittedRequest.principal;
+          // A second signed key can claim the same UUID; the durable pin must also agree.
+          const connected =
+            !closed &&
+            [...connections].some((connection) => {
+              if (
+                connection.channel.closed ||
+                connection.handle.campaignId !== campaignId ||
+                !same(connection.channel.deviceIdentity, expected.peerIdentity)
+              )
+                return false;
+              const principal = source(connection).principal;
+              if (!same(principal, expected)) return false;
+              readHostedDeviceRequest(d.database, principal, requestId, validateOwner);
+              return true;
+            });
+          return Object.freeze({
+            requestId,
+            requestOwnerDeviceId: expected.peerIdentity.ownerDeviceId,
+            connected,
+          });
+        }),
+      );
+    };
+    // A command guard reads its existing snapshot; standalone refresh opens only a deferred read.
+    return d.database.inTransaction ? read() : d.database.transaction(read).deferred();
+  }
+
   function close(): Promise<void> {
     if (closePromise !== undefined) return closePromise;
     closed = true;
@@ -902,5 +1132,5 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     closePromise = Promise.allSettled(tasks).then(() => undefined);
     return closePromise;
   }
-  return Object.freeze({ run, close });
+  return Object.freeze({ run, close, requestConnectionFacts });
 }

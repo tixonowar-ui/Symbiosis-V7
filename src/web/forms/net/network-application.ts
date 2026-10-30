@@ -25,8 +25,16 @@ import {
   type Net004Projection,
   type Net005Projection,
   type Net011Projection,
+  type Net017Projection,
+  type NetworkGmRequestDraftValues,
+  type NetworkGmAcceptToReviewPayload,
+  type NetworkGmRejectRequestPayload,
 } from '@shared/network-application.js';
-import { isNetworkApplicationProjection } from '@shared/network-application-codec.js';
+import {
+  isNetworkApplicationProjection,
+  networkGmRequestProjectionValue,
+  networkGmRequestDraftValues,
+} from '@shared/network-application-codec.js';
 
 export type NetworkEdit = NetworkDraftReplaceV3Message extends infer Request
   ? Request extends NetworkDraftReplaceV3Message
@@ -456,4 +464,66 @@ export function networkCommandDestinationMatches(
         p['requestRevision'] === receipt.result.requestRevisionOrNull
       : p['ownRequestIdOrNull'] === null)
   );
+}
+
+/** Local editor flags only: neither these values nor the queue DTO grant GM authority. */
+export interface NetworkGmRequestEditState {
+  readonly values: NetworkGmRequestDraftValues;
+  readonly dirty: boolean;
+  readonly pending: boolean;
+}
+export function networkGmRequestDraftFromProjection(
+  value: Net017Projection,
+): NetworkGmRequestDraftValues {
+  const p = networkGmRequestProjectionValue(value);
+  return { selectedRequestIdOrNull: p.selectedRequestIdOrNull, decisionReason: p.decisionReason };
+}
+function confirmedGmRequestSelection(
+  value: Net017Projection,
+  state: NetworkGmRequestEditState | null,
+) {
+  const p = networkGmRequestProjectionValue(value);
+  if (p.commandId !== null || state?.dirty || state?.pending) return null;
+  if (state !== null) {
+    const values = networkGmRequestDraftValues(state.values);
+    if (
+      values.selectedRequestIdOrNull !== p.selectedRequestIdOrNull ||
+      values.decisionReason !== p.decisionReason
+    )
+      return null;
+  }
+  const row = p.requests.find((request) => request.requestId === p.selectedRequestIdOrNull);
+  return row === undefined ? null : { projection: p, row };
+}
+/** NET-017::CTA::007: a payload preview, never a client-side decision or reservation. */
+export function networkGmAcceptToReviewPayload(
+  value: Net017Projection,
+  state: NetworkGmRequestEditState | null = null,
+): NetworkGmAcceptToReviewPayload | null {
+  const selected = confirmedGmRequestSelection(value, state);
+  if (selected === null || selected.row.requestStatus !== 'PENDING') return null;
+  return {
+    campaignId: selected.projection.campaignId,
+    requestId: selected.row.requestId,
+    requestRevision: selected.row.requestRevision,
+  };
+}
+/** NET-017::CTA::008 preserves exact confirmed reason bytes for the host command. */
+export function networkGmRejectRequestPayload(
+  value: Net017Projection,
+  state: NetworkGmRequestEditState | null = null,
+): NetworkGmRejectRequestPayload | null {
+  const selected = confirmedGmRequestSelection(value, state);
+  if (
+    selected === null ||
+    !['PENDING', 'IN_REVIEW'].includes(selected.row.requestStatus) ||
+    selected.projection.decisionReason.trim().length === 0
+  )
+    return null;
+  return {
+    campaignId: selected.projection.campaignId,
+    requestId: selected.row.requestId,
+    requestRevision: selected.row.requestRevision,
+    reason: selected.projection.decisionReason,
+  };
 }

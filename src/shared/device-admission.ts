@@ -7,13 +7,20 @@ import type {
 } from './wire-protocol.js';
 import { POST_SAVE_COMMAND_IDS } from './local-character-post-save.js';
 
-/** Existing Atlas workflows only; preliminary GM decisions await source approval. */
+/** Player workflows only; GM request review has a separate capability vocabulary. */
 export const NETWORK_WORKFLOW_COMMAND_IDS = Object.freeze([
   'UI-CMD-CONNECTION-OPEN',
   'UI-CMD-DEVICE-REQUEST-SUBMIT',
   'UI-CMD-DEVICE-REQUEST-CANCEL',
 ] as const);
 export type NetworkWorkflowCommandId = (typeof NETWORK_WORKFLOW_COMMAND_IDS)[number];
+/** Atlas 1.6 / ADR 0069. These identifiers never grant player capabilities. */
+export const NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS = Object.freeze([
+  'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+  'UI-CMD-DEVICE-REQUEST-REJECT',
+] as const);
+export type NetworkGmRequestReviewWorkflowId =
+  (typeof NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS)[number];
 /** Client implementation vocabulary across a local NET entry/exit; not a role or form grant. */
 export const NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS = Object.freeze([
   ...NETWORK_WORKFLOW_COMMAND_IDS,

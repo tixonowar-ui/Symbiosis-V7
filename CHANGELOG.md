@@ -34,8 +34,9 @@
 - **2026-10-30, issue #171 — в работе, не слито:** player NET-контур собственной
   Node/SQLite-установки сохраняет local outbox, original receipts и current view.
   В application-ветку локально интегрирована разрешённая Atlas1.6-поставка #177
-  и проверенная baseline lineage #190; preliminary GM runtime и его полный
-  сквозной сценарий ещё интегрируются. Прежний f9 прошёл 3539 тестов и 36 E2E,
+  и проверенная baseline lineage #190. Подключены GM queue, отдельный draft,
+  preliminary decisions, forward0011 и live owner recovery; полный новый
+  сквозной сценарий ещё проходит проверку. Прежний f9 прошёл 3539 тестов и 36 E2E,
   но это не проверка нового снимка. До merge нужны новые author/independent
   verify/E2E и CI. [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md)
   остаётся предложенным; границы — в [handoff](docs/status/handoff.md).

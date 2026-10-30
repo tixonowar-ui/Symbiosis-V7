@@ -1,4 +1,17 @@
 import { randomUUID } from 'node:crypto';
+import Database from 'better-sqlite3';
+import { configurePersistenceDatabase } from '../persistence/database.js';
+import { applyMigrations, applyMigrationSequence } from '../persistence/migrations/index.js';
+import { migration0001 } from '../persistence/migrations/0001-initial.js';
+import { migration0002 } from '../persistence/migrations/0002-local-character-checkpoint.js';
+import { migration0003 } from '../persistence/migrations/0003-device-identity.js';
+import { migration0004 } from '../persistence/migrations/0004-skill-presentation.js';
+import { migration0005 } from '../persistence/migrations/0005-symbiont-presentation.js';
+import { migration0006 } from '../persistence/migrations/0006-local-character-post-save.js';
+import { migration0007 } from '../persistence/migrations/0007-campaign-creation.js';
+import { migration0008 } from '../persistence/migrations/0008-network-installation-identity.js';
+import { migration0009 } from '../persistence/migrations/0009-device-admission.js';
+import { migration0010 } from '../persistence/migrations/0010-network-application.js';
 import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,6 +37,7 @@ import {
 import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import {
   readHostedNetworkCommand,
+  commitHostedNetworkCommand,
   readHostedDeviceRequest,
   readHostedPausedCampaignIds,
   type HostedNetworkPrincipal,
@@ -48,7 +62,10 @@ import { createCampaignBindManager } from './campaign-bind.js';
 import { createCampaignNetworkEndpoint } from './campaign-network-endpoint.js';
 import { createCampaignNetworkExecutor } from './campaign-network-executor.js';
 import { initializeNetworkInstallation, loadNetworkInstallation } from './network-installation.js';
-import { campaignPeerPublicIdentity } from './campaign-peer-identity.js';
+import {
+  campaignPeerPublicIdentity,
+  generateDeviceInstallationIdentityMaterial,
+} from './campaign-peer-identity.js';
 import { acceptCampaignPeerChannel, connectCampaignPeerChannel } from './campaign-peer-channel.js';
 import { parseCampaignLanAddress } from './campaign-lan-address.js';
 import { validatePeerCampaignHeader } from './campaign-peer-handshake.js';
@@ -153,9 +170,32 @@ async function host(
     campaignId?: string;
     capacity?: number;
     limits?: Partial<DeviceAdmissionPeerRuntimeLimits>;
+    legacySeed?: (
+      db: Database.Database,
+      principal: HostedNetworkPrincipal,
+      current: ReturnType<typeof readHostedCurrentPausedCampaign>,
+    ) => void;
   } = {},
 ) {
-  const db = openPersistenceDatabase(options.path ?? ':memory:');
+  const db =
+    options.legacySeed === undefined
+      ? openPersistenceDatabase(options.path ?? ':memory:')
+      : new Database(options.path ?? ':memory:');
+  if (options.legacySeed !== undefined) {
+    configurePersistenceDatabase(db);
+    applyMigrationSequence(db, [
+      migration0001,
+      migration0002,
+      migration0003,
+      migration0004,
+      migration0005,
+      migration0006,
+      migration0007,
+      migration0008,
+      migration0009,
+      migration0010,
+    ]);
+  }
   bootstrapDeviceIdentity(db);
   initializeNetworkInstallation(db);
   const http = createServer((_request, response) => {
@@ -348,6 +388,15 @@ async function host(
       revisions: vector(h),
     });
   };
+  const principal: HostedNetworkPrincipal = {
+    hostOwnerDeviceId: owner,
+    campaignId,
+    peerIdentity: campaignPeerPublicIdentity(playerMaterial),
+  };
+  if (options.legacySeed !== undefined) {
+    options.legacySeed(db, principal, header());
+    applyMigrations(db);
+  }
   const ex = createCampaignNetworkExecutor({ maxScopes: 1024, maxScopeBytes: 8 * 1024 * 1024 }),
     runtime = createDeviceAdmissionPeerRuntime({
       database: db,
@@ -409,11 +458,7 @@ async function host(
     clients.push(client);
     return client;
   };
-  const principal: HostedNetworkPrincipal = {
-    hostOwnerDeviceId: owner,
-    campaignId,
-    peerIdentity: campaignPeerPublicIdentity(playerMaterial),
-  };
+
   return {
     db,
     campaignId,
@@ -458,6 +503,8 @@ async function opened(
 }
 function batch(session: PeerSessionHeader): NetworkPreparedBatch {
   const rest = {
+    schemaVersion: 2 as const,
+    localControllerSeatId: randomUUID(),
     requestId: randomUUID(),
     technicalSessionId: session.technicalSessionId,
     connectionRevision: session.connectionRevision,
@@ -551,7 +598,7 @@ describe('actual owner-bound campaign peer application', () => {
     if (
       replay.outcome !== 'ACK' ||
       replay.receipt.operation !== 'SUBMIT' ||
-      replay.current.kind !== 'REQUEST'
+      replay.current.kind !== 'REQUEST_REVIEW'
     )
       throw new Error('Expected replay');
     expect(replay.delivery).toBe('REPLAY');
@@ -972,4 +1019,198 @@ describe('actual owner-bound campaign peer application', () => {
       'TRANSFER_READY',
     );
   });
+});
+
+const validateMasterOwner = (
+  owner: Parameters<typeof readHostedCurrentPausedCampaign>[2] extends (p: infer P) => void
+    ? P
+    : never,
+): void => {
+  validateMasterSecretVerifier(owner.verifier);
+};
+
+it('binds an authenticated owner attestation to genuine schema10 history without changing SUBMIT bytes', async () => {
+  let legacy!: {
+    prepared: NetworkPreparedBatch;
+    session: PeerSessionHeader;
+    submit: ReturnType<typeof commitHostedNetworkCommand>;
+  };
+  const p = await host({
+    legacySeed: (db, principal, current) => {
+      const technicalSessionId = randomUUID(),
+        receiptId = randomUUID();
+      const command = {
+        schemaVersion: 1 as const,
+        operation: 'CONNECTION_OPEN' as const,
+        commandId: 'legacy-open',
+        attemptId: 'legacy-attempt',
+        campaignCheckpointSha256: current.checkpointSha256,
+      };
+      const saved = commitHostedNetworkCommand(
+        db,
+        principal,
+        {
+          operation: 'OPEN',
+          commandId: command.commandId,
+          receiptId,
+          attemptId: command.attemptId,
+          technicalSessionId,
+          campaignProof: {
+            campaignId: current.campaignId,
+            revisions: vector(current),
+            checkpointSha256: current.checkpointSha256,
+          },
+          semanticBodyJson: canonicalPostSaveJson(command),
+        },
+        validateMasterOwner,
+        () => undefined,
+      );
+      if (saved.receipt.operation !== 'OPEN') throw new Error('Missing historical OPEN');
+      const session: PeerSessionHeader = {
+        technicalSessionId,
+        attemptId: command.attemptId,
+        campaignProof: saved.receipt.session.campaignProof,
+        connectionRevision: 0,
+        receiptId,
+      };
+      const v2 = batch(session),
+        { schemaVersion: _schema, localControllerSeatId: _lane, batchSha256: _hash, ...body } = v2;
+      const prepared: NetworkPreparedBatch = {
+        ...body,
+        batchSha256: postSaveSha256(canonicalPostSaveJson(body)),
+      };
+      const submit = commitHostedNetworkCommand(
+        db,
+        principal,
+        {
+          operation: 'SUBMIT',
+          commandId: 'legacy-submit',
+          receiptId: randomUUID(),
+          requestId: prepared.requestId,
+          technicalSessionId,
+          expectedConnectionRevision: 0,
+          batch: prepared,
+          semanticBodyJson: deviceAdmissionSubmitSemanticBody(
+            'legacy-submit',
+            prepared.batchSha256,
+          ),
+        },
+        validateMasterOwner,
+        () => undefined,
+      );
+      legacy = { prepared, session, submit };
+    },
+  });
+  const beforeSubmit = canonicalPostSaveJson(legacy.submit.receipt),
+    peer = await p.connect();
+  // The receiver proves a signed owner-host attestation, not the existence of a row in remote SQLite.
+  const command: Extract<DeviceAdmissionPeerCommand, { operation: 'DEVICE_REQUEST_BIND_LANE' }> = {
+    schemaVersion: 1,
+    operation: 'DEVICE_REQUEST_BIND_LANE',
+    commandId: 'bind-historical-lane',
+    requestId: legacy.prepared.requestId,
+    technicalSessionId: legacy.session.technicalSessionId,
+    submitCommandId: 'legacy-submit',
+    batchSha256: legacy.prepared.batchSha256,
+    localControllerSeatId: randomUUID(),
+  };
+  const originalWire = await call(peer, {
+    schemaVersion: 1,
+    operation: 'DEVICE_REQUEST_RECOVER',
+    requestId: command.requestId,
+    technicalSessionId: command.technicalSessionId,
+    submitCommandId: command.submitCommandId,
+  });
+  if (originalWire.outcome !== 'ACK' || originalWire.receipt.operation !== 'SUBMIT')
+    throw new Error('Missing original wire SUBMIT');
+  const beforeWireSubmit = canonicalPostSaveJson(originalWire.receipt);
+  const first = await call(peer, command);
+  if (
+    first.outcome !== 'ACK' ||
+    first.receipt.operation !== 'BIND_LANE' ||
+    first.current.kind !== 'REQUEST_REVIEW'
+  )
+    throw new Error('Expected explicit BIND ACK');
+  expect(first.current.request.requestRevision).toBe(0);
+  expect(first.current.request.status).toBe('PENDING');
+  expect(first.current.proof.laneProvenance).toEqual({ kind: 'BIND_LANE', receipt: first.receipt });
+  const beforeReplay = p.db.serialize(),
+    replay = await call(peer, command);
+  expect(replay).toEqual({ ...first, delivery: 'REPLAY' });
+  expect(p.db.serialize().equals(beforeReplay)).toBe(true);
+  const recovered = await call(peer, {
+    schemaVersion: 1,
+    operation: 'DEVICE_REQUEST_RECOVER',
+    requestId: command.requestId,
+    technicalSessionId: command.technicalSessionId,
+    submitCommandId: command.submitCommandId,
+  });
+  if (recovered.outcome !== 'ACK') throw new Error('Missing recovered historical SUBMIT');
+  expect(canonicalPostSaveJson(recovered.receipt)).toBe(beforeWireSubmit);
+  expect(recovered.current).toEqual(first.current);
+  expect(p.db.serialize().equals(beforeReplay)).toBe(true);
+  for (const change of [
+    { commandId: 'another-bind' },
+    { localControllerSeatId: randomUUID() },
+    { technicalSessionId: randomUUID() },
+    { batchSha256: '0'.repeat(64) },
+  ]) {
+    expect((await call(peer, { ...command, ...change })).outcome).toBe('REFUSED');
+    expect(p.db.serialize().equals(beforeReplay)).toBe(true);
+  }
+  expect(
+    canonicalPostSaveJson(
+      readHostedNetworkCommand(p.db, p.principal, 'legacy-submit', p.validate)!.receipt,
+    ),
+  ).toBe(beforeSubmit);
+  expect(p.db.prepare('SELECT count(*) AS n FROM campaign_character_copy').get()).toEqual({ n: 0 });
+});
+
+it('derives deterministic request connection facts from live signed channels and the exact stored key pin', async () => {
+  const p = await host(),
+    first = await opened(p),
+    one = batch(first.session);
+  expect((await transferred(first.peer, one)).result.outcome).toBe('ACK');
+  const second = await opened(p, first.peer, 'second-facts-open', 'second-facts-attempt'),
+    two = batch(second.session);
+  expect((await transferred(second.peer, two, 'second-facts-submit')).result.outcome).toBe('ACK');
+  const ids = [one.requestId, two.requestId],
+    sorted = [...ids].sort(),
+    owner = p.principal.peerIdentity.ownerDeviceId;
+  const before = p.db.serialize();
+  const facts = p.runtime.requestConnectionFacts(p.campaignId, ids.slice().reverse());
+  expect(facts).toEqual(
+    sorted.map((requestId) => ({ requestId, requestOwnerDeviceId: owner, connected: true })),
+  );
+  expect(Object.isFrozen(facts)).toBe(true);
+  expect(facts.every(Object.isFrozen)).toBe(true);
+  expect(() =>
+    p.runtime.requestConnectionFacts(p.campaignId, [one.requestId, one.requestId]),
+  ).toThrow();
+  expect(() => p.runtime.requestConnectionFacts(p.campaignId, [randomUUID()])).toThrow();
+  expect(() => p.runtime.requestConnectionFacts(randomUUID(), ids)).toThrow();
+  expect(p.db.serialize().equals(before)).toBe(true);
+  const other = await p.connect(),
+    changedKey = await p.connect(generateDeviceInstallationIdentityMaterial(owner));
+  await vi.waitFor(() =>
+    expect(p.runtime.requestConnectionFacts(p.campaignId, ids).every((f) => f.connected)).toBe(
+      true,
+    ),
+  );
+  first.peer.close();
+  await vi.waitFor(() => expect(first.peer.closed).toBe(true));
+  expect(p.runtime.requestConnectionFacts(p.campaignId, ids).every((f) => f.connected)).toBe(true);
+  other.close();
+  await vi.waitFor(() =>
+    expect(p.runtime.requestConnectionFacts(p.campaignId, ids).every((f) => !f.connected)).toBe(
+      true,
+    ),
+  );
+  expect(changedKey.closed).toBe(false);
+  expect(p.db.serialize().equals(before)).toBe(true);
+  await p.runtime.close();
+  expect(p.runtime.requestConnectionFacts(p.campaignId, ids)).toEqual(
+    sorted.map((requestId) => ({ requestId, requestOwnerDeviceId: owner, connected: false })),
+  );
+  expect(p.db.serialize().equals(before)).toBe(true);
 });

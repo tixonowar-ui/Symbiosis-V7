@@ -42,6 +42,13 @@ import {
   readLocalNetworkShellExitByNavigationId,
   readLocalNetworkAttemptCount,
   readLocalNetworkOpenOutboxByAttempt,
+  readLocalRequestLaneBinding,
+  prepareLocalRequestLaneBinding,
+  acknowledgeLocalRequestLaneBinding,
+  readLocalNetworkCancelSettlementEvent,
+  commitLocalNetworkCancelSettlement,
+  commitLocalNetworkRequestAdvance,
+  validateRequestReviewProof,
   NetworkApplicationStoreError,
   type LocalNetworkScope,
   type LocalNetworkApplication,
@@ -68,10 +75,14 @@ import type {
 import type { FormActionIntentV2Message } from '../shared/wire-v2-protocol.js';
 import type { CommandReceipt, JsonObject } from '../shared/wire-protocol.js';
 import { canonicalPostSaveJson, postSaveSha256 } from './local-character-export.js';
-import { prepareOwnedFinalAdmissionCandidate } from './device-admission-candidate.js';
+import {
+  prepareOwnedFinalAdmissionCandidate,
+  validateFinalAdmissionCandidate,
+} from './device-admission-candidate.js';
 import {
   deviceAdmissionSubmitSemanticBody,
   encodeDeviceAdmissionPeerResponse,
+  deviceAdmissionRequestReviewCurrent,
   type DeviceAdmissionPeerResponse,
 } from './device-admission-peer-response.js';
 import { encodeDeviceAdmissionPeerCommand } from './device-admission-peer-commands.js';
@@ -234,13 +245,15 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       discovery: discovery.get(s.networkScopeId) ?? null,
       discoveryUnavailable: discoveryFailures.has(s.networkScopeId),
       baselineVersion: d.baseline.baselineVersion,
+      isCompatibleBaseline: (version) =>
+        isStoredLocalCharacterExportBaselineCompatible(d.baseline, version),
       attemptCount: s.formId === 'NET-011' ? readLocalNetworkAttemptCount(db, scope(c)) : 0,
     });
   };
   const snapshot = (
     c: LocalNetworkConnection,
     id: string,
-    reason: 'FORM_ACTION' | 'RECONNECT' | 'COMMAND_DESTINATION',
+    reason: 'FORM_ACTION' | 'RECONNECT' | 'COMMAND_DESTINATION' | 'HOST_SYSTEM_EVENT',
     verifiedCurrent?: LocalNetworkApplication,
   ): ProjectionSnapshotV2Message => {
     const s = verifiedCurrent ?? current(c);
@@ -295,12 +308,19 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       (s.requestOrNull === null || s.requestOrNull.closureOrNull !== null) &&
       (s.plannedAttemptIdOrNull === null || s.plannedAttemptIdOrNull === s.lastAttemptIdOrNull)
     )
-      mutate(c, {
-        kind: 'NAVIGATE',
-        targetFormId: 'NET-011',
-        plannedAttemptIdOrNull: randomUUID(),
-        singleCandidateOrNull: null,
-      });
+      return mutate(
+        c,
+        {
+          kind: 'NAVIGATE',
+          targetFormId: 'NET-011',
+          plannedAttemptIdOrNull: randomUUID(),
+          singleCandidateOrNull: null,
+        },
+        undefined,
+        null,
+        s,
+      ).current;
+    return s;
   }
   function diagnostic(
     c: LocalNetworkConnection,
@@ -346,32 +366,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     // A newly authenticated transport must reconcile the existing logical session
     // before it can issue another command against that session's generation.
     if ((force || s.pendingCommandIdOrNull === null) && s.requestOrNull !== null) {
-      const restored = readLocalNetworkDeliverySnapshot(
-        db,
-        scope(c),
-        s.requestOrNull.submitCommandId,
-      );
-      verify(restored.current);
-      const submit = restored.outbox;
-      if (
-        submit === null ||
-        submit.intent.operation !== 'SUBMIT' ||
-        submit.acknowledgementOrNull?.operation !== 'SUBMIT'
-      )
-        unavailable();
-      const recovered = await d.peer.recover(scope(c), submit);
       verify();
-      if (
-        recovered.outcome !== 'ACK' ||
-        recovered.operation !== 'DEVICE_REQUEST_RECOVER' ||
-        recovered.receipt.operation !== 'SUBMIT' ||
-        recovered.current.kind !== 'REQUEST'
-      )
-        unavailable();
-      exact(recovered.receipt.commandId, submit.intent.commandId);
-      exact(recovered.receipt.semanticBodySha256, submit.semanticBodySha256);
-      exact(recovered.receipt.request, submit.acknowledgementOrNull.request);
-      exact(recovered.current.request, s.requestOrNull);
+      await refreshRequest(c);
     } else if ((force || s.pendingCommandIdOrNull === null) && s.sessionOrNull !== null) {
       verify();
       const opening = readLocalNetworkOpenOutboxByAttempt(db, scope(c), s.sessionOrNull.attemptId);
@@ -390,6 +386,192 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       exact(recovered.receipt.session, s.sessionOrNull);
       exact(recovered.current.session, s.sessionOrNull);
     } else verify();
+  }
+  function requestProof(c: LocalNetworkConnection, response: DeviceAdmissionPeerResponse) {
+    if (response.outcome !== 'ACK' || response.current.kind !== 'REQUEST_REVIEW') return null;
+    const proof = response.current.proof,
+      delivery = readLocalNetworkDeliverySnapshot(db, scope(c), proof.submittedReceipt.commandId),
+      submit = delivery.outbox;
+    if (submit?.intent.operation !== 'SUBMIT') unavailable();
+    const ack = submit.acknowledgementOrNull;
+    // Before the first local ACK, the signed original SUBMIT is the only admissible receipt.
+    const original =
+      ack === null
+        ? response.receipt
+        : ack.operation === 'SUBMIT'
+          ? {
+              operation: 'SUBMIT' as const,
+              commandId: ack.commandId,
+              receiptId: ack.request.submitReceiptId,
+              semanticBodySha256: ack.semanticBodySha256,
+              request: ack.request,
+            }
+          : unavailable();
+    if (original.operation !== 'SUBMIT') unavailable();
+    const result = validateRequestReviewProof(proof, {
+      submittedReceipt: original,
+      batch: submit.intent.batch,
+      requestOwnerDeviceId: submit.ownerDeviceId,
+      campaignId: submit.intent.batch.campaignProof.campaignId,
+    });
+    exact(response.current.request, {
+      ...proof.submittedReceipt.request,
+      requestRevision: result.requestRevision,
+      status: result.requestStatus,
+      closureOrNull: proof.cancelledReceiptOrNull?.request.closureOrNull ?? null,
+    });
+    return { proof: result.proof, submit, status: result.requestStatus, delivery };
+  }
+  async function applyRequestCurrent(
+    c: LocalNetworkConnection,
+    response: DeviceAdmissionPeerResponse,
+  ) {
+    let parsed = requestProof(c, response);
+    if (parsed === null) return;
+    const bound = scope(c),
+      contextId = c.contextId;
+    const check = (s = current(c)) => {
+      trust(c);
+      exact(scope(c), bound);
+      if (c.contextId !== contextId) unavailable();
+      if (s.requestOrNull?.requestId !== parsed!.proof.submittedReceipt.request.requestId)
+        unavailable();
+      return s;
+    };
+    check(parsed.delivery.current);
+    const requestId = parsed.proof.submittedReceipt.request.requestId;
+    if (
+      parsed.submit.intent.operation !== 'SUBMIT' ||
+      parsed.submit.acknowledgementOrNull?.operation !== 'SUBMIT'
+    )
+      unavailable();
+    if (parsed.submit.intent.batch.schemaVersion !== 2) {
+      let lane = readLocalRequestLaneBinding(db, bound, requestId);
+      const remote = parsed.proof.laneProvenance;
+      if (remote?.kind === 'BIND_LANE') {
+        // A remote proof cannot invent a local BIND identity after the original intent was lost.
+        if (lane === null || lane.request.commandId !== remote.receipt.commandId) unavailable();
+        acknowledgeLocalRequestLaneBinding(
+          db,
+          bound,
+          lane.request.commandId,
+          remote.receipt,
+          guard(c),
+        );
+      } else if (remote === null) {
+        if (lane?.receiptOrNull != null) unavailable();
+        lane ??= prepareLocalRequestLaneBinding(db, bound, requestId, randomUUID(), guard(c));
+        const verify = guard(c, check());
+        const recovered = await d.peer.recoverLaneBinding(bound, lane);
+        verify();
+        if (
+          recovered.outcome !== 'ACK' ||
+          recovered.operation !== 'DEVICE_REQUEST_RECOVER' ||
+          recovered.receipt.operation !== 'SUBMIT'
+        )
+          unavailable();
+        let updated = requestProof(c, recovered) ?? unavailable();
+        if (updated.proof.laneProvenance === null) {
+          // Recovery fenced the old channel before retransmitting the SAME durable BIND intent.
+          verify();
+          const delivered = await d.peer.deliverLaneBinding(bound, lane);
+          verify();
+          if (
+            delivered.outcome !== 'ACK' ||
+            delivered.operation !== 'DEVICE_REQUEST_BIND_LANE' ||
+            delivered.receipt.operation !== 'BIND_LANE'
+          )
+            unavailable();
+          updated = requestProof(c, delivered) ?? unavailable();
+        }
+        const receipt = updated.proof.laneProvenance;
+        if (receipt?.kind !== 'BIND_LANE' || receipt.receipt.commandId !== lane.request.commandId)
+          unavailable();
+        acknowledgeLocalRequestLaneBinding(
+          db,
+          bound,
+          lane.request.commandId,
+          receipt.receipt,
+          guard(c),
+        );
+        parsed = updated;
+      } else unavailable();
+    }
+    // v2 provenance performs no await or mutation above; retain that one verified read only here.
+    if (parsed.submit.intent.operation !== 'SUBMIT') unavailable();
+    const sameRead = parsed.submit.intent.batch.schemaVersion === 2;
+    const s = check(sameRead ? parsed.delivery.current : undefined);
+    const pending =
+      s.pendingCommandIdOrNull === null
+        ? null
+        : readLocalNetworkOutbox(db, bound, s.pendingCommandIdOrNull);
+    if (
+      pending?.intent.operation === 'CANCEL' &&
+      ['IN_REVIEW', 'REJECTED'].includes(parsed.status)
+    ) {
+      const known = readLocalNetworkCancelSettlementEvent(db, bound, pending.intent.commandId);
+      if (known !== null) {
+        commitLocalNetworkMutation(db, known.input, guard(c));
+      } else {
+        commitLocalNetworkCancelSettlement(
+          db,
+          {
+            ...bound,
+            expectedRevisions: vector(s),
+            expectedDraftRevision: s.draftRevision,
+          },
+          {
+            eventId: randomUUID(),
+            receiptId: randomUUID(),
+            commandId: pending.intent.commandId,
+            proof: parsed.proof,
+          },
+          guard(c),
+        );
+      }
+      return;
+    }
+    const confirmed = sameRead
+      ? parsed.delivery
+      : readLocalNetworkDeliverySnapshot(db, bound, parsed.submit.intent.commandId);
+    if (isDeepStrictEqual(confirmed.requestCurrentOrNull?.proof, parsed.proof)) return;
+    const source = confirmed.current;
+    commitLocalNetworkRequestAdvance(
+      db,
+      {
+        ...bound,
+        expectedRevisions: vector(source),
+        expectedDraftRevision: source.draftRevision,
+      },
+      { eventId: randomUUID(), receiptId: randomUUID(), proof: parsed.proof },
+      guard(c),
+    );
+  }
+  async function refreshRequest(c: LocalNetworkConnection) {
+    const s = current(c),
+      request = s.requestOrNull;
+    if (request === null) return;
+    const submit = readLocalNetworkOutbox(db, scope(c), request.submitCommandId);
+    if (
+      submit?.intent.operation !== 'SUBMIT' ||
+      submit.acknowledgementOrNull?.operation !== 'SUBMIT'
+    )
+      unavailable();
+    const verify = guard(c, s),
+      response = await d.peer.recover(scope(c), submit);
+    verify();
+    if (
+      response.outcome !== 'ACK' ||
+      response.operation !== 'DEVICE_REQUEST_RECOVER' ||
+      response.receipt.operation !== 'SUBMIT'
+    )
+      unavailable();
+    exact(response.receipt.commandId, submit.intent.commandId);
+    exact(response.receipt.semanticBodySha256, submit.semanticBodySha256);
+    exact(response.receipt.request, submit.acknowledgementOrNull.request);
+    if (response.current.kind === 'REQUEST') exact(response.current.request, request);
+    else if (response.current.kind === 'REQUEST_REVIEW') await applyRequestCurrent(c, response);
+    else unavailable();
   }
   function receipt(
     c: LocalNetworkConnection,
@@ -430,6 +612,20 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     send: (m: LocalNetworkHostMessage) => void,
     delivery?: LocalNetworkDeliverySnapshot,
   ) {
+    if (out.intent.operation === 'CANCEL') {
+      delivery ??= readLocalNetworkDeliverySnapshot(db, scope(c), out.intent.commandId);
+      if (delivery.cancelSettlementOrNull !== null) {
+        send({
+          messageType: 'command.refusal',
+          protocolVersion: 1,
+          commandId: out.intent.commandId,
+          lastLifecycleState: null,
+          revisions: vector(delivery.current),
+          refusal: { code: 'GUARD_REJECTED' },
+        });
+        return;
+      }
+    }
     const r = receipt(c, out, delivery?.acknowledgementEvent);
     if (r !== null)
       send(
@@ -477,7 +673,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     if (response.outcome === 'ACK') {
       let r = response.receipt;
       if (intent.operation === 'CANCEL' && response.operation === 'DEVICE_REQUEST_RECOVER') {
-        const now = response.current.kind === 'REQUEST' ? response.current.request : null;
+        const now =
+          response.current.kind === 'REQUEST'
+            ? response.current.request
+            : response.current.kind === 'REQUEST_REVIEW'
+              ? (response.current.proof.cancelledReceiptOrNull?.request ?? null)
+              : null;
         if (
           now?.closureOrNull?.commandId === intent.commandId &&
           now.closureOrNull.reason === intent.reason &&
@@ -516,7 +717,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           verifiedReceipt: response as unknown as JsonObject,
         };
       }
-      if (r.operation !== 'OPEN' && intent.operation !== 'OPEN') {
+      if ((r.operation === 'SUBMIT' || r.operation === 'CANCEL') && intent.operation !== 'OPEN') {
         const sessionId =
           intent.operation === 'SUBMIT'
             ? intent.batch.technicalSessionId
@@ -577,10 +778,31 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     };
     const beforeReconnect = check();
     await reconnect(c, !recovery && out.intent.operation !== 'OPEN', beforeReconnect);
+    const afterReconnect = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
+    if (
+      afterReconnect.cancelSettlementOrNull !== null ||
+      afterReconnect.outbox?.acknowledgementOrNull != null
+    )
+      return;
     check();
     let response = recovery ? await d.peer.recover(bound, out) : await d.peer.deliver(bound, out);
     let verified = check();
+    if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW')
+      requestProof(c, response);
     let ack = acknowledgement(out, response);
+    if (ack === null && out.intent.operation === 'CANCEL') {
+      if (!(response.outcome === 'ACK' && response.operation === 'DEVICE_REQUEST_RECOVER')) {
+        response = await d.peer.recover(bound, out);
+        verified = check();
+      }
+      if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW') {
+        await applyRequestCurrent(c, response);
+        const settled = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
+        if (settled.cancelSettlementOrNull !== null) return;
+        verified = check();
+      }
+      ack = acknowledgement(out, response);
+    }
     if (ack === null && recovery && out.intent.operation !== 'OPEN') {
       const i = out.intent;
       const absence =
@@ -599,7 +821,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         i.operation === 'CANCEL' &&
         response.outcome === 'ACK' &&
         response.operation === 'DEVICE_REQUEST_RECOVER' &&
-        response.current.kind === 'REQUEST' &&
+        (response.current.kind === 'REQUEST' || response.current.kind === 'REQUEST_REVIEW') &&
+        response.current.request.status === 'PENDING' &&
         response.current.request.requestId === i.requestId &&
         response.current.request.technicalSessionId === i.technicalSessionId &&
         response.current.request.closureOrNull === null &&
@@ -610,6 +833,21 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         verified = check();
         ack = acknowledgement(out, response);
       }
+    }
+    if (ack === null && out.intent.operation === 'CANCEL' && response.outcome === 'REFUSED') {
+      // A decision may win after the preceding recovery but before the same CANCEL redelivery.
+      response = await d.peer.recover(bound, out);
+      verified = check();
+      if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW') {
+        await applyRequestCurrent(c, response);
+        if (
+          readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId)
+            .cancelSettlementOrNull !== null
+        )
+          return;
+        verified = check();
+      }
+      ack = acknowledgement(out, response);
     }
     if (ack === null) {
       diagnostic(c, 'UNCONFIRMED_OUTCOME');
@@ -623,6 +861,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       verified.current,
     );
     planRetry(c, saved.current);
+    if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW')
+      await applyRequestCurrent(c, response);
   }
   async function command(
     m: NetworkWorkflowRequest,
@@ -635,11 +875,19 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     const known = readLocalNetworkOutbox(db, scope(c), m.commandId);
     if (known !== null) {
       exact(known.intent.clientRequestJson, wire);
-      if (known.acknowledgementOrNull === null)
+      if (
+        known.acknowledgementOrNull === null &&
+        readLocalNetworkCancelSettlementEvent(db, scope(c), m.commandId) === null
+      )
         try {
           await deliver(c, known, true);
         } catch {
-          diagnostic(c, 'UNCONFIRMED_OUTCOME');
+          const latest = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
+          if (
+            latest.outbox?.acknowledgementOrNull === null &&
+            latest.cancelSettlementOrNull === null
+          )
+            diagnostic(c, 'UNCONFIRMED_OUTCOME');
         }
       const delivery = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
       terminal(c, delivery.outbox!, true, send, delivery);
@@ -855,7 +1103,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     try {
       await deliver(c, out, false);
     } catch {
-      diagnostic(c, 'UNCONFIRMED_OUTCOME');
+      const latest = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
+      if (latest.outbox?.acknowledgementOrNull === null && latest.cancelSettlementOrNull === null)
+        diagnostic(c, 'UNCONFIRMED_OUTCOME');
     }
     const delivery = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
     terminal(c, delivery.outbox!, false, send, delivery);
@@ -919,7 +1169,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       draftRevision: result.current.draftRevision,
       revisions: vector(result.current),
       projectionRole: 'player',
-      presentation: { base: project(c), layers: [] },
+      presentation: { base: project(c, result.current), layers: [] },
     });
   }
   async function enter(
@@ -1198,6 +1448,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       )
         unavailable();
       const body = {
+        schemaVersion: 2 as const,
+        localControllerSeatId: s.tabId,
         requestId: randomUUID(),
         technicalSessionId: session.technicalSessionId,
         connectionRevision: session.connectionRevision,
@@ -1228,6 +1480,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         'NET-003::CTA::003': 'NET-005',
         'NET-004::CTA::001': 'NET-003',
         'NET-004::CTA::003': 'NET-003',
+        'NET-005::CTA::003': 'NET-003',
         'NET-011::CTA::004': 'NET-002',
       };
       const target = hops[m.actionKey];
@@ -1371,7 +1624,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       }
     } else if (s.sessionOrNull !== null)
       try {
-        await reconnect(c);
+        await reconnect(c, true);
         // A recovered technical session keeps its original OPEN identity. Only
         // the confirmed presentation resumes; candidate bytes and requests stay pinned.
         const restored = current(c);
@@ -1394,11 +1647,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       } catch {
         if (s.formId !== 'CHR-027') diagnostic(c, 'PEER_UNAVAILABLE');
       }
-    planRetry(c);
-    s = current(c);
+    s = planRetry(c);
     for (const id of m.unacknowledgedCommandIds) {
-      const out = readLocalNetworkOutbox(db, scope(c), id);
-      if (out !== null) terminal(c, out, true, send);
+      const delivery = readLocalNetworkDeliverySnapshot(db, scope(c), id);
+      s = delivery.current;
+      if (delivery.outbox !== null) terminal(c, delivery.outbox, true, send, delivery);
       else
         send({
           messageType: 'command.refusal',
@@ -1413,12 +1666,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       messageType: 'session.reconnect.capabilities',
       protocolVersion: 2,
       reconnectRequestId: m.reconnectRequestId,
-      revisions: currentVector(c),
+      revisions: vector(s),
       executableWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS.filter((id) =>
         c.executableWorkflowCommandIds.includes(id),
       ),
     });
-    send(snapshot(c, m.reconnectRequestId, 'RECONNECT'));
+    send(snapshot(c, m.reconnectRequestId, 'RECONNECT', s));
   }
   async function handle(
     m: LocalNetworkClientMessage,
@@ -1530,6 +1783,68 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     }
     return true;
   }
+  const ownerViews = new Map<
+    LocalNetworkConnection,
+    { contextId: string; scopeId: string; send: (m: LocalNetworkHostMessage) => void }
+  >();
+  let polling = false;
+  const ownerTimer = setInterval(() => {
+    if (closed || polling || ownerViews.size === 0) return;
+    polling = true;
+    const tick = frames.then(async () => {
+      for (const [c, binding] of ownerViews) {
+        try {
+          if (
+            !c.trusted() ||
+            c.contextId !== binding.contextId ||
+            c.networkScopeId !== binding.scopeId
+          ) {
+            ownerViews.delete(c);
+            continue;
+          }
+          const before = current(c);
+          if (
+            before.formId !== 'NET-005' ||
+            before.pendingCommandIdOrNull !== null ||
+            before.requestOrNull === null
+          )
+            continue;
+          if (d.peer.current(binding.scopeId) === null) await reconnect(c, true);
+          else await refreshRequest(c);
+          trust(c);
+          if (c.contextId !== binding.contextId || c.networkScopeId !== binding.scopeId) continue;
+          const after = current(c);
+          if (
+            after.formId !== 'NET-005' ||
+            after.pendingCommandIdOrNull !== null ||
+            isDeepStrictEqual(vector(before), vector(after))
+          )
+            continue;
+          const correlation =
+            'network-owner-view:' +
+            postSaveSha256(
+              canonicalPostSaveJson({
+                scope: scope(c),
+                contextId: c.contextId,
+                revisions: vector(after),
+              }),
+            );
+          binding.send(snapshot(c, correlation, 'HOST_SYSTEM_EVENT', after));
+        } catch {
+          // A missing or unverifiable reply never replaces the last confirmed own view.
+        }
+      }
+    });
+    frames = tick.then(
+      () => {
+        polling = false;
+      },
+      () => {
+        polling = false;
+      },
+    );
+  }, 1000);
+  ownerTimer.unref();
   return {
     currentVector,
     handle(
@@ -1538,7 +1853,13 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       shell: LocalNetworkShell,
       send: (m: LocalNetworkHostMessage) => void,
     ) {
-      const next = frames.then(() => handle(m, c, shell, send));
+      const next = frames.then(async () => {
+        const handled = await handle(m, c, shell, send);
+        if (handled && !closed && c.trusted() && c.networkScopeId !== null && c.contextId !== null)
+          ownerViews.set(c, { contextId: c.contextId, scopeId: c.networkScopeId, send });
+        else ownerViews.delete(c);
+        return handled;
+      });
       frames = next.then(
         () => {},
         () => {},
@@ -1547,7 +1868,494 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     },
     close() {
       closed = true;
+      clearInterval(ownerTimer);
+      ownerViews.clear();
       d.peer.close();
+    },
+  };
+}
+import type { CampaignConnection } from './campaign-creation.js';
+import type { PresentedBaseForm, WireV2Vocabulary } from '../shared/wire-v2-protocol.js';
+import type { ProtocolVocabulary } from '../shared/wire-protocol.js';
+import type { createCampaignNetworkRuntime } from './campaign-network-runtime.js';
+import {
+  readCampaignCreationCursor,
+  readLocalGmContext,
+  type GmRequestReviewScope,
+} from '../persistence/campaign-creation.js';
+import {
+  readGmRequestReviewSource,
+  readGmDeviceRequestQueue,
+  readGmDeviceRequestDecision,
+  commitGmRequestReviewNavigation,
+  commitGmRequestReviewDraft,
+  commitGmDeviceRequestDecision,
+  commitGmRequestReviewConnectionRefresh,
+  type GmRequestReviewSource,
+  type NetworkGmDecisionRequest,
+} from '../persistence/network-device-request.js';
+import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
+import { validateMasterSecretVerifier } from './campaign-secret.js';
+import {
+  resolveStoredLocalCharacterExportBaseline,
+  isStoredLocalCharacterExportBaselineCompatible,
+} from './local-character-export.js';
+import { NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS } from '../shared/device-admission.js';
+import { projectGmRequestQueue } from './projections/net-application.js';
+import { encodeHostMessage } from '../shared/wire-codec.js';
+import { encodeHostMessageV2 } from '../shared/wire-v2-codec.js';
+import type { NetworkGmRequestDraftRefusal } from '../shared/network-application.js';
+
+/** Local GM authority and technical QUEUE heads remain separate from campaign birth/checkpoints. */
+export function createGmNetworkRuntime(d: {
+  readonly database: Database.Database;
+  readonly schedule?: <T>(run: () => Promise<T>) => Promise<T>;
+  readonly config: NetworkApplicationConfig;
+  readonly baseline: LocalCharacterExportBaseline;
+  readonly vocabulary: ProtocolVocabulary & WireV2Vocabulary;
+  readonly campaignNetwork: Pick<
+    ReturnType<typeof createCampaignNetworkRuntime>,
+    'requestConnectionFacts'
+  >;
+  readonly campaignPresentation: (
+    c: CampaignConnection,
+  ) => Promise<{ base: PresentedBaseForm; revisions: RevisionVector }>;
+}) {
+  const db = d.database;
+  let closed = false,
+    frames = Promise.resolve();
+  const schedule = <T>(run: () => Promise<T>): Promise<T> => {
+    if (d.schedule !== undefined) return d.schedule(run);
+    const next = frames.then(run);
+    frames = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  };
+  const validatedCandidates = new Set<string>();
+  const watchers = new Map<
+    CampaignConnection,
+    { send: (m: LocalNetworkHostMessage) => void; lastHash: string }
+  >();
+  const validateOwner = (o: GmRequestReviewSource['privateOwner']): void => {
+    validateMasterSecretVerifier(o.verifier);
+  };
+  const scope = (c: CampaignConnection): GmRequestReviewScope => {
+    if (closed || !c.trusted() || c.gmLocalContextId === null) unavailable();
+    const context = readLocalGmContext(db, c.gmLocalContextId),
+      cursor = readCampaignCreationCursor(db, context.gmLocalContextId);
+    if (
+      context.ownerDeviceId !== loadDeviceId(db) ||
+      (cursor.kind !== 'CAMPAIGN' && cursor.kind !== 'QUEUE')
+    )
+      unavailable();
+    const current = readHostedCurrentPausedCampaign(db, cursor.targetId, validateOwner);
+    resolveStoredLocalCharacterExportBaseline(d.baseline, current.baselineVersion);
+    return {
+      ownerDeviceId: context.ownerDeviceId,
+      gmLocalContextId: context.gmLocalContextId,
+      campaignId: cursor.targetId,
+    };
+  };
+  const verifiedQueue = (queue: GmRequestReviewSource['queue']) => {
+    for (const request of queue.requests)
+      for (const candidate of request.submittedRequest.batch.candidates) {
+        // The trusted context is rechecked even on a content-cache hit; mutable catalog changes remain fatal.
+        resolveStoredLocalCharacterExportBaseline(d.baseline, candidate.descriptor.baselineVersion);
+        const owner = request.submittedRequest.principal.peerIdentity.ownerDeviceId;
+        const key = postSaveSha256(canonicalPostSaveJson({ owner, candidate }));
+        if (!validatedCandidates.has(key)) {
+          validateFinalAdmissionCandidate(
+            candidate.canonicalWitnessText,
+            owner,
+            candidate.descriptor,
+            candidate.exportDocument,
+            d.baseline,
+            { maxWitnessBytes: d.config.transfer.maxWitnessBytes },
+          );
+          validatedCandidates.add(key);
+        }
+      }
+    return queue;
+  };
+  const verifiedSource = (c: CampaignConnection): GmRequestReviewSource => {
+    const source = readGmRequestReviewSource(db, scope(c), validateOwner);
+    verifiedQueue(source.queue);
+    return source;
+  };
+  const guard = (c: CampaignConnection) => {
+    const bound = scope(c);
+    return (source: GmRequestReviewSource): void => {
+      exact(scope(c), bound);
+      exact(source.scope, bound);
+      if (source.context.masterProfileId !== source.privateOwner.masterProfileId) unavailable();
+      // This runs both before and after the tentative SQL write. Encoding failure rolls the transaction back.
+      const view = source.viewOrNull;
+      const queue = verifiedQueue(source.queue);
+      if (view?.formId === 'NET-017') {
+        const base = projectGmRequestQueue({
+          view,
+          queue,
+          campaign: readHostedCurrentPausedCampaign(db, bound.campaignId, validateOwner),
+          connections: d.campaignNetwork.requestConnectionFacts(
+            bound.campaignId,
+            queue.requests.map((r) => r.submittedRequest.requestId),
+          ),
+          supported: c.executableReview ?? [],
+        });
+        if (
+          !encodeHostMessageV2(
+            {
+              messageType: 'projection.snapshot',
+              protocolVersion: 2,
+              projectionRole: 'gm',
+              revisions: vector(view),
+              presentation: {
+                assignment: {
+                  reason: 'HOST_SYSTEM_EVENT',
+                  correlationId: 'network-gm-view:' + view.snapshotSha256,
+                },
+                base,
+                layers: [],
+              },
+            },
+            d.vocabulary,
+          ).ok
+        )
+          unavailable();
+      }
+    };
+  };
+  function receipt(c: CampaignConnection, id: string) {
+    const own = scope(c);
+    verifiedQueue(readGmDeviceRequestQueue(db, own, validateOwner));
+    return readGmDeviceRequestDecision(db, own, id, validateOwner)?.receipt ?? null;
+  }
+  function queuePresentation(
+    c: CampaignConnection,
+    source: GmRequestReviewSource,
+    connections?: ReturnType<typeof d.campaignNetwork.requestConnectionFacts>,
+  ): { base: PresentedBaseForm; revisions: RevisionVector } {
+    const { scope: own, viewOrNull: view, queue } = source;
+    if (view?.formId !== 'NET-017') unavailable();
+    return {
+      revisions: vector(view),
+      base: projectGmRequestQueue({
+        view,
+        queue,
+        campaign: readHostedCurrentPausedCampaign(db, own.campaignId, validateOwner),
+        connections:
+          connections ??
+          d.campaignNetwork.requestConnectionFacts(
+            own.campaignId,
+            queue.requests.map((r) => r.submittedRequest.requestId),
+          ),
+        supported: c.executableReview ?? [],
+      }),
+    };
+  }
+  const project = async (c: CampaignConnection) => {
+    const source = verifiedSource(c);
+    return source.viewOrNull?.formId === 'NET-017'
+      ? queuePresentation(c, source)
+      : d.campaignPresentation(c);
+  };
+  const presentationHash = (
+    c: CampaignConnection,
+    value: { base: PresentedBaseForm; revisions: RevisionVector },
+  ) =>
+    postSaveSha256(
+      canonicalPostSaveJson({
+        scope: scope(c),
+        formId: value.base.formId,
+        revisions: value.revisions,
+        projectionPayload: value.base.roleFilteredPayload,
+      }),
+    );
+  async function snapshot(
+    c: CampaignConnection,
+    id: string,
+    reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'],
+    prepared?: { base: PresentedBaseForm; revisions: RevisionVector },
+  ): Promise<ProjectionSnapshotV2Message> {
+    const p = prepared ?? (await publication(c));
+    const result: ProjectionSnapshotV2Message = {
+      messageType: 'projection.snapshot',
+      protocolVersion: 2,
+      projectionRole: 'gm',
+      revisions: p.revisions,
+      presentation: { assignment: { correlationId: id, reason }, base: p.base, layers: [] },
+    };
+    if (!encodeHostMessageV2(result, d.vocabulary).ok) unavailable();
+    const watched = watchers.get(c);
+    if (watched !== undefined) watched.lastHash = presentationHash(c, p);
+    return result;
+  }
+  function connectionSource(c: CampaignConnection) {
+    let source = verifiedSource(c);
+    if (source.viewOrNull?.formId !== 'NET-017') return { source, facts: null };
+    const own = source.scope,
+      view = source.viewOrNull;
+    const facts = d.campaignNetwork.requestConnectionFacts(
+      own.campaignId,
+      source.queue.requests.map((r) => r.submittedRequest.requestId),
+    );
+    const connectionFactsSha256 = postSaveSha256(canonicalPostSaveJson(facts));
+    if (source.connectionFactsSha256OrNull !== connectionFactsSha256) {
+      commitGmRequestReviewConnectionRefresh(
+        db,
+        own,
+        {
+          eventId: `gm-connection:${postSaveSha256(canonicalPostSaveJson({ own, vector: vector(view), connectionFactsSha256 }))}`,
+          connectionFactsSha256,
+        },
+        validateOwner,
+        (actual) => {
+          guard(c)(actual);
+          exact(
+            d.campaignNetwork.requestConnectionFacts(
+              own.campaignId,
+              actual.queue.requests.map((r) => r.submittedRequest.requestId),
+            ),
+            facts,
+          );
+        },
+      );
+      source = verifiedSource(c);
+    }
+    return { source, facts };
+  }
+  // A publication may discover a real channel change while no browser watcher existed.
+  // Seal that technical P-only event explicitly; the public project() reader stays read-only.
+  function refreshConnectionPresentation(c: CampaignConnection): void {
+    connectionSource(c);
+  }
+  const publication = async (c: CampaignConnection) => {
+    const { source, facts } = connectionSource(c);
+    return facts === null ? d.campaignPresentation(c) : queuePresentation(c, source, facts);
+  };
+  async function refresh(
+    c: CampaignConnection,
+    send: (m: LocalNetworkHostMessage) => void,
+  ): Promise<void> {
+    const { source, facts } = connectionSource(c);
+    if (facts === null) return;
+    const p = queuePresentation(c, source, facts),
+      hash = presentationHash(c, p),
+      watched = watchers.get(c);
+    if (watched !== undefined && watched.lastHash !== hash)
+      send(await snapshot(c, `network-gm-view:${hash}`, 'HOST_SYSTEM_EVENT', p));
+  }
+  async function handle(
+    m: LocalNetworkClientMessage,
+    c: CampaignConnection,
+    send: (m: LocalNetworkHostMessage) => void,
+  ): Promise<boolean> {
+    const command =
+      m.messageType === 'command.request' &&
+      m.commandKind === 'workflow-command' &&
+      NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((id) => id === m.workflowCommandId);
+    const nav =
+      m.messageType === 'navigation.form-action' &&
+      (m.sourceFormId === 'NET-017' ||
+        (m.sourceFormId === 'CMP-006' && m.actionKey === 'CMP-006::CTA::002'));
+    const draft = m.messageType === 'network.gm-request-draft.replace';
+    if (!command && !nav && !draft) return false;
+    try {
+      const own = scope(c);
+      watchers.set(c, { send, lastHash: watchers.get(c)?.lastHash ?? '' });
+      if (nav && m.messageType === 'navigation.form-action') {
+        if (m.sourceFormId === 'CMP-006' && (c.executableReview?.length ?? 0) === 0) unavailable();
+        commitGmRequestReviewNavigation(db, own, m, validateOwner, guard(c));
+        send(await snapshot(c, m.navigationRequestId, 'FORM_ACTION'));
+      } else if (draft) {
+        const result = commitGmRequestReviewDraft(db, own, m, validateOwner, guard(c));
+        const p = await publication(c);
+        send({
+          messageType: 'network.gm-request-draft.result',
+          protocolVersion: 3,
+          draftUpdateId: m.draftUpdateId,
+          scope: m.scope,
+          changed: result.event.changed,
+          appliedRevisions: result.event.appliedRevisions,
+          appliedRequestQueueRevision: result.event.appliedRequestQueueRevision,
+          revisions: p.revisions,
+          requestQueueRevision: result.current.requestQueueRevision,
+          projectionRole: 'gm',
+          presentation: { base: p.base, layers: [] },
+        });
+        watchers.set(c, { send, lastHash: presentationHash(c, p) });
+      } else if (command && m.messageType === 'command.request') {
+        if (!(c.executableReview ?? []).includes(m.workflowCommandId)) unavailable();
+        const request = m as NetworkGmDecisionRequest,
+          known = readGmDeviceRequestDecision(db, own, m.commandId, validateOwner);
+        const receiptId = known?.receipt.receiptId ?? randomUUID(),
+          timestamp = known?.receipt.result.timestamp ?? new Date().toISOString();
+        const result = commitGmDeviceRequestDecision(
+          db,
+          own,
+          { request, receiptId, timestamp },
+          validateOwner,
+          (source) => {
+            guard(c)(source);
+            const current = verifiedQueue(source.queue).requests.find(
+              (r) => r.submittedRequest.requestId === request.payload.requestId,
+            );
+            if (current === undefined) unavailable();
+            encodeDeviceAdmissionPeerResponse({
+              schemaVersion: 1,
+              operation: 'DEVICE_REQUEST_RECOVER',
+              outcome: 'ACK',
+              delivery: 'RECOVERED',
+              receipt: current.proof.submittedReceipt,
+              current: deviceAdmissionRequestReviewCurrent(current.proof),
+            });
+            const encodedCommand = readGmDeviceRequestDecision(db, own, m.commandId, validateOwner);
+            if (
+              encodedCommand !== null &&
+              !encodeHostMessage(
+                {
+                  messageType: 'command.replay',
+                  protocolVersion: 1,
+                  lifecycleState: 'IDEMPOTENT_REPLAY',
+                  receipt: encodedCommand.receipt,
+                },
+                d.vocabulary,
+              ).ok
+            )
+              unavailable();
+          },
+        );
+        send(
+          known === null
+            ? {
+                messageType: 'command.result',
+                protocolVersion: 1,
+                lifecycleState: 'COMMITTED',
+                receipt: result.command.receipt,
+              }
+            : {
+                messageType: 'command.replay',
+                protocolVersion: 1,
+                lifecycleState: 'IDEMPOTENT_REPLAY',
+                receipt: result.command.receipt,
+              },
+        );
+        send(await snapshot(c, m.commandId, 'COMMAND_DESTINATION'));
+      }
+    } catch (error) {
+      let revisions: RevisionVector = {
+        stateRevision: 0,
+        projectionRevision: 0,
+        actorVisibilityRevision: 0,
+      };
+      try {
+        revisions = readCampaignCreationCursor(db, scope(c).gmLocalContextId).revisions;
+      } catch {
+        /* Foreign/corrupt contexts disclose no head. */
+      }
+      const conflict =
+        error instanceof NetworkApplicationStoreError && error.code === 'IDEMPOTENCY_CONFLICT';
+      if (draft) {
+        let refusal: NetworkGmRequestDraftRefusal = conflict
+          ? { code: 'IDEMPOTENCY_CONFLICT' }
+          : { code: 'DRAFT_UNAVAILABLE' };
+        if (error instanceof NetworkApplicationStoreError && error.code === 'STALE_REVISION')
+          refusal = { code: 'STALE_REVISION', expected: m.expectedRevisions, actual: revisions };
+        send({
+          messageType: 'network.gm-request-draft.refusal',
+          protocolVersion: 3,
+          draftUpdateId: m.draftUpdateId,
+          scope: m.scope,
+          revisions,
+          presentationUnchanged: true,
+          refusal,
+        });
+      } else if (nav && m.messageType === 'navigation.form-action')
+        send({
+          messageType: 'navigation.form-action.refusal',
+          protocolVersion: 2,
+          navigationRequestId: m.navigationRequestId,
+          presentationUnchanged: true,
+          revisions,
+          refusal: conflict
+            ? { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' }
+            : { code: 'NAVIGATION_UNAVAILABLE' },
+        });
+      else if (command && m.messageType === 'command.request')
+        send({
+          messageType: 'command.refusal',
+          protocolVersion: 1,
+          commandId: m.commandId,
+          lastLifecycleState: null,
+          revisions,
+          refusal: conflict
+            ? { code: 'IDEMPOTENCY_CONFLICT', commandId: m.commandId, detail: 'PAYLOAD_MISMATCH' }
+            : { code: 'GUARD_REJECTED' },
+        });
+      if (command && m.messageType === 'command.request') {
+        try {
+          send(await snapshot(c, m.commandId, 'COMMAND_DESTINATION'));
+        } catch {
+          /* A foreign or corrupt source cannot supply a current view. */
+        }
+      }
+    }
+    return true;
+  }
+  // Technical polling observes persisted requests and authenticated channels; it cannot allocate gameplay state.
+  let polling = false;
+  const timer = setInterval(() => {
+    if (closed || polling || watchers.size === 0) return;
+    polling = true;
+    const next = schedule(async () => {
+      for (const [c, w] of watchers) {
+        if (!c.trusted() || c.gmLocalContextId === null) {
+          watchers.delete(c);
+          continue;
+        }
+        try {
+          await refresh(c, w.send);
+        } catch {
+          /* A refused source never emits a partial or foreign queue. */
+        }
+      }
+    });
+    void next
+      .catch(() => {})
+      .finally(() => {
+        polling = false;
+      });
+  }, 1000);
+  timer.unref();
+  return {
+    project,
+    refreshConnectionPresentation,
+    receipt,
+    watch(c: CampaignConnection, send: (m: LocalNetworkHostMessage) => void): void {
+      if (!closed && c.trusted()) watchers.set(c, { send, lastHash: '' });
+    },
+    handle(
+      m: LocalNetworkClientMessage,
+      c: CampaignConnection,
+      send: (m: LocalNetworkHostMessage) => void,
+    ) {
+      const relevant =
+        m.messageType === 'network.gm-request-draft.replace' ||
+        (m.messageType === 'command.request' &&
+          m.commandKind === 'workflow-command' &&
+          NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((id) => id === m.workflowCommandId)) ||
+        (m.messageType === 'navigation.form-action' &&
+          (m.sourceFormId === 'NET-017' ||
+            (m.sourceFormId === 'CMP-006' && m.actionKey === 'CMP-006::CTA::002')));
+      if (!relevant) return Promise.resolve(false);
+      return schedule(() => handle(m, c, send));
+    },
+    close() {
+      closed = true;
+      clearInterval(timer);
+      watchers.clear();
     },
   };
 }

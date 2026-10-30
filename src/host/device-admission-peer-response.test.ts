@@ -195,6 +195,7 @@ describe('short private admission response codec', () => {
     if (
       decoded.outcome !== 'ACK' ||
       decoded.receipt.operation === 'OPEN' ||
+      decoded.receipt.operation === 'BIND_LANE' ||
       decoded.current.kind !== 'REQUEST'
     )
       throw new Error('Expected request ACK');
@@ -351,5 +352,261 @@ describe('short private admission response codec', () => {
     expect(() => deviceAdmissionSubmitSemanticBody('command', 'A'.repeat(64))).toThrow(
       DeviceAdmissionPeerResponseError,
     );
+  });
+});
+
+describe('request review proof and explicit lane receipt', () => {
+  type MutableReviewValue = {
+    current: {
+      request: Record<string, unknown>;
+      proof: {
+        decisions: Record<string, unknown>[];
+        laneProvenance: unknown;
+        submittedReceipt: Record<string, unknown>;
+        cancelledReceiptOrNull: unknown;
+        [key: string]: unknown;
+      };
+    };
+  };
+  const OWNER = '55555555-5555-4555-8555-555555555555';
+  const LANE = '66666666-6666-4666-8666-666666666666';
+  const accepted = {
+    receiptId: 'review-receipt',
+    commandId: 'review-command',
+    workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+    campaignId: CAMPAIGN,
+    requestId: REQUEST,
+    requestOwnerDeviceId: OWNER,
+    beforeRequestStatus: 'PENDING',
+    afterRequestStatus: 'IN_REVIEW',
+    beforeRequestRevision: 0,
+    requestRevision: 1,
+    decisionReasonOrNull: null,
+    candidateSnapshotChecksums: ['1'.repeat(64)],
+    authoritativeGmActorId: 'original-gm-profile',
+    timestamp: '2026-10-30T00:00:00.000Z',
+  } as const;
+  const rejected = {
+    ...accepted,
+    receiptId: 'reject-receipt',
+    commandId: 'reject-command',
+    workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+    beforeRequestStatus: 'IN_REVIEW',
+    afterRequestStatus: 'REJECTED',
+    beforeRequestRevision: 1,
+    requestRevision: 2,
+    decisionReasonOrNull: '  Public reason\nunchanged e\u0301  ',
+  } as const;
+  const proof = {
+    submittedReceipt: submit,
+    cancelledReceiptOrNull: null,
+    decisions: [accepted],
+    laneProvenance: {
+      kind: 'SUBMITTED_BATCH',
+      batchSha256: request.batchSha256,
+      localControllerSeatId: LANE,
+    },
+  };
+  const reviewed = {
+    ...ack,
+    operation: 'DEVICE_REQUEST_RECOVER',
+    delivery: 'RECOVERED',
+    current: {
+      kind: 'REQUEST_REVIEW',
+      request: { ...request, status: 'IN_REVIEW', requestRevision: 1 },
+      proof,
+    },
+  };
+  const bindCommand = {
+    schemaVersion: 1,
+    operation: 'DEVICE_REQUEST_BIND_LANE',
+    commandId: 'bind-command',
+    requestId: REQUEST,
+    technicalSessionId: SESSION,
+    submitCommandId: request.submitCommandId,
+    batchSha256: request.batchSha256,
+    localControllerSeatId: LANE,
+  };
+  const binding = {
+    operation: 'BIND_LANE',
+    commandId: 'bind-command',
+    receiptId: 'bind-receipt',
+    semanticBodySha256: postSaveSha256(canonicalPostSaveJson(bindCommand)),
+    binding: {
+      campaignId: CAMPAIGN,
+      requestOwnerDeviceId: OWNER,
+      requestId: REQUEST,
+      technicalSessionId: SESSION,
+      submitCommandId: request.submitCommandId,
+      batchSha256: request.batchSha256,
+      localControllerSeatId: LANE,
+    },
+  };
+  it('keeps the original submit bytes while a complete accept/reject proof advances current', () => {
+    for (const [decisions, status, revision] of [
+      [[accepted], 'IN_REVIEW', 1],
+      [[accepted, rejected], 'REJECTED', 2],
+    ] as const) {
+      const value = {
+        ...reviewed,
+        current: {
+          ...reviewed.current,
+          request: { ...request, status, requestRevision: revision },
+          proof: { ...proof, decisions },
+        },
+      };
+      const decoded = decodeDeviceAdmissionPeerResponse(encode(value));
+      expect(decoded).toEqual(value);
+      expect(canonicalPostSaveJson(decoded.outcome === 'ACK' ? decoded.receipt : null)).toBe(
+        canonicalPostSaveJson(submit),
+      );
+    }
+  });
+  it('accepts an explicit legacy BIND without increasing requestRevision, including a later decision', () => {
+    for (const decisions of [[], [accepted]]) {
+      const value = {
+        schemaVersion: 1,
+        operation: 'DEVICE_REQUEST_BIND_LANE',
+        outcome: 'ACK',
+        delivery: 'REPLAY',
+        receipt: binding,
+        current: {
+          kind: 'REQUEST_REVIEW',
+          request: {
+            ...request,
+            status: decisions.length ? 'IN_REVIEW' : 'PENDING',
+            requestRevision: decisions.length,
+          },
+          proof: { ...proof, decisions, laneProvenance: { kind: 'BIND_LANE', receipt: binding } },
+        },
+      };
+      expect(decodeDeviceAdmissionPeerResponse(encode(value))).toEqual(value);
+    }
+  });
+  it('retains a historical cancellation receipt with a derived CANCELLED header and no fake lane', () => {
+    const value = {
+      schemaVersion: 1,
+      operation: 'DEVICE_REQUEST_CANCEL',
+      outcome: 'ACK',
+      delivery: 'REPLAY',
+      receipt: cancel,
+      current: {
+        kind: 'REQUEST_REVIEW',
+        request: { ...cancelled, status: 'CANCELLED' },
+        proof: {
+          submittedReceipt: submit,
+          cancelledReceiptOrNull: cancel,
+          decisions: [],
+          laneProvenance: null,
+        },
+      },
+    };
+    expect(decodeDeviceAdmissionPeerResponse(encode(value))).toEqual(value);
+  });
+  it.each([
+    [
+      'unproven status',
+      (v: MutableReviewValue) => {
+        v.current.request.status = 'REJECTED';
+      },
+    ],
+    [
+      'skipped revision',
+      (v: MutableReviewValue) => {
+        v.current.proof.decisions[0]!.beforeRequestRevision = 1;
+      },
+    ],
+    [
+      'missing predecessor',
+      (v: MutableReviewValue) => {
+        v.current.proof.decisions = [rejected];
+      },
+    ],
+    [
+      'decision without lane',
+      (v: MutableReviewValue) => {
+        v.current.proof.laneProvenance = null;
+      },
+    ],
+    [
+      'unknown proof field',
+      (v: MutableReviewValue) => {
+        v.current.proof.campaignCopies = [];
+      },
+    ],
+    [
+      'unknown header field',
+      (v: MutableReviewValue) => {
+        v.current.request.controllerSeat = LANE;
+      },
+    ],
+    [
+      'wrong snapshot shape',
+      (v: MutableReviewValue) => {
+        v.current.proof.decisions[0]!.candidateSnapshotChecksums = [];
+      },
+    ],
+    [
+      'changed submit receipt',
+      (v: MutableReviewValue) => {
+        v.current.proof.submittedReceipt.receiptId = 'another';
+      },
+    ],
+    [
+      'cancellation and decision',
+      (v: MutableReviewValue) => {
+        v.current.proof.cancelledReceiptOrNull = cancel;
+      },
+    ],
+  ] as const)('rejects %s without normalizing a proof', (_label, mutate) => {
+    const value = structuredClone(reviewed);
+    mutate(value);
+    invalid(value);
+  });
+  it('rejects cross-owner decisions and changed ordered snapshot checksums', () => {
+    for (const second of [
+      { ...rejected, requestOwnerDeviceId: TRANSFER },
+      { ...rejected, candidateSnapshotChecksums: ['2'.repeat(64)] },
+    ])
+      invalid({
+        ...reviewed,
+        current: {
+          ...reviewed.current,
+          request: { ...request, status: 'REJECTED', requestRevision: 2 },
+          proof: { ...proof, decisions: [accepted, second] },
+        },
+      });
+  });
+  it('requires the exact BIND receipt in separately current proof', () => {
+    const value = {
+      schemaVersion: 1,
+      operation: 'DEVICE_REQUEST_BIND_LANE',
+      outcome: 'ACK',
+      delivery: 'COMMITTED',
+      receipt: binding,
+      current: {
+        kind: 'REQUEST_REVIEW',
+        request,
+        proof: {
+          ...proof,
+          decisions: [],
+          laneProvenance: { kind: 'BIND_LANE', receipt: { ...binding, receiptId: 'changed' } },
+        },
+      },
+    };
+    invalid(value);
+    invalid({ ...value, receipt: { ...binding, semanticBodySha256: '0'.repeat(64) } });
+  });
+  it('never invokes request or proof-array accessors during direct encode validation', () => {
+    const requestGetter = vi.fn(() => REQUEST),
+      arrayGetter = vi.fn(() => accepted);
+    const a = structuredClone(reviewed),
+      b = structuredClone(reviewed);
+    Object.defineProperty(a.current.request, 'requestId', { get: requestGetter, enumerable: true });
+    Object.defineProperty(b.current.proof.decisions, '0', { get: arrayGetter, enumerable: true });
+    expect(() => encode(a)).toThrow(DeviceAdmissionPeerResponseError);
+    expect(() => encode(b)).toThrow(DeviceAdmissionPeerResponseError);
+    expect(requestGetter).not.toHaveBeenCalled();
+    expect(arrayGetter).not.toHaveBeenCalled();
   });
 });

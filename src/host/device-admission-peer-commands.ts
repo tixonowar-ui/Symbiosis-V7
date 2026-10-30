@@ -41,6 +41,15 @@ export type DeviceAdmissionPeerCommand = { readonly schemaVersion: 1 } & (
       readonly submitCommandId: string;
     }
   | {
+      readonly operation: 'DEVICE_REQUEST_BIND_LANE';
+      readonly commandId: string;
+      readonly requestId: string;
+      readonly technicalSessionId: string;
+      readonly submitCommandId: string;
+      readonly batchSha256: string;
+      readonly localControllerSeatId: string;
+    }
+  | {
       readonly operation: 'DEVICE_REQUEST_BEGIN';
       readonly commandId: string;
       readonly requestId: string;
@@ -78,6 +87,8 @@ export type DeviceAdmissionPeerCommandField =
   | 'requestRevision'
   | 'reason'
   | 'submitCommandId'
+  | 'batchSha256'
+  | 'localControllerSeatId'
   | 'connectionRevision'
   | 'candidates'
   | 'manifest'
@@ -326,6 +337,37 @@ function command(
         technicalSessionId: uuid(r['technicalSessionId'], 'technicalSessionId'),
         submitCommandId: identifier(r['submitCommandId'], 'submitCommandId'),
       });
+    }
+    case 'DEVICE_REQUEST_BIND_LANE': {
+      const r = closed(
+        'commandId',
+        'requestId',
+        'technicalSessionId',
+        'submitCommandId',
+        'batchSha256',
+        'localControllerSeatId',
+      );
+      const result = {
+        ...base,
+        operation,
+        commandId: identifier(r['commandId'], 'commandId'),
+        requestId: uuid(r['requestId'], 'requestId'),
+        technicalSessionId: uuid(r['technicalSessionId'], 'technicalSessionId'),
+        submitCommandId: identifier(r['submitCommandId'], 'submitCommandId'),
+        batchSha256: digest(r['batchSha256'], 'batchSha256'),
+        localControllerSeatId: uuid(r['localControllerSeatId'], 'localControllerSeatId'),
+      };
+      if (
+        new Set([
+          result.commandId,
+          result.requestId,
+          result.technicalSessionId,
+          result.submitCommandId,
+          result.localControllerSeatId,
+        ]).size !== 5
+      )
+        return fail('command');
+      return Object.freeze(result);
     }
     case 'DEVICE_REQUEST_BEGIN': {
       const r = closed(

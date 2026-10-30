@@ -11,13 +11,21 @@ import type {
   Net005Projection,
   Net011Projection,
   NetworkDraftRefusal,
+  NetworkConnectionState,
+  NetworkGmRequestDraftValues,
+  NetworkVisibleRequestStatus,
 } from '@shared/network-application.js';
-import { isNetworkApplicationProjection } from '@shared/network-application-codec.js';
+import {
+  isNetworkApplicationProjection,
+  networkGmRequestProjectionValue,
+  networkGmRequestDraftValues,
+} from '@shared/network-application-codec.js';
 import {
   isNetworkApplicationForm,
   isNetworkEditableForm,
   networkEditFromProjection,
   type NetworkEdit,
+  type NetworkGmRequestEditState,
 } from './network-application.js';
 import { NetworkQrError, readNetworkQrFile } from './network-qr.js';
 
@@ -335,9 +343,11 @@ export function NetworkFields({
           <p role="status">
             {p.requestStatus === 'PENDING'
               ? 'Заявка ожидает решения мастера.'
-              : p.requestStatus === 'REJECTED'
-                ? 'Мастер отклонил заявку.'
-                : 'Получено предложение по допуску.'}
+              : p.requestStatus === 'IN_REVIEW'
+                ? 'Мастер принял заявку к рассмотрению. Персонажи ещё не допущены в кампанию.'
+                : p.requestStatus === 'REJECTED'
+                  ? 'Мастер отклонил заявку.'
+                  : 'Получено предложение по допуску.'}
           </p>
           {p.gmMessage !== null ? <p>{p.gmMessage}</p> : null}
           {p.requestStatus === 'PENDING' ? (
@@ -351,7 +361,9 @@ export function NetworkFields({
               />
             </label>
           ) : null}
-          <p>Отмена требует отдельного подтверждения и сохраняет исходные локальные листы.</p>
+          {p.requestStatus === 'PENDING' ? (
+            <p>Отмена требует отдельного подтверждения и сохраняет исходные локальные листы.</p>
+          ) : null}
         </section>
       );
       break;
@@ -451,5 +463,140 @@ export function NetworkFields({
       <DraftStatus state={state} />
       {content}
     </>
+  );
+}
+
+const GM_REQUEST_STATUS_LABELS: Readonly<Record<NetworkVisibleRequestStatus, string>> = {
+  PENDING: 'Ожидает решения',
+  IN_REVIEW: 'Принята к рассмотрению',
+  REJECTED: 'Отклонена',
+  PROPOSED: 'Получено предложение по допуску',
+};
+const GM_REQUEST_CONNECTION_LABELS: Readonly<Record<NetworkConnectionState, string>> = {
+  NO_TECHNICAL_SESSION: 'Нет технического соединения',
+  CONNECTING: 'Подключается',
+  CONNECTED_TECHNICAL: 'Техническое соединение установлено',
+  CONNECTED_ADMITTED: 'Соединение допущенного участника',
+  LOST: 'Связь потеряна',
+  UNAVAILABLE: 'Устройство недоступно',
+  DISCONNECTED: 'Соединение закрыто',
+  RECONNECTED: 'Соединение восстановлено',
+};
+export interface NetworkGmRequestFieldsProps {
+  readonly projection: JsonObject;
+  readonly state: NetworkGmRequestEditState | null;
+  readonly onChange: (values: NetworkGmRequestDraftValues) => void;
+}
+/** NET-017 inputs supplement the GM Atlas renderer; they never dispatch a workflow. */
+export function NetworkGmRequestFields({
+  projection,
+  state,
+  onChange,
+}: NetworkGmRequestFieldsProps): ReactElement {
+  const p = networkGmRequestProjectionValue(projection);
+  const values =
+    state === null
+      ? { selectedRequestIdOrNull: p.selectedRequestIdOrNull, decisionReason: p.decisionReason }
+      : networkGmRequestDraftValues(state.values);
+  const selected = p.requests.find((row) => row.requestId === values.selectedRequestIdOrNull);
+  const staleSelection = values.selectedRequestIdOrNull !== null && selected === undefined;
+  const disabled = p.commandId !== null || state?.pending === true;
+  const canEditReason =
+    selected !== undefined && ['PENDING', 'IN_REVIEW'].includes(selected.requestStatus);
+  return (
+    <section aria-label="Входящие заявки устройств">
+      <p role="status">
+        {state?.pending
+          ? 'Сохранение выбора…'
+          : state?.dirty
+            ? 'Ввод ещё не подтверждён. Дождитесь сохранения перед решением.'
+            : 'Показана очередь, подтверждённая хостом.'}
+      </p>
+      {staleSelection ? (
+        <p role="alert">
+          Выбранной заявки больше нет в текущей очереди. Выберите актуальную заявку.
+        </p>
+      ) : null}
+      <p>
+        Активных персонажей: {p.occupiedActivePcCount} из {p.activePlayerCapacity}.
+      </p>
+      {p.requests.length === 0 ? (
+        <p>Входящих заявок пока нет.</p>
+      ) : (
+        <fieldset disabled={disabled}>
+          <legend>Заявки устройств</legend>
+          {p.requests.map((row) => (
+            <article key={row.requestId} aria-label={'Заявка ' + row.requestId}>
+              <label>
+                <input
+                  type="radio"
+                  name={'gm-request-' + p.contextId}
+                  aria-label={'Выбрать заявку ' + row.requestId}
+                  checked={row.requestId === values.selectedRequestIdOrNull}
+                  onChange={() =>
+                    onChange({ selectedRequestIdOrNull: row.requestId, decisionReason: '' })
+                  }
+                />
+                Заявка {row.requestId}
+              </label>
+              <p>Устройство: {row.requestOwnerDeviceId}.</p>
+              <p>
+                {GM_REQUEST_STATUS_LABELS[row.requestStatus]}. Ревизия заявки: {row.requestRevision}
+                .
+              </p>
+              <p>{GM_REQUEST_CONNECTION_LABELS[row.connectionState]}.</p>
+              <ul>
+                {row.batchCharacterSummaries.map((entry) => (
+                  <li key={entry.sourceUuid}>
+                    <strong>{entry.name}</strong>
+                    <details>
+                      <summary>Источник и сохранённый снимок</summary>
+                      <dl>
+                        <dt>Исходный персонаж</dt>
+                        <dd>{entry.sourceUuid}</dd>
+                        <dt>Снимок</dt>
+                        <dd>{entry.sourceSnapshotId}</dd>
+                        <dt>Контрольная сумма снимка</dt>
+                        <dd>{entry.snapshotChecksum}</dd>
+                        <dt>Место ввода устройства</dt>
+                        <dd>{entry.localControllerSeatId}</dd>
+                      </dl>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+              <p>Персонажей в заявке: {row.requestedCandidateCount}.</p>
+              {row.gmMessageOrNull !== null ? <p>Причина решения: {row.gmMessageOrNull}</p> : null}
+              {row.decisionReceiptIdOrNull !== null ? (
+                <p>Квитанция решения: {row.decisionReceiptIdOrNull}</p>
+              ) : null}
+            </article>
+          ))}
+        </fieldset>
+      )}
+      {selected !== undefined ? (
+        <p>
+          Прогноз для выбранной заявки: {p.occupiedActivePcCount + selected.requestedCandidateCount}{' '}
+          из {p.activePlayerCapacity}.{' '}
+          {p.occupiedActivePcCount + selected.requestedCandidateCount <= p.activePlayerCapacity
+            ? 'Состав помещается в текущую вместимость.'
+            : 'Состав превышает текущую вместимость.'}{' '}
+          Этот прогноз не резервирует места и не ограничивает предварительное рассмотрение.
+        </p>
+      ) : null}
+      <label>
+        Причина отклонения
+        <textarea
+          aria-label="Причина отклонения заявки"
+          value={values.decisionReason}
+          disabled={disabled || !canEditReason || staleSelection}
+          onChange={(event) => onChange({ ...values, decisionReason: event.currentTarget.value })}
+        />
+      </label>
+      <p>
+        Для отклонения нужна непустая причина. Принятие к рассмотрению сохраняет заявку для проверки
+        мастером; допуск персонажей оформляется отдельно.
+      </p>
+    </section>
   );
 }

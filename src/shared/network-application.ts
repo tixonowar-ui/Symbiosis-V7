@@ -1,6 +1,7 @@
 import type {
   NetworkDraftScope,
   NetworkWorkflowCommandId,
+  NetworkGmRequestReviewWorkflowId,
   PublicCandidateRef,
   PublicFinalCandidateSummary,
   CapacityForecast,
@@ -8,7 +9,7 @@ import type {
 import type { JsonObject, RevisionVector, WorkflowCommandRequestMessage } from './wire-protocol.js';
 import type { PresentedBaseForm } from './wire-v2-protocol.js';
 
-/** Application surfaces of #171; later review/admission forms are deliberately separate. */
+/** Player application surfaces of #171; GM review is a separate projection family. */
 export const NETWORK_APPLICATION_FORM_IDS = [
   'NET-001',
   'NET-002',
@@ -110,14 +111,99 @@ export interface Net005Projection extends NetworkReadCommon {
   readonly requestId: string;
   readonly requestOwnerDeviceId: string;
   readonly batchCharacterSummaries: readonly PublicFinalCandidateSummary[];
-  /** Only the existing source literals. New preliminary GM states await #177. */
-  readonly requestStatus: 'PENDING' | 'REJECTED' | 'PROPOSED';
+  /** Atlas 1.6: only this installation's request; no queue or admission authority. */
+  readonly requestStatus: NetworkVisibleRequestStatus;
   readonly gmMessage: string | null;
   readonly requestRevision: number;
   /** Own local input only; storing it never executes the separate cancellation command. */
   readonly cancelReason: string;
   readonly commandId: string | null;
 }
+
+/** Atlas 1.6 excludes CANCELLED rows from the queue and clears their selection. */
+export type NetworkVisibleRequestStatus = 'PENDING' | 'IN_REVIEW' | 'REJECTED' | 'PROPOSED';
+export interface NetworkGmRequestCandidateSummary extends JsonObject {
+  readonly sourceUuid: string;
+  /** Verified descriptor.exportBytesSha256; the exact canonical export file, including LF. */
+  readonly snapshotChecksum: string;
+  readonly name: string;
+  readonly sourceSnapshotId: string;
+  /** The submitted installation's real input lane, never an admitted campaign seat. */
+  readonly localControllerSeatId: string;
+}
+export interface NetworkGmRequestQueueRow extends JsonObject {
+  readonly requestId: string;
+  readonly requestOwnerDeviceId: string;
+  readonly requestStatus: NetworkVisibleRequestStatus;
+  readonly requestRevision: number;
+  readonly connectionState: NetworkConnectionState;
+  readonly batchCharacterSummaries: readonly NetworkGmRequestCandidateSummary[];
+  readonly requestedCandidateCount: 1 | 2 | 3;
+  readonly gmMessageOrNull: string | null;
+  readonly decisionReceiptIdOrNull: string | null;
+}
+export type NetworkGmRequestReturnContext =
+  | {
+      readonly originFormId: 'CMP-006';
+      readonly campaignId: string;
+      readonly creationReceiptId: string;
+    }
+  | { readonly originFormId: 'GM-002'; readonly campaignId: string }
+  | { readonly originFormId: 'CMP-009'; readonly campaignId: string };
+/** Bare source-backed values only; a GM draft transport/revision owner is defined separately. */
+export interface NetworkGmRequestDraftValues extends JsonObject {
+  readonly selectedRequestIdOrNull: string | null;
+  readonly decisionReason: string;
+}
+/** Independent GM projection: it cannot inherit a player scope, device, or controller seat. */
+export interface Net017Projection extends NetworkGmRequestDraftValues {
+  readonly contextId: string;
+  readonly campaignId: string;
+  readonly stateRevision: number;
+  readonly projectionRevision: number;
+  readonly requestQueueRevision: number;
+  readonly requests: readonly NetworkGmRequestQueueRow[];
+  readonly activePlayerCapacity: 1 | 2 | 3 | 4 | 5;
+  readonly occupiedActivePcCount: number;
+  readonly commandId: string | null;
+  readonly returnContext: NetworkGmRequestReturnContext;
+}
+export interface NetworkGmAcceptToReviewPayload extends JsonObject {
+  readonly campaignId: string;
+  readonly requestId: string;
+  readonly requestRevision: number;
+}
+export interface NetworkGmRejectRequestPayload extends NetworkGmAcceptToReviewPayload {
+  readonly reason: string;
+}
+interface NetworkGmRequestDecisionReceiptBase extends JsonObject {
+  readonly receiptId: string;
+  readonly commandId: string;
+  readonly workflowCommandId: NetworkGmRequestReviewWorkflowId;
+  readonly campaignId: string;
+  readonly requestId: string;
+  readonly requestOwnerDeviceId: string;
+  readonly beforeRequestRevision: number;
+  readonly requestRevision: number;
+  /** One to three exact submitted export byte digests, in immutable batch order. */
+  readonly candidateSnapshotChecksums: readonly string[];
+  readonly authoritativeGmActorId: string;
+  readonly timestamp: string;
+}
+export type NetworkGmRequestDecisionReceipt =
+  | (NetworkGmRequestDecisionReceiptBase & {
+      readonly workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW';
+      readonly beforeRequestStatus: 'PENDING';
+      readonly afterRequestStatus: 'IN_REVIEW';
+      readonly decisionReasonOrNull: null;
+    })
+  | (NetworkGmRequestDecisionReceiptBase & {
+      readonly workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT';
+      readonly beforeRequestStatus: 'PENDING' | 'IN_REVIEW';
+      readonly afterRequestStatus: 'REJECTED';
+      readonly decisionReasonOrNull: string;
+    });
+
 export interface NetworkPublicProvenance extends JsonObject {
   readonly registryVersion: string;
   readonly catalogVersion: string;
@@ -251,3 +337,59 @@ export interface NetworkDraftRefusalV3Message {
 }
 export type NetworkHostV3Message = NetworkDraftResultV3Message | NetworkDraftRefusalV3Message;
 export type NetworkSupportedWorkflows = readonly NetworkWorkflowCommandId[];
+
+/** A distinct GM draft family; player network scope and lane fields are not applicable. */
+export interface NetworkGmRequestDraftScope {
+  readonly gmLocalContextId: string;
+  readonly campaignId: string;
+  readonly sourceFormId: 'NET-017';
+}
+export interface NetworkGmRequestDraftReplaceV3Message {
+  readonly messageType: 'network.gm-request-draft.replace';
+  readonly protocolVersion: 3;
+  readonly draftUpdateId: string;
+  readonly scope: NetworkGmRequestDraftScope;
+  readonly expectedRevisions: RevisionVector;
+  readonly expectedRequestQueueRevision: number;
+  readonly values: NetworkGmRequestDraftValues;
+}
+export interface NetworkGmRequestDraftResultV3Message {
+  readonly messageType: 'network.gm-request-draft.result';
+  readonly protocolVersion: 3;
+  readonly draftUpdateId: string;
+  readonly scope: NetworkGmRequestDraftScope;
+  readonly changed: boolean;
+  readonly appliedRevisions: RevisionVector;
+  readonly appliedRequestQueueRevision: number;
+  readonly revisions: RevisionVector;
+  readonly requestQueueRevision: number;
+  readonly projectionRole: 'gm';
+  readonly presentation: { readonly base: PresentedBaseForm; readonly layers: readonly [] };
+}
+export type NetworkGmRequestDraftRefusal =
+  | {
+      readonly code: 'INVALID_FIELD';
+      readonly field: 'selectedRequestIdOrNull' | 'decisionReason';
+      readonly reason: 'INVALID_VALUE';
+    }
+  | {
+      readonly code: 'STALE_REVISION';
+      readonly expected: RevisionVector;
+      readonly actual: RevisionVector;
+    }
+  | { readonly code: 'STALE_QUEUE'; readonly expected: number; readonly actual: number }
+  | { readonly code: 'IDEMPOTENCY_CONFLICT' }
+  | { readonly code: 'DRAFT_UNAVAILABLE' }
+  | { readonly code: 'REVISION_OVERFLOW' };
+export interface NetworkGmRequestDraftRefusalV3Message {
+  readonly messageType: 'network.gm-request-draft.refusal';
+  readonly protocolVersion: 3;
+  readonly draftUpdateId: string;
+  readonly scope: NetworkGmRequestDraftScope;
+  readonly revisions: RevisionVector;
+  readonly presentationUnchanged: true;
+  readonly refusal: NetworkGmRequestDraftRefusal;
+}
+export type NetworkGmClientV3Message = NetworkGmRequestDraftReplaceV3Message;
+export type NetworkGmHostV3Message =
+  NetworkGmRequestDraftResultV3Message | NetworkGmRequestDraftRefusalV3Message;

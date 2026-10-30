@@ -4,6 +4,7 @@ import type Database from 'better-sqlite3';
 import { loadDeviceId } from './device-identity.js';
 import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 import { NETWORK_APPLICATION_TABLES } from './migrations/0010-network-application.js';
+import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
 import {
   assertNetworkTabApplicationCanClose,
   networkApplicationStorage,
@@ -262,10 +263,13 @@ function requireSchema(db: Database.Database): void {
   const row = db
     .prepare<[], { version: unknown }>('SELECT MAX(version) AS version FROM schema_migration')
     .get();
-  if (row?.version !== 9 && row?.version !== 10) return fail();
+  if (row?.version !== 9 && row?.version !== 10 && row?.version !== 11) return fail();
   for (const table of LOCAL_NETWORK_TAB_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 10)
+  if (row.version === 10 || row.version === 11)
     for (const table of NETWORK_APPLICATION_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (row.version === 11)
+    for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 function owner(db: Database.Database, device: string): void {
@@ -310,8 +314,9 @@ function journal(
   const request = input(JSON.parse(requestJson) as unknown, 'CORRUPT_STORAGE');
   if (
     request.applicationEntry !== undefined &&
-    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] !==
-      10
+    !([10, 11] as readonly unknown[]).includes(
+      (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
+    )
   )
     return fail();
   const receipt: unknown = JSON.parse(receiptJson);
@@ -488,8 +493,9 @@ function closeJournal(
   const request = closeInput(JSON.parse(requestJson) as unknown, 'CORRUPT_STORAGE');
   if (
     request.applicationExit !== undefined &&
-    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] !==
-      10
+    !([10, 11] as readonly unknown[]).includes(
+      (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
+    )
   )
     return fail();
   const receipt = object(JSON.parse(receiptJson) as unknown);
@@ -532,7 +538,8 @@ function tabState(
     const version = (
       db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
     )['version'];
-    if (version === 10 && validateApplication) validateNetworkTabApplicationState(db, record.tab);
+    if ((version === 10 || version === 11) && validateApplication)
+      validateNetworkTabApplicationState(db, record.tab);
     return { currentTab: record.tab, closureReceiptOrNull: null };
   }
   if (indexedClosure?.['close_command_id'] !== record.retirementCommandIdOrNull) return fail();
@@ -722,10 +729,20 @@ function assertUnused(db: Database.Database, id: string): void {
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version === 10)
+  if (version === 10 || version === 11)
     for (const [table, columns] of [
       ['local_network_application_event', ['event_id', 'receipt_id']],
       ['hosted_network_command', ['command_id', 'receipt_id']],
+    ] as const)
+      for (const column of columns)
+        if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
+          return fail('IDEMPOTENCY_CONFLICT');
+  if (version === 11)
+    for (const [table, columns] of [
+      ['gm_request_queue_event', ['event_id']],
+      ['hosted_device_request_decision', ['command_id', 'receipt_id']],
+      ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
+      ['local_network_lane_binding', ['command_id']],
     ] as const)
       for (const column of columns)
         if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
@@ -771,12 +788,18 @@ export function writeLocalNetworkTabApplicationState(
     target.projectionRevision !== previous.projectionRevision + 1
   )
     return fail();
-  const request = next['requestOrNull'] === null ? null : object(next['requestOrNull']);
-  if (
-    lifecycleState !==
-    (request !== null && request['closureOrNull'] === null ? 'PROVISIONAL' : 'UNBOUND')
-  )
-    return fail();
+  if (next['schemaVersion'] === 2) {
+    // The legacy PENDING receipt is immutable. Replay its separate decision/lane journals
+    // against the proposed anchor before accepting the new lifecycle, without rereading the tab.
+    validateNetworkTabApplicationState(db, { ...previous, ...target, lifecycleState });
+  } else if (next['schemaVersion'] === 1) {
+    const request = next['requestOrNull'] === null ? null : object(next['requestOrNull']);
+    if (
+      lifecycleState !==
+      (request !== null && request['closureOrNull'] === null ? 'PROVISIONAL' : 'UNBOUND')
+    )
+      return fail();
+  } else return fail();
   const anchor = { ...previous, ...target, lifecycleState, retirementCommandIdOrNull: null };
   const result = db
     .prepare(
@@ -830,9 +853,11 @@ export function commitLocalNetworkTabEntry(
         requireSchema(db);
         if (
           request.applicationEntry !== undefined &&
-          (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
-            'version'
-          ] !== 10
+          !([10, 11] as readonly unknown[]).includes(
+            (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+              'version'
+            ],
+          )
         )
           return fail('INVALID_INPUT');
         owner(db, request.ownerDeviceId);
@@ -936,9 +961,9 @@ export function commitLocalNetworkTabClose(
         const schemaVersion = (
           db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
         )['version'];
-        if (request.applicationExit !== undefined && schemaVersion !== 10)
+        if (request.applicationExit !== undefined && schemaVersion !== 10 && schemaVersion !== 11)
           return fail('INVALID_INPUT');
-        if (schemaVersion === 10) {
+        if (schemaVersion === 10 || schemaVersion === 11) {
           try {
             assertNetworkTabApplicationCanClose(db, current);
           } catch (error: unknown) {

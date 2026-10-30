@@ -2,18 +2,28 @@
 
 ## Application integration #171 — текущий рабочий снимок
 
-Ветка `codex/171-device-request-flow`: прежний проверенный player-срез f9a6a539
-локально объединён с source-поставкой #177, exact 5e929973. Эта локальная
-интеграция не является GitHub merge #177 или завершением #171. Одобрения
-владельца #177/#184 сохраняются; повторный вопрос не требуется.
+Ветка codex/171-device-request-flow интегрирована с main ecd398458c:
+#190 и Atlas 1.6 / #177 уже слиты; старые migration 0009/0010 сохранены.
+Shared/store/peer/web подготовки применены, GM queue CMP-006↔NET-017,
+решения, owner delivery и recovery подключены. Это пока рабочий снимок,
+а не завершение #171: production E2E и final independent verify ещё не выполнены.
+Новый полный runtime case после повторного использования одного проверенного
+синхронного снимка прошёл за 19.993 s при неизменном пределе 30 s.
 
-Следом применяются подготовленные shared/store/peer/web контракты и завершается
-GM queue CMP006↔NET017, two-process owner delivery и recovery. Предыдущие
-3539 tests / 36 E2E относятся к f9, не к этому новому снимку. Текущие проверки
-будут записаны отдельно; перед merge полного #171 обязательны независимые
-verify/E2E exact final SHA и CI. Ни copies, ни seats, ни Start не добавляются.
+Проверено на текущем этапе: node/web typecheck и client suite 58/58.
+Focused реальные TCP owner review и CANCEL race прошли; lost-first-BIND-ACK
+fixture исправляется на реальную schema10→11; до этой правки focused subset
+дал 13 PASS / 1 FAIL. Новая регрессия GM reconnect publication ещё не запущена. Прежние 3539 tests / 36 E2E
+относятся к f9, а не к новой интеграции. Журналы — reports/171-integration.
 
-Ниже сохранён source/lineage handoff на момент 5e929973.
+Source-contract foundation #195 подготавливается отдельным PR без runtime
+activation. До её интеграции фактический diff от ECD: код +17277/−103,
+40 путей; tests +14769/−53, 35 путей; docs272, всего81. Этот промежуточный
+замер не разрешает превышать действующий бюджет; итог измеряется заново.
+Нет campaign copies, admitted seats, reservation или Start. Перед merge
+полного #171 обязательны независимые verify/E2E exact final SHA и CI.
+
+Ниже сохранена история source/lineage handoff на момент 5e929973.
 
 ## Текущая поставка #177
 

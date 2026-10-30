@@ -2,7 +2,11 @@ import { wireCodecPrimitives } from './wire-codec.js';
 import { redactProtocolInputRefusal } from './wire-codec.js';
 import { campaignClientValue, campaignHostValue } from './campaign-creation-codec.js';
 import { networkClientValue } from './device-admission.js';
-import { networkHostValue } from './network-application-codec.js';
+import {
+  networkHostValue,
+  networkGmRequestClientValue,
+  networkGmRequestHostValue,
+} from './network-application-codec.js';
 import type { DecodeResult, EncodeResult, RevisionVector } from './wire-protocol.js';
 import type {
   AssignedRouteBinding,
@@ -419,6 +423,8 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
   const object = base(value);
   if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('campaign.'))
     return campaignClientValue(value);
+  if (object['messageType'] === 'network.gm-request-draft.replace')
+    return networkGmRequestClientValue(value);
   if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('network.'))
     return networkClientValue(value);
   if (object['messageType'] === 'character.identity-draft.replace') {
@@ -431,6 +437,11 @@ const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3
   const object = base(value);
   if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('campaign.'))
     return campaignHostValue(value, vocabulary);
+  if (
+    object['messageType'] === 'network.gm-request-draft.result' ||
+    object['messageType'] === 'network.gm-request-draft.refusal'
+  )
+    return networkGmRequestHostValue(value, vocabulary);
   if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('network.'))
     return networkHostValue(value, vocabulary);
   if (object['messageType'] === 'character.identity-draft.result') {

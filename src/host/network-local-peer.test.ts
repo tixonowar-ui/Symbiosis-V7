@@ -9,6 +9,7 @@ import {
   commitLocalNetworkMutation,
   readLocalNetworkApplication,
   readLocalNetworkHostPin,
+  type LocalRequestLaneBindingOutbox,
 } from '../persistence/network-local-application.js';
 import { initializeNetworkInstallation } from './network-installation.js';
 import {
@@ -23,6 +24,7 @@ import {
 import { parseCampaignLanAddress } from './campaign-lan-address.js';
 import {
   canonicalPostSaveJson,
+  postSaveSha256,
   loadLocalCharacterExportBaseline,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
@@ -161,6 +163,7 @@ describe('manual private campaign locator over actual HTTP', () => {
 function keyServer(
   server: Server,
   material: ReturnType<typeof generateDeviceInstallationIdentityMaterial>,
+  onRequest?: () => void,
 ) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: CAMPAIGN_PEER_CHANNEL_MAX_BYTES });
   const channels: CampaignPeerServerChannel[] = [];
@@ -173,6 +176,11 @@ function keyServer(
       }).then(
         (channel) => {
           channels.push(channel);
+          if (onRequest !== undefined)
+            void channel.receiveRequest().then(
+              () => onRequest(),
+              () => undefined,
+            );
         },
         () => undefined,
       );
@@ -334,4 +342,51 @@ it('persists the real host pin before RPC and refuses a changed key even at anot
   expect(readLocalNetworkHostPin(db, ownerDeviceId, campaignId)?.identity).toEqual(
     campaignPeerPublicIdentity(material),
   );
+});
+
+it('refuses a forged lane outbox before RPC even on an authenticated live channel', async () => {
+  const { database, scope, peer } = localPeerFixture();
+  let requests = 0;
+  const { server, target } = await listen((_request, response) => response.end());
+  keyServer(server, generateDeviceInstallationIdentityMaterial(hostId), () => {
+    requests++;
+  });
+  await peer.open(scope, target.canonicalOrigin, campaignId, () => undefined);
+  const app = readLocalNetworkApplication(database, scope),
+    requestId = randomUUID(),
+    technicalSessionId = randomUUID();
+  const command = {
+    schemaVersion: 1 as const,
+    operation: 'DEVICE_REQUEST_BIND_LANE' as const,
+    commandId: 'bind-without-intent',
+    requestId,
+    technicalSessionId,
+    submitCommandId: 'missing-original-submit',
+    batchSha256: 'a'.repeat(64),
+    localControllerSeatId: app.tabId,
+  };
+  const forged: LocalRequestLaneBindingOutbox = {
+    ...scope,
+    requestId,
+    request: command,
+    semanticBodySha256: postSaveSha256(canonicalPostSaveJson(command)),
+    receiptOrNull: null,
+    origin: {
+      ...scope,
+      tabId: app.tabId,
+      entryCommandId: 'missing-entry',
+      entryReceiptId: 'missing-entry-receipt',
+      submitCommandId: command.submitCommandId,
+      submitIntentEventId: 'missing-intent',
+      submitIntentEventReceiptId: 'missing-intent-receipt',
+      submitIntentEventSha256: 'b'.repeat(64),
+      originalEntrySha256: 'c'.repeat(64),
+      originEvidenceSha256: 'd'.repeat(64),
+    },
+  };
+  const before = database.serialize();
+  await expect(peer.deliverLaneBinding(scope, forged)).rejects.toThrow();
+  await expect(peer.recoverLaneBinding(scope, forged)).rejects.toThrow();
+  expect(requests).toBe(0);
+  expect(database.serialize().equals(before)).toBe(true);
 });

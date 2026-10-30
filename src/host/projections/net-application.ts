@@ -79,6 +79,7 @@ export interface NetworkProjectionInput {
   readonly discovery: CampaignDiscoveryScan | null;
   readonly discoveryUnavailable: boolean;
   readonly baselineVersion: string;
+  readonly isCompatibleBaseline?: (version: string) => boolean;
   readonly attemptCount: number;
 }
 /** Explicit public allowlist; original FINAL witnesses and peer proofs never enter this object. */
@@ -86,7 +87,13 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
   const s = i.state,
     session = s.sessionOrNull,
     pending = s.pendingCommandIdOrNull !== null;
-  const idle = !pending && (s.requestOrNull === null || s.requestOrNull.closureOrNull !== null);
+  const status = s.schemaVersion === 2 ? s.requestReviewOrNull?.requestStatus : undefined;
+  const idle =
+    !pending &&
+    (s.requestOrNull === null ||
+      s.requestOrNull.closureOrNull !== null ||
+      status === 'REJECTED' ||
+      status === 'CANCELLED');
   const live =
     i.campaign !== null &&
     session !== null &&
@@ -152,7 +159,10 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
             activePlayerCapacity: o.campaign.activePlayerCapacity,
             activePcCount: o.campaign.activePcCount,
             compatibility:
-              o.campaign.baselineVersion === i.baselineVersion ? 'COMPATIBLE' : 'INCOMPATIBLE',
+              (i.isCompatibleBaseline?.(o.campaign.baselineVersion) ??
+              o.campaign.baselineVersion === i.baselineVersion)
+                ? 'COMPATIBLE'
+                : 'INCOMPATIBLE',
           };
         }),
         discoveryTruncated: i.discovery?.truncated ?? false,
@@ -251,15 +261,25 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
         b = s.preparedBatchOrNull;
       if (r === null || b === null || r.closureOrNull !== null)
         throw new Error('network request unavailable');
+      const requestStatus =
+        s.schemaVersion === 2 ? (s.requestReviewOrNull?.requestStatus ?? r.status) : r.status;
+      if (requestStatus === 'CANCELLED')
+        throw new Error('Cancelled request must leave the request screen');
       payload = {
         ...common,
         sessionId: r.technicalSessionId,
         requestId: r.requestId,
         requestOwnerDeviceId: s.ownerDeviceId,
         batchCharacterSummaries: summaries(b.candidates),
-        requestStatus: r.status,
-        gmMessage: null,
-        requestRevision: r.requestRevision,
+        requestStatus,
+        gmMessage:
+          s.schemaVersion === 2
+            ? (s.requestReviewOrNull?.proof.decisions.at(-1)?.decisionReasonOrNull ?? null)
+            : null,
+        requestRevision:
+          s.schemaVersion === 2
+            ? (s.requestReviewOrNull?.requestRevision ?? r.requestRevision)
+            : r.requestRevision,
         cancelReason: s.cancelReason,
         commandId: s.pendingCommandIdOrNull,
       };
@@ -267,9 +287,11 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
         'NET-005::CTA::001',
         !pending &&
           live &&
+          (status === undefined || status === 'PENDING') &&
           s.cancelReason.trim().length > 0 &&
           capable('UI-CMD-DEVICE-REQUEST-CANCEL'),
       );
+      add('NET-005::CTA::003', !pending && status === 'REJECTED');
       break;
     }
     case 'NET-011': {
@@ -378,5 +400,108 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
             : (session?.campaignProof.campaignId ?? `unbound:${s.networkScopeId}`),
       },
     ],
+  };
+}
+import type { GmRequestReviewView } from '../../persistence/campaign-creation.js';
+import type { VerifiedGmRequestQueue } from '../../persistence/network-device-request.js';
+import type { CurrentPausedCampaignHeader } from '../../persistence/current-paused-campaign.js';
+import type {
+  Net017Projection,
+  NetworkGmRequestQueueRow,
+} from '../../shared/network-application.js';
+import { networkGmRequestProjectionValue } from '../../shared/network-application-codec.js';
+
+/** The GM queue exposes the submitted export byte digest, never the private replay witness. */
+export function projectGmRequestQueue(i: {
+  readonly view: GmRequestReviewView;
+  readonly queue: VerifiedGmRequestQueue;
+  readonly campaign: CurrentPausedCampaignHeader;
+  readonly connections: readonly {
+    readonly requestId: string;
+    readonly requestOwnerDeviceId: string;
+    readonly connected: boolean;
+  }[];
+  readonly supported: readonly WorkflowCommandCapabilityId[];
+}): PresentedBaseForm {
+  const { view, queue, campaign } = i;
+  if (
+    view.formId !== 'NET-017' ||
+    queue.campaignId !== view.campaignId ||
+    campaign.campaignId !== view.campaignId ||
+    view.requestQueueRevision !== queue.requestQueueRevision
+  )
+    throw new Error('GM queue projection source mismatch');
+  const requests = queue.requests
+    .filter((r) => r.requestStatus !== 'CANCELLED')
+    .map((r): NetworkGmRequestQueueRow => {
+      if (r.requestStatus === 'CANCELLED') throw new Error('Cancelled request has no visible row');
+      const original = r.submittedRequest,
+        lane = r.proof.laneProvenance;
+      if (lane === null) throw new Error('GM queue requires the original owner input lane');
+      const localControllerSeatId =
+        lane.kind === 'SUBMITTED_BATCH'
+          ? original.batch.localControllerSeatId
+          : lane.receipt.binding.localControllerSeatId;
+      if (localControllerSeatId === undefined) throw new Error('GM queue lane unavailable');
+      const connection = i.connections.find((v) => v.requestId === original.requestId);
+      if (
+        connection === undefined ||
+        connection.requestOwnerDeviceId !== original.principal.peerIdentity.ownerDeviceId
+      )
+        throw new Error('GM queue owner connection mismatch');
+      const decision = r.proof.decisions.at(-1);
+      return {
+        requestId: original.requestId,
+        requestOwnerDeviceId: original.principal.peerIdentity.ownerDeviceId,
+        requestStatus: r.requestStatus,
+        requestRevision: r.requestRevision,
+        connectionState: connection.connected ? 'CONNECTED_TECHNICAL' : 'LOST',
+        batchCharacterSummaries: original.batch.candidates.map((candidate) => ({
+          sourceUuid: candidate.descriptor.sourceUuid,
+          snapshotChecksum: candidate.descriptor.exportBytesSha256,
+          name: publicText(publicObject(candidate.exportDocument['metadata'])['name']),
+          sourceSnapshotId: candidate.descriptor.sourceSnapshotId,
+          localControllerSeatId,
+        })),
+        requestedCandidateCount: original.batch.candidates.length as 1 | 2 | 3,
+        gmMessageOrNull: decision?.decisionReasonOrNull ?? null,
+        decisionReceiptIdOrNull: decision?.receiptId ?? null,
+      };
+    });
+  const payload: Net017Projection = {
+    contextId: view.gmLocalContextId,
+    campaignId: view.campaignId,
+    stateRevision: view.stateRevision,
+    projectionRevision: view.projectionRevision,
+    requestQueueRevision: view.requestQueueRevision,
+    requests,
+    activePlayerCapacity: campaign.activePlayerCapacity as 1 | 2 | 3 | 4 | 5,
+    occupiedActivePcCount: campaign.activePcCount,
+    commandId: null,
+    returnContext: view.returnContext,
+    ...view.values,
+  };
+  networkGmRequestProjectionValue(payload);
+  const selected = requests.find((r) => r.requestId === view.values.selectedRequestIdOrNull);
+  const actions: ActionKey[] = [];
+  if (
+    selected?.requestStatus === 'PENDING' &&
+    i.supported.includes('UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW')
+  )
+    actions.push('NET-017::CTA::007');
+  if (
+    (selected?.requestStatus === 'PENDING' || selected?.requestStatus === 'IN_REVIEW') &&
+    view.values.decisionReason.trim().length > 0 &&
+    i.supported.includes('UI-CMD-DEVICE-REQUEST-REJECT')
+  )
+    actions.push('NET-017::CTA::008');
+  actions.push('NET-017::CTA::009');
+  return {
+    formId: 'NET-017',
+    formType: 'screen',
+    routeTemplate: '/master/campaigns/:campaignId/network/net-017',
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: view.campaignId }],
+    availableActionKeys: actions,
+    roleFilteredPayload: payload,
   };
 }

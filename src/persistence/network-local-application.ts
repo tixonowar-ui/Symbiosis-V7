@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import type Database from 'better-sqlite3';
 import type { PublicCandidateRef } from '@shared/device-admission.js';
-import type { NetworkPublicErrorCode } from '@shared/network-application.js';
+import type {
+  NetworkPublicErrorCode,
+  NetworkGmRequestDecisionReceipt,
+} from '@shared/network-application.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import { loadDeviceId } from './device-identity.js';
 import {
@@ -12,6 +15,7 @@ import {
   type LocalNetworkTab,
 } from './network-local-tab.js';
 import { NETWORK_APPLICATION_TABLES } from './migrations/0010-network-application.js';
+import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
 import type { RevisionTriple } from './store.js';
 
 export interface NetworkPublicIdentity {
@@ -43,7 +47,7 @@ export interface NetworkPreparedCandidate {
   readonly witnessSha256: string;
   readonly byteLength: number;
 }
-export interface NetworkPreparedBatch {
+interface NetworkPreparedBatchBase {
   readonly requestId: string;
   readonly technicalSessionId: string;
   readonly connectionRevision: number;
@@ -51,6 +55,11 @@ export interface NetworkPreparedBatch {
   readonly candidates: readonly NetworkPreparedCandidate[];
   readonly batchSha256: string;
 }
+export type NetworkPreparedBatch = NetworkPreparedBatchBase &
+  (
+    | { readonly schemaVersion?: never; readonly localControllerSeatId?: never }
+    | { readonly schemaVersion: 2; readonly localControllerSeatId: string }
+  );
 export type NetworkApplicationFormId =
   'NET-001' | 'NET-002' | 'NET-003' | 'NET-004' | 'NET-005' | 'NET-011' | 'CHR-027';
 export interface LocalNetworkScope {
@@ -90,7 +99,9 @@ export interface NetworkRequestConfirmation {
   };
 }
 export interface LocalNetworkApplication extends LocalNetworkScope, RevisionTriple {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
+  /** Introduced only by an explicit review event; legacy serialized heads stay byte-exact. */
+  readonly requestReviewOrNull?: VerifiedLocalRequestCurrent | null;
   readonly tabId: string;
   readonly formId: NetworkApplicationFormId;
   readonly draftRevision: number;
@@ -177,6 +188,18 @@ export interface LocalNetworkOutbox extends LocalNetworkScope {
   readonly acknowledgementOrNull: LocalNetworkAcknowledgement | null;
 }
 export type LocalNetworkMutation =
+  | { readonly kind: 'LANE_BIND_INTENT'; readonly outbox: LocalRequestLaneBindingOutbox }
+  | {
+      readonly kind: 'LANE_BIND_ACK';
+      readonly commandId: string;
+      readonly receipt: PeerLaneBindingReceipt;
+    }
+  | { readonly kind: 'REQUEST_ADVANCE'; readonly proof: VerifiedRequestReviewProof }
+  | {
+      readonly kind: 'CANCEL_SETTLE';
+      readonly commandId: string;
+      readonly proof: VerifiedRequestReviewProof;
+    }
   | { readonly kind: 'ADDRESS'; readonly addressOrQrPayload: string }
   | { readonly kind: 'CANCEL_REASON'; readonly cancelReason: string }
   | {
@@ -228,8 +251,372 @@ export interface LocalNetworkDeliverySnapshot {
   readonly current: LocalNetworkApplication;
   readonly outbox: LocalNetworkOutbox | null;
   readonly acknowledgementEvent: StoredLocalNetworkEvent | null;
+  readonly requestCurrentOrNull: VerifiedLocalRequestCurrent | null;
+  readonly cancelSettlementOrNull: LocalCancelSettlement | null;
+}
+export interface LocalCancelSettlement {
+  readonly commandId: string;
+  readonly requestId: string;
+  readonly proof: VerifiedRequestReviewProof;
 }
 export type NetworkStoreGuard<T> = (source: T, phase: 'APPLY' | 'REPLAY') => void;
+
+export interface DeviceRequestBindLane {
+  readonly schemaVersion: 1;
+  readonly operation: 'DEVICE_REQUEST_BIND_LANE';
+  readonly commandId: string;
+  readonly requestId: string;
+  readonly technicalSessionId: string;
+  readonly submitCommandId: string;
+  readonly batchSha256: string;
+  readonly localControllerSeatId: string;
+}
+export interface HostedRequestLaneBinding {
+  readonly campaignId: string;
+  readonly requestOwnerDeviceId: string;
+  readonly requestId: string;
+  readonly technicalSessionId: string;
+  readonly submitCommandId: string;
+  readonly batchSha256: string;
+  readonly localControllerSeatId: string;
+}
+export interface PeerLaneBindingReceipt {
+  readonly operation: 'BIND_LANE';
+  readonly commandId: string;
+  readonly receiptId: string;
+  readonly semanticBodySha256: string;
+  readonly binding: HostedRequestLaneBinding;
+}
+export interface LegacyRequestReceipt {
+  readonly operation: 'SUBMIT' | 'CANCEL';
+  readonly commandId: string;
+  readonly receiptId: string;
+  readonly semanticBodySha256: string;
+  readonly request: NetworkRequestConfirmation;
+}
+export interface VerifiedRequestReviewProof {
+  readonly submittedReceipt: LegacyRequestReceipt & { readonly operation: 'SUBMIT' };
+  readonly cancelledReceiptOrNull: (LegacyRequestReceipt & { readonly operation: 'CANCEL' }) | null;
+  readonly decisions: readonly NetworkGmRequestDecisionReceipt[];
+  readonly laneProvenance:
+    | {
+        readonly kind: 'SUBMITTED_BATCH';
+        readonly batchSha256: string;
+        readonly localControllerSeatId: string;
+      }
+    | { readonly kind: 'BIND_LANE'; readonly receipt: PeerLaneBindingReceipt }
+    | null;
+}
+export interface VerifiedLocalRequestCurrent {
+  readonly proof: VerifiedRequestReviewProof;
+  readonly requestStatus: 'PENDING' | 'IN_REVIEW' | 'REJECTED' | 'CANCELLED';
+  readonly requestRevision: number;
+}
+export interface LocalRequestLaneOriginWitness extends LocalNetworkScope {
+  readonly tabId: string;
+  readonly entryCommandId: string;
+  readonly entryReceiptId: string;
+  readonly submitCommandId: string;
+  readonly submitIntentEventId: string;
+  readonly submitIntentEventReceiptId: string;
+  readonly submitIntentEventSha256: string;
+  readonly originalEntrySha256: string;
+  readonly originEvidenceSha256: string;
+}
+export interface LocalRequestLaneBindingOutbox extends LocalNetworkScope {
+  readonly requestId: string;
+  readonly request: DeviceRequestBindLane;
+  readonly semanticBodySha256: string;
+  readonly origin: LocalRequestLaneOriginWitness;
+  readonly receiptOrNull: PeerLaneBindingReceipt | null;
+}
+export interface LocalRequestLaneBindingDelivery {
+  readonly outbox: LocalRequestLaneBindingOutbox;
+  readonly current: LocalNetworkDeliverySnapshot;
+}
+
+/** Source closure is intentionally independent of browser projection/role claims. */
+export function validateDeviceRequestBindLane(value: unknown): DeviceRequestBindLane {
+  const row = object(value, [
+    'schemaVersion',
+    'operation',
+    'commandId',
+    'requestId',
+    'technicalSessionId',
+    'submitCommandId',
+    'batchSha256',
+    'localControllerSeatId',
+  ]);
+  if (row['schemaVersion'] !== 1 || row['operation'] !== 'DEVICE_REQUEST_BIND_LANE') return fail();
+  const result = {
+    schemaVersion: 1 as const,
+    operation: 'DEVICE_REQUEST_BIND_LANE' as const,
+    commandId: text(row['commandId']),
+    requestId: uuid(row['requestId']),
+    technicalSessionId: uuid(row['technicalSessionId']),
+    submitCommandId: text(row['submitCommandId']),
+    batchSha256: hash(row['batchSha256']),
+    localControllerSeatId: uuid(row['localControllerSeatId']),
+  };
+  if (
+    new Set([
+      result.commandId,
+      result.requestId,
+      result.technicalSessionId,
+      result.submitCommandId,
+      result.localControllerSeatId,
+    ]).size !== 5
+  )
+    return fail();
+  return result;
+}
+export function validatePeerLaneBindingReceipt(value: unknown): PeerLaneBindingReceipt {
+  const row = object(value, [
+    'operation',
+    'commandId',
+    'receiptId',
+    'semanticBodySha256',
+    'binding',
+  ]);
+  if (row['operation'] !== 'BIND_LANE') return fail();
+  const b = object(row['binding'], [
+    'campaignId',
+    'requestOwnerDeviceId',
+    'requestId',
+    'technicalSessionId',
+    'submitCommandId',
+    'batchSha256',
+    'localControllerSeatId',
+  ]);
+  const binding: HostedRequestLaneBinding = {
+    campaignId: uuid(b['campaignId']),
+    requestOwnerDeviceId: uuid(b['requestOwnerDeviceId']),
+    requestId: uuid(b['requestId']),
+    technicalSessionId: uuid(b['technicalSessionId']),
+    submitCommandId: text(b['submitCommandId']),
+    batchSha256: hash(b['batchSha256']),
+    localControllerSeatId: uuid(b['localControllerSeatId']),
+  };
+  const command = validateDeviceRequestBindLane({
+    schemaVersion: 1,
+    operation: 'DEVICE_REQUEST_BIND_LANE',
+    commandId: text(row['commandId']),
+    requestId: binding.requestId,
+    technicalSessionId: binding.technicalSessionId,
+    submitCommandId: binding.submitCommandId,
+    batchSha256: binding.batchSha256,
+    localControllerSeatId: binding.localControllerSeatId,
+  });
+  const receiptId = text(row['receiptId']);
+  if (
+    receiptId === command.commandId ||
+    hash(row['semanticBodySha256']) !== sha(canonical(command))
+  )
+    return fail();
+  return {
+    operation: 'BIND_LANE',
+    commandId: command.commandId,
+    receiptId,
+    semanticBodySha256: sha(canonical(command)),
+    binding,
+  };
+}
+export function validateLegacyRequestReceipt(value: unknown): LegacyRequestReceipt {
+  const row = object(value, [
+    'operation',
+    'commandId',
+    'receiptId',
+    'semanticBodySha256',
+    'request',
+  ]);
+  const operation = row['operation'];
+  if (operation !== 'SUBMIT' && operation !== 'CANCEL') return fail();
+  const header = request(row['request']),
+    commandId = text(row['commandId']),
+    receiptId = text(row['receiptId']);
+  if (
+    commandId === receiptId ||
+    (operation === 'SUBMIT'
+      ? header.requestRevision !== 0 ||
+        header.closureOrNull !== null ||
+        header.submitCommandId !== commandId ||
+        header.submitReceiptId !== receiptId
+      : header.requestRevision !== 1 ||
+        header.closureOrNull?.commandId !== commandId ||
+        header.closureOrNull.receiptId !== receiptId)
+  )
+    return fail();
+  return {
+    operation,
+    commandId,
+    receiptId,
+    semanticBodySha256: hash(row['semanticBodySha256']),
+    request: header,
+  };
+}
+export function validateRequestReviewProof(
+  value: unknown,
+  expected: {
+    readonly submittedReceipt: LegacyRequestReceipt;
+    readonly batch: NetworkPreparedBatch;
+    readonly requestOwnerDeviceId: string;
+    readonly campaignId: string;
+    readonly authoritativeGmActorId?: string;
+  },
+): VerifiedLocalRequestCurrent {
+  const row = object(value, [
+    'submittedReceipt',
+    'cancelledReceiptOrNull',
+    'decisions',
+    'laneProvenance',
+  ]);
+  const submitted = validateLegacyRequestReceipt(row['submittedReceipt']);
+  if (
+    submitted.operation !== 'SUBMIT' ||
+    !same(submitted, expected.submittedReceipt) ||
+    expected.batch.requestId !== submitted.request.requestId ||
+    expected.batch.technicalSessionId !== submitted.request.technicalSessionId ||
+    expected.batch.batchSha256 !== submitted.request.batchSha256 ||
+    expected.batch.campaignProof.campaignId !== expected.campaignId
+  )
+    return fail();
+  uuid(expected.requestOwnerDeviceId);
+  uuid(expected.campaignId);
+  const rawDecisions = row['decisions'];
+  if (!Array.isArray(rawDecisions) || rawDecisions.length > 2) return fail();
+  let status: VerifiedLocalRequestCurrent['requestStatus'] = 'PENDING';
+  let revision = 0;
+  const decisions: NetworkGmRequestDecisionReceipt[] = [];
+  const ids = new Set([
+    submitted.commandId,
+    submitted.receiptId,
+    submitted.request.requestId,
+    submitted.request.technicalSessionId,
+    expected.requestOwnerDeviceId,
+    expected.campaignId,
+  ]);
+  for (const value of rawDecisions) {
+    const d = object(value, [
+      'receiptId',
+      'commandId',
+      'workflowCommandId',
+      'campaignId',
+      'requestId',
+      'requestOwnerDeviceId',
+      'beforeRequestStatus',
+      'afterRequestStatus',
+      'beforeRequestRevision',
+      'requestRevision',
+      'decisionReasonOrNull',
+      'candidateSnapshotChecksums',
+      'authoritativeGmActorId',
+      'timestamp',
+    ]);
+    const commandId = text(d['commandId']),
+      receiptId = text(d['receiptId']);
+    const accept = d['workflowCommandId'] === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW';
+    if (
+      (!accept && d['workflowCommandId'] !== 'UI-CMD-DEVICE-REQUEST-REJECT') ||
+      ids.has(commandId) ||
+      ids.has(receiptId) ||
+      commandId === receiptId ||
+      commandId === d['authoritativeGmActorId'] ||
+      receiptId === d['authoritativeGmActorId'] ||
+      d['campaignId'] !== expected.campaignId ||
+      d['requestId'] !== submitted.request.requestId ||
+      d['requestOwnerDeviceId'] !== expected.requestOwnerDeviceId ||
+      d['beforeRequestStatus'] !== status ||
+      integer(d['beforeRequestRevision']) !== revision ||
+      integer(d['requestRevision']) !== increment(revision) ||
+      (status !== 'PENDING' && status !== 'IN_REVIEW') ||
+      (accept && status !== 'PENDING') ||
+      d['afterRequestStatus'] !== (accept ? 'IN_REVIEW' : 'REJECTED') ||
+      !same(
+        d['candidateSnapshotChecksums'],
+        expected.batch.candidates.map((c) => c.descriptor.exportBytesSha256),
+      ) ||
+      (expected.authoritativeGmActorId !== undefined &&
+        d['authoritativeGmActorId'] !== expected.authoritativeGmActorId)
+    )
+      return fail();
+    text(d['authoritativeGmActorId']);
+    text(d['timestamp']);
+    if (
+      accept
+        ? d['decisionReasonOrNull'] !== null
+        : text(d['decisionReasonOrNull']).trim().length === 0
+    )
+      return fail();
+    ids.add(commandId);
+    ids.add(receiptId);
+    revision = increment(revision);
+    status = accept ? 'IN_REVIEW' : 'REJECTED';
+    decisions.push(d as unknown as NetworkGmRequestDecisionReceipt);
+  }
+  let cancelled: (LegacyRequestReceipt & { readonly operation: 'CANCEL' }) | null = null;
+  if (row['cancelledReceiptOrNull'] !== null) {
+    const c = validateLegacyRequestReceipt(row['cancelledReceiptOrNull']);
+    if (
+      c.operation !== 'CANCEL' ||
+      decisions.length !== 0 ||
+      ids.has(c.commandId) ||
+      ids.has(c.receiptId) ||
+      !same({ ...c.request, requestRevision: 0, closureOrNull: null }, submitted.request)
+    )
+      return fail();
+    cancelled = { ...c, operation: 'CANCEL' };
+    ids.add(c.commandId);
+    ids.add(c.receiptId);
+    revision = 1;
+    status = 'CANCELLED';
+  }
+  let lane: VerifiedRequestReviewProof['laneProvenance'] = null;
+  if (row['laneProvenance'] !== null) {
+    const l = object(row['laneProvenance']);
+    if (l['kind'] === 'SUBMITTED_BATCH') {
+      object(l, ['kind', 'batchSha256', 'localControllerSeatId']);
+      if (
+        expected.batch.schemaVersion !== 2 ||
+        l['batchSha256'] !== expected.batch.batchSha256 ||
+        l['localControllerSeatId'] !== expected.batch.localControllerSeatId
+      )
+        return fail();
+      lane = {
+        kind: 'SUBMITTED_BATCH',
+        batchSha256: expected.batch.batchSha256,
+        localControllerSeatId: expected.batch.localControllerSeatId,
+      };
+    } else if (l['kind'] === 'BIND_LANE') {
+      object(l, ['kind', 'receipt']);
+      const receipt = validatePeerLaneBindingReceipt(l['receipt']);
+      const b = receipt.binding;
+      if (
+        expected.batch.schemaVersion === 2 ||
+        b.requestOwnerDeviceId !== expected.requestOwnerDeviceId ||
+        b.campaignId !== expected.campaignId ||
+        b.requestId !== submitted.request.requestId ||
+        b.technicalSessionId !== submitted.request.technicalSessionId ||
+        b.submitCommandId !== submitted.commandId ||
+        b.batchSha256 !== expected.batch.batchSha256 ||
+        ids.has(receipt.commandId) ||
+        ids.has(receipt.receiptId)
+      )
+        return fail();
+      lane = { kind: 'BIND_LANE', receipt };
+    } else return fail();
+  } else if (expected.batch.schemaVersion === 2) return fail();
+  if (decisions.length !== 0 && lane === null) return fail();
+  return {
+    proof: {
+      submittedReceipt: { ...submitted, operation: 'SUBMIT' },
+      cancelledReceiptOrNull: cancelled,
+      decisions,
+      laneProvenance: lane,
+    },
+    requestStatus: status,
+    requestRevision: revision,
+  };
+}
 export type NetworkApplicationStoreCode =
   | 'INVALID_INPUT'
   | 'CORRUPT_STORAGE'
@@ -388,9 +775,12 @@ function input<T>(body: () => T): T {
 }
 function schema(db: Database.Database): void {
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 10) return fail();
+  if (row['version'] !== 10 && row['version'] !== 11) return fail();
   for (const table of NETWORK_APPLICATION_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (row['version'] === 11)
+    for (const table of DEVICE_REQUEST_REVIEW_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 function owner(db: Database.Database, id: string): void {
   uuid(id);
@@ -542,6 +932,8 @@ function candidate(value: unknown): NetworkPreparedCandidate {
   };
 }
 function batch(value: unknown): NetworkPreparedBatch {
+  const batchRecord = object(value);
+  const versioned = batchRecord['schemaVersion'] === 2;
   const row = object(value, [
     'requestId',
     'technicalSessionId',
@@ -549,6 +941,7 @@ function batch(value: unknown): NetworkPreparedBatch {
     'campaignProof',
     'candidates',
     'batchSha256',
+    ...(versioned ? ['schemaVersion', 'localControllerSeatId'] : []),
   ]);
   if (
     !Array.isArray(row['candidates']) ||
@@ -560,6 +953,9 @@ function batch(value: unknown): NetworkPreparedBatch {
   if (new Set(candidates.map((c) => c.descriptor.sourceUuid)).size !== candidates.length)
     return fail();
   const body = {
+    ...(versioned
+      ? { schemaVersion: 2 as const, localControllerSeatId: uuid(row['localControllerSeatId']) }
+      : {}),
     requestId: uuid(row['requestId']),
     technicalSessionId: uuid(row['technicalSessionId']),
     connectionRevision: integer(row['connectionRevision']),
@@ -643,10 +1039,12 @@ function request(value: unknown): NetworkRequestConfirmation {
   };
 }
 function state(value: unknown): LocalNetworkApplication {
-  const row = object(value, stateKeys);
+  const raw = object(value),
+    version = raw['schemaVersion'];
+  const row = object(value, [...stateKeys, ...(version === 2 ? ['requestReviewOrNull'] : [])]);
   const tabId = uuid(row['tabId']);
   if (
-    row['schemaVersion'] !== 1 ||
+    (version !== 1 && version !== 2) ||
     !forms.some((form) => form === row['formId']) ||
     typeof row['addressOrQrPayload'] !== 'string' ||
     typeof row['cancelReason'] !== 'string'
@@ -655,7 +1053,7 @@ function state(value: unknown): LocalNetworkApplication {
   const result = {
     ...row,
     ...vector(Object.fromEntries(vectorKeys.map((key) => [key, row[key]]))),
-    schemaVersion: 1,
+    schemaVersion: version,
     ownerDeviceId: uuid(row['ownerDeviceId']),
     networkScopeId: uuid(row['networkScopeId']),
     tabId,
@@ -836,6 +1234,29 @@ function acknowledgement(value: unknown): LocalNetworkAcknowledgement {
 function mutation(value: unknown, tabId: string): LocalNetworkMutation {
   const row = object(value);
   switch (row['kind']) {
+    case 'LANE_BIND_INTENT':
+      object(row, ['kind', 'outbox']);
+      return { kind: 'LANE_BIND_INTENT', outbox: laneOutbox(row['outbox']) };
+    case 'LANE_BIND_ACK':
+      object(row, ['kind', 'commandId', 'receipt']);
+      return {
+        kind: 'LANE_BIND_ACK',
+        commandId: text(row['commandId']),
+        receipt: validatePeerLaneBindingReceipt(row['receipt']),
+      };
+    case 'REQUEST_ADVANCE':
+      object(row, ['kind', 'proof']);
+      return {
+        kind: 'REQUEST_ADVANCE',
+        proof: object(row['proof']) as unknown as VerifiedRequestReviewProof,
+      };
+    case 'CANCEL_SETTLE':
+      object(row, ['kind', 'commandId', 'proof']);
+      return {
+        kind: 'CANCEL_SETTLE',
+        commandId: text(row['commandId']),
+        proof: object(row['proof']) as unknown as VerifiedRequestReviewProof,
+      };
     case 'SHELL_EXIT': {
       object(row, ['kind', 'navigationRequestId', 'sourceUuid']);
       return {
@@ -922,6 +1343,8 @@ function mutationInput(value: unknown, tabId: string): LocalNetworkMutationInput
     receiptId = text(row['receiptId']);
   if (eventId === receiptId) return fail();
   const change = mutation(row['mutation'], tabId);
+  if (change.kind === 'LANE_BIND_INTENT' && change.outbox.request.commandId === receiptId)
+    return fail();
   const client =
     row['clientRequestJsonOrNull'] === null ? null : semanticBody(row['clientRequestJsonOrNull']);
   if (
@@ -970,14 +1393,248 @@ function mutationInput(value: unknown, tabId: string): LocalNetworkMutationInput
   };
 }
 function lifecycle(current: LocalNetworkApplication): LocalNetworkTab['lifecycleState'] {
+  if (current.requestReviewOrNull !== undefined && current.requestReviewOrNull !== null)
+    return ['PENDING', 'IN_REVIEW'].includes(current.requestReviewOrNull.requestStatus)
+      ? 'PROVISIONAL'
+      : 'UNBOUND';
   return current.requestOrNull !== null && current.requestOrNull.closureOrNull === null
     ? 'PROVISIONAL'
     : 'UNBOUND';
+}
+interface LocalReviewReplay {
+  readonly lanes: Map<string, LocalRequestLaneBindingOutbox>;
+  readonly currents: Map<
+    string,
+    { readonly current: VerifiedLocalRequestCurrent; readonly headEventId: string }
+  >;
+  readonly settlements: Map<string, LocalCancelSettlement>;
+}
+const emptyLocalReview = (): LocalReviewReplay => ({
+  lanes: new Map(),
+  currents: new Map(),
+  settlements: new Map(),
+});
+function laneOrigin(value: unknown): LocalRequestLaneOriginWitness {
+  const row = object(value, [
+    'ownerDeviceId',
+    'networkScopeId',
+    'tabId',
+    'entryCommandId',
+    'entryReceiptId',
+    'submitCommandId',
+    'submitIntentEventId',
+    'submitIntentEventReceiptId',
+    'submitIntentEventSha256',
+    'originalEntrySha256',
+    'originEvidenceSha256',
+  ]);
+  const body = {
+    ownerDeviceId: uuid(row['ownerDeviceId']),
+    networkScopeId: uuid(row['networkScopeId']),
+    tabId: uuid(row['tabId']),
+    entryCommandId: text(row['entryCommandId']),
+    entryReceiptId: text(row['entryReceiptId']),
+    submitCommandId: text(row['submitCommandId']),
+    submitIntentEventId: text(row['submitIntentEventId']),
+    submitIntentEventReceiptId: text(row['submitIntentEventReceiptId']),
+    submitIntentEventSha256: hash(row['submitIntentEventSha256']),
+    originalEntrySha256: hash(row['originalEntrySha256']),
+  };
+  if (sha(canonical(body)) !== row['originEvidenceSha256']) return fail();
+  return { ...body, originEvidenceSha256: hash(row['originEvidenceSha256']) };
+}
+function laneOutbox(value: unknown): LocalRequestLaneBindingOutbox {
+  const row = object(value, [
+    'ownerDeviceId',
+    'networkScopeId',
+    'requestId',
+    'request',
+    'semanticBodySha256',
+    'origin',
+    'receiptOrNull',
+  ]);
+  const request = validateDeviceRequestBindLane(row['request']),
+    origin = laneOrigin(row['origin']);
+  const result = {
+    ownerDeviceId: uuid(row['ownerDeviceId']),
+    networkScopeId: uuid(row['networkScopeId']),
+    requestId: uuid(row['requestId']),
+    request,
+    semanticBodySha256: hash(row['semanticBodySha256']),
+    origin,
+    receiptOrNull:
+      row['receiptOrNull'] === null ? null : validatePeerLaneBindingReceipt(row['receiptOrNull']),
+  };
+  if (
+    result.requestId !== request.requestId ||
+    result.ownerDeviceId !== origin.ownerDeviceId ||
+    result.networkScopeId !== origin.networkScopeId ||
+    request.submitCommandId !== origin.submitCommandId ||
+    request.localControllerSeatId !== origin.tabId ||
+    sha(canonical(request)) !== result.semanticBodySha256
+  )
+    return fail();
+  return result;
+}
+type SubmitOutbox = LocalNetworkOutbox & {
+  readonly intent: Extract<LocalNetworkIntent, { operation: 'SUBMIT' }>;
+};
+function localSubmit(
+  outboxes: ReadonlyMap<string, LocalNetworkOutbox>,
+  requestId: string,
+): SubmitOutbox {
+  const matches = [...outboxes.values()].filter(
+    (o): o is SubmitOutbox => o.intent.operation === 'SUBMIT' && o.intent.requestId === requestId,
+  );
+  if (matches.length !== 1) return fail('NOT_FOUND');
+  return matches[0]!;
+}
+/** This is a projection of the immutable acknowledged header, never a new receipt identity. */
+function acknowledgedReceipt(outbox: LocalNetworkOutbox): LegacyRequestReceipt {
+  const a = outbox.acknowledgementOrNull;
+  if (
+    a === null ||
+    (a.operation !== 'SUBMIT' && a.operation !== 'CANCEL') ||
+    a.operation !== outbox.intent.operation
+  )
+    return fail('UNAVAILABLE');
+  return validateLegacyRequestReceipt({
+    operation: a.operation,
+    commandId: a.commandId,
+    receiptId:
+      a.operation === 'SUBMIT' ? a.request.submitReceiptId : a.request.closureOrNull?.receiptId,
+    semanticBodySha256: a.semanticBodySha256,
+    request: a.request,
+  });
+}
+function localProof(
+  current: LocalNetworkApplication,
+  outboxes: ReadonlyMap<string, LocalNetworkOutbox>,
+  proof: VerifiedRequestReviewProof,
+): VerifiedLocalRequestCurrent {
+  const submitted = validateLegacyRequestReceipt(object(proof)['submittedReceipt']);
+  const outbox = localSubmit(outboxes, submitted.request.requestId),
+    known = acknowledgedReceipt(outbox);
+  if (
+    known.operation !== 'SUBMIT' ||
+    outbox.ownerDeviceId !== current.ownerDeviceId ||
+    outbox.networkScopeId !== current.networkScopeId
+  )
+    return fail();
+  const result = validateRequestReviewProof(proof, {
+    submittedReceipt: { ...known, operation: 'SUBMIT' },
+    batch: outbox.intent.batch,
+    requestOwnerDeviceId: current.ownerDeviceId,
+    campaignId: outbox.intent.batch.campaignProof.campaignId,
+  });
+  const cancelled = result.proof.cancelledReceiptOrNull;
+  if (cancelled !== null) {
+    const intent = outboxes.get(cancelled.commandId);
+    if (
+      intent?.intent.operation !== 'CANCEL' ||
+      intent.intent.requestId !== submitted.request.requestId ||
+      intent.intent.technicalSessionId !== submitted.request.technicalSessionId ||
+      intent.intent.requestRevision !== 0 ||
+      intent.intent.reason !== cancelled.request.closureOrNull?.reason ||
+      intent.semanticBodySha256 !== cancelled.semanticBodySha256 ||
+      (intent.acknowledgementOrNull !== null && !same(acknowledgedReceipt(intent), cancelled))
+    )
+      return fail();
+  }
+  return result;
+}
+function localReviewCurrent(
+  current: LocalNetworkApplication,
+  outboxes: ReadonlyMap<string, LocalNetworkOutbox>,
+  review: LocalReviewReplay,
+  requestId: string,
+): VerifiedLocalRequestCurrent {
+  const known = review.currents.get(requestId);
+  if (known !== undefined) return known.current;
+  const submit = localSubmit(outboxes, requestId),
+    submitted = acknowledgedReceipt(submit);
+  if (submitted.operation !== 'SUBMIT') return fail();
+  const cancelled = [...outboxes.values()].filter(
+    (o) =>
+      o.intent.operation === 'CANCEL' &&
+      o.intent.requestId === requestId &&
+      o.acknowledgementOrNull !== null,
+  );
+  if (cancelled.length > 1) return fail();
+  const receipt = cancelled[0] === undefined ? null : acknowledgedReceipt(cancelled[0]);
+  if (receipt !== null && receipt.operation !== 'CANCEL') return fail();
+  return localProof(current, outboxes, {
+    submittedReceipt: { ...submitted, operation: 'SUBMIT' },
+    cancelledReceiptOrNull: receipt === null ? null : { ...receipt, operation: 'CANCEL' },
+    decisions: [],
+    laneProvenance:
+      submit.intent.batch.schemaVersion === 2
+        ? {
+            kind: 'SUBMITTED_BATCH',
+            batchSha256: submit.intent.batch.batchSha256,
+            localControllerSeatId: submit.intent.batch.localControllerSeatId,
+          }
+        : null,
+  });
+}
+function originalLaneOrigin(
+  db: Database.Database,
+  tab: LocalNetworkTab,
+  events: readonly EventRecord[],
+  requestId: string,
+): LocalRequestLaneOriginWitness {
+  const matches = events.filter(
+    (e) =>
+      e.input.mutation.kind === 'INTENT' &&
+      e.input.mutation.intent.operation === 'SUBMIT' &&
+      e.input.mutation.intent.requestId === requestId,
+  );
+  if (matches.length !== 1) return fail('NOT_FOUND');
+  const event = matches[0]!,
+    change = event.input.mutation;
+  if (change.kind !== 'INTENT' || change.intent.operation !== 'SUBMIT') return fail();
+  // The caller has already replayed this owned tab's entire prefix; no active-tab pointer is read.
+  const entry = at(db, 'local_network_tab_entry', 'entry_command_id', tab.entryCommandId) ?? fail();
+  const requestJson = text(entry['request_json']),
+    receiptJson = text(entry['receipt_json']);
+  const request = object(JSON.parse(requestJson) as unknown),
+    receipt = object(JSON.parse(receiptJson) as unknown);
+  const originalEntrySha256 = sha(canonical({ request, receipt }));
+  if (
+    entry['owner_device_id'] !== tab.ownerDeviceId ||
+    entry['network_scope_id'] !== tab.networkScopeId ||
+    entry['tab_id'] !== tab.tabId ||
+    entry['entry_receipt_id'] !== tab.entryReceiptId ||
+    entry['journal_sha256'] !== originalEntrySha256 ||
+    canonical(request) !== requestJson ||
+    canonical(receipt) !== receiptJson ||
+    request['tabId'] !== tab.tabId ||
+    request['networkScopeId'] !== tab.networkScopeId ||
+    event.input.ownerDeviceId !== tab.ownerDeviceId ||
+    event.input.networkScopeId !== tab.networkScopeId
+  )
+    return fail();
+  const body = {
+    ownerDeviceId: tab.ownerDeviceId,
+    networkScopeId: tab.networkScopeId,
+    tabId: tab.tabId,
+    entryCommandId: tab.entryCommandId,
+    entryReceiptId: tab.entryReceiptId,
+    submitCommandId: change.intent.commandId,
+    submitIntentEventId: event.input.eventId,
+    submitIntentEventReceiptId: event.input.receiptId,
+    submitIntentEventSha256: sha(canonical(event)),
+    originalEntrySha256,
+  };
+  return { ...body, originEvidenceSha256: sha(canonical(body)) };
 }
 function reduce(
   current: LocalNetworkApplication,
   change: LocalNetworkMutation,
   outboxes: Map<string, LocalNetworkOutbox>,
+  review: LocalReviewReplay = emptyLocalReview(),
+  origin: LocalRequestLaneOriginWitness | null = null,
+  eventId = '',
 ): LocalNetworkApplication {
   const next = { ...current };
   if (current.shellExitOrNull !== null && change.kind !== 'NAVIGATE') return fail('UNAVAILABLE');
@@ -988,6 +1645,105 @@ function reduce(
       return fail('UNAVAILABLE');
   };
   switch (change.kind) {
+    case 'LANE_BIND_INTENT': {
+      const o = change.outbox;
+      if (
+        origin === null ||
+        !same(o.origin, origin) ||
+        o.ownerDeviceId !== current.ownerDeviceId ||
+        o.networkScopeId !== current.networkScopeId ||
+        o.request.localControllerSeatId !== origin.tabId ||
+        o.receiptOrNull !== null ||
+        review.lanes.has(o.requestId)
+      )
+        return fail('INVALID_INPUT');
+      const submit = localSubmit(outboxes, o.requestId);
+      if (
+        submit.intent.batch.schemaVersion === 2 ||
+        submit.acknowledgementOrNull === null ||
+        localReviewCurrent(current, outboxes, review, o.requestId).proof.laneProvenance !== null ||
+        o.request.submitCommandId !== submit.intent.commandId ||
+        o.request.technicalSessionId !== submit.intent.batch.technicalSessionId ||
+        o.request.batchSha256 !== submit.intent.batch.batchSha256
+      )
+        return fail('INVALID_INPUT');
+      review.lanes.set(o.requestId, o);
+      break;
+    }
+    case 'LANE_BIND_ACK': {
+      const receipt = change.receipt,
+        o = review.lanes.get(receipt.binding.requestId) ?? fail('NOT_FOUND');
+      if (
+        origin === null ||
+        !same(o.origin, origin) ||
+        o.request.commandId !== change.commandId ||
+        receipt.commandId !== change.commandId ||
+        receipt.semanticBodySha256 !== o.semanticBodySha256 ||
+        receipt.binding.localControllerSeatId !== origin.tabId
+      )
+        return fail('IDEMPOTENCY_CONFLICT');
+      if (o.receiptOrNull !== null) {
+        if (!same(o.receiptOrNull, receipt)) return fail('IDEMPOTENCY_CONFLICT');
+        break;
+      }
+      const before = localReviewCurrent(current, outboxes, review, o.requestId);
+      if (before.proof.laneProvenance !== null) return fail('IDEMPOTENCY_CONFLICT');
+      const result = localProof(current, outboxes, {
+        ...before.proof,
+        laneProvenance: { kind: 'BIND_LANE', receipt },
+      });
+      review.lanes.set(o.requestId, { ...o, receiptOrNull: receipt });
+      review.currents.set(o.requestId, { current: result, headEventId: eventId });
+      next.schemaVersion = 2;
+      next.requestReviewOrNull =
+        current.requestOrNull?.requestId === o.requestId
+          ? result
+          : (current.requestReviewOrNull ?? null);
+      data = true;
+      break;
+    }
+    case 'REQUEST_ADVANCE':
+    case 'CANCEL_SETTLE': {
+      const result = localProof(current, outboxes, change.proof),
+        id = result.proof.submittedReceipt.request.requestId;
+      const before = localReviewCurrent(current, outboxes, review, id);
+      if (
+        !same(before.proof.laneProvenance, result.proof.laneProvenance) ||
+        result.requestRevision < before.requestRevision ||
+        (result.requestRevision === before.requestRevision && !same(before, result)) ||
+        !same(
+          result.proof.decisions.slice(0, before.proof.decisions.length),
+          before.proof.decisions,
+        ) ||
+        (before.proof.cancelledReceiptOrNull !== null &&
+          !same(before.proof.cancelledReceiptOrNull, result.proof.cancelledReceiptOrNull))
+      )
+        return fail('STALE_REVISION');
+      if (change.kind === 'CANCEL_SETTLE') {
+        const pending = outboxes.get(change.commandId) ?? fail('NOT_FOUND');
+        if (
+          pending.intent.operation !== 'CANCEL' ||
+          pending.intent.requestId !== id ||
+          pending.acknowledgementOrNull !== null ||
+          current.pendingCommandIdOrNull !== change.commandId ||
+          !['IN_REVIEW', 'REJECTED'].includes(result.requestStatus) ||
+          pending.intent.requestRevision >= result.requestRevision
+        )
+          return fail('INVALID_INPUT');
+        const settled = { commandId: change.commandId, requestId: id, proof: result.proof };
+        const old = review.settlements.get(change.commandId);
+        if (old !== undefined && !same(old, settled)) return fail('IDEMPOTENCY_CONFLICT');
+        review.settlements.set(change.commandId, settled);
+        next.pendingCommandIdOrNull = null;
+      }
+      if (same(before, result) && change.kind === 'REQUEST_ADVANCE') break;
+      review.currents.set(id, { current: result, headEventId: eventId });
+      next.schemaVersion = 2;
+      next.requestReviewOrNull =
+        current.requestOrNull?.requestId === id ? result : (current.requestReviewOrNull ?? null);
+      data = true;
+      break;
+    }
     case 'SHELL_EXIT':
       idle();
       if (
@@ -1014,7 +1770,9 @@ function reduce(
         current.formId !== 'NET-005' ||
         current.pendingCommandIdOrNull !== null ||
         current.requestOrNull === null ||
-        current.requestOrNull.closureOrNull !== null
+        current.requestOrNull.closureOrNull !== null ||
+        (current.requestReviewOrNull != null &&
+          current.requestReviewOrNull.requestStatus !== 'PENDING')
       )
         return fail('UNAVAILABLE');
       next.cancelReason = change.cancelReason;
@@ -1087,6 +1845,7 @@ function reduce(
         b = change.batch;
       if (
         s === null ||
+        (b.schemaVersion === 2 && b.localControllerSeatId !== current.tabId) ||
         s.technicalSessionId !== b.technicalSessionId ||
         s.connectionRevision !== b.connectionRevision ||
         s.campaignProof.campaignId !== b.campaignProof.campaignId
@@ -1144,6 +1903,8 @@ function reduce(
           current.formId !== 'NET-005' ||
           r === null ||
           r.closureOrNull !== null ||
+          (current.requestReviewOrNull != null &&
+            current.requestReviewOrNull.requestStatus !== 'PENDING') ||
           r.requestId !== i.requestId ||
           r.technicalSessionId !== i.technicalSessionId ||
           r.requestRevision !== i.requestRevision ||
@@ -1202,6 +1963,7 @@ function reduce(
         )
           return fail();
         next.requestOrNull = a.request;
+        if (next.schemaVersion === 2) next.requestReviewOrNull = null;
         next.formId = 'NET-005';
       } else if (a.operation === 'CANCEL' && o.intent.operation === 'CANCEL') {
         const old = current.requestOrNull;
@@ -1223,6 +1985,26 @@ function reduce(
         next.cancelReason = '';
       } else return fail();
       outboxes.set(a.commandId, { ...o, acknowledgementOrNull: a });
+      if (a.operation === 'CANCEL') {
+        const known = review.currents.get(a.request.requestId);
+        if (known !== undefined) {
+          const cancelled = acknowledgedReceipt(outboxes.get(a.commandId)!);
+          if (
+            cancelled.operation !== 'CANCEL' ||
+            !['PENDING', 'CANCELLED'].includes(known.current.requestStatus) ||
+            (known.current.proof.cancelledReceiptOrNull !== null &&
+              !same(known.current.proof.cancelledReceiptOrNull, cancelled))
+          )
+            return fail();
+          const result = localProof(current, outboxes, {
+            ...known.current.proof,
+            cancelledReceiptOrNull: { ...cancelled, operation: 'CANCEL' },
+          });
+          review.currents.set(a.request.requestId, { current: result, headEventId: eventId });
+          next.schemaVersion = 2;
+          next.requestReviewOrNull = result;
+        }
+      }
       next.pendingCommandIdOrNull = null;
       if (a.operation !== 'OPEN_FAILURE') next.diagnosticCodeOrNull = null;
       data = true;
@@ -1290,11 +2072,13 @@ function readHistory(
   events: EventRecord[];
   outboxes: Map<string, LocalNetworkOutbox>;
   attemptCount: number;
+  review: LocalReviewReplay;
 } {
   let current = initial(tab);
   const outboxes = new Map<string, LocalNetworkOutbox>();
   const events: EventRecord[] = [];
   const attempts = new Set<string>();
+  const review = emptyLocalReview();
   const rows = db
     .prepare(
       'SELECT * FROM local_network_application_event WHERE network_scope_id=? ORDER BY event_index',
@@ -1315,7 +2099,9 @@ function readHistory(
       i.expectedDraftRevision !== current.draftRevision
     )
       return fail();
-    const next = reduce(current, i.mutation, outboxes),
+    assertReviewPin(db, current, outboxes, i.mutation);
+    const origin = mutationOrigin(db, tab, events, i.mutation);
+    const next = reduce(current, i.mutation, outboxes, review, origin, i.eventId),
       receipt = receiptFor(current, next, i);
     const nextSha256 = sha(canonical(next));
     if (next.lastAttemptIdOrNull !== null) attempts.add(next.lastAttemptIdOrNull);
@@ -1354,7 +2140,106 @@ function readHistory(
     )
       return fail();
   }
-  return { current, events, outboxes, attemptCount: attempts.size };
+  const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+    'version'
+  ];
+  if (version === 11) {
+    for (const [table, records, key] of [
+      ['local_network_lane_binding', review.lanes, 'request_id'],
+      ['local_network_request_current', review.currents, 'request_id'],
+      ['local_network_cancel_settlement', review.settlements, 'command_id'],
+    ] as const) {
+      const stored = db
+        .prepare(`SELECT * FROM ${table} WHERE network_scope_id=?`)
+        .all(tab.networkScopeId) as Row[];
+      if (stored.length !== records.size) return fail();
+      for (const [id, value] of records) {
+        const row = stored.find((r) => r[key] === id);
+        if (
+          row === undefined ||
+          row['owner_device_id'] !== tab.ownerDeviceId ||
+          !same(checked(row), value)
+        )
+          return fail();
+        if (table === 'local_network_lane_binding') {
+          const lane = review.lanes.get(id)!;
+          if (
+            row['command_id'] !== lane.request.commandId ||
+            row['acknowledged'] !== (lane.receiptOrNull === null ? 0 : 1)
+          )
+            return fail();
+        } else if (table === 'local_network_request_current') {
+          if (row['head_event_id'] !== review.currents.get(id)!.headEventId) return fail();
+        } else if (row['request_id'] !== review.settlements.get(id)!.requestId) return fail();
+      }
+    }
+  } else if (review.lanes.size + review.currents.size + review.settlements.size !== 0)
+    return fail();
+  return { current, events, outboxes, attemptCount: attempts.size, review };
+}
+function mutationOrigin(
+  db: Database.Database,
+  tab: LocalNetworkTab,
+  events: readonly EventRecord[],
+  change: LocalNetworkMutation,
+): LocalRequestLaneOriginWitness | null {
+  if (change.kind === 'LANE_BIND_INTENT')
+    return originalLaneOrigin(db, tab, events, change.outbox.requestId);
+  if (change.kind === 'LANE_BIND_ACK')
+    return originalLaneOrigin(db, tab, events, change.receipt.binding.requestId);
+  return null;
+}
+function assertReviewPin(
+  db: Database.Database,
+  current: LocalNetworkApplication,
+  outboxes: ReadonlyMap<string, LocalNetworkOutbox>,
+  change: LocalNetworkMutation,
+): void {
+  const requestId =
+    change.kind === 'LANE_BIND_INTENT'
+      ? change.outbox.requestId
+      : change.kind === 'LANE_BIND_ACK'
+        ? change.receipt.binding.requestId
+        : change.kind === 'REQUEST_ADVANCE' || change.kind === 'CANCEL_SETTLE'
+          ? validateLegacyRequestReceipt(object(change.proof)['submittedReceipt']).request.requestId
+          : null;
+  if (requestId === null) return;
+  const submit = localSubmit(outboxes, requestId),
+    campaignId = submit.intent.batch.campaignProof.campaignId;
+  const row = db
+    .prepare('SELECT * FROM local_network_host_pin WHERE owner_device_id=? AND campaign_id=?')
+    .get(current.ownerDeviceId, campaignId) as Row | undefined;
+  if (row === undefined) return fail('UNAVAILABLE');
+  const value = object(checked(row), [
+      'ownerDeviceId',
+      'campaignId',
+      'identity',
+      'initialCanonicalOrigin',
+      'entryCommandId',
+    ]),
+    pin = identity(value['identity']);
+  if (
+    value['ownerDeviceId'] !== current.ownerDeviceId ||
+    value['campaignId'] !== campaignId ||
+    row['host_device_id'] !== pin.ownerDeviceId ||
+    row['key_fingerprint'] !== pin.keyFingerprintSha256
+  )
+    return fail();
+  text(value['initialCanonicalOrigin']);
+  const entry =
+    at(db, 'local_network_tab_entry', 'entry_command_id', text(value['entryCommandId'])) ?? fail();
+  const requestJson = text(entry['request_json']),
+    receiptJson = text(entry['receipt_json']),
+    request = object(JSON.parse(requestJson) as unknown),
+    receipt = object(JSON.parse(receiptJson) as unknown);
+  if (
+    entry['owner_device_id'] !== current.ownerDeviceId ||
+    request['ownerDeviceId'] !== current.ownerDeviceId ||
+    canonical(request) !== requestJson ||
+    canonical(receipt) !== receiptJson ||
+    sha(canonical({ request, receipt })) !== entry['journal_sha256']
+  )
+    return fail();
 }
 /** Counts actual recorded attempts, including a definite failure before OPEN outbox creation. */
 export function readLocalNetworkAttemptCount(
@@ -1483,9 +2368,26 @@ export function readLocalNetworkDeliverySnapshot(
     if (tab === null) return fail('UNAVAILABLE');
     const history = readHistory(db, tab),
       outbox = history.outboxes.get(commandId) ?? null;
+    const requestId =
+      outbox?.intent.operation === 'SUBMIT' || outbox?.intent.operation === 'CANCEL'
+        ? outbox.intent.requestId
+        : history.current.requestOrNull?.requestId;
+    const submitted =
+      requestId === undefined
+        ? undefined
+        : [...history.outboxes.values()].find(
+            (o) => o.intent.operation === 'SUBMIT' && o.intent.requestId === requestId,
+          );
+    const extra = {
+      requestCurrentOrNull:
+        requestId === undefined || submitted?.acknowledgementOrNull == null
+          ? null
+          : localReviewCurrent(history.current, history.outboxes, history.review, requestId),
+      cancelSettlementOrNull: history.review.settlements.get(commandId) ?? null,
+    };
     if (outbox === null) {
       if (row !== undefined) return fail();
-      return { current: history.current, outbox: null, acknowledgementEvent: null };
+      return { current: history.current, outbox: null, acknowledgementEvent: null, ...extra };
     }
     const event = history.events.find(
       (e) =>
@@ -1494,7 +2396,7 @@ export function readLocalNetworkDeliverySnapshot(
     );
     if (outbox.acknowledgementOrNull === null) {
       if (event !== undefined) return fail();
-      return { current: history.current, outbox, acknowledgementEvent: null };
+      return { current: history.current, outbox, acknowledgementEvent: null, ...extra };
     }
     if (
       event === undefined ||
@@ -1503,6 +2405,7 @@ export function readLocalNetworkDeliverySnapshot(
     )
       return fail();
     return {
+      ...extra,
       current: history.current,
       outbox,
       acknowledgementEvent: {
@@ -1533,7 +2436,14 @@ export function readLocalNetworkShellExitByNavigationId(
   });
 }
 function assertUnused(db: Database.Database, id: string): void {
+  if (id === loadDeviceId(db)) return fail('IDEMPOTENCY_CONFLICT');
   for (const [table, columns] of [
+    ['local_gm_profile', ['profile_id']],
+    ['local_gm_context', ['context_id']],
+    ['campaign_draft', ['draft_id']],
+    ['campaign_draft_update', ['update_id']],
+    ['campaign_draft_cancel', ['cancel_id']],
+    ['campaign_creation_command', ['command_id', 'receipt_id']],
     ['local_network_application_event', ['event_id', 'receipt_id']],
     ['hosted_network_command', ['command_id', 'receipt_id']],
     ['local_network_tab_entry', ['entry_command_id', 'entry_receipt_id']],
@@ -1547,6 +2457,18 @@ function assertUnused(db: Database.Database, id: string): void {
   ] as const)
     for (const column of columns)
       if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+  if (
+    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] ===
+    11
+  )
+    for (const [table, columns] of [
+      ['hosted_device_request_decision', ['command_id', 'receipt_id']],
+      ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
+      ['local_network_lane_binding', ['command_id']],
+      ['gm_request_queue_event', ['event_id']],
+    ] as const)
+      for (const column of columns)
+        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
 }
 export function commitLocalNetworkMutation(
   db: Database.Database,
@@ -1583,8 +2505,33 @@ export function commitLocalNetworkMutation(
           if (i.mutation.intent.commandId !== i.eventId)
             assertUnused(db, i.mutation.intent.commandId);
         }
+        if (
+          ['LANE_BIND_INTENT', 'LANE_BIND_ACK', 'REQUEST_ADVANCE', 'CANCEL_SETTLE'].includes(
+            i.mutation.kind,
+          ) &&
+          (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+            'version'
+          ] !== 11
+        )
+          return fail('UNAVAILABLE');
+        if (
+          i.mutation.kind === 'LANE_BIND_INTENT' &&
+          i.mutation.outbox.request.commandId !== i.eventId
+        )
+          assertUnused(db, i.mutation.outbox.request.commandId);
+        assertReviewPin(db, h.current, h.outboxes, i.mutation);
         const oldOutboxes = new Map(h.outboxes),
-          next = reduce(h.current, i.mutation, h.outboxes),
+          oldLanes = new Map(h.review.lanes),
+          oldCurrents = new Map(h.review.currents),
+          oldSettlements = new Map(h.review.settlements),
+          next = reduce(
+            h.current,
+            i.mutation,
+            h.outboxes,
+            h.review,
+            mutationOrigin(db, tab, h.events, i.mutation),
+            i.eventId,
+          ),
           receipt = receiptFor(h.current, next, i);
         guarded(db, guard, h.current, 'APPLY');
         owner(db, i.ownerDeviceId);
@@ -1624,6 +2571,47 @@ export function commitLocalNetworkMutation(
               sha(canonical(o)),
             );
           }
+        for (const [id, lane] of h.review.lanes)
+          if (!same(oldLanes.get(id) ?? null, lane)) {
+            expected++;
+            db.prepare(
+              'INSERT INTO local_network_lane_binding VALUES (?,?,?,?,?,?,?) ON CONFLICT(command_id) DO UPDATE SET acknowledged=excluded.acknowledged,record_json=excluded.record_json,record_sha256=excluded.record_sha256',
+            ).run(
+              lane.request.commandId,
+              i.networkScopeId,
+              i.ownerDeviceId,
+              id,
+              lane.receiptOrNull === null ? 0 : 1,
+              canonical(lane),
+              sha(canonical(lane)),
+            );
+          }
+        for (const [id, record] of h.review.currents)
+          if (!same(oldCurrents.get(id) ?? null, record)) {
+            expected++;
+            db.prepare(
+              'INSERT INTO local_network_request_current VALUES (?,?,?,?,?,?) ON CONFLICT(request_id) DO UPDATE SET head_event_id=excluded.head_event_id,record_json=excluded.record_json,record_sha256=excluded.record_sha256',
+            ).run(
+              id,
+              i.networkScopeId,
+              i.ownerDeviceId,
+              record.headEventId,
+              canonical(record),
+              sha(canonical(record)),
+            );
+          }
+        for (const [id, record] of h.review.settlements)
+          if (!same(oldSettlements.get(id) ?? null, record)) {
+            expected++;
+            db.prepare('INSERT INTO local_network_cancel_settlement VALUES (?,?,?,?,?,?)').run(
+              id,
+              i.networkScopeId,
+              i.ownerDeviceId,
+              record.requestId,
+              canonical(record),
+              sha(canonical(record)),
+            );
+          }
         if (!same(vectorOf(tab), vectorOf(next)) || tab.lifecycleState !== lifecycle(next)) {
           writeLocalNetworkTabApplicationState(db, tab, vectorOf(next), lifecycle(next), i.eventId);
           expected++;
@@ -1637,6 +2625,262 @@ export function commitLocalNetworkMutation(
       })
       .immediate(),
   );
+}
+
+/** All lane identities come from the original journal; callers supply only a new command ID. */
+export function prepareLocalRequestLaneBinding(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  requestId: string,
+  commandId: string,
+  guard: NetworkStoreGuard<LocalNetworkApplication>,
+): LocalRequestLaneBindingOutbox {
+  const prepared = read(db, scope.ownerDeviceId, () => {
+    const tab =
+        readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId) ??
+        fail('UNAVAILABLE'),
+      h = readHistory(db, tab);
+    const prior = h.review.lanes.get(uuid(requestId));
+    if (prior !== undefined) {
+      if (prior.request.commandId !== commandId) return fail('IDEMPOTENCY_CONFLICT');
+      guarded(db, guard, h.current, 'REPLAY');
+      return { kind: 'REPLAY' as const, prior };
+    }
+    const origin = originalLaneOrigin(db, tab, h.events, requestId),
+      submit = localSubmit(h.outboxes, requestId);
+    // This also requires the original SUBMIT ACK after a remote-commit/local-ACK crash gap.
+    const current = localReviewCurrent(h.current, h.outboxes, h.review, requestId);
+    if (submit.intent.batch.schemaVersion === 2 || current.proof.laneProvenance !== null)
+      return fail('UNAVAILABLE');
+    const request = validateDeviceRequestBindLane({
+      schemaVersion: 1,
+      operation: 'DEVICE_REQUEST_BIND_LANE',
+      commandId: text(commandId),
+      requestId,
+      technicalSessionId: submit.intent.batch.technicalSessionId,
+      submitCommandId: submit.intent.commandId,
+      batchSha256: submit.intent.batch.batchSha256,
+      localControllerSeatId: origin.tabId,
+    });
+    const outbox: LocalRequestLaneBindingOutbox = {
+      ...scope,
+      requestId,
+      request,
+      semanticBodySha256: sha(canonical(request)),
+      origin,
+      receiptOrNull: null,
+    };
+    return { kind: 'APPLY' as const, outbox, current: h.current };
+  });
+  if (prepared.kind === 'REPLAY') return prepared.prior;
+  commitLocalNetworkMutation(
+    db,
+    {
+      ...scope,
+      expectedRevisions: vectorOf(prepared.current),
+      expectedDraftRevision: prepared.current.draftRevision,
+      eventId: commandId,
+      receiptId: `lane-bind-intent:${commandId}`,
+      clientRequestJsonOrNull: null,
+      mutation: { kind: 'LANE_BIND_INTENT', outbox: prepared.outbox },
+    },
+    guard,
+  );
+  return readLocalRequestLaneBinding(db, scope, requestId) ?? fail();
+}
+export function readLocalRequestLaneBinding(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  requestId: string,
+): LocalRequestLaneBindingOutbox | null {
+  return read(db, scope.ownerDeviceId, () => {
+    const tab =
+        readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId) ??
+        fail('UNAVAILABLE'),
+      h = readHistory(db, tab);
+    localSubmit(h.outboxes, uuid(requestId));
+    return h.review.lanes.get(requestId) ?? null;
+  });
+}
+export function acknowledgeLocalRequestLaneBinding(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  commandId: string,
+  value: PeerLaneBindingReceipt,
+  guard: NetworkStoreGuard<LocalNetworkApplication>,
+): LocalRequestLaneBindingDelivery {
+  const receipt = input(() => validatePeerLaneBindingReceipt(value));
+  const found = read(db, scope.ownerDeviceId, () => {
+    const tab =
+        readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId) ??
+        fail('UNAVAILABLE'),
+      h = readHistory(db, tab);
+    const outbox = h.review.lanes.get(receipt.binding.requestId) ?? fail('NOT_FOUND');
+    if (outbox.request.commandId !== commandId || receipt.commandId !== commandId)
+      return fail('IDEMPOTENCY_CONFLICT');
+    if (outbox.receiptOrNull !== null) {
+      if (!same(outbox.receiptOrNull, receipt)) return fail('IDEMPOTENCY_CONFLICT');
+      guarded(db, guard, h.current, 'REPLAY');
+    }
+    return { outbox, current: h.current };
+  });
+  if (found.outbox.receiptOrNull === null)
+    commitLocalNetworkMutation(
+      db,
+      {
+        ...scope,
+        expectedRevisions: vectorOf(found.current),
+        expectedDraftRevision: found.current.draftRevision,
+        eventId: `lane-bind-ack:${commandId}`,
+        receiptId: `lane-bind-ack-receipt:${commandId}`,
+        clientRequestJsonOrNull: null,
+        mutation: { kind: 'LANE_BIND_ACK', commandId, receipt },
+      },
+      guard,
+    );
+  return {
+    outbox: readLocalRequestLaneBinding(db, scope, receipt.binding.requestId) ?? fail(),
+    current: readLocalNetworkDeliverySnapshot(db, scope, receipt.binding.submitCommandId),
+  };
+}
+export function readLocalNetworkRequestCurrent(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  requestId: string,
+): VerifiedLocalRequestCurrent {
+  return read(db, scope.ownerDeviceId, () => {
+    const tab =
+        readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId) ??
+        fail('UNAVAILABLE'),
+      h = readHistory(db, tab);
+    return localReviewCurrent(h.current, h.outboxes, h.review, uuid(requestId));
+  });
+}
+export function commitLocalNetworkRequestAdvance(
+  db: Database.Database,
+  source: LocalNetworkSource,
+  value: {
+    readonly eventId: string;
+    readonly receiptId: string;
+    readonly proof: VerifiedRequestReviewProof;
+  },
+  guard: NetworkStoreGuard<LocalNetworkApplication>,
+): LocalNetworkDeliverySnapshot {
+  const row = input(() => object(value, ['eventId', 'receiptId', 'proof']));
+  const result = read(db, source.ownerDeviceId, () => {
+    const tab =
+        readOwnedLocalNetworkTab(db, source.ownerDeviceId, source.networkScopeId) ??
+        fail('UNAVAILABLE'),
+      h = readHistory(db, tab);
+    const i = input(() =>
+      mutationInput(
+        {
+          ...source,
+          eventId: row['eventId'],
+          receiptId: row['receiptId'],
+          clientRequestJsonOrNull: null,
+          mutation: { kind: 'REQUEST_ADVANCE', proof: row['proof'] },
+        },
+        tab.tabId,
+      ),
+    );
+    if (i.mutation.kind !== 'REQUEST_ADVANCE') return fail();
+    const saved = at(db, 'local_network_application_event', 'event_id', i.eventId);
+    if (saved !== undefined) {
+      const known = h.events.find((e) => e.input.eventId === i.eventId);
+      if (known === undefined || !same(known.input, i)) return fail('IDEMPOTENCY_CONFLICT');
+      guarded(db, guard, h.current, 'REPLAY');
+      return {
+        unchanged: true,
+        input: i,
+        submitCommandId: i.mutation.proof.submittedReceipt.commandId,
+      };
+    }
+    assertUnused(db, i.eventId);
+    assertUnused(db, i.receiptId);
+    if (
+      !same(i.expectedRevisions, vectorOf(h.current)) ||
+      i.expectedDraftRevision !== h.current.draftRevision
+    )
+      return fail('STALE_REVISION');
+    const proof = localProof(h.current, h.outboxes, i.mutation.proof),
+      requestId = proof.proof.submittedReceipt.request.requestId;
+    const current = localReviewCurrent(h.current, h.outboxes, h.review, requestId),
+      equal = same(current, proof);
+    if (equal) guarded(db, guard, h.current, 'REPLAY');
+    return { unchanged: equal, input: i, submitCommandId: proof.proof.submittedReceipt.commandId };
+  });
+  if (!result.unchanged) commitLocalNetworkMutation(db, result.input, guard);
+  return readLocalNetworkDeliverySnapshot(db, source, result.submitCommandId);
+}
+/** Recover exact settlement event identity before allocating IDs or retransmitting CANCEL. */
+export function readLocalNetworkCancelSettlementEvent(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  commandId: string,
+): StoredLocalNetworkEvent | null {
+  return read(db, scope.ownerDeviceId, () => {
+    const id = text(commandId),
+      row = at(db, 'local_network_outbox', 'command_id', id);
+    if (
+      row !== undefined &&
+      (row['owner_device_id'] !== scope.ownerDeviceId ||
+        row['network_scope_id'] !== scope.networkScopeId)
+    )
+      return fail('FOREIGN_OWNER');
+    const tab =
+        readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId) ??
+        fail('UNAVAILABLE'),
+      h = readHistory(db, tab);
+    const matches = h.events.filter(
+      (e) => e.input.mutation.kind === 'CANCEL_SETTLE' && e.input.mutation.commandId === id,
+    );
+    if (matches.length > 1) return fail();
+    const event = matches[0],
+      settled = h.review.settlements.get(id);
+    if (event === undefined) {
+      if (settled !== undefined) return fail();
+      return null;
+    }
+    if (
+      settled === undefined ||
+      event.input.mutation.kind !== 'CANCEL_SETTLE' ||
+      !same(event.input.mutation.proof, settled.proof)
+    )
+      return fail();
+    return { input: event.input, receipt: event.receipt, current: h.current };
+  });
+}
+/** The old CANCEL intent remains unacknowledged; this separate proof stops retransmission. */
+export function commitLocalNetworkCancelSettlement(
+  db: Database.Database,
+  source: LocalNetworkSource,
+  value: {
+    readonly eventId: string;
+    readonly receiptId: string;
+    readonly commandId: string;
+    readonly proof: VerifiedRequestReviewProof;
+  },
+  guard: NetworkStoreGuard<LocalNetworkApplication>,
+): LocalNetworkDeliverySnapshot {
+  const row = input(() => object(value, ['eventId', 'receiptId', 'commandId', 'proof'])),
+    commandId = input(() => text(row['commandId']));
+  const i: LocalNetworkMutationInput = {
+    ...source,
+    eventId: input(() => text(row['eventId'])),
+    receiptId: input(() => text(row['receiptId'])),
+    clientRequestJsonOrNull: null,
+    mutation: {
+      kind: 'CANCEL_SETTLE',
+      commandId,
+      proof: row['proof'] as VerifiedRequestReviewProof,
+    },
+  };
+  const known = readLocalNetworkCancelSettlementEvent(db, source, commandId);
+  if (known !== null && !same(known.input, i)) return fail('IDEMPOTENCY_CONFLICT');
+  // The general writer checks exact replay before CAS and rechecks every source in its transaction.
+  commitLocalNetworkMutation(db, i, guard);
+  return readLocalNetworkDeliverySnapshot(db, source, commandId);
 }
 
 function pinRecord(

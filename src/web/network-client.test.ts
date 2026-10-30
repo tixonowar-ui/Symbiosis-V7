@@ -1270,3 +1270,542 @@ describe('NET application client command and recovery boundaries', () => {
     });
   });
 });
+
+const GM_CAPS = [
+  'UI-CMD-CAMPAIGN-CREATE',
+  'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+  'UI-CMD-DEVICE-REQUEST-REJECT',
+] as const;
+const GM_ROW = {
+  requestId: REQUEST,
+  requestOwnerDeviceId: NEXT_CONTEXT,
+  requestStatus: 'PENDING',
+  requestRevision: 0,
+  connectionState: 'CONNECTED_TECHNICAL',
+  batchCharacterSummaries: [
+    {
+      sourceUuid: 'gm-source-character',
+      snapshotChecksum: '5'.repeat(64),
+      name: 'Игрок',
+      sourceSnapshotId: 'gm-final-source',
+      localControllerSeatId: SEAT,
+    },
+  ],
+  requestedCandidateCount: 1,
+  gmMessageOrNull: null,
+  decisionReceiptIdOrNull: null,
+} as const;
+const gmQueue = (v: RevisionVector = ZERO, overrides: JsonObject = {}): JsonObject => ({
+  contextId: CONTEXT,
+  campaignId: CAMPAIGN,
+  stateRevision: v.stateRevision,
+  projectionRevision: v.projectionRevision,
+  requestQueueRevision: 1,
+  requests: [GM_ROW],
+  selectedRequestIdOrNull: REQUEST,
+  decisionReason: '',
+  activePlayerCapacity: 3,
+  occupiedActivePcCount: 0,
+  commandId: null,
+  returnContext: {
+    originFormId: 'CMP-006',
+    campaignId: CAMPAIGN,
+    creationReceiptId: 'original-create-receipt',
+  },
+  ...overrides,
+});
+const gmBirth = (): JsonObject => ({
+  gmLocalContextId: CONTEXT,
+  hostDeviceId: DEVICE,
+  masterAuthorityRevision: 0,
+  routeIdentityKind: 'CAMPAIGN',
+  campaignId: CAMPAIGN,
+  sourceCampaignDraftId: SCOPE,
+  status: 'PAUSED',
+  createdAt: '2026-10-30T00:00:00.000Z',
+  hostAddress: '192.168.1.20',
+  hostPort: 3000,
+  networkInterface: 'actual-fixture-interface',
+  qrPayload: ADDRESS,
+  activePlayerCapacity: 3,
+  creationReceiptId: 'original-create-receipt',
+  creationCommandId: 'original-create-command',
+  hostBindRecovery: { status: 'RESERVED', reasonCode: null },
+});
+function gmSnapshot(
+  formId: 'NET-017' | 'CMP-006',
+  p: JsonObject,
+  v: RevisionVector,
+  id: string,
+  reason: 'RECONNECT' | 'FORM_ACTION' | 'COMMAND_DESTINATION' | 'HOST_SYSTEM_EVENT' = 'RECONNECT',
+): ProjectionSnapshotV2Message {
+  const keys: ActionKey[] =
+    formId === 'CMP-006'
+      ? ['CMP-006::CTA::002']
+      : p['commandId'] !== null
+        ? []
+        : [
+            ...(p['selectedRequestIdOrNull'] !== null &&
+            (p['requests'] as readonly JsonObject[]).some(
+              (r) =>
+                r['requestId'] === p['selectedRequestIdOrNull'] && r['requestStatus'] === 'PENDING',
+            )
+              ? ['NET-017::CTA::007' as const]
+              : []),
+            ...(p['selectedRequestIdOrNull'] !== null &&
+            typeof p['decisionReason'] === 'string' &&
+            p['decisionReason'].trim() !== '' &&
+            (p['requests'] as readonly JsonObject[]).some(
+              (r) =>
+                r['requestId'] === p['selectedRequestIdOrNull'] &&
+                ['PENDING', 'IN_REVIEW'].includes(r['requestStatus'] as string),
+            )
+              ? ['NET-017::CTA::008' as const]
+              : []),
+            'NET-017::CTA::009',
+          ];
+  const definition = presentedFormDefinition(formId)!;
+  if (definition.type !== 'screen') throw new Error('GM queue fixture requires a source screen');
+  return {
+    protocolVersion: 2,
+    messageType: 'projection.snapshot',
+    projectionRole: 'gm',
+    revisions: v,
+    presentation: {
+      assignment: { reason, correlationId: id },
+      base: {
+        formId,
+        formType: definition.type,
+        routeTemplate: definition.route,
+        routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CAMPAIGN }],
+        roleFilteredPayload: p,
+        availableActionKeys: keys,
+      },
+      layers: [],
+    },
+  };
+}
+function gmReady(
+  socket: Socket,
+  p: JsonObject,
+  v: RevisionVector = ZERO,
+  form: 'NET-017' | 'CMP-006' = 'NET-017',
+) {
+  const id = sent(socket)['reconnectRequestId'] as string;
+  socket.message({
+    protocolVersion: 2,
+    messageType: 'session.reconnect.capabilities',
+    reconnectRequestId: id,
+    revisions: v,
+    executableWorkflowCommandIds: GM_CAPS,
+  });
+  socket.message(gmSnapshot(form, p, v, id));
+}
+async function gmStart(p: JsonObject = gmQueue(), v: RevisionVector = ZERO) {
+  window.sessionStorage.setItem(GM_CONTEXT_STORAGE_KEY, CONTEXT);
+  vi.stubGlobal('WebSocket', Socket);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ deviceId: DEVICE }), { status: 200 })),
+    ),
+  );
+  const states: WebClientState[] = [],
+    drafts: (import('./ws-client.js').NetworkGmRequestDraftClientState | null)[] = [];
+  const connection = connectProjection(
+    (state) => states.push(state),
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (state) => drafts.push(state),
+  );
+  connections.push(connection);
+  await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
+  const socket = Socket.instances[0]!;
+  socket.open();
+  gmReady(socket, p, v);
+  expect(states.at(-1)?.kind).toBe('ready');
+  return { connection, socket, states, drafts };
+}
+function gmDecision(command: Record<string, unknown>) {
+  const expected = command['expectedRevisions'] as RevisionVector,
+    payload = command['payload'] as Record<string, unknown>,
+    reject = command['workflowCommandId'] === 'UI-CMD-DEVICE-REQUEST-REJECT';
+  return {
+    commandId: command['commandId'],
+    receiptId: 'gm-decision-receipt',
+    revisions: {
+      ...expected,
+      stateRevision: expected.stateRevision + 1,
+      projectionRevision: expected.projectionRevision + 1,
+    },
+    result: {
+      receiptId: 'gm-decision-receipt',
+      commandId: command['commandId'],
+      workflowCommandId: command['workflowCommandId'],
+      campaignId: CAMPAIGN,
+      requestId: REQUEST,
+      requestOwnerDeviceId: NEXT_CONTEXT,
+      beforeRequestStatus: 'PENDING',
+      afterRequestStatus: reject ? 'REJECTED' : 'IN_REVIEW',
+      beforeRequestRevision: 0,
+      requestRevision: 1,
+      decisionReasonOrNull: reject ? payload['reason'] : null,
+      candidateSnapshotChecksums: ['5'.repeat(64)],
+      authoritativeGmActorId: 'source-gm-profile',
+      timestamp: '2026-10-30T01:00:00.000Z',
+    },
+  };
+}
+describe('NET-017 actual GM client transport family', () => {
+  it('resumes the own GM ticket with exactly CREATE plus two GM capabilities, without player fields', async () => {
+    const f = await gmStart();
+    expect(sent(f.socket)).toMatchObject({
+      messageType: 'campaign.local-context.resume',
+      gmLocalContextId: CONTEXT,
+      supportedWorkflowCommandIds: GM_CAPS,
+    });
+    expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBe(CONTEXT);
+    expect(window.sessionStorage.getItem(NETWORK_CONTEXT_STORAGE_KEY)).toBeNull();
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'NET-017',
+        availableActionKeys: ['NET-017::CTA::007', 'NET-017::CTA::009'],
+      },
+    });
+    expect(JSON.stringify(f.states.at(-1))).not.toContain('networkScopeId');
+    expect(JSON.stringify(f.states.at(-1))).not.toContain('controllerSeat"');
+  });
+  it('pins applied draft facts while a newer live current view preserves the exact pending update', async () => {
+    const f = await gmStart();
+    vi.useFakeTimers();
+    expect(
+      f.connection.replaceNetworkGmRequestDraft({
+        selectedRequestIdOrNull: REQUEST,
+        decisionReason: '  Exact reason e\u0301  ',
+      }),
+    ).toEqual({ ok: true });
+    expect(f.connection.requestFormAction('NET-017::CTA::007').ok).toBe(false);
+    vi.advanceTimersByTime(250);
+    const draft = sent(f.socket);
+    expect(draft).toMatchObject({
+      messageType: 'network.gm-request-draft.replace',
+      scope: { gmLocalContextId: CONTEXT, campaignId: CAMPAIGN, sourceFormId: 'NET-017' },
+      expectedRequestQueueRevision: 1,
+      values: { selectedRequestIdOrNull: REQUEST, decisionReason: '  Exact reason e\u0301  ' },
+    });
+    const applied = { stateRevision: 1, projectionRevision: 1, actorVisibilityRevision: 0 },
+      current = { ...applied, projectionRevision: 2 },
+      p = gmQueue(current, {
+        decisionReason: '  Exact reason e\u0301  ',
+        requests: [{ ...GM_ROW, connectionState: 'DISCONNECTED' }],
+      });
+    f.socket.message(
+      gmSnapshot('NET-017', p, current, 'network-gm-view:' + 'a'.repeat(64), 'HOST_SYSTEM_EVENT'),
+    );
+    expect(f.drafts.at(-1)).toMatchObject({ dirty: true, pending: true });
+    expect(sent(f.socket)).toEqual(draft);
+    const view = gmSnapshot('NET-017', p, current, 'unused');
+    f.socket.message({
+      protocolVersion: 3,
+      messageType: 'network.gm-request-draft.result',
+      draftUpdateId: draft['draftUpdateId'],
+      scope: draft['scope'],
+      changed: true,
+      appliedRevisions: applied,
+      appliedRequestQueueRevision: 1,
+      revisions: current,
+      requestQueueRevision: 1,
+      projectionRole: 'gm',
+      presentation: { base: view.presentation.base, layers: [] },
+    });
+    expect(f.drafts.at(-1)).toMatchObject({ dirty: false, pending: false });
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        revisions: current,
+        availableActionKeys: ['NET-017::CTA::007', 'NET-017::CTA::008', 'NET-017::CTA::009'],
+      },
+    });
+  });
+  it('replays the exact pending draft after reconnect and clears a reason when selection changes', async () => {
+    const f = await gmStart(gmQueue(ZERO, { decisionReason: 'Old request reason' }));
+    vi.useFakeTimers();
+    f.connection.replaceNetworkGmRequestDraft({
+      selectedRequestIdOrNull: null,
+      decisionReason: 'Must not migrate',
+    });
+    vi.advanceTimersByTime(250);
+    const draft = sent(f.socket);
+    expect(draft['values']).toEqual({ selectedRequestIdOrNull: null, decisionReason: '' });
+    f.socket.drop();
+    expect(f.connection.reconnect()).toEqual({ ok: true });
+    const second = Socket.instances[1]!;
+    second.open();
+    gmReady(second, gmQueue(ZERO, { decisionReason: 'Old request reason' }));
+    expect(sent(second)).toEqual(draft);
+  });
+  it('retries an unchanged unacknowledged GM command then verifies all immutable receipt and destination facts', async () => {
+    const f = await gmStart();
+    expect(f.connection.requestFormAction('NET-017::CTA::007')).toEqual({ ok: true });
+    const command = sent(f.socket);
+    f.socket.drop();
+    f.connection.reconnect();
+    const second = Socket.instances[1]!;
+    second.open();
+    expect(sent(second)['unacknowledgedCommandIds']).toEqual([command['commandId']]);
+    second.message({
+      messageType: 'command.refusal',
+      protocolVersion: 1,
+      commandId: command['commandId'],
+      lastLifecycleState: null,
+      revisions: ZERO,
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    gmReady(second, gmQueue());
+    expect(sent(second)).toEqual(command);
+    const receipt = gmDecision(command),
+      v = receipt.revisions,
+      p = gmQueue(v, {
+        requestQueueRevision: 2,
+        requests: [
+          {
+            ...GM_ROW,
+            requestStatus: 'IN_REVIEW',
+            requestRevision: 1,
+            decisionReceiptIdOrNull: receipt.receiptId,
+          },
+        ],
+      });
+    second.message({
+      protocolVersion: 1,
+      messageType: 'command.result',
+      lifecycleState: 'COMMITTED',
+      receipt,
+    });
+    expect(f.drafts.at(-1)).toMatchObject({ pending: true });
+    second.message(
+      gmSnapshot('NET-017', p, v, command['commandId'] as string, 'COMMAND_DESTINATION'),
+    );
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { projection: { requests: [{ requestStatus: 'IN_REVIEW' }] } },
+    });
+    expect(f.drafts.at(-1)).toMatchObject({ pending: false });
+  });
+  it.each(['owner', 'checksum', 'reason', 'revision', 'receiptId'])(
+    'refuses changed %s receipt facts',
+    async (fault) => {
+      const f = await gmStart(gmQueue(ZERO, { decisionReason: 'Original rejection reason' }));
+      f.connection.requestFormAction('NET-017::CTA::008');
+      const receipt = gmDecision(sent(f.socket));
+      if (fault === 'owner') receipt.result.requestOwnerDeviceId = DEVICE;
+      if (fault === 'checksum') receipt.result.candidateSnapshotChecksums = ['4'.repeat(64)];
+      if (fault === 'reason') receipt.result.decisionReasonOrNull = 'Another reason';
+      if (fault === 'revision') receipt.result.requestRevision = 2;
+      if (fault === 'receiptId') receipt.result.receiptId = 'different';
+      f.socket.message({
+        protocolVersion: 1,
+        messageType: 'command.result',
+        lifecycleState: 'COMMITTED',
+        receipt,
+      });
+      expect(f.states.at(-1)?.kind).toBe('protocol-error');
+    },
+  );
+  it('accepts original accept receipt paired with a newer current rejection without replaying its old status', async () => {
+    const f = await gmStart();
+    f.connection.requestFormAction('NET-017::CTA::007');
+    const command = sent(f.socket),
+      receipt = gmDecision(command),
+      v = { stateRevision: 2, projectionRevision: 2, actorVisibilityRevision: 0 },
+      p = gmQueue(v, {
+        requestQueueRevision: 3,
+        requests: [
+          {
+            ...GM_ROW,
+            requestStatus: 'REJECTED',
+            requestRevision: 2,
+            decisionReceiptIdOrNull: 'later-rejection',
+            gmMessageOrNull: 'Later exact reason',
+          },
+        ],
+      });
+    f.socket.message(
+      gmSnapshot('NET-017', p, v, 'network-gm-view:' + 'b'.repeat(64), 'HOST_SYSTEM_EVENT'),
+    );
+    f.socket.message({
+      protocolVersion: 1,
+      messageType: 'command.result',
+      lifecycleState: 'COMMITTED',
+      receipt,
+    });
+    f.socket.message(
+      gmSnapshot('NET-017', p, v, command['commandId'] as string, 'COMMAND_DESTINATION'),
+    );
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { projection: { requests: [{ requestStatus: 'REJECTED', requestRevision: 2 }] } },
+    });
+  });
+  it('keeps CMP-006 birth bytes and a monotonic technical vector through explicit back and ingress', async () => {
+    const initial = { stateRevision: 4, projectionRevision: 7, actorVisibilityRevision: 0 },
+      f = await gmStart(gmQueue(initial), initial);
+    f.connection.requestFormAction('NET-017::CTA::009');
+    const back = sent(f.socket),
+      v = { ...initial, projectionRevision: 8 };
+    f.socket.message(
+      gmSnapshot('CMP-006', gmBirth(), v, back['navigationRequestId'] as string, 'FORM_ACTION'),
+    );
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'CMP-006', revisions: v },
+    });
+    expect(f.connection.requestFormAction('CMP-006::CTA::002')).toEqual({ ok: true });
+    const enter = sent(f.socket),
+      next = { ...v, projectionRevision: 9 };
+    f.socket.message(
+      gmSnapshot(
+        'NET-017',
+        gmQueue(next),
+        next,
+        enter['navigationRequestId'] as string,
+        'FORM_ACTION',
+      ),
+    );
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'NET-017', revisions: next },
+    });
+  });
+  it.each(['scope', 'form', 'prefix', 'regression'])(
+    'refuses unsolicited %s refresh',
+    async (fault) => {
+      const f = await gmStart(),
+        v = { stateRevision: 0, projectionRevision: 1, actorVisibilityRevision: 0 };
+      let frame = gmSnapshot(
+        'NET-017',
+        gmQueue(v),
+        v,
+        'network-gm-view:' + 'c'.repeat(64),
+        'HOST_SYSTEM_EVENT',
+      );
+      if (fault === 'scope')
+        frame = gmSnapshot(
+          'NET-017',
+          gmQueue(v, { contextId: NEXT_CONTEXT }),
+          v,
+          frame.presentation.assignment.correlationId,
+          'HOST_SYSTEM_EVENT',
+        );
+      if (fault === 'form')
+        frame = gmSnapshot(
+          'CMP-006',
+          gmBirth(),
+          v,
+          frame.presentation.assignment.correlationId,
+          'HOST_SYSTEM_EVENT',
+        );
+      if (fault === 'prefix')
+        frame = {
+          ...frame,
+          presentation: {
+            ...frame.presentation,
+            assignment: { reason: 'HOST_SYSTEM_EVENT', correlationId: 'untrusted-notification' },
+          },
+        };
+      if (fault === 'regression')
+        frame = gmSnapshot(
+          'NET-017',
+          gmQueue(v, { requestQueueRevision: 0 }),
+          v,
+          frame.presentation.assignment.correlationId,
+          'HOST_SYSTEM_EVENT',
+        );
+      f.socket.message(frame);
+      expect(f.states.at(-1)?.kind).toBe('protocol-error');
+    },
+  );
+  it('renders the connected GM-specific fields through App without raw player or private payload panels', async () => {
+    window.sessionStorage.setItem(GM_CONTEXT_STORAGE_KEY, CONTEXT);
+    vi.stubGlobal('WebSocket', Socket);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify({ deviceId: DEVICE }), { status: 200 })),
+      ),
+    );
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push({ root, container });
+    await act(async () => root.render(createElement(App)));
+    await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
+    const socket = Socket.instances[0]!;
+    act(() => {
+      socket.open();
+      gmReady(socket, gmQueue());
+    });
+    expect(container.querySelector('[aria-label="Входящие заявки устройств"]')).not.toBeNull();
+    expect(container.textContent).toContain('Игрок');
+    expect(container.textContent).not.toContain('networkScopeId');
+    expect(container.textContent).not.toContain('privateKey');
+  });
+  it('accepts only the own NET-005 decision push and keeps the player capability vocabulary separate', async () => {
+    const f = await start('NET-005', waiting(ZERO));
+    const v = { stateRevision: 1, projectionRevision: 1, actorVisibilityRevision: 0 },
+      p = { ...waiting(v), requestStatus: 'IN_REVIEW', requestRevision: 1 };
+    const frame = snapshot('NET-005', p, v, 'network-owner-view:' + 'd'.repeat(64));
+    f.socket.message({
+      ...frame,
+      presentation: {
+        ...frame.presentation,
+        assignment: {
+          reason: 'HOST_SYSTEM_EVENT',
+          correlationId: 'network-owner-view:' + 'd'.repeat(64),
+        },
+      },
+    });
+    expect(f.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: {
+        formId: 'NET-005',
+        projection: { requestStatus: 'IN_REVIEW' },
+        availableActionKeys: [],
+      },
+    });
+    expect(sent(f.socket)['supportedWorkflowCommandIds'] as readonly string[]).not.toContain(
+      'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+    );
+    const foreign = snapshot(
+      'NET-005',
+      { ...p, contextId: NEXT_CONTEXT },
+      { ...v, projectionRevision: 2 },
+      'unused',
+    );
+    f.socket.message({
+      ...foreign,
+      presentation: {
+        ...foreign.presentation,
+        assignment: {
+          reason: 'HOST_SYSTEM_EVENT',
+          correlationId: 'network-owner-view:' + 'e'.repeat(64),
+        },
+      },
+    });
+    expect(f.states.at(-1)?.kind).toBe('protocol-error');
+  });
+});

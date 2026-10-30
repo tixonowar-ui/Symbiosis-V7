@@ -6,9 +6,19 @@ import type {
   NetworkApplicationFormId,
   NetworkApplicationProjection,
   NetworkHostV3Message,
+  NetworkGmClientV3Message,
+  NetworkGmHostV3Message,
+  NetworkGmRequestDraftScope,
   NetworkOpenPayload,
   NetworkSubmitPayload,
   NetworkCancelPayload,
+  Net017Projection,
+  NetworkGmRequestCandidateSummary,
+  NetworkGmRequestQueueRow,
+  NetworkGmRequestDraftValues,
+  NetworkGmAcceptToReviewPayload,
+  NetworkGmRejectRequestPayload,
+  NetworkGmRequestDecisionReceipt,
 } from './network-application.js';
 
 const {
@@ -283,8 +293,11 @@ function projectionValue(
         uuid(r['deviceId'], '$.deviceId'),
         '$.requestOwnerDeviceId',
       );
-      // Preliminary GM decisions remain unavailable until the normative #177 delivery.
-      literal(r['requestStatus'], 'PENDING', '$.requestStatus');
+      oneOf(
+        r['requestStatus'],
+        ['PENDING', 'IN_REVIEW', 'REJECTED', 'PROPOSED'],
+        '$.requestStatus',
+      );
       nullableText(r['gmMessage'], '$.gmMessage');
       revision(r['requestRevision'], '$.requestRevision');
       raw(r['cancelReason'], '$.cancelReason');
@@ -537,4 +550,374 @@ export function networkWorkflowPayloadValue(
     }
   }
   return validated(r);
+}
+
+function gmRequestCandidates(
+  value: unknown,
+  path: string,
+): readonly NetworkGmRequestCandidateSummary[] {
+  const batch = list(value, path);
+  if (batch.length < 1 || batch.length > 3)
+    invalid(path, 'one to three submitted candidates', null);
+  const result = batch.map((value, index): NetworkGmRequestCandidateSummary => {
+    const at = `${path}[${String(index)}]`;
+    const row = exact(
+      value,
+      'sourceUuid snapshotChecksum name sourceSnapshotId localControllerSeatId',
+      at,
+    );
+    for (const key of ['sourceUuid', 'name', 'sourceSnapshotId']) text(row[key], `${at}.${key}`);
+    hash(row['snapshotChecksum'], `${at}.snapshotChecksum`);
+    uuid(row['localControllerSeatId'], `${at}.localControllerSeatId`);
+    return validated(row);
+  });
+  unique(
+    result.map((row) => row.sourceUuid),
+    path,
+  );
+  return result;
+}
+function gmRequestRow(value: unknown, path: string): NetworkGmRequestQueueRow {
+  const row = exact(
+    value,
+    'requestId requestOwnerDeviceId requestStatus requestRevision connectionState batchCharacterSummaries requestedCandidateCount gmMessageOrNull decisionReceiptIdOrNull',
+    path,
+  );
+  text(row['requestId'], `${path}.requestId`);
+  uuid(row['requestOwnerDeviceId'], `${path}.requestOwnerDeviceId`);
+  oneOf(
+    row['requestStatus'],
+    ['PENDING', 'IN_REVIEW', 'REJECTED', 'PROPOSED'],
+    `${path}.requestStatus`,
+  );
+  revision(row['requestRevision'], `${path}.requestRevision`);
+  oneOf(
+    row['connectionState'],
+    [
+      'NO_TECHNICAL_SESSION',
+      'CONNECTING',
+      'CONNECTED_TECHNICAL',
+      'CONNECTED_ADMITTED',
+      'LOST',
+      'UNAVAILABLE',
+      'DISCONNECTED',
+      'RECONNECTED',
+    ],
+    `${path}.connectionState`,
+  );
+  const batch = gmRequestCandidates(
+    row['batchCharacterSummaries'],
+    `${path}.batchCharacterSummaries`,
+  );
+  literal(row['requestedCandidateCount'], batch.length, `${path}.requestedCandidateCount`);
+  nullableText(row['gmMessageOrNull'], `${path}.gmMessageOrNull`);
+  nullable(row['decisionReceiptIdOrNull'], `${path}.decisionReceiptIdOrNull`, text);
+  return validated(row);
+}
+/** No transport scope or authority is inferred from these two editable source fields. */
+export function networkGmRequestDraftValues(value: unknown): NetworkGmRequestDraftValues {
+  const row = exact(value, 'selectedRequestIdOrNull decisionReason', '$.values');
+  nullable(row['selectedRequestIdOrNull'], '$.values.selectedRequestIdOrNull', text);
+  raw(row['decisionReason'], '$.values.decisionReason');
+  return validated(row);
+}
+export function networkGmRequestProjectionValue(value: unknown): Net017Projection {
+  const row = exact(
+    value,
+    'contextId campaignId stateRevision projectionRevision requestQueueRevision requests selectedRequestIdOrNull activePlayerCapacity occupiedActivePcCount decisionReason commandId returnContext',
+  );
+  uuid(row['contextId'], '$.contextId');
+  const campaignId = uuid(row['campaignId'], '$.campaignId');
+  for (const key of ['stateRevision', 'projectionRevision', 'requestQueueRevision'])
+    revision(row[key], `$.${key}`);
+  const requests = list(row['requests'], '$.requests').map((value, index) =>
+    gmRequestRow(value, `$.requests[${String(index)}]`),
+  );
+  const ids = unique(
+    requests.map((request) => request.requestId),
+    '$.requests',
+  );
+  const selected = nullable(row['selectedRequestIdOrNull'], '$.selectedRequestIdOrNull', text);
+  if (selected !== null && !ids.includes(selected))
+    invalid('$.selectedRequestIdOrNull', 'request in the current queue', null);
+  const limit = capacity(row['activePlayerCapacity'], '$.activePlayerCapacity');
+  if (revision(row['occupiedActivePcCount'], '$.occupiedActivePcCount') > limit)
+    invalid('$.occupiedActivePcCount', 'active PCs within capacity', null);
+  raw(row['decisionReason'], '$.decisionReason');
+  nullable(row['commandId'], '$.commandId', text);
+  const context = record(row['returnContext'], '$.returnContext');
+  const origin = oneOf(
+    context['originFormId'],
+    ['CMP-006', 'GM-002', 'CMP-009'],
+    '$.returnContext.originFormId',
+  );
+  exact(
+    context,
+    origin === 'CMP-006' ? 'originFormId campaignId creationReceiptId' : 'originFormId campaignId',
+    '$.returnContext',
+  );
+  literal(context['campaignId'], campaignId, '$.returnContext.campaignId');
+  if (origin === 'CMP-006') text(context['creationReceiptId'], '$.returnContext.creationReceiptId');
+  return validated(row);
+}
+/** Selection membership, verified GM authority, source action, and expected revisions belong to host preflight. */
+export function networkGmRequestWorkflowPayloadValue(
+  workflowId: string,
+  value: unknown,
+): NetworkGmAcceptToReviewPayload | NetworkGmRejectRequestPayload {
+  const reject = workflowId === 'UI-CMD-DEVICE-REQUEST-REJECT';
+  if (!reject && workflowId !== 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW')
+    unrecognized('$.workflowCommandId', null);
+  const row = exact(
+    value,
+    'campaignId requestId requestRevision' + (reject ? ' reason' : ''),
+    '$.payload',
+  );
+  uuid(row['campaignId'], '$.payload.campaignId');
+  text(row['requestId'], '$.payload.requestId');
+  revision(row['requestRevision'], '$.payload.requestRevision');
+  if (reject && text(row['reason'], '$.payload.reason').trim() === '')
+    invalid('$.payload.reason', 'nonblank reason', null);
+  return validated(row);
+}
+/** The host supplies summaries from its verified immutable submitted batch, not a browser selection. */
+export function networkGmRequestDecisionReceiptValue(
+  value: unknown,
+  submittedSummaries: readonly NetworkGmRequestCandidateSummary[],
+): NetworkGmRequestDecisionReceipt {
+  const row = exact(
+    value,
+    'receiptId commandId workflowCommandId campaignId requestId requestOwnerDeviceId beforeRequestStatus afterRequestStatus beforeRequestRevision requestRevision decisionReasonOrNull candidateSnapshotChecksums authoritativeGmActorId timestamp',
+    '$.receipt',
+  );
+  for (const key of ['receiptId', 'commandId', 'requestId', 'authoritativeGmActorId', 'timestamp'])
+    text(row[key], `$.receipt.${key}`);
+  uuid(row['campaignId'], '$.receipt.campaignId');
+  uuid(row['requestOwnerDeviceId'], '$.receipt.requestOwnerDeviceId');
+  const before = revision(row['beforeRequestRevision'], '$.receipt.beforeRequestRevision');
+  const after = revision(row['requestRevision'], '$.receipt.requestRevision');
+  if (before === Number.MAX_SAFE_INTEGER || after !== before + 1)
+    invalid('$.receipt.requestRevision', 'one committed request revision', null);
+  const workflow = oneOf(
+    row['workflowCommandId'],
+    ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT'],
+    '$.receipt.workflowCommandId',
+  );
+  if (workflow === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW') {
+    literal(row['beforeRequestStatus'], 'PENDING', '$.receipt.beforeRequestStatus');
+    literal(row['afterRequestStatus'], 'IN_REVIEW', '$.receipt.afterRequestStatus');
+    literal(row['decisionReasonOrNull'], null, '$.receipt.decisionReasonOrNull');
+  } else {
+    oneOf(row['beforeRequestStatus'], ['PENDING', 'IN_REVIEW'], '$.receipt.beforeRequestStatus');
+    literal(row['afterRequestStatus'], 'REJECTED', '$.receipt.afterRequestStatus');
+    if (text(row['decisionReasonOrNull'], '$.receipt.decisionReasonOrNull').trim() === '')
+      invalid('$.receipt.decisionReasonOrNull', 'nonblank public reason', null);
+  }
+  const expected = gmRequestCandidates(submittedSummaries, '$.submittedSummaries');
+  const actual = list(row['candidateSnapshotChecksums'], '$.receipt.candidateSnapshotChecksums');
+  if (actual.length !== expected.length)
+    invalid('$.receipt.candidateSnapshotChecksums', 'exact submitted batch length', null);
+  actual.forEach((value, index) => {
+    const at = `$.receipt.candidateSnapshotChecksums[${String(index)}]`;
+    literal(hash(value, at), expected[index]!.snapshotChecksum, at);
+  });
+  return validated(row);
+}
+
+function gmDraftScope(value: unknown): NetworkGmRequestDraftScope {
+  const row = exact(value, 'gmLocalContextId campaignId sourceFormId', '$.scope');
+  text(row['gmLocalContextId'], '$.scope.gmLocalContextId');
+  uuid(row['campaignId'], '$.scope.campaignId');
+  literal(row['sourceFormId'], 'NET-017', '$.scope.sourceFormId');
+  return validated(row);
+}
+export function networkGmRequestClientValue(value: unknown): NetworkGmClientV3Message {
+  const row = exact(
+    value,
+    'messageType protocolVersion draftUpdateId scope expectedRevisions expectedRequestQueueRevision values',
+  );
+  literal(row['messageType'], 'network.gm-request-draft.replace', '$.messageType');
+  literal(row['protocolVersion'], 3, '$.protocolVersion');
+  text(row['draftUpdateId'], '$.draftUpdateId');
+  gmDraftScope(row['scope']);
+  revisions(row['expectedRevisions'], '$.expectedRevisions');
+  revision(row['expectedRequestQueueRevision'], '$.expectedRequestQueueRevision');
+  networkGmRequestDraftValues(row['values']);
+  return validated(row);
+}
+function gmDraftRefusal(value: unknown): void {
+  const row = record(value, '$.refusal');
+  switch (row['code']) {
+    case 'INVALID_FIELD':
+      exact(row, 'code field reason', '$.refusal');
+      oneOf(row['field'], ['selectedRequestIdOrNull', 'decisionReason'], '$.refusal.field');
+      literal(row['reason'], 'INVALID_VALUE', '$.refusal.reason');
+      return;
+    case 'STALE_REVISION':
+      exact(row, 'code expected actual', '$.refusal');
+      revisions(row['expected'], '$.refusal.expected');
+      revisions(row['actual'], '$.refusal.actual');
+      return;
+    case 'STALE_QUEUE':
+      exact(row, 'code expected actual', '$.refusal');
+      revision(row['expected'], '$.refusal.expected');
+      revision(row['actual'], '$.refusal.actual');
+      return;
+    case 'IDEMPOTENCY_CONFLICT':
+    case 'DRAFT_UNAVAILABLE':
+    case 'REVISION_OVERFLOW':
+      exact(row, 'code', '$.refusal');
+      return;
+    default:
+      return unrecognized('$.refusal.code', null);
+  }
+}
+/** Replay may return the saved QUEUE family's CMP-006 view; it is never a new CREATE receipt. */
+function gmQueueCampaignPayload(value: unknown, scope: NetworkGmRequestDraftScope): void {
+  const path = '$.presentation.base.roleFilteredPayload';
+  const row = exact(
+    value,
+    'gmLocalContextId hostDeviceId masterAuthorityRevision routeIdentityKind campaignId sourceCampaignDraftId status createdAt hostAddress hostPort networkInterface qrPayload activePlayerCapacity creationReceiptId creationCommandId hostBindRecovery',
+    path,
+  );
+  literal(row['gmLocalContextId'], scope.gmLocalContextId, path + '.gmLocalContextId');
+  literal(row['campaignId'], scope.campaignId, path + '.campaignId');
+  literal(row['routeIdentityKind'], 'CAMPAIGN', path + '.routeIdentityKind');
+  literal(row['status'], 'PAUSED', path + '.status');
+  literal(row['masterAuthorityRevision'], 0, path + '.masterAuthorityRevision');
+  uuid(row['hostDeviceId'], path + '.hostDeviceId');
+  for (const key of [
+    'sourceCampaignDraftId',
+    'createdAt',
+    'hostAddress',
+    'networkInterface',
+    'qrPayload',
+    'creationReceiptId',
+    'creationCommandId',
+  ])
+    text(row[key], path + '.' + key);
+  const port = revision(row['hostPort'], path + '.hostPort');
+  if (port < 1 || port > 65535) invalid(path + '.hostPort', 'valid TCP port', null);
+  capacity(row['activePlayerCapacity'], path + '.activePlayerCapacity');
+  const recovery = exact(row['hostBindRecovery'], 'status reasonCode', path + '.hostBindRecovery');
+  oneOf(recovery['status'], ['RESERVED', 'UNAVAILABLE'], path + '.hostBindRecovery.status');
+  if (recovery['status'] === 'RESERVED')
+    literal(recovery['reasonCode'], null, path + '.hostBindRecovery.reasonCode');
+  else
+    oneOf(
+      recovery['reasonCode'],
+      ['PORT_UNAVAILABLE', 'BIND_FAILED'],
+      path + '.hostBindRecovery.reasonCode',
+    );
+}
+export function networkGmRequestHostValue(
+  value: unknown,
+  vocabulary: WireV2Vocabulary,
+): NetworkGmHostV3Message {
+  const message = record(value, '$');
+  literal(message['protocolVersion'], 3, '$.protocolVersion');
+  if (message['messageType'] === 'network.gm-request-draft.refusal') {
+    const row = exact(
+      value,
+      'messageType protocolVersion draftUpdateId scope revisions presentationUnchanged refusal',
+    );
+    text(row['draftUpdateId'], '$.draftUpdateId');
+    gmDraftScope(row['scope']);
+    const current = revisions(row['revisions'], '$.revisions');
+    literal(row['presentationUnchanged'], true, '$.presentationUnchanged');
+    gmDraftRefusal(row['refusal']);
+    const refusal = record(row['refusal'], '$.refusal');
+    if (refusal['code'] === 'STALE_REVISION') {
+      const actual = revisions(refusal['actual'], '$.refusal.actual');
+      for (const axis of AXES) literal(actual[axis], current[axis], '$.refusal.actual.' + axis);
+    }
+    return validated(row);
+  }
+  if (message['messageType'] !== 'network.gm-request-draft.result')
+    return unrecognized('$.messageType', null);
+  const row = exact(
+    value,
+    'messageType protocolVersion draftUpdateId scope changed appliedRevisions appliedRequestQueueRevision revisions requestQueueRevision projectionRole presentation',
+  );
+  const id = text(row['draftUpdateId'], '$.draftUpdateId'),
+    scope = gmDraftScope(row['scope']);
+  if (typeof row['changed'] !== 'boolean') invalid('$.changed', 'boolean', null);
+  const applied = revisions(row['appliedRevisions'], '$.appliedRevisions'),
+    current = revisions(row['revisions'], '$.revisions');
+  const appliedQueue = revision(
+      row['appliedRequestQueueRevision'],
+      '$.appliedRequestQueueRevision',
+    ),
+    currentQueue = revision(row['requestQueueRevision'], '$.requestQueueRevision');
+  if (
+    AXES.some((axis) => current[axis] < applied[axis]) ||
+    currentQueue < appliedQueue ||
+    current.projectionRevision < current.stateRevision ||
+    applied.projectionRevision < applied.stateRevision ||
+    current.actorVisibilityRevision !== 0 ||
+    applied.actorVisibilityRevision !== 0
+  )
+    invalid('$.revisions', 'ordered GM queue revision owners', null);
+  literal(row['projectionRole'], 'gm', '$.projectionRole');
+  const presentation = exact(row['presentation'], 'base layers', '$.presentation');
+  if (list(presentation['layers'], '$.presentation.layers').length !== 0)
+    invalid('$.presentation.layers', 'empty GM queue layers', null);
+  const base = record(presentation['base'], '$.presentation.base');
+  if (base['formId'] === 'NET-017') {
+    const payload = networkGmRequestProjectionValue(base['roleFilteredPayload']);
+    literal(
+      payload.contextId,
+      scope.gmLocalContextId,
+      '$.presentation.base.roleFilteredPayload.contextId',
+    );
+    literal(
+      payload.campaignId,
+      scope.campaignId,
+      '$.presentation.base.roleFilteredPayload.campaignId',
+    );
+    literal(
+      payload.stateRevision,
+      current.stateRevision,
+      '$.presentation.base.roleFilteredPayload.stateRevision',
+    );
+    literal(
+      payload.projectionRevision,
+      current.projectionRevision,
+      '$.presentation.base.roleFilteredPayload.projectionRevision',
+    );
+    literal(
+      payload.requestQueueRevision,
+      currentQueue,
+      '$.presentation.base.roleFilteredPayload.requestQueueRevision',
+    );
+  } else if (base['formId'] === 'CMP-006')
+    gmQueueCampaignPayload(base['roleFilteredPayload'], scope);
+  else return unrecognized('$.presentation.base.formId', null);
+  const bindings = list(base['routeBindings'], '$.presentation.base.routeBindings');
+  if (bindings.length !== 1)
+    invalid('$.presentation.base.routeBindings', 'one campaign binding', null);
+  const binding = exact(
+    bindings[0],
+    'parameterIndex source value',
+    '$.presentation.base.routeBindings[0]',
+  );
+  literal(binding['parameterIndex'], 0, '$.presentation.base.routeBindings[0].parameterIndex');
+  literal(binding['source'], 'inherited', '$.presentation.base.routeBindings[0].source');
+  literal(binding['value'], scope.campaignId, '$.presentation.base.routeBindings[0].value');
+  const encoded = encodeHostMessageV2(
+    {
+      messageType: 'projection.snapshot',
+      protocolVersion: 2,
+      projectionRole: 'gm',
+      revisions: current,
+      presentation: {
+        assignment: { reason: 'RECONNECT', correlationId: id },
+        base: base as unknown as PresentedBaseForm,
+        layers: [],
+      },
+    },
+    vocabulary,
+  );
+  if (!encoded.ok) invalid('$.presentation', 'valid signed GM queue presentation', null);
+  return validated(row);
 }

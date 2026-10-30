@@ -5,6 +5,7 @@ import {
   NETWORK_APPLICATION_FORM_IDS,
   type NetworkApplicationFormId,
   type NetworkDraftResultV3Message,
+  type Net017Projection,
 } from '@shared/network-application.js';
 import {
   decodeNetworkProjection,
@@ -16,6 +17,9 @@ import {
   networkEditIsSendable,
   networkOpenPayload,
   networkSubmitPayload,
+  networkGmRequestDraftFromProjection,
+  networkGmAcceptToReviewPayload,
+  networkGmRejectRequestPayload,
 } from './network-application.js';
 
 const DEVICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -468,5 +472,107 @@ describe('NET-001–005/011 and CHR-027 public application helpers', () => {
         'UI-CMD-CONNECTION-OPEN',
       ]),
     ).toEqual(['NET-002::CTA::001', 'NET-002::CTA::002']);
+  });
+});
+
+describe('NET-017 preliminary GM payload previews', () => {
+  const queue = (): Net017Projection => ({
+    contextId: CONTEXT,
+    campaignId: CAMPAIGN,
+    stateRevision: 8,
+    projectionRevision: 10,
+    requestQueueRevision: 3,
+    selectedRequestIdOrNull: REQUEST,
+    activePlayerCapacity: 1,
+    occupiedActivePcCount: 1,
+    decisionReason: '  Проверить происхождение  ',
+    commandId: null,
+    returnContext: {
+      originFormId: 'CMP-006',
+      campaignId: CAMPAIGN,
+      creationReceiptId: 'create-receipt',
+    },
+    requests: [
+      {
+        requestId: REQUEST,
+        requestOwnerDeviceId: DEVICE,
+        requestStatus: 'PENDING',
+        requestRevision: 4,
+        connectionState: 'LOST',
+        requestedCandidateCount: 1,
+        gmMessageOrNull: null,
+        decisionReceiptIdOrNull: null,
+        batchCharacterSummaries: [
+          {
+            sourceUuid: source,
+            snapshotChecksum: CHECKSUM,
+            name: 'Алиса',
+            sourceSnapshotId: 'snapshot-v8',
+            localControllerSeatId: SEAT,
+          },
+        ],
+      },
+    ],
+  });
+  it('uses confirmed request identity and revision without gating review on capacity or current peer connection', () => {
+    const p = queue(),
+      before = JSON.stringify(p);
+    expect(networkGmAcceptToReviewPayload(p)).toEqual({
+      campaignId: CAMPAIGN,
+      requestId: REQUEST,
+      requestRevision: 4,
+    });
+    expect(networkGmRejectRequestPayload(p)).toEqual({
+      campaignId: CAMPAIGN,
+      requestId: REQUEST,
+      requestRevision: 4,
+      reason: '  Проверить происхождение  ',
+    });
+    expect(networkGmRequestDraftFromProjection(p)).toEqual({
+      selectedRequestIdOrNull: REQUEST,
+      decisionReason: p.decisionReason,
+    });
+    expect(JSON.stringify(p)).toBe(before);
+  });
+  it('distinguishes preliminary review from terminal rejection and proposed admission', () => {
+    for (const status of ['IN_REVIEW', 'REJECTED', 'PROPOSED'] as const) {
+      const original = queue();
+      const p = { ...original, requests: [{ ...original.requests[0]!, requestStatus: status }] };
+      expect(networkGmAcceptToReviewPayload(p)).toBeNull();
+      expect(networkGmRejectRequestPayload(p) !== null).toBe(status === 'IN_REVIEW');
+    }
+    expect(networkGmRejectRequestPayload({ ...queue(), decisionReason: ' \n ' })).toBeNull();
+    expect(
+      networkGmAcceptToReviewPayload({ ...queue(), requests: [], selectedRequestIdOrNull: null }),
+    ).toBeNull();
+  });
+  it('does not build commands from unsaved values, local in-flight work or a host command in progress', () => {
+    const p = queue(),
+      values = networkGmRequestDraftFromProjection(p);
+    for (const state of [
+      { values, dirty: true, pending: false },
+      { values, dirty: false, pending: true },
+      { values: { ...values, decisionReason: 'другая причина' }, dirty: false, pending: false },
+      { values: { ...values, selectedRequestIdOrNull: null }, dirty: false, pending: false },
+    ]) {
+      expect(networkGmAcceptToReviewPayload(p, state)).toBeNull();
+      expect(networkGmRejectRequestPayload(p, state)).toBeNull();
+    }
+    expect(networkGmAcceptToReviewPayload({ ...p, commandId: 'in-flight' })).toBeNull();
+    expect(networkGmRejectRequestPayload({ ...p, commandId: 'in-flight' })).toBeNull();
+    expect(
+      networkGmAcceptToReviewPayload(p, { values, dirty: false, pending: false }),
+    ).not.toBeNull();
+  });
+  it('keeps the GM queue closed and outside every player form family', () => {
+    const p = queue();
+    for (const altered of [
+      { ...p, controllerSeat: SEAT },
+      { ...p, requests: [{ ...p.requests[0]!, privateWitness: 'secret' }] },
+      { ...p, requests: [], selectedRequestIdOrNull: REQUEST },
+    ])
+      expect(() => networkGmAcceptToReviewPayload(altered)).toThrow();
+    for (const form of NETWORK_APPLICATION_FORM_IDS)
+      expect(decodeNetworkProjection(p, '$', form).ok).toBe(false);
   });
 });

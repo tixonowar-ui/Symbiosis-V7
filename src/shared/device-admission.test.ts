@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   decodeNetworkClientMessageV3,
   NETWORK_WORKFLOW_COMMAND_IDS,
+  NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
   NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
 } from './device-admission.js';
 import type {
@@ -83,12 +84,18 @@ describe('local device-admission draft messages (standalone V3)', () => {
     },
   );
 
-  it('keeps only the three existing Atlas workflows, without preliminary GM commands', () => {
+  it('keeps player workflows separate from the approved GM request-review vocabulary', () => {
     expect(NETWORK_WORKFLOW_COMMAND_IDS).toEqual([
       'UI-CMD-CONNECTION-OPEN',
       'UI-CMD-DEVICE-REQUEST-SUBMIT',
       'UI-CMD-DEVICE-REQUEST-CANCEL',
     ]);
+    expect(NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS).toEqual([
+      'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+      'UI-CMD-DEVICE-REQUEST-REJECT',
+    ]);
+    for (const workflow of NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS)
+      expect(NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS).not.toContain(workflow);
   });
 
   it.each(['', '127.0.0.1:41234', ' http://192.168.1.2:41234/ ', 'not yet a valid locator'])(

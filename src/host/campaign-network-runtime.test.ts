@@ -587,3 +587,16 @@ describe('actual saved-campaign network coordinator', () => {
     await expect(h.runtime.discover()).rejects.toThrow('CLOSED');
   });
 });
+
+it('reads connection snapshots through the actual coordinator and rejects unknown stored requests without writes', async () => {
+  const h = await host(),
+    saved = await h.save('BORROWED_SHELL');
+  await h.runtime.start();
+  const before = h.db.serialize(),
+    empty = h.runtime.requestConnectionFacts(saved.campaignId, []);
+  expect(empty).toEqual([]);
+  expect(Object.isFrozen(empty)).toBe(true);
+  expect(() => h.runtime.requestConnectionFacts(saved.campaignId, [randomUUID()])).toThrow();
+  expect(() => h.runtime.requestConnectionFacts(randomUUID(), [])).toThrow();
+  expect(h.db.serialize().equals(before)).toBe(true);
+});

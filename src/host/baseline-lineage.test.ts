@@ -14,6 +14,7 @@ import {
 } from './baseline-lineage.js';
 import {
   loadLocalCharacterExportBaseline,
+  isStoredLocalCharacterExportBaselineCompatible,
   resolveStoredLocalCharacterExportBaseline,
   postSaveSha256,
   type LocalCharacterExportBaseline,
@@ -73,6 +74,21 @@ describe('verified baseline lineage', () => {
       current,
     );
     expect(current.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B1);
+  });
+
+  it('previews registered compatibility without hiding invalid trusted contexts', () => {
+    expect(isStoredLocalCharacterExportBaselineCompatible(current, BASELINE_FIXTURE_IDS.B1)).toBe(
+      true,
+    );
+    expect(isStoredLocalCharacterExportBaselineCompatible(current, BASELINE_FIXTURE_IDS.B0)).toBe(
+      true,
+    );
+    expect(isStoredLocalCharacterExportBaselineCompatible(current, 'sha256:unregistered')).toBe(
+      false,
+    );
+    expect(() =>
+      isStoredLocalCharacterExportBaselineCompatible({ ...current }, BASELINE_FIXTURE_IDS.B1),
+    ).toThrow('unverified');
   });
 
   it('rejects unknown IDs and structurally identical untrusted contexts', () => {
@@ -186,6 +202,12 @@ describe('verified baseline lineage', () => {
         resolveStoredLocalCharacterExportBaseline(other, BASELINE_FIXTURE_IDS.B0),
       ).toThrow('not an approved historical successor');
       expect(resolveStoredLocalCharacterExportBaseline(other, other.baselineVersion)).toBe(other);
+      expect(isStoredLocalCharacterExportBaselineCompatible(other, BASELINE_FIXTURE_IDS.B0)).toBe(
+        false,
+      );
+      expect(isStoredLocalCharacterExportBaselineCompatible(other, other.baselineVersion)).toBe(
+        true,
+      );
     } finally {
       writeFileSync(atlasPath, oldAtlas);
       writeFileSync(manifestPath, oldManifest);
@@ -201,6 +223,9 @@ describe('verified baseline lineage', () => {
       expect(changed.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B1);
       expect(() =>
         resolveStoredLocalCharacterExportBaseline(changed, BASELINE_FIXTURE_IDS.B0),
+      ).toThrow('catalog source seal');
+      expect(() =>
+        isStoredLocalCharacterExportBaselineCompatible(changed, BASELINE_FIXTURE_IDS.B0),
       ).toThrow('catalog source seal');
     } finally {
       writeFileSync(path, bytes);

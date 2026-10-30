@@ -5,11 +5,13 @@
 
 ## Application #171 — интеграция
 
-Player-срез f9a6a539 локально объединён с разрешённой поставкой #177/lineage #190
-на 5e929973. GM runtime, shared transport и client wiring ещё интегрируются;
-полный #171 не готов к merge. Старые 3539 tests / 36 E2E не объявляются
-результатом новой ветки. Полные итоговые проверки и фактический PR-size замер
-будут выполнены после завершения GM journey.
+Player-срез f9a6a539 объединён с main ecd398458c (#190 и Atlas 1.6 / #177).
+В рабочей ветке подключены GM queue, отдельный GM v3 draft, два preliminary
+workflow, forward0011, peer lane provenance и live owner recovery. Полный #171
+ещё не готов к merge: types/client focused прошли, полный GM runtime case и
+production E2E остаются в проверке. Предыдущие 3539 tests / 36 E2E не являются
+проверкой нового снимка. Фактический итоговый бюджет и независимые final-SHA
+проверки обязательны; source-contract foundation #195 выделяется отдельно.
 
 ## Source-снимок #177 — 2026-10-30
 

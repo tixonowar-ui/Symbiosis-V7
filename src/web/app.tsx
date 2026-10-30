@@ -1,10 +1,15 @@
+import type { NetworkGmRequestDraftClientState } from './ws-client.js';
 import { CreationValidationFields } from './forms/chr/creation-validation-fields.js';
 import {
   CampaignCreationFields,
   type CampaignDraftClientState,
 } from './forms/cmp/campaign-create-fields.js';
 import { isCampaignCreationForm } from './forms/cmp/campaign-create.js';
-import { NetworkFields, type NetworkDraftClientState } from './forms/net/network-fields.js';
+import {
+  NetworkFields,
+  NetworkGmRequestFields,
+  type NetworkDraftClientState,
+} from './forms/net/network-fields.js';
 import { isNetworkApplicationForm } from './forms/net/network-application.js';
 import { PostSaveFields, downloadPostSaveFile } from './forms/chr/post-save-fields.js';
 import { isPostSaveForm } from './forms/chr/post-save.js';
@@ -228,6 +233,7 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     (snapshot.formId === 'CHR-001' && Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
+    snapshot.formId === 'NET-017' ||
     isNetworkApplicationForm(snapshot.formId) ||
     snapshot.formId === 'CHR-032' ||
     snapshot.formId === 'CHR-025' ||
@@ -2204,6 +2210,9 @@ export function App(): ReactElement {
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraftClientState | null>(null);
   const [networkDraft, setNetworkDraft] = useState<NetworkDraftClientState | null>(null);
+  const [gmRequestDraft, setGmRequestDraft] = useState<NetworkGmRequestDraftClientState | null>(
+    null,
+  );
   const [networkQrScanSequence, setNetworkQrScanSequence] = useState(0);
   const [networkImageReadPending, setNetworkImageReadPending] = useState(false);
   const [creationChoiceDraft, setCreationChoiceDraft] =
@@ -2263,6 +2272,7 @@ export function App(): ReactElement {
       },
       setCampaignDraft,
       setNetworkDraft,
+      setGmRequestDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2341,8 +2351,19 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive || layers.length > 0 || networkImageReadPending}>
             <legend>AtlasForm {snapshot.formId}</legend>
+            {snapshot.formId === 'NET-017' ? (
+              <NetworkGmRequestFields
+                projection={snapshot.projection}
+                state={gmRequestDraft}
+                onChange={(values) => {
+                  const result = connectionRef.current?.replaceNetworkGmRequestDraft(values);
+                  if (result?.ok === false) setActionNotice(result.detail);
+                  else setActionNotice(null);
+                }}
+              />
+            ) : null}
             <NetworkFields
-              key={`${snapshot.formId}:${typeof snapshot.projection['networkScopeId'] === 'string' ? snapshot.projection['networkScopeId'] : ''}`}
+              key={`network:${snapshot.formId}:${typeof snapshot.projection['networkScopeId'] === 'string' ? snapshot.projection['networkScopeId'] : ''}`}
               formId={snapshot.formId}
               projection={snapshot.projection}
               state={networkDraft}
@@ -2373,7 +2394,7 @@ export function App(): ReactElement {
               qrScanSequence={networkQrScanSequence}
             />
             <CampaignCreationFields
-              key={`${snapshot.formId}:${typeof snapshot.projection['campaignDraftId'] === 'string' ? snapshot.projection['campaignDraftId'] : ''}`}
+              key={`campaign:${snapshot.formId}:${typeof snapshot.projection['campaignDraftId'] === 'string' ? snapshot.projection['campaignDraftId'] : ''}`}
               formId={snapshot.formId}
               projection={snapshot.projection}
               state={campaignDraft}
@@ -2813,6 +2834,7 @@ export function App(): ReactElement {
                   Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
+                snapshot.formId === 'NET-017' ||
                 isNetworkApplicationForm(snapshot.formId)
               }
               availableActionKeys={

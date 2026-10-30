@@ -171,6 +171,8 @@ export async function createNetworkBrowserProcess(finalCount: number) {
             sources: rows('local_character'),
             copies: rows('campaign_character_copy'),
             requests: rows('hosted_device_request'),
+            decisions: rows('hosted_device_request_decision'),
+            queueViews: rows('gm_request_queue_view'),
             sessions: rows('hosted_technical_session'),
             commands: rows('hosted_network_command'),
             outbox: rows('local_network_outbox'),

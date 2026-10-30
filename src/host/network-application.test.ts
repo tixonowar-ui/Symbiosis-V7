@@ -1,3 +1,16 @@
+import Database from 'better-sqlite3';
+import { configurePersistenceDatabase } from '../persistence/database.js';
+import { applyMigrationSequence, applyMigrations } from '../persistence/migrations/index.js';
+import { migration0001 } from '../persistence/migrations/0001-initial.js';
+import { migration0002 } from '../persistence/migrations/0002-local-character-checkpoint.js';
+import { migration0003 } from '../persistence/migrations/0003-device-identity.js';
+import { migration0004 } from '../persistence/migrations/0004-skill-presentation.js';
+import { migration0005 } from '../persistence/migrations/0005-symbiont-presentation.js';
+import { migration0006 } from '../persistence/migrations/0006-local-character-post-save.js';
+import { migration0007 } from '../persistence/migrations/0007-campaign-creation.js';
+import { migration0008 } from '../persistence/migrations/0008-network-installation-identity.js';
+import { migration0009 } from '../persistence/migrations/0009-device-admission.js';
+import { migration0010 } from '../persistence/migrations/0010-network-application.js';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -21,16 +34,28 @@ import {
   commitCampaignDraftUpdate,
   navigateCampaignDraft,
   commitCampaignCreation,
+  readHostedCampaignCreationOrigin,
   type RedactedCampaignDraftRequest,
 } from '../persistence/campaign-creation.js';
 import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import {
   readHostedPausedCampaignIds,
+  commitHostedNetworkCommand,
   type HostedNetworkPrincipal,
+  readGmRequestReviewView,
+  readHostedDeviceRequestCurrent,
+  commitGmRequestReviewNavigation,
+  commitGmRequestReviewDraft,
+  commitGmDeviceRequestDecision,
+  type NetworkGmDecisionRequest,
 } from '../persistence/network-device-request.js';
 import {
   readLocalNetworkApplication,
   readLocalNetworkOutbox,
+  readLocalNetworkDeliverySnapshot,
+  readLocalRequestLaneBinding,
+  readLocalNetworkCancelSettlementEvent,
+  commitLocalNetworkMutation,
 } from '../persistence/network-local-application.js';
 import {
   createCreationFinalizationSetup,
@@ -41,6 +66,8 @@ import { commitCreationFinalization } from './creation-finalization.js';
 import { loadCreationWizardCheckpoint } from './creation-set-decide.js';
 import {
   loadLocalCharacterExportBaseline,
+  canonicalPostSaveJson,
+  postSaveSha256,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import { createCampaignBindManager } from './campaign-bind.js';
@@ -70,6 +97,7 @@ import {
   type LocalNetworkHostMessage,
 } from './network-application.js';
 import { isNetworkApplicationProjection } from '../shared/network-application-codec.js';
+import { validateFinalAdmissionCandidate } from './device-admission-candidate.js';
 
 let baseline: LocalCharacterExportBaseline,
   config: NetworkApplicationConfig,
@@ -134,6 +162,7 @@ function client() {
     const sent: LocalNetworkHostMessage[] = [];
     const responses: DeviceAdmissionPeerResponse[] = [];
     const peerErrors: string[] = [];
+    let beforeDeliver: (() => void | Promise<void>) | null = null;
     const c: LocalNetworkConnection = {
       networkScopeId: null,
       contextId: null,
@@ -222,6 +251,9 @@ function client() {
         peer: {
           ...peer,
           async deliver(scope, out) {
+            const before = beforeDeliver;
+            beforeDeliver = null;
+            await before?.();
             try {
               const value = await peer.deliver(scope, out);
               responses.push(value);
@@ -333,6 +365,9 @@ function client() {
       sent,
       responses,
       peerErrors,
+      beforeNextDeliver(value: () => void | Promise<void>) {
+        beforeDeliver = value;
+      },
       send,
       nav,
       payload,
@@ -340,6 +375,9 @@ function client() {
       command,
       state,
       scope,
+      disconnect() {
+        runtime.close();
+      },
       revoke() {
         live = false;
       },
@@ -401,7 +439,325 @@ function client() {
   });
 }
 
+async function submittedPlayer(
+  h: Awaited<ReturnType<typeof host>>,
+  legacy = false,
+  loseFirstBindingAck = false,
+) {
+  const p = await client();
+  await p.nav('APP-002::CTA::003', 'APP-002');
+  await p.nav('NET-001::CTA::001');
+  await p.replace('ADDRESS', {
+    addressOrQrPayload: campaignQrPayload('127.0.0.1', h.port, h.campaignId),
+  });
+  await p.command('UI-CMD-CONNECTION-OPEN', {
+    attemptId: p.state().plannedAttemptIdOrNull,
+    addressOrQrPayload: p.state().addressOrQrPayload,
+    selectedCampaignIdOrNull: null,
+  });
+  const {
+    name: _name,
+    sourceSnapshotId: _snapshot,
+    ...ref
+  } = (p.payload()['eligibleFinalCandidates'] as readonly JsonObject[])[0]!;
+  await p.replace('SELECTION', { selectedCandidates: [ref] });
+  await p.nav('NET-003::CTA::001');
+  expect(p.state().preparedBatchOrNull).toMatchObject({
+    schemaVersion: 2,
+    localControllerSeatId: p.state().tabId,
+  });
+  if (legacy) {
+    const batch = p.state().preparedBatchOrNull!;
+    await p.nav('NET-004::CTA::001');
+    const {
+      schemaVersion: _version,
+      localControllerSeatId: _lane,
+      batchSha256: _sha,
+      ...body
+    } = batch;
+    const before = p.state();
+    // A valid old batch is produced through the same store writer, never by editing old journal bytes.
+    commitLocalNetworkMutation(
+      p.db,
+      {
+        ...p.scope(),
+        eventId: randomUUID(),
+        receiptId: randomUUID(),
+        expectedRevisions: vector(before),
+        expectedDraftRevision: before.draftRevision,
+        clientRequestJsonOrNull: null,
+        mutation: {
+          kind: 'PREPARE_BATCH',
+          batch: {
+            ...body,
+            batchSha256: postSaveSha256(canonicalPostSaveJson(body)),
+          },
+        },
+      },
+      () => {
+        if (!p.c.trusted() || loadDeviceId(p.db) !== p.scope().ownerDeviceId)
+          throw new Error('Lost own source');
+      },
+    );
+  }
+  const batch = p.state().preparedBatchOrNull!;
+  let originalHostedSubmit: unknown = null;
+  if (legacy)
+    p.beforeNextDeliver(() => {
+      // Seed through the real schema10 writer, then forward-migrate before the upgraded peer replays it.
+      expect(h.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+        version: 10,
+      });
+      const commandId = p.state().pendingCommandIdOrNull!;
+      const out = readLocalNetworkOutbox(p.db, p.scope(), commandId)!;
+      if (out.intent.operation !== 'SUBMIT') throw new Error('Expected original legacy submit');
+      commitHostedNetworkCommand(
+        h.db,
+        h.principal,
+        {
+          operation: 'SUBMIT',
+          commandId,
+          receiptId: randomUUID(),
+          requestId: batch.requestId,
+          technicalSessionId: batch.technicalSessionId,
+          expectedConnectionRevision: batch.connectionRevision,
+          batch,
+          semanticBodyJson: out.intent.semanticBodyJson,
+        },
+        h.validate,
+        () => {
+          for (const candidate of batch.candidates)
+            validateFinalAdmissionCandidate(
+              candidate.canonicalWitnessText,
+              p.scope().ownerDeviceId,
+              candidate.descriptor,
+              candidate.exportDocument,
+              baseline,
+              { maxWitnessBytes: config.transfer.maxWitnessBytes },
+            );
+        },
+      );
+      originalHostedSubmit = h.db
+        .prepare('SELECT * FROM hosted_network_command WHERE command_id=?')
+        .get(commandId);
+      applyMigrations(h.db);
+      expect(
+        h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(commandId),
+      ).toEqual(originalHostedSubmit);
+      expect(h.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+        version: 11,
+      });
+    });
+  if (loseFirstBindingAck)
+    p.db.exec(
+      "CREATE TRIGGER fail_binding_ack BEFORE INSERT ON local_network_application_event WHEN json_extract(NEW.record_json,'$.input.mutation.kind')='LANE_BIND_ACK' BEGIN SELECT RAISE(ABORT,'binding ACK interrupted'); END",
+    );
+  const submit = await p.command('UI-CMD-DEVICE-REQUEST-SUBMIT', {
+    requestId: batch.requestId,
+    technicalSessionId: batch.technicalSessionId,
+    connectionRevision: batch.connectionRevision,
+    selectedCandidates: p.state().selectedCandidates,
+  });
+  expect(p.state().formId, JSON.stringify(p.sent)).toBe('NET-005');
+  return { p, submit, batch, originalHostedSubmit };
+}
+function gmDecision(h: Awaited<ReturnType<typeof host>>, requestId: string, reject = false) {
+  const scope = {
+    ownerDeviceId: h.principal.hostOwnerDeviceId,
+    gmLocalContextId: h.gmLocalContextId,
+    campaignId: h.campaignId,
+  };
+  const guard = () => {
+    if (loadDeviceId(h.db) !== scope.ownerDeviceId) throw new Error('Lost real GM owner');
+    h.header();
+  };
+  let view = readGmRequestReviewView(h.db, scope, h.validate);
+  if (view?.formId !== 'NET-017')
+    view = commitGmRequestReviewNavigation(
+      h.db,
+      scope,
+      {
+        messageType: 'navigation.form-action',
+        protocolVersion: 2,
+        navigationRequestId: randomUUID(),
+        sourceFormId: 'CMP-006',
+        actionKey: 'CMP-006::CTA::002',
+        expectedProjectionRevision: view?.projectionRevision ?? 0,
+      },
+      h.validate,
+      guard,
+    ).current;
+  for (let n = 0; n < (reject ? 2 : 1); n++)
+    view = commitGmRequestReviewDraft(
+      h.db,
+      scope,
+      {
+        messageType: 'network.gm-request-draft.replace',
+        protocolVersion: 3,
+        draftUpdateId: randomUUID(),
+        scope: {
+          gmLocalContextId: scope.gmLocalContextId,
+          campaignId: scope.campaignId,
+          sourceFormId: 'NET-017',
+        },
+        expectedRevisions: vector(view),
+        expectedRequestQueueRevision: view.requestQueueRevision,
+        values: {
+          selectedRequestIdOrNull: requestId,
+          decisionReason: reject ? 'Different candidates required' : '',
+        },
+      },
+      h.validate,
+      guard,
+    ).current;
+  const current = readHostedDeviceRequestCurrent(h.db, h.principal, requestId, h.validate);
+  const common = {
+    messageType: 'command.request' as const,
+    protocolVersion: 1 as const,
+    commandKind: 'workflow-command' as const,
+    role: 'gm' as const,
+    commandId: randomUUID(),
+    expectedRevisions: vector(view),
+  };
+  const payload = { campaignId: h.campaignId, requestId, requestRevision: current.requestRevision };
+  const request: NetworkGmDecisionRequest = reject
+    ? {
+        ...common,
+        workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+        payload: { ...payload, reason: view.values.decisionReason },
+      }
+    : { ...common, workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', payload };
+  return commitGmDeviceRequestDecision(
+    h.db,
+    scope,
+    { request, receiptId: randomUUID(), timestamp: '2026-10-30T12:00:00.000Z' },
+    h.validate,
+    guard,
+  );
+}
+
 describe('local network application with durable SQLite and real Node peers', () => {
+  it('publishes owner review updates over the existing session and keeps the original SUBMIT replay unchanged', async () => {
+    const h = await host(),
+      { p, submit, batch } = await submittedPlayer(h);
+    const original = p.sent.find((m) => m.messageType === 'command.result');
+    expect(original?.messageType).toBe('command.result');
+    const stored = readLocalNetworkOutbox(p.db, p.scope(), submit.commandId);
+    gmDecision(h, batch.requestId);
+    await expect
+      .poll(
+        () => {
+          const pushed = p.sent.findLast(
+            (m) =>
+              m.messageType === 'projection.snapshot' &&
+              m.protocolVersion === 2 &&
+              m.presentation.assignment.reason === 'HOST_SYSTEM_EVENT',
+          );
+          return pushed?.messageType === 'projection.snapshot' && pushed.protocolVersion === 2
+            ? pushed.presentation.base.roleFilteredPayload['requestStatus']
+            : null;
+        },
+        { timeout: 10000 },
+      )
+      .toBe('IN_REVIEW');
+    const pushed = p.sent.findLast((m) => m.messageType === 'projection.snapshot')!;
+    if (pushed.messageType !== 'projection.snapshot' || pushed.protocolVersion !== 2)
+      throw new Error('Missing actual owner push');
+    expect(pushed.presentation.assignment.correlationId).toMatch(
+      /^network-owner-view:[0-9a-f]{64}$/u,
+    );
+    expect(pushed.presentation.base.availableActionKeys).not.toContain('NET-005::CTA::001');
+    expect(readLocalNetworkOutbox(p.db, p.scope(), submit.commandId)).toEqual(stored);
+    gmDecision(h, batch.requestId, true);
+    await expect
+      .poll(() => p.state().requestReviewOrNull?.requestStatus, { timeout: 10000 })
+      .toBe('REJECTED');
+    await p.restart([submit.commandId]);
+    const replay = p.sent.find((m) => m.messageType === 'command.replay');
+    if (original?.messageType !== 'command.result' || replay?.messageType !== 'command.replay')
+      throw new Error('Missing immutable terminal receipt');
+    expect(replay.receipt).toEqual(original.receipt);
+    expect(p.state().formId).toBe('NET-005');
+    expect(p.state().requestReviewOrNull?.requestStatus).toBe('REJECTED');
+    expect(p.payload()['requestStatus']).toBe('REJECTED');
+    expect(JSON.stringify(p.sent)).not.toMatch(
+      /canonicalWitnessText|privateKeyPkcs8Base64|learnedNodeRefs/u,
+    );
+    await p.nav('NET-005::CTA::003');
+    expect(p.state().formId).toBe('NET-003');
+    expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
+      n: 0,
+    });
+  }, 30000);
+  it('settles CANCEL losing to review and recovers the same refusal after SQLite reopen without a fake ACK', async () => {
+    const h = await host(),
+      { p, batch } = await submittedPlayer(h);
+    await p.replace('CANCEL_REASON', { cancelReason: 'Withdraw original submission' });
+    p.beforeNextDeliver(() => {
+      gmDecision(h, batch.requestId);
+    });
+    const cancel = await p.command('UI-CMD-DEVICE-REQUEST-CANCEL', {
+      requestId: batch.requestId,
+      technicalSessionId: batch.technicalSessionId,
+      requestRevision: 0,
+      reason: 'Withdraw original submission',
+    });
+    expect(
+      p.sent.some((m) => m.messageType === 'command.refusal' && m.commandId === cancel.commandId),
+    ).toBe(true);
+    const delivery = readLocalNetworkDeliverySnapshot(p.db, p.scope(), cancel.commandId);
+    expect(delivery.outbox?.acknowledgementOrNull).toBeNull();
+    expect(delivery.cancelSettlementOrNull?.proof.decisions).toHaveLength(1);
+    expect(delivery.current.pendingCommandIdOrNull).toBeNull();
+    expect(delivery.current.requestReviewOrNull?.requestStatus).toBe('IN_REVIEW');
+    const event = readLocalNetworkCancelSettlementEvent(p.db, p.scope(), cancel.commandId)!;
+    expect(event).not.toBeNull();
+    const count = h.db
+      .prepare("SELECT COUNT(*) AS n FROM hosted_network_command WHERE operation='CANCEL'")
+      .get();
+    expect(count).toEqual({ n: 0 });
+    await p.restart([cancel.commandId]);
+    expect(
+      p.sent.some((m) => m.messageType === 'command.refusal' && m.commandId === cancel.commandId),
+    ).toBe(true);
+    const after = readLocalNetworkCancelSettlementEvent(p.db, p.scope(), cancel.commandId)!;
+    expect(after.input).toEqual(event.input);
+    expect(after.receipt).toEqual(event.receipt);
+    await p.send(cancel);
+    expect(p.sent[0]?.messageType).toBe('command.refusal');
+    expect(readLocalNetworkOutbox(p.db, p.scope(), cancel.commandId)).toEqual(delivery.outbox);
+    expect(
+      h.db
+        .prepare("SELECT COUNT(*) AS n FROM hosted_network_command WHERE operation='CANCEL'")
+        .get(),
+    ).toEqual(count);
+  }, 30000);
+  it('recovers a lost first BIND ACK using the original input and command after restart', async () => {
+    const h = await host({ legacySchema: true }),
+      { p, submit, batch, originalHostedSubmit } = await submittedPlayer(h, true, true);
+    expect(batch.schemaVersion).toBeUndefined();
+    const bound = readLocalRequestLaneBinding(p.db, p.scope(), batch.requestId)!;
+    expect(bound.receiptOrNull).toBeNull();
+    expect(bound.request.localControllerSeatId).toBe(p.state().tabId);
+    expect(bound.origin.submitCommandId).toBe(submit.commandId);
+    expect(bound.request.batchSha256).toBe(batch.batchSha256);
+    const original = readLocalNetworkOutbox(p.db, p.scope(), submit.commandId);
+    p.db.exec('DROP TRIGGER fail_binding_ack');
+    await p.restart([submit.commandId]);
+    const recovered = readLocalRequestLaneBinding(p.db, p.scope(), batch.requestId)!;
+    expect(recovered.request).toEqual(bound.request);
+    expect(recovered.origin).toEqual(bound.origin);
+    expect(recovered.receiptOrNull?.binding.localControllerSeatId).toBe(bound.origin.tabId);
+    expect(readLocalNetworkOutbox(p.db, p.scope(), submit.commandId)).toEqual(original);
+    expect(
+      h.db.prepare('SELECT COUNT(*) AS n FROM hosted_device_request_lane_binding').get(),
+    ).toEqual({ n: 1 });
+    expect(p.state().requestReviewOrNull?.proof.laneProvenance?.kind).toBe('BIND_LANE');
+    expect(
+      h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(submit.commandId),
+    ).toEqual(originalHostedSubmit);
+  }, 30000);
+
   it('binds an entry before the first NAV fault and refuses a changed envelope after reopen without binding the connection', async () => {
     const p = await client();
     p.db.exec(
@@ -932,9 +1288,27 @@ async function host(
     campaignId?: string;
     capacity?: number;
     limits?: Partial<DeviceAdmissionPeerRuntimeLimits>;
+    legacySchema?: boolean;
   } = {},
 ) {
-  const db = openPersistenceDatabase(options.path ?? ':memory:');
+  const db = options.legacySchema
+    ? new Database(options.path ?? ':memory:')
+    : openPersistenceDatabase(options.path ?? ':memory:');
+  if (options.legacySchema) {
+    configurePersistenceDatabase(db);
+    applyMigrationSequence(db, [
+      migration0001,
+      migration0002,
+      migration0003,
+      migration0004,
+      migration0005,
+      migration0006,
+      migration0007,
+      migration0008,
+      migration0009,
+      migration0010,
+    ]);
+  }
   bootstrapDeviceIdentity(db);
   initializeNetworkInstallation(db);
   const http = createServer((_request, response) => {
@@ -1196,6 +1570,9 @@ async function host(
   return {
     db,
     campaignId,
+    gmLocalContextId: readHostedCampaignCreationOrigin(db, campaignId, validate).command.request
+      .payload.gmLocalContextId,
+    bind,
     port: address.port,
     header,
     principal,
@@ -1206,3 +1583,337 @@ async function host(
     errors,
   };
 }
+import { createGmNetworkRuntime } from './network-application.js';
+import { createCampaignCreationRuntime, type CampaignConnection } from './campaign-creation.js';
+import { loadProtocolVocabulary } from './protocol-vocabulary.js';
+import { NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS } from '../shared/device-admission.js';
+import { readGmDeviceRequestQueue } from '../persistence/network-device-request.js';
+
+async function gmClient(h: Awaited<ReturnType<typeof host>>) {
+  const c: CampaignConnection = {
+    gmLocalContextId: h.gmLocalContextId,
+    executableCreate: true,
+    executableReview: NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+    trusted: () => h.db.open,
+  };
+  let gmFrames = Promise.resolve();
+  const schedule = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = gmFrames.then(run);
+    gmFrames = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  };
+  const campaign = createCampaignCreationRuntime({
+    schedule,
+    database: h.db,
+    projectRoot: process.cwd(),
+    baseline,
+    bind: h.bind,
+    requestReview: {
+      project: (connection) => runtime.project(connection),
+      refreshConnectionPresentation: (connection) =>
+        runtime.refreshConnectionPresentation(connection),
+      receipt: (connection, id) => runtime.receipt(connection, id),
+    },
+  });
+  const runtime = createGmNetworkRuntime({
+    schedule,
+    config,
+    database: h.db,
+    baseline,
+    vocabulary: await loadProtocolVocabulary(process.cwd()),
+    campaignNetwork: h.runtime,
+    campaignPresentation: campaign.project,
+  });
+  cleaners.push(() => {
+    runtime.close();
+    return Promise.resolve();
+  });
+  const sent: LocalNetworkHostMessage[] = [];
+  const scope = {
+    ownerDeviceId: loadDeviceId(h.db),
+    gmLocalContextId: h.gmLocalContextId,
+    campaignId: h.campaignId,
+  };
+  const view = () => readGmRequestReviewView(h.db, scope, h.validate)!;
+  const send = async (m: LocalNetworkClientMessage) => {
+    sent.length = 0;
+    expect(await runtime.handle(m, c, (v) => sent.push(v))).toBe(true);
+    return sent;
+  };
+  const nav = async (enter = true) => {
+    const request = {
+      messageType: 'navigation.form-action' as const,
+      protocolVersion: 2 as const,
+      navigationRequestId: randomUUID(),
+      sourceFormId: enter ? ('CMP-006' as const) : ('NET-017' as const),
+      actionKey: enter ? ('CMP-006::CTA::002' as const) : ('NET-017::CTA::009' as const),
+      expectedProjectionRevision: view()?.projectionRevision ?? 0,
+    };
+    await send(request);
+    return request;
+  };
+  const select = async (requestId: string, reason = '') => {
+    const update = () =>
+      send({
+        messageType: 'network.gm-request-draft.replace',
+        protocolVersion: 3,
+        draftUpdateId: randomUUID(),
+        scope: {
+          gmLocalContextId: h.gmLocalContextId,
+          campaignId: h.campaignId,
+          sourceFormId: 'NET-017',
+        },
+        expectedRevisions: vector(view()),
+        expectedRequestQueueRevision: view().requestQueueRevision,
+        values: { selectedRequestIdOrNull: requestId, decisionReason: reason },
+      });
+    await update();
+    if (reason !== '' && view().values.decisionReason === '') await update();
+  };
+  const resume = async () => {
+    sent.length = 0;
+    const shell = {
+      formId: null,
+      revisions: zero,
+      ready: true,
+      enter() {},
+      exit() {},
+      advance: () => zero,
+      base: (): never => {
+        throw new Error('No unrelated GM shell projection');
+      },
+    };
+    expect(
+      await campaign.handle(
+        {
+          messageType: 'campaign.local-context.resume',
+          protocolVersion: 3,
+          gmLocalContextId: h.gmLocalContextId,
+          reconnectRequestId: randomUUID(),
+          knownRevisions: vector(view()),
+          supportedWorkflowCommandIds: NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+          unacknowledgedCommandIds: [],
+        },
+        c,
+        shell,
+        (value) => sent.push(value),
+      ),
+    ).toBe(true);
+  };
+  return { c, runtime, campaign, sent, scope, view, send, nav, select, resume };
+}
+
+describe('actual GM request review orchestration', () => {
+  it('keeps the campaign birth immutable through queue ingress, safe return, replay and unauthorized requests', async () => {
+    const h = await host(),
+      gm = await gmClient(h);
+    const checkpoint = h.db.prepare('SELECT * FROM campaign_checkpoint').all();
+    const entering = await gm.nav();
+    expect(gm.sent[0]).toMatchObject({
+      messageType: 'projection.snapshot',
+      projectionRole: 'gm',
+      presentation: {
+        base: {
+          formId: 'NET-017',
+          roleFilteredPayload: {
+            contextId: h.gmLocalContextId,
+            campaignId: h.campaignId,
+            requests: [],
+          },
+        },
+      },
+    });
+    expect(Object.keys((await gm.runtime.project(gm.c)).base.roleFilteredPayload)).toHaveLength(12);
+    const leaving = await gm.nav(false);
+    expect((await gm.campaign.project(gm.c)).base.formId).toBe('CMP-006');
+    const before = h.db.serialize();
+    await gm.send(entering);
+    expect(gm.sent[0]).toMatchObject({ presentation: { base: { formId: 'CMP-006' } } });
+    expect(h.db.serialize().equals(before)).toBe(true);
+    await gm.send({ ...leaving, navigationRequestId: entering.navigationRequestId });
+    expect(gm.sent[0]).toMatchObject({ messageType: 'navigation.form-action.refusal' });
+    expect(h.db.serialize().equals(before)).toBe(true);
+    gm.c.gmLocalContextId = randomUUID();
+    await gm.send({ ...entering, navigationRequestId: randomUUID() });
+    expect(gm.sent[0]).toMatchObject({ messageType: 'navigation.form-action.refusal' });
+    expect(h.db.serialize().equals(before)).toBe(true);
+    expect(h.db.prepare('SELECT * FROM campaign_checkpoint').all()).toEqual(checkpoint);
+    expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
+      n: 0,
+    });
+  });
+  it('seals a disconnected owner as a technical view revision on explicit GM reconnect without rewriting campaign or SUBMIT', async () => {
+    const h = await host(),
+      { p, submit, batch } = await submittedPlayer(h),
+      gm = await gmClient(h);
+    await gm.nav();
+    const before = gm.view(),
+      original = h.db
+        .prepare('SELECT * FROM hosted_network_command WHERE command_id=?')
+        .get(submit.commandId),
+      campaign = h.db.prepare('SELECT * FROM campaign_checkpoint').all();
+    gm.runtime.close();
+    p.disconnect();
+    await expect
+      .poll(() => h.runtime.requestConnectionFacts(h.campaignId, [batch.requestId])[0]!.connected)
+      .toBe(false);
+    const fresh = await gmClient(h),
+      bytes = h.db.serialize();
+    expect(
+      (await fresh.runtime.project(fresh.c)).base.roleFilteredPayload['requests'],
+    ).toMatchObject([{ connectionState: 'LOST' }]);
+    expect(h.db.serialize().equals(bytes)).toBe(true);
+    await fresh.resume();
+    expect(fresh.sent.find((m) => m.messageType === 'projection.snapshot')).toMatchObject({
+      revisions: {
+        stateRevision: before.stateRevision,
+        projectionRevision: before.projectionRevision + 1,
+        actorVisibilityRevision: before.actorVisibilityRevision,
+      },
+      presentation: {
+        assignment: { reason: 'RECONNECT' },
+        base: {
+          formId: 'NET-017',
+          roleFilteredPayload: { requests: [{ connectionState: 'LOST' }] },
+        },
+      },
+    });
+    expect(fresh.view().requestQueueRevision).toBe(before.requestQueueRevision);
+    const settled = h.db.serialize();
+    await fresh.resume();
+    expect(h.db.serialize().equals(settled)).toBe(true);
+    expect(
+      h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(submit.commandId),
+    ).toEqual(original);
+    expect(h.db.prepare('SELECT * FROM campaign_checkpoint').all()).toEqual(campaign);
+  }, 30000);
+  it('accepts and rejects the actual submitted FINAL with separate immutable receipt/current and exact owner lane', async () => {
+    const h = await host(),
+      p = await client(),
+      gm = await gmClient(h);
+    await gm.nav();
+    await p.nav('APP-002::CTA::003', 'APP-002');
+    await p.nav('NET-001::CTA::001');
+    await p.replace('ADDRESS', {
+      addressOrQrPayload: campaignQrPayload('127.0.0.1', h.port, h.campaignId),
+    });
+    await p.command('UI-CMD-CONNECTION-OPEN', {
+      attemptId: p.state().plannedAttemptIdOrNull,
+      addressOrQrPayload: p.state().addressOrQrPayload,
+      selectedCampaignIdOrNull: null,
+    });
+    const candidate = (p.payload()['eligibleFinalCandidates'] as readonly JsonObject[])[0]!;
+    const { name: _name, sourceSnapshotId: _snapshot, ...ref } = candidate;
+    await p.replace('SELECTION', { selectedCandidates: [ref] });
+    await p.nav('NET-003::CTA::001');
+    const batch = p.state().preparedBatchOrNull!;
+    const submit = await p.command('UI-CMD-DEVICE-REQUEST-SUBMIT', {
+      requestId: batch.requestId,
+      technicalSessionId: batch.technicalSessionId,
+      connectionRevision: batch.connectionRevision,
+      selectedCandidates: p.state().selectedCandidates,
+    });
+    expect(p.state().formId, JSON.stringify(p.sent)).toBe('NET-005');
+    const submitted = p.sent.find((m) => m.messageType === 'command.result');
+    const projected = (await gm.runtime.project(gm.c)).base.roleFilteredPayload;
+    expect(projected['requests']).toMatchObject([
+      {
+        requestId: batch.requestId,
+        requestStatus: 'PENDING',
+        batchCharacterSummaries: [
+          {
+            snapshotChecksum: batch.candidates[0]!.descriptor.exportBytesSha256,
+            localControllerSeatId: p.state().tabId,
+          },
+        ],
+      },
+    ]);
+    await gm.select(batch.requestId);
+    const accept = {
+      messageType: 'command.request' as const,
+      protocolVersion: 1 as const,
+      commandKind: 'workflow-command' as const,
+      role: 'gm' as const,
+      commandId: randomUUID(),
+      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' as const,
+      expectedRevisions: vector(gm.view()),
+      payload: { campaignId: h.campaignId, requestId: batch.requestId, requestRevision: 0 },
+    };
+    await gm.send(accept);
+    const accepted = gm.sent[0];
+    expect(accepted).toMatchObject({
+      messageType: 'command.result',
+      receipt: {
+        result: {
+          beforeRequestStatus: 'PENDING',
+          afterRequestStatus: 'IN_REVIEW',
+          requestRevision: 1,
+        },
+      },
+    });
+    await gm.select(batch.requestId, 'x'.repeat(128 * 1024));
+    const beforeOversized = h.db.serialize();
+    await gm.send({
+      ...accept,
+      commandId: randomUUID(),
+      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+      expectedRevisions: vector(gm.view()),
+      payload: { ...accept.payload, requestRevision: 1, reason: 'x'.repeat(128 * 1024) },
+    });
+    expect(gm.sent[0]).toMatchObject({ messageType: 'command.refusal' });
+    expect(h.db.serialize().equals(beforeOversized)).toBe(true);
+    await gm.select(batch.requestId, 'Причина решения');
+    await gm.send({
+      ...accept,
+      commandId: randomUUID(),
+      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+      expectedRevisions: vector(gm.view()),
+      payload: { ...accept.payload, requestRevision: 1, reason: 'Причина решения' },
+    });
+    expect(gm.sent[0]).toMatchObject({
+      messageType: 'command.result',
+      receipt: {
+        result: {
+          beforeRequestStatus: 'IN_REVIEW',
+          afterRequestStatus: 'REJECTED',
+          requestRevision: 2,
+          decisionReasonOrNull: 'Причина решения',
+        },
+      },
+    });
+    const durable = h.db.serialize();
+    await gm.send(accept);
+    expect(gm.sent[0]).toMatchObject({
+      messageType: 'command.replay',
+      receipt: (accepted as Extract<LocalNetworkHostMessage, { messageType: 'command.result' }>)
+        .receipt,
+    });
+    expect(gm.sent[1]).toMatchObject({
+      presentation: {
+        base: {
+          roleFilteredPayload: { requests: [{ requestStatus: 'REJECTED', requestRevision: 2 }] },
+        },
+      },
+    });
+    expect(h.db.serialize().equals(durable)).toBe(true);
+    await p.restart([submit.commandId]);
+    expect(p.sent.find((m) => m.messageType === 'command.replay')).toMatchObject({
+      receipt: (submitted as Extract<LocalNetworkHostMessage, { messageType: 'command.result' }>)
+        .receipt,
+    });
+    expect(p.payload()).toMatchObject({
+      requestStatus: 'REJECTED',
+      requestRevision: 2,
+      gmMessage: 'Причина решения',
+    });
+    expect(readGmDeviceRequestQueue(h.db, gm.scope, h.validate).requests[0]!.requestStatus).toBe(
+      'REJECTED',
+    );
+    expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
+      n: 0,
+    });
+  }, 30000);
+});

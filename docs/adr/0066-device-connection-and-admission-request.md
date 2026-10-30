@@ -1,8 +1,8 @@
 # ADR 0066 — Подключение установки и адресованная заявка устройства
 
-- **Статус:** предложено; issue #171, нормативный конфликт #177 остаётся открытым
+- **Статус:** предложено; полная проверка runtime #171 ещё не завершена
 - **Дата:** 2026-10-30
-- **Дополняет:** ADR 0018, 0027, 0030, 0032, 0063, 0064 и 0065
+- **Дополняет:** ADR 0018, 0027, 0030, 0032, 0063, 0064, 0065, 0068 и 0069
 
 ## Контекст и граница готовности
 
@@ -15,9 +15,9 @@ GM-хоста — это прямо предусмотрено ADR 0018.
 Этот ADR фиксирует технические решения, не новые игровые правила. Его статус
 остаётся «предложено», пока сквозная реализация и независимые проверки не
 завершены. Наличие файла, SQL-таблицы или source assertion само по себе не
-означает готовность NET-форм. Публикация preliminary GM accept/reject и нового
-статуса заявки требует решения #177: существующие команды относятся к
-NET-021/022 и публикуют campaign copies, запрещённые срезом #171.
+означает готовность NET-форм. Принятая поставка #177 / ADR 0069 задаёт
+отдельные preliminary GM accept/reject и IN_REVIEW. Существующие команды
+NET-021/022 относятся к final admission и не переиспользуются для этой заявки.
 
 ## Две установки и один писатель кампании
 
@@ -200,7 +200,7 @@ CONNECT использует применимый NET-011; подробност�
 - Input lanes, local attempt/outbox, remote sessions/requests/receipts и их
   atomic writers; точный candidate validation contract.
 - Discovery, локальные NET projections/forms и источник допустимого GM ingress.
-- Решение #177 и нормативная поставка preliminary GM decisions.
+- Полное исполнение предварительных GM решений по поставленному ADR 0069.
 - Два настоящих Node/SQLite и browser contexts; fault injection до/после remote
   commit; reset/foreign owner/key/stale payload; ноль copies/capacity mutation;
   независимый полный verify и production E2E на итоговом committed SHA.
@@ -209,8 +209,9 @@ CONNECT использует применимый NET-011; подробност�
 
 ## Уточнения прикладной реализации после #182
 
-Этот раздел уточняет предложенный технический контракт, а не принимает #177.
-Предварительные GM commands, IN_REVIEW и NET-017 остаются неподтверждёнными.
+Этот раздел уточняет технический контракт player runtime. Нормативные
+preliminary GM commands и IN_REVIEW теперь поставлены отдельно в ADR 0069;
+готовность их приложения подтверждается проверками полного #171.
 
 До подтверждённого OPEN параметр Atlas route `:campaignId` несёт отдельный
 executor-assigned namespace `unbound:<networkScopeId>`. Он не является campaign
@@ -287,8 +288,10 @@ Host pin имеет ключ ownerDeviceId+campaignId, независимо от
 Редактирование адреса не сбрасывает известный ключ. First-use pin фиксируется
 до `confirmHostPin` и первого RPC. Immutable campaign birth baseline, текущий
 artifact manifest и pinned candidate baseline остаются разными фактами;
-неизвестная смена baseline отклоняется. Возможная будущая Atlas-only поставка
-требует отдельного точного compatibility proof, без переписывания birth/bytes.
+неизвестная смена baseline отклоняется. Совместимость конкретной B0/B1 пары
+разрешает только loader-owned resolver ADR 0068 с полным source seal;
+SQL callback синхронно проверяет обе сохранённые версии. Browser не выдаёт
+compatibility boolean, исходные birth/bytes не переписываются.
 
 Публикация CREATE с host configuration является явным выбором этого owner
 размещать кампанию. После restart перечисляются все actual owner-valid PAUSED
@@ -334,3 +337,88 @@ QR из локального файла декодируется существ�
 это бюджет чтения изображения, не правило арта. Bitmap закрывается и поздний
 результат после unmount отбрасывается. QR только заполняет собственный draft;
 OPEN остаётся отдельным действием, Origin/history browser не меняются.
+
+## Предварительное GM review и технический QUEUE cursor
+
+Atlas 1.6 / ADR 0069 задаёт две отдельные команды: ACCEPT-TO-REVIEW переводит
+PENDING → IN_REVIEW; REJECT переводит PENDING или IN_REVIEW → REJECTED с
+непустой причиной. Отмена владельцем допустима только из PENDING. Порядок
+транзакций решает гонку CANCEL и GM decision: проигравшая команда получает
+отказ и актуальное состояние, а не поддельную квитанцию успешной отмены.
+Решение не создаёт campaign copy, admitted seat, reservation или Start.
+
+Forward migration 0011 не меняет bytes 0009/0010, CREATE или SUBMIT. Она
+добавляет отдельные журналы GM view, решений, lane provenance и local current.
+Существующий campaign cursor получает закрытый kind QUEUE для NET-017 и
+его safe return CMP-006. Это технический view head, а не новый campaign
+checkpoint: birth CREATE receipt, campaign rows и revisions остаются прежними.
+Первый вход проверяет собственную PAUSED campaign по её actual CREATE origin;
+этот узкий ingress не вводит универсальное игровое правило для всех решений.
+
+QUEUE проверяется по последовательности NAV, DRAFT, REQUEST_REFRESH и
+CONNECTION_REFRESH. NAV и connection refresh повышают только P; изменение
+confirmed selection/reason и новое решение повышают S/P. Request queue revision
+отдельно учитывает SUBMIT, CANCEL, decision и однократное legacy lane enrichment.
+Исторические NAV/draft/decision receipts возвращаются с текущим head без rewind.
+Перед явной публикацией reconnect/command/NAV/draft host отдельно фиксирует
+изменившийся authenticated connection snapshot как P-only event, даже если
+браузерный watcher отсутствовал. Сам read-only projector ничего не записывает;
+неизменный snapshot не создаёт новый event или revision.
+CANCELLED исключается из текущих строк, очищает selected request и reason,
+но сохраняет всю историю. Смена выбранной заявки тоже очищает прежнюю причину.
+
+Authority связывает exact owning local GM context, installation owner,
+master profile/revision, private campaign owner и CREATE proof. Последний
+active context pointer не заменяет эту связь. Campaign runtime, GM commands,
+NAV и технический refresh используют одну host очередь; после каждого await
+контекст и владение проверяются заново. Transaction callbacks синхронны,
+read-only и обязаны вернуть undefined; false, Promise, SQL write или изменение
+source отклоняются. Request/candidate доказательства перепроверяются до commit,
+включая полный creation replay и строгий baseline resolver, а current checkpoint
+проверяется отдельно от неизменяемого birth anchor.
+
+NET-017 имеет ровно 12 source fields и отдельный GM transport scope с
+campaignId + gmLocalContextId; фиктивные player context/controllerSeat в него
+не добавляются. Каждая batch summary показывает checksum точных canonical
+export bytes, включая checksum member и завершающий LF: descriptor.exportBytesSha256.
+Приватный witness, ключ, verifier и internal rules в projection не передаются.
+Решение имеет закрытый 14-field receipt; original applied facts отделены от
+current request/view. Прежде чем transaction завершится, будущие browser и
+private peer ответы кодируются целиком с действующими byte limits.
+
+## Legacy input lane и доставка владельцу
+
+Новый prepared batch schemaVersion 2 хранит actual owned local tab ID вместе
+с исходной заявкой. Старый SUBMIT остаётся побайтово неизменным. Для него
+добавлена восьмая закрытая private operation DEVICE_REQUEST_BIND_LANE в
+существующем private schema 1, без новой outer protocolVersion. Local bridge
+доказывает origin через исходные retained applicationEntry и SUBMIT INTENT;
+текущий browser tab после crash gap не заменяет исходную lane. Если этот
+origin недоказуем, применяется явный отказ, а не придуманный UUID.
+
+BIND получает отдельные durable intent/receipt и sidecar ACK. Receiver проверяет
+тот же authenticated key, owner, campaign, session, original SUBMIT и batch
+hash. Это owner-host attestation; receiver не заявляет доступ к чужой SQLite.
+Один request связывается с одной lane: иная повторная привязка запрещена.
+Request revision при enrichment не меняется. При одинаковой request revision
+решения обязаны совпадать точно; единственное отдельное продвижение provenance
+null → BIND_LANE допускается только через matching original local BIND ACK.
+Generic current refresh не имеет такого исключения. Потерянный первый ACK
+восстанавливает исходные IDs; поздний ACK после CANCEL не оживляет заявку.
+
+Private RECOVER остаётся read-only по семантике заявки и возвращает immutable
+SUBMIT/CANCEL receipt отдельно от verified current proof. Local REQUEST_ADVANCE
+и CANCEL_SETTLE сверяют полный event identity до no-op/replay; другое proof,
+event/receipt ID или expected vector не подменяет известный event. Если CANCEL
+проиграл решению, original outbox сохраняется, explicit settlement завершает
+его без fake CANCEL ACK. Более позднее состояние применяется отдельным событием.
+
+Хост использует actual authenticated registered channels для connection status;
+одного совпадения device UUID недостаточно. Bounded periodic recovery доставляет
+изменение только владельцу текущей NET-005. Browser получает existing v2 snapshot
+с отдельными network-owner-view / network-gm-view correlations, без NAV и без
+новой authority. Push сохраняет pending commands/drafts. Явные решения идут
+через v1 workflow envelope, editable GM draft — отдельный закрытый v3 message.
+Reconnect повторяет исходный неподтверждённый intent, а original receipt всегда
+сопровождается актуальным verified view. Выход, потеря доверия и shutdown
+отзывают subscription; protocol errors не раскрывают приватные source values.

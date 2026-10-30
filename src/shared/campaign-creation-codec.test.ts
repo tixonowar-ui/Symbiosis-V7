@@ -326,3 +326,41 @@ describe('closed campaign wire v3 contract', () => {
     expect(JSON.stringify(failed)).not.toContain(secret);
   });
 });
+
+describe('GM request-review capabilities on the existing campaign resume envelope', () => {
+  it('carries CREATE and the two preliminary GM IDs without adding a player seat or changing protocol', () => {
+    const value: CampaignLocalContextResumeV3Message = {
+      ...resume,
+      supportedWorkflowCommandIds: [
+        'UI-CMD-CAMPAIGN-CREATE',
+        'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+        'UI-CMD-DEVICE-REQUEST-REJECT',
+      ],
+      unacknowledgedCommandIds: ['original:create', 'original:decision'],
+    };
+    expect(decodeClient(value)).toEqual({ ok: true, value });
+    expect(encodeClientMessageV3(value, vocabulary).ok).toBe(true);
+    // Capability advertisement is forward-compatible; runtime still intersects implemented family guards.
+    expect(
+      decodeClient({
+        ...value,
+        supportedWorkflowCommandIds: [...value.supportedWorkflowCommandIds, 'UI-CMD-FUTURE-GM'],
+      }).ok,
+    ).toBe(true);
+    for (const change of [
+      {
+        supportedWorkflowCommandIds: [
+          ...value.supportedWorkflowCommandIds,
+          value.supportedWorkflowCommandIds[1],
+        ],
+      },
+      { supportedWorkflowCommandIds: ['UI-CMD-lowercase'] },
+      { unacknowledgedCommandIds: ['same', 'same'] },
+      { networkScopeId: CONTEXT },
+      { controllerSeat: CONTEXT },
+      { sourceFormId: 'NET-017' },
+      { protocolVersion: 2 },
+    ])
+      expect(decodeClient({ ...value, ...change }).ok).toBe(false);
+  });
+});

@@ -2,14 +2,21 @@ import { Buffer } from 'node:buffer';
 import type {
   NetworkSessionConfirmation,
   NetworkRequestConfirmation,
+  PeerLaneBindingReceipt,
+  VerifiedRequestReviewProof,
 } from '../persistence/network-local-application.js';
+import type { NetworkGmRequestDecisionReceipt } from '../shared/network-application.js';
 import type { DeviceAdmissionPeerCommand } from './device-admission-peer-commands.js';
 import { CAMPAIGN_PEER_CHANNEL_MAX_BYTES } from './campaign-peer-channel.js';
-import { canonicalPostSaveJson } from './local-character-export.js';
+import { canonicalPostSaveJson, postSaveSha256 } from './local-character-export.js';
 
 export type PeerSessionHeader = NetworkSessionConfirmation;
 export type PeerRequestHeader = NetworkRequestConfirmation;
+export type PeerRequestReviewHeader = Omit<PeerRequestHeader, 'status'> & {
+  readonly status: 'PENDING' | 'IN_REVIEW' | 'REJECTED' | 'CANCELLED';
+};
 export type DeviceAdmissionPeerReceipt =
+  | PeerLaneBindingReceipt
   | {
       readonly operation: 'OPEN';
       readonly commandId: string;
@@ -26,7 +33,12 @@ export type DeviceAdmissionPeerReceipt =
     };
 export type DeviceAdmissionPeerCurrent =
   | { readonly kind: 'SESSION'; readonly session: PeerSessionHeader }
-  | { readonly kind: 'REQUEST'; readonly request: PeerRequestHeader };
+  | { readonly kind: 'REQUEST'; readonly request: PeerRequestHeader }
+  | {
+      readonly kind: 'REQUEST_REVIEW';
+      readonly request: PeerRequestReviewHeader;
+      readonly proof: VerifiedRequestReviewProof;
+    };
 export const DEVICE_ADMISSION_PEER_REFUSAL_CODES = [
   'INVALID_COMMAND',
   'UNAVAILABLE',
@@ -107,6 +119,7 @@ const operations: readonly Operation[] = [
   'DEVICE_REQUEST_BEGIN',
   'DEVICE_REQUEST_CHUNK',
   'DEVICE_REQUEST_COMMIT',
+  'DEVICE_REQUEST_BIND_LANE',
 ];
 function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return fail();
@@ -191,9 +204,258 @@ function request(value: unknown): PeerRequestHeader {
     closureOrNull,
   });
 }
+function list(value: unknown, minimum: number, maximum: number): unknown[] {
+  if (
+    !Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Array.prototype ||
+    value.length < minimum ||
+    value.length > maximum
+  )
+    return fail();
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  if (Reflect.ownKeys(value).length !== value.length + 1) return fail();
+  return Array.from({ length: value.length }, (_, index) => {
+    const item = descriptors[String(index)];
+    if (item === undefined || !item.enumerable || !Object.hasOwn(item, 'value')) return fail();
+    return item.value as unknown;
+  });
+}
+function laneReceipt(value: unknown): PeerLaneBindingReceipt {
+  const r = record(value, ['operation', 'commandId', 'receiptId', 'semanticBodySha256', 'binding']);
+  if (r['operation'] !== 'BIND_LANE') return fail();
+  const b = record(r['binding'], [
+    'campaignId',
+    'requestOwnerDeviceId',
+    'requestId',
+    'technicalSessionId',
+    'submitCommandId',
+    'batchSha256',
+    'localControllerSeatId',
+  ]);
+  const binding = Object.freeze({
+    campaignId: uuid(b['campaignId']),
+    requestOwnerDeviceId: uuid(b['requestOwnerDeviceId']),
+    requestId: uuid(b['requestId']),
+    technicalSessionId: uuid(b['technicalSessionId']),
+    submitCommandId: text(b['submitCommandId']),
+    batchSha256: hash(b['batchSha256']),
+    localControllerSeatId: uuid(b['localControllerSeatId']),
+  });
+  const commandId = text(r['commandId']),
+    receiptId = text(r['receiptId']);
+  const command = {
+    schemaVersion: 1,
+    operation: 'DEVICE_REQUEST_BIND_LANE',
+    commandId,
+    requestId: binding.requestId,
+    technicalSessionId: binding.technicalSessionId,
+    submitCommandId: binding.submitCommandId,
+    batchSha256: binding.batchSha256,
+    localControllerSeatId: binding.localControllerSeatId,
+  };
+  if (
+    new Set([
+      commandId,
+      binding.requestId,
+      binding.technicalSessionId,
+      binding.submitCommandId,
+      binding.localControllerSeatId,
+    ]).size !== 5 ||
+    commandId === receiptId ||
+    hash(r['semanticBodySha256']) !== postSaveSha256(canonicalPostSaveJson(command))
+  )
+    return fail();
+  return Object.freeze({
+    operation: 'BIND_LANE',
+    commandId,
+    receiptId,
+    semanticBodySha256: hash(r['semanticBodySha256']),
+    binding,
+  });
+}
+function reviewRequest(value: unknown): PeerRequestReviewHeader {
+  const r = record(value, [
+    'requestId',
+    'technicalSessionId',
+    'submitCommandId',
+    'submitReceiptId',
+    'requestRevision',
+    'status',
+    'batchSha256',
+    'closureOrNull',
+  ]);
+  const status = r['status'];
+  if (
+    status !== 'PENDING' &&
+    status !== 'IN_REVIEW' &&
+    status !== 'REJECTED' &&
+    status !== 'CANCELLED'
+  )
+    return fail();
+  return Object.freeze({ ...request({ ...r, status: 'PENDING' }), status });
+}
+function reviewProof(
+  value: unknown,
+): Extract<DeviceAdmissionPeerCurrent, { kind: 'REQUEST_REVIEW' }> {
+  const p = record(value, [
+    'submittedReceipt',
+    'cancelledReceiptOrNull',
+    'decisions',
+    'laneProvenance',
+  ]);
+  const submitted = receipt(p['submittedReceipt']);
+  if (submitted.operation !== 'SUBMIT' || submitted.request.requestRevision !== 0) return fail();
+  const used = new Set([submitted.commandId, submitted.receiptId]);
+  if (used.size !== 2) return fail();
+  let status: PeerRequestReviewHeader['status'] = 'PENDING',
+    revision = 0;
+  const decisions: NetworkGmRequestDecisionReceipt[] = [];
+  // #177 has at most ACCEPT-TO-REVIEW followed by REJECT; neither creates admission.
+  for (const item of list(p['decisions'], 0, 2)) {
+    const d = record(item, [
+      'receiptId',
+      'commandId',
+      'workflowCommandId',
+      'campaignId',
+      'requestId',
+      'requestOwnerDeviceId',
+      'beforeRequestStatus',
+      'afterRequestStatus',
+      'beforeRequestRevision',
+      'requestRevision',
+      'decisionReasonOrNull',
+      'candidateSnapshotChecksums',
+      'authoritativeGmActorId',
+      'timestamp',
+    ]);
+    const accept = d['workflowCommandId'] === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW';
+    const commandId = text(d['commandId']),
+      receiptId = text(d['receiptId']);
+    const snapshots = list(d['candidateSnapshotChecksums'], 1, 3).map(hash);
+    uuid(d['campaignId']);
+    uuid(d['requestOwnerDeviceId']);
+    text(d['authoritativeGmActorId']);
+    text(d['timestamp']);
+    if (
+      (!accept && d['workflowCommandId'] !== 'UI-CMD-DEVICE-REQUEST-REJECT') ||
+      used.has(commandId) ||
+      used.has(receiptId) ||
+      commandId === receiptId ||
+      d['requestId'] !== submitted.request.requestId ||
+      d['beforeRequestStatus'] !== status ||
+      integer(d['beforeRequestRevision']) !== revision ||
+      integer(d['requestRevision']) !== revision + 1 ||
+      (status !== 'PENDING' && status !== 'IN_REVIEW') ||
+      (accept && status !== 'PENDING') ||
+      d['afterRequestStatus'] !== (accept ? 'IN_REVIEW' : 'REJECTED') ||
+      (accept
+        ? d['decisionReasonOrNull'] !== null
+        : text(d['decisionReasonOrNull']).trim().length === 0)
+    )
+      return fail();
+    if (decisions.length !== 0) {
+      const first = decisions[0]!;
+      if (
+        d['campaignId'] !== first.campaignId ||
+        d['requestOwnerDeviceId'] !== first.requestOwnerDeviceId ||
+        canonicalPostSaveJson(snapshots) !== canonicalPostSaveJson(first.candidateSnapshotChecksums)
+      )
+        return fail();
+    }
+    used.add(commandId);
+    used.add(receiptId);
+    revision++;
+    status = accept ? 'IN_REVIEW' : 'REJECTED';
+    decisions.push(
+      Object.freeze({
+        ...d,
+        candidateSnapshotChecksums: Object.freeze(snapshots),
+      }) as unknown as NetworkGmRequestDecisionReceipt,
+    );
+  }
+  let cancelled: VerifiedRequestReviewProof['cancelledReceiptOrNull'] = null;
+  if (p['cancelledReceiptOrNull'] !== null) {
+    const c = receipt(p['cancelledReceiptOrNull']);
+    if (
+      c.operation !== 'CANCEL' ||
+      decisions.length !== 0 ||
+      c.request.requestRevision !== 1 ||
+      used.has(c.commandId) ||
+      used.has(c.receiptId) ||
+      c.commandId === c.receiptId ||
+      canonicalPostSaveJson({ ...c.request, requestRevision: 0, closureOrNull: null }) !==
+        canonicalPostSaveJson(submitted.request)
+    )
+      return fail();
+    cancelled = Object.freeze({ ...c, operation: 'CANCEL' });
+    used.add(c.commandId);
+    used.add(c.receiptId);
+    status = 'CANCELLED';
+    revision = 1;
+  }
+  let lane: VerifiedRequestReviewProof['laneProvenance'] = null;
+  if (p['laneProvenance'] !== null) {
+    const raw = p['laneProvenance'];
+    const kind =
+      raw !== null && typeof raw === 'object'
+        ? (Object.getOwnPropertyDescriptor(raw, 'kind')?.value as unknown)
+        : null;
+    if (kind === 'SUBMITTED_BATCH') {
+      const l = record(raw, ['kind', 'batchSha256', 'localControllerSeatId']);
+      if (hash(l['batchSha256']) !== submitted.request.batchSha256) return fail();
+      lane = Object.freeze({
+        kind,
+        batchSha256: hash(l['batchSha256']),
+        localControllerSeatId: uuid(l['localControllerSeatId']),
+      });
+    } else if (kind === 'BIND_LANE') {
+      const l = record(raw, ['kind', 'receipt']),
+        bound = laneReceipt(l['receipt']),
+        b = bound.binding;
+      if (
+        b.requestId !== submitted.request.requestId ||
+        b.technicalSessionId !== submitted.request.technicalSessionId ||
+        b.submitCommandId !== submitted.commandId ||
+        b.batchSha256 !== submitted.request.batchSha256 ||
+        used.has(bound.commandId) ||
+        used.has(bound.receiptId)
+      )
+        return fail();
+      for (const d of decisions)
+        if (d.campaignId !== b.campaignId || d.requestOwnerDeviceId !== b.requestOwnerDeviceId)
+          return fail();
+      lane = Object.freeze({ kind, receipt: bound });
+    } else return fail();
+  }
+  if (decisions.length !== 0 && lane === null) return fail();
+  const proof: VerifiedRequestReviewProof = Object.freeze({
+    submittedReceipt: Object.freeze({ ...submitted, operation: 'SUBMIT' }),
+    cancelledReceiptOrNull: cancelled,
+    decisions: Object.freeze(decisions),
+    laneProvenance: lane,
+  });
+  return Object.freeze({
+    kind: 'REQUEST_REVIEW',
+    proof,
+    request: Object.freeze({
+      ...submitted.request,
+      status,
+      requestRevision: revision,
+      closureOrNull: cancelled?.request.closureOrNull ?? null,
+    }),
+  });
+}
+/** Codec-only derivation; the caller still verifies the original owner, batch and authenticated channel. */
+export function deviceAdmissionRequestReviewCurrent(
+  proof: VerifiedRequestReviewProof,
+): Extract<DeviceAdmissionPeerCurrent, { kind: 'REQUEST_REVIEW' }> {
+  return reviewProof(proof);
+}
+
 function receipt(value: unknown): DeviceAdmissionPeerReceipt {
   if (value === null || typeof value !== 'object') return fail();
   const operation: unknown = Object.getOwnPropertyDescriptor(value, 'operation')?.value;
+  if (operation === 'BIND_LANE') return laneReceipt(value);
   if (operation === 'OPEN') {
     const r = record(value, [
         'operation',
@@ -244,6 +506,15 @@ function current(value: unknown): DeviceAdmissionPeerCurrent {
     const r = record(value, ['kind', 'session']);
     return Object.freeze({ kind, session: session(r['session']) });
   }
+  if (kind === 'REQUEST_REVIEW') {
+    const r = record(value, ['kind', 'request', 'proof']),
+      parsed = reviewProof(r['proof']);
+    if (
+      canonicalPostSaveJson(reviewRequest(r['request'])) !== canonicalPostSaveJson(parsed.request)
+    )
+      return fail();
+    return parsed;
+  }
   if (kind === 'REQUEST') {
     const r = record(value, ['kind', 'request']);
     return Object.freeze({ kind, request: request(r['request']) });
@@ -264,7 +535,18 @@ function paired(
       return fail();
     return;
   }
-  if (r.operation === 'OPEN' || c.kind !== 'REQUEST' || operation === 'DEVICE_REQUEST_CHUNK')
+  if (operation === 'DEVICE_REQUEST_BIND_LANE' || r.operation === 'BIND_LANE') {
+    if (
+      operation !== 'DEVICE_REQUEST_BIND_LANE' ||
+      r.operation !== 'BIND_LANE' ||
+      c.kind !== 'REQUEST_REVIEW' ||
+      c.proof.laneProvenance?.kind !== 'BIND_LANE' ||
+      canonicalPostSaveJson(c.proof.laneProvenance.receipt) !== canonicalPostSaveJson(r)
+    )
+      return fail();
+    return;
+  }
+  if (r.operation === 'OPEN' || c.kind === 'SESSION' || operation === 'DEVICE_REQUEST_CHUNK')
     return fail();
   if ((operation === 'DEVICE_REQUEST_CANCEL') !== (r.operation === 'CANCEL')) return fail();
   const previous = r.request,
@@ -278,7 +560,14 @@ function paired(
   ] as const)
     if (previous[key] !== latest[key]) return fail();
   if (latest.requestRevision < previous.requestRevision) return fail();
-  if (r.operation === 'CANCEL' && canonicalPostSaveJson(previous) !== canonicalPostSaveJson(latest))
+  if (c.kind === 'REQUEST_REVIEW') {
+    const original =
+      r.operation === 'SUBMIT' ? c.proof.submittedReceipt : c.proof.cancelledReceiptOrNull;
+    if (canonicalPostSaveJson(original) !== canonicalPostSaveJson(r)) return fail();
+  } else if (
+    r.operation === 'CANCEL' &&
+    canonicalPostSaveJson(previous) !== canonicalPostSaveJson(latest)
+  )
     return fail();
 }
 function response(value: unknown): DeviceAdmissionPeerResponse {

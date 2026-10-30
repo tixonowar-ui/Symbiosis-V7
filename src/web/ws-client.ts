@@ -1,4 +1,24 @@
 import {
+  networkGmRequestProjectionValue,
+  networkGmRequestDraftValues,
+  networkGmRequestDecisionReceiptValue,
+} from '@shared/network-application-codec.js';
+import type {
+  Net017Projection,
+  NetworkGmRequestDraftValues,
+  NetworkGmRequestDraftReplaceV3Message,
+  NetworkGmRequestDraftRefusal,
+  NetworkGmRequestDecisionReceipt,
+  NetworkGmAcceptToReviewPayload,
+  NetworkGmRejectRequestPayload,
+} from '@shared/network-application.js';
+import {
+  networkGmRequestDraftFromProjection,
+  networkGmAcceptToReviewPayload,
+  networkGmRejectRequestPayload,
+  type NetworkGmRequestEditState,
+} from './forms/net/network-application.js';
+import {
   CAMPAIGN_CREATE_ACTION_KEY,
   GM_CONTEXT_STORAGE_KEY,
   campaignCreateDestinationMatches,
@@ -22,6 +42,7 @@ import {
 } from '@shared/network-application.js';
 import {
   NETWORK_WORKFLOW_COMMAND_IDS,
+  NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
   NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
 } from '@shared/device-admission.js';
 import type {
@@ -424,6 +445,13 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     const definition = presentedFormDefinition(formId);
     if (definition === null || formType !== definition.type || routeTemplate !== definition.route)
       return false;
+    if (formId === 'NET-017')
+      return (
+        bindings.length === 1 &&
+        bindings[0]?.parameterIndex === 0 &&
+        bindings[0].source === 'inherited' &&
+        UUID_PATTERN.test(bindings[0].value)
+      );
     if ((NETWORK_APPLICATION_FORM_IDS as readonly string[]).includes(formId)) {
       const binding = bindings[0];
       if (bindings.length !== 1 || binding?.parameterIndex !== 0 || binding.source !== 'inherited')
@@ -474,6 +502,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
     (NETWORK_WORKFLOW_COMMAND_IDS as readonly string[]).includes(value) ||
+    (NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS as readonly string[]).includes(value) ||
     value === CAMPAIGN_CREATE_COMMAND_ID ||
     value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID ||
     value === SET_DECIDE_WORKFLOW_COMMAND_ID ||
@@ -1837,6 +1866,7 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  replaceNetworkGmRequestDraft(values: NetworkGmRequestDraftValues): FormActionRequestResult;
   replaceNetworkDraft(edit: NetworkEdit): FormActionRequestResult;
   setNetworkInputPending(pending: boolean): void;
   chooseLocalRole(role: 'player' | 'gm'): FormActionRequestResult;
@@ -4105,7 +4135,7 @@ function decodeConfirmedSnapshot(
   const expectedRole =
     base.formId === 'APP-001'
       ? null
-      : isCampaignCreationForm(base.formId)
+      : base.formId === 'NET-017' || isCampaignCreationForm(base.formId)
         ? 'gm'
         : base.formId === 'APP-010' &&
             base.roleFilteredPayload['ownerContext'] === 'GM_ARCHIVE_EXPORT'
@@ -4116,11 +4146,36 @@ function decodeConfirmedSnapshot(
   }
   if (
     message.projectionRole !== 'gm' &&
-    executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID)
+    (executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
+      NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((id) =>
+        executableWorkflowCommandIds.includes(id),
+      ))
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (isNetworkApplicationForm(base.formId)) {
+  if (base.formId === 'NET-017') {
+    const p = gmRequestProjection(base.roleFilteredPayload);
+    if (p === null) return unrecognized('$.presentation.base.roleFilteredPayload', null);
+    if (
+      message.presentation.layers.length !== 0 ||
+      base.routeBindings.length !== 1 ||
+      base.routeBindings[0]?.parameterIndex !== 0 ||
+      base.routeBindings[0].source !== 'inherited' ||
+      base.routeBindings[0].value !== p.campaignId ||
+      message.revisions.stateRevision !== p.stateRevision ||
+      message.revisions.projectionRevision !== p.projectionRevision ||
+      message.revisions.actorVisibilityRevision !== 0 ||
+      p.projectionRevision < p.stateRevision
+    )
+      return unrecognized('$.revisions', null);
+    const actions = exactSymbiontActionKeys(
+      base.availableActionKeys,
+      expectedGmRequestActions(p, executableWorkflowCommandIds),
+      '$.presentation.base.availableActionKeys',
+    );
+    if (!actions.ok) return actions;
+    projection = { ok: true, value: p };
+  } else if (isNetworkApplicationForm(base.formId)) {
     projection = decodeNetworkProjection(
       base.roleFilteredPayload,
       '$.presentation.base.roleFilteredPayload',
@@ -4160,8 +4215,7 @@ function decodeConfirmedSnapshot(
         base.formId === 'APP-011'
           ? message.revisions.stateRevision !== 0 || message.revisions.actorVisibilityRevision !== 0
           : base.formId === 'CMP-006'
-            ? message.revisions.stateRevision !== 0 ||
-              message.revisions.projectionRevision !== 0 ||
+            ? message.revisions.projectionRevision < message.revisions.stateRevision ||
               message.revisions.actorVisibilityRevision !== 0
             : p['draftRevision'] !== message.revisions.stateRevision ||
               message.revisions.projectionRevision < message.revisions.stateRevision ||
@@ -4182,7 +4236,9 @@ function decodeConfirmedSnapshot(
         return unrecognized('$.presentation.base.routeBindings', null);
       const actions = exactSymbiontActionKeys(
         base.availableActionKeys,
-        expectedCampaignActions(base.formId, p, executableWorkflowCommandIds),
+        base.formId === 'CMP-006'
+          ? ['CMP-006::CTA::002']
+          : expectedCampaignActions(base.formId, p, executableWorkflowCommandIds),
         '$.presentation.base.availableActionKeys',
       );
       if (!actions.ok) return actions;
@@ -5463,6 +5519,39 @@ function decodeFormActionSnapshot(
   }
   if (message.presentation.assignment.reason !== 'FORM_ACTION') {
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
+  }
+  if (
+    (previous.formId === 'CMP-006' && pending.actionKey === 'CMP-006::CTA::002') ||
+    (previous.formId === 'NET-017' && pending.actionKey === 'NET-017::CTA::009')
+  ) {
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    const target = previous.formId === 'CMP-006' ? 'NET-017' : 'CMP-006';
+    if (
+      pending.sourceFormId !== previous.formId ||
+      decoded.value.formId !== target ||
+      !gmQueueMonotonic(decoded.value, previous) ||
+      decoded.value.revisions.projectionRevision < previous.revisions.projectionRevision + 1
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', null);
+    if (previous.formId === 'CMP-006') {
+      const p = gmRequestProjection(decoded.value.projection);
+      if (
+        p === null ||
+        p.returnContext.originFormId !== 'CMP-006' ||
+        p.returnContext.creationReceiptId !== previous.projection['creationReceiptId']
+      )
+        return unrecognized('$.returnContext', null);
+    } else {
+      const p = gmRequestProjection(previous.projection);
+      if (
+        p === null ||
+        p.returnContext.originFormId !== 'CMP-006' ||
+        decoded.value.projection['creationReceiptId'] !== p.returnContext.creationReceiptId
+      )
+        return unrecognized('$.returnContext', null);
+    }
+    return decoded;
   }
   if (
     isNetworkApplicationForm(previous.formId) ||
@@ -8311,6 +8400,265 @@ function rollCommitPayload(
   throw new Error(`ROLL-COMMIT is unavailable on ${snapshot.formId}`);
 }
 
+type NetworkGmDecisionRequest =
+  | WorkflowCommandRequestMessage<
+      'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+      NetworkGmAcceptToReviewPayload
+    >
+  | WorkflowCommandRequestMessage<'UI-CMD-DEVICE-REQUEST-REJECT', NetworkGmRejectRequestPayload>;
+export interface NetworkGmRequestDraftClientState extends NetworkGmRequestEditState {
+  readonly lastRefusal: NetworkGmRequestDraftRefusal | null;
+}
+function gmRequestProjection(p: JsonObject): Net017Projection | null {
+  try {
+    return networkGmRequestProjectionValue(p);
+  } catch {
+    return null;
+  }
+}
+function expectedGmRequestActions(
+  p: Net017Projection,
+  caps: readonly WorkflowCommandId[],
+): readonly ActionKey[] {
+  if (p.commandId !== null) return [];
+  return [
+    ...(caps.includes('UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW') &&
+    networkGmAcceptToReviewPayload(p) !== null
+      ? ['NET-017::CTA::007' as const]
+      : []),
+    ...(caps.includes('UI-CMD-DEVICE-REQUEST-REJECT') && networkGmRejectRequestPayload(p) !== null
+      ? ['NET-017::CTA::008' as const]
+      : []),
+    'NET-017::CTA::009',
+  ];
+}
+function gmQueueScope(
+  s: ConfirmedProjectionSnapshot,
+): { contextId: string; campaignId: string } | null {
+  const contextId =
+    s.formId === 'NET-017'
+      ? s.projection['contextId']
+      : s.formId === 'CMP-006'
+        ? s.projection['gmLocalContextId']
+        : null;
+  const campaignId = s.projection['campaignId'];
+  return typeof contextId === 'string' && typeof campaignId === 'string'
+    ? { contextId, campaignId }
+    : null;
+}
+function gmQueueMonotonic(
+  next: ConfirmedProjectionSnapshot,
+  previous: ConfirmedProjectionSnapshot,
+): boolean {
+  const a = gmQueueScope(next),
+    b = gmQueueScope(previous);
+  if (
+    a === null ||
+    b === null ||
+    a.contextId !== b.contextId ||
+    a.campaignId !== b.campaignId ||
+    next.revisions.actorVisibilityRevision !== previous.revisions.actorVisibilityRevision ||
+    next.revisions.stateRevision < previous.revisions.stateRevision ||
+    next.revisions.projectionRevision < previous.revisions.projectionRevision
+  )
+    return false;
+  if (next.formId === 'NET-017' && previous.formId === 'NET-017') {
+    const n = gmRequestProjection(next.projection),
+      p = gmRequestProjection(previous.projection);
+    if (
+      n === null ||
+      p === null ||
+      n.requestQueueRevision < p.requestQueueRevision ||
+      !sameJson(n.returnContext, p.returnContext)
+    )
+      return false;
+    for (const old of p.requests) {
+      const row = n.requests.find((r) => r.requestId === old.requestId);
+      if (row === undefined) {
+        if (n.requestQueueRevision === p.requestQueueRevision) return false;
+        continue;
+      }
+      if (
+        row.requestOwnerDeviceId !== old.requestOwnerDeviceId ||
+        row.requestRevision < old.requestRevision ||
+        row.requestedCandidateCount !== old.requestedCandidateCount ||
+        !sameJson(row.batchCharacterSummaries, old.batchCharacterSummaries)
+      )
+        return false;
+      if (
+        row.requestRevision === old.requestRevision &&
+        (row.requestStatus !== old.requestStatus ||
+          row.decisionReceiptIdOrNull !== old.decisionReceiptIdOrNull ||
+          row.gmMessageOrNull !== old.gmMessageOrNull)
+      )
+        return false;
+    }
+    if (
+      n.requestQueueRevision === p.requestQueueRevision &&
+      n.requests.some((row) => !p.requests.some((old) => old.requestId === row.requestId))
+    )
+      return false;
+    if (sameCampaignRevisions(next.revisions, previous.revisions) && !sameJson(n, p)) return false;
+  }
+  if (
+    next.formId === 'CMP-006' &&
+    previous.formId === 'CMP-006' &&
+    !sameGmCampaignBirth(next.projection, previous.projection)
+  )
+    return false;
+  return true;
+}
+function sameGmCampaignBirth(a: JsonObject, b: JsonObject): boolean {
+  const { hostBindRecovery: _oldRecovery, ...old } = a,
+    { hostBindRecovery: _nextRecovery, ...next } = b;
+  return sameJson(old, next);
+}
+function gmDecisionReceipt(
+  value: CommandReceipt<JsonObject>,
+  request: NetworkGmDecisionRequest,
+  source: ConfirmedProjectionSnapshot,
+): DecodeResult<CommandReceipt<NetworkGmRequestDecisionReceipt>> {
+  const p = gmRequestProjection(source.projection),
+    row = p?.requests.find((r) => r.requestId === request.payload.requestId);
+  if (p === null || row === undefined) return unrecognized('$.receipt.result', null);
+  let result: NetworkGmRequestDecisionReceipt;
+  try {
+    result = networkGmRequestDecisionReceiptValue(value.result, row.batchCharacterSummaries);
+  } catch {
+    return unrecognized('$.receipt.result', null);
+  }
+  if (
+    value.commandId !== request.commandId ||
+    value.receiptId !== result.receiptId ||
+    result.commandId !== request.commandId ||
+    result.workflowCommandId !== request.workflowCommandId ||
+    result.campaignId !== request.payload.campaignId ||
+    result.requestId !== request.payload.requestId ||
+    result.requestOwnerDeviceId !== row.requestOwnerDeviceId ||
+    result.beforeRequestStatus !== row.requestStatus ||
+    result.beforeRequestRevision !== request.payload.requestRevision ||
+    (request.workflowCommandId === 'UI-CMD-DEVICE-REQUEST-REJECT' &&
+      result.decisionReasonOrNull !== request.payload.reason) ||
+    !sameCampaignRevisions(value.revisions, {
+      stateRevision: request.expectedRevisions.stateRevision + 1,
+      projectionRevision: request.expectedRevisions.projectionRevision + 1,
+      actorVisibilityRevision: request.expectedRevisions.actorVisibilityRevision,
+    })
+  )
+    return unrecognized('$.receipt', null);
+  return { ok: true, value: { ...value, result } };
+}
+function gmDecisionDestination(
+  next: ConfirmedProjectionSnapshot,
+  source: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt<NetworkGmRequestDecisionReceipt>,
+  _replay: boolean,
+): boolean {
+  if (
+    !gmQueueMonotonic(next, source) ||
+    next.revisions.stateRevision < receipt.revisions.stateRevision ||
+    next.revisions.projectionRevision < receipt.revisions.projectionRevision
+  )
+    return false;
+  const old = gmRequestProjection(source.projection);
+  if (old === null) return false;
+  if (next.formId === 'CMP-006')
+    return (
+      old.returnContext.originFormId === 'CMP-006' &&
+      next.projection['creationReceiptId'] === old.returnContext.creationReceiptId
+    );
+  const p = gmRequestProjection(next.projection),
+    row = p?.requests.find((r) => r.requestId === receipt.result.requestId);
+  if (
+    p === null ||
+    row === undefined ||
+    p.requestQueueRevision < old.requestQueueRevision + 1 ||
+    row.requestOwnerDeviceId !== receipt.result.requestOwnerDeviceId ||
+    row.requestRevision < receipt.result.requestRevision
+  )
+    return false;
+  if (row.requestRevision === receipt.result.requestRevision)
+    return (
+      row.requestStatus === receipt.result.afterRequestStatus &&
+      row.decisionReceiptIdOrNull === receipt.receiptId &&
+      row.gmMessageOrNull === receipt.result.decisionReasonOrNull
+    );
+  return (
+    receipt.result.afterRequestStatus === 'IN_REVIEW' &&
+    row.requestStatus === 'REJECTED' &&
+    row.requestRevision === receipt.result.requestRevision + 1 &&
+    row.decisionReceiptIdOrNull !== null &&
+    row.gmMessageOrNull !== null &&
+    row.gmMessageOrNull.trim().length > 0
+  );
+}
+function gmCampaignCreateDestination(
+  next: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt<CampaignCreateResult>,
+): boolean {
+  const r = receipt.result;
+  if (next.formId === 'CMP-006')
+    return (
+      campaignCreateDestinationMatches(next.formId, next.projection, r.targetRevisions, receipt) &&
+      next.revisions.stateRevision >= r.targetRevisions.stateRevision &&
+      next.revisions.projectionRevision >= r.targetRevisions.projectionRevision &&
+      next.revisions.actorVisibilityRevision === r.targetRevisions.actorVisibilityRevision
+    );
+  const p = next.formId === 'NET-017' ? gmRequestProjection(next.projection) : null;
+  return (
+    p !== null &&
+    p.contextId === r.gmLocalContextId &&
+    p.campaignId === r.campaignId &&
+    p.returnContext.originFormId === 'CMP-006' &&
+    p.returnContext.creationReceiptId === receipt.receiptId &&
+    next.revisions.stateRevision >= receipt.revisions.stateRevision &&
+    next.revisions.projectionRevision >= receipt.revisions.projectionRevision &&
+    next.revisions.actorVisibilityRevision === receipt.revisions.actorVisibilityRevision
+  );
+}
+function ownerRequestPush(
+  next: ConfirmedProjectionSnapshot,
+  old: ConfirmedProjectionSnapshot,
+): boolean {
+  if (next.formId !== 'NET-005' || old.formId !== 'NET-005') return false;
+  const n = next.projection,
+    p = old.projection;
+  for (const key of [
+    'deviceId',
+    'networkScopeId',
+    'contextId',
+    'controllerSeat',
+    'campaignIdOrNull',
+    'sessionId',
+    'requestId',
+    'requestOwnerDeviceId',
+    'batchCharacterSummaries',
+  ] as const)
+    if (!sameJson(n[key] ?? null, p[key] ?? null)) return false;
+  if (
+    next.revisions.actorVisibilityRevision !== old.revisions.actorVisibilityRevision ||
+    next.revisions.stateRevision < old.revisions.stateRevision ||
+    next.revisions.projectionRevision < old.revisions.projectionRevision ||
+    typeof n['requestRevision'] !== 'number' ||
+    typeof p['requestRevision'] !== 'number' ||
+    n['requestRevision'] < p['requestRevision']
+  )
+    return false;
+  const before = p['requestStatus'],
+    after = n['requestStatus'];
+  if (sameCampaignRevisions(next.revisions, old.revisions) && !sameJson(n, p)) return false;
+  if (n['requestRevision'] === p['requestRevision'])
+    return after === before && n['gmMessage'] === p['gmMessage'];
+  return (
+    (before === 'PENDING' &&
+      ((after === 'IN_REVIEW' && n['requestRevision'] === p['requestRevision'] + 1) ||
+        (after === 'REJECTED' && n['requestRevision'] <= p['requestRevision'] + 2))) ||
+    (before === 'IN_REVIEW' &&
+      after === 'REJECTED' &&
+      n['requestRevision'] === p['requestRevision'] + 1)
+  );
+}
+
 export function connectProjection(
   onState: (state: WebClientState) => void,
   onIdentityDraft: (state: IdentityDraftClientState | null) => void = () => {},
@@ -8330,6 +8678,7 @@ export function connectProjection(
   onPostSaveCommitted: (value: PostSaveCommandResult) => void = () => {},
   onCampaignDraft: (value: CampaignDraftClientState | null) => void = () => {},
   onNetworkDraft: (value: NetworkDraftClientState | null) => void = () => {},
+  onNetworkGmRequestDraft: (value: NetworkGmRequestDraftClientState | null) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -8338,6 +8687,75 @@ export function connectProjection(
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
   let gmLocalContextId: string | null = null;
   let networkScopeId: string | null = null;
+  let gmEdit: NetworkGmRequestDraftValues | null = null;
+  let gmEditVersion = 0;
+  let gmDraftRefusal: NetworkGmRequestDraftRefusal | null = null;
+  let gmTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingGmDraft: {
+    request: NetworkGmRequestDraftReplaceV3Message;
+    editVersion: number;
+  } | null = null;
+  let pendingGmCommand: {
+    request: NetworkGmDecisionRequest;
+    receipt: CommandReceipt<NetworkGmRequestDecisionReceipt> | null;
+    source: ConfirmedProjectionSnapshot;
+    replay: boolean;
+  } | null = null;
+  let pendingGmRefusal: {
+    request: NetworkGmDecisionRequest;
+    source: ConfirmedProjectionSnapshot;
+    refusal: CommandRefusalMessage;
+  } | null = null;
+  const gmQueueHeads = new Map<
+    string,
+    { revisions: RevisionVector; queueRevision: number | null; birth: JsonObject | null }
+  >();
+  const ownGmQueue = (next: ConfirmedProjectionSnapshot): boolean => {
+    const scope = gmQueueScope(next);
+    if (scope === null || scope.contextId !== gmLocalContextId) return false;
+    const key = JSON.stringify(scope),
+      old = gmQueueHeads.get(key),
+      p = next.formId === 'NET-017' ? gmRequestProjection(next.projection) : null;
+    if (next.formId === 'CMP-006' && next.projection['hostDeviceId'] !== deviceId) return false;
+    if (
+      old !== undefined &&
+      (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).some(
+        (axis) => next.revisions[axis] < old.revisions[axis],
+      )
+    )
+      return false;
+    if (
+      old?.queueRevision !== null &&
+      old?.queueRevision !== undefined &&
+      p !== null &&
+      p.requestQueueRevision < old.queueRevision
+    )
+      return false;
+    if (old?.birth !== null && old?.birth !== undefined) {
+      if (next.formId === 'CMP-006' && !sameGmCampaignBirth(old.birth, next.projection))
+        return false;
+      if (
+        p !== null &&
+        p.returnContext.originFormId === 'CMP-006' &&
+        p.returnContext.creationReceiptId !== old.birth['creationReceiptId']
+      )
+        return false;
+    }
+    return true;
+  };
+  const rememberGmQueue = (next: ConfirmedProjectionSnapshot): void => {
+    const scope = gmQueueScope(next);
+    if (scope === null) return;
+    const key = JSON.stringify(scope),
+      old = gmQueueHeads.get(key),
+      p = next.formId === 'NET-017' ? gmRequestProjection(next.projection) : null;
+    gmQueueHeads.set(key, {
+      revisions: next.revisions,
+      queueRevision: p?.requestQueueRevision ?? old?.queueRevision ?? null,
+      birth: next.formId === 'CMP-006' ? next.projection : (old?.birth ?? null),
+    });
+  };
+
   let contextChoiceRequired = false;
   let networkEdit: NetworkEdit | null = null;
   let networkEditVersion = 0;
@@ -8395,6 +8813,9 @@ export function connectProjection(
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
+    pendingGmDraft !== null ||
+    pendingGmCommand !== null ||
+    pendingGmRefusal !== null ||
     pendingNetworkDraft !== null ||
     pendingNetworkCommand !== null ||
     pendingNetworkRefusal !== null ||
@@ -8428,6 +8849,11 @@ export function connectProjection(
       skillCardDraft,
       manualCompositionDraft,
     );
+    if (snapshot.formId === 'NET-017')
+      return {
+        ...visible,
+        availableActionKeys: pending || gmEdit !== null ? [] : visible.availableActionKeys,
+      };
     if (isNetworkApplicationForm(snapshot.formId))
       return {
         ...visible,
@@ -8503,6 +8929,85 @@ export function connectProjection(
     networkInputPending = false;
     networkRefusal = null;
   };
+  const publishGmDraft = () => {
+    const p =
+      lastSnapshot?.formId === 'NET-017' ? gmRequestProjection(lastSnapshot.projection) : null;
+    onNetworkGmRequestDraft(
+      p === null
+        ? null
+        : {
+            values: gmEdit ?? networkGmRequestDraftFromProjection(p),
+            dirty: gmEdit !== null,
+            pending:
+              pendingGmDraft !== null || pendingGmCommand !== null || pendingGmRefusal !== null,
+            lastRefusal: gmDraftRefusal,
+          },
+    );
+  };
+  const clearGmDraft = () => {
+    if (gmTimer !== null) clearTimeout(gmTimer);
+    gmTimer = null;
+    gmEdit = null;
+    pendingGmDraft = null;
+    gmDraftRefusal = null;
+  };
+  const discardDisconnectedGmInput = () => {
+    if (gmTimer !== null) clearTimeout(gmTimer);
+    gmTimer = null;
+    if (pendingGmDraft === null) gmEdit = null;
+    publishGmDraft();
+  };
+  const flushGmDraft = (): void => {
+    if (gmTimer !== null) clearTimeout(gmTimer);
+    gmTimer = null;
+    if (
+      disposed ||
+      terminal ||
+      lastSnapshot?.formId !== 'NET-017' ||
+      gmLocalContextId === null ||
+      gmEdit === null ||
+      pendingGmDraft !== null ||
+      pendingGmCommand !== null ||
+      pendingGmRefusal !== null ||
+      pendingFormAction !== null ||
+      pendingAddressableRoute !== null ||
+      socket?.readyState !== WebSocket.OPEN
+    )
+      return;
+    const p = gmRequestProjection(lastSnapshot.projection);
+    if (p === null || p.contextId !== gmLocalContextId) return;
+    if (sameJson(gmEdit, networkGmRequestDraftFromProjection(p))) {
+      gmEdit = null;
+      publishGmDraft();
+      notifyReady();
+      return;
+    }
+    const request: NetworkGmRequestDraftReplaceV3Message = {
+      protocolVersion: 3,
+      messageType: 'network.gm-request-draft.replace',
+      draftUpdateId: createRequestId('network-draft'),
+      scope: { gmLocalContextId, campaignId: p.campaignId, sourceFormId: 'NET-017' },
+      expectedRevisions: { ...lastSnapshot.revisions },
+      expectedRequestQueueRevision: p.requestQueueRevision,
+      values: gmEdit,
+    };
+    const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok) {
+      gmDraftRefusal = { code: 'DRAFT_UNAVAILABLE' };
+      publishGmDraft();
+      notifyReady();
+      return;
+    }
+    pendingGmDraft = { request, editVersion: gmEditVersion };
+    try {
+      socket.send(encoded.text);
+    } catch {
+      socket.close(1000, 'GM draft delivery interrupted');
+    }
+    publishGmDraft();
+    notifyReady();
+  };
+
   const discardDisconnectedNetworkInput = () => {
     if (networkTimer !== null) clearTimeout(networkTimer);
     networkTimer = null;
@@ -8544,6 +9049,10 @@ export function connectProjection(
   const failProtocol = (refusal: DecodeRefusal, detail: string) => {
     if (disposed || terminal) return;
     terminal = true;
+    clearGmDraft();
+    pendingGmCommand = null;
+    pendingGmRefusal = null;
+    publishGmDraft();
     pendingCheckpoint = null;
     clearNetworkDraft();
     publishNetworkDraft();
@@ -8717,6 +9226,19 @@ export function connectProjection(
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
     const previous = lastSnapshot;
+    if (next.formId !== 'NET-017' && pendingGmDraft === null) clearGmDraft();
+    if (next.formId === 'NET-017' && gmEdit !== null) {
+      const p = gmRequestProjection(next.projection);
+      if (
+        p !== null &&
+        gmEdit.selectedRequestIdOrNull !== null &&
+        !p.requests.some((r) => r.requestId === gmEdit!.selectedRequestIdOrNull)
+      ) {
+        gmEdit = { selectedRequestIdOrNull: null, decisionReason: '' };
+        gmEditVersion++;
+      }
+    }
+    rememberGmQueue(next);
     const networkExit =
       networkScopeId !== null && (next.formId === 'APP-002' || next.formId === 'CHR-040');
     if (
@@ -8734,7 +9256,7 @@ export function connectProjection(
       networkContextTicket(networkScopeId);
       gmLocalContextId = null;
       storeGmContextTicket(null);
-    } else if (networkExit || isCampaignCreationForm(next.formId)) {
+    } else if (networkExit || next.formId === 'NET-017' || isCampaignCreationForm(next.formId)) {
       if (networkScopeId !== null) {
         networkScopeId = null;
         networkContextTicket(null);
@@ -8761,6 +9283,13 @@ export function connectProjection(
         );
         return;
       }
+    } else if (next.formId === 'NET-017') {
+      const p = gmRequestProjection(next.projection);
+      if (p === null || p.contextId !== gmLocalContextId) {
+        failUnexpected('$.contextId', null, 'GM queue changed the owned ticket.');
+        return;
+      }
+      storeGmContextTicket(gmLocalContextId);
     } else if (next.formId === 'APP-001') {
       gmLocalContextId = null;
       storeGmContextTicket(null);
@@ -8838,12 +9367,13 @@ export function connectProjection(
     onIdentityDraft(identity?.state ?? null);
     publishCampaignDraft();
     publishNetworkDraft();
+    publishGmDraft();
     onState({
       kind: 'ready',
       snapshot: visibleSnapshotBase(
         next,
         identity,
-        commandPending(),
+        commandPending() || campaignLaunch,
         creationChoiceDraft,
         creationRollDraft,
         statAssignmentDraft,
@@ -8855,6 +9385,25 @@ export function connectProjection(
       const oldSocket = socket;
       openTransport(deviceId);
       oldSocket?.close(1000, 'launch capability negotiation');
+    } else if (
+      reconnect &&
+      (pendingGmDraft !== null ||
+        (pendingGmCommand !== null && pendingGmCommand.receipt === null)) &&
+      socket?.readyState === WebSocket.OPEN
+    ) {
+      const encoded =
+        pendingGmDraft !== null
+          ? encodeClientMessageV3(pendingGmDraft.request, WEB_PROTOCOL_VOCABULARY)
+          : pendingGmCommand !== null
+            ? encodeClientMessage(pendingGmCommand.request, WEB_PROTOCOL_VOCABULARY)
+            : null;
+      if (encoded?.ok) socket.send(encoded.text);
+      else
+        failUnexpected(
+          '$.network.gm-request',
+          null,
+          'The exact pending GM delivery could not be replayed.',
+        );
     } else if (reconnect && pendingNetworkDraft !== null && socket?.readyState === WebSocket.OPEN) {
       const encoded = encodeClientMessageV3(pendingNetworkDraft.request, WEB_PROTOCOL_VOCABULARY);
       if (encoded.ok) socket.send(encoded.text);
@@ -8938,7 +9487,36 @@ export function connectProjection(
         }
         const message = decoded.value;
         if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
-          if (pendingNetworkCommand !== null) {
+          if (pendingGmCommand !== null) {
+            const receipt = gmDecisionReceipt(
+              message.receipt,
+              pendingGmCommand.request,
+              pendingGmCommand.source,
+            );
+            if (!receipt.ok) {
+              failProtocol(receipt.refusal, 'Host sent an invalid GM decision receipt.');
+              return;
+            }
+            if (
+              pendingGmCommand.receipt !== null &&
+              (message.messageType !== 'command.replay' ||
+                pendingGmCommand.receipt.commandId !== receipt.value.commandId ||
+                pendingGmCommand.receipt.receiptId !== receipt.value.receiptId ||
+                !sameCampaignRevisions(
+                  pendingGmCommand.receipt.revisions,
+                  receipt.value.revisions,
+                ) ||
+                !sameJson(pendingGmCommand.receipt.result, receipt.value.result))
+            ) {
+              failUnexpected('$.receipt', null, 'Host changed the original GM decision receipt.');
+              return;
+            }
+            pendingGmCommand = {
+              ...pendingGmCommand,
+              receipt: receipt.value,
+              replay: message.messageType === 'command.replay',
+            };
+          } else if (pendingNetworkCommand !== null) {
             const receipt = decodeNetworkCommandReceipt(
               message.receipt,
               pendingNetworkCommand.request,
@@ -9116,6 +9694,11 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'command.refusal') {
+          const matchesGm =
+            (pendingGmCommand !== null &&
+              pendingGmCommand.receipt === null &&
+              pendingGmCommand.request.commandId === message.commandId) ||
+            pendingGmRefusal?.request.commandId === message.commandId;
           const matchesNetworkCommand =
             (pendingNetworkCommand !== null &&
               pendingNetworkCommand.receipt === null &&
@@ -9142,7 +9725,8 @@ export function connectProjection(
             pendingRollCommit.receipt === null &&
             message.commandId === pendingRollCommit.request.commandId;
           if (
-            (!matchesNetworkCommand &&
+            (!matchesGm &&
+              !matchesNetworkCommand &&
               !matchesCampaignCreate &&
               !matchesPostSave &&
               !matchesCheckpoint &&
@@ -9156,6 +9740,31 @@ export function connectProjection(
               'Host command refusal does not match the pending wizard command.',
             );
             return;
+          }
+          if (matchesGm) {
+            // Resume reports absence with GUARD_REJECTED before the paired current view. The original intention remains retryable once that pair is verified.
+            if (
+              expectingCapabilities &&
+              pendingGmCommand?.receipt === null &&
+              message.lastLifecycleState === null &&
+              message.refusal.code === 'GUARD_REJECTED'
+            )
+              return;
+            if (
+              pendingGmRefusal !== null &&
+              JSON.stringify(pendingGmRefusal.refusal) !== JSON.stringify(message)
+            ) {
+              failUnexpected('$.commandId', null, 'Host changed a terminal GM refusal.');
+              return;
+            }
+            if (pendingGmCommand !== null)
+              pendingGmRefusal = {
+                request: pendingGmCommand.request,
+                source: pendingGmCommand.source,
+                refusal: message,
+              };
+            pendingGmCommand = null;
+            publishGmDraft();
           }
           if (matchesCheckpoint) pendingCheckpoint = null;
           if (matchesNetworkCommand) {
@@ -9197,6 +9806,8 @@ export function connectProjection(
         }
         if (message.messageType === 'protocol.refusal') {
           terminal = true;
+          clearGmDraft();
+          publishGmDraft();
           clearNetworkDraft();
           publishNetworkDraft();
           clearCampaignDraft();
@@ -9232,6 +9843,90 @@ export function connectProjection(
           );
           return;
         }
+        if (
+          message.messageType === 'network.gm-request-draft.result' ||
+          message.messageType === 'network.gm-request-draft.refusal'
+        ) {
+          const pending = pendingGmDraft;
+          if (
+            pending === null ||
+            lastSnapshot === null ||
+            message.draftUpdateId !== pending.request.draftUpdateId ||
+            !sameJson({ ...message.scope }, { ...pending.request.scope }) ||
+            message.scope.gmLocalContextId !== gmLocalContextId
+          ) {
+            failUnexpected(
+              '$.network.gm-request-draft',
+              null,
+              'GM draft response does not match the outstanding owner scope.',
+            );
+            return;
+          }
+          if (message.messageType === 'network.gm-request-draft.refusal') {
+            pendingGmDraft = null;
+            gmEdit = null;
+            gmDraftRefusal = message.refusal;
+            publishGmDraft();
+            notifyReady();
+            if (deviceId !== null) {
+              const old = socket;
+              openTransport(deviceId);
+              old?.close(1000, 'refresh GM draft refusal');
+            }
+            return;
+          }
+          const candidate = decodeConfirmedSnapshot(
+            {
+              protocolVersion: 2,
+              messageType: 'projection.snapshot',
+              projectionRole: 'gm',
+              revisions: message.revisions,
+              presentation: {
+                assignment: { reason: 'FORM_ACTION', correlationId: message.draftUpdateId },
+                ...message.presentation,
+              },
+            },
+            lastSnapshot.executableWorkflowCommandIds,
+          );
+          const expected = {
+            stateRevision:
+              pending.request.expectedRevisions.stateRevision + (message.changed ? 1 : 0),
+            projectionRevision:
+              pending.request.expectedRevisions.projectionRevision + (message.changed ? 1 : 0),
+            actorVisibilityRevision: pending.request.expectedRevisions.actorVisibilityRevision,
+          };
+          if (!candidate.ok) {
+            failProtocol(candidate.refusal, 'Host sent an invalid GM draft current view.');
+            return;
+          }
+          const p =
+            candidate.value.formId === 'NET-017'
+              ? gmRequestProjection(candidate.value.projection)
+              : null;
+          if (
+            !sameCampaignRevisions(message.appliedRevisions, expected) ||
+            message.appliedRequestQueueRevision !== pending.request.expectedRequestQueueRevision ||
+            !ownGmQueue(candidate.value) ||
+            !gmQueueMonotonic(candidate.value, lastSnapshot) ||
+            (sameCampaignRevisions(message.revisions, message.appliedRevisions) &&
+              p !== null &&
+              !sameJson(networkGmRequestDraftFromProjection(p), pending.request.values))
+          ) {
+            failUnexpected(
+              '$.network.gm-request-draft.result',
+              null,
+              'GM draft applied facts or current view changed owner/revision.',
+            );
+            return;
+          }
+          pendingGmDraft = null;
+          gmDraftRefusal = null;
+          if (gmEditVersion === pending.editVersion) gmEdit = null;
+          adoptSnapshot(candidate.value, false);
+          if (gmEdit !== null) flushGmDraft();
+          return;
+        }
+
         if (
           message.messageType === 'network.draft.result' ||
           message.messageType === 'network.draft.refusal'
@@ -9459,7 +10154,10 @@ export function connectProjection(
             message.messageType === 'projection.snapshot' &&
             message.presentation.assignment.reason === 'COMMAND_DESTINATION' &&
             message.presentation.assignment.correlationId ===
-              (pendingNetworkRefusal?.request.commandId ?? pendingNetworkCommand?.request.commandId)
+              (pendingGmRefusal?.request.commandId ??
+                pendingGmCommand?.request.commandId ??
+                pendingNetworkRefusal?.request.commandId ??
+                pendingNetworkCommand?.request.commandId)
           )) ||
         (stagedCapabilities !== null && message.messageType !== 'projection.snapshot')
       ) {
@@ -9492,6 +10190,42 @@ export function connectProjection(
         return;
       }
       if (message.messageType === 'projection.snapshot') {
+        if (message.presentation.assignment.reason === 'HOST_SYSTEM_EVENT') {
+          if (expectingCapabilities || stagedCapabilities !== null || lastSnapshot === null) {
+            failUnexpected('$.messageType', null, 'System refresh interrupted reconnect.');
+            return;
+          }
+          const candidate = decodeConfirmedSnapshot(
+            message,
+            lastSnapshot.executableWorkflowCommandIds,
+          );
+          if (!candidate.ok) {
+            failProtocol(candidate.refusal, 'Invalid current system view.');
+            return;
+          }
+          const gm =
+            lastSnapshot.formId === 'NET-017' &&
+            candidate.value.formId === 'NET-017' &&
+            /^network-gm-view:[0-9a-f]{64}$/u.test(message.presentation.assignment.correlationId) &&
+            ownGmQueue(candidate.value) &&
+            gmQueueMonotonic(candidate.value, lastSnapshot);
+          const player =
+            /^network-owner-view:[0-9a-f]{64}$/u.test(
+              message.presentation.assignment.correlationId,
+            ) &&
+            candidate.value.projection['deviceId'] === deviceId &&
+            ownerRequestPush(candidate.value, lastSnapshot);
+          if (!gm && !player) {
+            failUnexpected(
+              '$.presentation.assignment',
+              null,
+              'System refresh changed the active family or owner.',
+            );
+            return;
+          }
+          adoptSnapshot(candidate.value, false);
+          return;
+        }
         let snapshot: DecodeResult<ConfirmedProjectionSnapshot>;
         const reconnecting = stagedCapabilities !== null;
         if (reconnecting) {
@@ -9539,7 +10273,37 @@ export function connectProjection(
               snapshot.value.projection['hostDeviceId'] !== deviceId)
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
-          if (snapshot.ok && pendingNetworkRefusal !== null) {
+          if (snapshot.ok && snapshot.value.formId === 'NET-017' && !ownGmQueue(snapshot.value))
+            snapshot = unrecognized('$.presentation.base.roleFilteredPayload.contextId', null);
+          if (
+            snapshot.ok &&
+            (snapshot.value.formId === 'NET-017' || snapshot.value.formId === 'CMP-006') &&
+            lastSnapshot !== null &&
+            gmQueueScope(lastSnapshot) !== null &&
+            gmQueueScope(snapshot.value)?.campaignId === gmQueueScope(lastSnapshot)?.campaignId &&
+            !gmQueueMonotonic(snapshot.value, lastSnapshot)
+          )
+            snapshot = unrecognized('$.revisions', null);
+          if (
+            snapshot.ok &&
+            (pendingGmCommand !== null || pendingGmRefusal !== null || pendingGmDraft !== null)
+          ) {
+            const source = pendingGmCommand?.source ?? pendingGmRefusal?.source ?? lastSnapshot;
+            if (
+              source === null ||
+              !ownGmQueue(snapshot.value) ||
+              !gmQueueMonotonic(snapshot.value, source) ||
+              (pendingGmCommand?.receipt !== null &&
+                pendingGmCommand?.receipt !== undefined &&
+                !gmDecisionDestination(
+                  snapshot.value,
+                  pendingGmCommand.source,
+                  pendingGmCommand.receipt,
+                  true,
+                ))
+            )
+              snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
+          } else if (snapshot.ok && pendingNetworkRefusal !== null) {
             if (
               !isNetworkApplicationForm(snapshot.value.formId) ||
               snapshot.value.projection['networkScopeId'] !==
@@ -9583,12 +10347,7 @@ export function connectProjection(
           } else if (snapshot.ok && pendingCampaignCreate !== null) {
             if (
               pendingCampaignCreate.receipt === null ||
-              !campaignCreateDestinationMatches(
-                snapshot.value.formId,
-                snapshot.value.projection,
-                snapshot.value.revisions,
-                pendingCampaignCreate.receipt,
-              )
+              !gmCampaignCreateDestination(snapshot.value, pendingCampaignCreate.receipt)
             )
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           } else if (snapshot.ok && pendingCampaignDraft !== null) {
@@ -9642,6 +10401,25 @@ export function connectProjection(
               );
             }
           }
+        } else if (pendingGmCommand !== null || pendingGmRefusal !== null) {
+          const pending = pendingGmCommand ?? pendingGmRefusal!;
+          snapshot = decodeConfirmedSnapshot(message, pending.source.executableWorkflowCommandIds);
+          if (
+            snapshot.ok &&
+            (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
+              message.presentation.assignment.correlationId !== pending.request.commandId ||
+              !ownGmQueue(snapshot.value) ||
+              !gmQueueMonotonic(snapshot.value, pending.source) ||
+              (pendingGmCommand !== null &&
+                (pendingGmCommand.receipt === null ||
+                  !gmDecisionDestination(
+                    snapshot.value,
+                    pendingGmCommand.source,
+                    pendingGmCommand.receipt,
+                    pendingGmCommand.replay,
+                  ))))
+          )
+            snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
         } else if (pendingNetworkRefusal !== null) {
           snapshot = decodeConfirmedSnapshot(
             message,
@@ -9732,12 +10510,7 @@ export function connectProjection(
               message.presentation.assignment.correlationId !==
                 pendingCampaignCreate.request.commandId ||
               snapshot.value.projection['hostDeviceId'] !== deviceId ||
-              !campaignCreateDestinationMatches(
-                snapshot.value.formId,
-                snapshot.value.projection,
-                snapshot.value.revisions,
-                pendingCampaignCreate.receipt,
-              ))
+              !gmCampaignCreateDestination(snapshot.value, pendingCampaignCreate.receipt))
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
         } else if (pendingPostSave !== null && pendingPostSave.receipt !== null) {
@@ -9832,6 +10605,21 @@ export function connectProjection(
           );
           return;
         }
+        if (
+          (snapshot.value.formId === 'NET-017' || snapshot.value.formId === 'CMP-006') &&
+          gmQueueScope(snapshot.value) !== null &&
+          !ownGmQueue(snapshot.value)
+        ) {
+          failUnexpected(
+            '$.contextId',
+            null,
+            'GM queue changed owner or regressed its durable head.',
+          );
+          return;
+        }
+        if (pendingGmCommand?.receipt !== null && pendingGmCommand?.receipt !== undefined)
+          pendingGmCommand = null;
+        pendingGmRefusal = null;
         pendingNetworkRefusal = null;
         if (pendingNetworkCommand?.receipt !== null && pendingNetworkCommand?.receipt !== undefined)
           pendingNetworkCommand = null;
@@ -9915,6 +10703,7 @@ export function connectProjection(
       stagedCapabilities = null;
       discardDisconnectedCampaignInput();
       discardDisconnectedNetworkInput();
+      discardDisconnectedGmInput();
       onState({
         code: null,
         detail: 'WebSocket transport reported an error.',
@@ -9931,6 +10720,7 @@ export function connectProjection(
       stagedCapabilities = null;
       discardDisconnectedCampaignInput();
       discardDisconnectedNetworkInput();
+      discardDisconnectedGmInput();
       const reason = event.reason.length === 0 ? 'no close reason' : event.reason;
       onState({
         code: event.code,
@@ -9958,21 +10748,25 @@ export function connectProjection(
         ...NETWORK_WORKFLOW_COMMAND_IDS,
       ],
       unacknowledgedCommandIds:
-        pendingNetworkCommand !== null
-          ? [pendingNetworkCommand.request.commandId]
-          : pendingNetworkRefusal !== null
-            ? [pendingNetworkRefusal.request.commandId]
-            : pendingCampaignCreate !== null
-              ? [pendingCampaignCreate.request.commandId]
-              : pendingPostSave !== null
-                ? [pendingPostSave.request.commandId]
-                : pendingCheckpoint !== null
-                  ? [pendingCheckpoint.request.commandId]
-                  : pendingSetDecision !== null
-                    ? [pendingSetDecision.request.commandId]
-                    : pendingRollCommit !== null
-                      ? [pendingRollCommit.request.commandId]
-                      : [],
+        pendingGmCommand !== null
+          ? [pendingGmCommand.request.commandId]
+          : pendingGmRefusal !== null
+            ? [pendingGmRefusal.request.commandId]
+            : pendingNetworkCommand !== null
+              ? [pendingNetworkCommand.request.commandId]
+              : pendingNetworkRefusal !== null
+                ? [pendingNetworkRefusal.request.commandId]
+                : pendingCampaignCreate !== null
+                  ? [pendingCampaignCreate.request.commandId]
+                  : pendingPostSave !== null
+                    ? [pendingPostSave.request.commandId]
+                    : pendingCheckpoint !== null
+                      ? [pendingCheckpoint.request.commandId]
+                      : pendingSetDecision !== null
+                        ? [pendingSetDecision.request.commandId]
+                        : pendingRollCommit !== null
+                          ? [pendingRollCommit.request.commandId]
+                          : [],
     } as const satisfies SessionReconnectV2Message;
     const gmResume: CampaignLocalContextResumeV3Message | null =
       gmLocalContextId === null
@@ -9983,7 +10777,10 @@ export function connectProjection(
             gmLocalContextId,
             reconnectRequestId: requestId,
             knownRevisions: reconnect.knownRevisions,
-            supportedWorkflowCommandIds: [CAMPAIGN_CREATE_COMMAND_ID],
+            supportedWorkflowCommandIds: [
+              CAMPAIGN_CREATE_COMMAND_ID,
+              ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+            ],
             unacknowledgedCommandIds: reconnect.unacknowledgedCommandIds,
           };
     const networkResume: NetworkLocalContextResumeV3Message | null =
@@ -10189,6 +10986,44 @@ export function connectProjection(
       openTransport(deviceId);
       return { ok: true };
     },
+    replaceNetworkGmRequestDraft: (values) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot?.formId !== 'NET-017' ||
+        socket?.readyState !== WebSocket.OPEN ||
+        pendingGmCommand !== null ||
+        pendingGmRefusal !== null ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null
+      )
+        return { ok: false, detail: 'GM queue input is unavailable' };
+      const p = gmRequestProjection(lastSnapshot.projection);
+      if (p === null || p.contextId !== gmLocalContextId)
+        return { ok: false, detail: 'GM queue owner is not confirmed' };
+      let checked: NetworkGmRequestDraftValues;
+      try {
+        checked = networkGmRequestDraftValues(values);
+      } catch {
+        return { ok: false, detail: 'GM draft values are invalid' };
+      }
+      if (
+        checked.selectedRequestIdOrNull !== null &&
+        !p.requests.some((r) => r.requestId === checked.selectedRequestIdOrNull)
+      )
+        return { ok: false, detail: 'GM request selection is stale' };
+      const previous = gmEdit ?? networkGmRequestDraftFromProjection(p);
+      if (checked.selectedRequestIdOrNull !== previous.selectedRequestIdOrNull)
+        checked = { selectedRequestIdOrNull: checked.selectedRequestIdOrNull, decisionReason: '' };
+      gmEdit = checked;
+      gmEditVersion++;
+      gmDraftRefusal = null;
+      if (gmTimer !== null) clearTimeout(gmTimer);
+      gmTimer = setTimeout(flushGmDraft, 250);
+      publishGmDraft();
+      notifyReady();
+      return { ok: true };
+    },
     replaceNetworkDraft: (edit) => {
       if (
         disposed ||
@@ -10330,6 +11165,9 @@ export function connectProjection(
     disconnect: () => {
       if (disposed) return;
       disposed = true;
+      clearGmDraft();
+      pendingGmCommand = null;
+      pendingGmRefusal = null;
       clearNetworkDraft();
       pendingNetworkCommand = null;
       pendingNetworkRefusal = null;
@@ -11119,6 +11957,50 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
+      if (
+        activeForm.formId === 'NET-017' &&
+        (actionKey === 'NET-017::CTA::007' || actionKey === 'NET-017::CTA::008')
+      ) {
+        const p = gmRequestProjection(lastSnapshot.projection);
+        if (p === null || p.contextId !== gmLocalContextId || gmEdit !== null)
+          return { ok: false, detail: 'GM queue input is not confirmed' };
+        const workflow =
+          actionKey === 'NET-017::CTA::007'
+            ? 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW'
+            : 'UI-CMD-DEVICE-REQUEST-REJECT';
+        if (!lastSnapshot.executableWorkflowCommandIds.includes(workflow))
+          return { ok: false, detail: 'GM decision capability is unavailable' };
+        const envelope = {
+          protocolVersion: 1 as const,
+          messageType: 'command.request' as const,
+          commandKind: 'workflow-command' as const,
+          role: 'gm' as const,
+          commandId: createRequestId('command'),
+          expectedRevisions: { ...lastSnapshot.revisions },
+        };
+        let request: NetworkGmDecisionRequest;
+        if (workflow === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW') {
+          const payload = networkGmAcceptToReviewPayload(p);
+          if (payload === null) return { ok: false, detail: 'GM accept payload is unavailable' };
+          request = { ...envelope, workflowCommandId: workflow, payload };
+        } else {
+          const payload = networkGmRejectRequestPayload(p);
+          if (payload === null) return { ok: false, detail: 'GM reject payload is unavailable' };
+          request = { ...envelope, workflowCommandId: workflow, payload };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: 'GM decision could not be encoded' };
+        pendingGmCommand = { request, receipt: null, source: lastSnapshot, replay: false };
+        try {
+          socket.send(encoded.text);
+        } catch {
+          socket.close(1000, 'GM decision delivery interrupted');
+        }
+        publishGmDraft();
+        notifyReady();
+        return { ok: true };
+      }
+
       if (isNetworkApplicationForm(activeForm.formId)) {
         if (actionKey === 'NET-002::CTA::005')
           return { ok: false, detail: 'QR input is a local action' };
@@ -12460,6 +13342,10 @@ export function connectProjection(
         };
       }
       pendingFormAction = request;
+      if (activeForm.formId === 'NET-017') {
+        clearGmDraft();
+        publishGmDraft();
+      }
       if (isCampaignCreationForm(activeForm.formId)) {
         clearCampaignDraft();
         publishCampaignDraft();

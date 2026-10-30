@@ -4,11 +4,13 @@ import type {
   LocalNetworkOutbox,
   LocalNetworkApplication,
   NetworkStoreGuard,
+  LocalRequestLaneBindingOutbox,
 } from '../persistence/network-local-application.js';
 import {
   readLocalNetworkApplication,
   readLocalNetworkHostPin,
   commitLocalNetworkHostPin,
+  readLocalRequestLaneBinding,
 } from '../persistence/network-local-application.js';
 import { readOwnedLocalNetworkTab } from '../persistence/network-local-tab.js';
 import { loadNetworkInstallation } from './network-installation.js';
@@ -22,6 +24,8 @@ import { validatePeerCampaignHeader } from './campaign-peer-handshake.js';
 import {
   canonicalPostSaveJson,
   postSaveSha256,
+  resolveStoredLocalCharacterExportBaseline,
+  isStoredLocalCharacterExportBaselineCompatible,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import {
@@ -169,8 +173,14 @@ export function createLocalNetworkPeer(d: {
       });
       owned(scope);
       if (signal.aborted) return fail('PEER_UNAVAILABLE');
-      if (channel.campaign.baselineVersion !== d.baseline.baselineVersion)
+      if (
+        !isStoredLocalCharacterExportBaselineCompatible(
+          d.baseline,
+          channel.campaign.baselineVersion,
+        )
+      )
         return fail('INCOMPATIBLE_BASELINE');
+      resolveStoredLocalCharacterExportBaseline(d.baseline, channel.campaign.baselineVersion);
       if (channel.needsHostPin) {
         if (pinGuard === null) return fail('HOST_IDENTITY_CHANGED');
         const tab = readOwnedLocalNetworkTab(d.database, scope.ownerDeviceId, scope.networkScopeId);
@@ -280,6 +290,33 @@ export function createLocalNetworkPeer(d: {
       return c !== undefined && !c.closed ? c : null;
     },
     call,
+    async deliverLaneBinding(
+      scope: LocalNetworkScope,
+      outbox: LocalRequestLaneBindingOutbox,
+    ): Promise<DeviceAdmissionPeerResponse> {
+      owned(scope);
+      const saved = readLocalRequestLaneBinding(d.database, scope, outbox.requestId);
+      if (saved === null || canonicalPostSaveJson(saved) !== canonicalPostSaveJson(outbox))
+        return fail('UNCONFIRMED_OUTCOME');
+      // The writer already replays the original own entry/SUBMIT prefix; a new browser lane is not evidence.
+      return call(scope, saved.request);
+    },
+    async recoverLaneBinding(
+      scope: LocalNetworkScope,
+      outbox: LocalRequestLaneBindingOutbox,
+    ): Promise<DeviceAdmissionPeerResponse> {
+      owned(scope);
+      const saved = readLocalRequestLaneBinding(d.database, scope, outbox.requestId);
+      if (saved === null || canonicalPostSaveJson(saved) !== canonicalPostSaveJson(outbox))
+        return fail('UNCONFIRMED_OUTCOME');
+      return call(scope, {
+        schemaVersion: 1,
+        operation: 'DEVICE_REQUEST_RECOVER',
+        requestId: saved.requestId,
+        technicalSessionId: saved.request.technicalSessionId,
+        submitCommandId: saved.request.submitCommandId,
+      });
+    },
     async deliver(
       scope: LocalNetworkScope,
       outbox: LocalNetworkOutbox,

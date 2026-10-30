@@ -11,6 +11,9 @@ import { loadCampaignCheckpoint } from './store.js';
 import { CAMPAIGN_CREATION_TABLES } from './migrations/0007-campaign-creation.js';
 import {
   campaignCreationHash,
+  readGmRequestReviewViewStateInTransaction,
+  appendGmRequestReviewEventInTransaction,
+  type GmRequestReviewDraftRequest,
   ensureLocalGmProfile,
   readLocalGmProfile,
   createLocalGmContext,
@@ -864,5 +867,283 @@ describe('atomic paused campaign creation', () => {
     db.prepare('UPDATE campaign_private_owner SET verifier_sha256=?').run('0'.repeat(64));
     expect(() => readCampaignCreationCursor(db, 'context')).toThrow();
     expect(() => readCampaignCreationCommand(db, 'context', 'create')).toThrow();
+  });
+});
+
+describe('GM queue structural journal and cursor boundary', () => {
+  const emptyQueue = () => ({
+    requestQueueRevision: 0,
+    requestFacts: [],
+    visibleRequestIds: [],
+    queueEvidenceSha256: campaignCreationHash([]),
+  });
+  function queuedSetup(path = ':memory:') {
+    const p = setup(path);
+    ready(p.db);
+    const creation = commitCampaignCreation(p.db, creationInput(p.db), allow);
+    return {
+      ...p,
+      creation,
+      scope: { ownerDeviceId: p.device, gmLocalContextId: 'context', campaignId: 'campaign' },
+    };
+  }
+  const state = (p: ReturnType<typeof queuedSetup>) =>
+    p.db.transaction(() => readGmRequestReviewViewStateInTransaction(p.db, p.scope)).deferred();
+  function enter(p: ReturnType<typeof queuedSetup>, id = 'queue-entry') {
+    const cursor = readCampaignCreationCursor(p.db, 'context');
+    const input = {
+      eventId: id,
+      mutation: {
+        kind: 'NAV' as const,
+        request: {
+          messageType: 'navigation.form-action' as const,
+          protocolVersion: 2 as const,
+          navigationRequestId: id,
+          actionKey: 'CMP-006::CTA::002' as const,
+          sourceFormId: 'CMP-006' as const,
+          expectedProjectionRevision: cursor.revisions.projectionRevision,
+        },
+        initialQueueOrNull: emptyQueue(),
+      },
+    };
+    return {
+      input,
+      delivery: p.db
+        .transaction(() => appendGmRequestReviewEventInTransaction(p.db, p.scope, input))
+        .immediate(),
+    };
+  }
+  function back(p: ReturnType<typeof queuedSetup>, id = 'queue-back') {
+    const current = state(p).viewOrNull!;
+    return p.db
+      .transaction(() =>
+        appendGmRequestReviewEventInTransaction(p.db, p.scope, {
+          eventId: id,
+          mutation: {
+            kind: 'NAV',
+            request: {
+              messageType: 'navigation.form-action',
+              protocolVersion: 2,
+              navigationRequestId: id,
+              actionKey: 'NET-017::CTA::009',
+              sourceFormId: 'NET-017',
+              expectedProjectionRevision: current.projectionRevision,
+            },
+            initialQueueOrNull: null,
+          },
+        }),
+      )
+      .immediate();
+  }
+  it('preserves birth/checkpoint bytes and keeps QUEUE revisions through safe return and exact entry replay', () => {
+    const p = queuedSetup();
+    const old = {
+      campaign: p.db.prepare('SELECT * FROM campaign').all(),
+      checkpoint: p.db.prepare('SELECT * FROM campaign_checkpoint').all(),
+      creation: p.db.prepare('SELECT * FROM campaign_creation_command').all(),
+      draft: p.db.prepare('SELECT * FROM campaign_draft').all(),
+    };
+    const entry = enter(p);
+    expect(entry.delivery.view).toMatchObject({
+      formId: 'NET-017',
+      stateRevision: 0,
+      projectionRevision: 1,
+      requestQueueRevision: 0,
+    });
+    expect(entry.delivery.rowWrites).toBe(3);
+    const returned = back(p);
+    expect(readCampaignCreationCursor(p.db, 'context')).toMatchObject({
+      kind: 'QUEUE',
+      formId: 'CMP-006',
+      revisions: { ...zero, projectionRevision: 2 },
+    });
+    const before = p.db.serialize();
+    const replay = p.db
+      .transaction(() => appendGmRequestReviewEventInTransaction(p.db, p.scope, entry.input))
+      .immediate();
+    expect(replay.event).toEqual(entry.delivery.event);
+    expect(replay.view).toEqual(returned.view);
+    expect(replay.rowWrites).toBe(0);
+    expect(p.db.serialize().equals(before)).toBe(true);
+    expect({
+      campaign: p.db.prepare('SELECT * FROM campaign').all(),
+      checkpoint: p.db.prepare('SELECT * FROM campaign_checkpoint').all(),
+      creation: p.db.prepare('SELECT * FROM campaign_creation_command').all(),
+      draft: p.db.prepare('SELECT * FROM campaign_draft').all(),
+    }).toEqual(old);
+    expect(p.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual([]);
+    expect(readCampaignCreationCommand(p.db, 'context', 'create')).toEqual(p.creation);
+  });
+  it('journals an exact no-op draft without advancing the view and refuses an unavailable selection', () => {
+    const p = queuedSetup();
+    const { delivery } = enter(p);
+    const request: GmRequestReviewDraftRequest = {
+      messageType: 'network.gm-request-draft.replace',
+      protocolVersion: 3,
+      draftUpdateId: 'queue-draft',
+      scope: { gmLocalContextId: 'context', campaignId: 'campaign', sourceFormId: 'NET-017' },
+      expectedRevisions: {
+        stateRevision: delivery.view.stateRevision,
+        projectionRevision: delivery.view.projectionRevision,
+        actorVisibilityRevision: delivery.view.actorVisibilityRevision,
+      },
+      expectedRequestQueueRevision: 0,
+      values: { selectedRequestIdOrNull: null, decisionReason: '' },
+    };
+    const saved = p.db
+      .transaction(() =>
+        appendGmRequestReviewEventInTransaction(p.db, p.scope, {
+          eventId: request.draftUpdateId,
+          mutation: { kind: 'DRAFT', request },
+        }),
+      )
+      .immediate();
+    expect(saved.event.changed).toBe(false);
+    expect(saved.view).toEqual(delivery.view);
+    const before = p.db.serialize();
+    expect(() =>
+      p.db
+        .transaction(() =>
+          appendGmRequestReviewEventInTransaction(p.db, p.scope, {
+            eventId: 'bad-selection',
+            mutation: {
+              kind: 'DRAFT',
+              request: {
+                ...request,
+                draftUpdateId: 'bad-selection',
+                values: {
+                  selectedRequestIdOrNull: 'absent-request',
+                  decisionReason: 'not applied',
+                },
+              },
+            },
+          }),
+        )
+        .immediate(),
+    ).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('refuses changed same-ID envelopes and stale navigation before writes', () => {
+    const p = queuedSetup();
+    const entry = enter(p);
+    const before = p.db.serialize();
+    for (const input of [
+      {
+        ...entry.input,
+        mutation: {
+          ...entry.input.mutation,
+          request: { ...entry.input.mutation.request, expectedProjectionRevision: 2 },
+        },
+      },
+      {
+        eventId: 'stale-entry',
+        mutation: {
+          ...entry.input.mutation,
+          request: { ...entry.input.mutation.request, navigationRequestId: 'stale-entry' },
+          initialQueueOrNull: null,
+        },
+      },
+    ])
+      expect(() =>
+        p.db
+          .transaction(() => appendGmRequestReviewEventInTransaction(p.db, p.scope, input))
+          .immediate(),
+      ).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('restores the exact selected QUEUE after SQLite close/reopen without selecting a newer context', () => {
+    const p = fileSetup();
+    ready(p.db);
+    commitCampaignCreation(p.db, creationInput(p.db), allow);
+    const scope = { ownerDeviceId: p.device, gmLocalContextId: 'context', campaignId: 'campaign' };
+    const q = { ...p, scope, creation: readCampaignCreationCommand(p.db, 'context', 'create')! };
+    enter(q);
+    const returned = back(q);
+    createLocalGmContext(
+      p.db,
+      { gmLocalContextId: 'other-context', masterProfileId: 'profile', ownerDeviceId: p.device },
+      allow,
+    );
+    p.db.close();
+    const db = open(p.path);
+    const reopened = db
+      .transaction(() => readGmRequestReviewViewStateInTransaction(db, scope))
+      .deferred();
+    expect(reopened.viewOrNull).toEqual(returned.view);
+    expect(readCampaignCreationCursor(db, 'context').kind).toBe('QUEUE');
+    expect(readCampaignCreationCursor(db, 'other-context').kind).toBe('MENU');
+  });
+  it.each(['view', 'event', 'pointer'] as const)(
+    'rejects checksum-valid %s corruption without repairing history',
+    (kind) => {
+      const p = queuedSetup();
+      enter(p);
+      const table =
+        kind === 'view'
+          ? 'gm_request_queue_view'
+          : kind === 'event'
+            ? 'gm_request_queue_event'
+            : 'campaign_creation_cursor';
+      const row = p.db.prepare(`SELECT record_json FROM ${table}`).get() as { record_json: string };
+      const value = JSON.parse(row.record_json) as Record<string, unknown>;
+      if (kind === 'view') value['projectionRevision'] = 50;
+      else if (kind === 'event')
+        (value['view'] as Record<string, unknown>)['projectionRevision'] = 50;
+      else (value['revisions'] as Record<string, unknown>)['projectionRevision'] = 50;
+      p.db
+        .prepare(`UPDATE ${table} SET record_json=?,record_sha256=?`)
+        .run(canonicalJson(value), campaignCreationHash(value));
+      const before = p.db.serialize();
+      expect(() => readCampaignCreationCursor(p.db, 'context')).toThrow();
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+  it('rolls back the journal, head and cursor when a trigger changes the campaign after the view write', () => {
+    const p = queuedSetup();
+    enter(p);
+    p.db.exec(
+      "CREATE TRIGGER sabotage_queue AFTER UPDATE ON gm_request_queue_view BEGIN UPDATE campaign SET payload_json='{}' WHERE campaign_id='campaign'; END",
+    );
+    const before = p.db.serialize();
+    expect(() => back(p)).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+    expect(readCampaignCreationCursor(p.db, 'context')).toMatchObject({
+      kind: 'QUEUE',
+      formId: 'NET-017',
+    });
+  });
+  it('requires an existing transaction and actual current installation ownership', () => {
+    const p = queuedSetup();
+    expect(() => readGmRequestReviewViewStateInTransaction(p.db, p.scope)).toThrow();
+    enter(p);
+    resetDeviceIdentity(p.db, allow);
+    bootstrapDeviceIdentity(p.db);
+    const before = p.db.serialize();
+    expect(() => state(p)).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('advances connection presentation only and does not turn a refresh into a browser NAV', () => {
+    const p = queuedSetup();
+    const { delivery } = enter(p);
+    const changed = p.db
+      .transaction(() =>
+        appendGmRequestReviewEventInTransaction(p.db, p.scope, {
+          eventId: 'connection-refresh',
+          mutation: {
+            kind: 'CONNECTION_REFRESH',
+            connectionFactsSha256: campaignCreationHash([
+              { owner: 'peer', connectionState: 'DISCONNECTED' },
+            ]),
+          },
+        }),
+      )
+      .immediate();
+    expect(changed.view).toMatchObject({
+      formId: 'NET-017',
+      stateRevision: delivery.view.stateRevision,
+      projectionRevision: delivery.view.projectionRevision + 1,
+      requestQueueRevision: 0,
+    });
+    expect(changed.event.mutation.kind).toBe('CONNECTION_REFRESH');
   });
 });

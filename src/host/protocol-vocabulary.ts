@@ -29,6 +29,7 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'NET-004',
   'NET-005',
   'NET-011',
+  'NET-017',
   'CHR-027',
   'APP-011',
   'CMP-001',
@@ -299,13 +300,13 @@ export async function loadProtocolVocabulary(
           bindings[0].value.length > 0
         );
       }
-      if (/^CMP-00[1-6]$/u.test(formId)) {
+      if (/^CMP-00[1-6]$/u.test(formId) || formId === 'NET-017') {
         const binding = bindings[0];
         return (
           bindings.length === 1 &&
           binding?.parameterIndex === 0 &&
           binding.source === 'inherited' &&
-          (formId === 'CMP-006'
+          (formId === 'CMP-006' || formId === 'NET-017'
             ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(binding.value)
             : /^draft:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
                 binding.value,

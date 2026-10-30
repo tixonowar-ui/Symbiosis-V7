@@ -102,6 +102,23 @@ function verifiedContext(baseline: LocalCharacterExportBaseline): VerifiedBaseli
   return proof;
 }
 
+/** Unknown advertised IDs are incompatible; invalid trusted contexts still fail closed. */
+export function isStoredLocalCharacterExportBaselineCompatible(
+  baseline: LocalCharacterExportBaseline,
+  storedBaselineVersion: string,
+): boolean {
+  const { current } = verifiedContext(baseline);
+  if (storedBaselineVersion === current.baselineVersion) return true;
+  if (storedBaselineVersion !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion) return false;
+  if (
+    current.baselineVersion !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion &&
+    current.baselineVersion !== BASELINE_LINEAGE_SEALS.successorBaselineVersion
+  )
+    return false;
+  resolveStoredLocalCharacterExportBaseline(baseline, storedBaselineVersion);
+  return true;
+}
+
 /** Stored data keeps its original full manifest ID; current freshness never uses this view. */
 export function resolveStoredLocalCharacterExportBaseline(
   baseline: LocalCharacterExportBaseline,

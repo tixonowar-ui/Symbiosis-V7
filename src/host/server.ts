@@ -406,6 +406,7 @@ import { loadNetworkApplicationConfig } from './network-application-config.js';
 import { createLocalNetworkPeer } from './network-local-peer.js';
 import {
   createLocalNetworkRuntime,
+  createGmNetworkRuntime,
   type LocalNetworkConnection,
   type LocalNetworkHostMessage,
 } from './network-application.js';
@@ -553,6 +554,7 @@ interface LibraryRevisionRuntime {
 interface NavigationDependencies {
   readonly campaignCreation: ReturnType<typeof createCampaignCreationRuntime>;
   readonly network: ReturnType<typeof createLocalNetworkRuntime>;
+  readonly gmNetwork: ReturnType<typeof createGmNetworkRuntime>;
   readonly archivedCharacterExport?: ArchivedCharacterExportDependencies;
   readonly localCharacterExportBaseline: LocalCharacterExportBaseline;
   readonly advanceRevisions: HostServerConfig['advanceRevisions'];
@@ -6492,6 +6494,7 @@ async function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
+    if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
     if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     if (decoded.value.messageType !== 'character.identity-draft.replace')
@@ -6505,6 +6508,7 @@ async function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
+    if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
     if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     handleClientMessageV2(socket, decoded.value, dependencies, commandJournal, connection);
@@ -6515,9 +6519,23 @@ async function handleFrame(
     sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
     return;
   }
+  if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
   if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
   if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
   handleClientMessage(socket, decoded.value, dependencies, commandJournal, connection);
+}
+
+async function handleGmNetworkMessage(
+  socket: WebSocket,
+  message: ClientToHostMessage | ClientToHostV2Message | ClientToHostV3Message,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+): Promise<boolean> {
+  return dependencies.gmNetwork.handle(message, connection.campaign, (result) => {
+    if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+    else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+    else sendChecked(socket, result, dependencies.vocabulary);
+  });
 }
 
 async function handleNetworkMessage(
@@ -6691,7 +6709,7 @@ async function handleCampaignMessage(
     routeBindings: [],
     roleFilteredPayload: projectApp001Bootstrap(dependencies.catalog),
   });
-  return dependencies.campaignCreation.handle(
+  const handled = await dependencies.campaignCreation.handle(
     message,
     connection.campaign,
     {
@@ -6738,6 +6756,13 @@ async function handleCampaignMessage(
       else sendChecked(socket, result, dependencies.vocabulary);
     },
   );
+  if (handled)
+    dependencies.gmNetwork.watch(connection.campaign, (result) => {
+      if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+      else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+      else sendChecked(socket, result, dependencies.vocabulary);
+    });
+  return handled;
 }
 
 function rawDataText(data: RawData): string {
@@ -6912,22 +6937,49 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   NETWORK_HOST_LIFECYCLE.set(app, campaignNetwork);
   // Private upgrades must be closed before HTTP close waits for its upgraded sockets.
   app.addHook('preClose', async () => {
+    gmNetwork.close();
     localNetwork.close();
     localPeer.close();
     await campaignNetwork.close();
     await campaignBind.close();
     NETWORK_HOST_LIFECYCLE.delete(app);
   });
+  let gmFrames = Promise.resolve();
+  const scheduleGm = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = gmFrames.then(run);
+    gmFrames = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  };
+  const campaignCreation = createCampaignCreationRuntime({
+    schedule: scheduleGm,
+    database: config.database,
+    projectRoot,
+    baseline: localCharacterExportBaseline,
+    bind: campaignBind,
+    publishCampaign: campaignNetwork.publishCampaign,
+    requestReview: {
+      project: (c) => gmNetwork.project(c),
+      refreshConnectionPresentation: (c) => gmNetwork.refreshConnectionPresentation(c),
+      receipt: (c, id) => gmNetwork.receipt(c, id),
+    },
+  });
+  const gmNetwork = createGmNetworkRuntime({
+    schedule: scheduleGm,
+    config: networkConfig,
+    database: config.database,
+    baseline: localCharacterExportBaseline,
+    vocabulary,
+    campaignNetwork,
+    campaignPresentation: campaignCreation.project,
+  });
   const commandJournal: CommandJournal = new Map();
   const dependencies: NavigationDependencies = {
     network: localNetwork,
-    campaignCreation: createCampaignCreationRuntime({
-      database: config.database,
-      projectRoot,
-      baseline: localCharacterExportBaseline,
-      bind: campaignBind,
-      publishCampaign: campaignNetwork.publishCampaign,
-    }),
+    campaignCreation,
+    gmNetwork,
     localCharacterExportBaseline,
     ...(config.readArchivedCharacterExportAuthority === undefined
       ? {}
