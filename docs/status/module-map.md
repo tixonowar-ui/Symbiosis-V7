@@ -3,12 +3,13 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-30`, реализация #179 поверх слитого PR #178 (#170).
-- Подтверждённая база: 132 файла / 2464 Vitest-теста и 34 Chrome E2E.
-- Текущий срез защищает private local-app HTTP/WS до decode/read/allocation.
-  Семь integration suites используют настоящий TCP с Origin. Полный verify:
-  134 файла / 2499 Vitest-тестов; production Chrome E2E: 34/34 без retry.
-  Независимый прогон и CI фиксируются в PR; подробности — в [handoff](handoff.md).
+- Снимок: `2026-10-30`, техническая подготовка #171 поверх слитого PR #180 (#179).
+- Подтверждённая база `03bf13b`: 134 файла / 2499 Vitest-тестов и 34 Chrome E2E
+  без retry; независимый final-SHA прогон и CI прошли перед merge.
+- Текущий срез добавляет только LAN parser, private installation keys, peer
+  proof primitives, held-listener attachment и буквальные source assertions.
+  NET runtime, discovery, admission request и решения GM ещё не опубликованы.
+  Полные проверки текущей подготовки фиксируются в [handoff](handoff.md).
 - Артефакты и конвейер не менялись. Воспроизводимость проверяется отдельным
   CI-гейтом на чистом checkout.
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
@@ -188,6 +189,13 @@ runtime этим не реализованы.
 CREATE. QR реально декодируется; восстановление сохраняет campaign/receipt.
 Admission, Start, игровой clock и сцены ещё не реализованы.
 
+#171 имеет проверяемые технические заготовки: strict LAN locator, owner-bound
+Ed25519 installation identity (миграция 0008), scoped peer transcripts и передача
+actual sockets удерживаемому endpoint без close/rebind. Source assertions
+NET-001–005/009–012 и CHR-027 не регистрируют формы и не расширяют player authority.
+Дальнейшая реализация и принятие [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
+остаются открытыми; preliminary GM decisions требуют решения нормативного #177.
+
 После #170 очередь — #171 → #172 → #173 → #174 → #113. Для #113
 исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
@@ -198,7 +206,7 @@ Admission, Start, игровой clock и сцены ещё не реализо�
 | `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
 | `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0007`, включая локальный post-save и paused campaign                      | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0008`, включая post-save, paused campaign и private installation identity | M2   |
 | `src/host`                   | **частично** | character FINAL/post-save, GM launch, durable campaign draft и CREATE PAUSED                   | M4   |
 | `src/host/projections`       | **частично** | APP-001/002/004/009/010/011, CHR-001–026/028/031/032/036–042, CMP-001–006                      | M4   |
 | `src/web`                    | **частично** | character/post-save и GM campaign creation; production E2E с настоящим host                    | M5   |
@@ -216,11 +224,11 @@ Admission, Start, игровой clock и сцены ещё не реализо�
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                                                   |
-| ------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                           |
-| `tests/e2e`         | **частично** | 30 production-сценариев, включая recovery/cache, metadata/export/variant и GM archive fixture; полный новый прогон ожидается |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                       |
+| Каталог             | Состояние    | Примечание                                                                                                            |
+| ------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                    |
+| `tests/e2e`         | **частично** | 34 production-сценария, включая character/post-save и paused campaign creation; NET двух устройств пока не реализован |
+| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                |
 
 ---
 

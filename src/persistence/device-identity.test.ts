@@ -64,7 +64,7 @@ afterEach(() => {
 });
 
 describe('device identity migration', () => {
-  it('upgrades version 2 to 5 without changing existing persistence rows', () => {
+  it('upgrades version 2 to 8 without changing existing persistence rows', () => {
     const database = rawMemoryDatabase();
     expect(applyMigrationSequence(database, [migration0001, migration0002])).toBe(2);
     database
@@ -74,7 +74,7 @@ describe('device identity migration', () => {
       )
       .run('preserved', 'DRAFT', '{ "source": "v2" }');
 
-    expect(applyMigrations(database)).toBe(7);
+    expect(applyMigrations(database)).toBe(8);
     expect(
       database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
     ).toEqual([
@@ -85,6 +85,7 @@ describe('device identity migration', () => {
       { version: 5, name: 'symbiont-presentation' },
       { version: 6, name: 'local-character-post-save' },
       { version: 7, name: 'campaign-creation' },
+      { version: 8, name: 'network-installation-identity' },
     ]);
     expect(
       database
@@ -157,7 +158,7 @@ describe('device identity store', () => {
     databases.splice(databases.indexOf(firstDatabase), 1);
     const restartedDatabase = new Database(carrier);
     configurePersistenceDatabase(restartedDatabase);
-    expect(applyMigrations(restartedDatabase)).toBe(7);
+    expect(applyMigrations(restartedDatabase)).toBe(8);
     databases.push(restartedDatabase);
 
     expect(bootstrapDeviceIdentity(restartedDatabase)).toBe(firstBootstrap);

@@ -9,6 +9,15 @@
 
 ### Добавлено
 
+- **2026-10-30, подготовка issue #171:** строгий LAN locator, хранение
+  owner-bound ключа установки, проверка peer signatures и передача sockets
+  удерживаемого listener без close/rebind. Source assertions фиксируют NET
+  forms/CTA, включая ещё не опубликованные поверхности. Миграция 0008
+  не меняет существующие листы, кампании или receipts. Сетевые формы,
+  заявки и решения мастера ещё не реализованы; #171 остаётся открытой,
+  нормативный конфликт вынесен в #177.
+  [Предложенный ADR 0066](docs/adr/0066-device-connection-and-admission-request.md).
+
 - **2026-10-30, issue #179:** private HTTP identity и локальный `/state`
   проверяют реальные TCP endpoint/listener и Origin до чтения store,
   decode, replay и выделения ID. Чужой transport получает безопасный отказ

@@ -1,6 +1,15 @@
 export { bootstrapDeviceIdentity, loadDeviceId, resetDeviceIdentity } from './device-identity.js';
 export type { DeviceBindingsInvalidator, DeviceId } from './device-identity.js';
 export {
+  readDeviceInstallationIdentity,
+  ensureDeviceInstallationIdentity,
+  NetworkInstallationIdentityStoreError,
+} from './network-installation-identity.js';
+export type {
+  DeviceInstallationIdentityMaterial,
+  NetworkInstallationIdentityStoreCode,
+} from './network-installation-identity.js';
+export {
   CampaignCreationStoreError,
   campaignCreationHash,
   readLocalGmProfile,
