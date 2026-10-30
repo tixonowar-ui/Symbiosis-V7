@@ -122,6 +122,14 @@
 
 ### Исправлено
 
+- **2026-10-30, issue #191:** 19 сравнений полного SQLite snapshot в тестах
+  current campaign и installation identity используют native `Buffer.equals`.
+  Проверка всех байтов и длины сохранена вместе с rollback, corruption,
+  restart и authority assertions. Парный прогон тех же 77 тестов сократился
+  с 33,84 до 2,74 с; данные Advisor, workers и таймауты не менялись.
+  Замер подтверждает стоимость сравнений, но не единственную причину
+  прежнего CI-таймаута Advisor.
+
 - **2026-10-28, issue #146:** RANDOM checkpoint после safe-return/resume
   сохраняет результирующую presentation revision и проходит полную persisted
   validation. Подтверждение взаимодействий работает уже для первой composition
