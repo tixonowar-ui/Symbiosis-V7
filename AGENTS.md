@@ -165,7 +165,7 @@ tools/
 
 tests/
   integration/      кросс-слойные тесты. ПУСТО
-  e2e/              Playwright, тридцать шесть production-сценариев
+  e2e/              Playwright, тридцать восемь production-сценариев
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
