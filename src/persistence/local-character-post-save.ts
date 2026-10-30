@@ -5,6 +5,8 @@ import type { JsonObject } from '@shared/wire-protocol.js';
 import type { IdentityDraftValues } from '@shared/wire-v3-protocol.js';
 import { loadDeviceId } from './device-identity.js';
 import { CAMPAIGN_CREATION_TABLES } from './migrations/0007-campaign-creation.js';
+import { NETWORK_INSTALLATION_IDENTITY_TABLES } from './migrations/0008-network-installation-identity.js';
+import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 import {
   loadLocalCharacterCheckpoint,
   loadCampaignCheckpoint,
@@ -502,12 +504,20 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     return fail('restore cursor retirement requires the checkpoint transaction');
   const schema = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
   const version = schema['version'];
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 7)
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 9)
     return fail('unknown schema version for restore cursor retirement');
   // Versions 1..5 predate this aggregate. A version-6 database must have its actual tables.
   if (version < 6) return;
-  if (version === 7) {
+  if (version >= 7) {
     for (const table of CAMPAIGN_CREATION_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  }
+  if (version >= 8) {
+    for (const table of NETWORK_INSTALLATION_IDENTITY_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  }
+  if (version === 9) {
+    for (const table of LOCAL_NETWORK_TAB_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   }
   if (

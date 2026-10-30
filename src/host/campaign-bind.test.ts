@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createServer, type Server } from 'node:net';
+import { createServer as createHttpServer, get } from 'node:http';
+import { createConnection, createServer, type Server, type Socket } from 'node:net';
 import type { NetworkInterfaceInfo } from 'node:os';
 import type { CampaignHostValues } from '@shared/campaign-creation.js';
 import {
@@ -10,6 +11,8 @@ import {
 
 const managers: CampaignBindManager[] = [];
 const servers: Server[] = [];
+const clients: Socket[] = [];
+const clientErrors: Error[] = [];
 const ipv4 = (address: string): NetworkInterfaceInfo => ({
   address,
   family: 'IPv4',
@@ -72,9 +75,285 @@ const occupied = async (port: number): Promise<boolean> => {
     throw error;
   }
 };
+const connect = async (port: number): Promise<Socket> => {
+  const socket = createConnection({ host: '127.0.0.1', port });
+  clients.push(socket);
+  socket.on('error', (error) => clientErrors.push(error));
+  await new Promise<void>((resolve, reject) => {
+    socket.once('error', reject);
+    socket.once('connect', () => {
+      socket.off('error', reject);
+      resolve();
+    });
+  });
+  return socket;
+};
+const closed = (socket: Socket): Promise<void> =>
+  socket.closed
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => socket.once('close', () => resolve()));
+const httpText = (port: number): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const request = get({ host: '127.0.0.1', port, path: '/', agent: false }, (response) => {
+      let text = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk: string) => {
+        text += chunk;
+      });
+      response.once('error', reject);
+      response.once('end', () => resolve(text));
+    });
+    request.once('error', reject);
+    request.setTimeout(2000, () => request.destroy(new Error('Test HTTP request timed out')));
+  });
 afterEach(async () => {
+  for (const socket of clients.splice(0)) socket.destroy();
   await Promise.all(managers.splice(0).map((item) => item.close()));
   await Promise.all(servers.splice(0).map(closeServer));
+  clientErrors.length = 0;
+});
+
+describe('campaign held-socket attachment', () => {
+  it('upgrades the held TCP listener into real HTTP without closing or rebinding the endpoint', async () => {
+    const m = manager();
+    const port = await unusedPort();
+    expect(m.endpointForCampaign('campaign')).toBeNull();
+    await m.prepare('draft', config(port));
+    expect(m.endpointForCampaign('campaign')).toBeNull();
+    m.retainForCampaign('draft', 'campaign');
+    const endpoint = { kind: 'OWNED_RESERVATION', address: '127.0.0.1', port };
+    expect(m.endpointForCampaign('campaign')).toEqual(endpoint);
+    const refused = await connect(port);
+    await closed(refused);
+    expect(await occupied(port)).toBe(true);
+
+    const http = createHttpServer((_request, reply) => reply.end('campaign HTTP'));
+    servers.push(http);
+    const errors: unknown[] = [];
+    const handler = (socket: Socket): void => {
+      http.emit('connection', socket);
+    };
+    const attachment = m.attachCampaignSocketHandler('campaign', handler, (error) =>
+      errors.push(error),
+    );
+    expect(attachment).toMatchObject(endpoint);
+    expect(http.listening).toBe(false);
+    expect(await httpText(port)).toBe('campaign HTTP');
+    expect(await occupied(port)).toBe(true);
+    expect(m.attachCampaignSocketHandler('campaign', handler, () => {})).toBe(attachment);
+    expect(() =>
+      m.attachCampaignSocketHandler(
+        'campaign',
+        () => {},
+        () => {},
+      ),
+    ).toThrow('another socket handler');
+    if (attachment.kind !== 'OWNED_RESERVATION') throw new Error('Expected owned reservation');
+    attachment.detach();
+    attachment.detach();
+    const detached = await connect(port);
+    await closed(detached);
+    expect(await occupied(port)).toBe(true);
+
+    const next = m.attachCampaignSocketHandler('campaign', handler, (error) => errors.push(error));
+    expect(next).not.toBe(attachment);
+    attachment.detach();
+    expect(await httpText(port)).toBe('campaign HTTP');
+    expect(errors).toEqual([]);
+    await m.close();
+    expect(m.endpointForCampaign('campaign')).toBeNull();
+    expect(await occupied(port)).toBe(false);
+  });
+
+  it('destroys forwarded sockets on detach and shutdown so close does not wait for clients', async () => {
+    const m = manager();
+    const port = await unusedPort();
+    await m.recover('campaign', config(port));
+    const accepted: Socket[] = [];
+    const attachment = m.attachCampaignSocketHandler(
+      'campaign',
+      (socket) => {
+        accepted.push(socket);
+        socket.write('ready');
+      },
+      (error) => {
+        throw error;
+      },
+    );
+    if (attachment.kind !== 'OWNED_RESERVATION') throw new Error('Expected owned reservation');
+    const one = await connect(port);
+    await new Promise((resolve) => one.once('data', resolve));
+    const oneClosed = closed(one);
+    attachment.detach();
+    await oneClosed;
+    expect(accepted[0]!.destroyed).toBe(true);
+    m.attachCampaignSocketHandler(
+      'campaign',
+      (socket) => socket.write('ready'),
+      () => {},
+    );
+    const two = await connect(port);
+    await new Promise((resolve) => two.once('data', resolve));
+    const twoClosed = closed(two);
+    await m.close();
+    await twoClosed;
+    expect(await occupied(port)).toBe(false);
+  });
+
+  it('returns an explicit borrowed-shell outcome without changing or closing its listener', async () => {
+    const http = createHttpServer((_request, reply) => reply.end('existing shell'));
+    servers.push(http);
+    await new Promise<void>((resolve) => http.listen(0, '127.0.0.1', resolve));
+    const port = portOf(http);
+    const m = manager({
+      readShellListener: () => (http.listening ? { address: '127.0.0.1', port } : null),
+    });
+    await m.prepare('draft', config(port));
+    m.retainForCampaign('draft', 'campaign');
+    const listeners = http.listeners('connection');
+    let forwarded = 0;
+    const attachment = m.attachCampaignSocketHandler(
+      'campaign',
+      () => forwarded++,
+      () => {},
+    );
+    expect(attachment).toEqual({ kind: 'BORROWED_SHELL', address: '127.0.0.1', port });
+    expect(m.endpointForCampaign('campaign')).toEqual(attachment);
+    expect(http.listeners('connection')).toEqual(listeners);
+    expect(await httpText(port)).toBe('existing shell');
+    expect(forwarded).toBe(0);
+    await m.close();
+    expect(http.listening).toBe(true);
+    expect(await httpText(port)).toBe('existing shell');
+  });
+
+  it('rejects unknown and expired campaigns and removes an expired attachment before recovery', async () => {
+    let present = true;
+    const m = manager({
+      readShellListener: () => null,
+      readNetworkInterfaces: () => (present ? testInterfaces() : {}),
+    });
+    const port = await unusedPort();
+    expect(() =>
+      m.attachCampaignSocketHandler(
+        'unknown',
+        () => {},
+        () => {},
+      ),
+    ).toThrow('unknown or expired');
+    await m.recover('campaign', config(port));
+    m.attachCampaignSocketHandler(
+      'campaign',
+      (socket) => socket.write('ready'),
+      () => {},
+    );
+    const client = await connect(port);
+    await new Promise((resolve) => client.once('data', resolve));
+    const clientClosed = closed(client);
+    present = false;
+    expect(m.endpointForCampaign('campaign')).toBeNull();
+    await clientClosed;
+    expect(() =>
+      m.attachCampaignSocketHandler(
+        'campaign',
+        () => {},
+        () => {},
+      ),
+    ).toThrow('unknown or expired');
+    present = true;
+    expect(await m.recover('campaign', config(port))).toEqual({
+      status: 'RESERVED',
+      reasonCode: null,
+    });
+    const refused = await connect(port);
+    await closed(refused);
+    m.attachCampaignSocketHandler(
+      'campaign',
+      (socket) => socket.end('recovered'),
+      () => {},
+    );
+    const recovered = await connect(port);
+    let text = '';
+    recovered.setEncoding('utf8');
+    recovered.on('data', (chunk: string) => {
+      text += chunk;
+    });
+    await closed(recovered);
+    expect(text).toBe('recovered');
+    await m.recover('campaign', config(port, { activePlayerCapacity: 4 }));
+    const afterFailure = await connect(port);
+    await closed(afterFailure);
+    expect(await occupied(port)).toBe(true);
+  });
+
+  it('contains throwing and rejecting handlers and reports socket errors without leaving an active client', async () => {
+    const m = manager();
+    const port = await unusedPort();
+    await m.recover('campaign', config(port));
+    const errors: unknown[] = [];
+    const failure = new Error('handler failure');
+    const attachment = m.attachCampaignSocketHandler(
+      'campaign',
+      () => {
+        throw failure;
+      },
+      (error) => errors.push(error),
+    );
+    const one = await connect(port);
+    await closed(one);
+    expect(errors).toEqual([failure]);
+    if (attachment.kind !== 'OWNED_RESERVATION') throw new Error('Expected owned reservation');
+    attachment.detach();
+    // JavaScript callers can violate the synchronous callback contract; contain their rejection.
+    const rejectingHandler = (() => Promise.reject(failure)) as unknown as (socket: Socket) => void;
+    const rejecting = m.attachCampaignSocketHandler('campaign', rejectingHandler, (error) =>
+      errors.push(error),
+    );
+    const two = await connect(port);
+    await closed(two);
+    expect(errors).toEqual([failure, failure]);
+    if (rejecting.kind !== 'OWNED_RESERVATION') throw new Error('Expected owned reservation');
+    rejecting.detach();
+    m.attachCampaignSocketHandler(
+      'campaign',
+      (socket) => socket.destroy(failure),
+      (error) => errors.push(error),
+    );
+    const three = await connect(port);
+    await closed(three);
+    expect(errors).toEqual([failure, failure, failure]);
+  });
+
+  it('fails closed when the application error observer throws', async () => {
+    const m = manager();
+    const port = await unusedPort();
+    await m.recover('campaign', config(port));
+    m.attachCampaignSocketHandler(
+      'campaign',
+      () => {
+        throw new Error('handler failure');
+      },
+      () => {
+        throw new Error('observer failure');
+      },
+    );
+    const client = await connect(port);
+    await closed(client);
+    expect(m.endpointForCampaign('campaign')).toBeNull();
+    expect(() =>
+      m.attachCampaignSocketHandler(
+        'campaign',
+        () => {},
+        () => {},
+      ),
+    ).toThrow('unknown or expired');
+    expect(await m.recover('campaign', config(port))).toEqual({
+      status: 'RESERVED',
+      reasonCode: null,
+    });
+    const refused = await connect(port);
+    await closed(refused);
+  });
 });
 
 describe('campaign bind reservations (ADR 0064)', () => {

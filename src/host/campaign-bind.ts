@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createServer, type Server } from 'node:net';
+import { createServer, type Server, type Socket } from 'node:net';
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import type {
   CampaignBindPreflight,
@@ -22,6 +22,20 @@ export interface CampaignBindRecovery {
   readonly status: 'RESERVED' | 'UNAVAILABLE';
   readonly reasonCode: null | 'PORT_UNAVAILABLE' | 'BIND_FAILED';
 }
+export interface CampaignNetworkEndpoint {
+  readonly kind: 'BORROWED_SHELL' | 'OWNED_RESERVATION';
+  readonly address: string;
+  readonly port: number;
+}
+export type CampaignSocketAttachment =
+  | (CampaignNetworkEndpoint & { readonly kind: 'BORROWED_SHELL' })
+  | (CampaignNetworkEndpoint & { readonly kind: 'OWNED_RESERVATION'; readonly detach: () => void });
+interface SocketHandler {
+  readonly handler: (socket: Socket) => void;
+  readonly onError: (error: unknown) => void;
+  readonly sockets: Set<Socket>;
+  readonly outcome: CampaignSocketAttachment & { readonly kind: 'OWNED_RESERVATION' };
+}
 interface Config extends CampaignHostValues {
   readonly hostAddress: string;
   readonly hostPort: number;
@@ -35,6 +49,7 @@ interface Lease {
   readonly server: Server | null;
   readonly borrowedListener: CampaignShellListener | null;
   readonly sourceDraftId: string | null;
+  socketHandler: SocketHandler | null;
   failed: boolean;
   closePromise?: Promise<void>;
 }
@@ -75,7 +90,7 @@ const unavailableCode = (error: unknown): 'PORT_UNAVAILABLE' | 'BIND_FAILED' =>
 const unsupportedAddress = (ip: string): boolean =>
   ip === '0.0.0.0' || ip === '::' || /^fe[89ab][0-9a-f]:/u.test(ip);
 
-/** Reservations hold real listeners, but never accept a player or start a campaign host. */
+/** Held listeners and optional socket handlers never grant player admission by themselves. */
 export function createCampaignBindManager(options: CampaignBindOptions) {
   const readInterfaces = options.readNetworkInterfaces ?? networkInterfaces;
   const allocateLeaseId = options.allocateLeaseId ?? randomUUID;
@@ -163,9 +178,26 @@ export function createCampaignBindManager(options: CampaignBindOptions) {
       shell.port === lease.borrowedListener.port
     );
   }
+  function detachHandler(lease: Lease, attachment: SocketHandler): void {
+    if (lease.socketHandler === attachment) lease.socketHandler = null;
+    for (const socket of attachment.sockets) socket.destroy();
+  }
+  function clearHandler(lease: Lease): void {
+    if (lease.socketHandler !== null) detachHandler(lease, lease.socketHandler);
+  }
+  function reportSocketError(lease: Lease, attachment: SocketHandler, error: unknown): void {
+    try {
+      attachment.onError(error);
+    } catch {
+      // A throwing observer must revoke the endpoint, not escape an untrusted socket event.
+      if (lease.socketHandler === attachment) lease.failed = true;
+      detachHandler(lease, attachment);
+    }
+  }
   function closeLease(lease: Lease): Promise<void> {
     if (lease.closePromise !== undefined) return lease.closePromise;
     lease.failed = true;
+    clearHandler(lease);
     const server = lease.server;
     lease.closePromise =
       server === null
@@ -195,13 +227,47 @@ export function createCampaignBindManager(options: CampaignBindOptions) {
       server: null,
       borrowedListener: shell,
       sourceDraftId,
+      socketHandler: null,
       failed: false,
     };
     if (shell !== null) return lease;
-    const server = createServer((socket) => socket.destroy());
+    const server = createServer((socket) => {
+      const attachment = owned.socketHandler;
+      if (attachment === null) {
+        socket.destroy();
+        return;
+      }
+      const socketError = (error: Error): void => {
+        socket.destroy();
+        reportSocketError(owned, attachment, error);
+      };
+      attachment.sockets.add(socket);
+      socket.on('error', socketError);
+      socket.once('close', () => {
+        attachment.sockets.delete(socket);
+        socket.off('error', socketError);
+      });
+      try {
+        if (!live(owned)) {
+          clearHandler(owned);
+          socket.destroy();
+          return;
+        }
+        void Promise.resolve(attachment.handler(socket)).catch((error: unknown) => {
+          socket.destroy();
+          reportSocketError(owned, attachment, error);
+        });
+      } catch (error) {
+        socket.destroy();
+        reportSocketError(owned, attachment, error);
+      }
+    });
     const owned: Lease = { ...lease, server };
-    server.on('error', () => {
+    server.on('error', (error) => {
       owned.failed = true;
+      const attachment = owned.socketHandler;
+      clearHandler(owned);
+      if (attachment !== null) reportSocketError(owned, attachment, error);
     });
     try {
       await new Promise<void>((resolve, reject) => {
@@ -236,6 +302,20 @@ export function createCampaignBindManager(options: CampaignBindOptions) {
     return lease.fingerprint === fingerprint(config) && live(lease)
       ? passed(lease)
       : failure('LEASE_EXPIRED');
+  }
+  function campaignLease(campaignId: string): Lease | null {
+    const lease = leases.get(`campaign:${idAt(campaignId)}`);
+    if (lease === undefined) return null;
+    if (live(lease)) return lease;
+    clearHandler(lease);
+    return null;
+  }
+  function endpoint(lease: Lease): CampaignNetworkEndpoint {
+    return {
+      kind: lease.server === null ? 'BORROWED_SHELL' : 'OWNED_RESERVATION',
+      address: lease.config.hostAddress,
+      port: lease.config.hostPort,
+    };
   }
   async function releaseKey(key: string): Promise<void> {
     const flight = flights.get(key);
@@ -294,6 +374,39 @@ export function createCampaignBindManager(options: CampaignBindOptions) {
   return {
     interfaces,
     describe,
+    endpointForCampaign: (campaignId: string): CampaignNetworkEndpoint | null => {
+      const lease = campaignLease(campaignId);
+      return lease === null ? null : endpoint(lease);
+    },
+    attachCampaignSocketHandler: (
+      campaignId: string,
+      handler: (socket: Socket) => void,
+      onError: (error: unknown) => void,
+    ): CampaignSocketAttachment => {
+      if (typeof handler !== 'function' || typeof onError !== 'function')
+        throw new TypeError('Campaign socket handler and error observer are required');
+      const lease = campaignLease(campaignId);
+      if (lease === null) throw new Error('Campaign bind lease is unknown or expired');
+      const current = endpoint(lease);
+      if (current.kind === 'BORROWED_SHELL') return { ...current, kind: 'BORROWED_SHELL' };
+      if (lease.socketHandler !== null) {
+        if (lease.socketHandler.handler !== handler)
+          throw new Error('Campaign bind lease already has another socket handler');
+        return lease.socketHandler.outcome;
+      }
+      const attachment: SocketHandler = {
+        handler,
+        onError,
+        sockets: new Set(),
+        outcome: {
+          ...current,
+          kind: 'OWNED_RESERVATION',
+          detach: () => detachHandler(lease, attachment),
+        },
+      };
+      lease.socketHandler = attachment;
+      return attachment.outcome;
+    },
     validate: (leaseId: string, draftId: string, host: CampaignHostValues): boolean => {
       const current = describe(draftId, host);
       return current.status === 'PASS' && current.leaseIdOrNull === leaseId;
@@ -343,10 +456,14 @@ export function createCampaignBindManager(options: CampaignBindOptions) {
     ): Promise<CampaignBindRecovery> => {
       const key = `campaign:${idAt(campaignId)}`;
       const config = configAt(host);
-      if (config === null) return { status: 'UNAVAILABLE', reasonCode: 'BIND_FAILED' };
       const existing = leases.get(key);
-      if (existing !== undefined && existing.fingerprint !== fingerprint(config))
+      if (
+        config === null ||
+        (existing !== undefined && existing.fingerprint !== fingerprint(config))
+      ) {
+        if (existing !== undefined) clearHandler(existing);
         return { status: 'UNAVAILABLE', reasonCode: 'BIND_FAILED' };
+      }
       const result = await reserve(key, config, null, () => `recovery:${campaignId}`);
       return result.status === 'PASS'
         ? { status: 'RESERVED', reasonCode: null }

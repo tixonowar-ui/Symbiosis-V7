@@ -9,6 +9,19 @@
 
 ### Добавлено
 
+- **2026-10-30, issue #182, предпосылка #171:** закрытые installation keys,
+  LAN locator/discovery и подписанный peer channel с ограниченными очередями.
+  FINAL candidates проверяются полным existing creation replay и точным DTO,
+  private history не возвращается в проекции. Current campaign reader отделяет
+  immutable CREATE от текущего checkpoint; прежние zero-copy guards сохранены.
+  Миграции 0008/0009 добавляют private identity и аудируемые local input tabs:
+  entry/close, exact replay, owner reset, явный recovery pointer и предел 0–3.
+  Listener передаёт sockets без close/rebind, standalone codecs не публикуют
+  NET forms или application request runtime. #171 остаётся открытой, решения
+  мастера требуют нормативного #177.
+  [ADR 0067](docs/adr/0067-private-campaign-network-foundation.md);
+  [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md) предложен.
+
 - **2026-10-30, issue #179:** private HTTP identity и локальный `/state`
   проверяют реальные TCP endpoint/listener и Origin до чтения store,
   decode, replay и выделения ID. Чужой transport получает безопасный отказ

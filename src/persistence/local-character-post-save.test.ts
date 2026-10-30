@@ -273,14 +273,27 @@ describe('receipt-backed restore cursor', () => {
     expect(loadLocalCharacterCheckpoint(p.db, p.scope.entityId)).toEqual(p.complete);
     expect(readPostSaveRestoreCommand(p.db, p.device)?.command).toEqual(saved.command);
   });
-  it.each(['missing-table', 'missing-campaign-table', 'unknown-version'] as const)(
-    'does not downgrade a version-7 store when %s invalidates cursor retirement',
+  it.each([
+    'missing-table',
+    'missing-campaign-table',
+    'missing-installation-table',
+    'missing-network-tab-table',
+    'missing-network-close-table',
+    'unknown-version',
+  ] as const)(
+    'does not downgrade a version-9 store when %s invalidates cursor retirement',
     (damage) => {
       const p = setup('DRAFT');
       const original = readLocalCharacter(p.db, p.scope.entityId);
       if (damage === 'missing-table') p.db.exec('DROP TABLE local_character_post_save_cursor');
       else if (damage === 'missing-campaign-table') p.db.exec('DROP TABLE campaign_draft_update');
-      else p.db.prepare('UPDATE schema_migration SET version = 8 WHERE version = 7').run();
+      else if (damage === 'missing-installation-table')
+        p.db.exec('DROP TABLE device_installation_identity');
+      else if (damage === 'missing-network-tab-table')
+        p.db.exec('DROP TABLE local_network_active_tab');
+      else if (damage === 'missing-network-close-table')
+        p.db.exec('DROP TABLE local_network_tab_close');
+      else p.db.prepare('UPDATE schema_migration SET version = 10 WHERE version = 9').run();
       expect(() =>
         commitLocalCharacterCheckpoint(p.db, p.scope.entityId, p.complete.checkpointId, (write) =>
           write(

@@ -1,9 +1,78 @@
 # Передача контекста — 2026-10-30
 
-Срез issue #179, ветка `codex/179-local-app-boundary`.
-База — `5ca1b4c8a105d25355e8c90a1caaa0438014d461`: PR #178 слит,
-issue #170 закрыта. Независимые проверки базы подтвердили 132 файла /
-2464 Vitest-теста и 34 production E2E без retry. Это не проверка нового среза.
+Срез issue #182, ветка `codex/182-campaign-network-foundation`.
+База — `03bf13b5b3d56ea04f81659bda7a53aef8e00742`: PR #178 и #180 слиты,
+issues #170 и #179 фактически CLOSED/COMPLETED. Независимые проверки базы:
+134 файла / 2499 Vitest-тестов и 34 production E2E без retry; CI тоже зелёный.
+Это не утверждение готовности нового NET runtime.
+
+## Текущий самостоятельный контракт #182
+
+Инфраструктурная предпосылка отделена от прикладной #171 по контракту:
+собственная установка/SQLite и private authenticated Node channel. Критерии
+#171 не изменены, её player/GM journey остаётся отдельной прикладной работой.
+Черновик PR #181 содержит только прежнюю Phase A; его сменяет отдельный
+инфраструктурный PR для issue #182.
+
+- Installation identity и явный startup initializer; network loading read-only,
+  без bootstrap/repair в отказавшей команде.
+- Actual TCP private handshake/RPC с canonical JSON, обеими identities/nonces,
+  точным pinned key, sequence, bounds, deadlines и безопасными ошибками.
+- Actual UDP discovery с явной конфигурацией, correlation, duplicates/conflicts,
+  byte/offer limits и диагностикой; manual IPv6 locator поддержан отдельно.
+- Actual owned FINAL evidence: original checkpoint strings, полный existing replay,
+  metadata0 baseline и exact safe DTO; старые pinned metadata сохраняются после edits.
+- Immutable campaign birth proof отдельно от current checkpoint/ACTIVE count.
+- Миграция 0009: UNBOUND entry/close, immutable receipts, audited retirement,
+  TARGET/NONE pointer, known command preflight и 0–3 живых logical tabs.
+- Closed standalone client/application codecs, без регистрации NET форм/routes.
+
+[ADR 0067](../adr/0067-private-campaign-network-foundation.md) фиксирует
+фундамент; ADR 0066 остаётся предложенным. Application peer executor/carrier,
+distributed outbox/request journals, NET UI, GM decisions и полноценный production
+сценарий двух browser contexts не реализованы. Это следующий срез #171.
+
+Полный текущий verify/E2E, независимый повтор на committed SHA и CI должны
+подтвердиться перед merge инфраструктурного PR; focused-прогоны этого не заменяют.
+
+## История предыдущей Phase A #171
+
+### Состояние на `e5b7f17`
+
+- Held `net.Server` передаёт actual sockets campaign handler без close/rebind.
+  Owned attachments уничтожают sockets при detach/release/shutdown; borrowed
+  listener остаётся под управлением local shell.
+- Strict LAN locator принимает IP-only HTTP QR #170 и ручной адрес. DNS,
+  runtime Internet, необычные IPv4 encodings и двусмысленный query запрещены.
+- Миграция 0008 хранит owner-bound private installation identity отдельно от
+  campaign/checkpoint/export. Reset не присваивает старый ключ; повреждение
+  вызывает отказ. Транзакционный validator получает выбранную сохранённую пару.
+- Host primitives проверяют реальный Ed25519 keypair, canonical DER/Base64,
+  transcript с обеими сторонами/campaign/nonces/sequence/body hash. Private key
+  не входит в публичную identity. Это possession proof, не GM authority или
+  аттестация честности runtime; отдельного player password нет.
+- Буквальные assertions охватывают NET-001–005/009–012, CHR-027 и player-menu
+  ingress. Они не публикуют UI и не создают request/campaign copy/seat.
+- [ADR 0066](../adr/0066-device-connection-and-admission-request.md) предложен,
+  не принят. Discovery, peer endpoint/codec, lanes/outbox/request stores,
+  candidate witness, actual NET flow и production E2E двух устройств ещё нужны.
+
+#171 остаётся открытой; подготовку нельзя считать её выполнением или мержить
+как готовый сквозной срез. #177 требует явного нормативного решения владельца.
+Original private candidate witness и точное применение existing creation replay
+проработаны в `reports/171-candidate-evidence-audit.md`; safe export validator
+сам по себе не доказывает механическую корректность rechecksummed remote DTO.
+
+Точные результаты новых полных проверок фиксируются в описании draft PR и
+`reports/171-phase-a-verify.log` / `171-phase-a-e2e.log` после заморозки diff.
+Частичные focused-прогоны не подменяют критерии готовности всей #171.
+
+## История слитого prerequisite #179
+
+Ниже доказательства исходного изменения PR #180; его независимый прогон на
+`224552bec313b7753103ed4967a3f9cd85826d4b` подтвердил 134 файла / 2499 тестов
+и 34/34 E2E без retry, чистое дерево до/между/после. Merge tree идентичен этому
+SHA. Непрерывный новый LAN runtime #171 этим не проверялся.
 
 ## Что исправлено в #179
 
@@ -49,7 +118,8 @@ SQLite schema, artifacts/generated, зависимости, CI и конфигу
   Node replay fixtures тоже передают настоящий Origin своего listener.
   Лог: `reports/179-e2e-root.log`. После уточнения этих двух fixture headers
   общий typecheck повторно прошёл: `reports/179-final-typecheck.log`.
-- Независимый final-SHA прогон и CI фиксируются в PR перед merge.
+- Независимый final-SHA прогон и CI прошли перед merge PR #180:
+  134 файла / 2499 тестов и 34/34 E2E без retry; tree squash совпал с проверенным.
 
 ## Дальнейшая очередь
 
@@ -62,7 +132,7 @@ Read-only подготовка #171 сохранена в reports: source audit,
 и store API proposal. Выбранная для обсуждения архитектура — собственный local
 Node/SQLite устройства и отдельный bridge к единственному campaign writer.
 Provisional input controllerSeat из ADR 0027/0030 отделён от admitted seats и
-campaign capacity. Реализация этих новых contracts пока не начата.
+campaign capacity. Технические primitives перечислены выше; полный flow не готов.
 
 После #171 идут #172 → #173 → #174. #113 требует отдельной санкции source
 поставки и явной границы runtime; вопросы о массе/поле/переиспользовании

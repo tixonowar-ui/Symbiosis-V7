@@ -29,6 +29,8 @@ import {
   commitCampaignCreation,
   readCampaignCreationCommand,
   readCampaignPrivateOwner,
+  readCampaignCreationOrigin,
+  readHostedCampaignCreationOrigin,
   type StoredCampaignDraft,
   type RedactedCampaignDraftRequest,
   type CampaignSecretUpdate,
@@ -216,6 +218,28 @@ function fileSetup() {
 }
 
 describe('device-owned campaign draft aggregate', () => {
+  it('reads exact immutable CREATE origin without returning the private credential', () => {
+    const { db, device } = setup();
+    ready(db);
+    const input = creationInput(db);
+    const command = commitCampaignCreation(db, input, allow);
+    const before = snapshot(db);
+    const validate = vi.fn((owner) => {
+      expect(db.inTransaction).toBe(true);
+      expect(owner).toMatchObject({
+        campaignId: 'campaign',
+        ownerDeviceId: device,
+        verifier: proofA,
+      });
+    });
+    const origin = readCampaignCreationOrigin(db, 'context', 'campaign', validate);
+    expect(origin).toEqual({ payload: readPausedCampaign(db, 'context', 'campaign'), command });
+    expect(readHostedCampaignCreationOrigin(db, 'campaign', validate)).toEqual(origin);
+    expect(validate).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(origin)).not.toMatch(/private-verifier|opaqueKdf|verifierSha256|"salt"/u);
+    expect(snapshot(db)).toEqual(before);
+  });
+
   it('keeps an exact checksummed active context pointer, rejects corruption and does not rebind after reset', () => {
     const p = setup();
     expect(readActiveLocalGmContext(p.db, p.device)?.gmLocalContextId).toBe('context');
