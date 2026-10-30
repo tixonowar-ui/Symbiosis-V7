@@ -164,7 +164,7 @@ tests/
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              65 ADR-записи + README. Статусы решений указаны в реестре
+  adr/              68 ADR-записей + README. Статусы решений указаны в реестре
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

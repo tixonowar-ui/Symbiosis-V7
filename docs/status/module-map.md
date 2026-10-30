@@ -3,6 +3,26 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
+## Текущий срез #190 — 2026-10-30
+
+База `fe5823d`: PR #189 (#184) и тестовый PR #192 (#191) смёржены. Политика
+и native binary comparisons подтянуты в #185. Независимые проверки базы: 148 файлов /
+3199 тестов, 34 production E2E без retry; CI зелёный. Ниже сохранён прежний
+снимок инфраструктуры #182; прикладной #171 пока находится в отдельном draft.
+
+В #190 loader/resolver отличает current baseline от запечатанного исторического
+context B0/B1. Archive/candidate и read/replay сохранённой кампании сохраняют
+исходные ID/bytes/receipts; проверяются manifests, 24 catalog inputs, tuple и
+authority context. Точные filesystem freshness guards сохраняются. SQL/schema,
+артефакты и опубликованные формы не меняются. [ADR 0068](../adr/0068-verified-artifact-baseline-lineage.md).
+
+Поставка Atlas 1.6 #177 ещё не применена: её реальные bytes используются только
+в проверяемом patch fixture. Application-only integration peer/SQL/discovery
+остаётся в #171. Полные verify/E2E и независимый final-SHA review обязательны
+до merge текущего среза; результаты фиксируются в PR и [handoff](handoff.md).
+
+## Предыдущий снимок #182
+
 - Снимок: `2026-10-30`, инфраструктурная предпосылка #182 для #171 поверх PR #180 (#179).
 - Подтверждённая база `03bf13b`: 134 файла / 2499 Vitest-тестов и 34 Chrome E2E
   без retry; независимый final-SHA прогон и CI прошли перед merge.

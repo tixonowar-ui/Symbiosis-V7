@@ -21,6 +21,7 @@ import {
   canonicalPostSaveJson,
   deriveLocalFinalExport,
   postSaveSha256,
+  resolveStoredLocalCharacterExportBaseline,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import { metadataForFinal, type LocalPostSaveDependencies } from './local-character-post-save.js';
@@ -331,10 +332,11 @@ export function validateFinalAdmissionCandidate(
   if (typeof witnessText !== 'string') return fail('INVALID_INPUT', 'witness');
   if (Buffer.byteLength(witnessText, 'utf8') > maximum) return fail('WITNESS_TOO_LARGE', 'witness');
   const expected = descriptor(expectedDescriptor);
-  const baselineVersion = checked('INVALID_INPUT', 'baseline', () => baseline.baselineVersion);
-  if (expected.baselineVersion !== baselineVersion) return fail('CANDIDATE_MISMATCH', 'baseline');
+  const sourceBaseline = checked('CANDIDATE_MISMATCH', 'baseline', () =>
+    resolveStoredLocalCharacterExportBaseline(baseline, expected.baselineVersion),
+  );
   const doc = checked('INVALID_INPUT', 'exportDocument', () =>
-    validateArchivedLocalExportDocument(jsonData(expectedExportDocument), baseline),
+    validateArchivedLocalExportDocument(jsonData(expectedExportDocument), sourceBaseline),
   );
   return checked('INVALID_WITNESS', 'witness', () => {
     const raw: unknown = JSON.parse(witnessText);
@@ -344,7 +346,7 @@ export function validateFinalAdmissionCandidate(
       w,
       doc['metadata'] as unknown as PostSaveMetadata,
       doc['metadataRevision'] as number,
-      baseline,
+      sourceBaseline,
     );
     if (
       !isDeepStrictEqual(result.descriptor, expected) ||

@@ -1,5 +1,57 @@
 # Передача контекста — 2026-10-30
 
+## Текущий срез #190
+
+Ветка `codex/190-verified-baseline-lineage`, база
+`fe5823d960a2f0bd4aec70203d0415917e2606b4`. PR #189 (#184) смёржен после полного
+независимого чтения, 24 classifier probes, verify 148/3199 и 34 production E2E
+без retry; CI зелёный. Политика 15000/90 применена в draft #185 коммитом
+`975bb6b`, его авторский verify 163/3539 и actual size gate прошли, #184 закрыта.
+
+PR #192 (#191) также смёржен после независимого полного verify 148/3199,
+34/34 E2E без retry и зелёного CI. Ровно 19 binary assertions заменены на native
+с сохранением всех байтов/длины, остальных checks и таймаутов. Парный набор
+77/77 прошёл до/после, 33,84 → 2,74 s; единственная причина исходного CI timeout
+не объявлена доказанной. Правка подтянута в #185 коммитом `f9a6a53`, его новый
+авторский verify 163/3539 прошёл; #191 закрыта. Final application checks остаются
+обязательными после завершения GM runtime и source/lineage integration.
+
+Source audit #177 выявил необходимость #190: полный manifest ID меняется даже
+при Atlas-only поправке. Новый loader-owned исторический context сохраняет
+старые bytes и baseline ID, проверяя конкретную разрешённую пару B0/B1,
+полный набор путей, 20 non-Atlas строк, 24 catalog source inputs и PASS tuple.
+Нельзя разрешить исторический B0 через произвольный будущий B2, структурный
+clone context или изменённую механику. Собственные current документы B2
+сохраняют прежний current validation path.
+[ADR 0068](../adr/0068-verified-artifact-baseline-lineage.md) описывает
+контракт; current filesystem/TOCTOU остаются точными, SQL migration не нужна.
+
+Постоянный fixture воспроизводит точные старые/новые Atlas bytes компактным
+patch и проверяет SHA. Cold Node-процессы проверяют old export/archive/candidate
+и SQLite replay; отдельные campaign регрессии сохраняют CREATE receipt после
+reopen и запрещают hot-swap после preflight. Результаты focused/full/independent
+проверок записываются в `reports/190-*` и PR; перед merge требуются полный
+verify, все production E2E, отдельный независимый прогон на committed SHA и CI.
+
+Артефакты в main остаются Atlas 1.5; готовый кандидат 1.6 для разрешённого #177
+сохранён в `reports/issue-177-delivery` (artifact diff 1022 строки). После #190
+нужны его новая guard-поставка и импорт; application-only peer/SQL/discovery
+callers интегрируются при завершении #171. Approval #177/#184/#113 и полный
+срез 31 формы подтверждены владельцем; повторное согласование не требуется.
+
+На CI #185 коммита 975bb6b один прежний AUTO Advisor test превысил 5000 ms,
+остальные 3538 прошли, E2E не запускались. Исходный лог —
+`reports/185-ci-975bb6b-failed.log`; диагностика остаётся в #171. Это не failure
+принятого process PR #189 и не разрешение merge неполного application PR.
+
+Далее: #190 → #177 → завершить #171 → #172 → #173 → #174. Мастерский срез
+#113 разбит на #186 → #187 → #188, с общим CMP-007/GM-001 ingress; его source
+поставка выполняется поверх #177 и не наследует Atlas-only compatibility
+для новых art artifacts автоматически. Ни partial #185, ни asset delivery
+не закрывают соответствующих родительских issues.
+
+## Исторический снимок инфраструктуры #182
+
 Срез issue #182, ветка `codex/182-campaign-network-foundation`.
 База — `03bf13b5b3d56ea04f81659bda7a53aef8e00742`: PR #178 и #180 слиты,
 issues #170 и #179 фактически CLOSED/COMPLETED. Независимые проверки базы:

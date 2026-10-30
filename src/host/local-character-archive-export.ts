@@ -22,6 +22,7 @@ import { canonicalizeIdentityDraftValues } from './identity-draft.js';
 import {
   canonicalPostSaveJson,
   postSaveSha256,
+  resolveStoredLocalCharacterExportBaseline,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 
@@ -247,9 +248,14 @@ const creationReceipt: Check = (r) =>
 /** This is an explicit export-fixture schema, never an interpreter for arbitrary campaign JSON. */
 export function validateArchivedLocalExportDocument(
   value: unknown,
-  baseline: LocalCharacterExportBaseline,
+  currentBaseline: LocalCharacterExportBaseline,
 ): JsonObject {
   canonicalPostSaveJson(value);
+  if (!object(value) || !text(value['baselineVersion'])) return fail('missing baseline version');
+  const baseline = resolveStoredLocalCharacterExportBaseline(
+    currentBaseline,
+    value['baselineVersion'],
+  );
   const skill: Check = (s) =>
     exact(s, {
       skillId: text,
@@ -607,7 +613,7 @@ export function projectArchivedCharacterExport(
       sourceSnapshotId: current.sourceSnapshotId,
       sourceUuid: head.scope.entityId,
       schemaVersion: 1,
-      baselineVersion: d.baseline.baselineVersion,
+      baselineVersion: current.document['baselineVersion']!,
       checksum: current.checksum,
       provenance: current.provenance,
       localMetadataRevision: current.metadataRevision,
