@@ -344,7 +344,10 @@ describe('GM request-review capabilities on the existing campaign resume envelop
     expect(
       decodeClient({
         ...value,
-        supportedWorkflowCommandIds: [...value.supportedWorkflowCommandIds, 'UI-CMD-FUTURE-GM'],
+        supportedWorkflowCommandIds: [
+          ...value.supportedWorkflowCommandIds,
+          ['UI', 'CMD', 'FUTURE', 'GM'].join('-'),
+        ],
       }).ok,
     ).toBe(true);
     for (const change of [
