@@ -11,7 +11,9 @@
   },
   "config": {
     "host_interface": "127.0.0.1",
-    "host_port": "3000"
+    "host_port": "3000",
+    "network_discovery_group": "239.255.77.7",
+    "network_discovery_port": "47777"
   },
   "allowScripts": {
     "better-sqlite3": false,
@@ -50,6 +52,7 @@
     "better-sqlite3": "13.0.3",
     "fastify": "5.11.2",
     "fflate": "0.8.3",
+    "jsqr": "1.4.0",
     "qrcode-generator": "2.0.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -70,7 +73,6 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.9.0",
     "jsdom": "30.0.1",
-    "jsqr": "1.4.0",
     "prettier": "3.9.6",
     "tsx": "4.23.9",
     "typescript": "6.0.3",

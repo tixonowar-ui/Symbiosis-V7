@@ -119,6 +119,10 @@ describe('persistence schema', () => {
       'campaign_private_owner',
       'device_identity',
       'device_installation_identity',
+      'hosted_device_request',
+      'hosted_network_command',
+      'hosted_network_peer',
+      'hosted_technical_session',
       'local_character',
       'local_character_checkpoint',
       'local_character_metadata_revision',
@@ -133,6 +137,10 @@ describe('persistence schema', () => {
       'local_gm_context',
       'local_gm_profile',
       'local_network_active_tab',
+      'local_network_application',
+      'local_network_application_event',
+      'local_network_host_pin',
+      'local_network_outbox',
       'local_network_tab',
       'local_network_tab_close',
       'local_network_tab_entry',
@@ -150,12 +158,12 @@ describe('persistence schema', () => {
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
 
     insertCampaign(database, 'preserved');
-    expect(applyMigrations(database)).toBe(9);
+    expect(applyMigrations(database)).toBe(10);
     expect(
       database.prepare('SELECT payload_json FROM campaign WHERE campaign_id = ?').get('preserved'),
     ).toEqual({ payload_json: '{}' });
     expect(database.prepare('SELECT count(*) AS count FROM schema_migration').get()).toEqual({
-      count: 9,
+      count: 10,
     });
 
     database

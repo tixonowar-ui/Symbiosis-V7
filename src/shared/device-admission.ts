@@ -1,5 +1,11 @@
 import { wireCodecPrimitives } from './wire-codec.js';
-import type { DecodeResult, RevisionVector } from './wire-protocol.js';
+import type {
+  DecodeResult,
+  JsonObject,
+  RevisionVector,
+  WorkflowCommandCapabilityId,
+} from './wire-protocol.js';
+import { POST_SAVE_COMMAND_IDS } from './local-character-post-save.js';
 
 /** Existing Atlas workflows only; preliminary GM decisions await source approval. */
 export const NETWORK_WORKFLOW_COMMAND_IDS = Object.freeze([
@@ -8,14 +14,23 @@ export const NETWORK_WORKFLOW_COMMAND_IDS = Object.freeze([
   'UI-CMD-DEVICE-REQUEST-CANCEL',
 ] as const);
 export type NetworkWorkflowCommandId = (typeof NETWORK_WORKFLOW_COMMAND_IDS)[number];
-export type NetworkEditableFormId = 'NET-002' | 'NET-003' | 'CHR-027';
+/** Client implementation vocabulary across a local NET entry/exit; not a role or form grant. */
+export const NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS = Object.freeze([
+  ...NETWORK_WORKFLOW_COMMAND_IDS,
+  'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+  'UI-CMD-CHAR-CREATION-SET-DECIDE',
+  'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
+  'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',
+  ...Object.values(POST_SAVE_COMMAND_IDS),
+] as const satisfies readonly WorkflowCommandCapabilityId[]);
+export type NetworkEditableFormId = 'NET-002' | 'NET-003' | 'NET-005' | 'CHR-027';
 export interface NetworkDraftScope {
   readonly networkScopeId: string;
   readonly contextId: string;
   readonly sourceFormId: NetworkEditableFormId;
 }
 
-export interface PublicCandidateRef {
+export interface PublicCandidateRef extends JsonObject {
   readonly sourceUuid: string;
   readonly finalSnapshotVersion: number;
   readonly metadataRevision: number;
@@ -28,7 +43,7 @@ export interface PublicFinalCandidateSummary extends PublicCandidateRef {
   readonly name: string;
   readonly sourceSnapshotId: string;
 }
-export interface CapacityForecast {
+export interface CapacityForecast extends JsonObject {
   readonly campaignRevision: number;
   /** CMP-002: configured active player capacity is one to five. */
   readonly activePlayerCapacity: 1 | 2 | 3 | 4 | 5;
@@ -58,6 +73,11 @@ export type NetworkDraftReplaceV3Message = NetworkDraftReplaceBase &
         readonly values: { readonly selectedCandidates: readonly PublicCandidateRef[] };
       }
     | {
+        readonly variant: 'CANCEL_REASON';
+        readonly scope: NetworkDraftScope & { readonly sourceFormId: 'NET-005' };
+        readonly values: { readonly cancelReason: string };
+      }
+    | {
         readonly variant: 'SINGLE_CANDIDATE';
         readonly scope: NetworkDraftScope & { readonly sourceFormId: 'CHR-027' };
         readonly values: {
@@ -72,7 +92,7 @@ export interface NetworkLocalContextResumeV3Message {
   readonly networkScopeId: string;
   readonly reconnectRequestId: string;
   readonly knownRevisions: RevisionVector;
-  readonly supportedWorkflowCommandIds: readonly NetworkWorkflowCommandId[];
+  readonly supportedWorkflowCommandIds: readonly WorkflowCommandCapabilityId[];
   readonly unacknowledgedCommandIds: readonly string[];
 }
 export type NetworkClientV3Message =
@@ -157,9 +177,9 @@ function selection(value: unknown): readonly PublicCandidateRef[] {
   );
   return candidates;
 }
-function workflow(value: unknown, path: string): NetworkWorkflowCommandId {
+function workflow(value: unknown, path: string): WorkflowCommandCapabilityId {
   const id = identifier(value, path);
-  const known = NETWORK_WORKFLOW_COMMAND_IDS.find((item) => item === id);
+  const known = NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS.find((item) => item === id);
   return known === undefined ? unrecognized(path, null) : known;
 }
 function resume(value: unknown): NetworkLocalContextResumeV3Message {
@@ -187,7 +207,7 @@ function resume(value: unknown): NetworkLocalContextResumeV3Message {
     ),
   };
 }
-function clientValue(value: unknown): NetworkClientV3Message {
+export function networkClientValue(value: unknown): NetworkClientV3Message {
   const envelope = record(value, '$');
   if (envelope['protocolVersion'] !== 3) unrecognized('$.protocolVersion', null);
   if (envelope['messageType'] === 'network.local-context.resume') return resume(value);
@@ -255,6 +275,18 @@ function clientValue(value: unknown): NetworkClientV3Message {
         },
       };
     }
+    case 'CANCEL_REASON': {
+      if (scope['sourceFormId'] !== 'NET-005') unrecognized('$.scope.sourceFormId', null);
+      const values = exact(object['values'], 'cancelReason', '$.values');
+      if (typeof values['cancelReason'] !== 'string')
+        return invalid('$.values.cancelReason', 'string', null);
+      return {
+        ...common,
+        variant: 'CANCEL_REASON',
+        scope: { ...assignedScope, sourceFormId: 'NET-005' },
+        values: { cancelReason: values['cancelReason'] },
+      };
+    }
     default:
       return unrecognized('$.variant', null);
   }
@@ -273,5 +305,5 @@ export function decodeNetworkClientMessageV3(source: string): DecodeResult<Netwo
         actualType: source === null ? 'null' : Array.isArray(source) ? 'array' : typeof source,
       },
     };
-  return parse(source, clientValue);
+  return parse(source, networkClientValue);
 }

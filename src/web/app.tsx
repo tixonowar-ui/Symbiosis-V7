@@ -4,6 +4,8 @@ import {
   type CampaignDraftClientState,
 } from './forms/cmp/campaign-create-fields.js';
 import { isCampaignCreationForm } from './forms/cmp/campaign-create.js';
+import { NetworkFields, type NetworkDraftClientState } from './forms/net/network-fields.js';
+import { isNetworkApplicationForm } from './forms/net/network-application.js';
 import { PostSaveFields, downloadPostSaveFile } from './forms/chr/post-save-fields.js';
 import { isPostSaveForm } from './forms/chr/post-save.js';
 import { CreationCorrectionFields } from './forms/chr/creation-correction-fields.js';
@@ -45,7 +47,7 @@ import { CHR_023_SUBMIT_ACTION_KEY } from './forms/chr/weapon-profile.js';
 import { CHR_022_ROLL_ACTION_KEY } from './forms/chr/starting-weapon.js';
 import type { StartingWeaponDraft } from './forms/chr/starting-weapon.js';
 import { AtlasForm } from './renderer/atlas-form.js';
-import { connectProjection } from './ws-client.js';
+import { connectProjection, LOCAL_ROLE_CHOICE_DETAIL } from './ws-client.js';
 import type {
   AdvisorSkillSelectionDraft,
   App001Projection,
@@ -226,6 +228,7 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     (snapshot.formId === 'CHR-001' && Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
+    isNetworkApplicationForm(snapshot.formId) ||
     snapshot.formId === 'CHR-032' ||
     snapshot.formId === 'CHR-025' ||
     Object.hasOwn(snapshot.projection, 'correctionContext')
@@ -2200,6 +2203,9 @@ export function App(): ReactElement {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraftClientState | null>(null);
+  const [networkDraft, setNetworkDraft] = useState<NetworkDraftClientState | null>(null);
+  const [networkQrScanSequence, setNetworkQrScanSequence] = useState(0);
+  const [networkImageReadPending, setNetworkImageReadPending] = useState(false);
   const [creationChoiceDraft, setCreationChoiceDraft] =
     useState<CharacterCreationChoiceDraft | null>(null);
   const [creationRollDraft, setCreationRollDraft] = useState<CharacterCreationRollDraft | null>(
@@ -2256,6 +2262,7 @@ export function App(): ReactElement {
           );
       },
       setCampaignDraft,
+      setNetworkDraft,
     );
     connectionRef.current = connection;
     return () => {
@@ -2311,6 +2318,16 @@ export function App(): ReactElement {
   return (
     <>
       <ConnectionBanner state={state} />
+      {state.kind === 'client-error' && state.detail === LOCAL_ROLE_CHOICE_DETAIL ? (
+        <section aria-label="Выбор локальной роли">
+          <button onClick={() => connectionRef.current?.chooseLocalRole('player')}>
+            Продолжить как игрок
+          </button>
+          <button onClick={() => connectionRef.current?.chooseLocalRole('gm')}>
+            Продолжить как мастер
+          </button>
+        </section>
+      ) : null}
       {state.kind === 'disconnected' ? (
         <button onClick={() => connectionRef.current?.reconnect()}>Переподключиться</button>
       ) : null}
@@ -2322,8 +2339,39 @@ export function App(): ReactElement {
       ) : (
         <>
           <HostProjection snapshot={snapshot} />
-          <fieldset disabled={!interactive || layers.length > 0}>
+          <fieldset disabled={!interactive || layers.length > 0 || networkImageReadPending}>
             <legend>AtlasForm {snapshot.formId}</legend>
+            <NetworkFields
+              key={`${snapshot.formId}:${typeof snapshot.projection['networkScopeId'] === 'string' ? snapshot.projection['networkScopeId'] : ''}`}
+              formId={snapshot.formId}
+              projection={snapshot.projection}
+              state={networkDraft}
+              onChange={(edit) => {
+                const result = connectionRef.current?.replaceNetworkDraft(edit);
+                setActionNotice(result?.ok ? null : 'Выбор не сохранён: соединение не готово.');
+              }}
+              cancelReason={
+                networkDraft?.values?.variant === 'CANCEL_REASON'
+                  ? networkDraft.values.values.cancelReason
+                  : snapshot.formId === 'NET-005'
+                    ? (snapshot.projection['cancelReason'] as string)
+                    : ''
+              }
+              onCancelReasonChange={(cancelReason) => {
+                const result = connectionRef.current?.replaceNetworkDraft({
+                  variant: 'CANCEL_REASON',
+                  values: { cancelReason },
+                });
+                setActionNotice(
+                  result?.ok ? null : 'Причина отмены не сохранена: соединение не готово.',
+                );
+              }}
+              onBusy={(pending) => {
+                setNetworkImageReadPending(pending);
+                connectionRef.current?.setNetworkInputPending(pending);
+              }}
+              qrScanSequence={networkQrScanSequence}
+            />
             <CampaignCreationFields
               key={`${snapshot.formId}:${typeof snapshot.projection['campaignDraftId'] === 'string' ? snapshot.projection['campaignDraftId'] : ''}`}
               formId={snapshot.formId}
@@ -2764,7 +2812,8 @@ export function App(): ReactElement {
                 (snapshot.formId === 'CHR-001' &&
                   Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
                 isPostSaveForm(snapshot.formId) ||
-                isCampaignCreationForm(snapshot.formId)
+                isCampaignCreationForm(snapshot.formId) ||
+                isNetworkApplicationForm(snapshot.formId)
               }
               availableActionKeys={
                 correction
@@ -2784,6 +2833,15 @@ export function App(): ReactElement {
               }
               formId={snapshot.formId}
               onAction={(selection) => {
+                if (networkImageReadPending) {
+                  setActionNotice('Дождитесь чтения изображения QR.');
+                  return;
+                }
+                if (snapshot.formId === 'NET-002' && selection.actionKey === 'NET-002::CTA::005') {
+                  setNetworkQrScanSequence((value) => value + 1);
+                  setActionNotice(null);
+                  return;
+                }
                 if (
                   characterArtReadPending &&
                   selection.actionKey === CHR_001_CHECKPOINT_ACTION_KEY

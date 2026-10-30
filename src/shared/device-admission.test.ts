@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { decodeNetworkClientMessageV3, NETWORK_WORKFLOW_COMMAND_IDS } from './device-admission.js';
+import {
+  decodeNetworkClientMessageV3,
+  NETWORK_WORKFLOW_COMMAND_IDS,
+  NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+} from './device-admission.js';
 import type {
   NetworkDraftReplaceV3Message,
   NetworkLocalContextResumeV3Message,
@@ -392,6 +396,16 @@ describe('local device-admission draft messages (standalone V3)', () => {
       supportedWorkflowCommandIds: ['UI-CMD-CONNECTION-OPEN', 'UI-CMD-CONNECTION-OPEN'],
     });
     refused({ ...resume, unacknowledgedCommandIds: ['one', 'one'] });
+  });
+
+  it('advertises implemented local player families across NET exit without negotiating GM authority', () => {
+    const advertised = {
+      ...resume,
+      supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+    };
+    expect(read(advertised)).toEqual({ ok: true, value: advertised });
+    expect(NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS).toContain('UI-CMD-CHAR-WIZARD-CHECKPOINT');
+    expect(NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS).not.toContain('UI-CMD-CAMPAIGN-CREATE');
   });
 
   it.each([

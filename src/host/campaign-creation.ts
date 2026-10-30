@@ -58,7 +58,7 @@ import {
   validateMasterSecretVerifier,
   MasterSecretError,
 } from './campaign-secret.js';
-import type { createCampaignBindManager } from './campaign-bind.js';
+import type { createCampaignBindManager, CampaignBindRecovery } from './campaign-bind.js';
 import { CAMPAIGN_CREATE_SCREEN_CONTRACTS } from './projections/cmp-create.js';
 import {
   loadLocalCharacterExportBaseline,
@@ -85,6 +85,8 @@ interface Dependencies {
   readonly projectRoot: string;
   readonly baseline: LocalCharacterExportBaseline;
   readonly bind: ReturnType<typeof createCampaignBindManager>;
+  /** The application composition publishes the saved bind on the actual private listener. */
+  readonly publishCampaign?: (campaignId: string) => Promise<CampaignBindRecovery>;
 }
 export interface CampaignShell {
   readonly formId: string | null;
@@ -319,7 +321,10 @@ export function createCampaignCreationRuntime(d: Dependencies) {
         readCampaignPrivateOwner(db, ctx.gmLocalContextId, cursor.targetId).verifier,
       );
       const saved = readPausedCampaign(db, ctx.gmLocalContextId, cursor.targetId);
-      const recovery = await d.bind.recover(saved.campaignId, saved.host);
+      const recovery =
+        d.publishCampaign === undefined
+          ? await d.bind.recover(saved.campaignId, saved.host)
+          : await d.publishCampaign(saved.campaignId);
       context(c);
       payload = {
         ...shared,

@@ -576,6 +576,9 @@ export function projectLocalPostSave(
       form === 'CHR-040'
         ? [
             'CHR-040::CTA::001',
+            ...(!replayVersion && capabilities.has('UI-CMD-CONNECTION-OPEN')
+              ? ['CHR-040::CTA::002' as const]
+              : []),
             'CHR-040::CTA::003',
             ...(capabilities.has(POST_SAVE_COMMAND_IDS.METADATA_PATCH)
               ? ['CHR-040::CTA::004' as const]

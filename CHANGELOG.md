@@ -9,6 +9,20 @@
 
 ### Добавлено
 
+- **2026-10-30, issue #171 — в работе, не слито:** в рабочей ветке добавлен
+  player NET-контур собственной Node/SQLite-установки: NET-001–005/011 и CHR-027,
+  ручной адрес, discovery, локальное чтение QR, выбор 1–3 FINAL, неизменяемый
+  preview заявки и явные OPEN/SUBMIT/CANCEL. Локальный outbox и журналы хоста
+  разделяют intent, immutable receipt и текущую проекцию; техническое соединение
+  не создаёт campaign copies или места в кампании. Focused-проверки проходят,
+  но единый сквозной PR #171 ещё не готов: новый production E2E двух Node
+  и Chrome падает при отмене после перезапуска обеих установок. Полный verify,
+  финальный независимый прогон и merge не выполнены. Preliminary GM review
+  и NET-017 не опубликованы: требуется нормативное решение
+  [#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177).
+  [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md)
+  остаётся предложенным; точные границы — в [handoff](docs/status/handoff.md).
+
 - **2026-10-30, issue #182, предпосылка #171:** закрытые installation keys,
   LAN locator/discovery и подписанный peer channel с ограниченными очередями.
   FINAL candidates проверяются полным existing creation replay и точным DTO,

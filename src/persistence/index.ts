@@ -16,6 +16,7 @@ export {
   readActiveLocalNetworkTab,
   readLocalNetworkTabEntryByCommandId,
   readLocalNetworkTabCloseByCommandId,
+  readLocalNetworkTabClosure,
   LocalNetworkTabStoreError,
 } from './network-local-tab.js';
 export type {
@@ -120,6 +121,57 @@ export type {
 } from './local-character-post-save.js';
 export { openPersistenceDatabase } from './database.js';
 export { applyMigrations } from './migrations/index.js';
+export {
+  readLocalNetworkApplication,
+  readLocalNetworkApplicationEvent,
+  readLocalNetworkOutbox,
+  readLocalNetworkAcknowledgementEvent,
+  readLocalNetworkHostPin,
+  commitLocalNetworkHostPin,
+  commitLocalNetworkMutation,
+  NetworkApplicationStoreError,
+} from './network-local-application.js';
+export type {
+  NetworkPublicIdentity,
+  NetworkCampaignProof,
+  NetworkCandidateDescriptor,
+  NetworkPreparedCandidate,
+  NetworkPreparedBatch,
+  NetworkApplicationFormId,
+  LocalNetworkScope,
+  LocalNetworkSource,
+  LocalNetworkHostPin,
+  NetworkSessionConfirmation,
+  NetworkRequestConfirmation,
+  LocalNetworkApplication,
+  LocalNetworkIntent,
+  LocalNetworkAcknowledgement,
+  LocalNetworkOutbox,
+  LocalNetworkMutation,
+  LocalNetworkMutationInput,
+  LocalNetworkEventReceipt,
+  StoredLocalNetworkEvent,
+  NetworkStoreGuard,
+  NetworkApplicationStoreCode,
+} from './network-local-application.js';
+export {
+  readHostedNetworkCommand,
+  readHostedTechnicalSession,
+  readHostedDeviceRequest,
+  readHostedConnectionAttempt,
+  commitHostedNetworkCommand,
+  readHostedPausedCampaignIds,
+} from './network-device-request.js';
+export type {
+  HostedNetworkPrincipal,
+  HostedTechnicalSession,
+  HostedDeviceRequest,
+  HostedNetworkInput,
+  HostedNetworkReceipt,
+  HostedNetworkCommand,
+  HostedNetworkSource,
+  HostedNetworkSourceGuard,
+} from './network-device-request.js';
 export {
   readLocalCharacterSkillPresentation,
   writeLocalCharacterSkillPresentation,

@@ -3,11 +3,20 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
-import type Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openPersistenceDatabase } from './database.js';
 import { bootstrapDeviceIdentity, resetDeviceIdentity } from './device-identity.js';
-import { applyMigrations } from './migrations/index.js';
+import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
+import { migration0001 } from './migrations/0001-initial.js';
+import { migration0002 } from './migrations/0002-local-character-checkpoint.js';
+import { migration0003 } from './migrations/0003-device-identity.js';
+import { migration0004 } from './migrations/0004-skill-presentation.js';
+import { migration0005 } from './migrations/0005-symbiont-presentation.js';
+import { migration0006 } from './migrations/0006-local-character-post-save.js';
+import { migration0007 } from './migrations/0007-campaign-creation.js';
+import { migration0008 } from './migrations/0008-network-installation-identity.js';
+import { migration0009 } from './migrations/0009-device-admission.js';
 import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 import {
   commitLocalNetworkTabEntry,
@@ -16,6 +25,7 @@ import {
   readActiveLocalNetworkTab,
   readLocalNetworkTabEntryByCommandId,
   readLocalNetworkTabCloseByCommandId,
+  readLocalNetworkTabClosure,
   LocalNetworkTabStoreError,
   type LocalNetworkTab,
   type LocalNetworkTabEntryInput,
@@ -56,8 +66,25 @@ function request(ownerDeviceId: string): LocalNetworkTabEntryInput {
     networkScopeId: randomUUID(),
   };
 }
-function setup(filename = ':memory:') {
-  const db = open(filename),
+function legacyDatabase(version: 8 | 9): Database.Database {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys=ON');
+  databases.push(db);
+  applyMigrationSequence(db, [
+    migration0001,
+    migration0002,
+    migration0003,
+    migration0004,
+    migration0005,
+    migration0006,
+    migration0007,
+    migration0008,
+    ...(version === 9 ? [migration0009] : []),
+  ]);
+  return db;
+}
+function setup(filename = ':memory:', legacy = false) {
+  const db = legacy ? legacyDatabase(9) : open(filename),
     device = bootstrapDeviceIdentity(db);
   return { db, device, input: request(device) };
 }
@@ -95,13 +122,95 @@ afterEach(() => {
 });
 
 describe('durable local network tab entry', () => {
+  it('binds the exact application entry and source FINAL before the first application event and preserves it after reopen', () => {
+    const path = file(),
+      { db, device, input } = setup(path);
+    const client = {
+      messageType: 'navigation.form-action',
+      protocolVersion: 2,
+      navigationRequestId: input.entryCommandId,
+      sourceFormId: 'CHR-040',
+      actionKey: 'CHR-040::CTA::002',
+      expectedProjectionRevision: input.sourceRevisions.projectionRevision,
+    };
+    const request: LocalNetworkTabEntryInput = {
+      ...input,
+      applicationEntry: {
+        schemaVersion: 1,
+        clientRequestJson: canonical(client),
+        sourceFinalUuidOrNull: 'final-source-a',
+      },
+    };
+    const saved = commitLocalNetworkTabEntry(db, request, allow);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM local_network_application_event').get()).toEqual({
+      n: 0,
+    });
+    db.close();
+    const reopened = open(path);
+    expect(readLocalNetworkTabEntryByCommandId(reopened, device, input.entryCommandId)).toEqual(
+      saved,
+    );
+    const before = reopened.serialize();
+    expect(commitLocalNetworkTabEntry(reopened, request, allow)).toEqual(saved);
+    for (const applicationEntry of [
+      { ...request.applicationEntry!, sourceFinalUuidOrNull: 'final-source-b' },
+      {
+        ...request.applicationEntry!,
+        sourceFinalUuidOrNull: null,
+        clientRequestJson: canonical({
+          ...client,
+          sourceFormId: 'APP-002',
+          actionKey: 'APP-002::CTA::003',
+        }),
+      },
+    ])
+      expectCode(
+        () => commitLocalNetworkTabEntry(reopened, { ...request, applicationEntry }, allow),
+        'IDEMPOTENCY_CONFLICT',
+      );
+    expect(reopened.serialize().equals(before)).toBe(true);
+  });
+  it('rejects app entry metadata on real schema9 and preserves the original optional-free entry bytes', () => {
+    const { db, device, input } = setup(':memory:', true);
+    const before = db.serialize();
+    expectCode(
+      () =>
+        commitLocalNetworkTabEntry(
+          db,
+          {
+            ...input,
+            applicationEntry: {
+              schemaVersion: 1,
+              sourceFinalUuidOrNull: null,
+              clientRequestJson: canonical({
+                messageType: 'navigation.form-action',
+                protocolVersion: 2,
+                navigationRequestId: input.entryCommandId,
+                sourceFormId: 'APP-002',
+                actionKey: 'APP-002::CTA::003',
+                expectedProjectionRevision: input.sourceRevisions.projectionRevision,
+              }),
+            },
+          },
+          allow,
+        ),
+      'INVALID_INPUT',
+    );
+    expect(db.serialize().equals(before)).toBe(true);
+    const saved = commitLocalNetworkTabEntry(db, input, allow);
+    expect(saved.request).not.toHaveProperty('applicationEntry');
+    expect(db.prepare('SELECT request_json FROM local_network_tab_entry').get()).toEqual({
+      request_json: canonical(input),
+    });
+    expect(readLocalNetworkTabEntryByCommandId(db, device, input.entryCommandId)).toEqual(saved);
+  });
   it('does not allocate on read and atomically writes UNBOUND, entry receipt and an exact active pointer', () => {
     const { db, device, input } = setup();
     const before = db.serialize();
     expect(readActiveLocalNetworkTab(db, device)).toBeNull();
     expectCode(() => readOwnedLocalNetworkTab(db, device, input.networkScopeId), 'NOT_FOUND');
     expect(readLocalNetworkTabEntryByCommandId(db, device, input.entryCommandId)).toBeNull();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     const guard = vi.fn((phase) => {
       expect(phase).toBe('APPLY');
       expect(db.inTransaction).toBe(true);
@@ -142,7 +251,7 @@ describe('durable local network tab entry', () => {
   });
 
   it('counts all three owned UNBOUND/PROVISIONAL tabs and rejects a fourth without writes', () => {
-    const { db, device, input } = setup();
+    const { db, device, input } = setup(undefined, true);
     const first = commitLocalNetworkTabEntry(db, input, allow);
     writeCurrentFixture(db, {
       ...live(first),
@@ -154,13 +263,13 @@ describe('durable local network tab entry', () => {
     const third = commitLocalNetworkTabEntry(db, request(device), allow);
     const before = db.serialize();
     expectCode(() => commitLocalNetworkTabEntry(db, request(device), allow), 'TAB_LIMIT');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     expect(readActiveLocalNetworkTab(db, device)).toEqual(third.currentTab);
     expect(db.prepare('SELECT count(*) AS n FROM local_network_tab').get()).toEqual({ n: 3 });
   });
 
   it('replays immutable entry receipt with the advanced current tab and never rotates a newer active pointer', () => {
-    const { db, device, input } = setup();
+    const { db, device, input } = setup(undefined, true);
     const first = commitLocalNetworkTabEntry(db, input, allow);
     const advanced: LocalNetworkTab = {
       ...live(first),
@@ -183,7 +292,7 @@ describe('durable local network tab entry', () => {
       currentTab: advanced,
     });
     expect(readActiveLocalNetworkTab(db, device)).toEqual(second.currentTab);
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('does not hide an owned inactive tab from the count when its duplicated owner index is corrupt', () => {
@@ -197,7 +306,7 @@ describe('durable local network tab entry', () => {
     const before = db.serialize();
     expect(readActiveLocalNetworkTab(db, device)).toEqual(active.currentTab);
     expectCode(() => commitLocalNetworkTabEntry(db, request(device), allow), 'FOREIGN_OWNER');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('reopens the exact pointer and reconciles the winning journal from another connection', () => {
@@ -217,7 +326,7 @@ describe('durable local network tab entry', () => {
     expect(readLocalNetworkTabEntryByCommandId(reopened, device, input.entryCommandId)).toEqual(
       saved,
     );
-    expect(reopened.serialize()).toEqual(before);
+    expect(reopened.serialize().equals(before)).toBe(true);
   });
 
   it.each([
@@ -234,7 +343,7 @@ describe('durable local network tab entry', () => {
     const changed = { ...input, [field]: field === 'sourceRevisions' ? zero : randomUUID() };
     expectCode(() => commitLocalNetworkTabEntry(db, changed, guard), 'IDEMPOTENCY_CONFLICT');
     expect(guard).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it.each(['entryCommandId', 'entryReceiptId', 'tabId', 'networkScopeId'] as const)(
@@ -247,7 +356,7 @@ describe('durable local network tab entry', () => {
         () => commitLocalNetworkTabEntry(db, { ...request(device), [field]: input[field] }, allow),
         'IDEMPOTENCY_CONFLICT',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -265,7 +374,7 @@ describe('durable local network tab entry', () => {
       'FOREIGN_OWNER',
     );
     expectCode(() => commitLocalNetworkTabEntry(db, input, allow), 'FOREIGN_OWNER');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     const fresh = commitLocalNetworkTabEntry(db, request(next), allow);
     expect(readActiveLocalNetworkTab(db, next)).toEqual(fresh.currentTab);
     expect(db.prepare('SELECT count(*) AS n FROM local_network_tab').get()).toEqual({ n: 2 });
@@ -296,7 +405,7 @@ describe('durable local network tab entry', () => {
     expectCode(() => commitLocalNetworkTabEntry(db, forged, guard), 'INVALID_INPUT');
     expect(getter).not.toHaveBeenCalled();
     expect(guard).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it.each([
@@ -353,7 +462,7 @@ describe('durable local network tab entry', () => {
       expectCode(() => commitLocalNetworkTabEntry(db, input, allow), 'CORRUPT_STORAGE');
     }
     expectCode(() => commitLocalNetworkTabEntry(db, request(device), allow), 'CORRUPT_STORAGE');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it.each(['abort-entry', 'mutate-tab', 'extra-write'] as const)(
@@ -375,7 +484,7 @@ describe('durable local network tab entry', () => {
         () => commitLocalNetworkTabEntry(db, request(device), allow),
         fault === 'abort-entry' ? 'CORRUPT_STORAGE' : 'SOURCE_CHANGED',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
       expect(readActiveLocalNetworkTab(db, device)).toEqual(first.currentTab);
     },
   );
@@ -399,7 +508,7 @@ describe('durable local network tab entry', () => {
         'SOURCE_CHANGED',
       );
       expect(readActiveLocalNetworkTab(db, device)).toBeNull();
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -433,21 +542,18 @@ describe('durable local network tab entry', () => {
       );
     await setImmediate();
     expect(getter).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('upgrades actual schema8 without rewriting rows or allocating a tab', () => {
-    const { db, device } = setup();
-    db.exec(
-      'DROP TABLE local_network_active_tab; DROP TABLE local_network_tab_close; DROP TABLE local_network_tab_entry; DROP TABLE local_network_tab',
-    );
-    db.prepare('DELETE FROM schema_migration WHERE version=9').run();
+    const db = legacyDatabase(8),
+      device = bootstrapDeviceIdentity(db);
     db.prepare(
       "INSERT INTO campaign(campaign_id,lifecycle_state,payload_json) VALUES('preserved','PAUSED','{}')",
     ).run();
     const registry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
       campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(9);
+    expect(applyMigrations(db)).toBe(10);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<=8 ORDER BY version').all(),
     ).toEqual(registry);
@@ -455,6 +561,27 @@ describe('durable local network tab entry', () => {
     expect(readActiveLocalNetworkTab(db, device)).toBeNull();
     for (const table of LOCAL_NETWORK_TAB_TABLES)
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
+  });
+  it('upgrades a real schema9 entry/close history to10 without modifying those receipts or allocating application state', () => {
+    const db = legacyDatabase(9),
+      device = bootstrapDeviceIdentity(db);
+    const first = commitLocalNetworkTabEntry(db, request(device), allow);
+    const second = commitLocalNetworkTabEntry(db, request(device), allow);
+    const closed = commitLocalNetworkTabClose(db, closeInput(first), allow);
+    const entries = db
+      .prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id')
+      .all();
+    const closes = db.prepare('SELECT * FROM local_network_tab_close').all();
+    expect(applyMigrations(db)).toBe(10);
+    expect(
+      db.prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id').all(),
+    ).toEqual(entries);
+    expect(db.prepare('SELECT * FROM local_network_tab_close').all()).toEqual(closes);
+    expect(
+      readLocalNetworkTabEntryByCommandId(db, device, first.request.entryCommandId),
+    ).toMatchObject({ currentTab: null, closureReceiptOrNull: closed.receipt });
+    expect(readActiveLocalNetworkTab(db, device)).toEqual(second.currentTab);
+    expect(db.prepare('SELECT * FROM local_network_application').all()).toEqual([]);
   });
 
   it.each([
@@ -471,16 +598,82 @@ describe('durable local network tab entry', () => {
     else if (fault === 'missing-close') db.exec('DROP TABLE local_network_tab_close');
     else if (fault === 'missing-pointer') db.exec('DROP TABLE local_network_active_tab');
     else if (fault === 'old-version')
-      db.prepare('DELETE FROM schema_migration WHERE version=9').run();
-    else db.prepare('UPDATE schema_migration SET version=10 WHERE version=9').run();
+      db.prepare('DELETE FROM schema_migration WHERE version>=9').run();
+    else db.prepare('UPDATE schema_migration SET version=11 WHERE version=10').run();
     const before = db.serialize();
     expectCode(() => readActiveLocalNetworkTab(db, device), 'CORRUPT_STORAGE');
     expectCode(() => commitLocalNetworkTabEntry(db, input, allow), 'CORRUPT_STORAGE');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 });
 
 describe('audited closure of a never-admitted network tab', () => {
+  it('atomically binds an application exit and recovers the exact target after reopen', () => {
+    const path = file(),
+      { db, device, input } = setup(path);
+    const entry = commitLocalNetworkTabEntry(db, input, allow);
+    expect(readLocalNetworkTabClosure(db, device, input.networkScopeId)).toBeNull();
+    const close: LocalNetworkTabCloseInput = {
+      ...closeInput(entry),
+      applicationExit: {
+        schemaVersion: 1,
+        clientRequestJson: canonical({
+          navigationRequestId: 'exit-original',
+          sourceFormId: 'NET-001',
+        }),
+        target: { kind: 'PLAYER_MENU' },
+      },
+    };
+    const saved = commitLocalNetworkTabClose(db, close, allow);
+    db.close();
+    const reopened = open(path);
+    expect(readLocalNetworkTabClosure(reopened, device, input.networkScopeId)).toEqual(saved);
+    expect(readOwnedLocalNetworkTab(reopened, device, input.networkScopeId)).toBeNull();
+    expect(commitLocalNetworkTabClose(reopened, close, allow)).toEqual(saved);
+    const before = reopened.serialize();
+    expectCode(
+      () =>
+        commitLocalNetworkTabClose(
+          reopened,
+          {
+            ...close,
+            applicationExit: {
+              ...close.applicationExit!,
+              target: { kind: 'LOCAL_FINAL', sourceUuid: 'changed-source' },
+            },
+          },
+          allow,
+        ),
+      'IDEMPOTENCY_CONFLICT',
+    );
+    expect(reopened.serialize().equals(before)).toBe(true);
+  });
+  it('refuses application exit metadata in actual schema9 without altering old closure journals', () => {
+    const { db, device, input } = setup(':memory:', true),
+      entry = commitLocalNetworkTabEntry(db, input, allow);
+    const old = closeInput(entry),
+      before = db.serialize();
+    expectCode(
+      () =>
+        commitLocalNetworkTabClose(
+          db,
+          {
+            ...old,
+            applicationExit: {
+              schemaVersion: 1,
+              clientRequestJson: '{}',
+              target: { kind: 'PLAYER_MENU' },
+            },
+          },
+          allow,
+        ),
+      'INVALID_INPUT',
+    );
+    expect(db.serialize().equals(before)).toBe(true);
+    const saved = commitLocalNetworkTabClose(db, old, allow);
+    expect(saved.request).not.toHaveProperty('applicationExit');
+    expect(readLocalNetworkTabClosure(db, device, input.networkScopeId)).toEqual(saved);
+  });
   it('releases capacity, persists explicit NONE, reopens the receipt and never reselects or reuses a retired tab', () => {
     const filename = file(),
       { db, device, input } = setup(filename);
@@ -519,7 +712,7 @@ describe('audited closure of a never-admitted network tab', () => {
     expect(readLocalNetworkTabCloseByCommandId(reopened, device, close.closeCommandId)).toEqual(
       closed,
     );
-    expect(reopened.serialize()).toEqual(before);
+    expect(reopened.serialize().equals(before)).toBe(true);
     const next = commitLocalNetworkTabEntry(reopened, request(device), allow);
     const replayGuard = vi.fn(allow),
       afterEntry = reopened.serialize();
@@ -527,7 +720,7 @@ describe('audited closure of a never-admitted network tab', () => {
     expect(replayGuard).toHaveBeenCalledExactlyOnceWith('REPLAY');
     expect(commitLocalNetworkTabEntry(reopened, selected.request, allow)).toEqual(closedEntry);
     expect(readActiveLocalNetworkTab(reopened, device)).toEqual(next.currentTab);
-    expect(reopened.serialize()).toEqual(afterEntry);
+    expect(reopened.serialize().equals(afterEntry)).toBe(true);
     commitLocalNetworkTabClose(reopened, closeInput(first), allow);
     const afterOtherClose = reopened.serialize();
     expectCode(
@@ -539,7 +732,7 @@ describe('audited closure of a never-admitted network tab', () => {
         ),
       'IDEMPOTENCY_CONFLICT',
     );
-    expect(reopened.serialize()).toEqual(afterOtherClose);
+    expect(reopened.serialize().equals(afterOtherClose)).toBe(true);
   });
 
   it('closing a nonselected tab preserves the exact pointer and later NONE is never inferred from first/latest', () => {
@@ -559,7 +752,7 @@ describe('audited closure of a never-admitted network tab', () => {
   });
 
   it('refuses PROVISIONAL, stale vectors, unknown scopes and fresh commands for a retired tab', () => {
-    const { db, device, input } = setup();
+    const { db, device, input } = setup(undefined, true);
     const saved = commitLocalNetworkTabEntry(db, input, allow),
       originalClose = closeInput(saved);
     writeCurrentFixture(db, {
@@ -583,7 +776,7 @@ describe('audited closure of a never-admitted network tab', () => {
       'CLOSE_UNAVAILABLE',
     );
     expect(guard).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     // This read fixture models a later separately confirmed cancellation; this API cannot cancel.
     writeCurrentFixture(db, { ...live(saved), stateRevision: 2, projectionRevision: 2 });
     expectCode(() => commitLocalNetworkTabClose(db, originalClose, guard), 'STALE_REVISION');
@@ -604,13 +797,13 @@ describe('audited closure of a never-admitted network tab', () => {
         ),
       'CLOSE_UNAVAILABLE',
     );
-    expect(db.serialize()).toEqual(after);
+    expect(db.serialize().equals(after)).toBe(true);
   });
 
   it.each(['stateRevision', 'projectionRevision'] as const)(
     'rejects %s overflow before any close write',
     (key) => {
-      const { db, device, input } = setup();
+      const { db, device, input } = setup(undefined, true);
       const saved = commitLocalNetworkTabEntry(db, input, allow);
       writeCurrentFixture(db, { ...live(saved), [key]: Number.MAX_SAFE_INTEGER });
       const current = readLocalNetworkTabEntryByCommandId(db, device, input.entryCommandId)!;
@@ -619,12 +812,12 @@ describe('audited closure of a never-admitted network tab', () => {
         () => commitLocalNetworkTabClose(db, closeInput(current), allow),
         'REVISION_OVERFLOW',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
   it('preserves visibility revision and rejects changed close payload and foreign owner after reset', () => {
-    const { db, device, input } = setup();
+    const { db, device, input } = setup(undefined, true);
     const saved = commitLocalNetworkTabEntry(db, input, allow);
     writeCurrentFixture(db, {
       ...live(saved),
@@ -648,7 +841,7 @@ describe('audited closure of a never-admitted network tab', () => {
       () => commitLocalNetworkTabClose(db, { ...closed.request, expectedRevisions: zero }, allow),
       'IDEMPOTENCY_CONFLICT',
     );
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     resetDeviceIdentity(db, allow);
     const nextOwner = bootstrapDeviceIdentity(db);
     expect(readActiveLocalNetworkTab(db, nextOwner)).toBeNull();
@@ -711,7 +904,7 @@ describe('audited closure of a never-admitted network tab', () => {
         () => commitLocalNetworkTabEntry(db, request(device), allow),
         fault === 'hidden-owner' ? 'FOREIGN_OWNER' : 'CORRUPT_STORAGE',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -733,7 +926,7 @@ describe('audited closure of a never-admitted network tab', () => {
         () => commitLocalNetworkTabClose(db, close, allow),
         fault === 'abort' ? 'CORRUPT_STORAGE' : 'SOURCE_CHANGED',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
       expect(readOwnedLocalNetworkTab(db, device, input.networkScopeId)).toEqual(saved.currentTab);
       expect(readLocalNetworkTabCloseByCommandId(db, device, close.closeCommandId)).toBeNull();
       expect(readActiveLocalNetworkTab(db, device)).toEqual(saved.currentTab);
@@ -763,14 +956,14 @@ describe('audited closure of a never-admitted network tab', () => {
       'SOURCE_CHANGED',
     );
     await setImmediate();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     const closed = commitLocalNetworkTabClose(db, close, allow),
       after = db.serialize();
     expectCode(
       () => commitLocalNetworkTabClose(db, close, () => db.pragma('user_version=123')),
       'SOURCE_CHANGED',
     );
-    expect(db.serialize()).toEqual(after);
+    expect(db.serialize().equals(after)).toBe(true);
     expect(commitLocalNetworkTabClose(db, close, allow)).toEqual(closed);
   });
 });

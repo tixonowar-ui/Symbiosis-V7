@@ -3,13 +3,23 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-30`, инфраструктурная предпосылка #182 для #171 поверх PR #180 (#179).
-- Подтверждённая база `03bf13b`: 134 файла / 2499 Vitest-тестов и 34 Chrome E2E
-  без retry; независимый final-SHA прогон и CI прошли перед merge.
-- Текущий срез добавляет LAN parser/discovery, private installation keys,
-  authenticated peer channel, FINAL evidence, current campaign reader и local tabs.
-  NET UI, application request runtime и решения GM ещё не опубликованы.
-  Полные проверки текущей подготовки фиксируются в [handoff](handoff.md).
+- Снимок: `2026-10-30`, #171 в работе в `codex/171-device-request-flow`.
+- База — `c30ee6b`, слитый PR #183; prerequisite #182 закрыта.
+  Прежние 134 файла / 2499 Vitest-тестов и 34 Chrome E2E без retry относятся
+  к базе #179 (`03bf13b`), а не к текущей реализации #171.
+- В рабочей ветке реализуется NET-контур игрока: собственная Node/SQLite,
+  локальный outbox, заявки хоста и семь форм NET-001–005/011 и CHR-027.
+  Два новых двухустановочных Chrome E2E прошли: ручной адрес/restart/CANCEL
+  и настоящий QR с тремя FINAL. Дополнительный путь нового и retained входа
+  из FINAL тоже прошёл. Entry/NAV crash boundary исправлен и подтверждён
+  неизменённым независимым reproducer. Авторский полный verify: 163 файла,
+  3539 тестов, PASS; полный production Chrome E2E — 36/36 без retry.
+  Независимый final-SHA гейт и CI идут отдельно.
+  Единого готового PR #171 ещё нет.
+- Предварительное рассмотрение мастером и NET-017 не реализованы; решение #177
+  ожидается. ADR 0066 остаётся предложенным. Доказательства — в [handoff](handoff.md).
+- Предварительный замер превысил действующие лимиты размера PR; решение и
+  полный финальный замер отслеживаются в [#184](https://github.com/tixonowar-ui/Symbiosis-V7/issues/184).
 - Артефакты и конвейер не менялись. Воспроизводимость проверяется отдельным
   CI-гейтом на чистом checkout.
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
@@ -187,32 +197,62 @@ runtime этим не реализованы.
 Срез #170 реализует APP-011 и CMP-001–006: отдельный durable GM context,
 черновик, write-only секрет, actual bind/baseline preflight и атомарный
 CREATE. QR реально декодируется; восстановление сохраняет campaign/receipt.
-Admission, Start, игровой clock и сцены ещё не реализованы.
+Финальный допуск в кампанию, Start, игровой clock и сцены ещё не реализованы.
 
-#182 реализует отдельный технический фундамент: private installation identity
+#182 слита в PR #183 и реализует технический фундамент: private installation identity
 и peer channel, LAN discovery, immutable FINAL evidence и owner-bound local tab
 entry/close. Source assertions NET-001–005/009–012 и CHR-027 не регистрируют формы
 и не расширяют player authority. [ADR 0067](../adr/0067-private-campaign-network-foundation.md)
 принят для APIs; прикладной [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
-остаётся предложенным. UI/outbox/request/GM runtime #171 не готов; preliminary
-GM decisions требуют решения нормативного #177.
+остаётся предложенным.
 
-После #170 очередь — #171 → #172 → #173 → #174 → #113. Для #113
+В #171 рабочая ветка связывает этот фундамент с player NET UI, local/host
+журналами и ограниченным peer executor. APP-002 и текущий FINAL CHR-040
+дают явные входы. Адрес или QR заполняют ввод, OPEN подтверждает только
+техническую сессию, SUBMIT передаёт один pinned batch из 1–3 собственных FINAL,
+CANCEL требует подтверждённую локальную причину. Сессия и input lane не
+являются campaign seat и не резервируют вместимость. Исходная контрольная
+сумма механики отделена от контрольной суммы безопасного экспорта.
+Resume использует известный opaque scope, сохраняет command ID и различает
+immutable ACK от текущего состояния; неизвестный исход удерживает pending
+команду. После подтверждённого выхода восстанавливается собственный APP-002
+или CHR-040 без создания нового входа. Новые формы зарегистрированы только
+в рабочей ветке; готовность полного #171 ещё не подтверждена.
+Предварительные решения мастера, NET-017 и новые GM-команды не добавлены:
+нужен [#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177).
+
+Текущая очередь — завершить #171, затем #172 → #173 → #174 → #113. Для #113
 исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                        | Веха |
-| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity/campaign drafts                          | M4   |
-| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
-| `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0009`, включая post-save, paused campaign, private identity и local tabs  | M2   |
-| `src/host`                   | **частично** | character FINAL/post-save, GM launch, durable campaign draft и CREATE PAUSED                   | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004/009/010/011, CHR-001–026/028/031/032/036–042, CMP-001–006                      | M4   |
-| `src/web`                    | **частично** | character/post-save и GM campaign creation; production E2E с настоящим host                    | M5   |
-| `src/web/renderer`           | **частично** | добавлены CHR-026/039/040 и APP-009/010; незарегистрированные формы fail-closed                | M5   |
-| `src/web/forms`              | **частично** | character wizard, финальный лист, recovery, библиотека, локальные варианты и экспорт           | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                         | Веха |
+| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **частично** | прежние wire v1/v2/v3 готовы; closed NET projection/draft/resume contracts добавлены в WIP #171 | M4   |
+| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime           | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                   | M3   |
+| `src/persistence`            | **частично** | character/post-save; local application/outbox и hosted request journals в WIP #171              | M2   |
+| `src/persistence/migrations` | **частично** | `0001`–`0009` готовы; `0010` добавляет восемь NET sidecar-таблиц в WIP #171                     | M2   |
+| `src/host`                   | **частично** | character/post-save, CREATE PAUSED; local NET coordinator и peer runtime в WIP #171             | M4   |
+| `src/host/projections`       | **частично** | прежние APP/CHR/CMP; NET-001–005/011 и CHR-027 добавлены в WIP #171                             | M4   |
+| `src/web`                    | **частично** | character/post-save/CMP; player NET UI и recovery в WIP #171, новый E2E ещё падает              | M5   |
+| `src/web/renderer`           | **частично** | NET-001–005/011 и CHR-027 зарегистрированы в WIP #171; неизвестные формы fail-closed            | M5   |
+| `src/web/forms`              | **частично** | character/CMP и player NET inputs, confirmed CANCEL_REASON, local QR decoder в WIP #171         | M6   |
+
+### Новые модули #171 — рабочая ветка
+
+| Модуль                                                                                                 | Текущее состояние                                                                                                                |
+| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/network-application*.ts`                                                                   | Закрытые public DTO и deep validator семи форм; NET draft/resume wire v3.                                                        |
+| `src/persistence/network-local-application.ts`, `network-device-request.ts`                            | Local intent/outbox/ACK, pins и pinned FINAL batch; отдельные hosted sessions/requests/receipts.                                 |
+| `src/host/campaign-network-endpoint.ts`, `campaign-network-executor.ts`, `campaign-network-runtime.ts` | Реальные held listeners, ограниченные transport leases и lifecycle сетевой кампании.                                             |
+| `src/host/device-admission-peer-runtime.ts`, `device-admission-peer-response.ts`                       | OPEN/SUBMIT/CANCEL/RECOVER через authenticated Node channel, current view отдельно от immutable receipt.                         |
+| `src/host/network-local-peer.ts`, `network-application.ts`                                             | Локальный coordinator, explicit entry/resume/exit, discovery/locator, проверка FINAL и восстановление outbox.                    |
+| `src/host/projections/net-application.ts`                                                              | Собственная sanitized projection, точные route bindings и доступные source CTAs; 37 focused-тестов.                              |
+| `src/web/forms/net`, `src/web/ws-client.ts`                                                            | Подтверждённые drafts, выбор FINAL, QR из локального изображения и recovery; 304 web-теста до последнего изменения action guard. |
+
+Все строки этой таблицы относятся к незавершённому #171. Полный verify,
+production E2E и независимая проверка окончательного SHA ещё требуются;
+покрытие форм перегенерируется штатным traceability CLI после стабилизации.
 
 ## generated/ — вывод конвейера
 
@@ -225,11 +265,11 @@ GM decisions требуют решения нормативного #177.
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                                            |
-| ------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                    |
-| `tests/e2e`         | **частично** | 34 production-сценария, включая character/post-save и paused campaign creation; NET двух устройств пока не реализован |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                |
+| Каталог             | Состояние    | Примечание                                                                                                           |
+| ------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                   |
+| `tests/e2e`         | **частично** | 34 прежних production-сценария; новый NET двух Node/SQLite и Chrome добавлен, CANCEL после общего restart ещё падает |
+| `tests/fixtures`    | **частично** | source-backed fixtures, изолированный SQLite host harness; новый двухпроцессный NET harness в WIP #171               |
 
 ---
 

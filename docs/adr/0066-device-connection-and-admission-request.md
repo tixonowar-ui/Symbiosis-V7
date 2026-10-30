@@ -164,12 +164,12 @@ seat, как и требует APP-003. Отправка заявки перев
 campaign seats остаётся за последующим срезом. Это уточнение проектного выбора
 ADR 0027, а не якобы уже заданная в Atlas формула «candidate = browser tab».
 
-Remote host отдельно валидирует закрытый candidate schema, baseline,
-provenance, checksum, catalog references и согласованность доступных фактов.
-Подпись/checksum не заменяют эту проверку и не выдаются за полный replay
-всей удалённой creation history. Конкретный witness/recompute contract должен
-быть зафиксирован до публикации SUBMIT; этот предложенный ADR не разрешает
-принять произвольный rechecksummed JSON как проверенный лист.
+Remote host использует `validateFinalAdmissionCandidate` из принятого ADR 0067:
+исходные checkpoint strings, snapshot SHA, точный persistence builder и полный
+существующий creation replay заново строят safe export и descriptor. Приватный
+witness не публикуется в browser/GM queue/readback. Подпись не аттестует честность
+чужого runtime или manual dice; checksum-valid произвольный JSON не становится
+проверенным листом. Новый rules engine и усечённая история не вводятся.
 
 ## Durable recovery и представление
 
@@ -206,3 +206,131 @@ CONNECT использует применимый NET-011; подробност�
   независимый полный verify и production E2E на итоговом committed SHA.
 
 Ни один пункт этого списка не объявлен реализованным только на основании ADR.
+
+## Уточнения прикладной реализации после #182
+
+Этот раздел уточняет предложенный технический контракт, а не принимает #177.
+Предварительные GM commands, IN_REVIEW и NET-017 остаются неподтверждёнными.
+
+До подтверждённого OPEN параметр Atlas route `:campaignId` несёт отдельный
+executor-assigned namespace `unbound:<networkScopeId>`. Он не является campaign
+ID или строкой БД. `campaignIdOrNull=null` остаётся явным фактом payload; QR и
+discovery hint его не меняют. После OPEN route содержит actual campaign ID,
+проверенный через session. Узкие host/web guards проверяют kind, форму и точное
+равенство привязки payload. CHR-027 всегда адресует actual owned source UUID.
+
+Новый явный вход APP-002::CTA::003 создаёт отдельную counted UNBOUND tab;
+exact replay не создаёт вторую и не переставляет active pointer. NET resume
+получает точный opaque scope из owning browser ticket, затем проверяет его
+owner, полный журнал и retirement proof в SQLite. Обычный shell reconnect без
+NET ticket сохраняет прежнюю семью local wizard/post-save/GM: несколько
+независимых cursor не дают права выбирать первый, последний или NET TARGET
+автоматически. Новый browser без ticket не восстанавливает NET cursor сам;
+reload и restart того же browser восстанавливают его по сохранённому ticket.
+Audited TARGET/NONE служит явным выбором уже существующей tab, когда вызывающий
+путь запрашивает этот выбор. Использовать `active ?? create` для нового
+входа нельзя: это скрывает четвёртую попытку за автоматическим resume. Вход из
+CHR-040 создаёт такой же явный local input scope и сохраняет точную source ref;
+новый candidate не создаёт actor seat. NET-003 → NET-004 фиксирует request ID
+и immutable prepared batch до SUBMIT. Поздняя metadata edit его не подменяет.
+
+Первый entry commit схемы 0010 сохраняет необязательный applicationEntry в
+существующем журнале: точный canonical browser envelope и исходный UUID FINAL
+либо null для APP-002. Поэтому сбой до отдельного первого NAV не разрешает
+переиспользовать ID для другого входа или выбрать текущий чужой cursor вместо
+исходного FINAL. Replay сверяет envelope до binding/IO и заново проверяет
+сохранённый собственный source. Старые schema9 entries остаются побайтово
+неизменными; отсутствие application binding не восстанавливается догадкой.
+
+Миграция 0010 добавляет application companion/event/outbox/pin и hosted
+peer/session/request/command. Локальным triple по-прежнему владеет tab:
+изменённый editable draft повышает S/P/draft на один; navigation повышает P;
+первый CHR-040 → CHR-027 одновременно фиксирует выбранный source candidate и
+повышает S/P до 1/1 при draftRevision=0. Поэтому его новый namespace не обязан
+иметь нулевой S или P>S. Возврат из FINAL в retained confirmed scope использует
+существующие ревизии этой NET entity, а не ревизии финального листа;
+новый INTENT и первый ACK повышают S/P каждый на один. Visibility остаётся 0.
+Read, no-op и replay не повышают counters. PREPARE_BATCH фиксирует semantic
+data и повышает S/P, а draftRevision не меняет. Remote request/session vectors
+никогда не копируются в local vector. Old immutable receipt возвращается
+вместе с отдельным актуальным представлением, без отката cursor.
+
+Возврат CHR-027 к FINAL при подтверждённом UNBOUND scope не удаляет input
+identity или technical session. Application event сохраняет точный SHELL_EXIT
+с исходным navigation ID и собственным source UUID; это изменение только P.
+Потерянный ответ восстанавливается в тот же FINAL по этому событию. Новый явный
+NET ingress очищает exit marker. Повтор старого выхода после более новой
+локальной навигации не вправе переставить shell cursor: same-transport replay
+проверяет точное последнее exit assignment, context и vector. Cold resume
+допускает восстановление адресованного выхода до появления другого shell context.
+
+В пределах одной синхронной фазы delivery reader возвращает current, outbox
+и исходный ACK event из одного полного проверенного журнала. Это не cache между
+`await` или транзакциями: после сетевого ожидания источник проверяется заново,
+а writer сохраняет полный transactional replay и final guards. Неизменяемый
+receipt и актуальная проекция используют разные части этого проверенного снимка.
+
+NET-005 `cancelReason` — собственный локальный editable input. Закрытый v3
+`CANCEL_REASON` сохраняет его до пересчёта availability: CTA отмены появляется
+только после подтверждённой непустой причины. Сохранение input не исполняет
+отмену и не передаёт её GM. CANCEL остаётся отдельной явной workflow-командой.
+Неподтверждённый SUBMIT/CANCEL outbox блокирует закрытие ещё UNBOUND tab: remote
+commit мог произойти до потерянного ACK. NOT_FOUND не очищает outbox и не даёт
+новые semantic IDs. Внутри общего campaign executor recovery отзывает прежнюю
+opaque ATTEMPT/SESSION lease и RAM transfers до ответа; финальный SQL guard
+повторно проверяет lease. Одна очередь без generation fence недостаточна для
+позднего старого COMMIT после нового NOT_FOUND. Другие logical sessions того
+же peer не отзываются. Restart уничтожает все прежние physical channels и RAM
+transfers; новое соединение получает свежий proof.
+
+Host pin имеет ключ ownerDeviceId+campaignId, независимо от введённого origin.
+Редактирование адреса не сбрасывает известный ключ. First-use pin фиксируется
+до `confirmHostPin` и первого RPC. Immutable campaign birth baseline, текущий
+artifact manifest и pinned candidate baseline остаются разными фактами;
+неизвестная смена baseline отклоняется. Возможная будущая Atlas-only поставка
+требует отдельного точного compatibility proof, без переписывания birth/bytes.
+
+Публикация CREATE с host configuration является явным выбором этого owner
+размещать кампанию. После restart перечисляются все actual owner-valid PAUSED
+кампании с проверенным CREATE proof; для каждой восстанавливается её held bind.
+Это технический выбор восстановления, не выбор первой/последней campaign.
+Corruption не скрывается, занятый endpoint не выдаётся за успешный. Discovery
+рекламирует только действительно опубликованные live endpoints.
+
+Discovery group/port заданы deployment-конфигурацией `package.json`:
+`239.255.77.7:47777`, administratively scoped UDP4 с TTL 1. Это технический
+канал приложения, не игровой параметр. Scan ограничен 1200 ms, 64 offers и
+4096 bytes на packet; обрезанный список отмечается явно. Channel deadlines
+составляют 10 s; inbox — 16 кадров/512 KiB, pending calls — 8. Private frame
+сохраняет предел ADR 0067 128 KiB. Carrier использует chunks до 64 KiB, witness
+до 16 MiB, полный submit до 64 MiB, до 8 RAM transfers/128 MiB суммарно и
+30 s deadline. Превышение даёт отказ, без усечения evidence или нового RNG.
+Одновременно runtime обслуживает до 64 private channels. Бюджет 128 MiB
+относится к staged bytes, а не обещает верхнюю границу всего RSS процесса.
+Private endpoint ограничивает 64 ещё не завершивших handshake соединения до
+upgrade. Executor ограничивает таблицу scoped recovery fences 1024 записями
+и 8 MiB суммарных UTF-8 ключей до добавления новой записи. Живые tombstones не
+вытесняются ради освобождения бюджета: иначе старый transport вернётся после
+NOT_FOUND. После отзыва всех прежних физических principals возможно безопасно
+убрать только уже недостижимые fence records. Это не постоянный запрет peer
+когда-либо снова использовать ID: honest local outbox проверяется повторно
+после handshake и непосредственно перед RPC, в том числе после recovery.
+
+Outgoing locator и ещё не завершённый WS handshake принадлежат тому же local
+scope, что и готовый channel. Close, closeScope и замена попытки отменяют их
+через scope-owned AbortController, сохраняя прежний deadline. Поздний ответ не
+фиксирует pin или intent после отзыва scope; проверка owner и cancellation
+повторяется до синхронной записи. Закрытие приложения не ждёт чужого timeout,
+чтобы освободить незавершённый исходящий transport.
+До durable commit кодирует также будущий short ACK: неизменяемый receipt и
+current view вместе обязаны уместиться в 128 KiB. Большая причина отмены или
+корреляция не усекутся и не создадут commit, которому невозможно ответить.
+Эти engineering budgets ограничивают память/ожидание; они не меняют лимиты
+персонажей, capacity, правила игры или состав исходных артефактов.
+
+QR из локального файла декодируется существующим `jsqr` 1.4.0, который теперь
+используется в self-contained runtime bundle. Новый пакет или install script
+не добавляется. Декодирование ограничено 12 MiB файла и 4096 pixels по стороне:
+это бюджет чтения изображения, не правило арта. Bitmap закрывается и поздний
+результат после unmount отбрасывается. QR только заполняет собственный draft;
+OPEN остаётся отдельным действием, Origin/history browser не меняются.

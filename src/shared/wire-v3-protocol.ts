@@ -1,4 +1,6 @@
 import type { RevisionVector } from './wire-protocol.js';
+import type { NetworkClientV3Message } from './device-admission.js';
+import type { NetworkHostV3Message } from './network-application.js';
 import type {
   CampaignDraftReplaceV3Message,
   CampaignLocalContextResumeV3Message,
@@ -114,10 +116,12 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
 
 export type ClientToHostV3Message =
   | IdentityDraftReplaceV3Message
+  | NetworkClientV3Message
   | CampaignDraftReplaceV3Message
   | CampaignLocalContextResumeV3Message;
 export type HostToClientV3Message =
   | IdentityDraftRefusalV3Message
+  | NetworkHostV3Message
   | IdentityDraftResultV3Message
   | CampaignDraftResultV3Message
   | CampaignDraftRefusalV3Message;

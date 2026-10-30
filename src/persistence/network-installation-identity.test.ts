@@ -10,11 +10,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import { runInNewContext } from 'node:vm';
-import type Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openPersistenceDatabase } from './database.js';
 import { bootstrapDeviceIdentity, resetDeviceIdentity } from './device-identity.js';
-import { applyMigrations } from './migrations/index.js';
+import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
+import { migration0001 } from './migrations/0001-initial.js';
+import { migration0002 } from './migrations/0002-local-character-checkpoint.js';
+import { migration0003 } from './migrations/0003-device-identity.js';
+import { migration0004 } from './migrations/0004-skill-presentation.js';
+import { migration0005 } from './migrations/0005-symbiont-presentation.js';
+import { migration0006 } from './migrations/0006-local-character-post-save.js';
+import { migration0007 } from './migrations/0007-campaign-creation.js';
+import { migration0008 } from './migrations/0008-network-installation-identity.js';
 import {
   ensureDeviceInstallationIdentity,
   NetworkInstallationIdentityStoreError,
@@ -38,6 +46,22 @@ const canonical = (value: Record<string, unknown>) =>
 function open(path = ':memory:') {
   const db = openPersistenceDatabase(path);
   databases.push(db);
+  return db;
+}
+function legacyDatabase(version: 7 | 8): Database.Database {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys=ON');
+  databases.push(db);
+  applyMigrationSequence(db, [
+    migration0001,
+    migration0002,
+    migration0003,
+    migration0004,
+    migration0005,
+    migration0006,
+    migration0007,
+    ...(version === 8 ? [migration0008] : []),
+  ]);
   return db;
 }
 function path() {
@@ -95,16 +119,14 @@ afterEach(() => {
 });
 
 describe('durable private installation identity', () => {
-  it('keeps the explicit schema8 key contract while schema9 requires its actual tab tables', () => {
-    const { db, device, input } = setup();
-    db.exec(
-      'DROP TABLE local_network_active_tab; DROP TABLE local_network_tab_close; DROP TABLE local_network_tab_entry; DROP TABLE local_network_tab',
-    );
-    db.prepare('DELETE FROM schema_migration WHERE version=9').run();
+  it('keeps the explicit schema8 key contract while newer schemas require their actual tables', () => {
+    const db = legacyDatabase(8),
+      device = bootstrapDeviceIdentity(db),
+      input = prepared(device);
     ensureDeviceInstallationIdentity(db, input, validateRealKeyPair);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
     const before = raw(db);
-    expect(applyMigrations(db)).toBe(9);
+    expect(applyMigrations(db)).toBe(10);
     expect(raw(db)).toEqual(before);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
   });
@@ -495,6 +517,7 @@ describe('durable private installation identity', () => {
     'missing-table',
     'missing-network-tab-table',
     'missing-close-table',
+    'missing-application-table',
     'older-schema',
     'future-schema',
   ] as const)('refuses %s instead of generating a fallback identity', (kind) => {
@@ -502,9 +525,10 @@ describe('durable private installation identity', () => {
     if (kind === 'missing-table') db.exec('DROP TABLE device_installation_identity');
     else if (kind === 'missing-network-tab-table') db.exec('DROP TABLE local_network_active_tab');
     else if (kind === 'missing-close-table') db.exec('DROP TABLE local_network_tab_close');
+    else if (kind === 'missing-application-table') db.exec('DROP TABLE local_network_host_pin');
     else if (kind === 'older-schema')
       db.prepare('DELETE FROM schema_migration WHERE version>=8').run();
-    else db.prepare('UPDATE schema_migration SET version=10 WHERE version=9').run();
+    else db.prepare('UPDATE schema_migration SET version=11 WHERE version=10').run();
     const before = db.serialize();
     const validate = vi.fn(allow);
     expectCode(() => readDeviceInstallationIdentity(db, device), 'CORRUPT_STORAGE');
@@ -514,13 +538,8 @@ describe('durable private installation identity', () => {
   });
 
   it('upgrades version 7 without rewriting prior migrations or creating identity, roles or game rows', () => {
-    const db = open();
+    const db = legacyDatabase(7);
     const device = bootstrapDeviceIdentity(db);
-    db.exec(
-      'DROP TABLE local_network_active_tab; DROP TABLE local_network_tab_close; DROP TABLE local_network_tab_entry; DROP TABLE local_network_tab',
-    );
-    db.exec('DROP TABLE device_installation_identity');
-    db.prepare('DELETE FROM schema_migration WHERE version>=8').run();
     db.prepare(
       "INSERT INTO local_character(local_character_id,lifecycle_state,payload_json) VALUES('preserved-local','DRAFT','{\"source\":7}')",
     ).run();
@@ -530,7 +549,7 @@ describe('durable private installation identity', () => {
     const oldRegistry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
     const local = db.prepare('SELECT * FROM local_character').all();
     const campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(9);
+    expect(applyMigrations(db)).toBe(10);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<8 ORDER BY version').all(),
     ).toEqual(oldRegistry);
@@ -540,7 +559,7 @@ describe('durable private installation identity', () => {
     for (const table of ['campaign_character_copy', 'campaign_checkpoint', 'local_gm_context'])
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const before = db.serialize();
-    expect(applyMigrations(db)).toBe(9);
+    expect(applyMigrations(db)).toBe(10);
     expect(db.serialize()).toEqual(before);
   });
 });
