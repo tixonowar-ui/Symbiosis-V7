@@ -3,17 +3,20 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-## Application #171 — интеграция
+## Application #171 — реализация полного сценария
 
-Player-срез f9a6a539 объединён с main f7e6ade3d0 (#190, Atlas 1.6 / #177 и source contracts #195).
-В рабочей ветке подключены GM queue, отдельный GM v3 draft, два preliminary
-workflow, forward0011, peer lane provenance и live owner recovery. Полный #171
-ожидает финальных gates: types/client/store focused и полный GM browser
-accept→restart→reject→safe return→повторный SUBMIT прошли. Полный verify/E2E
-на окончательном committed SHA и независимый прогон ещё требуются. Предыдущие 3539 tests / 36 E2E не являются
-проверкой нового снимка. Фактический итоговый бюджет и независимые final-SHA
-проверки обязательны; source-contract foundation #195 смёржена через PR #196; её standalone
-контракты и encoder redaction сохранены, runtime registration добавляется в #171.
+На базе main `7568488a13` (#190, Atlas 1.6 / #177, source contracts #195 и
+исключение #197 только для PR #185) реализованы player NET entry/connect/batch,
+GM CMP-006↔NET-017, предварительные accept/reject, owner-only delivery,
+CANCEL race, legacy lane recovery и forward0011. Common technical view head
+отделён от неизменяемого campaign birth; copies, admitted seats и Start
+остаются за последующими задачами. Shared encoder redaction сохранён.
+
+Точные browser reproducers проходят, включая reject→safe return→новый SUBMIT
+и CANCEL выбранной GM строки. Полный verify, все 38 production E2E,
+независимые final-SHA проверки и CI остаются обязательными merge gates.
+Их текущий результат фиксируется в handoff и PR; прежние успешные запуски
+не считаются проверкой изменённого снимка. После merge #185 работа останавливается.
 
 ## Source-снимок #177 — 2026-10-30
 
@@ -244,9 +247,9 @@ CREATE. QR реально декодируется; восстановление
 entry/close. Source assertions NET-001–005/009–012 и CHR-027 не регистрируют формы
 и не расширяют player authority. [ADR 0067](../adr/0067-private-campaign-network-foundation.md)
 принят для APIs; прикладной [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
-остаётся предложенным.
+вступает в силу с merge #185 после финальных gates.
 
-В #171 рабочая ветка связывает этот фундамент с player NET UI, local/host
+В #171 реализация связывает этот фундамент с player NET UI, local/host
 журналами и ограниченным peer executor. APP-002 и текущий FINAL CHR-040
 дают явные входы. Адрес или QR заполняют ввод, OPEN подтверждает только
 техническую сессию, SUBMIT передаёт один pinned batch из 1–3 собственных FINAL,
@@ -256,10 +259,9 @@ CANCEL требует подтверждённую локальную причи
 Resume использует известный opaque scope, сохраняет command ID и различает
 immutable ACK от текущего состояния; неизвестный исход удерживает pending
 команду. После подтверждённого выхода восстанавливается собственный APP-002
-или CHR-040 без создания нового входа. Новые формы зарегистрированы только
-в рабочей ветке; готовность полного #171 ещё не подтверждена.
-Предварительные решения мастера, NET-017 и две GM-команды подключены в рабочей
-ветке по смёрженной поставке #177; final verification полного среза ещё требуется.
+или CHR-040 без создания нового входа. NET-017 и две preliminary GM-команды
+подключены по смёрженной поставке #177. Финальная приёмка полного среза
+требует проверок одного окончательного committed SHA.
 
 Текущее поручение — завершить и смёржить #171 / PR #185, затем остановиться.
 #172, #173, #174, #113 и подготовка #186 сейчас не продолжаются.
@@ -267,32 +269,32 @@ immutable ACK от текущего состояния; неизвестный �
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                                                              | Веха |
 | ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **частично** | прежние wire v1/v2/v3 готовы; closed NET projection/draft/resume contracts добавлены в WIP #171                      | M4   |
+| `src/shared`                 | **частично** | прежние wire v1/v2/v3 готовы; closed NET projection/draft/resume contracts добавлены в #171                          | M4   |
 | `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime                                | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                                        | M3   |
-| `src/persistence`            | **частично** | character/post-save; local application/outbox и hosted request journals в WIP #171                                   | M2   |
+| `src/persistence`            | **частично** | character/post-save; local application/outbox и hosted request journals в #171                                       | M2   |
 | `src/persistence/migrations` | **частично** | `0010` сохраняет NET sidecars; forward `0011` добавляет GM queue, решения и lane provenance                          | M2   |
-| `src/host`                   | **частично** | character/post-save, CREATE PAUSED; local NET coordinator и peer runtime в WIP #171                                  | M4   |
+| `src/host`                   | **частично** | character/post-save, CREATE PAUSED; local NET coordinator и peer runtime в #171                                      | M4   |
 | `src/host/projections`       | **частично** | прежние APP/CHR/CMP; NET-001–005/011/017 и CHR-027 подключены в #171                                                 | M4   |
 | `src/web`                    | **частично** | character/post-save/CMP; player/GM NET UI и recovery в #171; точные browser reproducers прошли, full gates ожидаются | M5   |
 | `src/web/renderer`           | **частично** | NET-001–005/011/017 и CHR-027 зарегистрированы в #171; неизвестные формы fail-closed                                 | M5   |
-| `src/web/forms`              | **частично** | character/CMP и player NET inputs, confirmed CANCEL_REASON, local QR decoder в WIP #171                              | M6   |
+| `src/web/forms`              | **частично** | character/CMP и player NET inputs, confirmed CANCEL_REASON, local QR decoder в #171                                  | M6   |
 
-### Новые модули #171 — рабочая ветка
+### Модули полного сценария #171
 
-| Модуль                                                                                                 | Текущее состояние                                                                                                                |
-| ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `src/shared/network-application*.ts`                                                                   | Закрытые public DTO и deep validator семи форм; NET draft/resume wire v3.                                                        |
-| `src/persistence/network-local-application.ts`, `network-device-request.ts`                            | Local intent/outbox/ACK, pins и pinned FINAL batch; отдельные hosted sessions/requests/receipts.                                 |
-| `src/host/campaign-network-endpoint.ts`, `campaign-network-executor.ts`, `campaign-network-runtime.ts` | Реальные held listeners, ограниченные transport leases и lifecycle сетевой кампании.                                             |
-| `src/host/device-admission-peer-runtime.ts`, `device-admission-peer-response.ts`                       | OPEN/SUBMIT/CANCEL/RECOVER через authenticated Node channel, current view отдельно от immutable receipt.                         |
-| `src/host/network-local-peer.ts`, `network-application.ts`                                             | Локальный coordinator, explicit entry/resume/exit, discovery/locator, проверка FINAL и восстановление outbox.                    |
-| `src/host/projections/net-application.ts`                                                              | Собственная sanitized projection, точные route bindings и доступные source CTAs; 37 focused-тестов.                              |
-| `src/web/forms/net`, `src/web/ws-client.ts`                                                            | Подтверждённые drafts, выбор FINAL, QR из локального изображения и recovery; 304 web-теста до последнего изменения action guard. |
+| Модуль                                                                                                 | Текущее состояние                                                                                             |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `src/shared/network-application*.ts`                                                                   | Закрытые public DTO и deep validator семи форм; NET draft/resume wire v3.                                     |
+| `src/persistence/network-local-application.ts`, `network-device-request.ts`                            | Local intent/outbox/ACK, pins и pinned FINAL batch; отдельные hosted sessions/requests/receipts.              |
+| `src/host/campaign-network-endpoint.ts`, `campaign-network-executor.ts`, `campaign-network-runtime.ts` | Реальные held listeners, ограниченные transport leases и lifecycle сетевой кампании.                          |
+| `src/host/device-admission-peer-runtime.ts`, `device-admission-peer-response.ts`                       | OPEN/SUBMIT/CANCEL/RECOVER через authenticated Node channel, current view отдельно от immutable receipt.      |
+| `src/host/network-local-peer.ts`, `network-application.ts`                                             | Локальный coordinator, explicit entry/resume/exit, discovery/locator, проверка FINAL и восстановление outbox. |
+| `src/host/projections/net-application.ts`                                                              | Отдельные player/GM projections, точные bindings/source CTAs, owner-only текущие результаты.                  |
+| `src/web/forms/net`, `src/web/ws-client.ts`                                                            | Подтверждённые player/GM drafts, FINAL/QR, immutable receipt/current view, live delivery и recovery.          |
 
-Все строки этой таблицы относятся к незавершённому #171. Полный verify,
-production E2E и независимая проверка окончательного SHA ещё требуются;
-покрытие форм перегенерируется штатным traceability CLI после стабилизации.
+Это реализованный прикладной срез #171. Полный verify, production E2E и
+независимая проверка окончательного SHA обязательны до merge. Покрытие форм
+перегенерировано штатным traceability CLI.
 
 ## generated/ — вывод конвейера
 
@@ -305,11 +307,11 @@ production E2E и независимая проверка окончательн
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                                           |
-| ------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                   |
-| `tests/e2e`         | **частично** | 34 прежних production-сценария; новый NET двух Node/SQLite и Chrome добавлен, CANCEL после общего restart ещё падает |
-| `tests/fixtures`    | **частично** | source-backed fixtures, изолированный SQLite host harness; новый двухпроцессный NET harness в WIP #171               |
+| Каталог             | Состояние    | Примечание                                                                                                  |
+| ------------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                          |
+| `tests/e2e`         | **частично** | 38 production-сценариев; четыре NET с отдельными Node/SQLite и Chrome проверяют player/GM review и recovery |
+| `tests/fixtures`    | **частично** | source-backed fixtures, изолированный SQLite host harness; новый двухпроцессный NET harness в #171          |
 
 ---
 

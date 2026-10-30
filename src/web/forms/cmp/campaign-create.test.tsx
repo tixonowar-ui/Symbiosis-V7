@@ -383,7 +383,9 @@ describe('campaign projection contract', () => {
     expect(expectedCampaignActions('CMP-005', projections['CMP-005'], [])).toEqual([
       'CMP-005::CTA::002',
     ]);
-    expect(expectedCampaignActions('CMP-006', projections['CMP-006'], CAPABILITIES)).toEqual([]);
+    expect(expectedCampaignActions('CMP-006', projections['CMP-006'], CAPABILITIES)).toEqual([
+      'CMP-006::CTA::002',
+    ]);
     expect(
       expectedCampaignActions(
         'CMP-002',
@@ -735,7 +737,7 @@ describe('campaign draft transport', () => {
     ['APP-011', { ...ZERO, stateRevision: 1 }],
     ['APP-011', { ...ZERO, actorVisibilityRevision: 1 }],
     ['CMP-006', { ...ZERO, stateRevision: 1 }],
-    ['CMP-006', { ...ZERO, projectionRevision: 1 }],
+    ['CMP-006', { ...ZERO, stateRevision: 2, projectionRevision: 1 }],
     ['CMP-006', { ...ZERO, actorVisibilityRevision: 1 }],
   ] as const)('rejects an invalid resumed %s revision vector %j', async (formId, revisions) => {
     const h = await harness(formId, projections[formId], revisions);
@@ -747,6 +749,8 @@ describe('campaign draft transport', () => {
   it.each([
     ['APP-011', { ...ZERO, projectionRevision: 7 }],
     ['CMP-006', ZERO],
+    ['CMP-006', { ...ZERO, projectionRevision: 1 }],
+    ['CMP-006', { ...ZERO, stateRevision: 2, projectionRevision: 4 }],
   ] as const)('accepts the persisted resumed %s revision vector %j', async (formId, revisions) => {
     const h = await harness(formId, projections[formId], revisions);
     expect(h.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId, revisions } });
@@ -956,7 +960,7 @@ describe('campaign creation receipt and UI', () => {
     );
     expect(h.states.at(-1)).toMatchObject({
       kind: 'ready',
-      snapshot: { formId: 'CMP-006', revisions: ZERO, availableActionKeys: [] },
+      snapshot: { formId: 'CMP-006', revisions: ZERO, availableActionKeys: ['CMP-006::CTA::002'] },
     });
     expect(h.connection.requestFormAction('CMP-006::CTA::001').ok).toBe(false);
   });

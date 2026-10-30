@@ -4236,9 +4236,7 @@ function decodeConfirmedSnapshot(
         return unrecognized('$.presentation.base.routeBindings', null);
       const actions = exactSymbiontActionKeys(
         base.availableActionKeys,
-        base.formId === 'CMP-006'
-          ? ['CMP-006::CTA::002']
-          : expectedCampaignActions(base.formId, p, executableWorkflowCommandIds),
+        expectedCampaignActions(base.formId, p, executableWorkflowCommandIds),
         '$.presentation.base.availableActionKeys',
       );
       if (!actions.ok) return actions;
