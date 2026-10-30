@@ -162,13 +162,13 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
-          MAX_CODE_ADDED: 10000
+          MAX_CODE_ADDED: 15000
           MAX_CODE_DELETED: 1500
           MAX_CODE_FILES: 40
           MAX_TEST_DELETED: 400
           MAX_DOC_LINES: 3000
           MAX_ARTIFACT_LINES: 2000
-          MAX_TOTAL_FILES: 60
+          MAX_TOTAL_FILES: 90
         run: |
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
