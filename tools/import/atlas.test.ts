@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertAdr0049MissingChannels,
   assertAdr0052AdvisorIntelligenceFloor,
+  assertAdr0069RequestReview,
   assertAtlasCounts,
   auditAtlasSections,
   buildRendererQueryIndexes,
@@ -192,10 +193,10 @@ describe('generated atlas spec', () => {
   });
 
   it('matches the counts the audit states about the atlas', () => {
-    expect(spec('transitions.json')).toHaveLength(1681);
+    expect(spec('transitions.json')).toHaveLength(1688);
     expect(spec('journeys.json')).toHaveLength(66);
     expect(spec('requirements.json')).toHaveLength(91);
-    expect(spec('qa-scenarios.json')).toHaveLength(2440);
+    expect(spec('qa-scenarios.json')).toHaveLength(2445);
     expect(spec('lifecycles.json')).toHaveLength(19);
     expect(spec('diagrams.json')).toHaveLength(11);
   });
@@ -253,7 +254,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.5', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.6', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',
@@ -419,7 +420,7 @@ describe('generated atlas types', () => {
     const known: ActionKey = 'APP-002::CTA::007';
     // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
     const absent: ActionKey = 'APP-002::CTA::999';
-    expect(members).toHaveLength(1_247);
+    expect(members).toHaveLength(1_252);
     expect(members).toEqual(extractActionKeys(clonedForms()));
     expect(members).toContain(known);
     expect(members).not.toContain(absent);
@@ -438,8 +439,8 @@ describe('action key export guards', () => {
     [rows[0], rows[1]] = [rows[1]!, rows[0]!];
     const actionKeys = extractActionKeys(forms);
 
-    expect(actionKeys).toHaveLength(1_247);
-    expect(new Set(actionKeys).size).toBe(1_247);
+    expect(actionKeys).toHaveLength(1_252);
+    expect(new Set(actionKeys).size).toBe(1_252);
     expect(actionKeys.slice(0, 4)).toEqual([
       'APP-001::CTA::002',
       'APP-001::CTA::001',
@@ -487,7 +488,7 @@ describe('action key export guards', () => {
     const forms = clonedForms();
     firstFormActionRows(forms).pop();
 
-    expect(() => extractActionKeys(forms)).toThrow(/expected 1247 action keys, got 1246/u);
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1252 action keys, got 1251/u);
   });
 });
 
@@ -657,7 +658,7 @@ describe('ADR 0049 missing decision channels', () => {
     expect(() => assertAdr0049MissingChannels(root)).toThrow();
   };
 
-  it('accepts the exact v1.5 delivery', () => {
+  it('accepts the exact v1.6 delivery', () => {
     expect(() => assertAdr0049MissingChannels(clonedAtlas())).not.toThrow();
   });
 
@@ -1099,7 +1100,7 @@ describe('ADR 0052 advisor intelligence floor channel', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(root)).toThrow();
   };
 
-  it('accepts the exact v1.5 delivery', () => {
+  it('accepts the exact v1.6 delivery', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(clonedAtlas())).not.toThrow();
   });
 
@@ -1194,5 +1195,731 @@ describe('ADR 0052 advisor intelligence floor channel', () => {
     );
     atlasObject(root['counts'])['transitions'] = 1_680;
     expectRejected(root);
+  });
+});
+
+describe('ADR 0069 request-level review source boundary', () => {
+  const row = (root: ImportJsonObject, target: string, id: string): ImportJsonObject => {
+    const container = target === 'workflowCommands' ? atlasObject(root['registryCoverage']) : root;
+    const key =
+      target === 'workflowCommands'
+        ? 'commandId'
+        : target === 'coverageRequirements'
+          ? 'requirementId'
+          : target === 'qaScenarios'
+            ? 'qaId'
+            : 'id';
+    const result = (container[target] as ImportJsonObject[]).find((value) => value[key] === id);
+    if (result === undefined) throw new Error('Missing source fixture ' + id);
+    return result;
+  };
+  const action = (root: ImportJsonObject, id: string, key: string): ImportJsonObject => {
+    const actions = atlasObject(row(root, 'forms', id)['actions'])[
+      'ctaAvailabilityByAction'
+    ] as ImportJsonObject[];
+    const found = actions.find((value) => value['actionKey'] === key);
+    if (!found) throw new Error('Missing source action ' + key);
+    return found;
+  };
+  const reject = (root: ImportJsonObject): void => {
+    expect(() => assertAdr0069RequestReview(root)).toThrow();
+  };
+  const authorityMutations = [
+    { key: 'roles', value: ['system'] },
+    { key: 'route', value: '/player/foreign-queue' },
+    { key: 'inputOwner', value: 'unbound browser chooses authority' },
+    { key: 'entryConditions', value: [] },
+    { key: 'guardStates', value: [] },
+    { key: 'projection', value: { controller: 'all data', observer: 'all data' } },
+    { key: 'contexts', value: ['unbound'] },
+    { key: 'actions.prohibited', value: [] },
+  ];
+  for (const id of ['NET-003', 'NET-005', 'NET-017', 'CMP-006']) {
+    for (const mutation of authorityMutations) {
+      it('rejects authority drift at ' + id + '.' + mutation.key, () => {
+        const root = clonedAtlas();
+        const form = row(root, 'forms', id);
+        if (mutation.key === 'actions.prohibited')
+          atlasObject(form['actions'])['prohibited'] = mutation.value;
+        else form[mutation.key] = mutation.value;
+        reject(root);
+      });
+    }
+  }
+  it('accepts the complete real v1.6 delivery and preserves both older semantic guards', () => {
+    const root = clonedAtlas();
+    expect(() => {
+      assertAdr0069RequestReview(root);
+      assertAdr0049MissingChannels(root);
+      assertAdr0052AdvisorIntelligenceFloor(root);
+    }).not.toThrow();
+  });
+  const contracts = [
+    {
+      target: 'forms',
+      id: 'NET-003',
+      path: ['requiredFields'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-003',
+      path: ['qaScenarioIds'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['requiredFields'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['components'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['states'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['acceptanceCriteria'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['qaScenarioIds'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['actions', 'visible'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-005',
+      path: ['actions', 'allowed'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['requiredFields'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['purpose'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['inputOwner'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['components'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['states'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['acceptanceCriteria'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['qaScenarioIds'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['actions', 'visible'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['actions', 'allowed'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['actions', 'workflowCommandAvailability'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['actions', 'availabilityContract', 'authoritativeSource'],
+    },
+    {
+      target: 'forms',
+      id: 'NET-017',
+      path: ['references', 'workflowCommandIds'],
+    },
+    {
+      target: 'forms',
+      id: 'CMP-006',
+      path: ['requiredFields'],
+    },
+    {
+      target: 'forms',
+      id: 'CMP-006',
+      path: ['components'],
+    },
+    {
+      target: 'forms',
+      id: 'CMP-006',
+      path: ['states'],
+    },
+    {
+      target: 'forms',
+      id: 'CMP-006',
+      path: ['qaScenarioIds'],
+    },
+    {
+      target: 'forms',
+      id: 'CMP-006',
+      path: ['actions', 'visible'],
+    },
+    {
+      target: 'forms',
+      id: 'CMP-006',
+      path: ['actions', 'allowed'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-004',
+      path: ['actionSteps'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-004',
+      path: ['expectedStateDeltas'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-004',
+      path: ['offlineReconnectAssertions'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-005',
+      path: ['happyPath'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-005',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-005',
+      path: ['actionSteps'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-005',
+      path: ['expectedStateDeltas'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-005',
+      path: ['offlineReconnectAssertions'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-006',
+      path: ['happyPath'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-006',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-006',
+      path: ['actionSteps'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-006',
+      path: ['expectedStateDeltas'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-006',
+      path: ['offlineReconnectAssertions'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-007',
+      path: ['actionSteps'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-007',
+      path: ['expectedStateDeltas'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-007',
+      path: ['offlineReconnectAssertions'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-010',
+      path: ['happyPath'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-010',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-010',
+      path: ['actionSteps'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-010',
+      path: ['expectedStateDeltas'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-010',
+      path: ['offlineReconnectAssertions'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-031',
+      path: ['actionSteps'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-031',
+      path: ['expectedStateDeltas'],
+    },
+    {
+      target: 'coverageRequirements',
+      id: 'REQ-031',
+      path: ['offlineReconnectAssertions'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-GM-IMPORT-ADMISSION',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-JOIN-REVIEW',
+      path: ['steps'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-JOIN-REVIEW',
+      path: ['alternatives'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-JOIN-REVIEW',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-CAMPAIGN-CREATE',
+      path: ['alternatives'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-CAMPAIGN-LIFECYCLE',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'journeys',
+      id: 'J-LOCAL-SEATS',
+      path: ['workflowCommandIds'],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-FORM-NET-005',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-FORM-NET-017',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-FORM-CMP-006',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-REQ-004',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-REQ-005',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-REQ-006',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-REQ-007',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-REQ-010',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-REQ-031',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-CMP-006-DEVICE-REQUEST-QUEUE',
+      path: [],
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-NET-005-REJECTED-RETURN',
+      path: [],
+    },
+  ] as const;
+  for (const item of contracts)
+    for (const mutation of ['lost', 'changed'] as const) {
+      it(mutation + ' independent source mirror ' + item.id + '.' + item.path.join('.'), () => {
+        const root = clonedAtlas();
+        let owner = row(root, item.target, item.id);
+        if (item.path.length === 0) {
+          if (mutation === 'lost') delete owner['qaId'];
+          else owner['unexpectedField'] = 'unapproved';
+        } else {
+          const keys: readonly string[] = item.path;
+          for (const key of keys.slice(0, -1)) owner = atlasObject(owner[key]);
+          const last = keys[keys.length - 1]!;
+          if (mutation === 'lost') delete owner[last];
+          else {
+            const value = owner[last];
+            owner[last] = Array.isArray(value)
+              ? [...value, 'UNAPPROVED_SOURCE_VALUE']
+              : value !== null && typeof value === 'object'
+                ? { ...value, unexpectedField: true }
+                : 'UNAPPROVED_SOURCE_VALUE';
+          }
+        }
+        reject(root);
+      });
+    }
+  for (const [id, key] of [
+    ['NET-005', 'NET-005::CTA::003'],
+    ['NET-017', 'NET-017::CTA::007'],
+    ['NET-017', 'NET-017::CTA::008'],
+    ['NET-017', 'NET-017::CTA::009'],
+    ['CMP-006', 'CMP-006::CTA::002'],
+  ] as const)
+    for (const mutation of ['missing', 'guard', 'unknown'] as const) {
+      it('rejects ' + mutation + ' at ' + key, () => {
+        const root = clonedAtlas();
+        const value = action(root, id, key);
+        if (mutation === 'missing') {
+          const owner = atlasObject(row(root, 'forms', id)['actions']);
+          owner['ctaAvailabilityByAction'] = (
+            owner['ctaAvailabilityByAction'] as ImportJsonObject[]
+          ).filter((x) => x !== value);
+        } else if (mutation === 'guard') value['guard'] = 'allow without request or owner';
+        else value['unexpectedField'] = true;
+        reject(root);
+      });
+    }
+  for (const expected of [
+    {
+      from: 'CMP-006',
+      to: 'NET-017',
+      trigger: 'Открыть входящие запросы устройств',
+    },
+    {
+      from: 'NET-017',
+      to: 'CMP-006',
+      trigger: 'Вернуться к созданной кампании',
+    },
+    {
+      from: 'NET-017',
+      to: 'NET-017',
+      trigger: 'Принять заявку к рассмотрению',
+    },
+    {
+      from: 'NET-017',
+      to: 'NET-017',
+      trigger: 'Отклонить заявку с причиной',
+    },
+    {
+      from: 'NET-017',
+      to: 'NET-005',
+      trigger: 'Server publishes request accepted to review',
+    },
+    {
+      from: 'NET-017',
+      to: 'NET-005',
+      trigger: 'Server publishes preliminary request rejection',
+    },
+    {
+      from: 'NET-005',
+      to: 'NET-003',
+      trigger: 'Вернуться к выбору персонажей',
+    },
+  ] as const)
+    for (const mirror of ['global', 'out', 'in'] as const)
+      for (const mutation of ['missing', 'guard', 'unknown'] as const) {
+        it(
+          'rejects ' +
+            mutation +
+            ' ' +
+            mirror +
+            ' mirror ' +
+            expected.from +
+            ' ' +
+            expected.trigger,
+          () => {
+            const root = clonedAtlas();
+            const owner =
+              mirror === 'global'
+                ? root
+                : row(root, 'forms', mirror === 'out' ? expected.from : expected.to);
+            const key =
+              mirror === 'global'
+                ? 'transitions'
+                : mirror === 'out'
+                  ? 'transitionsOut'
+                  : 'transitionsIn';
+            const rows = owner[key] as ImportJsonObject[];
+            const value = rows.find(
+              (x) =>
+                x['trigger'] === expected.trigger &&
+                (mirror === 'out' || x['from'] === expected.from) &&
+                (mirror === 'in' || x['to'] === expected.to),
+            );
+            if (!value) throw new Error('Missing transition fixture');
+            if (mutation === 'missing') owner[key] = rows.filter((x) => x !== value);
+            else if (mutation === 'guard') value['guard'] = 'allow without committed receipt';
+            else value['unexpectedField'] = true;
+            reject(root);
+          },
+        );
+      }
+  for (const id of [
+    'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+    'UI-CMD-DEVICE-REQUEST-REJECT',
+  ] as const)
+    for (const field of [
+      'guards',
+      'atomicity',
+      'reconnect',
+      'formIds',
+      'qa',
+      'unexpectedField',
+    ] as const) {
+      it('rejects workflow ' + field + ' drift ' + id, () => {
+        const root = clonedAtlas();
+        row(root, 'workflowCommands', id)[field] = 'UNAPPROVED';
+        reject(root);
+      });
+    }
+  for (const item of [
+    {
+      target: 'forms',
+      id: 'NET-018',
+    },
+    {
+      target: 'forms',
+      id: 'NET-019',
+    },
+    {
+      target: 'forms',
+      id: 'NET-020',
+    },
+    {
+      target: 'forms',
+      id: 'NET-021',
+    },
+    {
+      target: 'forms',
+      id: 'NET-022',
+    },
+    {
+      target: 'forms',
+      id: 'NET-027',
+    },
+    {
+      target: 'workflowCommands',
+      id: 'UI-CMD-ADMISSION-GM-ACCEPT',
+    },
+    {
+      target: 'workflowCommands',
+      id: 'UI-CMD-ADMISSION-GM-REJECT',
+    },
+    {
+      target: 'workflowCommands',
+      id: 'UI-CMD-DEVICE-REQUEST-CANCEL',
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-WORKFLOW-UI-CMD-ADMISSION-GM-ACCEPT',
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-WORKFLOW-UI-CMD-ADMISSION-GM-REJECT',
+    },
+    {
+      target: 'qaScenarios',
+      id: 'QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-CANCEL',
+    },
+  ] as const) {
+    it('preserves the separate existing contract ' + item.id, () => {
+      const root = clonedAtlas();
+      row(root, item.target, item.id)['unexpectedField'] =
+        'preliminary decision must not overwrite this contract';
+      reject(root);
+    });
+  }
+  for (const id of ['NET-003', 'NET-005', 'NET-017', 'CMP-006'] as const) {
+    it('rejects an unimported extra form contract on ' + id, () => {
+      const root = clonedAtlas();
+      row(root, 'forms', id)['fieldComposites'] = { fake: 'not an approved schema key' };
+      reject(root);
+    });
+  }
+  for (const name of ['requests', 'batchCharacterSummaries', 'capacity', 'returnContext'] as const)
+    for (const mutation of ['missing', 'unknown'] as const) {
+      it('rejects ' + mutation + ' closed composite field in ' + name, () => {
+        const root = clonedAtlas(),
+          form = row(root, 'forms', 'NET-017');
+        let changed = false;
+        form['acceptanceCriteria'] = (form['acceptanceCriteria'] as string[]).map((value) => {
+          if (!value.startsWith('Closed field composite ' + name + ':')) return value;
+          const start = value.indexOf('{'),
+            end = value.lastIndexOf('}') + 1;
+          const contract = JSON.parse(value.slice(start, end)) as ImportJsonObject;
+          const fields =
+            contract['closedFields'] === undefined
+              ? contract
+              : atlasObject(contract['closedFields']);
+          if (mutation === 'missing') delete fields[Object.keys(fields)[0]!];
+          else fields['unapprovedField'] = 'unknown';
+          changed = true;
+          return value.slice(0, start) + JSON.stringify(contract) + value.slice(end);
+        });
+        expect(changed).toBe(true);
+        reject(root);
+      });
+    }
+  for (const command of [
+    'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+    'UI-CMD-DEVICE-REQUEST-REJECT',
+  ] as const)
+    for (const mutation of [
+      'missing-payload',
+      'unknown-payload',
+      'missing-receipt',
+      'unknown-receipt',
+    ] as const) {
+      it('rejects ' + mutation + ' field for ' + command, () => {
+        const root = clonedAtlas(),
+          form = row(root, 'forms', 'NET-017');
+        let changed = false;
+        form['acceptanceCriteria'] = (form['acceptanceCriteria'] as string[]).map((value) => {
+          if (!value.startsWith('Closed request command ' + command + ':')) return value;
+          const replacement =
+            mutation === 'missing-payload'
+              ? value.replace('payload campaignId, requestId,', 'payload campaignId,')
+              : mutation === 'unknown-payload'
+                ? value.replace('payload campaignId,', 'payload campaignId, unapprovedField,')
+                : mutation === 'missing-receipt'
+                  ? value.replace('candidateSnapshotChecksums, ', '')
+                  : value.replace(
+                      'Receipt fields: receiptId,',
+                      'Receipt fields: receiptId, unapprovedField,',
+                    );
+          expect(replacement).not.toBe(value);
+          changed = true;
+          return replacement;
+        });
+        expect(changed).toBe(true);
+        reject(root);
+      });
+    }
+  it('rejects an extra closed request-composite field inside its imported acceptance contract', () => {
+    const root = clonedAtlas(),
+      form = row(root, 'forms', 'NET-017');
+    form['acceptanceCriteria'] = (form['acceptanceCriteria'] as string[]).map((value) =>
+      value.startsWith('Closed field composite requests:')
+        ? value.replace('"closedFields":{', '"closedFields":{"undeclared":"field",')
+        : value,
+    );
+    reject(root);
+  });
+  it('rejects loss of exact receipt binding while keeping the workflow ID unchanged', () => {
+    const root = clonedAtlas(),
+      form = row(root, 'forms', 'NET-017');
+    form['acceptanceCriteria'] = (form['acceptanceCriteria'] as string[]).map((value) =>
+      value.startsWith('Closed request command ')
+        ? value.replace('candidateSnapshotChecksums, ', '')
+        : value,
+    );
+    reject(root);
+  });
+  it('rejects a new global PAUSED-only guard hidden in preliminary workflow availability', () => {
+    const root = clonedAtlas(),
+      form = row(root, 'forms', 'NET-017');
+    const commands = atlasObject(form['actions'])[
+      'workflowCommandAvailability'
+    ] as ImportJsonObject[];
+    const guard = commands[0]!['guard'];
+    if (typeof guard !== 'string') throw new Error('Missing source workflow availability guard');
+    commands[0]!['guard'] = guard + ' status=PAUSED';
+    reject(root);
+  });
+  it('rejects reversal of the cancelled-row selection-clear policy without changing request states', () => {
+    const root = clonedAtlas(),
+      form = row(root, 'forms', 'NET-017');
+    form['acceptanceCriteria'] = (form['acceptanceCriteria'] as string[]).map((value) =>
+      value.startsWith('CANCELLED requests ')
+        ? value.replace(
+            'clears selectedRequestIdOrNull to null',
+            'retains the selected request forever',
+          )
+        : value,
+    );
+    reject(root);
   });
 });

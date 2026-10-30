@@ -471,13 +471,16 @@
       "UI-CMD-ADMISSION-GM-ACCEPT",
       "UI-CMD-ADMISSION-PLAYER-DECIDE",
       "UI-CMD-CHAR-IMPORT-COMMIT",
-      "UI-CMD-IMPORTED-OWNER-CLAIM"
+      "UI-CMD-IMPORTED-OWNER-CLAIM",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {
     "alternatives": [
       "Незаполненные масса/имущество блокируют Ready, но сохраняют lobby copy.",
-      "Игровая вкладка host-PC появляется только после полного допуска и назначения local seat."
+      "Игровая вкладка host-PC появляется только после полного допуска и назначения local seat.",
+      "После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
@@ -555,8 +558,8 @@
           "NET-005",
           "NET-017"
         ],
-        "guards": "До решения места и campaignCharacterId не создаются.",
-        "result": "GM принимает к review или отклоняет с причиной.",
+        "guards": "Sole active GM and current requestRevision; PENDING accept-to-review or PENDING|IN_REVIEW reject with reason; no campaign copy, campaign seat, capacity reservation or player authority at either preliminary decision.",
+        "result": "PENDING→IN_REVIEW or PENDING|IN_REVIEW→REJECTED; immutable decision receipt and owner-only NET-005 status. Final admission remains NET-021/NET-022.",
         "state": "WAIT"
       },
       {
@@ -596,13 +599,16 @@
       "UI-CMD-ADMISSION-PLAYER-DECIDE",
       "UI-CMD-CONNECTION-OPEN",
       "UI-CMD-DEVICE-REQUEST-CANCEL",
-      "UI-CMD-DEVICE-REQUEST-SUBMIT"
+      "UI-CMD-DEVICE-REQUEST-SUBMIT",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {
     "alternatives": [
       "Свободные места не блокируют Start.",
-      "NPC не занимает PC capacity."
+      "NPC не занимает PC capacity.",
+      "Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
@@ -788,7 +794,9 @@
     "workflowCommandIds": [
       "UI-CMD-ADMISSION-PLAYER-DECIDE",
       "UI-CMD-CAMPAIGN-FINISH",
-      "UI-CMD-CAMPAIGN-PAUSE-SET"
+      "UI-CMD-CAMPAIGN-PAUSE-SET",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {
@@ -969,7 +977,9 @@
       "UI-CMD-CONSENT-RESPOND",
       "UI-CMD-DEVICE-REQUEST-SUBMIT",
       "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
-      "UI-CMD-MASTER-PREDICATE-RESPOND"
+      "UI-CMD-MASTER-PREDICATE-RESPOND",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {

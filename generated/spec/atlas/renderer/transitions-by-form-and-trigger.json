@@ -2264,6 +2264,13 @@
     }
   },
   "CMP-006": {
+    "Открыть входящие запросы устройств": {
+      "from": "CMP-006",
+      "guard": "projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; creation receipt confirmed; request queue capability available; navigation only, no Start.",
+      "kind": "normative",
+      "to": "NET-017",
+      "trigger": "Открыть входящие запросы устройств"
+    },
     "Открыть панель созданной кампании": {
       "from": "CMP-006",
       "guard": "creation receipt confirmed; this does not Start the campaign",
@@ -3458,6 +3465,13 @@
     }
   },
   "NET-005": {
+    "Вернуться к выбору персонажей": {
+      "from": "NET-005",
+      "guard": "projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt.",
+      "kind": "safe-return",
+      "to": "NET-003",
+      "trigger": "Вернуться к выбору персонажей"
+    },
     "Отменить pending request": {
       "from": "NET-005",
       "guard": "UI-CMD-DEVICE-REQUEST-CANCEL guards",
@@ -3551,6 +3565,29 @@
       "kind": "workflow-command",
       "to": "GM-001",
       "trigger": "Начать кампанию"
+    }
+  },
+  "NET-017": {
+    "Вернуться к созданной кампании": {
+      "from": "NET-017",
+      "guard": "projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; returnContext.originFormId=CMP-006; campaignId and creationReceiptId match initiating context; no mutation in flight; navigation only, no Start.",
+      "kind": "safe-return",
+      "to": "CMP-006",
+      "trigger": "Вернуться к созданной кампании"
+    },
+    "Отклонить заявку с причиной": {
+      "from": "NET-017",
+      "guard": "UI-CMD-DEVICE-REQUEST-REJECT guards",
+      "kind": "workflow-command",
+      "to": "NET-017",
+      "trigger": "Отклонить заявку с причиной"
+    },
+    "Принять заявку к рассмотрению": {
+      "from": "NET-017",
+      "guard": "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW guards",
+      "kind": "workflow-command",
+      "to": "NET-017",
+      "trigger": "Принять заявку к рассмотрению"
     }
   },
   "NET-019": {

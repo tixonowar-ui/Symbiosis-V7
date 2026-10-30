@@ -1096,7 +1096,8 @@
         "formId": "NET-005",
         "primaryActions": [
           "Отменить pending request",
-          "Повторить подключение после потери связи"
+          "Повторить подключение после потери связи",
+          "Вернуться к выбору персонажей"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-CANCEL"
@@ -1133,7 +1134,9 @@
           "WAITING_GM",
           "READY_TO_CANCEL",
           "CANCELLED",
-          "DECISION_WON_RACE"
+          "DECISION_WON_RACE",
+          "IN_REVIEW",
+          "REJECTED"
         ]
       }
     },
@@ -1152,7 +1155,10 @@
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
+      "REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.",
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     ],
     "preconditions": [
       "Роль и authority соответствуют player.",
@@ -1192,9 +1198,15 @@
           "Открыть «Итог персонажа: группа и локация»",
           "Открыть «Принять запрос устройства»",
           "Вернуться к «Список персонажей кампании»",
-          "Вернуться к «Клиенты и локальные места»"
+          "Вернуться к «Клиенты и локальные места»",
+          "Принять заявку к рассмотрению",
+          "Отклонить заявку с причиной",
+          "Вернуться к созданной кампании"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+          "UI-CMD-DEVICE-REQUEST-REJECT"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -1265,6 +1277,13 @@
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
       "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
       "terminalStatesByForm": {
+        "NET-017": [
+          "QUEUE_EMPTY",
+          "REQUEST_PENDING",
+          "IN_REVIEW",
+          "REQUEST_REJECTED",
+          "STALE_REQUEST"
+        ],
         "NET-021": [
           "BLOCKED_INVALID_BATCH",
           "READY_ALL_OR_NONE",
@@ -1291,14 +1310,16 @@
       "NET-022",
       "NET-027"
     ],
-    "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
     "journeyIds": [
       "J-JOIN-REVIEW"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     ],
     "preconditions": [
       "Роль и authority соответствуют player/gm.",
@@ -1337,7 +1358,9 @@
     "workflowCommandIds": [
       "UI-CMD-ADMISSION-GM-ACCEPT",
       "UI-CMD-ADMISSION-GM-REJECT",
-      "UI-CMD-ADMISSION-PLAYER-DECIDE"
+      "UI-CMD-ADMISSION-PLAYER-DECIDE",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {
@@ -1386,9 +1409,15 @@
           "Открыть «Итог персонажа: группа и локация»",
           "Открыть «Принять запрос устройства»",
           "Вернуться к «Список персонажей кампании»",
-          "Вернуться к «Клиенты и локальные места»"
+          "Вернуться к «Клиенты и локальные места»",
+          "Принять заявку к рассмотрению",
+          "Отклонить заявку с причиной",
+          "Вернуться к созданной кампании"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+          "UI-CMD-DEVICE-REQUEST-REJECT"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -1419,6 +1448,13 @@
           "INCOMPATIBLE_REPORT",
           "NO_PARTIAL_COMMIT"
         ],
+        "NET-017": [
+          "QUEUE_EMPTY",
+          "REQUEST_PENDING",
+          "IN_REVIEW",
+          "REQUEST_REJECTED",
+          "STALE_REQUEST"
+        ],
         "NET-027": [
           "DIFF_LOADING",
           "READY_FOR_WHOLE_BATCH_DECISION",
@@ -1440,14 +1476,16 @@
       "NET-017",
       "NET-027"
     ],
-    "happyPath": "Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
     "journeyIds": [
       "J-GM-IMPORT-ADMISSION"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     ],
     "preconditions": [
       "Роль и authority соответствуют player/gm.",
@@ -1478,7 +1516,9 @@
     "workflowCommandIds": [
       "UI-CMD-ADMISSION-PLAYER-DECIDE",
       "UI-CMD-CHAR-IMPORT-COMMIT",
-      "UI-CMD-IMPORTED-OWNER-CLAIM"
+      "UI-CMD-IMPORTED-OWNER-CLAIM",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {
@@ -1534,7 +1574,8 @@
         "executableOperationIds": [],
         "formId": "CMP-006",
         "primaryActions": [
-          "Открыть панель созданной кампании"
+          "Открыть панель созданной кампании",
+          "Открыть входящие запросы устройств"
         ],
         "workflowCommandIds": []
       },
@@ -1586,7 +1627,8 @@
         "CMP-006": [
           "RECEIPT_READY",
           "HOST_NOT_STARTED",
-          "OPENED_LOBBY"
+          "OPENED_LOBBY",
+          "OPENED_REQUEST_QUEUE"
         ]
       }
     },
@@ -1606,7 +1648,9 @@
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -2052,9 +2096,15 @@
           "Открыть «Итог персонажа: группа и локация»",
           "Открыть «Принять запрос устройства»",
           "Вернуться к «Список персонажей кампании»",
-          "Вернуться к «Клиенты и локальные места»"
+          "Вернуться к «Клиенты и локальные места»",
+          "Принять заявку к рассмотрению",
+          "Отклонить заявку с причиной",
+          "Вернуться к созданной кампании"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+          "UI-CMD-DEVICE-REQUEST-REJECT"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
@@ -2066,6 +2116,13 @@
         "NET-004": [
           "DRAFT_REQUEST",
           "SUBMITTED"
+        ],
+        "NET-017": [
+          "QUEUE_EMPTY",
+          "REQUEST_PENDING",
+          "IN_REVIEW",
+          "REQUEST_REJECTED",
+          "STALE_REQUEST"
         ],
         "PLY-030": [
           "inactive",
@@ -2085,14 +2142,16 @@
       "NET-004",
       "NET-017"
     ],
-    "happyPath": "Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
     "journeyIds": [
       "J-LOCAL-SEATS"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     ],
     "preconditions": [
       "Роль и authority соответствуют player/gm.",
@@ -2132,7 +2191,9 @@
     ],
     "workflowCommandIds": [
       "UI-CMD-DEVICE-REQUEST-SUBMIT",
-      "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK"
+      "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
+      "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "UI-CMD-DEVICE-REQUEST-REJECT"
     ]
   },
   {
@@ -5213,7 +5274,8 @@
         "formId": "NET-005",
         "primaryActions": [
           "Отменить pending request",
-          "Повторить подключение после потери связи"
+          "Повторить подключение после потери связи",
+          "Вернуться к выбору персонажей"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-CANCEL"
@@ -5285,7 +5347,9 @@
           "WAITING_GM",
           "READY_TO_CANCEL",
           "CANCELLED",
-          "DECISION_WON_RACE"
+          "DECISION_WON_RACE",
+          "IN_REVIEW",
+          "REJECTED"
         ],
         "NET-011": [
           "UNAVAILABLE",
@@ -5321,7 +5385,10 @@
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
+      "REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.",
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     ],
     "preconditions": [
       "Роль и authority соответствуют player/gm.",
