@@ -235,7 +235,7 @@ describe('private FINAL admission candidate evidence', () => {
       expect(w.localCharacter).toEqual(s.current.localCharacter);
       expect(w.checkpoint).toEqual(s.current.checkpoint);
       expect(s.d.database.prepare('SELECT total_changes() AS n').get()).toEqual(changes);
-      expect(s.d.database.serialize()).toEqual(before);
+      expect(s.d.database.serialize().equals(before)).toBe(true);
       expect(Object.isFrozen(c)).toBe(true);
       expect(Object.isFrozen(c.exportDocument['mechanicsSnapshot'])).toBe(true);
     },
@@ -253,7 +253,7 @@ describe('private FINAL admission candidate evidence', () => {
         throw sentinel;
       })(),
     ).toThrow(sentinel);
-    expect(s.d.database.serialize()).toEqual(before);
+    expect(s.d.database.serialize().equals(before)).toBe(true);
   });
 
   it('preserves original payload/snapshot strings and actual presentation rows without a copied Durable envelope', () => {
@@ -364,21 +364,36 @@ describe('private FINAL admission candidate evidence', () => {
     },
   );
 
-  it('rejects a foreign device, missing source, DRAFT and VARIANT without writes', async () => {
+  it('rejects a foreign device without writes', () => {
     const s = fixture();
     const before = s.d.database.serialize();
     error(() => prepareOwnedFinalAdmissionCandidate(s.d, 'foreign-device', s.id, limits));
+    expect(s.d.database.serialize().equals(before)).toBe(true);
+  });
+
+  it('rejects a missing source without writes', () => {
+    const s = fixture();
+    const before = s.d.database.serialize();
     error(() => prepareOwnedFinalAdmissionCandidate(s.d, s.owner, 'unknown-source', limits));
-    expect(s.d.database.serialize()).toEqual(before);
+    expect(s.d.database.serialize().equals(before)).toBe(true);
+  });
+
+  it('rejects a real DRAFT after the complete creation path without writes', async () => {
     const draft = await source('FREE', 'MANUAL', ':memory:', false);
     const draftBefore = draft.d.database.serialize();
     error(() => prepared(draft));
-    expect(draft.d.database.serialize()).toEqual(draftBefore);
+    expect(draft.d.database.serialize().equals(draftBefore)).toBe(true);
+  });
+
+  it('rejects a checksum-valid VARIANT witness without writes', () => {
+    const s = fixture();
+    const before = s.d.database.serialize();
     const c = prepared();
     const w = witness(c);
     w.localCharacter.lifecycleState = 'VARIANT';
     snapshot(w);
     error(() => receive(c, canonicalPostSaveJson(w)));
+    expect(s.d.database.serialize().equals(before)).toBe(true);
   });
 
   it('refuses a loader returning another actual character/checkpoint and redacts thrown private errors', () => {
@@ -418,7 +433,7 @@ describe('private FINAL admission candidate evidence', () => {
       },
     };
     error(() => prepareOwnedFinalAdmissionCandidate(d, s.owner, s.id, limits));
-    expect(s.d.database.serialize()).toEqual(before);
+    expect(s.d.database.serialize().equals(before)).toBe(true);
   });
 
   it('checks the actual owner binding, not just the singleton device or a supplied owner argument', () => {
@@ -436,7 +451,7 @@ describe('private FINAL admission candidate evidence', () => {
         throw rollback;
       })(),
     ).toThrow(rollback);
-    expect(s.d.database.serialize()).toEqual(before);
+    expect(s.d.database.serialize().equals(before)).toBe(true);
   });
 
   it.each([
