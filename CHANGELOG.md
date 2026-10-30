@@ -9,6 +9,14 @@
 
 ### Добавлено
 
+- **2026-10-30, issue #190, предпосылка #177:** проверенная lineage конкретных
+  поставок B0/B1 сохраняет исходные baseline ID, export/archive/candidate bytes
+  и campaign receipts. Запечатаны исторический manifest, разрешённый successor,
+  24 replay catalog inputs и tuple; исторический context выдаёт только loader.
+  Current filesystem freshness остаётся точной, SQL/история не переписываются.
+  Прикладные peer/SQL/discovery callers интегрируются отдельно в #171.
+  [ADR 0068](docs/adr/0068-verified-artifact-baseline-lineage.md).
+
 - **2026-10-30, issue #182, предпосылка #171:** закрытые installation keys,
   LAN locator/discovery и подписанный peer channel с ограниченными очередями.
   FINAL candidates проверяются полным existing creation replay и точным DTO,
