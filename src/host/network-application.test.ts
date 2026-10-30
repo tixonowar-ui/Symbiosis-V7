@@ -733,11 +733,10 @@ describe('local network application with durable SQLite and real Node peers', ()
   it('does not transfer a published owner subscription into a failed resume context', async () => {
     const h = await host(),
       { p } = await submittedPlayer(h),
-      originalContext = p.c.contextId,
-      originalEnter = p.shell.enterNetwork;
-    p.shell.enterNetwork = () => {
+      originalContext = p.c.contextId;
+    const enter = vi.spyOn(p.shell, 'enterNetwork').mockImplementation(() => {
       throw new Error('Simulated shell transition failure before resumed projection');
-    };
+    });
     await p.send({
       messageType: 'network.local-context.resume',
       protocolVersion: 3,
@@ -747,7 +746,7 @@ describe('local network application with durable SQLite and real Node peers', ()
       supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
       unacknowledgedCommandIds: [],
     });
-    p.shell.enterNetwork = originalEnter;
+    enter.mockRestore();
     expect(p.c.contextId).not.toBe(originalContext);
     expect(p.sent.some((m) => m.messageType === 'protocol.refusal')).toBe(true);
     expect(p.sent.some((m) => m.messageType === 'projection.snapshot')).toBe(false);
