@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createSocket } from 'node:dgram';
 import {
   CampaignDiscoveryError,
   scanCampaignDiscovery,
@@ -49,6 +50,55 @@ function scanOptions(port: number): CampaignDiscoveryScanOptions {
 }
 
 describe('actual UDP campaign discovery without domain admission', () => {
+  it.each(['returned-rejection', 'thrown-rejection', 'resolved'] as const)(
+    'revokes a responder for an unsupported native Promise observer (%s) without exposing its error',
+    async (kind) => {
+      let observed: () => void = () => {
+        throw new Error('observer was not installed');
+      };
+      const observation = new Promise<void>((resolve) => {
+        observed = resolve;
+      });
+      let reads = 0;
+      const host = await startCampaignDiscoveryResponder({
+        bindAddress: '127.0.0.1',
+        port: 0,
+        multicastGroup: null,
+        multicastInterface: null,
+        maxPacketBytes: 60 * 1024,
+        readOffers: () => {
+          reads++;
+          return [offer];
+        },
+        onDiagnostic: () => {
+          observed();
+          const result: unknown =
+            kind === 'resolved'
+              ? Promise.resolve()
+              : Promise.reject(new Error('PRIVATE_OBSERVER_ERROR'));
+          if (kind === 'thrown-rejection') throw result;
+          return result;
+        },
+      });
+      const sender = createSocket('udp4');
+      try {
+        await new Promise<void>((resolve, reject) =>
+          sender.send(Buffer.from('invalid packet'), host.port, '127.0.0.1', (error) => {
+            if (error !== null) reject(error);
+            else resolve();
+          }),
+        );
+        await observation;
+        const result = await scanCampaignDiscovery(scanOptions(host.port));
+        expect(result.offers).toEqual([]);
+        expect(reads).toBe(0);
+      } finally {
+        sender.close();
+        await host.close();
+      }
+    },
+  );
+
   it('finds exact public facts and deduplicates identical datagrams', async () => {
     const host = await responder([offer, offer]);
     try {

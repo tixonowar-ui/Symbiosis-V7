@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { createSocket, type Socket } from 'node:dgram';
 import { isIP } from 'node:net';
+import { types } from 'node:util';
 import { parseCampaignLanAddress } from './campaign-lan-address.js';
 import { validatePeerCampaignHeader, type PeerCampaignHeader } from './campaign-peer-handshake.js';
 import { canonicalPostSaveJson } from './local-character-export.js';
@@ -63,6 +64,19 @@ const fail = (code: CampaignDiscoveryError['code']): never => {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 // Technical UDP4 packet budget, deliberately below the maximum IP packet payload.
 const MAX_PACKET_BYTES = 60 * 1024;
+function consumeNativePromise(value: unknown): boolean {
+  if (!types.isPromise(value)) return false;
+  try {
+    void Promise.prototype.then.call(
+      value,
+      () => undefined,
+      () => undefined,
+    );
+  } catch {
+    // These callbacks are trusted code, not an adversarial Promise-constructor sandbox.
+  }
+  return true;
+}
 function integer(value: unknown, minimum: number, maximum = Number.MAX_SAFE_INTEGER): number {
   return typeof value === 'number' &&
     Number.isSafeInteger(value) &&
@@ -184,8 +198,12 @@ export async function startCampaignDiscoveryResponder(options: CampaignDiscovery
   const close = () => (closePromise ??= socketClose(socket));
   const diagnostic = (code: CampaignDiscoveryDiagnostic) => {
     try {
-      options.onDiagnostic(code);
-    } catch {
+      const result: unknown = options.onDiagnostic(code);
+      // A void callback may legally be async in TypeScript. Revoke before another datagram,
+      // without awaiting it or letting a rejected private diagnostic reach the event loop.
+      if (consumeNativePromise(result)) void close();
+    } catch (error: unknown) {
+      consumeNativePromise(error);
       void close();
     } // A failed observer revokes this responder.
   };
@@ -207,9 +225,16 @@ export async function startCampaignDiscoveryResponder(options: CampaignDiscovery
     }
     let offers: readonly DiscoveredCampaign[];
     try {
-      offers = options.readOffers();
-      if (!Array.isArray(offers)) throw new Error('invalid offer source');
-    } catch {
+      const selected: unknown = options.readOffers();
+      if (consumeNativePromise(selected)) {
+        diagnostic('SOURCE_UNAVAILABLE');
+        void close();
+        return;
+      }
+      if (!Array.isArray(selected)) throw new Error('invalid offer source');
+      offers = selected as readonly DiscoveredCampaign[];
+    } catch (error: unknown) {
+      if (consumeNativePromise(error)) void close();
       diagnostic('SOURCE_UNAVAILABLE');
       return;
     }

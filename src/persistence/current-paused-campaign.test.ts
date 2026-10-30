@@ -408,14 +408,12 @@ describe('owned current PAUSED campaign source', () => {
     const { db } = setup();
     const origin = readHostedCampaignCreationOrigin(db, 'campaign', validate);
     change(db, () =>
-      db
-        .prepare('UPDATE campaign SET payload_json=?')
-        .run(
-          canonical({
-            ...origin.payload,
-            host: { ...origin.payload.host, activePlayerCapacity: 4 },
-          }),
-        ),
+      db.prepare('UPDATE campaign SET payload_json=?').run(
+        canonical({
+          ...origin.payload,
+          host: { ...origin.payload.host, activePlayerCapacity: 4 },
+        }),
+      ),
     );
     expectCode(() => read(db));
     expect(readHostedCampaignCreationOrigin(db, 'campaign', validate)).toEqual(origin);

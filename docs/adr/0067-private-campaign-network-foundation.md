@@ -86,6 +86,11 @@ Multicast ограничен configured administratively scoped IPv4 group и TT
 даёт публичный locator, не trust или admission; hardware multicast не подменяется
 прошедшими loopback UDP tests.
 
+Discovery source/diagnostic callbacks синхронны. Возвращённый или брошенный
+native Promise получает безопасный rejection handler и отзывает responder до
+следующего datagram. Обычный синхронный return наблюдателя не интерпретируется
+как статус. Это не sandbox для произвольных Promise constructors.
+
 Held campaign listener передаёт actual sockets HTTP/WS handler без close/rebind.
 Detach/release/shutdown закрывает переданные sockets; borrowed shell возвращается
 явно и остаётся под управлением своего listener. Это не регистрация нового route.
