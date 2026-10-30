@@ -1229,5 +1229,27 @@
     "qa": "QA-WORKFLOW-UI-CMD-CHIMERA-EXTERNAL-DEVOURING-RECORD",
     "reconnect": "Same externalEventId/payload returns the prior receipt; duplicate, changed or app-runtime events never increment count or slots.",
     "title": "Зафиксировать внешнее завершённое Пожирание Химеры"
+  },
+  {
+    "atomicity": "Change exactly one request PENDING→IN_REVIEW, increment requestRevision once and append one decision receipt; do not create campaign copies, campaign seats, capacity reservations or player campaign authority; do not modify campaign checkpoint or local source sheets.",
+    "commandId": "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+    "formIds": [
+      "NET-017"
+    ],
+    "guards": "Sole active GM authority for this campaign; requestStatus=PENDING; requestId and requestRevision current; selected request has 1–3 validated immutable candidates; no copy, admission or capacity mutation.",
+    "qa": "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+    "reconnect": "Same commandId and payload return the original decision receipt; a current request view may be newer. A concurrent owner cancel or preliminary reject is serialized by requestRevision; the loser performs no write.",
+    "title": "Принять заявку к рассмотрению"
+  },
+  {
+    "atomicity": "Change exactly one request PENDING|IN_REVIEW→REJECTED with the non-empty reason, increment requestRevision once and append one decision receipt; preserve candidate snapshot and history; no campaign copy, campaign seat, capacity or local-sheet mutation.",
+    "commandId": "UI-CMD-DEVICE-REQUEST-REJECT",
+    "formIds": [
+      "NET-017"
+    ],
+    "guards": "Sole active GM authority for this campaign; requestStatus=PENDING or IN_REVIEW; requestId and requestRevision current; non-empty reason; no copy, admission or capacity mutation.",
+    "qa": "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT",
+    "reconnect": "Same commandId and payload return the original rejection receipt even if the UI has moved. A changed payload conflicts; stale requestRevision and a concurrent terminal decision perform no write.",
+    "title": "Отклонить заявку с причиной"
   }
 ]

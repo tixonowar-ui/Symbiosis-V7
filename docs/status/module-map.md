@@ -3,7 +3,25 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-## Текущий срез #190 — 2026-10-30
+## Текущая поставка #177 — 2026-10-30
+
+База `24c726c`: #190 смёржена через PR #193 после независимого полного
+verify 150/3211, 34/34 production E2E без retry и зелёного CI на том же SHA.
+Первый CI timeout старого AUTO Advisor не объявлен исправленным: локальная
+парная диагностика прошла, один повтор CI без изменений дал 3211/3211 и 34/34.
+
+Поставлен Atlas 1.6: 376 forms, 1688 transitions, 108 workflows, 2445 QA,
+1252 CTA. NET-017 описывает отдельный preliminary request review; изменённые
+NET-003/005 и CMP-006 согласованы с ним. NET-018–022/027 и конечный admission
+сохранены. Новые JSON/Markdown guards защищают контракт и зеркала, прежние
+семантические проверки сохранены. [ADR 0069](../adr/0069-device-request-review-atlas-amendment.md).
+
+Это source/guard-поставка: GM queue/decisions не опубликованы в приложении,
+draft PR #185 остаётся неполным до завершения #171. Проверки текущей поставки
+фиксируются в PR и [handoff](handoff.md); перед merge обязательны независимый
+полный verify/E2E окончательного committed SHA и зелёный CI.
+
+## Исторический срез #190
 
 База `fe5823d`: PR #189 (#184) и тестовый PR #192 (#191) смёржены. Политика
 и native binary comparisons подтянуты в #185. Независимые проверки базы: 148 файлов /
@@ -52,7 +70,7 @@ authority context. Точные filesystem freshness guards сохраняютс
 | ----------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------- |
 | `tools/checksums`             | **готов**    | косвенно | SHA-256 манифест, гейт перед импортом. Проверен на срабатывание                           |
 | `tools/import/lib`            | **готов**    | 18       | чтение xlsx и zip, fail-closed JSON, детерминированная запись, медиа по якорям OOXML      |
-| `tools/import/atlas`          | **готов**    | 164      | Atlas v1.5; единственный полный `forms-by-id`; 1 247 actionKey/label, 3 renderer-индекса  |
+| `tools/import/atlas`          | **готов**    | 467      | Atlas v1.6; единственный полный `forms-by-id`; 1 252 actionKey/label, 3 renderer-индекса  |
 | `tools/import/rules`          | **готов**    | 11       | 739 карточек, 699 активных, 40 tombstone                                                  |
 | `tools/import/character`      | **готов**    | 12       | 1144 payload-сущности, 9 секций XP-контракта                                              |
 | `tools/import/items`          | **готов**    | 11       | 64 типа предметов, 64 иконки в `generated/media`                                          |
@@ -62,8 +80,8 @@ authority context. Точные filesystem freshness guards сохраняютс
 | `tools/import/portraits`      | **готов**    | 9        | exact пакет из 6 портретов локального персонажа по ADR 0036                               |
 | `tools/import/symbiont-media` | **готов**    | 16       | 23 SpeciesKey, 23 арта и 23 изображения деревьев; exact anchors и PNG bytes               |
 | `tools/import/qna`            | **готов**    | 11       | 444 вопроса, 411 адресуемых кодов, алиас `Q-MON-089` по ADR 0017                          |
-| `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 288 строк, 9 паспортов; детерминизм на SQLite 3.53.4                       |
-| `tools/validate`              | **готов**    | 130      | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
+| `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 302 строки, 9 паспортов; детерминизм на SQLite 3.53.4                      |
+| `tools/validate`              | **готов**    | 376      | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
 | `tools/traceability`          | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм            |
 | `tools/reproducibility`       | **готов**    | 11       | два импорта, полный состав файлов и SHA-256, включая игнорируемые media и seed            |
 | `tools/package`               | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                  |

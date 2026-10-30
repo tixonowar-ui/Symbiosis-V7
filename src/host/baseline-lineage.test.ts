@@ -34,6 +34,27 @@ beforeAll(async () => {
 afterAll(() => fixture?.close());
 
 describe('verified baseline lineage', () => {
+  it('refuses unknown current Atlas bytes before a warm fixture cache can overwrite them', () => {
+    const probe = createBaselineLineageFixture('B0');
+    try {
+      probe.apply('B1');
+      probe.apply('B0');
+      const atlasPath = join(
+        probe.projectRoot,
+        'artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json',
+      );
+      const altered = Buffer.concat([readFileSync(atlasPath), Buffer.from('\n')]);
+      const manifestPath = join(probe.projectRoot, 'artifacts/CHECKSUMS.sha256');
+      const manifest = readFileSync(manifestPath);
+      writeFileSync(atlasPath, altered);
+      expect(() => probe.apply('B1')).toThrow('fixture requires exact known Atlas bytes');
+      expect(readFileSync(atlasPath).equals(altered)).toBe(true);
+      expect(readFileSync(manifestPath).equals(manifest)).toBe(true);
+    } finally {
+      probe.close();
+    }
+  });
+
   it('accepts the two sealed releases with all 24 replay catalogs and the exact tuple', () => {
     expect(Object.keys(seals.replayCatalogDigests)).toHaveLength(24);
     expect(captureReplayCatalogDigests(fixture.projectRoot)).toEqual(seals.replayCatalogDigests);

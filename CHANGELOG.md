@@ -9,6 +9,16 @@
 
 ### Добавлено
 
+- **2026-10-30, issue #177:** разрешённая поставка Atlas 1.6 задаёт адресную
+  очередь NET-017 и отдельные предварительные ACCEPT-TO-REVIEW / REJECT.
+  IN_REVIEW не создаёт campaign copies, seats или capacity reservations;
+  CANCELLED сохраняет историю, но исключается из текущей очереди. Узкий вход
+  CMP-006 доступен GM собственной PAUSED кампании, NET-005 получает owner-only
+  результат и безопасный возврат. JSON/Markdown зеркала защищены отдельными
+  importer/validator guards и mutation tests; финальный admission сохранён.
+  Прикладной GM runtime остаётся в #171/#172.
+  [ADR 0069](docs/adr/0069-device-request-review-atlas-amendment.md).
+
 - **2026-10-30, issue #190, предпосылка #177:** проверенная lineage конкретных
   поставок B0/B1 сохраняет исходные baseline ID, export/archive/candidate bytes
   и campaign receipts. Запечатаны исторический manifest, разрешённый successor,

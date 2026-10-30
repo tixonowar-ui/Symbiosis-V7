@@ -19,6 +19,7 @@ import {
   ATLAS_MARKDOWN_FILE,
   validateAtlasMarkdownAdr0049TextMirrors,
   validateAtlasMarkdownAdr0052TextMirrors,
+  validateAtlasMarkdownAdr0069TextMirrors,
   validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
@@ -335,6 +336,9 @@ try {
     report(problem.file, problem.id, problem.message),
   );
   validateAtlasMarkdownAdr0052TextMirrors(atlasMarkdown).forEach((problem) =>
+    report(problem.file, problem.id, problem.message),
+  );
+  validateAtlasMarkdownAdr0069TextMirrors(atlasMarkdown).forEach((problem) =>
     report(problem.file, problem.id, problem.message),
   );
 } catch (cause) {

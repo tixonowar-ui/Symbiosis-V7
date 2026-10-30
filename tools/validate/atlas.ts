@@ -61,29 +61,29 @@ const NO_SECTION = ['', ''] as const;
 export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
-    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.4',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.6',
+    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.5 |',
-    retired: '| Версия атласа | 1.4 |',
+    current: '| Версия атласа | 1.6 |',
+    retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-10-26 |',
-    retired: '| Дата | 2026-08-21 |',
+    current: '| Дата | 2026-10-30 |',
+    retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-transition-count',
-    current: '1681',
-    retired: '1680',
+    current: '1688',
+    retired: '1681',
     expected: 2,
     section: NO_SECTION,
   },
@@ -589,33 +589,33 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   },
 ] as const;
 
-/** ADR 0052 pins the v1.5 companion and the separate future-minimum B-roll. */
+/** ADR 0052 pins the v1.6 companion and the separate future-minimum B-roll. */
 export const ATLAS_MARKDOWN_ADR0052_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
-    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.4',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.6',
+    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.5 |',
-    retired: '| Версия атласа | 1.4 |',
+    current: '| Версия атласа | 1.6 |',
+    retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-10-26 |',
-    retired: '| Дата | 2026-08-21 |',
+    current: '| Дата | 2026-10-30 |',
+    retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-transition-count',
-    current: '1681',
-    retired: '1680',
+    current: '1688',
+    retired: '1681',
     expected: 2,
     section: NO_SECTION,
   },
@@ -833,6 +833,1639 @@ function markdownAdrSource(markdown: string, section: readonly [string, string])
   const end = markdown.indexOf(endMarker, start + startMarker.length);
   return end === -1 ? '' : markdown.slice(start, end);
 }
+
+/** ADR 0069 checks each approved form, transition, workflow, requirement and QA rendering. */
+export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
+  {
+    id: 'request-review-0-0',
+    current: '- QA-NET-005-REJECTED-RETURN',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-003 — Выбор локальных персонажей и мест',
+      '### NET-004 — Отправка запроса устройства',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-1-0',
+    current:
+      '| NET-005 | Вернуться к выбору персонажей | projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt. [safe-return] |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-003 — Выбор локальных персонажей и мест',
+      '### NET-004 — Отправка запроса устройства',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-2-0',
+    current: '- requestStatus=PENDING|IN_REVIEW|REJECTED|PROPOSED',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-2-0',
+    current: '- requestStatus=PENDING|IN_REVIEW|REJECTED|PROPOSED',
+    retired: '- requestStatus=PENDING|REJECTED|PROPOSED',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-3-0',
+    current: '- Return to character selection after confirmed request rejection',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-4-0',
+    current:
+      '- PENDING→IN_REVIEW is a preliminary request decision; the player receives only its own request status/receipt and no GM queue data.',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-4-1',
+    current:
+      '- Cancellation remains legal only in PENDING. An acceptance/rejection or cancellation wins atomically by requestRevision; the other command performs no write.',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-4-2',
+    current:
+      '- NET-005::CTA::003 returns only the owning rejected request to NET-003 under a valid technical session; it changes only the local presentation cursor, preserves the historical request/receipt, and does not reset/delete requests, submit a new request or write local source sheets.',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-5-0',
+    current: '- QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-5-1',
+    current: '- QA-NET-005-REJECTED-RETURN',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-6-0',
+    current: '- Вернуться к выбору персонажей',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-7-0',
+    current:
+      '- Разрешённые видимые действия/CTA именно этой формы: Отменить pending request; Повторить подключение после потери связи; Вернуться к выбору персонажей.',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-7-0',
+    current:
+      '- Разрешённые видимые действия/CTA именно этой формы: Отменить pending request; Повторить подключение после потери связи; Вернуться к выбору персонажей.',
+    retired:
+      '- Разрешённые видимые действия/CTA именно этой формы: Отменить pending request; Повторить подключение после потери связи.',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-8-0',
+    current:
+      '| NET-005::CTA::003 | Вернуться к выбору персонажей | NET-003 | projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt. | safe-return | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-9-0',
+    current: '| WAITING_GM | PENDING request is read-only except owner cancellation. |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-9-1',
+    current:
+      '| DECISION_WON_RACE | A committed accept-to-review or reject decision wins by requestRevision; owner cancellation rejects before write. |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-9-2',
+    current:
+      '| IN_REVIEW | GM accepted this request for review; no campaign authority, campaign copy or capacity reservation; owner cancellation is no longer available. |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-9-3',
+    current:
+      '| REJECTED | The reasoned preliminary rejection is visible; the owner may return to selection while the same technical session is valid and no campaign copy/admission exists. Navigation preserves the closed request, immutable receipt and local source sheets. |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-9-0',
+    current: '| WAITING_GM | PENDING request is read-only except owner cancellation. |',
+    retired: '| WAITING_GM | Pending request is read-only except owner cancellation. |',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-9-1',
+    current: '| WAITING_GM | PENDING request is read-only except owner cancellation. |',
+    retired:
+      '| DECISION_WON_RACE | A simultaneous GM decision wins by revision; cancel rejects before write. |',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-10-0',
+    current:
+      '| NET-017 | Server publishes request accepted to review | SERVER_ONLY_ROLE_PROJECTION; UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW committed; only request owner; requestStatus=IN_REVIEW; no copies or admission [system-event] |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-10-1',
+    current:
+      '| NET-017 | Server publishes preliminary request rejection | SERVER_ONLY_ROLE_PROJECTION; UI-CMD-DEVICE-REQUEST-REJECT committed with reason; only request owner; requestStatus=REJECTED; no copies or admission [system-event] |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-11-0',
+    current:
+      '| NET-003 | Вернуться к выбору персонажей | projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt. [safe-return] |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### NET-005 — Ожидание решения мастера',
+      '### NET-006 — Лобби игрока: Ready и ожидание Start',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-0',
+    current: '- campaignId',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-1',
+    current: '- requestQueueRevision',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-2',
+    current: '- requests[]',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-3',
+    current: '- selectedRequestIdOrNull',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-4',
+    current: '- activePlayerCapacity',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-5',
+    current: '- occupiedActivePcCount',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-6',
+    current: '- decisionReason(required-for-reject)',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-7',
+    current: '- commandId',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-12-8',
+    current: '- returnContext',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-12-0',
+    current: '- campaignId',
+    retired: '- effectInstanceId/EffectTypeID',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-12-1',
+    current: '- campaignId',
+    retired: '- source',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-12-2',
+    current: '- campaignId',
+    retired: '- duration/stackPolicy',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-12-3',
+    current: '- campaignId',
+    retired: '- deviceId',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-12-4',
+    current: '- campaignId',
+    retired: '- controllerSeat',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-12-5',
+    current: '- campaignId',
+    retired: '- connectionState',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-0',
+    current: '- Заголовок и подтверждённый контекст кампании',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-1',
+    current: '- Очередь requests[] и явный выбор одной заявки',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-2',
+    current:
+      '- Read-only device ID, 1–3 candidate summaries, request status/revision and connection state',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-3',
+    current: '- Прогноз вместимости без резерва и без изменения активных PC',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-4',
+    current: '- Принять заявку к рассмотрению',
+    retired: '',
+    expected: 2,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-5',
+    current: '- Причина и предварительное отклонение заявки',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-6',
+    current: '- Подтверждённая квитанция решения',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-13-7',
+    current: '- Безопасный возврат в исходный контекст мастера',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-13-0',
+    current: '- Заголовок и подтверждённый контекст кампании',
+    retired: '- Заголовок и текущий контекст',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-13-1',
+    current: '- Заголовок и подтверждённый контекст кампании',
+    retired:
+      '- Содержательная область: DeviceId, несколько выбранных персонажей, прогноз занимаемых мест и принять к рассмотрению либо отклонить.',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-13-2',
+    current: '- Заголовок и подтверждённый контекст кампании',
+    retired: '- Основной CTA',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-13-3',
+    current: '- Заголовок и подтверждённый контекст кампании',
+    retired: '- Back/Cancel/Retry только на безопасной границе',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-13-4',
+    current: '- Заголовок и подтверждённый контекст кампании',
+    retired: '- Индикатор связи и ревизии',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-0',
+    current:
+      '- Назначение реализовано буквально: Очередь заявок устройств: подтверждённые immutable кандидаты, DeviceId и прогноз вместимости; принять заявку к рассмотрению либо отклонить с причиной без допуска, campaign copy или резерва места. Полный review и финальный AdmissionBatch остаются отдельной последующей стадией.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-1',
+    current:
+      '- No effect entity, EffectTypeID or duration/stackPolicy is required or fabricated for the request queue.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-2',
+    current:
+      '- The two request-level commands are distinct from final NET-021/NET-022 AdmissionBatch commands.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-3',
+    current: '- IN_REVIEW never means admitted, Ready or PROPOSED campaign copy.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-4',
+    current:
+      '- CMP-006 queue entry and return retain the same campaign and sole GM authority, including an empty queue.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-5',
+    current:
+      '- CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-6',
+    current:
+      '- The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-7',
+    current:
+      '- Closed field composite requests: {"cardinality":"0..N; empty queue valid","closedFields":{"requestId":"opaque request ID","requestOwnerDeviceId":"verified installation device ID","requestStatus":"PENDING|IN_REVIEW|REJECTED|PROPOSED","requestRevision":"nonnegative integer","connectionState":"existing source connection-state vocabulary, no invented state","batchCharacterSummaries":"immutable 1..3 submitted candidate summaries","requestedCandidateCount":"integer exactly equal to summaries.length","gmMessageOrNull":"string|null from public preliminary decision reason","decisionReceiptIdOrNull":"receipt ID|null"},"selection":"selectedRequestIdOrNull is null or names one currently projected row; updates are navigation/draft state only"}. Unknown fields are rejected.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-8',
+    current:
+      '- Closed field composite batchCharacterSummaries: {"closedFields":{"sourceUuid":"immutable local FINAL source UUID","snapshotChecksum":"checksum of exact submitted snapshot","name":"submitted metadata name, may duplicate another source","sourceSnapshotId":"immutable source snapshot ID","localControllerSeatId":"real provisional input-lane ID owned by that submitting installation; never admitted campaign slot"},"mechanics":"No full unrelated local library or arbitrary effect data; full read-only submitted snapshot belongs to the later NET-018 capability"}. Unknown fields are rejected.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-9',
+    current:
+      '- Closed field composite capacity: {"activePlayerCapacity":"configured campaign capacity","occupiedActivePcCount":"confirmed active PC count","preview":"requestedCandidateCount compared with current occupied count/capacity; no reservation and not a preliminary decision side effect"}. Unknown fields are rejected.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-10',
+    current:
+      '- Closed field composite returnContext: {"variants":[{"originFormId":"CMP-006","campaignId":"same bound campaign","creationReceiptId":"confirmed original creation receipt"},{"originFormId":"GM-002","campaignId":"existing original route context"},{"originFormId":"CMP-009","campaignId":"existing original route context"}],"authority":"Host-issued saved context, not freely supplied by browser"}. Unknown fields are rejected.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-11',
+    current:
+      '- Closed request command UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW: payload campaignId, requestId, requestRevision; Existing commandId, expected revision vector and verified GM authority; no outer protocol bump; unknownFieldPolicy=REJECT. Receipt fields: receiptId, commandId, workflowCommandId, campaignId, requestId, requestOwnerDeviceId, beforeRequestStatus, afterRequestStatus, beforeRequestRevision, requestRevision, decisionReasonOrNull, candidateSnapshotChecksums, authoritativeGmActorId, timestamp. Original immutable receipt; current projection may be newer and is carried separately; no cursor rollback.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-14-12',
+    current:
+      '- Closed request command UI-CMD-DEVICE-REQUEST-REJECT: payload campaignId, requestId, requestRevision, reason; Existing commandId, expected revision vector and verified GM authority; no outer protocol bump; unknownFieldPolicy=REJECT. Receipt fields: receiptId, commandId, workflowCommandId, campaignId, requestId, requestOwnerDeviceId, beforeRequestStatus, afterRequestStatus, beforeRequestRevision, requestRevision, decisionReasonOrNull, candidateSnapshotChecksums, authoritativeGmActorId, timestamp. Original immutable receipt; current projection may be newer and is carried separately; no cursor rollback.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-14-0',
+    current:
+      '- Назначение реализовано буквально: Очередь заявок устройств: подтверждённые immutable кандидаты, DeviceId и прогноз вместимости; принять заявку к рассмотрению либо отклонить с причиной без допуска, campaign copy или резерва места. Полный review и финальный AdmissionBatch остаются отдельной последующей стадией.',
+    retired:
+      '- Назначение реализовано буквально: DeviceId, несколько выбранных персонажей, прогноз занимаемых мест и принять к рассмотрению либо отклонить.',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-15-0',
+    current: '- QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-15-1',
+    current: '- QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-15-2',
+    current: '- QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-15-3',
+    current: '- QA-CMP-006-DEVICE-REQUEST-QUEUE',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-16-1',
+    current: '- Отклонить заявку с причиной',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-16-2',
+    current: '- Вернуться к созданной кампании',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-17-0',
+    current:
+      '- Разрешённые atlas workflow commands этой формы: UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-17-1',
+    current:
+      '- Исполняемых профильных OperationID нет; предварительные решения меняют только адресованную заявку и её журнал.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-17-2',
+    current:
+      '- Разрешённые видимые действия/CTA именно этой формы: Открыть «Исходный локальный лист»; Открыть «Финализация кампанийной копии»; Открыть «Итог персонажа: группа и локация»; Открыть «Принять запрос устройства»; Вернуться к «Список персонажей кампании»; Вернуться к «Клиенты и локальные места»; Принять заявку к рассмотрению; Отклонить заявку с причиной; Вернуться к созданной кампании.',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-17-0',
+    current:
+      '- Разрешённые atlas workflow commands этой формы: UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT.',
+    retired:
+      '- Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-17-1',
+    current:
+      '- Разрешённые atlas workflow commands этой формы: UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT.',
+    retired:
+      '- Разрешённые видимые действия/CTA именно этой формы: Открыть «Исходный локальный лист»; Открыть «Финализация кампанийной копии»; Открыть «Итог персонажа: группа и локация»; Открыть «Принять запрос устройства»; Вернуться к «Список персонажей кампании»; Вернуться к «Клиенты и локальные места».',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-18-0',
+    current:
+      '| authoritativeSource | {"abilityIds": [], "operationIds": [], "ruleIds": ["AQA-017"], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW", "UI-CMD-DEVICE-REQUEST-REJECT"]} |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-18-0',
+    current:
+      '| authoritativeSource | {"abilityIds": [], "operationIds": [], "ruleIds": ["AQA-017"], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW", "UI-CMD-DEVICE-REQUEST-REJECT"]} |',
+    retired:
+      '| authoritativeSource | {"abilityIds": [], "operationIds": [], "ruleIds": ["AQA-017"], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} |',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-19-0',
+    current:
+      '| NET-017::CTA::007 | Принять заявку к рассмотрению | NET-017 | UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW guards | workflow-command | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW"]} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-19-1',
+    current:
+      '| NET-017::CTA::008 | Отклонить заявку с причиной | NET-017 | UI-CMD-DEVICE-REQUEST-REJECT guards | workflow-command | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-REJECT"]} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-19-2',
+    current:
+      '| NET-017::CTA::009 | Вернуться к созданной кампании | CMP-006 | projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; returnContext.originFormId=CMP-006; campaignId and creationReceiptId match initiating context; no mutation in flight; navigation only, no Start. | safe-return | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-20-0',
+    current:
+      '| UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW | Sole active GM authority for this campaign; requestStatus=PENDING; requestId and requestRevision current; selected request has 1–3 validated immutable candidates; no copy, admission or capacity mutation. | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW"]} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | GM_QA_ONLY |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-20-1',
+    current:
+      '| UI-CMD-DEVICE-REQUEST-REJECT | Sole active GM authority for this campaign; requestStatus=PENDING or IN_REVIEW; requestId and requestRevision current; non-empty reason; no copy, admission or capacity mutation. | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-REJECT"]} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | GM_QA_ONLY |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-21-0',
+    current:
+      '| QUEUE_EMPTY | No eligible requests; no decision CTA; owner-safe return remains available. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-21-1',
+    current:
+      '| REQUEST_PENDING | PENDING request selected; accept-to-review and reasoned reject are available only while their guards hold. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-21-2',
+    current:
+      '| IN_REVIEW | Accepted for preliminary review; no copy, admission, active seat or capacity reservation exists from this decision. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-21-3',
+    current:
+      '| REQUEST_REJECTED | The preliminary rejection reason and decision receipt are confirmed; no new decision CTA for this terminal request. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-21-4',
+    current:
+      '| STALE_REQUEST | Another request decision or owner cancel won by requestRevision; no write, show the current authoritative request view. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-22-0',
+    current:
+      '| CMP-006 | Открыть входящие запросы устройств | projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; creation receipt confirmed; request queue capability available; navigation only, no Start. [normative] |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-22-1',
+    current:
+      '| NET-017 | Принять заявку к рассмотрению | UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW guards [workflow-command] |',
+    retired: '',
+    expected: 2,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-22-2',
+    current:
+      '| NET-017 | Отклонить заявку с причиной | UI-CMD-DEVICE-REQUEST-REJECT guards [workflow-command] |',
+    retired: '',
+    expected: 2,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-23-0',
+    current:
+      '| CMP-006 | Вернуться к созданной кампании | projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; returnContext.originFormId=CMP-006; campaignId and creationReceiptId match initiating context; no mutation in flight; navigation only, no Start. [safe-return] |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-23-3',
+    current:
+      '| NET-005 | Server publishes request accepted to review | SERVER_ONLY_ROLE_PROJECTION; UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW committed; only request owner; requestStatus=IN_REVIEW; no copies or admission [system-event] |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-23-4',
+    current:
+      '| NET-005 | Server publishes preliminary request rejection | SERVER_ONLY_ROLE_PROJECTION; UI-CMD-DEVICE-REQUEST-REJECT committed with reason; only request owner; requestStatus=REJECTED; no copies or admission [system-event] |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-24-0',
+    current:
+      '| Atlas workflow command | UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-24-0',
+    current:
+      '| Atlas workflow command | UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT |',
+    retired: '| Atlas workflow command |  |',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-25-0',
+    current:
+      '| Назначение | Очередь заявок устройств: подтверждённые immutable кандидаты, DeviceId и прогноз вместимости; принять заявку к рассмотрению либо отклонить с причиной без допуска, campaign copy или резерва места. Полный review и финальный AdmissionBatch остаются отдельной последующей стадией. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-25-0',
+    current:
+      '| Назначение | Очередь заявок устройств: подтверждённые immutable кандидаты, DeviceId и прогноз вместимости; принять заявку к рассмотрению либо отклонить с причиной без допуска, campaign copy или резерва места. Полный review и финальный AdmissionBatch остаются отдельной последующей стадией. |',
+    retired:
+      '| Назначение | DeviceId, несколько выбранных персонажей, прогноз занимаемых мест и принять к рассмотрению либо отклонить. |',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-26-0',
+    current:
+      '| Владелец ввода | Sole active GM authority for the addressed campaign; no player controllerSeat is required to operate this queue. |',
+    retired: '',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-26-0',
+    current:
+      '| Владелец ввода | Sole active GM authority for the addressed campaign; no player controllerSeat is required to operate this queue. |',
+    retired: '| Владелец ввода | active controllerSeat/GM context according to roles |',
+    expected: 1,
+    section: ['### NET-017 — Входящие запросы устройств', '### NET-018 — Исходный локальный лист'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-27-0',
+    current: '- Open device-request queue without Start',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-28-0',
+    current: '- QA-CMP-006-DEVICE-REQUEST-QUEUE',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-29-0',
+    current: '- Открыть входящие запросы устройств',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-30-0',
+    current:
+      '- Разрешённые видимые действия/CTA именно этой формы: Открыть панель созданной кампании; Открыть входящие запросы устройств.',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-30-0',
+    current:
+      '- Разрешённые видимые действия/CTA именно этой формы: Открыть панель созданной кампании; Открыть входящие запросы устройств.',
+    retired:
+      '- Разрешённые видимые действия/CTA именно этой формы: Открыть панель созданной кампании.',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-31-0',
+    current:
+      '| CMP-006::CTA::002 | Открыть входящие запросы устройств | NET-017 | projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; creation receipt confirmed; request queue capability available; navigation only, no Start. | normative | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-32-0',
+    current:
+      '| OPENED_REQUEST_QUEUE | Read-only navigation to NET-017; same PAUSED campaign, no Start, no campaign-state mutation. |',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-33-0',
+    current:
+      '| NET-017 | Вернуться к созданной кампании | projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; returnContext.originFormId=CMP-006; campaignId and creationReceiptId match initiating context; no mutation in flight; navigation only, no Start. [safe-return] |',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-34-0',
+    current:
+      '| NET-017 | Открыть входящие запросы устройств | projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; creation receipt confirmed; request queue capability available; navigation only, no Start. [normative] |',
+    retired: '',
+    expected: 1,
+    section: ['### CMP-006 — Кампания создана', '### CMP-007 — Панель кампании и Start'],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-35-0',
+    current:
+      '| player, gm | CHR-043, CHR-044, CHR-045, NET-028, NET-017, NET-018, NET-019, NET-020, NET-021, NET-027 | AQ2-010, AQA-017 | OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-GM-030 | COVERED |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-GM-IMPORT-ADMISSION — Импорт персонажа мастером с привязкой владельца',
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-35-0',
+    current:
+      '| player, gm | CHR-043, CHR-044, CHR-045, NET-028, NET-017, NET-018, NET-019, NET-020, NET-021, NET-027 | AQ2-010, AQA-017 | OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-GM-030 | COVERED |',
+    retired:
+      '| player, gm | CHR-043, CHR-044, CHR-045, NET-028, NET-017, NET-018, NET-019, NET-020, NET-021, NET-027 | AQ2-010, AQA-017 | OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-GM-030 | COVERED |',
+    expected: 1,
+    section: [
+      '### J-GM-IMPORT-ADMISSION — Импорт персонажа мастером с привязкой владельца',
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-36-0',
+    current:
+      '| player, gm | NET-001, NET-002, NET-003, NET-004, CHR-027, NET-005, NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, NET-006, NET-007 | AQ2-010, AQA-017 | OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-GM-030 | COVERED |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+      '### J-CAMPAIGN-CREATE — Создание и запуск кампании',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-36-0',
+    current:
+      '| player, gm | NET-001, NET-002, NET-003, NET-004, CHR-027, NET-005, NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, NET-006, NET-007 | AQ2-010, AQA-017 | OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-GM-030 | COVERED |',
+    retired:
+      '| player, gm | NET-001, NET-002, NET-003, NET-004, CHR-027, NET-005, NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, NET-006, NET-007 | AQ2-010, AQA-017 | OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-GM-030 | COVERED |',
+    expected: 1,
+    section: [
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+      '### J-CAMPAIGN-CREATE — Создание и запуск кампании',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-37-0',
+    current:
+      '| WAIT | NET-005, NET-017 | Sole active GM and current requestRevision; PENDING accept-to-review or PENDING\\|IN_REVIEW reject with reason; no campaign copy, campaign seat, capacity reservation or player authority at either preliminary decision. | PENDING→IN_REVIEW or PENDING\\|IN_REVIEW→REJECTED; immutable decision receipt and owner-only NET-005 status. Final admission remains NET-021/NET-022. |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+      '### J-CAMPAIGN-CREATE — Создание и запуск кампании',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-37-0',
+    current:
+      '| WAIT | NET-005, NET-017 | Sole active GM and current requestRevision; PENDING accept-to-review or PENDING\\|IN_REVIEW reject with reason; no campaign copy, campaign seat, capacity reservation or player authority at either preliminary decision. | PENDING→IN_REVIEW or PENDING\\|IN_REVIEW→REJECTED; immutable decision receipt and owner-only NET-005 status. Final admission remains NET-021/NET-022. |',
+    retired:
+      '| WAIT | NET-005, NET-017 | До решения места и campaignCharacterId не создаются. | GM принимает к review или отклоняет с причиной. |',
+    expected: 1,
+    section: [
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+      '### J-CAMPAIGN-CREATE — Создание и запуск кампании',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-38-0',
+    current:
+      '- После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы.',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-JOIN-REVIEW — Подключение устройства, review и допуск кампанийной копии',
+      '### J-CAMPAIGN-CREATE — Создание и запуск кампании',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-39-0',
+    current:
+      '- Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards.',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-CAMPAIGN-CREATE — Создание и запуск кампании',
+      '### J-CAMPAIGN-LIFECYCLE — Пауза, изменение состава, завершение и архив',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-40-0',
+    current:
+      '| gm | CMP-008, CMP-009, CMP-010, CMP-011, CMP-016, GM-002, NET-017, NET-018, NET-019, NET-027, CMP-013, CMP-012 | AQ2-005, AQ2-006, AQ2-013, AQ2-019, AQ2-025, AQ2-033, AQA-017, AQA-029, CORE-190, CORE-234, SYM-055 | OP-REQ-GM, SET_GM_FORMAL_STATE | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CAMP-009, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-ENEMY-P17, Q-GM-007, Q-GM-026, Q-REST-008, Q-SYM-085 | COVERED |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-CAMPAIGN-LIFECYCLE — Пауза, изменение состава, завершение и архив',
+      '### J-LOCAL-SEATS — 0–3 локальных игрока и игрок на компьютере мастера',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-40-0',
+    current:
+      '| gm | CMP-008, CMP-009, CMP-010, CMP-011, CMP-016, GM-002, NET-017, NET-018, NET-019, NET-027, CMP-013, CMP-012 | AQ2-005, AQ2-006, AQ2-013, AQ2-019, AQ2-025, AQ2-033, AQA-017, AQA-029, CORE-190, CORE-234, SYM-055 | OP-REQ-GM, SET_GM_FORMAL_STATE | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CAMP-009, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-ENEMY-P17, Q-GM-007, Q-GM-026, Q-REST-008, Q-SYM-085 | COVERED |',
+    retired:
+      '| gm | CMP-008, CMP-009, CMP-010, CMP-011, CMP-016, GM-002, NET-017, NET-018, NET-019, NET-027, CMP-013, CMP-012 | AQ2-005, AQ2-006, AQ2-013, AQ2-019, AQ2-025, AQ2-033, AQA-017, AQA-029, CORE-190, CORE-234, SYM-055 | OP-REQ-GM, SET_GM_FORMAL_STATE | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CAMP-009, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-ENEMY-P17, Q-GM-007, Q-GM-026, Q-REST-008, Q-SYM-085 | COVERED |',
+    expected: 1,
+    section: [
+      '### J-CAMPAIGN-LIFECYCLE — Пауза, изменение состава, завершение и архив',
+      '### J-LOCAL-SEATS — 0–3 локальных игрока и игрок на компьютере мастера',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-41-0',
+    current:
+      '| player, gm | APP-003, NET-003, CMP-009, PLY-030, APP-004, NET-004, NET-017, GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, CMB-050, SYS-028, GM-029 | AQ2-008, AQ2-011, AQA-017, AQA-031, AQA-040, AQA-041, CORE-066, CQA-004, CQA-011, CQA-016, CQA-023, CQA-024, CQA-036, SYM-048, SYM-113, SYM-127, SYM-163 | OP-CHAR-CREATE, OP-CONSUME, OP-PROFILE-ACTIVATE, OP-TRANSFER | UI-CMD-CONSENT-RESPOND, UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-MASTER-PREDICATE-RESPOND, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-APP-001, Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-006, Q-CAMP-007, Q-CHAR-009, Q-CORE-016, Q-CORE-017, Q-CORE-027, Q-CORE-036, Q-CORE-037, Q-CORE-060, Q-CORE-067, Q-GM-001, Q-GM-009, Q-GM-010, Q-GM-022, Q-GM-023, Q-GM-024, Q-GM-028, Q-GM-030, Q-GM-SYM-011, Q-MON-007, Q-MON-014, Q-MON-017, Q-MON-069, Q-MON-070, Q-MON-072, Q-MON-086, Q-MON-087, Q-PREDEV-017, Q-QA-007, Q-QA-008, Q-SYM-021, Q-SYM-034, Q-SYM-041, Q-SYM-051, Q-SYM-063, Q-SYM-069, Q-SYM-084, Q-SYM-089, Q-SYM-097, Q-SYM-099, Q-SYM-102, Q-SYM-109 | COVERED |',
+    retired: '',
+    expected: 1,
+    section: [
+      '### J-LOCAL-SEATS — 0–3 локальных игрока и игрок на компьютере мастера',
+      '### J-NPC-CREATE — Полный wizard постоянного НПС',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-41-0',
+    current:
+      '| player, gm | APP-003, NET-003, CMP-009, PLY-030, APP-004, NET-004, NET-017, GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, CMB-050, SYS-028, GM-029 | AQ2-008, AQ2-011, AQA-017, AQA-031, AQA-040, AQA-041, CORE-066, CQA-004, CQA-011, CQA-016, CQA-023, CQA-024, CQA-036, SYM-048, SYM-113, SYM-127, SYM-163 | OP-CHAR-CREATE, OP-CONSUME, OP-PROFILE-ACTIVATE, OP-TRANSFER | UI-CMD-CONSENT-RESPOND, UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-MASTER-PREDICATE-RESPOND, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-APP-001, Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-006, Q-CAMP-007, Q-CHAR-009, Q-CORE-016, Q-CORE-017, Q-CORE-027, Q-CORE-036, Q-CORE-037, Q-CORE-060, Q-CORE-067, Q-GM-001, Q-GM-009, Q-GM-010, Q-GM-022, Q-GM-023, Q-GM-024, Q-GM-028, Q-GM-030, Q-GM-SYM-011, Q-MON-007, Q-MON-014, Q-MON-017, Q-MON-069, Q-MON-070, Q-MON-072, Q-MON-086, Q-MON-087, Q-PREDEV-017, Q-QA-007, Q-QA-008, Q-SYM-021, Q-SYM-034, Q-SYM-041, Q-SYM-051, Q-SYM-063, Q-SYM-069, Q-SYM-084, Q-SYM-089, Q-SYM-097, Q-SYM-099, Q-SYM-102, Q-SYM-109 | COVERED |',
+    retired:
+      '| player, gm | APP-003, NET-003, CMP-009, PLY-030, APP-004, NET-004, NET-017, GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, CMB-050, SYS-028, GM-029 | AQ2-008, AQ2-011, AQA-017, AQA-031, AQA-040, AQA-041, CORE-066, CQA-004, CQA-011, CQA-016, CQA-023, CQA-024, CQA-036, SYM-048, SYM-113, SYM-127, SYM-163 | OP-CHAR-CREATE, OP-CONSUME, OP-PROFILE-ACTIVATE, OP-TRANSFER | UI-CMD-CONSENT-RESPOND, UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-MASTER-PREDICATE-RESPOND | Q-APP-001, Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-006, Q-CAMP-007, Q-CHAR-009, Q-CORE-016, Q-CORE-017, Q-CORE-027, Q-CORE-036, Q-CORE-037, Q-CORE-060, Q-CORE-067, Q-GM-001, Q-GM-009, Q-GM-010, Q-GM-022, Q-GM-023, Q-GM-024, Q-GM-028, Q-GM-030, Q-GM-SYM-011, Q-MON-007, Q-MON-014, Q-MON-017, Q-MON-069, Q-MON-070, Q-MON-072, Q-MON-086, Q-MON-087, Q-PREDEV-017, Q-QA-007, Q-QA-008, Q-SYM-021, Q-SYM-034, Q-SYM-041, Q-SYM-051, Q-SYM-063, Q-SYM-069, Q-SYM-084, Q-SYM-089, Q-SYM-097, Q-SYM-099, Q-SYM-102, Q-SYM-109 | COVERED |',
+    expected: 1,
+    section: [
+      '### J-LOCAL-SEATS — 0–3 локальных игрока и игрок на компьютере мастера',
+      '### J-NPC-CREATE — Полный wizard постоянного НПС',
+    ],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-42-0',
+    current:
+      "| REQ-004 | Подключение игрока к кампании | J-JOIN-REVIEW | NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 | AQA-017 | UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | player | Роль и authority соответствуют player., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-001', 'primaryActions': ['Открыть «Подключение по адресу или QR»', 'Открыть «Выбор локальных персонажей и мест»', 'Вернуться в главное меню игрока'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-002', 'primaryActions': ['Подключиться по введённому адресу или QR', 'Сканировать или выбрать QR', 'Вернуться в меню игрока'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CONNECTION-OPEN']}, {'formId': 'NET-003', 'primaryActions': ['Открыть «Отправка запроса устройства»', 'Открыть «Отправка сохранённого персонажа»', 'Открыть «Ожидание решения мастера»', 'Вернуться к «Выбор локального профиля и места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-005', 'primaryActions': ['Отменить pending request', 'Повторить подключение после потери связи', 'Вернуться к выбору персонажей'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-CANCEL']}, {'formId': 'NET-006', 'primaryActions': ['Вернуться к «Итог согласования персонажа»', 'Start подтверждён мастером'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-002\": [\"EMPTY_ADDRESS\", \"PARSE_INVALID\", \"READY_TO_CONNECT\", \"CONNECTING\", \"CONNECTED_TECHNICAL\"], \"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-005\": [\"WAITING_GM\", \"READY_TO_CANCEL\", \"CANCELLED\", \"DECISION_WON_RACE\", \"IN_REVIEW\", \"REJECTED\"]}} | Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-004 | COVERED |",
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-42-0',
+    current:
+      "| REQ-004 | Подключение игрока к кампании | J-JOIN-REVIEW | NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 | AQA-017 | UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | player | Роль и authority соответствуют player., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-001', 'primaryActions': ['Открыть «Подключение по адресу или QR»', 'Открыть «Выбор локальных персонажей и мест»', 'Вернуться в главное меню игрока'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-002', 'primaryActions': ['Подключиться по введённому адресу или QR', 'Сканировать или выбрать QR', 'Вернуться в меню игрока'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CONNECTION-OPEN']}, {'formId': 'NET-003', 'primaryActions': ['Открыть «Отправка запроса устройства»', 'Открыть «Отправка сохранённого персонажа»', 'Открыть «Ожидание решения мастера»', 'Вернуться к «Выбор локального профиля и места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-005', 'primaryActions': ['Отменить pending request', 'Повторить подключение после потери связи', 'Вернуться к выбору персонажей'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-CANCEL']}, {'formId': 'NET-006', 'primaryActions': ['Вернуться к «Итог согласования персонажа»', 'Start подтверждён мастером'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-002\": [\"EMPTY_ADDRESS\", \"PARSE_INVALID\", \"READY_TO_CONNECT\", \"CONNECTING\", \"CONNECTED_TECHNICAL\"], \"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-005\": [\"WAITING_GM\", \"READY_TO_CANCEL\", \"CANCELLED\", \"DECISION_WON_RACE\", \"IN_REVIEW\", \"REJECTED\"]}} | Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-004 | COVERED |",
+    retired:
+      "| REQ-004 | Подключение игрока к кампании | J-JOIN-REVIEW | NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 | AQA-017 | UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | player | Роль и authority соответствуют player., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-001', 'primaryActions': ['Открыть «Подключение по адресу или QR»', 'Открыть «Выбор локальных персонажей и мест»', 'Вернуться в главное меню игрока'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-002', 'primaryActions': ['Подключиться по введённому адресу или QR', 'Сканировать или выбрать QR', 'Вернуться в меню игрока'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CONNECTION-OPEN']}, {'formId': 'NET-003', 'primaryActions': ['Открыть «Отправка запроса устройства»', 'Открыть «Отправка сохранённого персонажа»', 'Открыть «Ожидание решения мастера»', 'Вернуться к «Выбор локального профиля и места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-005', 'primaryActions': ['Отменить pending request', 'Повторить подключение после потери связи'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-CANCEL']}, {'formId': 'NET-006', 'primaryActions': ['Вернуться к «Итог согласования персонажа»', 'Start подтверждён мастером'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-002\": [\"EMPTY_ADDRESS\", \"PARSE_INVALID\", \"READY_TO_CONNECT\", \"CONNECTING\", \"CONNECTED_TECHNICAL\"], \"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-005\": [\"WAITING_GM\", \"READY_TO_CANCEL\", \"CANCELLED\", \"DECISION_WON_RACE\"]}} | Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. | QA-REQ-004 | COVERED |",
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-43-0',
+    current:
+      "| REQ-005 | GM review, campaign copy diff и атомарный AdmissionBatch | J-JOIN-REVIEW | NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 | AQ2-010, AQA-017, OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»', 'Принять заявку к рассмотрению', 'Отклонить заявку с причиной', 'Вернуться к созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT']}, {'formId': 'NET-018', 'primaryActions': ['Вернуться к «Входящие запросы устройств»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-019', 'primaryActions': ['Рассмотреть валидированную оружейную заявку'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-020', 'primaryActions': ['Вернуться к «Входящие запросы устройств»', 'Вернуться к «Исходный локальный лист»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-021', 'primaryActions': ['Принять весь AdmissionBatch атомарно', 'Отменить до commit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-GM-ACCEPT']}, {'formId': 'NET-022', 'primaryActions': ['Отклонить весь AdmissionBatch с причиной', 'Отменить'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-GM-REJECT']}, {'formId': 'NET-027', 'primaryActions': ['Принять весь batch diff', 'Отказаться от всего batch'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-PLAYER-DECIDE']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-017\": [\"QUEUE_EMPTY\", \"REQUEST_PENDING\", \"IN_REVIEW\", \"REQUEST_REJECTED\", \"STALE_REQUEST\"], \"NET-021\": [\"BLOCKED_INVALID_BATCH\", \"READY_ALL_OR_NONE\", \"PUBLISHED\"], \"NET-022\": [\"REASON_REQUIRED\", \"REJECTED\"], \"NET-027\": [\"DIFF_LOADING\", \"READY_FOR_WHOLE_BATCH_DECISION\", \"ACCEPTED\", \"DECLINED\"]}} | Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-005 | COVERED |",
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-43-0',
+    current:
+      "| REQ-005 | GM review, campaign copy diff и атомарный AdmissionBatch | J-JOIN-REVIEW | NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 | AQ2-010, AQA-017, OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»', 'Принять заявку к рассмотрению', 'Отклонить заявку с причиной', 'Вернуться к созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT']}, {'formId': 'NET-018', 'primaryActions': ['Вернуться к «Входящие запросы устройств»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-019', 'primaryActions': ['Рассмотреть валидированную оружейную заявку'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-020', 'primaryActions': ['Вернуться к «Входящие запросы устройств»', 'Вернуться к «Исходный локальный лист»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-021', 'primaryActions': ['Принять весь AdmissionBatch атомарно', 'Отменить до commit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-GM-ACCEPT']}, {'formId': 'NET-022', 'primaryActions': ['Отклонить весь AdmissionBatch с причиной', 'Отменить'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-GM-REJECT']}, {'formId': 'NET-027', 'primaryActions': ['Принять весь batch diff', 'Отказаться от всего batch'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-PLAYER-DECIDE']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-017\": [\"QUEUE_EMPTY\", \"REQUEST_PENDING\", \"IN_REVIEW\", \"REQUEST_REJECTED\", \"STALE_REQUEST\"], \"NET-021\": [\"BLOCKED_INVALID_BATCH\", \"READY_ALL_OR_NONE\", \"PUBLISHED\"], \"NET-022\": [\"REASON_REQUIRED\", \"REJECTED\"], \"NET-027\": [\"DIFF_LOADING\", \"READY_FOR_WHOLE_BATCH_DECISION\", \"ACCEPTED\", \"DECLINED\"]}} | Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-005 | COVERED |",
+    retired:
+      "| REQ-005 | GM review, campaign copy diff и атомарный AdmissionBatch | J-JOIN-REVIEW | NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 | AQ2-010, AQA-017, OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-018', 'primaryActions': ['Вернуться к «Входящие запросы устройств»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-019', 'primaryActions': ['Рассмотреть валидированную оружейную заявку'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-020', 'primaryActions': ['Вернуться к «Входящие запросы устройств»', 'Вернуться к «Исходный локальный лист»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-021', 'primaryActions': ['Принять весь AdmissionBatch атомарно', 'Отменить до commit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-GM-ACCEPT']}, {'formId': 'NET-022', 'primaryActions': ['Отклонить весь AdmissionBatch с причиной', 'Отменить'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-GM-REJECT']}, {'formId': 'NET-027', 'primaryActions': ['Принять весь batch diff', 'Отказаться от всего batch'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-PLAYER-DECIDE']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-021\": [\"BLOCKED_INVALID_BATCH\", \"READY_ALL_OR_NONE\", \"PUBLISHED\"], \"NET-022\": [\"REASON_REQUIRED\", \"REJECTED\"], \"NET-027\": [\"DIFF_LOADING\", \"READY_FOR_WHOLE_BATCH_DECISION\", \"ACCEPTED\", \"DECLINED\"]}} | Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. | QA-REQ-005 | COVERED |",
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-44-0',
+    current:
+      "| REQ-006 | Master-import требует owner/device/seat link | J-GM-IMPORT-ADMISSION | CHR-043, CHR-045, NET-028, NET-017, NET-027 | AQA-017 | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CHR-043', 'primaryActions': ['Выбрать файл и перейти к обязательной проверке', 'Отменить и вернуться в меню игрока', 'Отменить и вернуться в библиотеку персонажей', 'Отменить импорт-кандидата и вернуться к персонажам кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CHR-045', 'primaryActions': ['Подтвердить независимый импорт', 'Закрыть результат и вернуться в меню игрока', 'Закрыть результат и вернуться в библиотеку персонажей', 'Закрыть результат и вернуться к персонажам кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-IMPORT-COMMIT']}, {'formId': 'NET-028', 'primaryActions': ['Подтвердить владение и local seat', 'Отклонить claim'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-IMPORTED-OWNER-CLAIM']}, {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»', 'Принять заявку к рассмотрению', 'Отклонить заявку с причиной', 'Вернуться к созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT']}, {'formId': 'NET-027', 'primaryActions': ['Принять весь batch diff', 'Отказаться от всего batch'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-PLAYER-DECIDE']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-043\": [\"NO_FILE\", \"FILE_SELECTED\", \"PICKER_CANCELLED\"], \"CHR-045\": [\"IMPORTED_LOCAL_COPY\", \"PENDING_OWNER_LINK\", \"INCOMPATIBLE_REPORT\", \"NO_PARTIAL_COMMIT\"], \"NET-017\": [\"QUEUE_EMPTY\", \"REQUEST_PENDING\", \"IN_REVIEW\", \"REQUEST_REJECTED\", \"STALE_REQUEST\"], \"NET-027\": [\"DIFF_LOADING\", \"READY_FOR_WHOLE_BATCH_DECISION\", \"ACCEPTED\", \"DECLINED\"], \"NET-028\": [\"PENDING_OWNER_LINK\", \"CLAIM_ACCEPTED\", \"CLAIM_DECLINED\", \"ADMISSION_REQUIRED\"]}} | Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-006 | COVERED |",
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-44-0',
+    current:
+      "| REQ-006 | Master-import требует owner/device/seat link | J-GM-IMPORT-ADMISSION | CHR-043, CHR-045, NET-028, NET-017, NET-027 | AQA-017 | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CHR-043', 'primaryActions': ['Выбрать файл и перейти к обязательной проверке', 'Отменить и вернуться в меню игрока', 'Отменить и вернуться в библиотеку персонажей', 'Отменить импорт-кандидата и вернуться к персонажам кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CHR-045', 'primaryActions': ['Подтвердить независимый импорт', 'Закрыть результат и вернуться в меню игрока', 'Закрыть результат и вернуться в библиотеку персонажей', 'Закрыть результат и вернуться к персонажам кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-IMPORT-COMMIT']}, {'formId': 'NET-028', 'primaryActions': ['Подтвердить владение и local seat', 'Отклонить claim'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-IMPORTED-OWNER-CLAIM']}, {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»', 'Принять заявку к рассмотрению', 'Отклонить заявку с причиной', 'Вернуться к созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT']}, {'formId': 'NET-027', 'primaryActions': ['Принять весь batch diff', 'Отказаться от всего batch'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-PLAYER-DECIDE']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-043\": [\"NO_FILE\", \"FILE_SELECTED\", \"PICKER_CANCELLED\"], \"CHR-045\": [\"IMPORTED_LOCAL_COPY\", \"PENDING_OWNER_LINK\", \"INCOMPATIBLE_REPORT\", \"NO_PARTIAL_COMMIT\"], \"NET-017\": [\"QUEUE_EMPTY\", \"REQUEST_PENDING\", \"IN_REVIEW\", \"REQUEST_REJECTED\", \"STALE_REQUEST\"], \"NET-027\": [\"DIFF_LOADING\", \"READY_FOR_WHOLE_BATCH_DECISION\", \"ACCEPTED\", \"DECLINED\"], \"NET-028\": [\"PENDING_OWNER_LINK\", \"CLAIM_ACCEPTED\", \"CLAIM_DECLINED\", \"ADMISSION_REQUIRED\"]}} | Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-006 | COVERED |",
+    retired:
+      "| REQ-006 | Master-import требует owner/device/seat link | J-GM-IMPORT-ADMISSION | CHR-043, CHR-045, NET-028, NET-017, NET-027 | AQA-017 | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CHR-043', 'primaryActions': ['Выбрать файл и перейти к обязательной проверке', 'Отменить и вернуться в меню игрока', 'Отменить и вернуться в библиотеку персонажей', 'Отменить импорт-кандидата и вернуться к персонажам кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CHR-045', 'primaryActions': ['Подтвердить независимый импорт', 'Закрыть результат и вернуться в меню игрока', 'Закрыть результат и вернуться в библиотеку персонажей', 'Закрыть результат и вернуться к персонажам кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CHAR-IMPORT-COMMIT']}, {'formId': 'NET-028', 'primaryActions': ['Подтвердить владение и local seat', 'Отклонить claim'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-IMPORTED-OWNER-CLAIM']}, {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-027', 'primaryActions': ['Принять весь batch diff', 'Отказаться от всего batch'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-ADMISSION-PLAYER-DECIDE']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CHR-043\": [\"NO_FILE\", \"FILE_SELECTED\", \"PICKER_CANCELLED\"], \"CHR-045\": [\"IMPORTED_LOCAL_COPY\", \"PENDING_OWNER_LINK\", \"INCOMPATIBLE_REPORT\", \"NO_PARTIAL_COMMIT\"], \"NET-027\": [\"DIFF_LOADING\", \"READY_FOR_WHOLE_BATCH_DECISION\", \"ACCEPTED\", \"DECLINED\"], \"NET-028\": [\"PENDING_OWNER_LINK\", \"CLAIM_ACCEPTED\", \"CLAIM_DECLINED\", \"ADMISSION_REQUIRED\"]}} | Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. | QA-REQ-006 | COVERED |",
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-45-0',
+    current:
+      "| REQ-007 | Создание/host/preflight/start кампании без выбора правил | J-CAMPAIGN-CREATE | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 |  | UI-CMD-CAMPAIGN-CREATE | gm | Роль и authority соответствуют gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CMP-001', 'primaryActions': ['Продолжить к вместимости и host', 'Отменить черновик кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-002', 'primaryActions': ['Назад к основным данным', 'Продолжить к паролю мастера'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-003', 'primaryActions': ['Назад к host', 'Продолжить к режиму будущих бросков'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-004', 'primaryActions': ['Назад к паролю мастера', 'Перейти к итоговой проверке'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-005', 'primaryActions': ['Создать кампанию атомарно', 'Назад до commit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CAMPAIGN-CREATE']}, {'formId': 'CMP-006', 'primaryActions': ['Открыть панель созданной кампании', 'Открыть входящие запросы устройств'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-007', 'primaryActions': ['Открыть «Лобби подключений и Start»', 'Открыть «Настройки кампании»', 'Открыть активную кампанию', 'Вернуться на главный экран мастера'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CMP-001\": [\"METADATA_INCOMPLETE\", \"METADATA_VALID\", \"DRAFT_CANCELLED\"], \"CMP-002\": [\"HOST_CONFIG_INVALID\", \"HOST_CONFIG_VALID\", \"PORT_UNAVAILABLE\"], \"CMP-003\": [\"PASSWORD_INCOMPLETE\", \"PASSWORD_VALID\", \"SECRET_HIDDEN\"], \"CMP-004\": [\"MODE_UNSELECTED\", \"MODE_VALID\", \"OPEN_REQUESTS_UNCHANGED\"], \"CMP-005\": [\"PREFLIGHT_BLOCKED\", \"READY_TO_CREATE\", \"CREATING\", \"CREATED\", \"IDEMPOTENT_REPLAY\"], \"CMP-006\": [\"RECEIPT_READY\", \"HOST_NOT_STARTED\", \"OPENED_LOBBY\", \"OPENED_REQUEST_QUEUE\"]}} | Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-007 | COVERED |",
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-45-0',
+    current:
+      "| REQ-007 | Создание/host/preflight/start кампании без выбора правил | J-CAMPAIGN-CREATE | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 |  | UI-CMD-CAMPAIGN-CREATE | gm | Роль и authority соответствуют gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CMP-001', 'primaryActions': ['Продолжить к вместимости и host', 'Отменить черновик кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-002', 'primaryActions': ['Назад к основным данным', 'Продолжить к паролю мастера'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-003', 'primaryActions': ['Назад к host', 'Продолжить к режиму будущих бросков'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-004', 'primaryActions': ['Назад к паролю мастера', 'Перейти к итоговой проверке'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-005', 'primaryActions': ['Создать кампанию атомарно', 'Назад до commit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CAMPAIGN-CREATE']}, {'formId': 'CMP-006', 'primaryActions': ['Открыть панель созданной кампании', 'Открыть входящие запросы устройств'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-007', 'primaryActions': ['Открыть «Лобби подключений и Start»', 'Открыть «Настройки кампании»', 'Открыть активную кампанию', 'Вернуться на главный экран мастера'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CMP-001\": [\"METADATA_INCOMPLETE\", \"METADATA_VALID\", \"DRAFT_CANCELLED\"], \"CMP-002\": [\"HOST_CONFIG_INVALID\", \"HOST_CONFIG_VALID\", \"PORT_UNAVAILABLE\"], \"CMP-003\": [\"PASSWORD_INCOMPLETE\", \"PASSWORD_VALID\", \"SECRET_HIDDEN\"], \"CMP-004\": [\"MODE_UNSELECTED\", \"MODE_VALID\", \"OPEN_REQUESTS_UNCHANGED\"], \"CMP-005\": [\"PREFLIGHT_BLOCKED\", \"READY_TO_CREATE\", \"CREATING\", \"CREATED\", \"IDEMPOTENT_REPLAY\"], \"CMP-006\": [\"RECEIPT_READY\", \"HOST_NOT_STARTED\", \"OPENED_LOBBY\", \"OPENED_REQUEST_QUEUE\"]}} | Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-007 | COVERED |",
+    retired:
+      "| REQ-007 | Создание/host/preflight/start кампании без выбора правил | J-CAMPAIGN-CREATE | CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 |  | UI-CMD-CAMPAIGN-CREATE | gm | Роль и authority соответствуют gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CMP-001', 'primaryActions': ['Продолжить к вместимости и host', 'Отменить черновик кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-002', 'primaryActions': ['Назад к основным данным', 'Продолжить к паролю мастера'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-003', 'primaryActions': ['Назад к host', 'Продолжить к режиму будущих бросков'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-004', 'primaryActions': ['Назад к паролю мастера', 'Перейти к итоговой проверке'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-005', 'primaryActions': ['Создать кампанию атомарно', 'Назад до commit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CAMPAIGN-CREATE']}, {'formId': 'CMP-006', 'primaryActions': ['Открыть панель созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'CMP-007', 'primaryActions': ['Открыть «Лобби подключений и Start»', 'Открыть «Настройки кампании»', 'Открыть активную кампанию', 'Вернуться на главный экран мастера'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CMP-001\": [\"METADATA_INCOMPLETE\", \"METADATA_VALID\", \"DRAFT_CANCELLED\"], \"CMP-002\": [\"HOST_CONFIG_INVALID\", \"HOST_CONFIG_VALID\", \"PORT_UNAVAILABLE\"], \"CMP-003\": [\"PASSWORD_INCOMPLETE\", \"PASSWORD_VALID\", \"SECRET_HIDDEN\"], \"CMP-004\": [\"MODE_UNSELECTED\", \"MODE_VALID\", \"OPEN_REQUESTS_UNCHANGED\"], \"CMP-005\": [\"PREFLIGHT_BLOCKED\", \"READY_TO_CREATE\", \"CREATING\", \"CREATED\", \"IDEMPOTENT_REPLAY\"], \"CMP-006\": [\"RECEIPT_READY\", \"HOST_NOT_STARTED\", \"OPENED_LOBBY\"]}} | Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. | QA-REQ-007 | COVERED |",
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-46-0',
+    current:
+      "| REQ-010 | Первоначальное заявление local player на host до player tab | J-LOCAL-SEATS | CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 | AQ2-011, AQA-017, AQA-040, CQA-004, OP-CHAR-CREATE | UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CMP-009', 'primaryActions': ['Вернуться к «Настройки кампании»', 'Вернуться к «Выбор локального профиля и места»', 'Открыть «Нейтральная завеса передачи устройства»', 'Передать устройство локальному кандидату'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'PLY-030', 'primaryActions': ['Готов открыть следующую проекцию', 'Вернуть управление инициатору после ответа'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK']}, {'formId': 'APP-004', 'primaryActions': ['Открыть «Создание персонажа: идентичность»', 'Открыть «Выбор локального профиля и места»', 'Открыть «Проверка совместимости сохранения»', 'Открыть «Подтверждение выхода»', 'Вернуться в главное меню игрока', 'Импортировать персонажа'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-003', 'primaryActions': ['Открыть «Отправка запроса устройства»', 'Открыть «Отправка сохранённого персонажа»', 'Открыть «Ожидание решения мастера»', 'Вернуться к «Выбор локального профиля и места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»', 'Принять заявку к рассмотрению', 'Отклонить заявку с причиной', 'Вернуться к созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-017\": [\"QUEUE_EMPTY\", \"REQUEST_PENDING\", \"IN_REVIEW\", \"REQUEST_REJECTED\", \"STALE_REQUEST\"], \"PLY-030\": [\"inactive\", \"PRIVACY_HANDOFF\", \"WAITING_FOR_LOCAL_OWNER\", \"TARGET_CONTEXT_ACTIVE\", \"RETURN_TO_INITIATOR\", \"RECONNECT_RESTORED\"]}} | Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-010 | COVERED |",
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-46-0',
+    current:
+      "| REQ-010 | Первоначальное заявление local player на host до player tab | J-LOCAL-SEATS | CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 | AQ2-011, AQA-017, AQA-040, CQA-004, OP-CHAR-CREATE | UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CMP-009', 'primaryActions': ['Вернуться к «Настройки кампании»', 'Вернуться к «Выбор локального профиля и места»', 'Открыть «Нейтральная завеса передачи устройства»', 'Передать устройство локальному кандидату'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'PLY-030', 'primaryActions': ['Готов открыть следующую проекцию', 'Вернуть управление инициатору после ответа'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK']}, {'formId': 'APP-004', 'primaryActions': ['Открыть «Создание персонажа: идентичность»', 'Открыть «Выбор локального профиля и места»', 'Открыть «Проверка совместимости сохранения»', 'Открыть «Подтверждение выхода»', 'Вернуться в главное меню игрока', 'Импортировать персонажа'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-003', 'primaryActions': ['Открыть «Отправка запроса устройства»', 'Открыть «Отправка сохранённого персонажа»', 'Открыть «Ожидание решения мастера»', 'Вернуться к «Выбор локального профиля и места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»', 'Принять заявку к рассмотрению', 'Отклонить заявку с причиной', 'Вернуться к созданной кампании'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', 'UI-CMD-DEVICE-REQUEST-REJECT']} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-017\": [\"QUEUE_EMPTY\", \"REQUEST_PENDING\", \"IN_REVIEW\", \"REQUEST_REJECTED\", \"STALE_REQUEST\"], \"PLY-030\": [\"inactive\", \"PRIVACY_HANDOFF\", \"WAITING_FOR_LOCAL_OWNER\", \"TARGET_CONTEXT_ACTIVE\", \"RETURN_TO_INITIATOR\", \"RECONNECT_RESTORED\"]}} | Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-010 | COVERED |",
+    retired:
+      "| REQ-010 | Первоначальное заявление local player на host до player tab | J-LOCAL-SEATS | CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 | AQ2-011, AQA-017, AQA-040, CQA-004, OP-CHAR-CREATE | UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'CMP-009', 'primaryActions': ['Вернуться к «Настройки кампании»', 'Вернуться к «Выбор локального профиля и места»', 'Открыть «Нейтральная завеса передачи устройства»', 'Передать устройство локальному кандидату'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'PLY-030', 'primaryActions': ['Готов открыть следующую проекцию', 'Вернуть управление инициатору после ответа'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK']}, {'formId': 'APP-004', 'primaryActions': ['Открыть «Создание персонажа: идентичность»', 'Открыть «Выбор локального профиля и места»', 'Открыть «Проверка совместимости сохранения»', 'Открыть «Подтверждение выхода»', 'Вернуться в главное меню игрока', 'Импортировать персонажа'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-003', 'primaryActions': ['Открыть «Отправка запроса устройства»', 'Открыть «Отправка сохранённого персонажа»', 'Открыть «Ожидание решения мастера»', 'Вернуться к «Выбор локального профиля и места»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-017', 'primaryActions': ['Открыть «Исходный локальный лист»', 'Открыть «Финализация кампанийной копии»', 'Открыть «Итог персонажа: группа и локация»', 'Открыть «Принять запрос устройства»', 'Вернуться к «Список персонажей кампании»', 'Вернуться к «Клиенты и локальные места»'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"PLY-030\": [\"inactive\", \"PRIVACY_HANDOFF\", \"WAITING_FOR_LOCAL_OWNER\", \"TARGET_CONTEXT_ACTIVE\", \"RETURN_TO_INITIATOR\", \"RECONNECT_RESTORED\"]}} | Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. | QA-REQ-010 | COVERED |",
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-47-0',
+    current:
+      "| REQ-031 | Waiting/connect/reconnect/connection-lost states | J-RECONNECT, J-JOIN-REVIEW | NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 | AQ2-025, AQA-017 | UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-005', 'primaryActions': ['Отменить pending request', 'Повторить подключение после потери связи', 'Вернуться к выбору персонажей'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-CANCEL']}, {'formId': 'NET-008', 'primaryActions': ['Вернуться к «Соединение потеряно»', 'Повторить подключение'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-009', 'primaryActions': ['Открыть «Сверка состояния после переподключения»', 'Получен snapshot'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-011', 'primaryActions': ['Повторить прерванную сессию по тому же адресу', 'Повторить новое подключение игрока по тому же адресу', 'Изменить адрес или QR как игрок', 'Выйти в локальное меню игрока', 'Выйти в меню мастера'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CONNECTION-OPEN']}, {'formId': 'NET-012', 'primaryActions': ['Открыть «Потеря соединения»', 'Открыть «Сервер недоступен»', 'Открыть «Переподключение к игре»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-013', 'primaryActions': ['Открыть «Переподключение во время боя»', 'Открыть «Индикатор активного локального места»'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-005\": [\"WAITING_GM\", \"READY_TO_CANCEL\", \"CANCELLED\", \"DECISION_WON_RACE\", \"IN_REVIEW\", \"REJECTED\"], \"NET-011\": [\"UNAVAILABLE\", \"RETRY_READY\", \"RETRYING\", \"EXITED_TO_LOCAL\"], \"NET-012\": [\"hidden\", \"visible\"], \"NET-013\": [\"hidden\", \"visible\"]}} | Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-031 | COVERED |",
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-47-0',
+    current:
+      "| REQ-031 | Waiting/connect/reconnect/connection-lost states | J-RECONNECT, J-JOIN-REVIEW | NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 | AQ2-025, AQA-017 | UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-005', 'primaryActions': ['Отменить pending request', 'Повторить подключение после потери связи', 'Вернуться к выбору персонажей'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-CANCEL']}, {'formId': 'NET-008', 'primaryActions': ['Вернуться к «Соединение потеряно»', 'Повторить подключение'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-009', 'primaryActions': ['Открыть «Сверка состояния после переподключения»', 'Получен snapshot'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-011', 'primaryActions': ['Повторить прерванную сессию по тому же адресу', 'Повторить новое подключение игрока по тому же адресу', 'Изменить адрес или QR как игрок', 'Выйти в локальное меню игрока', 'Выйти в меню мастера'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CONNECTION-OPEN']}, {'formId': 'NET-012', 'primaryActions': ['Открыть «Потеря соединения»', 'Открыть «Сервер недоступен»', 'Открыть «Переподключение к игре»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-013', 'primaryActions': ['Открыть «Переподключение во время боя»', 'Открыть «Индикатор активного локального места»'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-005\": [\"WAITING_GM\", \"READY_TO_CANCEL\", \"CANCELLED\", \"DECISION_WON_RACE\", \"IN_REVIEW\", \"REJECTED\"], \"NET-011\": [\"UNAVAILABLE\", \"RETRY_READY\", \"RETRYING\", \"EXITED_TO_LOCAL\"], \"NET-012\": [\"hidden\", \"visible\"], \"NET-013\": [\"hidden\", \"visible\"]}} | Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-031 | COVERED |",
+    retired:
+      "| REQ-031 | Waiting/connect/reconnect/connection-lost states | J-RECONNECT, J-JOIN-REVIEW | NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 | AQ2-025, AQA-017 | UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {'formId': 'NET-004', 'primaryActions': ['Отправить AdmissionBatch request', 'Отменить до submit'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-SUBMIT']}, {'formId': 'NET-005', 'primaryActions': ['Отменить pending request', 'Повторить подключение после потери связи'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-DEVICE-REQUEST-CANCEL']}, {'formId': 'NET-008', 'primaryActions': ['Вернуться к «Соединение потеряно»', 'Повторить подключение'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-009', 'primaryActions': ['Открыть «Сверка состояния после переподключения»', 'Получен snapshot'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-011', 'primaryActions': ['Повторить прерванную сессию по тому же адресу', 'Повторить новое подключение игрока по тому же адресу', 'Изменить адрес или QR как игрок', 'Выйти в локальное меню игрока', 'Выйти в меню мастера'], 'executableOperationIds': [], 'workflowCommandIds': ['UI-CMD-CONNECTION-OPEN']}, {'formId': 'NET-012', 'primaryActions': ['Открыть «Потеря соединения»', 'Открыть «Сервер недоступен»', 'Открыть «Переподключение к игре»'], 'executableOperationIds': [], 'workflowCommandIds': []}, {'formId': 'NET-013', 'primaryActions': ['Открыть «Переподключение во время боя»', 'Открыть «Индикатор активного локального места»'], 'executableOperationIds': [], 'workflowCommandIds': []} | {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"NET-004\": [\"DRAFT_REQUEST\", \"SUBMITTED\"], \"NET-005\": [\"WAITING_GM\", \"READY_TO_CANCEL\", \"CANCELLED\", \"DECISION_WON_RACE\"], \"NET-011\": [\"UNAVAILABLE\", \"RETRY_READY\", \"RETRYING\", \"EXITED_TO_LOCAL\"], \"NET-012\": [\"hidden\", \"visible\"], \"NET-013\": [\"hidden\", \"visible\"]}} | Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. | QA-REQ-031 | COVERED |",
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-48-0',
+    current:
+      '| UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW | Принять заявку к рассмотрению | NET-017 | Sole active GM authority for this campaign; requestStatus=PENDING; requestId and requestRevision current; selected request has 1–3 validated immutable candidates; no copy, admission or capacity mutation. | Change exactly one request PENDING→IN_REVIEW, increment requestRevision once and append one decision receipt; do not create campaign copies, campaign seats, capacity reservations or player campaign authority; do not modify campaign checkpoint or local source sheets. | Same commandId and payload return the original decision receipt; a current request view may be newer. A concurrent owner cancel or preliminary reject is serialized by requestRevision; the loser performs no write. | QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-48-1',
+    current:
+      '| UI-CMD-DEVICE-REQUEST-REJECT | Отклонить заявку с причиной | NET-017 | Sole active GM authority for this campaign; requestStatus=PENDING or IN_REVIEW; requestId and requestRevision current; non-empty reason; no copy, admission or capacity mutation. | Change exactly one request PENDING\\|IN_REVIEW→REJECTED with the non-empty reason, increment requestRevision once and append one decision receipt; preserve candidate snapshot and history; no campaign copy, campaign seat, capacity or local-sheet mutation. | Same commandId and payload return the original rejection receipt even if the UI has moved. A changed payload conflicts; stale requestRevision and a concurrent terminal decision perform no write. | QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-49-0',
+    current:
+      '| QA-FORM-NET-005 | NET-005 | Проверить буквальное назначение NET-005: Read-only состав запроса; до принятия устройство не занимает места и не меняет кампанию. Поля: requestId, requestOwnerDeviceId, batchCharacterSummaries[1..3], requestStatus=PENDING\\|IN_REVIEW\\|REJECTED\\|PROPOSED, gmMessage, connectionState, requestRevision, cancelReason(required), commandId. CTA: Отменить pending request, Повторить подключение после потери связи, Вернуться к выбору персонажей. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-49-0',
+    current:
+      '| QA-FORM-NET-005 | NET-005 | Проверить буквальное назначение NET-005: Read-only состав запроса; до принятия устройство не занимает места и не меняет кампанию. Поля: requestId, requestOwnerDeviceId, batchCharacterSummaries[1..3], requestStatus=PENDING\\|IN_REVIEW\\|REJECTED\\|PROPOSED, gmMessage, connectionState, requestRevision, cancelReason(required), commandId. CTA: Отменить pending request, Повторить подключение после потери связи, Вернуться к выбору персонажей. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    retired:
+      '| QA-FORM-NET-005 | NET-005 | Проверить буквальное назначение NET-005: Read-only состав запроса; до принятия устройство не занимает места и не меняет кампанию. Поля: requestId, requestOwnerDeviceId, batchCharacterSummaries[1..3], requestStatus=PENDING\\|REJECTED\\|PROPOSED, gmMessage, connectionState, requestRevision, cancelReason(required), commandId. CTA: Отменить pending request, Повторить подключение после потери связи. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-50-0',
+    current:
+      '| QA-FORM-NET-017 | NET-017 | Проверить буквальное назначение NET-017: Очередь заявок устройств: подтверждённые immutable кандидаты, DeviceId и прогноз вместимости; принять заявку к рассмотрению либо отклонить с причиной без допуска, campaign copy или резерва места. Полный review и финальный AdmissionBatch остаются отдельной последующей стадией. Поля: contextId, campaignId, stateRevision, projectionRevision, requestQueueRevision, requests[], selectedRequestIdOrNull, activePlayerCapacity, occupiedActivePcCount, decisionReason(required-for-reject), commandId, returnContext. CTA: Открыть «Исходный локальный лист», Открыть «Финализация кампанийной копии», Открыть «Итог персонажа: группа и локация», Открыть «Принять запрос устройства», Вернуться к «Список персонажей кампании», Вернуться к «Клиенты и локальные места», Принять заявку к рассмотрению, Отклонить заявку с причиной, Вернуться к созданной кампании. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-50-0',
+    current:
+      '| QA-FORM-NET-017 | NET-017 | Проверить буквальное назначение NET-017: Очередь заявок устройств: подтверждённые immutable кандидаты, DeviceId и прогноз вместимости; принять заявку к рассмотрению либо отклонить с причиной без допуска, campaign copy или резерва места. Полный review и финальный AdmissionBatch остаются отдельной последующей стадией. Поля: contextId, campaignId, stateRevision, projectionRevision, requestQueueRevision, requests[], selectedRequestIdOrNull, activePlayerCapacity, occupiedActivePcCount, decisionReason(required-for-reject), commandId, returnContext. CTA: Открыть «Исходный локальный лист», Открыть «Финализация кампанийной копии», Открыть «Итог персонажа: группа и локация», Открыть «Принять запрос устройства», Вернуться к «Список персонажей кампании», Вернуться к «Клиенты и локальные места», Принять заявку к рассмотрению, Отклонить заявку с причиной, Вернуться к созданной кампании. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    retired:
+      '| QA-FORM-NET-017 | NET-017 | Проверить буквальное назначение NET-017: DeviceId, несколько выбранных персонажей, прогноз занимаемых мест и принять к рассмотрению либо отклонить. Поля: contextId, stateRevision, projectionRevision, effectInstanceId/EffectTypeID, source, duration/stackPolicy, deviceId, controllerSeat, connectionState. CTA: Открыть «Исходный локальный лист», Открыть «Финализация кампанийной копии», Открыть «Итог персонажа: группа и локация», Открыть «Принять запрос устройства», Вернуться к «Список персонажей кампании», Вернуться к «Клиенты и локальные места». | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-51-0',
+    current:
+      '| QA-FORM-CMP-006 | CMP-006 | Проверить буквальное назначение CMP-006: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей. Поля: campaignId, status=PAUSED, createdAt, hostAddress, hostPort, qrPayload, activePlayerCapacity, creationReceiptId. CTA: Открыть панель созданной кампании, Открыть входящие запросы устройств. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-51-0',
+    current:
+      '| QA-FORM-CMP-006 | CMP-006 | Проверить буквальное назначение CMP-006: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей. Поля: campaignId, status=PAUSED, createdAt, hostAddress, hostPort, qrPayload, activePlayerCapacity, creationReceiptId. CTA: Открыть панель созданной кампании, Открыть входящие запросы устройств. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    retired:
+      '| QA-FORM-CMP-006 | CMP-006 | Проверить буквальное назначение CMP-006: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей. Поля: campaignId, status=PAUSED, createdAt, hostAddress, hostPort, qrPayload, activePlayerCapacity, creationReceiptId. CTA: Открыть панель созданной кампании. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-52-0',
+    current:
+      '| QA-REQ-004 | REQ-004 | Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"NET-002":["EMPTY_ADDRESS","PARSE_INVALID","READY_TO_CONNECT","CONNECTING","CONNECTED_TECHNICAL"],"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-52-0',
+    current:
+      '| QA-REQ-004 | REQ-004 | Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"NET-002":["EMPTY_ADDRESS","PARSE_INVALID","READY_TO_CONNECT","CONNECTING","CONNECTED_TECHNICAL"],"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired:
+      '| QA-REQ-004 | REQ-004 | Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"NET-002": ["EMPTY_ADDRESS", "PARSE_INVALID", "READY_TO_CONNECT", "CONNECTING", "CONNECTED_TECHNICAL"], "NET-004": ["DRAFT_REQUEST", "SUBMITTED"], "NET-005": ["WAITING_GM", "READY_TO_CANCEL", "CANCELLED", "DECISION_WON_RACE"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-53-0',
+    current:
+      '| QA-REQ-005 | REQ-005 | Требование «GM review, campaign copy diff и атомарный AdmissionBatch». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"NET-021":["BLOCKED_INVALID_BATCH","READY_ALL_OR_NONE","PUBLISHED"],"NET-022":["REASON_REQUIRED","REJECTED"],"NET-027":["DIFF_LOADING","READY_FOR_WHOLE_BATCH_DECISION","ACCEPTED","DECLINED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-53-0',
+    current:
+      '| QA-REQ-005 | REQ-005 | Требование «GM review, campaign copy diff и атомарный AdmissionBatch». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"NET-021":["BLOCKED_INVALID_BATCH","READY_ALL_OR_NONE","PUBLISHED"],"NET-022":["REASON_REQUIRED","REJECTED"],"NET-027":["DIFF_LOADING","READY_FOR_WHOLE_BATCH_DECISION","ACCEPTED","DECLINED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired:
+      '| QA-REQ-005 | REQ-005 | Требование «GM review, campaign copy diff и атомарный AdmissionBatch». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"NET-021": ["BLOCKED_INVALID_BATCH", "READY_ALL_OR_NONE", "PUBLISHED"], "NET-022": ["REASON_REQUIRED", "REJECTED"], "NET-027": ["DIFF_LOADING", "READY_FOR_WHOLE_BATCH_DECISION", "ACCEPTED", "DECLINED"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-54-0',
+    current:
+      '| QA-REQ-006 | REQ-006 | Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"CHR-043":["NO_FILE","FILE_SELECTED","PICKER_CANCELLED"],"CHR-045":["IMPORTED_LOCAL_COPY","PENDING_OWNER_LINK","INCOMPATIBLE_REPORT","NO_PARTIAL_COMMIT"],"NET-028":["PENDING_OWNER_LINK","CLAIM_ACCEPTED","CLAIM_DECLINED","ADMISSION_REQUIRED"],"NET-027":["DIFF_LOADING","READY_FOR_WHOLE_BATCH_DECISION","ACCEPTED","DECLINED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-54-0',
+    current:
+      '| QA-REQ-006 | REQ-006 | Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"CHR-043":["NO_FILE","FILE_SELECTED","PICKER_CANCELLED"],"CHR-045":["IMPORTED_LOCAL_COPY","PENDING_OWNER_LINK","INCOMPATIBLE_REPORT","NO_PARTIAL_COMMIT"],"NET-028":["PENDING_OWNER_LINK","CLAIM_ACCEPTED","CLAIM_DECLINED","ADMISSION_REQUIRED"],"NET-027":["DIFF_LOADING","READY_FOR_WHOLE_BATCH_DECISION","ACCEPTED","DECLINED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired:
+      '| QA-REQ-006 | REQ-006 | Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"CHR-043": ["NO_FILE", "FILE_SELECTED", "PICKER_CANCELLED"], "CHR-045": ["IMPORTED_LOCAL_COPY", "PENDING_OWNER_LINK", "INCOMPATIBLE_REPORT", "NO_PARTIAL_COMMIT"], "NET-027": ["DIFF_LOADING", "READY_FOR_WHOLE_BATCH_DECISION", "ACCEPTED", "DECLINED"], "NET-028": ["PENDING_OWNER_LINK", "CLAIM_ACCEPTED", "CLAIM_DECLINED", "ADMISSION_REQUIRED"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-55-0',
+    current:
+      '| QA-REQ-007 | REQ-007 | Требование «Создание/host/preflight/start кампании без выбора правил». Preconditions: Роль и authority соответствуют gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"CMP-001":["METADATA_INCOMPLETE","METADATA_VALID","DRAFT_CANCELLED"],"CMP-002":["HOST_CONFIG_INVALID","HOST_CONFIG_VALID","PORT_UNAVAILABLE"],"CMP-003":["PASSWORD_INCOMPLETE","PASSWORD_VALID","SECRET_HIDDEN"],"CMP-004":["MODE_UNSELECTED","MODE_VALID","OPEN_REQUESTS_UNCHANGED"],"CMP-005":["PREFLIGHT_BLOCKED","READY_TO_CREATE","CREATING","CREATED","IDEMPOTENT_REPLAY"],"CMP-006":["RECEIPT_READY","HOST_NOT_STARTED","OPENED_LOBBY","OPENED_REQUEST_QUEUE"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-55-0',
+    current:
+      '| QA-REQ-007 | REQ-007 | Требование «Создание/host/preflight/start кампании без выбора правил». Preconditions: Роль и authority соответствуют gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"CMP-001":["METADATA_INCOMPLETE","METADATA_VALID","DRAFT_CANCELLED"],"CMP-002":["HOST_CONFIG_INVALID","HOST_CONFIG_VALID","PORT_UNAVAILABLE"],"CMP-003":["PASSWORD_INCOMPLETE","PASSWORD_VALID","SECRET_HIDDEN"],"CMP-004":["MODE_UNSELECTED","MODE_VALID","OPEN_REQUESTS_UNCHANGED"],"CMP-005":["PREFLIGHT_BLOCKED","READY_TO_CREATE","CREATING","CREATED","IDEMPOTENT_REPLAY"],"CMP-006":["RECEIPT_READY","HOST_NOT_STARTED","OPENED_LOBBY","OPENED_REQUEST_QUEUE"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired:
+      '| QA-REQ-007 | REQ-007 | Требование «Создание/host/preflight/start кампании без выбора правил». Preconditions: Роль и authority соответствуют gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"CMP-001": ["METADATA_INCOMPLETE", "METADATA_VALID", "DRAFT_CANCELLED"], "CMP-002": ["HOST_CONFIG_INVALID", "HOST_CONFIG_VALID", "PORT_UNAVAILABLE"], "CMP-003": ["PASSWORD_INCOMPLETE", "PASSWORD_VALID", "SECRET_HIDDEN"], "CMP-004": ["MODE_UNSELECTED", "MODE_VALID", "OPEN_REQUESTS_UNCHANGED"], "CMP-005": ["PREFLIGHT_BLOCKED", "READY_TO_CREATE", "CREATING", "CREATED", "IDEMPOTENT_REPLAY"], "CMP-006": ["RECEIPT_READY", "HOST_NOT_STARTED", "OPENED_LOBBY"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-56-0',
+    current:
+      '| QA-REQ-010 | REQ-010 | Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"PLY-030":["inactive","PRIVACY_HANDOFF","WAITING_FOR_LOCAL_OWNER","TARGET_CONTEXT_ACTIVE","RETURN_TO_INITIATOR","RECONNECT_RESTORED"],"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-56-0',
+    current:
+      '| QA-REQ-010 | REQ-010 | Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"PLY-030":["inactive","PRIVACY_HANDOFF","WAITING_FOR_LOCAL_OWNER","TARGET_CONTEXT_ACTIVE","RETURN_TO_INITIATOR","RECONNECT_RESTORED"],"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired:
+      '| QA-REQ-010 | REQ-010 | Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"NET-004": ["DRAFT_REQUEST", "SUBMITTED"], "PLY-030": ["inactive", "PRIVACY_HANDOFF", "WAITING_FOR_LOCAL_OWNER", "TARGET_CONTEXT_ACTIVE", "RETURN_TO_INITIATOR", "RECONNECT_RESTORED"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-57-0',
+    current:
+      '| QA-REQ-031 | REQ-031 | Требование «Waiting/connect/reconnect/connection-lost states». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"],"NET-011":["UNAVAILABLE","RETRY_READY","RETRYING","EXITED_TO_LOCAL"],"NET-012":["hidden","visible"],"NET-013":["hidden","visible"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-57-0',
+    current:
+      '| QA-REQ-031 | REQ-031 | Требование «Waiting/connect/reconnect/connection-lost states». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"terminalStatesByForm":{"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"],"NET-011":["UNAVAILABLE","RETRY_READY","RETRYING","EXITED_TO_LOCAL"],"NET-012":["hidden","visible"],"NET-013":["hidden","visible"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired:
+      '| QA-REQ-031 | REQ-031 | Требование «Waiting/connect/reconnect/connection-lost states». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Terminal states/deltas: {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"NET-004": ["DRAFT_REQUEST", "SUBMITTED"], "NET-005": ["WAITING_GM", "READY_TO_CANCEL", "CANCELLED", "DECISION_WON_RACE"], "NET-011": ["UNAVAILABLE", "RETRY_READY", "RETRYING", "EXITED_TO_LOCAL"], "NET-012": ["hidden", "visible"], "NET-013": ["hidden", "visible"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache. |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-58-0',
+    current:
+      '| QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW | UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW | Выполнить UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW только из NET-017 с собственной sole-GM authority, затем exact replay, changed payload, stale request revision, restart и проигранную гонку с cancel/другим решением. | Change exactly one request PENDING→IN_REVIEW, increment requestRevision once and append one decision receipt; do not create campaign copies, campaign seats, capacity reservations or player campaign authority; do not modify campaign checkpoint or local source sheets. Same commandId and payload return the original decision receipt; a current request view may be newer. A concurrent owner cancel or preliminary reject is serialized by requestRevision; the loser performs no write. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-58-1',
+    current:
+      '| QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT | UI-CMD-DEVICE-REQUEST-REJECT | Выполнить UI-CMD-DEVICE-REQUEST-REJECT только из NET-017 с собственной sole-GM authority, затем exact replay, changed payload, stale request revision, restart и проигранную гонку с cancel/другим решением. | Change exactly one request PENDING\\|IN_REVIEW→REJECTED with the non-empty reason, increment requestRevision once and append one decision receipt; preserve candidate snapshot and history; no campaign copy, campaign seat, capacity or local-sheet mutation. Same commandId and payload return the original rejection receipt even if the UI has moved. A changed payload conflicts; stale requestRevision and a concurrent terminal decision perform no write. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-58-2',
+    current:
+      '| QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE | NET-005/NET-017 | Два соединения посылают owner cancellation и accept-to-review/reject с одной requestRevision; затем повторить победителя, проигравшего и изменённый payload. Повторить reject после IN_REVIEW и cancel после IN_REVIEW. | Ровно один commit на исходной revision. PENDING→IN_REVIEW делает последующий cancel недоступным; reasoned reject из IN_REVIEW разрешён новой актуальной revision. Старый receipt неизменен; source sheets/campaign checkpoint/copies/campaign seats/capacity/player authority не изменены. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-58-3',
+    current:
+      '| QA-CMP-006-DEVICE-REQUEST-QUEUE | CMP-006/NET-017 | Единственный GM открывает очередь из подтверждённой CMP-006 своей PAUSED кампании, включая ноль заявок, затем возвращается. Проверить чужую campaign, player role, устаревшую authority и forged returnContext. | Только CMP-006::CTA::002 и NET-017::CTA::009 нового пути; возврат к той же creation receipt/campaign. Никакого Start, CMP-007 или изменения campaign checkpoint; запрещённые CTA отсутствуют в payload/DOM/a11y/hotkeys/cache. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-58-4',
+    current:
+      '| QA-NET-005-REJECTED-RETURN | NET-005/NET-003 | После подтверждённого preliminary REJECTED владелец выбирает «Вернуться к выбору персонажей», затем reconnect/restart и replay старого reject receipt. Проверить чужое устройство, PENDING/IN_REVIEW, потерянную technical session и наличие campaign copy/admission. | Новый NET-005::CTA::003 доступен только при точном guard. Меняется только local presentation cursor. Старые request/receipt сохранены без reset/delete; source sheets и campaign checkpoint не меняются; нет автоматического submit/allocation; запрещённый CTA отсутствует в payload/DOM/a11y/hotkeys/cache. |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-59-0',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.6',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-59-0',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.6',
+    retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-60-0',
+    current: '| Версия атласа | 1.6 |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-60-0',
+    current: '| Версия атласа | 1.6 |',
+    retired: '| Версия атласа | 1.5 |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-61-0',
+    current: '| Дата | 2026-10-30 |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-61-0',
+    current: '| Дата | 2026-10-30 |',
+    retired: '| Дата | 2026-10-26 |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-62-0',
+    current: '| Переходы | 1688 |',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-62-0',
+    current: '| Переходы | 1688 |',
+    retired: '| Переходы | 1681 |',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-63-0',
+    current:
+      'Итог: **376 форм, 1688 переходов, 66 journeys, 91 требований, 108 workflow-команд и 2445 QA-сценариев; открытых UX-вопросов нет.**',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-63-0',
+    current:
+      'Итог: **376 форм, 1688 переходов, 66 journeys, 91 требований, 108 workflow-команд и 2445 QA-сценариев; открытых UX-вопросов нет.**',
+    retired:
+      'Итог: **376 форм, 1681 переходов, 66 journeys, 91 требований; открытых UX-вопросов нет.**',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-64-0',
+    current:
+      'All 2445 QA scenario IDs are unique; referenced QA IDs resolve to behavior-specific scenarios.',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: false,
+  },
+  {
+    id: 'request-review-retired-64-0',
+    current:
+      'All 2445 QA scenario IDs are unique; referenced QA IDs resolve to behavior-specific scenarios.',
+    retired: 'All 2391 referenced QA IDs resolve to unique behavior-specific scenarios.',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: false,
+  },
+  {
+    id: 'request-review-65-0',
+    current:
+      '> Нормативный человекочитаемый атлас локального web-приложения. Поля `graphDigest` и `contentDigest` сохраняют идентичность author-supplied base-v1.2 по ADR 0037/0049: алгоритмы semantic digest не поставлены. Целостность текущих JSON/Markdown байтов проверяется по `artifacts/CHECKSUMS.sha256`. Старый PDF не нужен для реализации; его страницы приведены только для трассировки.',
+    retired: '',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+  {
+    id: 'request-review-retired-65-0',
+    current:
+      '> Нормативный человекочитаемый атлас локального web-приложения. Поля `graphDigest` и `contentDigest` сохраняют идентичность author-supplied base-v1.2 по ADR 0037/0049: алгоритмы semantic digest не поставлены. Целостность текущих JSON/Markdown байтов проверяется по `artifacts/CHECKSUMS.sha256`. Старый PDF не нужен для реализации; его страницы приведены только для трассировки.',
+    retired:
+      '> Нормативный человекочитаемый атлас локального web-приложения. JSON-файл с тем же графом имеет указанный ниже `graphDigest`. Старый PDF не нужен для реализации; его страницы приведены только для трассировки.',
+    expected: 1,
+    section: ['', ''],
+    wholeLine: true,
+  },
+] as const;
 
 interface MarkdownAdrLiteral {
   readonly id: string;
@@ -1421,5 +3054,61 @@ export function validateRendererFormGraph(
     }
   }
 
+  return problems;
+}
+
+export function validateAtlasMarkdownAdr0069TextMirrors(
+  markdown: string,
+): readonly AtlasValidationProblem[] {
+  const problems: AtlasValidationProblem[] = [];
+  // Each call verifies its input afresh. Scoped source and full-line counts are
+  // shared only within this call, because several mirrors use the same section.
+  const sources = new Map<string, string>();
+  const lineCounts = new Map<string, ReadonlyMap<string, number>>();
+  for (const literal of ATLAS_MARKDOWN_ADR0069_LITERALS) {
+    const key = JSON.stringify(literal.section);
+    let source = sources.get(key);
+    if (source === undefined) {
+      source = markdownAdrSource(markdown, literal.section);
+      sources.set(key, source);
+    }
+    if (source === '') {
+      problems.push({
+        file: ATLAS_MARKDOWN_FILE,
+        id: literal.id,
+        message: 'ADR 0069 Markdown section ' + key + ' is missing',
+      });
+      continue;
+    }
+    let lines = lineCounts.get(key);
+    if (literal.wholeLine && lines === undefined) {
+      const counts = new Map<string, number>();
+      for (const line of source.split(/\r?\n/u)) counts.set(line, (counts.get(line) ?? 0) + 1);
+      lines = counts;
+      lineCounts.set(key, lines);
+    }
+    const count = (text: string): number =>
+      literal.wholeLine ? (lines?.get(text) ?? 0) : countLiteral(source, text);
+    const currentCount = count(literal.current);
+    if (currentCount !== literal.expected)
+      problems.push({
+        file: ATLAS_MARKDOWN_FILE,
+        id: literal.id,
+        message:
+          'current ADR 0069 literal count is ' +
+          String(currentCount) +
+          ', expected ' +
+          String(literal.expected),
+      });
+    if (literal.retired !== '') {
+      const retiredCount = count(literal.retired);
+      if (retiredCount !== 0)
+        problems.push({
+          file: ATLAS_MARKDOWN_FILE,
+          id: literal.id,
+          message: 'retired ADR 0069 literal count is ' + String(retiredCount) + ', expected 0',
+        });
+    }
+  }
   return problems;
 }
