@@ -40,6 +40,17 @@ reloads сохранены, фактические исходные/итогов
 Новый warm-cache corruption refusal и cold-process replay прошли 11/11.
 Единственная причина исходного timeout этим не объявляется доказанной.
 
+Коммит поставки `37c7c38` прошёл author verify 150/3739 и CI с 34 E2E, но
+независимый verify получил два старых timeout: server closed-command 5049 ms
+и local-tab closure/replay 6937 ms. Этот failed gate сохранён; E2E после него
+не запускался. Все 33 оставшихся `serialize().toEqual(Buffer)` заменены
+эквивалентным native `.equals` в четырёх test files: 176 expect и 65 serialize
+сохранены, обратная замена byte-identical. Парные реальные наборы 124/124
+прошли за 59.87→37.17 s, отдельные 4/4 — 4.90→0.65 s; local-tab suite
+59.17→0.88 s, целевой closure case 2711→154 ms. Причина отдельного server
+timeout не объявляется доказанной. Перед merge нужны новый committed SHA,
+свежие author/independent verify, все production E2E и CI этого нового SHA.
+
 PR #185 `f9a6a53` имеет зелёный CI (3539 tests, 36 E2E), но остаётся draft:
 не реализован GM runtime и не интегрированы application-only callers #190.
 Никаких новых решений владельца для продолжения не требуется. После merge

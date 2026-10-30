@@ -18,6 +18,10 @@
   importer/validator guards и mutation tests; финальный admission сохранён.
   Прикладной GM runtime остаётся в #171/#172.
   [ADR 0069](docs/adr/0069-device-request-review-atlas-amendment.md).
+  В обязательных проверках 33 оставшихся полных SQLite byte assertions
+  используют native `Buffer.equals`: длина и все байты, прежние fixtures,
+  структурные проверки и лимиты сохранены. Это убирает дорогую универсальную
+  deep comparison, не меняя runtime или исходные данные.
 
 - **2026-10-30, issue #190, предпосылка #177:** проверенная lineage конкретных
   поставок B0/B1 сохраняет исходные baseline ID, export/archive/candidate bytes
