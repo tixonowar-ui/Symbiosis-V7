@@ -257,7 +257,7 @@ describe('owned current PAUSED campaign source', () => {
     expect(JSON.stringify(result)).not.toMatch(
       /private|salt|verifier|context|profile|source-copy|DISCONNECTED|description|commandId|receiptId/iu,
     );
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('reads generic campaign vectors rather than draft-only revision rules', () => {
@@ -320,7 +320,7 @@ describe('owned current PAUSED campaign source', () => {
     bootstrapDeviceIdentity(db);
     const before = db.serialize();
     expectCode(() => read(db), 'FOREIGN_OWNER');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('rejects extra scope claims and accessors without evaluating them', () => {
@@ -391,7 +391,7 @@ describe('owned current PAUSED campaign source', () => {
         db.prepare("UPDATE campaign_checkpoint SET snapshot_json='{}'").run();
       const before = db.serialize();
       expectCode(() => read(db));
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -463,7 +463,7 @@ describe('owned current PAUSED campaign source', () => {
         })
         .immediate(),
     ).toThrow('caller rollback');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     expect(loadCampaignCheckpoint(db, 'campaign').stateRevision).toBe(0);
   });
 
@@ -482,7 +482,7 @@ describe('owned current PAUSED campaign source', () => {
           }),
         'SOURCE_CHANGED',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -511,7 +511,7 @@ describe('owned current PAUSED campaign source', () => {
       );
     await setImmediate();
     expect(then).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
     expect(
       readCampaignCreationOrigin(db, 'context', 'campaign', validate).command.receipt.revisions,
     ).toEqual(zero);

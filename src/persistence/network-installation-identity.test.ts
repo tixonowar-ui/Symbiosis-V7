@@ -156,7 +156,7 @@ describe('durable private installation identity', () => {
       selected,
     );
     expect(validate).toHaveBeenCalledExactlyOnceWith(selected);
-    expect(reopened.serialize()).toEqual(before);
+    expect(reopened.serialize().equals(before)).toBe(true);
   });
 
   it('selects the winner committed by another SQLite connection before validating a prepared loser', () => {
@@ -217,7 +217,7 @@ describe('durable private installation identity', () => {
       'INVALID_INPUT',
     );
     expect(validate).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('rejects accessor input without evaluating a private material getter', () => {
@@ -318,7 +318,7 @@ describe('durable private installation identity', () => {
           }),
         'SOURCE_CHANGED',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -336,7 +336,7 @@ describe('durable private installation identity', () => {
           }),
         'SOURCE_CHANGED',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     },
   );
 
@@ -361,7 +361,7 @@ describe('durable private installation identity', () => {
     expectCode(() => invokeUntyped(asynchronous), 'INVALID_INPUT');
     expect(called).toBe(false);
     expectCode(() => invokeUntyped(() => Promise.resolve()), 'INVALID_INPUT');
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it.each(['ordinary', 'mocked', 'mocked-async', 'cross-realm'] as const)(
@@ -392,7 +392,7 @@ describe('durable private installation identity', () => {
         await setImmediate();
         expect(unhandled).not.toHaveBeenCalled();
         expect(db.inTransaction).toBe(false);
-        expect(db.serialize()).toEqual(before);
+        expect(db.serialize().equals(before)).toBe(true);
         expect(raw(db)).toEqual([]);
       } finally {
         process.off('unhandledRejection', unhandled);
@@ -423,7 +423,7 @@ describe('durable private installation identity', () => {
         await setImmediate();
         expect(unhandled).not.toHaveBeenCalled();
         expect(db.inTransaction).toBe(false);
-        expect(db.serialize()).toEqual(before);
+        expect(db.serialize().equals(before)).toBe(true);
         expect(raw(db)).toEqual([]);
       } finally {
         process.off('unhandledRejection', unhandled);
@@ -440,7 +440,7 @@ describe('durable private installation identity', () => {
     const thenable = Object.defineProperty({}, 'then', { get: then });
     expectCode(() => ensureDeviceInstallationIdentity(db, input, () => thenable), 'INVALID_INPUT');
     expect(then).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it.each(['COMMIT', 'ROLLBACK'] as const)(
@@ -455,7 +455,7 @@ describe('durable private installation identity', () => {
       expect(db.inTransaction).toBe(false);
       expect(raw(db)).toEqual([]);
       expect(readDeviceInstallationIdentity(db, device)).toBeNull();
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
       // Rejection did not poison normal later initialization or replace a prior identity.
       ensureDeviceInstallationIdentity(db, input, validateRealKeyPair);
       const known = db.serialize();
@@ -464,7 +464,7 @@ describe('durable private installation identity', () => {
         'SOURCE_CHANGED',
       );
       expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
-      expect(db.serialize()).toEqual(known);
+      expect(db.serialize().equals(known)).toBe(true);
     },
   );
 
@@ -486,7 +486,7 @@ describe('durable private installation identity', () => {
         () => ensureDeviceInstallationIdentity(db, input, allow),
         kind === 'abort' ? 'CORRUPT_STORAGE' : 'SOURCE_CHANGED',
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
       expect(raw(db)).toEqual([]);
     },
   );
@@ -510,7 +510,7 @@ describe('durable private installation identity', () => {
     expectCode(() => readDeviceInstallationIdentity(db, device), 'CORRUPT_STORAGE');
     expectCode(() => ensureDeviceInstallationIdentity(db, input, validate), 'CORRUPT_STORAGE');
     expect(validate).not.toHaveBeenCalled();
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 
   it('upgrades version 7 without rewriting prior migrations or creating identity, roles or game rows', () => {
@@ -541,6 +541,6 @@ describe('durable private installation identity', () => {
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const before = db.serialize();
     expect(applyMigrations(db)).toBe(9);
-    expect(db.serialize()).toEqual(before);
+    expect(db.serialize().equals(before)).toBe(true);
   });
 });
