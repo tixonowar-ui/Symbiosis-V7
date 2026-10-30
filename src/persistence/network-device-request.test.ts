@@ -313,7 +313,7 @@ describe('hosted network session and addressed request journal', () => {
       commitHostedNetworkCommand(p.db, p.principal, submission(p, opening), allow, guard),
     ).toThrow('CORRUPT_STORAGE');
     expect(guard).not.toHaveBeenCalled();
-    expect(p.db.serialize()).toEqual(before);
+    expect(p.db.serialize().equals(before)).toBe(true);
   });
   it('checks existing peer continuity before returning absent commands or attempts', () => {
     const p = setup(),
@@ -340,7 +340,7 @@ describe('hosted network session and addressed request journal', () => {
     );
     expect(readHostedNetworkCommand(p.db, p.principal, unknownCommandId, allow)).toBeNull();
     expect(readHostedConnectionAttempt(p.db, p.principal, unknownAttemptId, allow)).toBeNull();
-    expect(p.db.serialize()).toEqual(before);
+    expect(p.db.serialize().equals(before)).toBe(true);
   });
   it('opens at most one session, restores the same attempt and never alters the campaign aggregate', () => {
     const p = setup(),
@@ -362,7 +362,7 @@ describe('hosted network session and addressed request journal', () => {
     expect(commitHostedNetworkCommand(p.db, p.principal, opened.input, allow, allow)).toEqual(
       opened,
     );
-    expect(p.db.serialize()).toEqual(after);
+    expect(p.db.serialize().equals(after)).toBe(true);
     expect(() =>
       commitHostedNetworkCommand(
         p.db,
@@ -372,7 +372,7 @@ describe('hosted network session and addressed request journal', () => {
         allow,
       ),
     ).toThrow('IDEMPOTENCY_CONFLICT');
-    expect(p.db.serialize()).toEqual(after);
+    expect(p.db.serialize().equals(after)).toBe(true);
     expect(snapshot(p.db)).toEqual(before);
   });
   it('captures immutable PENDING, cancels exactly once, and replays original SUBMIT alongside current closed request after reopen', () => {
@@ -404,7 +404,7 @@ describe('hosted network session and addressed request journal', () => {
     });
     const bytes = p.db.serialize();
     expect(commitHostedNetworkCommand(p.db, p.principal, cancel, allow, allow)).toEqual(cancelled);
-    expect(p.db.serialize()).toEqual(bytes);
+    expect(p.db.serialize().equals(bytes)).toBe(true);
     expect(snapshot(p.db)).toEqual(before);
     p.db.close();
     const db = open(filename);
@@ -498,7 +498,7 @@ describe('hosted network session and addressed request journal', () => {
         guard = vi.fn(allow);
       expect(() => commitHostedNetworkCommand(p.db, principal, request, allow, guard)).toThrow();
       expect(guard).not.toHaveBeenCalled();
-      expect(p.db.serialize()).toEqual(before);
+      expect(p.db.serialize().equals(before)).toBe(true);
     },
   );
   it.each(['trigger', 'revoked-generation', 'promise'] as const)(
@@ -525,7 +525,7 @@ describe('hosted network session and addressed request journal', () => {
         }),
       ).toThrow();
       await setImmediate();
-      expect(p.db.serialize()).toEqual(before);
+      expect(p.db.serialize().equals(before)).toBe(true);
     },
   );
   it.each(['request', 'receipt', 'peer-index'] as const)(
@@ -554,7 +554,7 @@ describe('hosted network session and addressed request journal', () => {
       }
       const before = p.db.serialize();
       expect(() => readHostedNetworkCommand(p.db, p.principal, input.commandId, allow)).toThrow();
-      expect(p.db.serialize()).toEqual(before);
+      expect(p.db.serialize().equals(before)).toBe(true);
     },
   );
   it.each(['hash', 'missing-owner'] as const)(
@@ -567,7 +567,7 @@ describe('hosted network session and addressed request journal', () => {
       else p.db.prepare('DELETE FROM campaign_private_owner').run();
       const before = p.db.serialize();
       expect(() => readHostedPausedCampaignIds(p.db, allow)).toThrow();
-      expect(p.db.serialize()).toEqual(before);
+      expect(p.db.serialize().equals(before)).toBe(true);
     },
   );
   it('does not let a reset device or changed semantic payload claim historical receipts', () => {
@@ -583,7 +583,7 @@ describe('hosted network session and addressed request journal', () => {
         allow,
       ),
     ).toThrow('IDEMPOTENCY_CONFLICT');
-    expect(p.db.serialize()).toEqual(before);
+    expect(p.db.serialize().equals(before)).toBe(true);
     resetDeviceIdentity(p.db, allow);
     bootstrapDeviceIdentity(p.db);
     expect(() =>
