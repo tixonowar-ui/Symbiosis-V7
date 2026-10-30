@@ -3,23 +3,59 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-30`, #171 в работе в `codex/171-device-request-flow`.
-- База — `c30ee6b`, слитый PR #183; prerequisite #182 закрыта.
-  Прежние 134 файла / 2499 Vitest-тестов и 34 Chrome E2E без retry относятся
-  к базе #179 (`03bf13b`), а не к текущей реализации #171.
-- В рабочей ветке реализуется NET-контур игрока: собственная Node/SQLite,
-  локальный outbox, заявки хоста и семь форм NET-001–005/011 и CHR-027.
-  Два новых двухустановочных Chrome E2E прошли: ручной адрес/restart/CANCEL
-  и настоящий QR с тремя FINAL. Дополнительный путь нового и retained входа
-  из FINAL тоже прошёл. Entry/NAV crash boundary исправлен и подтверждён
-  неизменённым независимым reproducer. Авторский полный verify: 163 файла,
-  3539 тестов, PASS; полный production Chrome E2E — 36/36 без retry.
-  Независимый final-SHA гейт и CI идут отдельно.
-  Единого готового PR #171 ещё нет.
-- Предварительное рассмотрение мастером и NET-017 не реализованы; решение #177
-  ожидается. ADR 0066 остаётся предложенным. Доказательства — в [handoff](handoff.md).
-- Предварительный замер превысил действующие лимиты размера PR; решение и
-  полный финальный замер отслеживаются в [#184](https://github.com/tixonowar-ui/Symbiosis-V7/issues/184).
+## Application #171 — интеграция
+
+Player-срез f9a6a539 локально объединён с разрешённой поставкой #177/lineage #190
+на 5e929973. GM runtime, shared transport и client wiring ещё интегрируются;
+полный #171 не готов к merge. Старые 3539 tests / 36 E2E не объявляются
+результатом новой ветки. Полные итоговые проверки и фактический PR-size замер
+будут выполнены после завершения GM journey.
+
+## Source-снимок #177 — 2026-10-30
+
+База `24c726c`: #190 смёржена через PR #193 после независимого полного
+verify 150/3211, 34/34 production E2E без retry и зелёного CI на том же SHA.
+Первый CI timeout старого AUTO Advisor не объявлен исправленным: локальная
+парная диагностика прошла, один повтор CI без изменений дал 3211/3211 и 34/34.
+
+Поставлен Atlas 1.6: 376 forms, 1688 transitions, 108 workflows, 2445 QA,
+1252 CTA. NET-017 описывает отдельный preliminary request review; изменённые
+NET-003/005 и CMP-006 согласованы с ним. NET-018–022/027 и конечный admission
+сохранены. Новые JSON/Markdown guards защищают контракт и зеркала, прежние
+семантические проверки сохранены. [ADR 0069](../adr/0069-device-request-review-atlas-amendment.md).
+
+Это source/guard-поставка: GM queue/decisions не опубликованы в приложении,
+draft PR #185 остаётся неполным до завершения #171. Проверки текущей поставки
+фиксируются в PR и [handoff](handoff.md); перед merge обязательны независимый
+полный verify/E2E окончательного committed SHA и зелёный CI.
+
+## Исторический срез #190
+
+База `fe5823d`: PR #189 (#184) и тестовый PR #192 (#191) смёржены. Политика
+и native binary comparisons подтянуты в #185. Независимые проверки базы: 148 файлов /
+3199 тестов, 34 production E2E без retry; CI зелёный. Ниже сохранён прежний
+снимок инфраструктуры #182; прикладной #171 пока находится в отдельном draft.
+
+В #190 loader/resolver отличает current baseline от запечатанного исторического
+context B0/B1. Archive/candidate и read/replay сохранённой кампании сохраняют
+исходные ID/bytes/receipts; проверяются manifests, 24 catalog inputs, tuple и
+authority context. Точные filesystem freshness guards сохраняются. SQL/schema,
+артефакты и опубликованные формы не меняются. [ADR 0068](../adr/0068-verified-artifact-baseline-lineage.md).
+
+Поставка Atlas 1.6 #177 ещё не применена: её реальные bytes используются только
+в проверяемом patch fixture. Application-only integration peer/SQL/discovery
+остаётся в #171. Полные verify/E2E и независимый final-SHA review обязательны
+до merge текущего среза; результаты фиксируются в PR и [handoff](handoff.md).
+
+## Предыдущий снимок #182
+
+- Снимок: `2026-10-30`, инфраструктурная предпосылка #182 для #171 поверх PR #180 (#179).
+- Подтверждённая база `03bf13b`: 134 файла / 2499 Vitest-тестов и 34 Chrome E2E
+  без retry; независимый final-SHA прогон и CI прошли перед merge.
+- Текущий срез добавляет LAN parser/discovery, private installation keys,
+  authenticated peer channel, FINAL evidence, current campaign reader и local tabs.
+  NET UI, application request runtime и решения GM ещё не опубликованы.
+  Полные проверки текущей подготовки фиксируются в [handoff](handoff.md).
 - Артефакты и конвейер не менялись. Воспроизводимость проверяется отдельным
   CI-гейтом на чистом checkout.
 - Vitest выполняет не более четырёх suites одновременно; причина и измерения
@@ -42,7 +78,7 @@
 | ----------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------- |
 | `tools/checksums`             | **готов**    | косвенно | SHA-256 манифест, гейт перед импортом. Проверен на срабатывание                           |
 | `tools/import/lib`            | **готов**    | 18       | чтение xlsx и zip, fail-closed JSON, детерминированная запись, медиа по якорям OOXML      |
-| `tools/import/atlas`          | **готов**    | 164      | Atlas v1.5; единственный полный `forms-by-id`; 1 247 actionKey/label, 3 renderer-индекса  |
+| `tools/import/atlas`          | **готов**    | 467      | Atlas v1.6; единственный полный `forms-by-id`; 1 252 actionKey/label, 3 renderer-индекса  |
 | `tools/import/rules`          | **готов**    | 11       | 739 карточек, 699 активных, 40 tombstone                                                  |
 | `tools/import/character`      | **готов**    | 12       | 1144 payload-сущности, 9 секций XP-контракта                                              |
 | `tools/import/items`          | **готов**    | 11       | 64 типа предметов, 64 иконки в `generated/media`                                          |
@@ -52,8 +88,8 @@
 | `tools/import/portraits`      | **готов**    | 9        | exact пакет из 6 портретов локального персонажа по ADR 0036                               |
 | `tools/import/symbiont-media` | **готов**    | 16       | 23 SpeciesKey, 23 арта и 23 изображения деревьев; exact anchors и PNG bytes               |
 | `tools/import/qna`            | **готов**    | 11       | 444 вопроса, 411 адресуемых кодов, алиас `Q-MON-089` по ADR 0017                          |
-| `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 288 строк, 9 паспортов; детерминизм на SQLite 3.53.4                       |
-| `tools/validate`              | **готов**    | 130      | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
+| `tools/import/seed`           | **готов**    | 5        | 114 таблиц, 20 302 строки, 9 паспортов; детерминизм на SQLite 3.53.4                      |
+| `tools/validate`              | **готов**    | 376      | forms/QA и JSON/md guard-зеркала, raw guard, renderer-каталоги и кросс-реестровые ссылки. |
 | `tools/traceability`          | **готов**    | 17       | детерминированная матрица ID, покрытия и расхождений из renderer-каталога форм            |
 | `tools/reproducibility`       | **готов**    | 11       | два импорта, полный состав файлов и SHA-256, включая игнорируемые media и seed            |
 | `tools/package`               | **не начат** | —        | portable-сборка под Windows x64. Веха M9                                                  |

@@ -4,9 +4,11 @@ import { ARTIFACT } from '../import/lib/paths.js';
 import {
   ATLAS_MARKDOWN_ADR0049_LITERALS,
   ATLAS_MARKDOWN_ADR0052_LITERALS,
+  ATLAS_MARKDOWN_ADR0069_LITERALS,
   ATLAS_MARKDOWN_FILE,
   validateAtlasMarkdownAdr0049TextMirrors,
   validateAtlasMarkdownAdr0052TextMirrors,
+  validateAtlasMarkdownAdr0069TextMirrors,
   validateAtlasMarkdownIdentityTextMirrors,
   validateAtlasFormQaMirrors,
   validateChr001IdentityTextMirrors,
@@ -489,7 +491,7 @@ describe('renderer form graph validation', () => {
 describe('ADR 0049 Atlas Markdown decision channels', () => {
   const actualMarkdown = (): string => readFileSync(ARTIFACT.atlasMd, 'utf8');
 
-  it('accepts the exact v1.5 companion', () => {
+  it('accepts the exact v1.6 companion', () => {
     expect(validateAtlasMarkdownAdr0049TextMirrors(actualMarkdown())).toEqual([]);
   });
 
@@ -612,7 +614,7 @@ describe('ADR 0049 Atlas Markdown decision channels', () => {
 describe('ADR 0052 Atlas Markdown intelligence floor channel', () => {
   const actualMarkdown = (): string => readFileSync(ARTIFACT.atlasMd, 'utf8');
 
-  it('accepts the exact v1.5 companion', () => {
+  it('accepts the exact v1.6 companion', () => {
     expect(validateAtlasMarkdownAdr0052TextMirrors(actualMarkdown())).toEqual([]);
   });
 
@@ -656,5 +658,55 @@ describe('ADR 0052 Atlas Markdown intelligence floor channel', () => {
         });
       });
     }
+  }
+});
+
+describe('ADR 0069 request review Markdown mirrors', () => {
+  const actual = readFileSync(ARTIFACT.atlasMd, 'utf8');
+  const altered = (
+    literal: (typeof ATLAS_MARKDOWN_ADR0069_LITERALS)[number],
+    replacement: string,
+  ): string => {
+    const replaceCurrent = (text: string): string => {
+      if (!literal.wholeLine) return text.replace(literal.current, replacement);
+      const lines = text.split('\n');
+      const index = lines.findIndex((line) => line.replace(/\r$/u, '') === literal.current);
+      if (index < 0) throw new Error('Missing exact source line ' + literal.id);
+      lines[index] = replacement;
+      return lines.join('\n');
+    };
+    if (!literal.section[0]) return replaceCurrent(actual);
+    const start = actual.indexOf(literal.section[0]),
+      end = actual.indexOf(literal.section[1], start + literal.section[0].length);
+    if (start < 0 || end < 0) throw new Error('Missing real source section ' + literal.id);
+    return actual.slice(0, start) + replaceCurrent(actual.slice(start, end)) + actual.slice(end);
+  };
+  it('accepts the full delivered companion, including original channels', () => {
+    expect(validateAtlasMarkdownAdr0069TextMirrors(actual)).toEqual([]);
+    expect(validateAtlasMarkdownAdr0049TextMirrors(actual)).toEqual([]);
+    expect(validateAtlasMarkdownAdr0052TextMirrors(actual)).toEqual([]);
+  });
+  for (const literal of ATLAS_MARKDOWN_ADR0069_LITERALS) {
+    it('rejects a lost rendering of ' + literal.id, () => {
+      const problems = validateAtlasMarkdownAdr0069TextMirrors(
+        altered(literal, '__UNAPPROVED_REQUEST_REVIEW__'),
+      );
+      expect(
+        problems.some(
+          (x) => x.id === literal.id && x.message.startsWith('current ADR 0069 literal'),
+        ),
+      ).toBe(true);
+    });
+    if (literal.retired !== '')
+      it('rejects reintroduced retired rendering ' + literal.id, () => {
+        const value = literal.section[0]
+          ? actual.replace(literal.section[1], literal.retired + '\n\n' + literal.section[1])
+          : actual + '\n' + literal.retired;
+        expect(
+          validateAtlasMarkdownAdr0069TextMirrors(value).some(
+            (x) => x.id === literal.id && x.message.startsWith('retired ADR 0069 literal'),
+          ),
+        ).toBe(true);
+      });
   }
 });

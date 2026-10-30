@@ -144,7 +144,7 @@ describe('generated SQLite seed', () => {
     const source = sourceCatalogue();
     expect(source.files).toBe(129);
     expect(source.arrays).toHaveLength(114);
-    expect(source.rows).toBe(20_288);
+    expect(source.rows).toBe(20_302);
     expect(source.arrays.map(({ path }) => path)).toContain('atlas/global-contracts.json');
     expect(source.metadata.map(({ path }) => path)).toEqual(EXPECTED_META_PATHS);
     expect(source.indexes).toEqual(EXPECTED_INDEX_PATHS);
@@ -208,7 +208,7 @@ describe('generated SQLite seed', () => {
         }
         actualRows += rowIndex;
       }
-      expect(actualRows).toBe(20_288);
+      expect(actualRows).toBe(20_302);
 
       const actualMetadata = database
         .prepare<[], { payload_json: string; spec_path: string }>(

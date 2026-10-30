@@ -130,12 +130,20 @@ describe('NET connection and CHR-027 literal source contracts', () => {
       'UI-CMD-DEVICE-REQUEST-CANCEL guards',
       ['UI-CMD-DEVICE-REQUEST-CANCEL'],
     ]);
+    expect(lookup('NET-005::CTA::003').slice(3)).toEqual([
+      'NET-003',
+      'safe-return',
+      'projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt.',
+      [],
+    ]);
   });
 
   it('retains source annotations and unsupported recovery fields without invented substitutes', () => {
     const lookup = (formId: string) =>
       NET_CONNECT_FORM_CONTRACTS.find((form) => form.formId === formId)!;
-    expect(lookup('NET-005').requiredFields).toContain('requestStatus=PENDING|REJECTED|PROPOSED');
+    expect(lookup('NET-005').requiredFields).toContain(
+      'requestStatus=PENDING|IN_REVIEW|REJECTED|PROPOSED',
+    );
     expect(lookup('NET-010').requiredFields).toContain('resumeContext=PEACE|COMBAT|LOCAL_HANDOFF');
     expect(lookup('NET-012')).toMatchObject({ type: 'banner', route: '@banner/net-012' });
     expect(lookup('NET-012').requiredFields).toEqual([
@@ -157,8 +165,8 @@ describe('NET connection and CHR-027 literal source contracts', () => {
         'NET-005': {
           ...waiting,
           requiredFields: waiting.requiredFields.map((field) =>
-            field === 'requestStatus=PENDING|REJECTED|PROPOSED'
-              ? 'requestStatus=PENDING|IN_REVIEW|REJECTED|PROPOSED'
+            field === 'requestStatus=PENDING|IN_REVIEW|REJECTED|PROPOSED'
+              ? 'requestStatus=PENDING|REJECTED|PROPOSED'
               : field,
           ),
         },

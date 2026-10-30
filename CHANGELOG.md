@@ -9,19 +9,36 @@
 
 ### Добавлено
 
-- **2026-10-30, issue #171 — в работе, не слито:** в рабочей ветке добавлен
-  player NET-контур собственной Node/SQLite-установки: NET-001–005/011 и CHR-027,
-  ручной адрес, discovery, локальное чтение QR, выбор 1–3 FINAL, неизменяемый
-  preview заявки и явные OPEN/SUBMIT/CANCEL. Локальный outbox и журналы хоста
-  разделяют intent, immutable receipt и текущую проекцию; техническое соединение
-  не создаёт campaign copies или места в кампании. Focused-проверки проходят,
-  но единый сквозной PR #171 ещё не готов: новый production E2E двух Node
-  и Chrome падает при отмене после перезапуска обеих установок. Полный verify,
-  финальный независимый прогон и merge не выполнены. Preliminary GM review
-  и NET-017 не опубликованы: требуется нормативное решение
-  [#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177).
-  [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md)
-  остаётся предложенным; точные границы — в [handoff](docs/status/handoff.md).
+- **2026-10-30, issue #177:** разрешённая поставка Atlas 1.6 задаёт адресную
+  очередь NET-017 и отдельные предварительные ACCEPT-TO-REVIEW / REJECT.
+  IN_REVIEW не создаёт campaign copies, seats или capacity reservations;
+  CANCELLED сохраняет историю, но исключается из текущей очереди. Узкий вход
+  CMP-006 доступен GM собственной PAUSED кампании, NET-005 получает owner-only
+  результат и безопасный возврат. JSON/Markdown зеркала защищены отдельными
+  importer/validator guards и mutation tests; финальный admission сохранён.
+  Прикладной GM runtime остаётся в #171/#172.
+  [ADR 0069](docs/adr/0069-device-request-review-atlas-amendment.md).
+  В обязательных проверках 33 оставшихся полных SQLite byte assertions
+  используют native `Buffer.equals`: длина и все байты, прежние fixtures,
+  структурные проверки и лимиты сохранены. Это убирает дорогую универсальную
+  deep comparison, не меняя runtime или исходные данные.
+
+- **2026-10-30, issue #190, предпосылка #177:** проверенная lineage конкретных
+  поставок B0/B1 сохраняет исходные baseline ID, export/archive/candidate bytes
+  и campaign receipts. Запечатаны исторический manifest, разрешённый successor,
+  24 replay catalog inputs и tuple; исторический context выдаёт только loader.
+  Current filesystem freshness остаётся точной, SQL/история не переписываются.
+  Прикладные peer/SQL/discovery callers интегрируются отдельно в #171.
+  [ADR 0068](docs/adr/0068-verified-artifact-baseline-lineage.md).
+
+- **2026-10-30, issue #171 — в работе, не слито:** player NET-контур собственной
+  Node/SQLite-установки сохраняет local outbox, original receipts и current view.
+  В application-ветку локально интегрирована разрешённая Atlas1.6-поставка #177
+  и проверенная baseline lineage #190; preliminary GM runtime и его полный
+  сквозной сценарий ещё интегрируются. Прежний f9 прошёл 3539 тестов и 36 E2E,
+  но это не проверка нового снимка. До merge нужны новые author/independent
+  verify/E2E и CI. [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md)
+  остаётся предложенным; границы — в [handoff](docs/status/handoff.md).
 
 - **2026-10-30, issue #182, предпосылка #171:** закрытые installation keys,
   LAN locator/discovery и подписанный peer channel с ограниченными очередями.

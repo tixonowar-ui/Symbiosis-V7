@@ -59,7 +59,7 @@ describe('campaign peer installation keys and scoped signatures', () => {
       const unusedNewKey = generateDeviceInstallationIdentityMaterial(owner);
       expect(ensureDeviceInstallationIdentity(db, unusedNewKey, validate)).toEqual(prepared);
       expect(validate).toHaveBeenLastCalledWith(prepared);
-      expect(db.serialize()).toEqual(beforeReplay);
+      expect(db.serialize().equals(beforeReplay)).toBe(true);
       const restored = readDeviceInstallationIdentity(db, owner);
       expect(validateDeviceInstallationIdentityMaterial(restored)).toEqual(prepared);
       expect(campaignPeerPublicIdentity(prepared)).not.toHaveProperty('privateKeyPkcs8Base64');

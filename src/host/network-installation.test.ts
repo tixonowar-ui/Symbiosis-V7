@@ -22,14 +22,14 @@ describe('explicit installation initialization and read-only network loading', (
       expect(() => loadNetworkInstallation(db)).toThrow(
         new NetworkInstallationError('NOT_INITIALIZED'),
       );
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
       const first = initializeNetworkInstallation(db);
       expect(first.ownerDeviceId).toBe(deviceId);
       expect(readDeviceInstallationIdentity(db, deviceId)).toEqual(first);
       const afterStartup = db.serialize();
       expect(initializeNetworkInstallation(db)).toEqual(first);
       expect(loadNetworkInstallation(db)).toEqual(first);
-      expect(db.serialize()).toEqual(afterStartup);
+      expect(db.serialize().equals(afterStartup)).toBe(true);
     } finally {
       db.close();
     }
@@ -41,7 +41,7 @@ describe('explicit installation initialization and read-only network loading', (
       const before = db.serialize();
       for (const run of [loadNetworkInstallation, initializeNetworkInstallation])
         expect(() => run(db)).toThrow(new NetworkInstallationError('OWNER_UNAVAILABLE'));
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     } finally {
       db.close();
     }
@@ -70,7 +70,7 @@ describe('explicit installation initialization and read-only network loading', (
           expect(String(error)).not.toContain(second.privateKeyPkcs8Base64);
         }
       }
-      expect(db.serialize()).toEqual(before);
+      expect(db.serialize().equals(before)).toBe(true);
     } finally {
       db.close();
     }
@@ -91,7 +91,7 @@ describe('explicit installation initialization and read-only network loading', (
       expect(() => loadNetworkInstallation(db)).toThrow(
         new NetworkInstallationError('NOT_INITIALIZED'),
       );
-      expect(db.serialize()).toEqual(beforeStartup);
+      expect(db.serialize().equals(beforeStartup)).toBe(true);
       const next = initializeNetworkInstallation(db);
       expect(next.ownerDeviceId).toBe(nextDevice);
       expect(next.keyFingerprintSha256).not.toBe(old.keyFingerprintSha256);

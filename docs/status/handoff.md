@@ -1,136 +1,129 @@
 # Передача контекста — 2026-10-30
 
-Текущая работа — **issue #171, WIP**, ветка `codex/171-device-request-flow`.
-База `c30ee6b894c77d71b80b261985a2b2814ac90f0f`: PR #183 слит,
-prerequisite #182 закрыта. Открыт [draft PR #185](https://github.com/tixonowar-ui/Symbiosis-V7/pull/185),
-полного готового #171, merge и закрытия #171 ещё нет. Ниже сначала текущий статус; прежние снимки и их доказательства
-сохранены в истории.
+## Application integration #171 — текущий рабочий снимок
 
-## Текущий срез #171
+Ветка `codex/171-device-request-flow`: прежний проверенный player-срез f9a6a539
+локально объединён с source-поставкой #177, exact 5e929973. Эта локальная
+интеграция не является GitHub merge #177 или завершением #171. Одобрения
+владельца #177/#184 сохраняются; повторный вопрос не требуется.
 
-В рабочей ветке собственная player Node/SQLite-установка подключается к
-кампании по authenticated peer channel. Локальный `/state` сохраняет прежнюю
-проверку реального transport/Origin; данные браузера не дают сетевой или
-мастерской authority.
+Следом применяются подготовленные shared/store/peer/web контракты и завершается
+GM queue CMP006↔NET017, two-process owner delivery и recovery. Предыдущие
+3539 tests / 36 E2E относятся к f9, не к этому новому снимку. Текущие проверки
+будут записаны отдельно; перед merge полного #171 обязательны независимые
+verify/E2E exact final SHA и CI. Ни copies, ни seats, ни Start не добавляются.
 
-- APP-002 и текущий FINAL CHR-040 открывают новый явный вход. NET-001–005/011
-  и CHR-027 зарегистрированы в рабочей ветке; остальные NET-формы не добавлены.
-- Discovery и ручной locator используют заданные бюджеты. Локальный QR image
-  decoder заполняет адрес; подключение требует отдельного OPEN.
-- Local outbox сохраняет intent до remote side effect. Immutable receipt,
-  текущая проекция и локальный revision vector проверяются раздельно;
-  replay/recovery удерживают тот же command ID. Неизвестный исход остаётся
-  pending до подтверждения.
-- SUBMIT передаёт pinned batch из 1–3 собственных FINAL с проверяемым исходным
-  свидетельством. Исходный checksum механики отделён от checksum безопасного
-  экспорта. Preview не перечитывает изменившиеся метаданные как новый batch.
-- Техническая сессия, real input lane и campaign seat различаются. Сессия
-  и заявка не создают campaign copy, seat или резерв вместимости. Три logical
-  input tabs учитываются на установку, четвёртый вход отклоняется.
-- CANCEL выполняется только явно после подтверждения локального CANCEL_REASON.
-  Close/exit, intent и ACK аудируются. Известный opaque scope восстанавливает
-  собственный NET-контекст либо подтверждённый выход в APP-002/CHR-040 без
-  создания нового входа. При отсутствии ticket обычный v2 bootstrap сохраняет
-  обычный local flow; среди чужих или нескольких namespaces выбор не угадывается.
-- Миграция 0010 добавляет восемь сетевых sidecar-таблиц отдельно от creation
-  checkpoints. Endpoint, executor, local coordinator, peer runtime, projector
-  и web связаны в текущем worktree; проверка полного сценария продолжается.
+Ниже сохранён source/lineage handoff на момент 5e929973.
 
-### Нормативная граница и оставшаяся работа
+## Текущая поставка #177
 
-[#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177) остаётся
-source blocker: поставленные admission-команды создают campaign copies,
-а заказанный preliminary GM review не должен их создавать. Решение владельца
-ещё не получено. Новые GM-команды, `IN_REVIEW`, preliminary accept/reject и
-NET-017 не реализованы. [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
-остаётся предложенным; ADR 0067 принят для уже слитого фундамента #182.
+Ветка `codex/177-request-review-atlas`, база
+`24c726c91ffe760802c690ad382c21e84782f923`. PR #193 смёржен; #190 фактически
+CLOSED/COMPLETED. Squash tree совпал с независимо проверенным `6736692`.
+Независимый verify 150/3211 и 34/34 production E2E без retry прошли на точном
+SHA. Первый CI timeout неизменного AUTO Advisor разобран без ослабления
+проверок; paired 280/280 main/PR прошёл, один повтор CI дал 3211/3211 и 34/34.
+Единственная причина первого таймаута не доказана; логи обеих попыток сохранены.
 
-Два новых production Chrome E2E запускают две настоящие Node-установки с
-отдельными SQLite и прошли без retry: `reports/171-network-e2e-player-final.log`,
-2/2. Проверены ручной адрес, SUBMIT, restart обеих сторон и CANCEL, а также
-настоящий GM QR screenshot, локальный decoder и batch трёх разных FINAL.
-Дополненный первый сценарий проверил новый вход CHR-040 → CHR-027, возврат,
-а затем повторный вход в тот же retained scope после CANCEL:
-`reports/171-network-final-entry-e2e-second.log`, 1/1, без retry.
+Разрешённые JSON/Markdown Atlas 1.6 материализованы побайтово из проверенного
+кандидата #177. SHA совпадают с successor pins ADR 0068; 20 non-Atlas файлов
+не меняются. Паспорт: 2026-10-30, schema 1.2.0, 376/1688/108/2445 и 1252 CTA.
+Исторические author semantic digests сохранены по прежним ADR, фактическая
+целостность задаётся санкционированными checksums.
 
-Прежняя задержка CANCEL исправлена удалением повторного чтения одного полного
-журнала в синхронной фазе: измерено 6355 → 3769 ms, без изменения production
-таймаутов. Предыдущие неудачные E2E и их trace сохранены отдельно в `reports/`.
-Для трёх полных source histories новый тест ждёт в пределах фактических
-transfer/RPC budgets конфигурации; сами budgets не увеличены.
+Новый [ADR 0069](../adr/0069-device-request-review-atlas-amendment.md) разделяет
+preliminary request review #171 и final admission #172. Новые importer и
+standalone Markdown guards защищают точные изменённые контракты, все зеркала,
+закрытые composites, CANCELLED selection-clear и узкую PAUSED ingress policy.
+Финальные NET-018–022/027/workflows/QA сохранены. Generated пересобирается
+только importer; результаты import/reproducibility/focused/full/independent
+проверок записываются в PR и `reports/177-*`.
 
-Находка независимого fault probe в окне между durable entry и первым NAV
-исправлена: первый commit сохраняет исходные browser envelope и UUID FINAL.
-Неизменённый independent reproducer после SQLite reopen отклоняет подмену
-envelope без NAV/write и восстанавливает исходный FINAL A даже при shell B;
-entry/tab остаются по одному. Отчёт повторной проверки —
-`reports/171-independent-entry-crash-gap-rereview.md`; авторские регрессии —
-73/73 в `reports/171-entry-binding-tests.log`. Schema9 bytes не менялись.
+Авторский import и import:verify прошли: 319 файлов с одинаковыми путями/SHA,
+включая media и seed 114/20302/9. Focused Atlas/Markdown/seed/lineage проверки
+прошли 835/835. Независимый authority probe выявил и после исправления отверг
+32/32 подмены roles/route/authority четырёх форм; source bytes не менялись.
+Полный final-SHA verify/E2E и CI всё ещё обязательны перед merge этой поставки.
 
-[#184](https://github.com/tixonowar-ui/Symbiosis-V7/issues/184) фиксирует
-превышение двух осей PR-size: неизменённый CI-гейт для `0416d63` измерил
-+10884/−55 строк кода в 36 файлах и 72 файла всего при лимитах 10000/60;
-тесты +10657/−77, документация 386 строк. Предложено отдельным процессным PR
-изменить только потолки добавлений кода и общего числа файлов на 15000/90.
-Решение владельца не получено, гейт не менялся; полный #171 потребует нового замера.
+После полного прогона source expectations NET-005/общих counts обновлены точно
+по поставке; 86/86 mirror cases прошли. Реальный CREATE hot-swap timeout
+5070/5000 ms исследован без изменения лимита: приватное повторное использование
+одной сверенной Atlas byte pair в test fixture сократило целевой case в парном
+измерении 3276→2468 ms (оба campaign набора 14/14). Полные данные и production
+reloads сохранены, фактические исходные/итоговые SHA проверяются каждый раз;
+каталоги не кэшируются. Цена пары около 45 MiB Buffer data, peak RSS не измерен.
+Новый warm-cache corruption refusal и cold-process replay прошли 11/11.
+Единственная причина исходного timeout этим не объявляется доказанной.
 
-Весь требуемый #171 ещё не готов. Авторский полный `npm run verify`
-прошёл: 163 файла / 3539 тестов, плюс все остальные гейты, в
-`reports/171-verify-author-player-final.log`. После разрешения source/size blockers
-нужны независимое ревью и свежий прогон на окончательном committed
-SHA, затем CI/merge и проверка фактического закрытия issue. Полный авторский
-production E2E прошёл: 36/36 без retry, `reports/171-e2e-author-all.log`.
-Независимый полный прогон на точном `0416d6351a6f6d91dc93dd07798064439c8b4304`
-также прошёл: 163 файла / 3539 тестов и 36/36 production E2E без retry;
-HEAD и отслеживаемое дерево проверены до, между и после команд. Evidence —
-`reports/171-independent-full-checks-0416d63.md` и соответствующие verify/E2E/revision логи.
-Это проверка технического player-среза, а не заключение о полном #171.
+Коммит поставки `37c7c38` прошёл author verify 150/3739 и CI с 34 E2E, но
+независимый verify получил два старых timeout: server closed-command 5049 ms
+и local-tab closure/replay 6937 ms. Этот failed gate сохранён; E2E после него
+не запускался. Все 33 оставшихся `serialize().toEqual(Buffer)` заменены
+эквивалентным native `.equals` в четырёх test files: 176 expect и 65 serialize
+сохранены, обратная замена byte-identical. Парные реальные наборы 124/124
+прошли за 59.87→37.17 s, отдельные 4/4 — 4.90→0.65 s; local-tab suite
+59.17→0.88 s, целевой closure case 2711→154 ms. Причина отдельного server
+timeout не объявляется доказанной. Перед merge нужны новый committed SHA,
+свежие author/independent verify, все production E2E и CI этого нового SHA.
 
-Первый CI `41016176184` прошёл checksums, types, lint, format, воспроизводимость
-импорта и traceability; один прежний post-save crash-recovery тест превысил
-неизменённые 5000 ms (5790 ms), остальные 3538 прошли. CI E2E не запускался.
-Исходный failure сохранён в `reports/185-ci-verify-0416d63-failed.log`.
-Тест и его fixtures не менялись относительно main. Десять глубоких JS-сравнений
-полных SQLite Buffer в новом `network-device-request.test.ts` заменены точным
-`Buffer.equals`: сравниваются все байты и длина, snapshots и остальные assertions
-сохранены. Один и тот же paired-запуск 28 тестов до/после прошёл: сетевой suite
-26192 → 1706 ms, вся команда 26,80 → 6,40 s. Старый crash-recovery тест прошёл
-за 1449 → 1273 ms; исходный CI-тайм-аут в этом локальном запуске не воспроизвёлся.
-Замер доказывает снижение стоимости матчера, но не единственную причину CI failure.
-Логи и JSON — `reports/185-buffer-{baseline,after}.{log,json}`.
-Новые source/test изменения требуют свежих полных прогонов на новом SHA. Текущие результаты
-не являются разрешением merge или основанием закрыть #171.
+PR #185 `f9a6a53` имеет зелёный CI (3539 tests, 36 E2E), но остаётся draft:
+не реализован GM runtime и не интегрированы application-only callers #190.
+Никаких новых решений владельца для продолжения не требуется. После merge
+#177 подтянуть обе предпосылки, завершить GM journey и повторить независимые
+полные проверки final SHA; только затем закрывать #171. Далее #172 → #173 →
+#174 и source/runtime цепочка #186 → #187 → #188 для полного #113.
 
-### Проверенные части текущего worktree
+## Исторический срез #190
 
-Это отдельные прогоны разных рабочих снимков, их числа не суммируются в
-результат полного verify. Новые изменения после указанного прогона требуют
-общего интеграционного гейта.
+Ветка `codex/190-verified-baseline-lineage`, база
+`fe5823d960a2f0bd4aec70203d0415917e2606b4`. PR #189 (#184) смёржен после полного
+независимого чтения, 24 classifier probes, verify 148/3199 и 34 production E2E
+без retry; CI зелёный. Политика 15000/90 применена в draft #185 коммитом
+`975bb6b`, его авторский verify 163/3539 и actual size gate прошли, #184 закрыта.
 
-| Проверка                                     | Фактический результат и evidence                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Local coordinator + projector, ранний снимок | 45/45 в двух suites; `reports/171-network-coordinator-focused.log`, 08:04.                 |
-| Projector после уточнений guards             | 37/37; `reports/171-net-projector-focused.log`, 08:07.                                     |
-| Core storage/runtime                         | 88/88 в трёх suites; `reports/171-local-runtime-freeze.log`.                               |
-| Peer/channel/server lifecycle                | 89/89 в трёх suites; `reports/171-network-lifecycle-focused.log`, 08:08.                   |
-| Web, включая source-backed entry и recovery  | 343/343 в семи suites; `reports/171-web-final-entry-regression.log`.                       |
-| Production build                             | Прошёл; `reports/171-network-build.log`. Два новых E2E прошли на описанном рабочем снимке. |
-| Полный авторский verify                      | 163 файла / 3539 тестов и все гейты PASS; `reports/171-verify-author-player-final.log`.    |
-| Полный авторский production E2E              | 36/36 PASS без retry; `reports/171-e2e-author-all.log`.                                    |
+PR #192 (#191) также смёржен после независимого полного verify 148/3199,
+34/34 E2E без retry и зелёного CI. Ровно 19 binary assertions заменены на native
+с сохранением всех байтов/длины, остальных checks и таймаутов. Парный набор
+77/77 прошёл до/после, 33,84 → 2,74 s; единственная причина исходного CI timeout
+не объявлена доказанной. Правка подтянута в #185 коммитом `f9a6a53`, его новый
+авторский verify 163/3539 прошёл; #191 закрыта. Final application checks остаются
+обязательными после завершения GM runtime и source/lineage integration.
 
-Ранний независимый wiring pass находится в
-`reports/171-independent-wiring-review.md`: три finding исправлены в
-прочитанном scope; исходный shutdown reproducer и отдельный pending WS probe
-повторены. Полного независимого verify/E2E и вердикта APPROVE #171 этот
-проход не даёт. Авторский полный verify относится к player-контуру;
-отсутствующие GM preliminary decisions и source delivery он не заменяет.
+Source audit #177 выявил необходимость #190: полный manifest ID меняется даже
+при Atlas-only поправке. Новый loader-owned исторический context сохраняет
+старые bytes и baseline ID, проверяя конкретную разрешённую пару B0/B1,
+полный набор путей, 20 non-Atlas строк, 24 catalog source inputs и PASS tuple.
+Нельзя разрешить исторический B0 через произвольный будущий B2, структурный
+clone context или изменённую механику. Собственные current документы B2
+сохраняют прежний current validation path.
+[ADR 0068](../adr/0068-verified-artifact-baseline-lineage.md) описывает
+контракт; current filesystem/TOCTOU остаются точными, SQL migration не нужна.
 
-После #171 очередь остаётся #172 → #173 → #174 → #113. Арт для #113
-подготовлен, прежние ответы владельца о портретах и недостающем арте сохраняются.
-Пользователь разрешил последовательные merge; перед каждым merge нужен
-независимый прогон и отдельная проверка закрытия выполненной issue.
+Постоянный fixture воспроизводит точные старые/новые Atlas bytes компактным
+patch и проверяет SHA. Cold Node-процессы проверяют old export/archive/candidate
+и SQLite replay; отдельные campaign регрессии сохраняют CREATE receipt после
+reopen и запрещают hot-swap после preflight. Результаты focused/full/independent
+проверок записываются в `reports/190-*` и PR; перед merge требуются полный
+verify, все production E2E, отдельный независимый прогон на committed SHA и CI.
 
-## История подготовки #182 до merge PR #183
+Артефакты в main остаются Atlas 1.5; готовый кандидат 1.6 для разрешённого #177
+сохранён в `reports/issue-177-delivery` (artifact diff 1022 строки). После #190
+нужны его новая guard-поставка и импорт; application-only peer/SQL/discovery
+callers интегрируются при завершении #171. Approval #177/#184/#113 и полный
+срез 31 формы подтверждены владельцем; повторное согласование не требуется.
+
+На CI #185 коммита 975bb6b один прежний AUTO Advisor test превысил 5000 ms,
+остальные 3538 прошли, E2E не запускались. Исходный лог —
+`reports/185-ci-975bb6b-failed.log`; диагностика остаётся в #171. Это не failure
+принятого process PR #189 и не разрешение merge неполного application PR.
+
+Далее: #190 → #177 → завершить #171 → #172 → #173 → #174. Мастерский срез
+#113 разбит на #186 → #187 → #188, с общим CMP-007/GM-001 ingress; его source
+поставка выполняется поверх #177 и не наследует Atlas-only compatibility
+для новых art artifacts автоматически. Ни partial #185, ни asset delivery
+не закрывают соответствующих родительских issues.
+
+## Исторический снимок инфраструктуры #182
 
 Срез issue #182, ветка `codex/182-campaign-network-foundation`.
 База — `03bf13b5b3d56ea04f81659bda7a53aef8e00742`: PR #178 и #180 слиты,

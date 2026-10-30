@@ -191,7 +191,7 @@ describe('private local application boundary on a real TCP listener', () => {
     expect(verifySecret).not.toHaveBeenCalled();
     expect(frameError).not.toHaveBeenCalled();
     expect(revisions).toEqual(ZERO);
-    expect(database.serialize()).toEqual(beforeBytes);
+    expect(database.serialize().equals(beforeBytes)).toBe(true);
   }
 
   function reconnectV1() {
@@ -363,7 +363,7 @@ describe('private local application boundary on a real TCP listener', () => {
         body: JSON.stringify({ deviceId }),
       });
       expect(prepare).toHaveBeenCalled();
-      expect(database.serialize()).toEqual(beforeBytes);
+      expect(database.serialize().equals(beforeBytes)).toBe(true);
       expect(allocate).not.toHaveBeenCalled();
       expect(advanceRevisions).not.toHaveBeenCalled();
     },

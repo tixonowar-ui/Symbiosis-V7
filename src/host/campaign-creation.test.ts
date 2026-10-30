@@ -21,6 +21,10 @@ import {
   campaignCreationHash,
 } from '../persistence/campaign-creation.js';
 import { CAMPAIGN_CREATION_TABLES } from '../persistence/migrations/0007-campaign-creation.js';
+import {
+  BASELINE_FIXTURE_IDS,
+  createBaselineLineageFixture,
+} from '../../tests/fixtures/baseline-lineage.js';
 import { createCampaignBindManager } from './campaign-bind.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import {
@@ -142,12 +146,17 @@ function shellContext(initialFormId: string | null = 'APP-001'): CampaignShell {
     },
   };
 }
-function harness(db: Database.Database, root = projectRoot, contextId: string | null = null) {
+function harness(
+  db: Database.Database,
+  root = projectRoot,
+  contextId: string | null = null,
+  runtimeBaseline = baseline,
+) {
   const bind = bindManager();
   const runtime = createCampaignCreationRuntime({
     database: db,
     projectRoot: root,
-    baseline,
+    baseline: runtimeBaseline,
     bind,
   });
   let trusted = true;
@@ -276,13 +285,13 @@ function harness(db: Database.Database, root = projectRoot, contextId: string | 
     ctx,
   };
 }
-async function setup(root = projectRoot) {
+async function setup(root = projectRoot, runtimeBaseline = baseline) {
   const dir = mkdtempSync(join(tmpdir(), 'symbiosis-campaign-runtime-'));
   dirs.push(dir);
   const path = join(dir, 'state.sqlite');
   const db = open(path);
   bootstrapDeviceIdentity(db);
-  const h = harness(db, root);
+  const h = harness(db, root, null, runtimeBaseline);
   await h.nav('APP-001::CTA::002');
   await h.resume();
   await h.nav('APP-011::CTA::006');
@@ -713,6 +722,65 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
     expect(storageSnapshot(db)).toEqual(snapshot);
     expect(JSON.stringify(restarted.messages)).not.toContain(PASSWORD);
     expect(JSON.stringify(restarted.messages)).not.toContain('saltBase64');
+  });
+  it('recovers the original paused campaign and exact CREATE receipt across the approved Atlas delivery', async () => {
+    const fixture = createBaselineLineageFixture('B0');
+    dirs.push(fixture.directory);
+    const oldBaseline = await loadLocalCharacterExportBaseline(fixture.projectRoot);
+    expect(oldBaseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B0);
+    const h = await setup(fixture.projectRoot, oldBaseline);
+    const port = await freePort();
+    await ready(h, port);
+    const request = h.createRequest();
+    const committed = await h.send(request);
+    const result = committed.find((message) => message.messageType === 'command.result');
+    if (result?.messageType !== 'command.result') throw new Error('missing original receipt');
+    expect(result.receipt).toMatchObject({ result: { baselineVersion: BASELINE_FIXTURE_IDS.B0 } });
+    const before = storageSnapshot(h.db);
+    const contextId = h.ctx();
+    await h.bind.close();
+    h.db.close();
+
+    fixture.apply('B1');
+    const current = await loadLocalCharacterExportBaseline(fixture.projectRoot);
+    expect(current.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B1);
+    expect(current.baselineVersion).not.toBe(oldBaseline.baselineVersion);
+    const reopened = open(h.path);
+    const restarted = harness(reopened, fixture.projectRoot, contextId, current);
+    const resumed = await restarted.resume(['create-command']);
+    const replay = resumed.find((message) => message.messageType === 'command.replay');
+    if (replay?.messageType !== 'command.replay') throw new Error('missing historical replay');
+    expect(canonicalPostSaveJson(replay.receipt)).toBe(canonicalPostSaveJson(result.receipt));
+    expect(restarted.snapshotPayload()).toMatchObject({
+      status: 'PAUSED',
+      hostPort: port,
+      creationReceiptId: result.receipt.receiptId,
+      hostBindRecovery: { status: 'RESERVED' },
+    });
+    expect(storageSnapshot(reopened)).toEqual(before);
+    const repeated = await restarted.send(request);
+    expect(repeated[0]).toMatchObject({ messageType: 'command.replay', receipt: result.receipt });
+    expect(storageSnapshot(reopened)).toEqual(before);
+    expect(JSON.stringify(restarted.messages)).not.toContain(PASSWORD);
+  });
+  it('keeps current filesystem freshness exact when compatible Atlas bytes change after CREATE preflight', async () => {
+    const fixture = createBaselineLineageFixture('B0');
+    dirs.push(fixture.directory);
+    const startup = await loadLocalCharacterExportBaseline(fixture.projectRoot);
+    const h = await setup(fixture.projectRoot, startup);
+    await ready(h, await freePort());
+    expect(h.snapshotPayload()['hostBindPreflight']).toMatchObject({ status: 'PASS' });
+    const request = h.createRequest();
+    const before = storageSnapshot(h.db);
+
+    fixture.apply('B1');
+    expect((await loadLocalCharacterExportBaseline(fixture.projectRoot)).baselineVersion).toBe(
+      BASELINE_FIXTURE_IDS.B1,
+    );
+    const refused = await h.send(request);
+    expect(refused[0]).toMatchObject({ messageType: 'command.refusal' });
+    expect(refused.some((message) => message.messageType === 'command.result')).toBe(false);
+    expect(storageSnapshot(h.db)).toEqual(before);
   });
   it('keeps the persisted endpoint and receipt when restart recovery finds its port occupied', async () => {
     const h = await setup();

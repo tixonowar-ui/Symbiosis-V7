@@ -21,6 +21,13 @@ import { loadCreationSkillCatalog, type CreationSkillCatalog } from './creation-
 import { creationFinalizationHash } from './creation-finalization-contract.js';
 import { deriveStartingPropertySummary } from './creation-property-summary.js';
 import { array, record, string } from './json-source.js';
+import {
+  assertReplayCatalogDigestsUnchanged,
+  captureReplayCatalogDigests,
+  verifyHistoricalBaselineLineage,
+  type ReplayCatalogDigests,
+} from './baseline-lineage.js';
+import { BASELINE_LINEAGE_SEALS } from './baseline-lineage-seals.js';
 
 export interface LocalCharacterExportBaseline {
   readonly baselineVersion: string;
@@ -31,6 +38,19 @@ export interface LocalCharacterExportBaseline {
   readonly skillCatalog: CreationSkillCatalog;
   readonly classLabels: ReadonlyMap<string, string>;
 }
+
+interface VerifiedBaselineContext {
+  readonly current: LocalCharacterExportBaseline;
+  readonly manifest: Uint8Array;
+  readonly replayCatalogDigests: ReplayCatalogDigests;
+  readonly contextSeal: string;
+  readonly historicalViews: Map<string, LocalCharacterExportBaseline>;
+}
+// A wire DTO, spread clone or structural type assertion cannot acquire this authority.
+const verifiedBaselineContexts = new WeakMap<
+  LocalCharacterExportBaseline,
+  VerifiedBaselineContext
+>();
 
 const fail = (detail: string): never => {
   throw new Error(`local character export: ${detail}`);
@@ -58,10 +78,61 @@ export function canonicalPostSaveJson(value: unknown): string {
     .join(',')}}`;
 }
 
+function contextSeal(baseline: LocalCharacterExportBaseline): string {
+  return postSaveSha256(
+    canonicalPostSaveJson({
+      baselineVersion: baseline.baselineVersion,
+      registryVersion: baseline.registryVersion,
+      catalogVersion: baseline.catalogVersion,
+      builtAgainstTuple: baseline.builtAgainstTuple,
+      catalog: baseline.catalog,
+      skillCatalog: baseline.skillCatalog,
+      classLabels: [...baseline.classLabels],
+    }),
+  );
+}
+
+function verifiedContext(baseline: LocalCharacterExportBaseline): VerifiedBaselineContext {
+  const proof = verifiedBaselineContexts.get(baseline);
+  if (proof === undefined || proof.contextSeal !== contextSeal(baseline))
+    return fail('baseline context is unverified or mutated');
+  const currentProof = verifiedBaselineContexts.get(proof.current);
+  if (currentProof === undefined || currentProof.contextSeal !== contextSeal(proof.current))
+    return fail('current baseline context is unverified or mutated');
+  return proof;
+}
+
+/** Stored data keeps its original full manifest ID; current freshness never uses this view. */
+export function resolveStoredLocalCharacterExportBaseline(
+  baseline: LocalCharacterExportBaseline,
+  storedBaselineVersion: string,
+): LocalCharacterExportBaseline {
+  const proof = verifiedContext(baseline);
+  const current = proof.current;
+  if (storedBaselineVersion === current.baselineVersion) return current;
+  if (storedBaselineVersion !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion)
+    return fail('unknown stored baseline');
+  verifyHistoricalBaselineLineage(proof.manifest, proof.replayCatalogDigests, {
+    registryVersion: current.registryVersion,
+    catalogVersion: current.catalogVersion,
+    builtAgainstTuple: current.builtAgainstTuple,
+  });
+  const known = proof.historicalViews.get(storedBaselineVersion);
+  if (known !== undefined) {
+    verifiedContext(known);
+    return known;
+  }
+  const historical = Object.freeze({ ...current, baselineVersion: storedBaselineVersion });
+  verifiedBaselineContexts.set(historical, { ...proof, contextSeal: contextSeal(historical) });
+  proof.historicalViews.set(storedBaselineVersion, historical);
+  return historical;
+}
+
 /** The baseline identifies verified supplied bytes, not the application's build timestamp. */
 export async function loadLocalCharacterExportBaseline(
   projectRoot: string,
 ): Promise<LocalCharacterExportBaseline> {
+  const replayCatalogDigests = captureReplayCatalogDigests(projectRoot);
   const directory = join(projectRoot, 'artifacts');
   const manifest = await readFile(join(directory, 'CHECKSUMS.sha256'));
   const paths = new Set<string>();
@@ -121,7 +192,7 @@ export async function loadLocalCharacterExportBaseline(
     catalog.symbionts.skillStage.classes.some((c) => !classLabels.has(c.classCode))
   )
     return fail('class labels differ from validated catalog');
-  return {
+  const baseline = Object.freeze({
     baselineVersion: `sha256:${postSaveSha256(manifest)}`,
     registryVersion: contract('registryVersion'),
     catalogVersion: contract('catalogVersion'),
@@ -129,7 +200,16 @@ export async function loadLocalCharacterExportBaseline(
     catalog,
     skillCatalog,
     classLabels,
-  };
+  });
+  assertReplayCatalogDigestsUnchanged(projectRoot, replayCatalogDigests);
+  verifiedBaselineContexts.set(baseline, {
+    current: baseline,
+    manifest: Uint8Array.from(manifest),
+    replayCatalogDigests,
+    contextSeal: contextSeal(baseline),
+    historicalViews: new Map(),
+  });
+  return baseline;
 }
 
 export function verifiedPostSaveCheckpoint(
@@ -261,6 +341,7 @@ export function deriveLocalFinalExport(
   ownerEnvelope: ExportSourceEnvelope,
   baseline: LocalCharacterExportBaseline,
 ) {
+  verifiedContext(baseline);
   const checkpoint = verifiedPostSaveCheckpoint(source, baseline.catalog);
   const snapshot = checkpoint.finalizationStage?.finalMechanicsSnapshotOrNull;
   const final = checkpoint.finalizationStage?.records.at(-1);

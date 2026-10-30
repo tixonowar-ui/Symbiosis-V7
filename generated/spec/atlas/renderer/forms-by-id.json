@@ -9754,6 +9754,10 @@
         {
           "actionKey": "CMP-006::CTA::001",
           "label": "Открыть панель созданной кампании"
+        },
+        {
+          "actionKey": "CMP-006::CTA::002",
+          "label": "Открыть входящие запросы устройств"
         }
       ]
     },
@@ -9763,7 +9767,8 @@
       "QR",
       "Capacity",
       "Zero-player lobby notice",
-      "Open campaign panel"
+      "Open campaign panel",
+      "Open device-request queue without Start"
     ],
     "contexts": [
       "campaign"
@@ -9772,7 +9777,8 @@
     "id": "CMP-006",
     "qaScenarioIds": [
       "QA-FORM-CMP-006",
-      "QA-CHANGE-CMP-006"
+      "QA-CHANGE-CMP-006",
+      "QA-CMP-006-DEVICE-REQUEST-QUEUE"
     ],
     "requiredFields": [
       "campaignId",
@@ -9791,6 +9797,7 @@
     "states": {
       "HOST_NOT_STARTED": "Кампания существует PAUSED; можно открыть lobby при нуле игроков.",
       "OPENED_LOBBY": "Переход в CMP-007 не выполняет Start.",
+      "OPENED_REQUEST_QUEUE": "Read-only navigation to NET-017; same PAUSED campaign, no Start, no campaign-state mutation.",
       "RECEIPT_READY": "Показаны подтверждённые campaignId/address/QR.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
@@ -16347,7 +16354,8 @@
     "id": "NET-003",
     "qaScenarioIds": [
       "QA-FORM-NET-003",
-      "QA-CHANGE-NET-003"
+      "QA-CHANGE-NET-003",
+      "QA-NET-005-REJECTED-RETURN"
     ],
     "requiredFields": [
       "contextId",
@@ -16450,6 +16458,10 @@
         {
           "actionKey": "NET-005::CTA::002",
           "label": "Повторить подключение после потери связи"
+        },
+        {
+          "actionKey": "NET-005::CTA::003",
+          "label": "Вернуться к выбору персонажей"
         }
       ]
     },
@@ -16459,7 +16471,8 @@
       "GM reason",
       "Cancel pending request",
       "Reconnect state",
-      "Cancel receipt"
+      "Cancel receipt",
+      "Return to character selection after confirmed request rejection"
     ],
     "contexts": [
       "network"
@@ -16468,13 +16481,15 @@
     "id": "NET-005",
     "qaScenarioIds": [
       "QA-FORM-NET-005",
-      "QA-CHANGE-NET-005"
+      "QA-CHANGE-NET-005",
+      "QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE",
+      "QA-NET-005-REJECTED-RETURN"
     ],
     "requiredFields": [
       "requestId",
       "requestOwnerDeviceId",
       "batchCharacterSummaries[1..3]",
-      "requestStatus=PENDING|REJECTED|PROPOSED",
+      "requestStatus=PENDING|IN_REVIEW|REJECTED|PROPOSED",
       "gmMessage",
       "connectionState",
       "requestRevision",
@@ -16487,9 +16502,11 @@
     "route": "/player/campaigns/:campaignId/network/net-005",
     "states": {
       "CANCELLED": "Request closed without campaign-copy or capacity mutation.",
-      "DECISION_WON_RACE": "A simultaneous GM decision wins by revision; cancel rejects before write.",
+      "DECISION_WON_RACE": "A committed accept-to-review or reject decision wins by requestRevision; owner cancellation rejects before write.",
+      "IN_REVIEW": "GM accepted this request for review; no campaign authority, campaign copy or capacity reservation; owner cancellation is no longer available.",
       "READY_TO_CANCEL": "Request still pending and reason is present.",
-      "WAITING_GM": "Pending request is read-only except owner cancellation.",
+      "REJECTED": "The reasoned preliminary rejection is visible; the owner may return to selection while the same technical session is valid and no campaign copy/admission exists. Navigation preserves the closed request, immutable receipt and local source sheets.",
+      "WAITING_GM": "PENDING request is read-only except owner cancellation.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -17266,15 +17283,30 @@
         {
           "actionKey": "NET-017::CTA::006",
           "label": "Вернуться к «Клиенты и локальные места»"
+        },
+        {
+          "actionKey": "NET-017::CTA::007",
+          "label": "Принять заявку к рассмотрению"
+        },
+        {
+          "actionKey": "NET-017::CTA::008",
+          "label": "Отклонить заявку с причиной"
+        },
+        {
+          "actionKey": "NET-017::CTA::009",
+          "label": "Вернуться к созданной кампании"
         }
       ]
     },
     "components": [
-      "Заголовок и текущий контекст",
-      "Содержательная область: DeviceId, несколько выбранных персонажей, прогноз занимаемых мест и принять к рассмотрению либо отклонить.",
-      "Основной CTA",
-      "Back/Cancel/Retry только на безопасной границе",
-      "Индикатор связи и ревизии"
+      "Заголовок и подтверждённый контекст кампании",
+      "Очередь requests[] и явный выбор одной заявки",
+      "Read-only device ID, 1–3 candidate summaries, request status/revision and connection state",
+      "Прогноз вместимости без резерва и без изменения активных PC",
+      "Принять заявку к рассмотрению",
+      "Причина и предварительное отклонение заявки",
+      "Подтверждённая квитанция решения",
+      "Безопасный возврат в исходный контекст мастера"
     ],
     "contexts": [
       "network"
@@ -17283,24 +17315,36 @@
     "id": "NET-017",
     "qaScenarioIds": [
       "QA-FORM-NET-017",
-      "QA-CHANGE-NET-017"
+      "QA-CHANGE-NET-017",
+      "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
+      "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT",
+      "QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE",
+      "QA-CMP-006-DEVICE-REQUEST-QUEUE"
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
       "stateRevision",
       "projectionRevision",
-      "effectInstanceId/EffectTypeID",
-      "source",
-      "duration/stackPolicy",
-      "deviceId",
-      "controllerSeat",
-      "connectionState"
+      "requestQueueRevision",
+      "requests[]",
+      "selectedRequestIdOrNull",
+      "activePlayerCapacity",
+      "occupiedActivePcCount",
+      "decisionReason(required-for-reject)",
+      "commandId",
+      "returnContext"
     ],
     "roles": [
       "gm"
     ],
     "route": "/master/campaigns/:campaignId/network/net-017",
     "states": {
+      "IN_REVIEW": "Accepted for preliminary review; no copy, admission, active seat or capacity reservation exists from this decision.",
+      "QUEUE_EMPTY": "No eligible requests; no decision CTA; owner-safe return remains available.",
+      "REQUEST_PENDING": "PENDING request selected; accept-to-review and reasoned reject are available only while their guards hold.",
+      "REQUEST_REJECTED": "The preliminary rejection reason and decision receipt are confirmed; no new decision CTA for this terminal request.",
+      "STALE_REQUEST": "Another request decision or owner cancel won by requestRevision; no write, show the current authoritative request view. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",

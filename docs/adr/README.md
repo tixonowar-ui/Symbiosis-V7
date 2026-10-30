@@ -97,8 +97,10 @@
 | [0063](0063-local-character-recovery-and-export.md)                  | Восстановление, локальный лист, варианты и экспорт | Принято                                     |
 | [0064](0064-paused-campaign-creation.md)                             | Локальный мастер и создание paused-кампании        | принято                                     |
 | [0065](0065-host-local-app-transport-boundary.md)                    | Граница транспорта локального приложения           | принято                                     |
-| [0066](0066-device-connection-and-admission-request.md)              | Подключение установки и заявка устройства          | предложено; #171, нормативный конфликт #177 |
+| [0066](0066-device-connection-and-admission-request.md)              | Подключение установки и заявка устройства          | предложено; runtime #171                    |
 | [0067](0067-private-campaign-network-foundation.md)                  | Закрытый сетевой фундамент установки               | принято; #182                               |
+| [0068](0068-verified-artifact-baseline-lineage.md)                   | Проверенная совместимость исторического baseline   | принято; #190, предпосылка #177             |
+| [0069](0069-device-request-review-atlas-amendment.md)                | Предварительное рассмотрение заявки в Atlas        | принято; #177                               |
 
 ## Перенос решений аудита
 

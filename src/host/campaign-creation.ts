@@ -62,6 +62,7 @@ import type { createCampaignBindManager, CampaignBindRecovery } from './campaign
 import { CAMPAIGN_CREATE_SCREEN_CONTRACTS } from './projections/cmp-create.js';
 import {
   loadLocalCharacterExportBaseline,
+  resolveStoredLocalCharacterExportBaseline,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import {
@@ -162,12 +163,21 @@ export function createCampaignCreationRuntime(d: Dependencies) {
   };
   const commandAt = (ctx: LocalGmContext, id: string) => {
     const known = readCampaignCreationCommand(db, ctx.gmLocalContextId, id);
-    if (known !== null)
+    if (known !== null) {
+      assertStoredBaseline(known.receipt.result.baselineVersion);
       validateMasterSecretVerifier(
         readCampaignPrivateOwner(db, ctx.gmLocalContextId, known.receipt.result.campaignId)
           .verifier,
       );
+    }
     return known;
+  };
+  const assertStoredBaseline = (version: string): void => {
+    try {
+      resolveStoredLocalCharacterExportBaseline(d.baseline, version);
+    } catch {
+      unavailable();
+    }
   };
   const guard =
     (c: CampaignConnection): CampaignSourceValidator =>
@@ -321,6 +331,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
         readCampaignPrivateOwner(db, ctx.gmLocalContextId, cursor.targetId).verifier,
       );
       const saved = readPausedCampaign(db, ctx.gmLocalContextId, cursor.targetId);
+      assertStoredBaseline(saved.baselineVersion);
       const recovery =
         d.publishCampaign === undefined
           ? await d.bind.recover(saved.campaignId, saved.host)
