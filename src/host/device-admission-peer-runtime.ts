@@ -441,6 +441,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     const p = source(c).principal,
       preview = acknowledged(c, operation, delivery, known),
       previewText = encodeDeviceAdmissionPeerResponse(preview);
+    const verified: { response?: Ack } = {};
     const result = commitHostedNetworkCommand(
       d.database,
       p,
@@ -448,16 +449,20 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       validateOwner,
       guard(c, lease, p, () => {
         const fresh = readHostedNetworkCommand(d.database, p, known.input.commandId, validateOwner);
-        if (
-          fresh === null ||
-          encodeDeviceAdmissionPeerResponse(acknowledged(c, operation, delivery, fresh)) !==
-            previewText
-        )
-          return fail('UNAVAILABLE');
+        if (fresh === null) return fail('UNAVAILABLE');
+        const response = acknowledged(c, operation, delivery, fresh);
+        if (encodeDeviceAdmissionPeerResponse(response) !== previewText) return fail('UNAVAILABLE');
+        verified.response = response;
       }),
       validateCandidateBaseline,
     );
-    return acknowledged(c, operation, delivery, result);
+    if (
+      verified.response === undefined ||
+      !same(verified.response.receipt, shortReceipt(result.receipt))
+    )
+      return fail('UNAVAILABLE');
+    // The synchronous guarded transaction just verified these bytes; no await or write intervenes.
+    return verified.response;
   }
   function newCommand(
     c: Connection,
@@ -469,6 +474,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
   ): Ack {
     const p = source(c).principal,
       previewText = encodeDeviceAdmissionPeerResponse(preview);
+    const verified: { response?: Ack } = {};
     const result = commitHostedNetworkCommand(
       d.database,
       p,
@@ -478,16 +484,21 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         check(s);
         encodeDeviceAdmissionPeerResponse(preview);
         const actual = readHostedNetworkCommand(d.database, p, input.commandId, validateOwner);
-        if (
-          actual !== null &&
-          encodeDeviceAdmissionPeerResponse(acknowledged(c, operation, 'COMMITTED', actual)) !==
-            previewText
-        )
-          return fail('UNAVAILABLE');
+        if (actual !== null) {
+          const response = acknowledged(c, operation, 'COMMITTED', actual);
+          if (encodeDeviceAdmissionPeerResponse(response) !== previewText)
+            return fail('UNAVAILABLE');
+          verified.response = response;
+        }
       }),
       validateCandidateBaseline,
     );
-    return acknowledged(c, operation, 'COMMITTED', result);
+    if (
+      verified.response === undefined ||
+      !same(verified.response.receipt, shortReceipt(result.receipt))
+    )
+      return fail('UNAVAILABLE');
+    return verified.response;
   }
   function knownOpen(
     c: Connection,
@@ -1089,31 +1100,33 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         validateOwner,
       );
       return Object.freeze(
-        [...authoritativeRequestIds].sort().map((requestId) => {
-          const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
-          if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
-          const expected = stored.submittedRequest.principal;
-          // A second signed key can claim the same UUID; the durable pin must also agree.
-          const connected =
-            !closed &&
-            [...connections].some((connection) => {
-              if (
-                connection.channel.closed ||
-                connection.handle.campaignId !== campaignId ||
-                !same(connection.channel.deviceIdentity, expected.peerIdentity)
-              )
-                return false;
-              const principal = source(connection).principal;
-              if (!same(principal, expected)) return false;
-              readHostedDeviceRequest(d.database, principal, requestId, validateOwner);
-              return true;
+        Array.from<string>(authoritativeRequestIds)
+          .sort()
+          .map((requestId) => {
+            const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
+            if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
+            const expected = stored.submittedRequest.principal;
+            // A second signed key can claim the same UUID; the durable pin must also agree.
+            const connected =
+              !closed &&
+              [...connections].some((connection) => {
+                if (
+                  connection.channel.closed ||
+                  connection.handle.campaignId !== campaignId ||
+                  !same(connection.channel.deviceIdentity, expected.peerIdentity)
+                )
+                  return false;
+                const principal = source(connection).principal;
+                if (!same(principal, expected)) return false;
+                readHostedDeviceRequest(d.database, principal, requestId, validateOwner);
+                return true;
+              });
+            return Object.freeze({
+              requestId,
+              requestOwnerDeviceId: expected.peerIdentity.ownerDeviceId,
+              connected,
             });
-          return Object.freeze({
-            requestId,
-            requestOwnerDeviceId: expected.peerIdentity.ownerDeviceId,
-            connected,
-          });
-        }),
+          }),
       );
     };
     // A command guard reads its existing snapshot; standalone refresh opens only a deferred read.

@@ -39,6 +39,7 @@ import {
   readLocalNetworkOutbox,
   readLocalNetworkAcknowledgementEvent,
   readLocalNetworkDeliverySnapshot,
+  readLocalNetworkRequestDeliverySnapshot,
   readLocalNetworkShellExitByNavigationId,
   readLocalNetworkAttemptCount,
   readLocalNetworkOpenOutboxByAttempt,
@@ -146,6 +147,11 @@ const actionFor: Readonly<Record<string, string>> = {
   'UI-CMD-DEVICE-REQUEST-SUBMIT': 'NET-004::CTA::002',
   'UI-CMD-DEVICE-REQUEST-CANCEL': 'NET-005::CTA::001',
 };
+class LocalNetworkPublicationError extends Error {
+  constructor() {
+    super('Network publication failed after durable acknowledgement');
+  }
+}
 /** One own host serializes local intents; only the authenticated Node peer crosses the LAN. */
 export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   const db = d.database;
@@ -365,10 +371,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     await d.peer.reconnect(scope(c), address, campaignId);
     // A newly authenticated transport must reconcile the existing logical session
     // before it can issue another command against that session's generation.
-    if ((force || s.pendingCommandIdOrNull === null) && s.requestOrNull !== null) {
+    if (out?.intent.operation !== 'OPEN' && s.requestOrNull !== null) {
       verify();
       await refreshRequest(c);
-    } else if ((force || s.pendingCommandIdOrNull === null) && s.sessionOrNull !== null) {
+    } else if (out?.intent.operation !== 'OPEN' && s.sessionOrNull !== null) {
       verify();
       const opening = readLocalNetworkOpenOutboxByAttempt(db, scope(c), s.sessionOrNull.attemptId);
       if (opening === null || opening.acknowledgementOrNull?.operation !== 'OPEN') unavailable();
@@ -387,12 +393,24 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       exact(recovered.current.session, s.sessionOrNull);
     } else verify();
   }
-  function requestProof(c: LocalNetworkConnection, response: DeviceAdmissionPeerResponse) {
+  function requestProof(
+    c: LocalNetworkConnection,
+    response: DeviceAdmissionPeerResponse,
+    verifiedDelivery?: LocalNetworkDeliverySnapshot,
+  ) {
     if (response.outcome !== 'ACK' || response.current.kind !== 'REQUEST_REVIEW') return null;
     const proof = response.current.proof,
-      delivery = readLocalNetworkDeliverySnapshot(db, scope(c), proof.submittedReceipt.commandId),
+      delivery =
+        verifiedDelivery ??
+        readLocalNetworkDeliverySnapshot(db, scope(c), proof.submittedReceipt.commandId),
       submit = delivery.outbox;
-    if (submit?.intent.operation !== 'SUBMIT') unavailable();
+    if (
+      submit?.intent.operation !== 'SUBMIT' ||
+      submit.intent.commandId !== proof.submittedReceipt.commandId ||
+      submit.networkScopeId !== scope(c).networkScopeId ||
+      submit.ownerDeviceId !== owner(c)
+    )
+      unavailable();
     const ack = submit.acknowledgementOrNull;
     // Before the first local ACK, the signed original SUBMIT is the only admissible receipt.
     const original =
@@ -425,8 +443,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   async function applyRequestCurrent(
     c: LocalNetworkConnection,
     response: DeviceAdmissionPeerResponse,
+    verifiedDelivery?: LocalNetworkDeliverySnapshot,
   ) {
-    let parsed = requestProof(c, response);
+    let parsed = requestProof(c, response, verifiedDelivery);
     if (parsed === null) return;
     const bound = scope(c),
       contextId = c.contextId;
@@ -547,19 +566,28 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       guard(c),
     );
   }
-  async function refreshRequest(c: LocalNetworkConnection) {
-    const s = current(c),
+  async function refreshRequest(
+    c: LocalNetworkConnection,
+    verifiedBefore?: LocalNetworkDeliverySnapshot,
+  ) {
+    const before = verifiedBefore ?? readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
+      s = before.current,
       request = s.requestOrNull;
     if (request === null) return;
-    const submit = readLocalNetworkOutbox(db, scope(c), request.submitCommandId);
+    const submit = before.outbox;
     if (
       submit?.intent.operation !== 'SUBMIT' ||
+      submit.intent.commandId !== request.submitCommandId ||
       submit.acknowledgementOrNull?.operation !== 'SUBMIT'
     )
       unavailable();
-    const verify = guard(c, s),
-      response = await d.peer.recover(scope(c), submit);
-    verify();
+    const verifyAuthority = guard(c);
+    const response = await d.peer.recover(scope(c), submit);
+    // No pre-await cache is authoritative here: fold the owned history again, then use that one fresh result synchronously.
+    const after = readLocalNetworkDeliverySnapshot(db, scope(c), submit.intent.commandId);
+    verifyAuthority();
+    if (!isDeepStrictEqual(after.current, s))
+      throw new NetworkApplicationStoreError('STALE_REVISION');
     if (
       response.outcome !== 'ACK' ||
       response.operation !== 'DEVICE_REQUEST_RECOVER' ||
@@ -570,9 +598,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     exact(response.receipt.semanticBodySha256, submit.semanticBodySha256);
     exact(response.receipt.request, submit.acknowledgementOrNull.request);
     if (response.current.kind === 'REQUEST') exact(response.current.request, request);
-    else if (response.current.kind === 'REQUEST_REVIEW') await applyRequestCurrent(c, response);
+    else if (response.current.kind === 'REQUEST_REVIEW')
+      await applyRequestCurrent(c, response, after);
     else unavailable();
   }
+
   function receipt(
     c: LocalNetworkConnection,
     out: LocalNetworkOutbox,
@@ -653,8 +683,14 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         refusal: { code: 'GUARD_REJECTED' },
       });
   }
-  function unresolved(c: LocalNetworkConnection, original: LocalNetworkOutbox) {
-    const delivery = readLocalNetworkDeliverySnapshot(db, scope(c), original.intent.commandId),
+  function unresolved(
+    c: LocalNetworkConnection,
+    original: LocalNetworkOutbox,
+    verifiedDelivery?: LocalNetworkDeliverySnapshot,
+  ) {
+    const delivery =
+        verifiedDelivery ??
+        readLocalNetworkDeliverySnapshot(db, scope(c), original.intent.commandId),
       now = delivery.outbox;
     if (
       now === null ||
@@ -767,28 +803,36 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     }
     return null;
   }
-  async function deliver(c: LocalNetworkConnection, out: LocalNetworkOutbox, recovery: boolean) {
+  async function deliver(
+    c: LocalNetworkConnection,
+    out: LocalNetworkOutbox,
+    recovery: boolean,
+    publish?: (delivery: LocalNetworkDeliverySnapshot) => void,
+    verifiedInitial?: LocalNetworkDeliverySnapshot,
+  ): Promise<boolean> {
     const bound = scope(c),
       contextId = c.contextId;
-    const check = () => {
+    const check = (verifiedDelivery?: LocalNetworkDeliverySnapshot) => {
       trust(c);
       exact(scope(c), bound);
       if (c.contextId !== contextId) unavailable();
-      return unresolved(c, out);
+      return unresolved(c, out, verifiedDelivery);
     };
-    const beforeReconnect = check();
-    await reconnect(c, !recovery && out.intent.operation !== 'OPEN', beforeReconnect);
-    const afterReconnect = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
-    if (
-      afterReconnect.cancelSettlementOrNull !== null ||
-      afterReconnect.outbox?.acknowledgementOrNull != null
-    )
-      return;
-    check();
+    const beforeReconnect = check(verifiedInitial);
+    if (d.peer.current(bound.networkScopeId) === null) {
+      await reconnect(c, false, beforeReconnect);
+      const afterReconnect = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
+      if (
+        afterReconnect.cancelSettlementOrNull !== null ||
+        afterReconnect.outbox?.acknowledgementOrNull != null
+      )
+        return false;
+      check(afterReconnect);
+    }
     let response = recovery ? await d.peer.recover(bound, out) : await d.peer.deliver(bound, out);
     let verified = check();
     if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW')
-      requestProof(c, response);
+      requestProof(c, response, out.intent.operation === 'SUBMIT' ? verified : undefined);
     let ack = acknowledgement(out, response);
     if (ack === null && out.intent.operation === 'CANCEL') {
       if (!(response.outcome === 'ACK' && response.operation === 'DEVICE_REQUEST_RECOVER')) {
@@ -798,7 +842,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW') {
         await applyRequestCurrent(c, response);
         const settled = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
-        if (settled.cancelSettlementOrNull !== null) return;
+        if (settled.cancelSettlementOrNull !== null) return false;
         verified = check();
       }
       ack = acknowledgement(out, response);
@@ -844,14 +888,14 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId)
             .cancelSettlementOrNull !== null
         )
-          return;
+          return false;
         verified = check();
       }
       ack = acknowledgement(out, response);
     }
     if (ack === null) {
       diagnostic(c, 'UNCONFIRMED_OUTCOME');
-      return;
+      return false;
     }
     const saved = mutate(
       c,
@@ -861,8 +905,32 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       verified.current,
     );
     planRetry(c, saved.current);
+    if (
+      !recovery &&
+      publish !== undefined &&
+      out.intent.operation === 'SUBMIT' &&
+      out.intent.batch.schemaVersion === 2 &&
+      response.outcome === 'ACK' &&
+      response.current.kind === 'REQUEST_REVIEW'
+    ) {
+      const delivery = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
+      const parsed = requestProof(c, response, delivery) ?? unavailable();
+      if (
+        delivery.current.pendingCommandIdOrNull === null &&
+        delivery.current.requestOrNull?.submitCommandId === out.intent.commandId &&
+        delivery.current.requestOrNull.requestId === out.intent.requestId &&
+        delivery.outbox?.acknowledgementOrNull?.operation === 'SUBMIT' &&
+        isDeepStrictEqual(delivery.requestCurrentOrNull?.proof, parsed.proof)
+      ) {
+        // ACK already sealed the inline lane and current proof. Publish this fresh,
+        // unchanged proof synchronously; never return it as authority across await.
+        publish(delivery);
+        return true;
+      }
+    }
     if (response.outcome === 'ACK' && response.current.kind === 'REQUEST_REVIEW')
       await applyRequestCurrent(c, response);
+    return false;
   }
   async function command(
     m: NetworkWorkflowRequest,
@@ -1033,6 +1101,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         },
         m.commandId,
         wire,
+        s,
       );
     } else if (m.workflowCommandId === 'UI-CMD-DEVICE-REQUEST-CANCEL') {
       const p = m.payload;
@@ -1099,10 +1168,30 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         wire,
       );
     } else unavailable();
-    const out = readLocalNetworkOutbox(db, scope(c), m.commandId)!;
+    const initial = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
+    const out = initial.outbox ?? unavailable();
+    let publicationAttempted = false;
     try {
-      await deliver(c, out, false);
+      const published = await deliver(
+        c,
+        out,
+        false,
+        (delivery) => {
+          publicationAttempted = true;
+          const messages: LocalNetworkHostMessage[] = [];
+          terminal(c, delivery.outbox!, false, (message) => messages.push(message), delivery);
+          const destination = snapshot(c, m.commandId, 'COMMAND_DESTINATION', delivery.current);
+          if (messages.length !== 1 || messages[0]?.messageType !== 'command.result') unavailable();
+          send(messages[0]);
+          send(destination);
+        },
+        initial,
+      );
+      if (published === true) return;
     } catch {
+      // Once publication is attempted, a construction/transport failure must close the connection.
+      // The next connection recovers the ACK; neither fallback nor refusal may contradict it.
+      if (publicationAttempted) throw new LocalNetworkPublicationError();
       const latest = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
       if (latest.outbox?.acknowledgementOrNull === null && latest.cancelSettlementOrNull === null)
         diagnostic(c, 'UNCONFIRMED_OUTCOME');
@@ -1722,6 +1811,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         );
       } else unavailable();
     } catch (error) {
+      if (error instanceof LocalNetworkPublicationError) throw error;
       let revisions = shell.revisions;
       try {
         if (c.trusted() && c.networkScopeId !== null) revisions = currentVector(c);
@@ -1802,7 +1892,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             ownerViews.delete(c);
             continue;
           }
-          const before = current(c);
+          const observed = readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
+            before = observed.current;
           if (
             before.formId !== 'NET-005' ||
             before.pendingCommandIdOrNull !== null ||
@@ -1810,7 +1901,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           )
             continue;
           if (d.peer.current(binding.scopeId) === null) await reconnect(c, true);
-          else await refreshRequest(c);
+          else await refreshRequest(c, observed);
           trust(c);
           if (c.contextId !== binding.contextId || c.networkScopeId !== binding.scopeId) continue;
           const after = current(c);
@@ -1854,8 +1945,36 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       send: (m: LocalNetworkHostMessage) => void,
     ) {
       const next = frames.then(async () => {
-        const handled = await handle(m, c, shell, send);
-        if (handled && !closed && c.trusted() && c.networkScopeId !== null && c.contextId !== null)
+        const previous = ownerViews.get(c);
+        let watching =
+          previous !== undefined &&
+          previous.contextId === c.contextId &&
+          previous.scopeId === c.networkScopeId;
+        let watchedContextId = previous?.contextId ?? null;
+        let watchedScopeId = previous?.scopeId ?? null;
+        const handled = await handle(m, c, shell, (message) => {
+          send(message);
+          // Subscription follows our published form, never a browser's claim. The tick
+          // still verifies the full owned current before any recovery or publication.
+          if (message.messageType === 'projection.snapshot' && message.protocolVersion === 2)
+            watching =
+              message.projectionRole === 'player' && message.presentation.base.formId === 'NET-005';
+          else if (message.messageType === 'network.draft.result')
+            watching = message.presentation.base.formId === 'NET-005';
+          else return;
+          watchedContextId = watching ? c.contextId : null;
+          watchedScopeId = watching ? c.networkScopeId : null;
+        });
+        if (
+          handled &&
+          watching &&
+          watchedContextId === c.contextId &&
+          watchedScopeId === c.networkScopeId &&
+          !closed &&
+          c.trusted() &&
+          c.networkScopeId !== null &&
+          c.contextId !== null
+        )
           ownerViews.set(c, { contextId: c.contextId, scopeId: c.networkScopeId, send });
         else ownerViews.delete(c);
         return handled;

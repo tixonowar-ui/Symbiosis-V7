@@ -326,6 +326,7 @@ export function expectedNetworkActions(
         'NET-004::CTA::003',
       ];
     case 'NET-005':
+      if (connected && p['requestStatus'] === 'REJECTED') return ['NET-005::CTA::003'];
       return capabilities.includes('UI-CMD-DEVICE-REQUEST-CANCEL') &&
         networkCancelPayload(formId, p, p['cancelReason'] as string)
         ? ['NET-005::CTA::001']

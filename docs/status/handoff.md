@@ -1,31 +1,37 @@
 # Передача контекста — 2026-10-30
 
-## Application integration #171 — текущий рабочий снимок
+## Application integration #171 / PR #185 — рабочий снимок
 
-Ветка codex/171-device-request-flow интегрирована с main f7e6ade3d0:
-#190 и Atlas 1.6 / #177 уже слиты; старые migration 0009/0010 сохранены.
-Shared/store/peer/web подготовки применены, GM queue CMP-006↔NET-017,
-решения, owner delivery и recovery подключены. Это пока рабочий снимок,
-а не завершение #171: production E2E и final independent verify ещё не выполнены.
-Новый полный runtime case после повторного использования одного проверенного
-синхронного снимка прошёл за 19.993 s при неизменном пределе 30 s.
+Ветка `codex/171-device-request-flow` интегрирована с main `f7e6ade3d0`:
+#190, Atlas 1.6 / #177 и shared source contracts #195 слиты. Старые migrations
+0009/0010 сохранены. Подключены полный player NET-контур, GM queue
+CMP-006↔NET-017, отдельный draft, preliminary decisions, owner-only delivery,
+restart/replay и forward0011. Campaign birth, original SUBMIT receipts,
+local FINAL и исторические baseline IDs не переписываются. Copies, seats,
+capacity reservations, final admission и Start не создаются.
 
-Проверено на текущем этапе: node/web typecheck и client suite 58/58.
-Focused реальные TCP owner review и CANCEL race прошли; lost-first-BIND-ACK
-fixture исправляется на реальную schema10→11; до этой правки focused subset
-дал 13 PASS / 1 FAIL. Новая регрессия GM reconnect publication ещё не запущена. Прежние 3539 tests / 36 E2E
-относятся к f9, а не к новой интеграции. Журналы — reports/171-integration.
+Авторские node/web typecheck проходят. Focused проверены реальные SQLite/TCP
+review, CANCEL race и старый schema10 SUBMIT→forward11→lost-first-BIND-ACK.
+Последний request-store/peer run — 57/57; client — 64/64. Production browser
+проходит исходный manual-address→restart→CANCEL, QR batch, а также owner CANCEL
+с очищением выбранной строки/причины GM. Новый GM accept→restart→reject→safe
+return→повторный SUBMIT прошёл полностью (55.3 s на весь сценарий). Устранены
+повторные synchronous folds одной уже проверенной операции; подписка owner
+polling теперь следует успешно опубликованной NET-005 и снимается после выхода.
+Проверки source/CAS после private await сохранены. Полный verify/E2E и
+независимые финальные gates на окончательном committed SHA ещё требуются.
+Таймауты, workers, byte assertions и fixtures не ослаблялись. Raw traces,
+phase measurements и пределы выводов сохранены в `reports/171-integration`.
 
-Source-contract foundation #195 / PR #196 смёржена в f7e6ade3d0 и
-интегрирована с сохранением standalone API/redaction guards. Новые runtime
-registration tests заменяют прежнее намеренное отсутствие handlers.
-Предыдущий замер до этой интеграции от ECD: код +17277/−103,
-40 путей; tests +14769/−53, 35 путей; docs272, всего81. Этот промежуточный
-замер не разрешает превышать действующий бюджет; итог измеряется заново.
-Нет campaign copies, admitted seats, reservation или Start. Перед merge
-полного #171 обязательны независимые verify/E2E exact final SHA и CI.
+Текущий замер тем же CI classifier от `f7e6ade3d0`: code37 +16195/−91,
+tests34 +14472/−59, docs428, artifacts0, всего77. Это промежуточные числа,
+финальные измеряются после исправлений. Владелец разрешил **20000 additions
+кода только для PR #185**; исключение закреплено смёрженным PR #198 / #197, прочие
+пороги сохраняются. По последнему прямому указанию пользователя после успешного
+merge #185 работа останавливается. #186 и дальнейший backlog сейчас не продолжаются.
 
-Ниже сохранён source-contract handoff #195; текущая runtime готовность описана выше.
+Ниже сохранён исторический source-contract handoff #195; актуальная runtime
+готовность описана выше. Его старые будущие шаги не отменяют остановку после #185.
 
 ## Текущий срез #195
 

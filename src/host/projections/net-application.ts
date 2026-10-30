@@ -88,6 +88,10 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
     session = s.sessionOrNull,
     pending = s.pendingCommandIdOrNull !== null;
   const status = s.schemaVersion === 2 ? s.requestReviewOrNull?.requestStatus : undefined;
+  const activeRequest =
+    s.requestOrNull !== null &&
+    s.requestOrNull.closureOrNull === null &&
+    (status === undefined || status === 'PENDING' || status === 'IN_REVIEW');
   const idle =
     !pending &&
     (s.requestOrNull === null ||
@@ -205,8 +209,7 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
       const forecast = networkCapacity(i.campaign, s.selectedCandidates.length);
       payload = {
         ...common,
-        ownRequestIdOrNull:
-          s.requestOrNull?.closureOrNull === null ? s.requestOrNull.requestId : null,
+        ownRequestIdOrNull: activeRequest ? s.requestOrNull.requestId : null,
         campaignId: session.campaignProof.campaignId,
         campaignStatus: 'PAUSED',
         sessionId: session.technicalSessionId,
@@ -223,10 +226,7 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
         'NET-003::CTA::002',
         idle && live && s.selectedCandidates.length === 1 && forecast.fitsCurrentCapacity,
       );
-      add(
-        'NET-003::CTA::003',
-        !pending && s.requestOrNull !== null && s.requestOrNull.closureOrNull === null,
-      );
+      add('NET-003::CTA::003', !pending && live && activeRequest);
       break;
     }
     case 'NET-004': {
@@ -291,7 +291,7 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
           s.cancelReason.trim().length > 0 &&
           capable('UI-CMD-DEVICE-REQUEST-CANCEL'),
       );
-      add('NET-005::CTA::003', !pending && status === 'REJECTED');
+      add('NET-005::CTA::003', !pending && live && status === 'REJECTED');
       break;
     }
     case 'NET-011': {

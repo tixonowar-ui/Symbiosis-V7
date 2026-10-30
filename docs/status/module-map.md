@@ -8,8 +8,9 @@
 Player-срез f9a6a539 объединён с main f7e6ade3d0 (#190, Atlas 1.6 / #177 и source contracts #195).
 В рабочей ветке подключены GM queue, отдельный GM v3 draft, два preliminary
 workflow, forward0011, peer lane provenance и live owner recovery. Полный #171
-ещё не готов к merge: types/client focused прошли, полный GM runtime case прошёл за 20 s;
-новые regressions и production E2E остаются в проверке. Предыдущие 3539 tests / 36 E2E не являются
+ожидает финальных gates: types/client/store focused и полный GM browser
+accept→restart→reject→safe return→повторный SUBMIT прошли. Полный verify/E2E
+на окончательном committed SHA и независимый прогон ещё требуются. Предыдущие 3539 tests / 36 E2E не являются
 проверкой нового снимка. Фактический итоговый бюджет и независимые final-SHA
 проверки обязательны; source-contract foundation #195 смёржена через PR #196; её standalone
 контракты и encoder redaction сохранены, runtime registration добавляется в #171.
@@ -260,22 +261,22 @@ immutable ACK от текущего состояния; неизвестный �
 Предварительные решения мастера, NET-017 и две GM-команды подключены в рабочей
 ветке по смёрженной поставке #177; final verification полного среза ещё требуется.
 
-Текущая очередь — завершить #171, затем #172 → #173 → #174 → #113. Для #113
-исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
+Текущее поручение — завершить и смёржить #171 / PR #185, затем остановиться.
+#172, #173, #174, #113 и подготовка #186 сейчас не продолжаются.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                         | Веха |
-| ---------------------------- | ------------ | ----------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **частично** | прежние wire v1/v2/v3 готовы; closed NET projection/draft/resume contracts добавлены в WIP #171 | M4   |
-| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime           | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                   | M3   |
-| `src/persistence`            | **частично** | character/post-save; local application/outbox и hosted request journals в WIP #171              | M2   |
-| `src/persistence/migrations` | **частично** | `0001`–`0009` готовы; `0010` добавляет восемь NET sidecar-таблиц в WIP #171                     | M2   |
-| `src/host`                   | **частично** | character/post-save, CREATE PAUSED; local NET coordinator и peer runtime в WIP #171             | M4   |
-| `src/host/projections`       | **частично** | прежние APP/CHR/CMP; NET-001–005/011 и CHR-027 добавлены в WIP #171                             | M4   |
-| `src/web`                    | **частично** | character/post-save/CMP; player NET UI и recovery в WIP #171, новый E2E ещё падает              | M5   |
-| `src/web/renderer`           | **частично** | NET-001–005/011 и CHR-027 зарегистрированы в WIP #171; неизвестные формы fail-closed            | M5   |
-| `src/web/forms`              | **частично** | character/CMP и player NET inputs, confirmed CANCEL_REASON, local QR decoder в WIP #171         | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                                              | Веха |
+| ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **частично** | прежние wire v1/v2/v3 готовы; closed NET projection/draft/resume contracts добавлены в WIP #171                      | M4   |
+| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime                                | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                                        | M3   |
+| `src/persistence`            | **частично** | character/post-save; local application/outbox и hosted request journals в WIP #171                                   | M2   |
+| `src/persistence/migrations` | **частично** | `0010` сохраняет NET sidecars; forward `0011` добавляет GM queue, решения и lane provenance                          | M2   |
+| `src/host`                   | **частично** | character/post-save, CREATE PAUSED; local NET coordinator и peer runtime в WIP #171                                  | M4   |
+| `src/host/projections`       | **частично** | прежние APP/CHR/CMP; NET-001–005/011/017 и CHR-027 подключены в #171                                                 | M4   |
+| `src/web`                    | **частично** | character/post-save/CMP; player/GM NET UI и recovery в #171; точные browser reproducers прошли, full gates ожидаются | M5   |
+| `src/web/renderer`           | **частично** | NET-001–005/011/017 и CHR-027 зарегистрированы в #171; неизвестные формы fail-closed                                 | M5   |
+| `src/web/forms`              | **частично** | character/CMP и player NET inputs, confirmed CANCEL_REASON, local QR decoder в WIP #171                              | M6   |
 
 ### Новые модули #171 — рабочая ветка
 

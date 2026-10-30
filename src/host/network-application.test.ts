@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { JsonObject } from '../shared/wire-protocol.js';
 import type { ProjectionSnapshotV2Message } from '../shared/wire-v2-protocol.js';
 import { NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS } from '../shared/device-admission.js';
@@ -53,6 +53,7 @@ import {
   readLocalNetworkApplication,
   readLocalNetworkOutbox,
   readLocalNetworkDeliverySnapshot,
+  readLocalNetworkRequestDeliverySnapshot,
   readLocalRequestLaneBinding,
   readLocalNetworkCancelSettlementEvent,
   commitLocalNetworkMutation,
@@ -155,12 +156,15 @@ function client() {
       runtime: ReturnType<typeof createLocalNetworkRuntime>;
     let live = true,
       loseExit = false,
+      loseDestination = false,
       lastExit: string | null = null,
       shellFinalId = player.setup.characterDraftId,
       shellForm: string | null = 'APP-002',
       shellContext: string | null = randomUUID();
     const sent: LocalNetworkHostMessage[] = [];
     const responses: DeviceAdmissionPeerResponse[] = [];
+    let reconnectCount = 0;
+    let dropPeer = () => {};
     const peerErrors: string[] = [];
     let beforeDeliver: (() => void | Promise<void>) | null = null;
     const c: LocalNetworkConnection = {
@@ -236,6 +240,7 @@ function client() {
     function start() {
       const catalog = player.setup.catalog;
       const peer = createLocalNetworkPeer({ database: db, baseline, config });
+      dropPeer = () => peer.current(c.networkScopeId!)?.close();
       runtime = createLocalNetworkRuntime({
         database: db,
         projectRoot: process.cwd(),
@@ -250,6 +255,10 @@ function client() {
         },
         peer: {
           ...peer,
+          async reconnect(...args) {
+            reconnectCount++;
+            return peer.reconnect(...args);
+          },
           async deliver(scope, out) {
             const before = beforeDeliver;
             beforeDeliver = null;
@@ -285,7 +294,20 @@ function client() {
     const state = () => readLocalNetworkApplication(db, scope());
     const send = async (m: LocalNetworkClientMessage) => {
       sent.length = 0;
-      expect(await runtime.handle(m, c, shell, (value) => sent.push(value))).toBe(true);
+      expect(
+        await runtime.handle(m, c, shell, (value) => {
+          if (
+            loseDestination &&
+            value.messageType === 'projection.snapshot' &&
+            value.protocolVersion === 2 &&
+            value.presentation.assignment.reason === 'COMMAND_DESTINATION'
+          ) {
+            loseDestination = false;
+            throw new Error('Simulated encoder failure after terminal delivery');
+          }
+          sent.push(value);
+        }),
+      ).toBe(true);
       return sent;
     };
     const nav = async (action: string, from?: string) => {
@@ -365,6 +387,8 @@ function client() {
       sent,
       responses,
       peerErrors,
+      reconnectCount: () => reconnectCount,
+      dropPeer: () => dropPeer(),
       beforeNextDeliver(value: () => void | Promise<void>) {
         beforeDeliver = value;
       },
@@ -398,6 +422,9 @@ function client() {
         shellForm = 'APP-004';
         shellContext = randomUUID();
         lastExit = null;
+      },
+      loseNextDestination() {
+        loseDestination = true;
       },
       loseNextExit() {
         loseExit = true;
@@ -443,6 +470,7 @@ async function submittedPlayer(
   h: Awaited<ReturnType<typeof host>>,
   legacy = false,
   loseFirstBindingAck = false,
+  beforeSubmit?: (p: Awaited<ReturnType<typeof client>>) => void,
 ) {
   const p = await client();
   await p.nav('APP-002::CTA::003', 'APP-002');
@@ -552,6 +580,7 @@ async function submittedPlayer(
     p.db.exec(
       "CREATE TRIGGER fail_binding_ack BEFORE INSERT ON local_network_application_event WHEN json_extract(NEW.record_json,'$.input.mutation.kind')='LANE_BIND_ACK' BEGIN SELECT RAISE(ABORT,'binding ACK interrupted'); END",
     );
+  beforeSubmit?.(p);
   const submit = await p.command('UI-CMD-DEVICE-REQUEST-SUBMIT', {
     requestId: batch.requestId,
     technicalSessionId: batch.technicalSessionId,
@@ -637,6 +666,100 @@ function gmDecision(h: Awaited<ReturnType<typeof host>>, requestId: string, reje
 }
 
 describe('local network application with durable SQLite and real Node peers', () => {
+  it.each(['construction', 'delivery'] as const)(
+    'does not repeat or contradict a committed terminal after destination %s fails, and replays after reopen',
+    async (failureStage) => {
+      const h = await host();
+      const captured: { player?: Awaited<ReturnType<typeof client>> } = {};
+      await expect(
+        submittedPlayer(h, false, false, (p) => {
+          captured.player = p;
+          if (failureStage === 'delivery') p.loseNextDestination();
+          else {
+            let pending = true,
+              supported = p.c.executableWorkflowCommandIds;
+            Object.defineProperty(p.c, 'executableWorkflowCommandIds', {
+              configurable: true,
+              get() {
+                const state = p.state();
+                if (
+                  pending &&
+                  state.requestOrNull !== null &&
+                  state.pendingCommandIdOrNull === null
+                ) {
+                  pending = false;
+                  throw new Error('Simulated projection construction failure after durable ACK');
+                }
+                return supported;
+              },
+              set(value: typeof supported) {
+                supported = value;
+              },
+            });
+          }
+        }),
+      ).rejects.toThrow('Network publication failed after durable acknowledgement');
+      const p = captured.player;
+      if (p === undefined) throw new Error('Missing actual owner fixture');
+      const commandId = p.state().requestOrNull?.submitCommandId;
+      if (commandId === undefined) throw new Error('Missing durable original SUBMIT');
+      const result = p.sent.find((m) => m.messageType === 'command.result');
+      expect(p.sent.filter((m) => m.messageType === 'command.result')).toHaveLength(
+        failureStage === 'delivery' ? 1 : 0,
+      );
+      expect(p.sent.filter((m) => m.messageType === 'command.refusal')).toHaveLength(0);
+      const original = readLocalNetworkOutbox(p.db, p.scope(), commandId);
+      const acknowledgement = readLocalNetworkDeliverySnapshot(
+        p.db,
+        p.scope(),
+        commandId,
+      ).acknowledgementEvent;
+      expect(original?.acknowledgementOrNull?.operation).toBe('SUBMIT');
+      expect(p.state().formId).toBe('NET-005');
+      await p.restart([commandId]);
+      const replay = p.sent.find((m) => m.messageType === 'command.replay');
+      expect(replay).toMatchObject({
+        receipt: { commandId, receiptId: acknowledgement!.receipt.receiptId },
+      });
+      if (result?.messageType === 'command.result')
+        expect(replay).toMatchObject({ receipt: result.receipt });
+      expect(p.sent.find((m) => m.messageType === 'projection.snapshot')).toMatchObject({
+        presentation: { base: { formId: 'NET-005' } },
+      });
+      expect(readLocalNetworkOutbox(p.db, p.scope(), commandId)).toEqual(original);
+    },
+    30000,
+  );
+  it('does not transfer a published owner subscription into a failed resume context', async () => {
+    const h = await host(),
+      { p } = await submittedPlayer(h),
+      originalContext = p.c.contextId,
+      originalEnter = p.shell.enterNetwork;
+    p.shell.enterNetwork = () => {
+      throw new Error('Simulated shell transition failure before resumed projection');
+    };
+    await p.send({
+      messageType: 'network.local-context.resume',
+      protocolVersion: 3,
+      networkScopeId: p.scope().networkScopeId,
+      reconnectRequestId: randomUUID(),
+      knownRevisions: vector(p.state()),
+      supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+      unacknowledgedCommandIds: [],
+    });
+    p.shell.enterNetwork = originalEnter;
+    expect(p.c.contextId).not.toBe(originalContext);
+    expect(p.sent.some((m) => m.messageType === 'protocol.refusal')).toBe(true);
+    expect(p.sent.some((m) => m.messageType === 'projection.snapshot')).toBe(false);
+    const prepare = vi.spyOn(p.db, 'prepare');
+    try {
+      // The actual one-second owner timer must not read the failed new binding.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      expect(prepare).not.toHaveBeenCalled();
+    } finally {
+      prepare.mockRestore();
+    }
+  }, 30000);
   it('publishes owner review updates over the existing session and keeps the original SUBMIT replay unchanged', async () => {
     const h = await host(),
       { p, submit, batch } = await submittedPlayer(h);
@@ -689,6 +812,33 @@ describe('local network application with durable SQLite and real Node peers', ()
       n: 0,
     });
   }, 30000);
+  it.each(['live', 'missing'] as const)(
+    'uses the authenticated %s channel correctly before CANCEL',
+    async (channel) => {
+      const h = await host(),
+        { p, batch } = await submittedPlayer(h);
+      await p.replace('CANCEL_REASON', { cancelReason: 'Withdraw' });
+      if (channel === 'missing') p.dropPeer();
+      const reconnects = p.reconnectCount(),
+        before = p.responses.length;
+      const cancel = await p.command('UI-CMD-DEVICE-REQUEST-CANCEL', {
+        requestId: batch.requestId,
+        technicalSessionId: batch.technicalSessionId,
+        requestRevision: 0,
+        reason: 'Withdraw',
+      });
+      expect(p.reconnectCount() - reconnects).toBe(channel === 'missing' ? 1 : 0);
+      const responses = p.responses.slice(before);
+      if (channel === 'missing')
+        expect(responses[0]).toMatchObject({ operation: 'DEVICE_REQUEST_RECOVER', outcome: 'ACK' });
+      expect(
+        readLocalNetworkDeliverySnapshot(p.db, p.scope(), cancel.commandId).outbox
+          ?.acknowledgementOrNull?.operation,
+      ).toBe('CANCEL');
+      expect(p.state().formId).toBe('NET-003');
+    },
+    30000,
+  );
   it('settles CANCEL losing to review and recovers the same refusal after SQLite reopen without a fake ACK', async () => {
     const h = await host(),
       { p, batch } = await submittedPlayer(h);
@@ -1818,6 +1968,23 @@ describe('actual GM request review orchestration', () => {
     });
     expect(p.state().formId, JSON.stringify(p.sent)).toBe('NET-005');
     const submitted = p.sent.find((m) => m.messageType === 'command.result');
+    expect(
+      p.sent.filter(
+        (m) => m.messageType === 'command.result' && m.receipt.commandId === submit.commandId,
+      ),
+    ).toHaveLength(1);
+    expect(
+      p.sent.filter(
+        (m) =>
+          m.messageType === 'projection.snapshot' &&
+          m.protocolVersion === 2 &&
+          m.presentation.assignment.correlationId === submit.commandId,
+      ),
+    ).toHaveLength(1);
+    expect(
+      readLocalNetworkRequestDeliverySnapshot(p.db, p.scope()).requestCurrentOrNull?.proof
+        .laneProvenance?.kind,
+    ).toBe('SUBMITTED_BATCH');
     const projected = (await gm.runtime.project(gm.c)).base.roleFilteredPayload;
     expect(projected['requests']).toMatchObject([
       {
@@ -1912,6 +2079,19 @@ describe('actual GM request review orchestration', () => {
     expect(readGmDeviceRequestQueue(h.db, gm.scope, h.validate).requests[0]!.requestStatus).toBe(
       'REJECTED',
     );
+    const rejectedState = p.state(),
+      retained = readLocalNetworkOutbox(p.db, p.scope(), submit.commandId),
+      requests = h.db.prepare('SELECT * FROM hosted_device_request').all(),
+      receipts = h.db.prepare('SELECT * FROM hosted_network_command').all();
+    await p.nav('NET-005::CTA::003');
+    expect(p.state().formId).toBe('NET-003');
+    expect(vector(p.state())).toEqual({
+      ...vector(rejectedState),
+      projectionRevision: rejectedState.projectionRevision + 1,
+    });
+    expect(readLocalNetworkOutbox(p.db, p.scope(), submit.commandId)).toEqual(retained);
+    expect(h.db.prepare('SELECT * FROM hosted_device_request').all()).toEqual(requests);
+    expect(h.db.prepare('SELECT * FROM hosted_network_command').all()).toEqual(receipts);
     expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
       n: 0,
     });

@@ -255,6 +255,21 @@ test('GM reviews an actual owner request, delivers live decisions and restores t
       playerPage.getByText('Нужно уточнить состав заявки', { exact: true }),
     ).toBeVisible();
     await expect(playerPage.locator('[data-atlas-action-key="NET-005::CTA::003"]')).toBeVisible();
+    const rejectedHistory = gm.inspect();
+    await action(playerPage, 'NET-005::CTA::003');
+    await expect(form(playerPage, 'NET-003')).toBeVisible();
+    expect(gm.inspect().requests).toEqual(rejectedHistory.requests);
+    expect(gm.inspect().commands).toEqual(rejectedHistory.commands);
+    expect(gm.inspect().decisions).toEqual(rejectedHistory.decisions);
+    await action(playerPage, 'NET-003::CTA::001');
+    await expect(form(playerPage, 'NET-004')).toBeVisible();
+    await action(playerPage, 'NET-004::CTA::002');
+    await expect(form(playerPage, 'NET-005')).toBeVisible();
+    await expect(masterPage.getByRole('radio')).toHaveCount(2);
+    expect(gm.inspect().requests).toHaveLength(2);
+    for (const row of rejectedHistory.requests) expect(gm.inspect().requests).toContainEqual(row);
+    for (const row of rejectedHistory.commands) expect(gm.inspect().commands).toContainEqual(row);
+    expect(gm.inspect().decisions).toEqual(rejectedHistory.decisions);
     expect(gm.inspect().decisions).toHaveLength(2);
     expect(gm.inspect().copies).toEqual([]);
     expect(gm.inspect().checkpoints).toEqual(birth);
@@ -267,12 +282,19 @@ test('GM reviews an actual owner request, delivers live decisions and restores t
     expect(player.errors).toEqual([]);
   } catch (error) {
     failure = error;
-    await test
-      .info()
-      .attach('gm-owner-frames', {
-        body: Buffer.from(JSON.stringify(frames)),
-        contentType: 'application/json',
-      });
+    await test.info().attach('gm-owner-frames', {
+      body: Buffer.from(JSON.stringify(frames)),
+      contentType: 'application/json',
+    });
+    await test.info().attach('gm-owner-durable-status', {
+      body: Buffer.from(
+        JSON.stringify({
+          gm: safeNetworkInspection(gm),
+          player: safeNetworkInspection(player),
+        }),
+      ),
+      contentType: 'application/json',
+    });
     throw error;
   } finally {
     await scenario.close(failure);

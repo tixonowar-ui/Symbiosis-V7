@@ -396,6 +396,88 @@ function decisionInput(p: ReturnType<typeof setup>, requestId: string, reject = 
   return { request, receiptId: randomUUID(), timestamp: '2026-10-30T12:00:00.000Z' };
 }
 describe('GM request review persistence', () => {
+  it('reads the owned current from the fully verified queue and refuses another pinned owner', () => {
+    const p = setup(),
+      opening = connect(p),
+      input = submission(p, opening);
+    commitHostedNetworkCommand(p.db, p.principal, input, allow, allow);
+    enterQueue(p);
+    selectRequest(p, input.requestId);
+    commitGmDeviceRequestDecision(
+      p.db,
+      gmScope(p),
+      decisionInput(p, input.requestId),
+      allow,
+      allow,
+    );
+    const before = p.db.serialize();
+    expect(readHostedDeviceRequestCurrent(p.db, p.principal, input.requestId, allow)).toEqual(
+      readGmDeviceRequestQueue(p.db, gmScope(p), allow).requests[0],
+    );
+    const key = generateKeyPairSync('ed25519').publicKey.export({ format: 'der', type: 'spki' });
+    const foreign = {
+      db: p.db,
+      principal: {
+        ...p.principal,
+        peerIdentity: {
+          ...p.principal.peerIdentity,
+          ownerDeviceId: randomUUID(),
+          publicKeySpkiBase64: key.toString('base64'),
+          keyFingerprintSha256: sha(key),
+        },
+      },
+    };
+    connect(foreign);
+    const pinned = p.db.serialize();
+    expect(() =>
+      readHostedDeviceRequestCurrent(p.db, foreign.principal, input.requestId, allow),
+    ).toThrow('FOREIGN_OWNER');
+    expect(() => readHostedDeviceRequestCurrent(p.db, p.principal, randomUUID(), allow)).toThrow(
+      'NOT_FOUND',
+    );
+    expect(p.db.serialize().equals(pinned)).toBe(true);
+    expect(pinned.equals(before)).toBe(false);
+    p.db.prepare('UPDATE gm_request_queue_event SET record_sha256=?').run('0'.repeat(64));
+    const corrupt = p.db.serialize();
+    expect(() =>
+      readHostedDeviceRequestCurrent(p.db, p.principal, input.requestId, allow),
+    ).toThrow();
+    expect(p.db.serialize().equals(corrupt)).toBe(true);
+  });
+  it('reports a technical view race as STALE_REVISION before any draft write', () => {
+    const p = setup(),
+      entry = enterQueue(p);
+    commitGmRequestReviewConnectionRefresh(
+      p.db,
+      gmScope(p),
+      { eventId: randomUUID(), connectionFactsSha256: sha('connected') },
+      allow,
+      allow,
+    );
+    const before = p.db.serialize();
+    expect(() =>
+      commitGmRequestReviewDraft(
+        p.db,
+        gmScope(p),
+        {
+          protocolVersion: 3,
+          messageType: 'network.gm-request-draft.replace',
+          draftUpdateId: randomUUID(),
+          scope: {
+            gmLocalContextId: 'context',
+            campaignId: p.principal.campaignId,
+            sourceFormId: 'NET-017',
+          },
+          expectedRevisions: vector(entry.current),
+          expectedRequestQueueRevision: entry.current.requestQueueRevision,
+          values: { selectedRequestIdOrNull: null, decisionReason: '' },
+        },
+        allow,
+        allow,
+      ),
+    ).toThrow('STALE_REVISION');
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
   it('persists connection presentation separately and refuses cross-family no-op IDs', () => {
     const p = setup(),
       entry = enterQueue(p),

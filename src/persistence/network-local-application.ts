@@ -2350,6 +2350,70 @@ export function readLocalNetworkAcknowledgementEvent(
 ): StoredLocalNetworkEvent | null {
   return readLocalNetworkDeliverySnapshot(db, scope, commandId).acknowledgementEvent;
 }
+/** The current request identity comes only from the verified owned history. */
+export function readLocalNetworkRequestDeliverySnapshot(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+): LocalNetworkDeliverySnapshot {
+  return read(db, scope.ownerDeviceId, () => {
+    const tab = readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId);
+    if (tab === null) return fail('UNAVAILABLE');
+    const history = readHistory(db, tab);
+    return localDeliverySnapshot(history, history.current.requestOrNull?.submitCommandId ?? null);
+  });
+}
+function localDeliverySnapshot(
+  history: ReturnType<typeof readHistory>,
+  commandId: string | null,
+): LocalNetworkDeliverySnapshot {
+  const outbox = commandId === null ? null : (history.outboxes.get(commandId) ?? null);
+  const requestId =
+    outbox?.intent.operation === 'SUBMIT' || outbox?.intent.operation === 'CANCEL'
+      ? outbox.intent.requestId
+      : history.current.requestOrNull?.requestId;
+  const submitted =
+    requestId === undefined
+      ? undefined
+      : [...history.outboxes.values()].find(
+          (o) => o.intent.operation === 'SUBMIT' && o.intent.requestId === requestId,
+        );
+  const extra = {
+    requestCurrentOrNull:
+      requestId === undefined || submitted?.acknowledgementOrNull == null
+        ? null
+        : localReviewCurrent(history.current, history.outboxes, history.review, requestId),
+    cancelSettlementOrNull:
+      commandId === null ? null : (history.review.settlements.get(commandId) ?? null),
+  };
+  if (outbox === null) {
+    return { current: history.current, outbox: null, acknowledgementEvent: null, ...extra };
+  }
+  const event = history.events.find(
+    (e) =>
+      e.input.mutation.kind === 'ACKNOWLEDGE' &&
+      e.input.mutation.acknowledgement.commandId === commandId,
+  );
+  if (outbox.acknowledgementOrNull === null) {
+    if (event !== undefined) return fail();
+    return { current: history.current, outbox, acknowledgementEvent: null, ...extra };
+  }
+  if (
+    event === undefined ||
+    event.input.mutation.kind !== 'ACKNOWLEDGE' ||
+    !same(event.input.mutation.acknowledgement, outbox.acknowledgementOrNull)
+  )
+    return fail();
+  return {
+    ...extra,
+    current: history.current,
+    outbox,
+    acknowledgementEvent: {
+      input: event.input,
+      receipt: event.receipt,
+      current: history.current,
+    },
+  };
+}
 /** Capture receipt history and the current view together; callers may reuse them only synchronously. */
 export function readLocalNetworkDeliverySnapshot(
   db: Database.Database,
@@ -2366,54 +2430,9 @@ export function readLocalNetworkDeliverySnapshot(
       return fail('FOREIGN_OWNER');
     const tab = readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId);
     if (tab === null) return fail('UNAVAILABLE');
-    const history = readHistory(db, tab),
-      outbox = history.outboxes.get(commandId) ?? null;
-    const requestId =
-      outbox?.intent.operation === 'SUBMIT' || outbox?.intent.operation === 'CANCEL'
-        ? outbox.intent.requestId
-        : history.current.requestOrNull?.requestId;
-    const submitted =
-      requestId === undefined
-        ? undefined
-        : [...history.outboxes.values()].find(
-            (o) => o.intent.operation === 'SUBMIT' && o.intent.requestId === requestId,
-          );
-    const extra = {
-      requestCurrentOrNull:
-        requestId === undefined || submitted?.acknowledgementOrNull == null
-          ? null
-          : localReviewCurrent(history.current, history.outboxes, history.review, requestId),
-      cancelSettlementOrNull: history.review.settlements.get(commandId) ?? null,
-    };
-    if (outbox === null) {
-      if (row !== undefined) return fail();
-      return { current: history.current, outbox: null, acknowledgementEvent: null, ...extra };
-    }
-    const event = history.events.find(
-      (e) =>
-        e.input.mutation.kind === 'ACKNOWLEDGE' &&
-        e.input.mutation.acknowledgement.commandId === commandId,
-    );
-    if (outbox.acknowledgementOrNull === null) {
-      if (event !== undefined) return fail();
-      return { current: history.current, outbox, acknowledgementEvent: null, ...extra };
-    }
-    if (
-      event === undefined ||
-      event.input.mutation.kind !== 'ACKNOWLEDGE' ||
-      !same(event.input.mutation.acknowledgement, outbox.acknowledgementOrNull)
-    )
-      return fail();
-    return {
-      ...extra,
-      current: history.current,
-      outbox,
-      acknowledgementEvent: {
-        input: event.input,
-        receipt: event.receipt,
-        current: history.current,
-      },
-    };
+    const history = readHistory(db, tab);
+    if (row !== undefined && !history.outboxes.has(commandId)) return fail();
+    return localDeliverySnapshot(history, commandId);
   });
 }
 export function readLocalNetworkShellExitByNavigationId(

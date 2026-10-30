@@ -5572,6 +5572,7 @@ function decodeFormActionSnapshot(
       'NET-003::CTA::003': 'NET-005',
       'NET-004::CTA::001': 'NET-003',
       'NET-004::CTA::003': 'NET-003',
+      'NET-005::CTA::003': 'NET-003',
       'NET-011::CTA::004': 'NET-002',
       'NET-011::CTA::005': 'APP-002',
       'CHR-027::CTA::001': 'NET-004',
@@ -5628,6 +5629,17 @@ function decodeFormActionSnapshot(
         ? decoded
         : unrecognized('$.presentation.base.roleFilteredPayload', null);
     }
+    if (
+      pending.actionKey === 'NET-005::CTA::003' &&
+      (p['requestStatus'] !== 'REJECTED' ||
+        p['connectionState'] !== 'CONNECTED_TECHNICAL' ||
+        p['pendingCommandIdOrNull'] !== null ||
+        n['pendingCommandIdOrNull'] !== null ||
+        n['campaignIdOrNull'] !== p['campaignIdOrNull'] ||
+        n['sessionId'] !== p['sessionId'] ||
+        n['ownRequestIdOrNull'] !== null)
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', null);
     const prepare =
       pending.actionKey === 'NET-003::CTA::001' || pending.actionKey === 'CHR-027::CTA::001';
     if (
@@ -8770,6 +8782,7 @@ export function connectProjection(
     replay: boolean;
     source: ConfirmedProjectionSnapshot;
   } | null = null;
+  let absentNetworkCommandId: string | null = null;
   let pendingNetworkRefusal: {
     request: NetworkWorkflowRequest;
     source: ConfirmedProjectionSnapshot;
@@ -8944,7 +8957,10 @@ export function connectProjection(
           },
     );
   };
+  let gmDraftRefresh: NetworkGmRequestDraftReplaceV3Message | null = null;
+  let gmDraftRebaseAttempted = false;
   const clearGmDraft = () => {
+    gmDraftRefresh = null;
     if (gmTimer !== null) clearTimeout(gmTimer);
     gmTimer = null;
     gmEdit = null;
@@ -8954,7 +8970,7 @@ export function connectProjection(
   const discardDisconnectedGmInput = () => {
     if (gmTimer !== null) clearTimeout(gmTimer);
     gmTimer = null;
-    if (pendingGmDraft === null) gmEdit = null;
+    if (pendingGmDraft === null && gmDraftRefresh === null) gmEdit = null;
     publishGmDraft();
   };
   const flushGmDraft = (): void => {
@@ -8982,6 +8998,12 @@ export function connectProjection(
       notifyReady();
       return;
     }
+    // A new selection clears the old reason at the host. Preserve text typed after that local selection for a second, correctly based draft.
+    const values =
+      gmEdit.selectedRequestIdOrNull === p.selectedRequestIdOrNull
+        ? gmEdit
+        : { selectedRequestIdOrNull: gmEdit.selectedRequestIdOrNull, decisionReason: '' };
+    const editVersion = sameJson(values, gmEdit) ? gmEditVersion : gmEditVersion - 1;
     const request: NetworkGmRequestDraftReplaceV3Message = {
       protocolVersion: 3,
       messageType: 'network.gm-request-draft.replace',
@@ -8989,7 +9011,7 @@ export function connectProjection(
       scope: { gmLocalContextId, campaignId: p.campaignId, sourceFormId: 'NET-017' },
       expectedRevisions: { ...lastSnapshot.revisions },
       expectedRequestQueueRevision: p.requestQueueRevision,
-      values: gmEdit,
+      values,
     };
     const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok) {
@@ -8998,7 +9020,7 @@ export function connectProjection(
       notifyReady();
       return;
     }
-    pendingGmDraft = { request, editVersion: gmEditVersion };
+    pendingGmDraft = { request, editVersion };
     try {
       socket.send(encoded.text);
     } catch {
@@ -9385,6 +9407,26 @@ export function connectProjection(
       const oldSocket = socket;
       openTransport(deviceId);
       oldSocket?.close(1000, 'launch capability negotiation');
+    } else if (reconnect && gmDraftRefresh !== null) {
+      const original = gmDraftRefresh;
+      gmDraftRefresh = null;
+      const p = next.formId === 'NET-017' ? gmRequestProjection(next.projection) : null;
+      if (
+        p !== null &&
+        p.contextId === original.scope.gmLocalContextId &&
+        p.campaignId === original.scope.campaignId &&
+        p.requestQueueRevision === original.expectedRequestQueueRevision &&
+        next.revisions.stateRevision === original.expectedRevisions.stateRevision &&
+        next.revisions.actorVisibilityRevision ===
+          original.expectedRevisions.actorVisibilityRevision &&
+        next.revisions.projectionRevision > original.expectedRevisions.projectionRevision
+      )
+        flushGmDraft();
+      else {
+        gmEdit = null;
+        publishGmDraft();
+        notifyReady();
+      }
     } else if (
       reconnect &&
       (pendingGmDraft !== null ||
@@ -9403,6 +9445,21 @@ export function connectProjection(
           '$.network.gm-request',
           null,
           'The exact pending GM delivery could not be replayed.',
+        );
+    } else if (
+      reconnect &&
+      pendingNetworkCommand !== null &&
+      absentNetworkCommandId === pendingNetworkCommand.request.commandId &&
+      socket?.readyState === WebSocket.OPEN
+    ) {
+      absentNetworkCommandId = null;
+      const encoded = encodeClientMessage(pendingNetworkCommand.request, WEB_PROTOCOL_VOCABULARY);
+      if (encoded.ok) socket.send(encoded.text);
+      else
+        failUnexpected(
+          '$.command.request',
+          null,
+          'The original unseen network intention could not be replayed.',
         );
     } else if (reconnect && pendingNetworkDraft !== null && socket?.readyState === WebSocket.OPEN) {
       const encoded = encodeClientMessageV3(pendingNetworkDraft.request, WEB_PROTOCOL_VOCABULARY);
@@ -9768,6 +9825,16 @@ export function connectProjection(
           }
           if (matchesCheckpoint) pendingCheckpoint = null;
           if (matchesNetworkCommand) {
+            // Resume absence is not a terminal outcome for an intention the host has never seen.
+            if (
+              expectingCapabilities &&
+              pendingNetworkCommand?.receipt === null &&
+              message.lastLifecycleState === null &&
+              message.refusal.code === 'GUARD_REJECTED'
+            ) {
+              absentNetworkCommandId = message.commandId;
+              return;
+            }
             if (
               pendingNetworkRefusal !== null &&
               JSON.stringify(pendingNetworkRefusal.refusal) !== JSON.stringify(message)
@@ -9864,7 +9931,19 @@ export function connectProjection(
           }
           if (message.messageType === 'network.gm-request-draft.refusal') {
             pendingGmDraft = null;
-            gmEdit = null;
+            const technicalAdvance =
+              message.refusal.code === 'STALE_REVISION' &&
+              message.refusal.actual.stateRevision ===
+                pending.request.expectedRevisions.stateRevision &&
+              message.refusal.actual.actorVisibilityRevision ===
+                pending.request.expectedRevisions.actorVisibilityRevision &&
+              message.refusal.actual.projectionRevision >
+                pending.request.expectedRevisions.projectionRevision;
+            if (technicalAdvance && !gmDraftRebaseAttempted) {
+              gmDraftRefresh = pending.request;
+              gmDraftRebaseAttempted = true;
+              gmEdit ??= pending.request.values;
+            } else gmEdit = null;
             gmDraftRefusal = message.refusal;
             publishGmDraft();
             notifyReady();
@@ -9974,6 +10053,18 @@ export function connectProjection(
           }
           if (
             !networkDraftResultMatches(message, pending.request, candidate.value.projection) ||
+            (sameNetworkRevisions(candidate.value.revisions, lastSnapshot.revisions) &&
+              (candidate.value.formId !== lastSnapshot.formId ||
+                !sameJson(candidate.value.projection, lastSnapshot.projection))) ||
+            (sameNetworkRevisions(message.appliedRevisions, message.revisions) &&
+              message.appliedDraftRevision === message.draftRevision &&
+              !sameJson(
+                networkEditFromProjection(
+                  pending.request.scope.sourceFormId,
+                  candidate.value.projection,
+                ),
+                { variant: pending.request.variant, values: pending.request.values },
+              )) ||
             candidate.value.projection['deviceId'] !== deviceId ||
             candidate.value.projection['networkScopeId'] !== networkScopeId ||
             candidate.value.projection['contextId'] !== lastSnapshot.projection['contextId'] ||
@@ -10314,6 +10405,33 @@ export function connectProjection(
                 pendingNetworkRefusal.source.revisions.projectionRevision ||
               snapshot.value.revisions.actorVisibilityRevision !==
                 pendingNetworkRefusal.source.revisions.actorVisibilityRevision
+            )
+              snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
+          } else if (
+            snapshot.ok &&
+            pendingNetworkCommand !== null &&
+            absentNetworkCommandId === pendingNetworkCommand.request.commandId
+          ) {
+            const original = pendingNetworkCommand.source,
+              next = snapshot.value;
+            const oldPayload = { ...original.projection, contextId: next.projection['contextId']! };
+            if (
+              next.formId !== original.formId ||
+              next.projection['pendingCommandIdOrNull'] !== null ||
+              [
+                'networkScopeId',
+                'deviceId',
+                'controllerSeat',
+                'campaignIdOrNull',
+                'sessionId',
+                'requestId',
+              ].some((key) => next.projection[key] !== original.projection[key]) ||
+              next.revisions.stateRevision < original.revisions.stateRevision ||
+              next.revisions.projectionRevision < original.revisions.projectionRevision ||
+              next.revisions.actorVisibilityRevision !==
+                original.revisions.actorVisibilityRevision ||
+              (sameNetworkRevisions(next.revisions, original.revisions) &&
+                !sameJson(oldPayload, next.projection))
             )
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           } else if (snapshot.ok && pendingNetworkCommand !== null) {
@@ -11017,6 +11135,7 @@ export function connectProjection(
         checked = { selectedRequestIdOrNull: checked.selectedRequestIdOrNull, decisionReason: '' };
       gmEdit = checked;
       gmEditVersion++;
+      gmDraftRebaseAttempted = false;
       gmDraftRefusal = null;
       if (gmTimer !== null) clearTimeout(gmTimer);
       gmTimer = setTimeout(flushGmDraft, 250);

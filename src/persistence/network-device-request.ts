@@ -402,20 +402,19 @@ export function readHostedDeviceRequestCurrent(
 ): HostedRequestReviewCurrent {
   return ownedRead(db, p, validatePrivateOwner, (bound) => {
     reviewSchema(db);
-    const current = readCurrentRequest(db, bound, s.uuid(requestId));
-    const owner = s.object(
-      s.checked(s.at(db, 'campaign_private_owner', 'campaign_id', bound.campaignId) ?? s.fail()),
-    );
-    gmSource(
-      db,
-      {
-        ownerDeviceId: bound.hostOwnerDeviceId,
-        gmLocalContextId: s.text(owner['gmLocalContextId']),
-        campaignId: bound.campaignId,
-      },
-      validatePrivateOwner,
-    );
-    return current;
+    const id = s.uuid(requestId),
+      owner = s.object(
+        s.checked(s.at(db, 'campaign_private_owner', 'campaign_id', bound.campaignId) ?? s.fail()),
+      );
+    const scope = {
+      ownerDeviceId: bound.hostOwnerDeviceId,
+      gmLocalContextId: s.text(owner['gmLocalContextId']),
+      campaignId: bound.campaignId,
+    };
+    if (!s.same(requestPrincipal(db, scope, id), bound)) return s.fail('FOREIGN_OWNER');
+    // The complete queue fold already verifies this request and its historical GM view bindings.
+    const source = gmSource(db, scope, validatePrivateOwner);
+    return source.queue.requests.find((r) => r.submittedRequest.requestId === id) ?? s.fail();
   });
 }
 function gmScope(value: unknown): GmRequestReviewScope {
@@ -734,6 +733,18 @@ function viewMutation(
         }
         s.assertUnused(db, eventId);
         s.guarded(db, guard, source, 'APPLY');
+        // The outer store owns its public stale result; the structural cursor reader uses another error family.
+        if (
+          !navigation &&
+          source.viewOrNull !== null &&
+          (!s.same(request.expectedRevisions, {
+            stateRevision: source.viewOrNull.stateRevision,
+            projectionRevision: source.viewOrNull.projectionRevision,
+            actorVisibilityRevision: source.viewOrNull.actorVisibilityRevision,
+          }) ||
+            request.expectedRequestQueueRevision !== source.viewOrNull.requestQueueRevision)
+        )
+          return s.fail('STALE_REVISION');
         const before = s.changes(db),
           added = appendGmRequestReviewEventInTransaction(db, scope, { eventId, mutation });
         if (s.changes(db) !== before + added.rowWrites) return s.fail('SOURCE_CHANGED');

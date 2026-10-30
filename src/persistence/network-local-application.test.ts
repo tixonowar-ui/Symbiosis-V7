@@ -21,6 +21,7 @@ import {
   readLocalNetworkOutbox,
   readLocalNetworkAcknowledgementEvent,
   readLocalNetworkDeliverySnapshot,
+  readLocalNetworkRequestDeliverySnapshot,
   readLocalNetworkShellExitByNavigationId,
   prepareLocalRequestLaneBinding,
   acknowledgeLocalRequestLaneBinding,
@@ -345,6 +346,22 @@ function advanceReview(p: ReturnType<typeof setup>, proof: VerifiedRequestReview
   );
 }
 describe('owner request review enrichment and delivery', () => {
+  it('derives the active request bundle from the same owned history and refuses corrupt outbox bytes without writes', () => {
+    const p = setup();
+    expect(readLocalNetworkRequestDeliverySnapshot(p.db, p.scope).outbox).toBeNull();
+    const submitted = submittedForReview(p),
+      before = p.db.serialize();
+    expect(readLocalNetworkRequestDeliverySnapshot(p.db, p.scope)).toEqual(
+      readLocalNetworkDeliverySnapshot(p.db, p.scope, submitted.commandId),
+    );
+    expect(p.db.serialize().equals(before)).toBe(true);
+    p.db
+      .prepare('UPDATE local_network_outbox SET record_sha256=? WHERE command_id=?')
+      .run('0'.repeat(64), submitted.commandId);
+    const corrupt = p.db.serialize();
+    expect(() => readLocalNetworkRequestDeliverySnapshot(p.db, p.scope)).toThrow();
+    expect(p.db.serialize().equals(corrupt)).toBe(true);
+  });
   it('binds the retained original tab, preserves old ACK bytes, and survives reopen with newer decisions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'local-review-'));
     directories.push(dir);

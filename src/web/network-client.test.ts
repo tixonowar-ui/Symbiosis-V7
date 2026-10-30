@@ -16,6 +16,7 @@ import {
   connectProjection,
   LOCAL_ROLE_CHOICE_DETAIL,
   type ProjectionConnection,
+  type NetworkGmRequestDraftClientState,
   type WebClientState,
 } from './ws-client.js';
 import { NETWORK_CONTEXT_STORAGE_KEY } from './forms/net/network-application.js';
@@ -1411,7 +1412,7 @@ async function gmStart(p: JsonObject = gmQueue(), v: RevisionVector = ZERO) {
     ),
   );
   const states: WebClientState[] = [],
-    drafts: (import('./ws-client.js').NetworkGmRequestDraftClientState | null)[] = [];
+    drafts: (NetworkGmRequestDraftClientState | null)[] = [];
   const connection = connectProjection(
     (state) => states.push(state),
     undefined,
@@ -1752,7 +1753,7 @@ describe('NET-017 actual GM client transport family', () => {
     document.body.append(container);
     const root = createRoot(container);
     roots.push({ root, container });
-    await act(async () => root.render(createElement(App)));
+    act(() => root.render(createElement(App)));
     await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
     const socket = Socket.instances[0]!;
     act(() => {
@@ -1807,5 +1808,248 @@ describe('NET-017 actual GM client transport family', () => {
       },
     });
     expect(f.states.at(-1)?.kind).toBe('protocol-error');
+  });
+  it('retains an unseen player command through the real resume absence sequence and retries its exact envelope', async () => {
+    const f = await start('NET-002', address());
+    expect(f.connection.requestFormAction('NET-002::CTA::003')).toEqual({ ok: true });
+    const command = sent(f.socket);
+    f.socket.drop();
+    f.connection.reconnect();
+    const second = Socket.instances[1]!;
+    second.open();
+    expect(sent(second)['unacknowledgedCommandIds']).toEqual([command['commandId']]);
+    second.message({
+      protocolVersion: 1,
+      messageType: 'command.refusal',
+      commandId: command['commandId'],
+      lastLifecycleState: null,
+      revisions: ZERO,
+      refusal: { code: 'GUARD_REJECTED' },
+    });
+    ready(second, 'NET-002', { ...address(), contextId: NEXT_CONTEXT });
+    expect(sent(second)).toEqual(command);
+    expect(f.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { availableActionKeys: [] } });
+  });
+  it.each(['same-vector replacement', 'different applied values'] as const)(
+    'rejects a player draft result with %s',
+    async (invalid) => {
+      const f = await start('NET-005', waiting(ZERO));
+      vi.useFakeTimers();
+      f.connection.replaceNetworkDraft({
+        variant: 'CANCEL_REASON',
+        values: { cancelReason: 'Requested reason' },
+      });
+      vi.advanceTimersByTime(250);
+      const edit = sent(f.socket);
+      const v = { stateRevision: 1, projectionRevision: 1, actorVisibilityRevision: 0 };
+      if (invalid === 'same-vector replacement') {
+        const push = snapshot(
+          'NET-005',
+          { ...waiting(v), requestStatus: 'IN_REVIEW', requestRevision: 1 },
+          v,
+          'unused',
+        );
+        f.socket.message({
+          ...push,
+          presentation: {
+            ...push.presentation,
+            assignment: {
+              reason: 'HOST_SYSTEM_EVENT',
+              correlationId: 'network-owner-view:' + 'e'.repeat(64),
+            },
+          },
+        });
+        expect(f.states.at(-1)?.kind).toBe('ready');
+      }
+      const p = {
+        ...waiting(
+          v,
+          1,
+          invalid === 'same-vector replacement' ? 'Requested reason' : 'Changed reason',
+        ),
+        ...(invalid === 'same-vector replacement'
+          ? { requestStatus: 'IN_REVIEW', requestRevision: 1 }
+          : {}),
+      };
+      const view = snapshot(
+        'NET-005',
+        p,
+        v,
+        edit['draftUpdateId'] as string,
+        'RECONNECT',
+        invalid === 'same-vector replacement' ? [] : ['NET-005::CTA::001'],
+      );
+      f.socket.message({
+        protocolVersion: 3,
+        messageType: 'network.draft.result',
+        draftUpdateId: edit['draftUpdateId'],
+        scope: edit['scope'],
+        changed: true,
+        appliedDraftRevision: 1,
+        appliedRevisions: v,
+        draftRevision: 1,
+        revisions: v,
+        projectionRole: 'player',
+        presentation: { base: view.presentation.base, layers: [] },
+      });
+      expect(f.states.at(-1)).toMatchObject({ kind: 'protocol-error', refusal: { value: null } });
+    },
+  );
+  it('renders the live owner rejection and decodes its safe return to editable NET-003', async () => {
+    window.sessionStorage.setItem(NETWORK_CONTEXT_STORAGE_KEY, SCOPE);
+    vi.stubGlobal('WebSocket', Socket);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify({ deviceId: DEVICE }), { status: 200 })),
+      ),
+    );
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push({ root, container });
+    act(() => root.render(createElement(App)));
+    await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
+    const socket = Socket.instances[0]!;
+    act(() => {
+      socket.open();
+      ready(socket, 'NET-005', waiting(ZERO));
+    });
+    const v = { stateRevision: 1, projectionRevision: 1, actorVisibilityRevision: 0 };
+    const p = {
+      ...waiting(v),
+      requestStatus: 'REJECTED',
+      requestRevision: 1,
+      gmMessage: 'Уточните заявку',
+    };
+    const push = snapshot('NET-005', p, v, 'unused', 'RECONNECT', ['NET-005::CTA::003']);
+    act(() =>
+      socket.message({
+        ...push,
+        presentation: {
+          ...push.presentation,
+          assignment: {
+            reason: 'HOST_SYSTEM_EVENT',
+            correlationId: 'network-owner-view:' + 'f'.repeat(64),
+          },
+        },
+      }),
+    );
+    expect(container.textContent).toContain('Уточните заявку');
+    const back = container.querySelector<HTMLButtonElement>(
+      '[data-atlas-action-key="NET-005::CTA::003"]',
+    );
+    expect(back).not.toBeNull();
+    act(() => back!.click());
+    const navigation = sent(socket),
+      next = { ...v, projectionRevision: 2 };
+    expect(navigation['actionKey']).toBe('NET-005::CTA::003');
+    act(() =>
+      socket.message(
+        snapshot(
+          'NET-003',
+          selection(next),
+          next,
+          navigation['navigationRequestId'] as string,
+          'FORM_ACTION',
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-atlas-form-id="NET-003"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="NET-003::CTA::001"]')).not.toBeNull();
+    expect(container.querySelector('[data-atlas-action-key="NET-003::CTA::003"]')).toBeNull();
+  });
+
+  it('rebases an unsaved GM reason once after an exact P-only stale refusal and verified reconnect, without a workflow command', async () => {
+    const f = await gmStart();
+    vi.useFakeTimers();
+    f.connection.replaceNetworkGmRequestDraft({
+      selectedRequestIdOrNull: REQUEST,
+      decisionReason: 'Keep this reason',
+    });
+    vi.advanceTimersByTime(250);
+    const original = sent(f.socket);
+    const v = { ...ZERO, projectionRevision: 1 };
+    f.socket.message({
+      protocolVersion: 3,
+      messageType: 'network.gm-request-draft.refusal',
+      draftUpdateId: original['draftUpdateId'],
+      scope: original['scope'],
+      revisions: v,
+      presentationUnchanged: true,
+      refusal: { code: 'STALE_REVISION', expected: ZERO, actual: v },
+    });
+    await vi.waitFor(() => expect(Socket.instances).toHaveLength(2));
+    const second = Socket.instances[1]!;
+    second.open();
+    gmReady(second, gmQueue(v), v);
+    const retry = sent(second);
+    expect(retry).toMatchObject({
+      messageType: 'network.gm-request-draft.replace',
+      values: original['values'],
+      expectedRevisions: v,
+    });
+    expect(retry['draftUpdateId']).not.toBe(original['draftUpdateId']);
+    const next = { ...v, projectionRevision: 2 };
+    second.message({
+      protocolVersion: 3,
+      messageType: 'network.gm-request-draft.refusal',
+      draftUpdateId: retry['draftUpdateId'],
+      scope: retry['scope'],
+      revisions: next,
+      presentationUnchanged: true,
+      refusal: { code: 'STALE_REVISION', expected: v, actual: next },
+    });
+    await vi.waitFor(() => expect(Socket.instances).toHaveLength(3));
+    const third = Socket.instances[2]!;
+    third.open();
+    gmReady(third, gmQueue(next), next);
+    expect(third.sent).toHaveLength(1);
+    expect(
+      Socket.instances
+        .flatMap((socket) => socket.sent)
+        .map((text) => JSON.parse(text) as Record<string, unknown>)
+        .filter((m) => m['messageType'] === 'command.request'),
+    ).toEqual([]);
+  });
+
+  it('sends a coalesced new selection before its newly typed reason and preserves both exact drafts', async () => {
+    const f = await gmStart(gmQueue(ZERO, { selectedRequestIdOrNull: null }));
+    vi.useFakeTimers();
+    f.connection.replaceNetworkGmRequestDraft({
+      selectedRequestIdOrNull: REQUEST,
+      decisionReason: '',
+    });
+    f.connection.replaceNetworkGmRequestDraft({
+      selectedRequestIdOrNull: REQUEST,
+      decisionReason: 'Typed for the new selection',
+    });
+    vi.advanceTimersByTime(250);
+    const first = sent(f.socket);
+    expect(first['values']).toEqual({ selectedRequestIdOrNull: REQUEST, decisionReason: '' });
+    const v = { stateRevision: 1, projectionRevision: 1, actorVisibilityRevision: 0 },
+      p = gmQueue(v);
+    const view = gmSnapshot('NET-017', p, v, first['draftUpdateId'] as string);
+    f.socket.message({
+      protocolVersion: 3,
+      messageType: 'network.gm-request-draft.result',
+      draftUpdateId: first['draftUpdateId'],
+      scope: first['scope'],
+      changed: true,
+      appliedRevisions: v,
+      appliedRequestQueueRevision: 1,
+      revisions: v,
+      requestQueueRevision: 1,
+      projectionRole: 'gm',
+      presentation: { base: view.presentation.base, layers: [] },
+    });
+    expect(f.states.at(-1)?.kind).toBe('ready');
+    const second = sent(f.socket);
+    expect(second).toMatchObject({
+      messageType: 'network.gm-request-draft.replace',
+      expectedRevisions: v,
+      values: { selectedRequestIdOrNull: REQUEST, decisionReason: 'Typed for the new selection' },
+    });
+    expect(second['draftUpdateId']).not.toBe(first['draftUpdateId']);
   });
 });
