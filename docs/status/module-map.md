@@ -3,7 +3,22 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-## Текущая поставка #177 — 2026-10-30
+## Текущий срез #195 — 2026-10-30
+
+#177 смёржена через PR #194 в `ecd3984`: независимо проверенный `5e92997`
+прошёл verify 150/3739 и 34/34 production E2E без retry. Финальный CI зелёный;
+две предыдущие попытки получили таймауты существующих SQLite suites, их логи
+сохранены. Единственная причина разброса времени не доказана, лимиты и
+конфигурация проверок сохранены. #190 также закрыта после PR #193.
+
+#195 добавляет самостоятельные shared DTO и standalone codecs player network
+и GM NET-017 по этому source. Закрытые поля, enum, UUID, revision vectors,
+payload/receipt consistency и player/GM isolation проверяются в библиотеке.
+Core wire dispatch, host/routes/capabilities и SQL остаются прежними. Формы
+в приложении не публикуются; #171 / draft PR #185 ещё требует полного GM
+journey и независимых проверок. [ADR 0070](../adr/0070-network-request-source-contracts.md).
+
+## Завершённая поставка #177
 
 База `24c726c`: #190 смёржена через PR #193 после независимого полного
 verify 150/3211, 34/34 production E2E без retry и зелёного CI на том же SHA.
@@ -17,9 +32,8 @@ NET-003/005 и CMP-006 согласованы с ним. NET-018–022/027 и к
 семантические проверки сохранены. [ADR 0069](../adr/0069-device-request-review-atlas-amendment.md).
 
 Это source/guard-поставка: GM queue/decisions не опубликованы в приложении,
-draft PR #185 остаётся неполным до завершения #171. Проверки текущей поставки
-фиксируются в PR и [handoff](handoff.md); перед merge обязательны независимый
-полный verify/E2E окончательного committed SHA и зелёный CI.
+draft PR #185 остаётся неполным до завершения #171. Результаты source-поставки
+зафиксированы в PR #194 и [handoff](handoff.md).
 
 ## Исторический срез #190
 
@@ -34,10 +48,9 @@ context B0/B1. Archive/candidate и read/replay сохранённой камп�
 authority context. Точные filesystem freshness guards сохраняются. SQL/schema,
 артефакты и опубликованные формы не меняются. [ADR 0068](../adr/0068-verified-artifact-baseline-lineage.md).
 
-Поставка Atlas 1.6 #177 ещё не применена: её реальные bytes используются только
-в проверяемом patch fixture. Application-only integration peer/SQL/discovery
-остаётся в #171. Полные verify/E2E и независимый final-SHA review обязательны
-до merge текущего среза; результаты фиксируются в PR и [handoff](handoff.md).
+На момент исторического среза #190 Atlas 1.6 использовался только в patch
+fixture; теперь поставка #177 применена. Application-only integration
+peer/SQL/discovery остаётся в #171.
 
 ## Предыдущий снимок #182
 
@@ -232,8 +245,9 @@ Admission, Start, игровой clock и сцены ещё не реализо�
 entry/close. Source assertions NET-001–005/009–012 и CHR-027 не регистрируют формы
 и не расширяют player authority. [ADR 0067](../adr/0067-private-campaign-network-foundation.md)
 принят для APIs; прикладной [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
-остаётся предложенным. UI/outbox/request/GM runtime #171 не готов; preliminary
-GM decisions требуют решения нормативного #177.
+остаётся предложенным. UI/outbox/request/GM runtime #171 не готов; нормативная
+поставка preliminary GM decisions #177 завершена. Shared контракты #195
+поставляются отдельно от включения этих обработчиков в приложение.
 
 После #170 очередь — #171 → #172 → #173 → #174 → #113. Для #113
 исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
@@ -241,7 +255,7 @@ GM decisions требуют решения нормативного #177.
 
 | Слой                         | Состояние    | Что нужно / реализовано                                                                        | Веха |
 | ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1 + exact v2 navigation/reconnect + v3 identity/campaign drafts                          | M4   |
+| `src/shared`                 | **готов**    | wire v1/v2/v3 identity/campaign; standalone network/player и GM request contracts              | M4   |
 | `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
 | `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
