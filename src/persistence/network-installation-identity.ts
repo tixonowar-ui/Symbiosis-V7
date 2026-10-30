@@ -3,6 +3,7 @@ import { types } from 'node:util';
 import type Database from 'better-sqlite3';
 import type { JsonObject } from '../shared/wire-protocol.js';
 import { loadDeviceId } from './device-identity.js';
+import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 
 /** Private installation material; it is never a player projection or campaign role. */
 export interface DeviceInstallationIdentityMaterial extends JsonObject {
@@ -135,7 +136,11 @@ function requireSchema(db: Database.Database): void {
   const row = db
     .prepare<[], { version: unknown }>('SELECT MAX(version) AS version FROM schema_migration')
     .get();
-  if (row?.version !== 8) return fail('CORRUPT_STORAGE');
+  if (row?.version !== 8 && row?.version !== 9) return fail('CORRUPT_STORAGE');
+  if (row.version === 9) {
+    for (const table of LOCAL_NETWORK_TAB_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  }
 }
 function read(
   db: Database.Database,

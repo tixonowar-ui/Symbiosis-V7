@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { types } from 'node:util';
 import type Database from 'better-sqlite3';
 import type {
   CampaignCreateRequest,
@@ -147,6 +148,11 @@ export interface CampaignPrivateOwner {
   readonly ownerDeviceId: string;
   readonly verifier: JsonObject;
   readonly verifierSha256: string;
+}
+export type CampaignPrivateOwnerValidator = (owner: CampaignPrivateOwner) => void;
+export interface CampaignCreationOrigin {
+  readonly payload: StoredPausedCampaign;
+  readonly command: StoredCampaignCreationCommand;
 }
 export type CampaignSourceValidator = (
   draft: StoredCampaignDraft,
@@ -1239,7 +1245,7 @@ function campaignPayload(
     return fail();
   return { checkpoint, payload };
 }
-export function readCampaignPrivateOwner(
+function readCampaignOwnerBinding(
   db: Database.Database,
   gmLocalContextId: string,
   campaignId: string,
@@ -1266,6 +1272,21 @@ export function readCampaignPrivateOwner(
     row['profile_id'] !== context.masterProfileId
   )
     return fail('FOREIGN_OWNER');
+  return {
+    campaignId,
+    gmLocalContextId,
+    masterProfileId: context.masterProfileId,
+    ownerDeviceId: context.ownerDeviceId,
+    verifier: proof.verifier,
+    verifierSha256: proof.verifierSha256,
+  };
+}
+export function readCampaignPrivateOwner(
+  db: Database.Database,
+  gmLocalContextId: string,
+  campaignId: string,
+): CampaignPrivateOwner {
+  const privateOwner = readCampaignOwnerBinding(db, gmLocalContextId, campaignId);
   const { payload } = campaignPayload(db, campaignId);
   const draft = readCampaignDraft(db, gmLocalContextId, payload.sourceCampaignDraftId);
   if (
@@ -1278,14 +1299,35 @@ export function readCampaignPrivateOwner(
     })
   )
     return fail();
-  return {
-    campaignId,
-    gmLocalContextId,
-    masterProfileId: context.masterProfileId,
-    ownerDeviceId: context.ownerDeviceId,
-    verifier: proof.verifier,
-    verifierSha256: proof.verifierSha256,
-  };
+  return privateOwner;
+}
+function validateCreationJournal(
+  row: Row,
+  request: CampaignCreateRequest,
+  receipt: CommandReceipt<CampaignCreateResult>,
+  payload: StoredPausedCampaign,
+  draft: StoredCampaignDraft,
+): void {
+  if (
+    row['campaign_id'] !== payload.campaignId ||
+    draft.status !== 'COMMITTED' ||
+    draft.committedCampaignId !== payload.campaignId ||
+    row['command_id'] !== request.commandId ||
+    row['draft_id'] !== draft.campaignDraftId ||
+    row['receipt_id'] !== receipt.receiptId ||
+    receipt.commandId !== request.commandId ||
+    receipt.receiptId !== payload.creationReceiptId ||
+    payload.creationCommandId !== request.commandId ||
+    payload.sourceCampaignDraftId !== draft.campaignDraftId ||
+    !same(receipt.result, createResult(request, payload)) ||
+    !same(receipt.revisions, zero()) ||
+    draft.draftRevision !== request.payload.draftRevision + 1 ||
+    draft.stateRevision !== request.expectedRevisions.stateRevision + 1 ||
+    draft.projectionRevision !== request.expectedRevisions.projectionRevision + 1 ||
+    draft.formId !== 'CMP-005' ||
+    campaignCreationHash({ request, receipt }) !== row['journal_sha256']
+  )
+    return fail();
 }
 export function readCampaignCreationCommand(
   db: Database.Database,
@@ -1307,25 +1349,120 @@ export function readCampaignCreationCommand(
   readCampaignPrivateOwner(db, gmLocalContextId, campaignId);
   const { payload } = campaignPayload(db, campaignId);
   const draft = readCampaignDraft(db, gmLocalContextId, request.payload.campaignDraftId);
-  const expectedResult = createResult(request, payload);
-  if (
-    row['command_id'] !== request.commandId ||
-    row['draft_id'] !== draft.campaignDraftId ||
-    row['receipt_id'] !== receipt.receiptId ||
-    receipt.commandId !== request.commandId ||
-    receipt.receiptId !== payload.creationReceiptId ||
-    payload.creationCommandId !== request.commandId ||
-    payload.sourceCampaignDraftId !== draft.campaignDraftId ||
-    !same(receipt.result, expectedResult) ||
-    !same(receipt.revisions, zero()) ||
-    draft.draftRevision !== request.payload.draftRevision + 1 ||
-    draft.stateRevision !== request.expectedRevisions.stateRevision + 1 ||
-    draft.projectionRevision !== request.expectedRevisions.projectionRevision + 1 ||
-    draft.formId !== 'CMP-005' ||
-    campaignCreationHash({ request, receipt }) !== row['journal_sha256']
-  )
-    return fail();
+  validateCreationJournal(row, request, receipt, payload, draft);
   return { request, receipt };
+}
+
+function consumeNativePromise(value: unknown): void {
+  if (!types.isPromise(value)) return;
+  try {
+    void Promise.prototype.then.call(
+      value,
+      () => undefined,
+      () => undefined,
+    );
+  } catch {
+    // Trusted validators are not a sandbox for adversarial Promise species constructors.
+  }
+}
+function validateOriginOwner(
+  db: Database.Database,
+  privateOwner: CampaignPrivateOwner,
+  callback: CampaignPrivateOwnerValidator,
+): void {
+  if (
+    typeof callback !== 'function' ||
+    Object.prototype.toString.call(callback) === '[object AsyncFunction]'
+  )
+    return fail('INVALID_INPUT');
+  const guard = () =>
+    canonical([
+      db.prepare('SELECT total_changes() AS changes').get(),
+      db.pragma('schema_version', { simple: true }),
+      db.pragma('user_version', { simple: true }),
+    ]);
+  const before = guard();
+  let result: unknown;
+  try {
+    result = callback(privateOwner);
+  } catch (error: unknown) {
+    consumeNativePromise(error);
+    return fail('INVALID_INPUT');
+  }
+  consumeNativePromise(result);
+  // An empty COMMIT/ROLLBACK does not alter total_changes; check before any further read.
+  if (!db.inTransaction || guard() !== before) return fail('SOURCE_CHANGED');
+  if (result !== undefined) return fail('INVALID_INPUT');
+}
+function readOriginTransaction<T>(db: Database.Database, body: () => T): T {
+  try {
+    return db.inTransaction ? body() : db.transaction(body).deferred();
+  } catch (error: unknown) {
+    if (error instanceof CampaignCreationStoreError) throw error;
+    // SQLite and device-identity diagnostics must not escape this private source boundary.
+    return fail();
+  }
+}
+function creationOrigin(
+  db: Database.Database,
+  gmLocalContextId: string,
+  campaignId: string,
+  validatePrivateOwner: CampaignPrivateOwnerValidator,
+): CampaignCreationOrigin {
+  const privateOwner = readCampaignOwnerBinding(db, gmLocalContextId, campaignId);
+  const row =
+    rowAt(db, 'campaign_creation_command', 'campaign_id', campaignId) ?? fail('NOT_FOUND');
+  const request = createRequest(parse(row['request_json']));
+  if (request.payload.gmLocalContextId !== gmLocalContextId) return fail('FOREIGN_OWNER');
+  const receipt = object(parse(row['receipt_json']), [
+    'commandId',
+    'receiptId',
+    'result',
+    'revisions',
+  ]) as unknown as CommandReceipt<CampaignCreateResult>;
+  const result = object(receipt.result);
+  const draft = readCampaignDraft(db, gmLocalContextId, request.payload.campaignDraftId);
+  // Birth facts are reconstructed from immutable CREATE/sealed-draft evidence, never from
+  // a later campaign vector or roster. Settings changes require a future explicit contract.
+  const payload = pausedPayload({
+    kind: 'PAUSED_CAMPAIGN',
+    schemaVersion: 1,
+    campaignId,
+    sourceCampaignDraftId: draft.campaignDraftId,
+    ...draft.values,
+    status: 'PAUSED',
+    createdAt: result['createdAt'],
+    qrPayload: result['qrPayload'],
+    baselineVersion: result['baselineVersion'],
+    creationCommandId: request.commandId,
+    creationReceiptId: receipt.receiptId,
+  });
+  validateCreationJournal(row, request, receipt, payload, draft);
+  validateOriginOwner(db, privateOwner, validatePrivateOwner);
+  return { payload, command: { request, receipt } };
+}
+/** Validates the immutable first CREATE independently of the current campaign checkpoint. */
+export function readCampaignCreationOrigin(
+  db: Database.Database,
+  gmLocalContextId: string,
+  campaignId: string,
+  validatePrivateOwner: CampaignPrivateOwnerValidator,
+): CampaignCreationOrigin {
+  return readOriginTransaction(db, () =>
+    creationOrigin(db, text(gmLocalContextId), text(campaignId), validatePrivateOwner),
+  );
+}
+/** Host-system lookup by exact published campaign; no peer-supplied GM context or scan. */
+export function readHostedCampaignCreationOrigin(
+  db: Database.Database,
+  campaignId: string,
+  validatePrivateOwner: CampaignPrivateOwnerValidator,
+): CampaignCreationOrigin {
+  return readOriginTransaction(db, () => {
+    const row =
+      rowAt(db, 'campaign_private_owner', 'campaign_id', text(campaignId)) ?? fail('NOT_FOUND');
+    return creationOrigin(db, text(row['context_id']), campaignId, validatePrivateOwner);
+  });
 }
 export function readPausedCampaign(
   db: Database.Database,

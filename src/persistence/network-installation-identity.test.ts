@@ -95,6 +95,20 @@ afterEach(() => {
 });
 
 describe('durable private installation identity', () => {
+  it('keeps the explicit schema8 key contract while schema9 requires its actual tab tables', () => {
+    const { db, device, input } = setup();
+    db.exec(
+      'DROP TABLE local_network_active_tab; DROP TABLE local_network_tab_close; DROP TABLE local_network_tab_entry; DROP TABLE local_network_tab',
+    );
+    db.prepare('DELETE FROM schema_migration WHERE version=9').run();
+    ensureDeviceInstallationIdentity(db, input, validateRealKeyPair);
+    expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
+    const before = raw(db);
+    expect(applyMigrations(db)).toBe(9);
+    expect(raw(db)).toEqual(before);
+    expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
+  });
+
   it('does not create credentials on read and atomically stores exactly the validated material', () => {
     const { db, device, input } = setup();
     expect(readDeviceInstallationIdentity(db, device)).toBeNull();
@@ -477,28 +491,36 @@ describe('durable private installation identity', () => {
     },
   );
 
-  it.each(['missing-table', 'older-schema', 'future-schema'] as const)(
-    'refuses %s instead of generating a fallback identity',
-    (kind) => {
-      const { db, device, input } = setup();
-      if (kind === 'missing-table') db.exec('DROP TABLE device_installation_identity');
-      else if (kind === 'older-schema')
-        db.prepare('DELETE FROM schema_migration WHERE version=8').run();
-      else db.prepare('UPDATE schema_migration SET version=9 WHERE version=8').run();
-      const before = db.serialize();
-      const validate = vi.fn(allow);
-      expectCode(() => readDeviceInstallationIdentity(db, device), 'CORRUPT_STORAGE');
-      expectCode(() => ensureDeviceInstallationIdentity(db, input, validate), 'CORRUPT_STORAGE');
-      expect(validate).not.toHaveBeenCalled();
-      expect(db.serialize()).toEqual(before);
-    },
-  );
+  it.each([
+    'missing-table',
+    'missing-network-tab-table',
+    'missing-close-table',
+    'older-schema',
+    'future-schema',
+  ] as const)('refuses %s instead of generating a fallback identity', (kind) => {
+    const { db, device, input } = setup();
+    if (kind === 'missing-table') db.exec('DROP TABLE device_installation_identity');
+    else if (kind === 'missing-network-tab-table') db.exec('DROP TABLE local_network_active_tab');
+    else if (kind === 'missing-close-table') db.exec('DROP TABLE local_network_tab_close');
+    else if (kind === 'older-schema')
+      db.prepare('DELETE FROM schema_migration WHERE version>=8').run();
+    else db.prepare('UPDATE schema_migration SET version=10 WHERE version=9').run();
+    const before = db.serialize();
+    const validate = vi.fn(allow);
+    expectCode(() => readDeviceInstallationIdentity(db, device), 'CORRUPT_STORAGE');
+    expectCode(() => ensureDeviceInstallationIdentity(db, input, validate), 'CORRUPT_STORAGE');
+    expect(validate).not.toHaveBeenCalled();
+    expect(db.serialize()).toEqual(before);
+  });
 
   it('upgrades version 7 without rewriting prior migrations or creating identity, roles or game rows', () => {
     const db = open();
     const device = bootstrapDeviceIdentity(db);
+    db.exec(
+      'DROP TABLE local_network_active_tab; DROP TABLE local_network_tab_close; DROP TABLE local_network_tab_entry; DROP TABLE local_network_tab',
+    );
     db.exec('DROP TABLE device_installation_identity');
-    db.prepare('DELETE FROM schema_migration WHERE version=8').run();
+    db.prepare('DELETE FROM schema_migration WHERE version>=8').run();
     db.prepare(
       "INSERT INTO local_character(local_character_id,lifecycle_state,payload_json) VALUES('preserved-local','DRAFT','{\"source\":7}')",
     ).run();
@@ -508,7 +530,7 @@ describe('durable private installation identity', () => {
     const oldRegistry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
     const local = db.prepare('SELECT * FROM local_character').all();
     const campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(8);
+    expect(applyMigrations(db)).toBe(9);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<8 ORDER BY version').all(),
     ).toEqual(oldRegistry);
@@ -518,7 +540,7 @@ describe('durable private installation identity', () => {
     for (const table of ['campaign_character_copy', 'campaign_checkpoint', 'local_gm_context'])
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const before = db.serialize();
-    expect(applyMigrations(db)).toBe(8);
+    expect(applyMigrations(db)).toBe(9);
     expect(db.serialize()).toEqual(before);
   });
 });

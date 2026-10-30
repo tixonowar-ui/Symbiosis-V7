@@ -3,12 +3,12 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-- Снимок: `2026-10-30`, техническая подготовка #171 поверх слитого PR #180 (#179).
+- Снимок: `2026-10-30`, инфраструктурная предпосылка #182 для #171 поверх PR #180 (#179).
 - Подтверждённая база `03bf13b`: 134 файла / 2499 Vitest-тестов и 34 Chrome E2E
   без retry; независимый final-SHA прогон и CI прошли перед merge.
-- Текущий срез добавляет только LAN parser, private installation keys, peer
-  proof primitives, held-listener attachment и буквальные source assertions.
-  NET runtime, discovery, admission request и решения GM ещё не опубликованы.
+- Текущий срез добавляет LAN parser/discovery, private installation keys,
+  authenticated peer channel, FINAL evidence, current campaign reader и local tabs.
+  NET UI, application request runtime и решения GM ещё не опубликованы.
   Полные проверки текущей подготовки фиксируются в [handoff](handoff.md).
 - Артефакты и конвейер не менялись. Воспроизводимость проверяется отдельным
   CI-гейтом на чистом checkout.
@@ -189,12 +189,13 @@ runtime этим не реализованы.
 CREATE. QR реально декодируется; восстановление сохраняет campaign/receipt.
 Admission, Start, игровой clock и сцены ещё не реализованы.
 
-#171 имеет проверяемые технические заготовки: strict LAN locator, owner-bound
-Ed25519 installation identity (миграция 0008), scoped peer transcripts и передача
-actual sockets удерживаемому endpoint без close/rebind. Source assertions
-NET-001–005/009–012 и CHR-027 не регистрируют формы и не расширяют player authority.
-Дальнейшая реализация и принятие [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
-остаются открытыми; preliminary GM decisions требуют решения нормативного #177.
+#182 реализует отдельный технический фундамент: private installation identity
+и peer channel, LAN discovery, immutable FINAL evidence и owner-bound local tab
+entry/close. Source assertions NET-001–005/009–012 и CHR-027 не регистрируют формы
+и не расширяют player authority. [ADR 0067](../adr/0067-private-campaign-network-foundation.md)
+принят для APIs; прикладной [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
+остаётся предложенным. UI/outbox/request/GM runtime #171 не готов; preliminary
+GM decisions требуют решения нормативного #177.
 
 После #170 очередь — #171 → #172 → #173 → #174 → #113. Для #113
 исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
@@ -206,7 +207,7 @@ NET-001–005/009–012 и CHR-027 не регистрируют формы и �
 | `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
 | `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
 | `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0008`, включая post-save, paused campaign и private installation identity | M2   |
+| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0009`, включая post-save, paused campaign, private identity и local tabs  | M2   |
 | `src/host`                   | **частично** | character FINAL/post-save, GM launch, durable campaign draft и CREATE PAUSED                   | M4   |
 | `src/host/projections`       | **частично** | APP-001/002/004/009/010/011, CHR-001–026/028/031/032/036–042, CMP-001–006                      | M4   |
 | `src/web`                    | **частично** | character/post-save и GM campaign creation; production E2E с настоящим host                    | M5   |

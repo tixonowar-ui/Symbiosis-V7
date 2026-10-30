@@ -10,6 +10,26 @@ export type {
   NetworkInstallationIdentityStoreCode,
 } from './network-installation-identity.js';
 export {
+  commitLocalNetworkTabEntry,
+  commitLocalNetworkTabClose,
+  readOwnedLocalNetworkTab,
+  readActiveLocalNetworkTab,
+  readLocalNetworkTabEntryByCommandId,
+  readLocalNetworkTabCloseByCommandId,
+  LocalNetworkTabStoreError,
+} from './network-local-tab.js';
+export type {
+  LocalNetworkTab,
+  LocalNetworkTabEntryInput,
+  LocalNetworkTabEntryReceipt,
+  LocalNetworkTabCloseInput,
+  LocalNetworkTabCloseReceipt,
+  StoredLocalNetworkTabClose,
+  StoredLocalNetworkTabEntry,
+  LocalNetworkTabEntryGuard,
+  LocalNetworkTabStoreCode,
+} from './network-local-tab.js';
+export {
   CampaignCreationStoreError,
   campaignCreationHash,
   readLocalGmProfile,
@@ -29,6 +49,8 @@ export {
   readCampaignDraftCancellationById,
   cancelCampaignDraft,
   readCampaignPrivateOwner,
+  readCampaignCreationOrigin,
+  readHostedCampaignCreationOrigin,
   readCampaignCreationCommand,
   commitCampaignCreation,
 } from './campaign-creation.js';
@@ -50,9 +72,19 @@ export type {
   CampaignCreationInput,
   StoredCampaignCreationCommand,
   CampaignPrivateOwner,
+  CampaignPrivateOwnerValidator,
+  CampaignCreationOrigin,
   CampaignSourceValidator,
   CampaignTrustedValidator,
 } from './campaign-creation.js';
+export {
+  readOwnedCurrentPausedCampaign,
+  readHostedCurrentPausedCampaign,
+} from './current-paused-campaign.js';
+export type {
+  OwnedCampaignReadScope,
+  CurrentPausedCampaignHeader,
+} from './current-paused-campaign.js';
 export {
   readArchivedCampaignCharacterSource,
   readPostSaveHeadById,

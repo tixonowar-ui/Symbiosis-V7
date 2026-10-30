@@ -6,6 +6,7 @@ import { bootstrapDeviceIdentity, openPersistenceDatabase } from '../persistence
 import type { DeviceId } from '../persistence/index.js';
 import { createHost, startHost } from './server.js';
 import { createShellRevisionTracker } from './shell-revisions.js';
+import { initializeNetworkInstallation } from './network-installation.js';
 
 const HOST_INTERFACE_CONFIG = 'npm_package_config_host_interface';
 const HOST_PORT_CONFIG = 'npm_package_config_host_port';
@@ -138,6 +139,7 @@ export async function startHostApplication(
   let app: Awaited<ReturnType<typeof createHost>> | undefined;
   try {
     const deviceId = dependencies.bootstrapDeviceIdentity(database);
+    initializeNetworkInstallation(database);
     const revisions = createShellRevisionTracker();
     app = await dependencies.createHost({
       advanceRevisions: revisions.advance,

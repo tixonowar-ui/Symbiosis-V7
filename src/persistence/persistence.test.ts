@@ -132,6 +132,10 @@ describe('persistence schema', () => {
       'local_gm_active_context',
       'local_gm_context',
       'local_gm_profile',
+      'local_network_active_tab',
+      'local_network_tab',
+      'local_network_tab_close',
+      'local_network_tab_entry',
       'schema_migration',
     ]);
     for (const table of ['local_character', 'campaign', 'campaign_checkpoint']) {
@@ -146,12 +150,12 @@ describe('persistence schema', () => {
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
 
     insertCampaign(database, 'preserved');
-    expect(applyMigrations(database)).toBe(8);
+    expect(applyMigrations(database)).toBe(9);
     expect(
       database.prepare('SELECT payload_json FROM campaign WHERE campaign_id = ?').get('preserved'),
     ).toEqual({ payload_json: '{}' });
     expect(database.prepare('SELECT count(*) AS count FROM schema_migration').get()).toEqual({
-      count: 8,
+      count: 9,
     });
 
     database

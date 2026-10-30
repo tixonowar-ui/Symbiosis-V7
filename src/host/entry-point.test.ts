@@ -15,6 +15,7 @@ import {
 import { hostEntryConfigFromEnvironment, startHostApplication } from './entry-point.js';
 import type { HostEntryConfig, HostEntryDependencies } from './entry-point.js';
 import { createHost, startHost } from './server.js';
+import { loadNetworkInstallation } from './network-installation.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const temporaryRoots: string[] = [];
@@ -153,6 +154,7 @@ describe('host application entry point', () => {
     const database = openPersistenceDatabase(join(config.dataDirectory, 'symbiosis-v7.sqlite'));
     try {
       expect(loadDeviceId(database)).toBe(first.deviceId);
+      expect(loadNetworkInstallation(database).ownerDeviceId).toBe(first.deviceId);
     } finally {
       database.close();
     }
