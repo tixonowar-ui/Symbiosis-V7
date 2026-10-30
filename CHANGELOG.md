@@ -51,7 +51,10 @@
   сценарий включает accept/restart/reject/новый SUBMIT; при CANCEL выбранная
   строка и причина GM очищаются. Immutable receipts отделены от current view.
   Подписка ограничена опубликованной NET-005; потерянный ACK восстанавливается
-  с прежними IDs. Финальный допуск, copies и seats не создаются.
+  с прежними IDs. Выход в обычный shell снимает только три GM capability;
+  повторные проверки одной синхронной операции переиспользуют проверенный
+  source при сохранённых owner/key/CAS guards. Финальный допуск, copies и seats
+  не создаются.
   [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md);
   результаты обязательных merge gates — в [handoff](docs/status/handoff.md).
 

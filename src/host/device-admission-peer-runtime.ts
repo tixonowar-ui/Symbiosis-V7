@@ -19,6 +19,8 @@ import {
   readHostedDeviceRequestCurrent,
   commitHostedRequestLaneBinding,
   type HostedRequestReviewCurrent,
+  type GmRequestReviewSource,
+  type VerifiedGmRequestQueue,
   type HostedCandidateBaselineGuard,
   readHostedConnectionAttempt,
   type HostedNetworkCommand,
@@ -1099,38 +1101,64 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         },
         validateOwner,
       );
-      return Object.freeze(
-        Array.from<string>(authoritativeRequestIds)
-          .sort()
-          .map((requestId) => {
-            const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
-            if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
-            const expected = stored.submittedRequest.principal;
-            // A second signed key can claim the same UUID; the durable pin must also agree.
-            const connected =
-              !closed &&
-              [...connections].some((connection) => {
-                if (
-                  connection.channel.closed ||
-                  connection.handle.campaignId !== campaignId ||
-                  !same(connection.channel.deviceIdentity, expected.peerIdentity)
-                )
-                  return false;
-                const principal = source(connection).principal;
-                if (!same(principal, expected)) return false;
-                readHostedDeviceRequest(d.database, principal, requestId, validateOwner);
-                return true;
-              });
-            return Object.freeze({
-              requestId,
-              requestOwnerDeviceId: expected.peerIdentity.ownerDeviceId,
-              connected,
-            });
-          }),
-      );
+      return connectionFacts(campaignId, authoritativeRequestIds, queue);
     };
     // A command guard reads its existing snapshot; standalone refresh opens only a deferred read.
     return d.database.inTransaction ? read() : d.database.transaction(read).deferred();
+  }
+
+  /** Internal synchronous composition only: never retain this source across await or a write. */
+  function requestConnectionFactsFromSource(
+    verified: GmRequestReviewSource,
+  ): readonly DeviceAdmissionPeerRequestConnectionFact[] {
+    const { scope, queue } = verified;
+    const origin = readHostedCampaignCreationOrigin(d.database, scope.campaignId, validateOwner);
+    if (
+      scope.ownerDeviceId !== loadDeviceId(d.database) ||
+      scope.gmLocalContextId !== origin.command.request.payload.gmLocalContextId ||
+      queue.campaignId !== scope.campaignId
+    )
+      throw new NetworkApplicationStoreError('FOREIGN_OWNER');
+    return connectionFacts(
+      scope.campaignId,
+      queue.requests.map((r) => r.submittedRequest.requestId),
+      queue,
+    );
+  }
+  function connectionFacts(
+    campaignId: string,
+    requestIds: readonly string[],
+    queue: VerifiedGmRequestQueue,
+  ): readonly DeviceAdmissionPeerRequestConnectionFact[] {
+    if (new Set(requestIds).size !== requestIds.length)
+      throw new NetworkApplicationStoreError('INVALID_INPUT');
+    return Object.freeze(
+      [...requestIds].sort().map((requestId) => {
+        const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
+        if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
+        const expected = stored.submittedRequest.principal;
+        if (expected.campaignId !== campaignId)
+          throw new NetworkApplicationStoreError('FOREIGN_OWNER');
+        // This also proves disconnected identities; a supplied UUID/key is never authority.
+        readHostedDeviceRequest(d.database, expected, requestId, validateOwner);
+        const connected =
+          !closed &&
+          [...connections].some((connection) => {
+            if (
+              connection.channel.closed ||
+              connection.handle.campaignId !== campaignId ||
+              !same(connection.channel.deviceIdentity, expected.peerIdentity)
+            )
+              return false;
+            return same(source(connection).principal, expected);
+          });
+        return Object.freeze({
+          requestId,
+          requestOwnerDeviceId: expected.peerIdentity.ownerDeviceId,
+          connected,
+        });
+      }),
+    );
   }
 
   function close(): Promise<void> {
@@ -1145,5 +1173,5 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     closePromise = Promise.allSettled(tasks).then(() => undefined);
     return closePromise;
   }
-  return Object.freeze({ run, close, requestConnectionFacts });
+  return Object.freeze({ run, close, requestConnectionFacts, requestConnectionFactsFromSource });
 }

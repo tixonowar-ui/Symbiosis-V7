@@ -5696,7 +5696,11 @@ function decodeFormActionSnapshot(
     const decoded = decodeConfirmedSnapshot(
       message,
       pending.actionKey === 'APP-011::CTA::001'
-        ? previous.executableWorkflowCommandIds.filter((id) => id !== CAMPAIGN_CREATE_COMMAND_ID)
+        ? previous.executableWorkflowCommandIds.filter(
+            (id) =>
+              id !== CAMPAIGN_CREATE_COMMAND_ID &&
+              !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id),
+          )
         : previous.executableWorkflowCommandIds,
     );
     if (!decoded.ok) return decoded;

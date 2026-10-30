@@ -278,6 +278,7 @@ export function createCampaignNetworkRuntime(d: {
     start,
     discover,
     requestConnectionFacts: receiver.requestConnectionFacts,
+    requestConnectionFactsFromSource: receiver.requestConnectionFactsFromSource,
     close,
     diagnostics: () => [...diagnosticCodes],
   };

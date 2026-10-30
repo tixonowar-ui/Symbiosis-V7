@@ -43,7 +43,11 @@ const DRAFT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CAMPAIGN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const PROFILE = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const ZERO = { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 };
-const CAPABILITIES = ['UI-CMD-CAMPAIGN-CREATE'] as const;
+const CAPABILITIES = [
+  'UI-CMD-CAMPAIGN-CREATE',
+  'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+  'UI-CMD-DEVICE-REQUEST-REJECT',
+] as const;
 const common = { gmLocalContextId: CONTEXT, hostDeviceId: DEVICE, masterAuthorityRevision: 0 };
 const draft = {
   ...common,
@@ -446,6 +450,29 @@ describe('campaign projection contract', () => {
 });
 
 describe('campaign draft transport', () => {
+  it.each(CAPABILITIES)(
+    'refuses GM capability %s on an ordinary shell snapshot',
+    async (capability) => {
+      const h = await harness('APP-001');
+      h.socket.serverClose();
+      h.connection.reconnect();
+      const resumed = Socket.instances.at(-1)!;
+      resumed.open();
+      const request = lastFrame<{ reconnectRequestId: string }>(resumed);
+      resumed.message({
+        messageType: 'session.reconnect.capabilities',
+        protocolVersion: 2,
+        executableWorkflowCommandIds: [capability],
+        revisions: ZERO,
+        reconnectRequestId: request.reconnectRequestId,
+      });
+      resumed.message(snapshot('APP-001', shell, ZERO, request.reconnectRequestId));
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { code: 'UNRECOGNIZED', path: '$.executableWorkflowCommandIds' },
+      });
+    },
+  );
   it.each(['missing', 'getter', 'read', 'write', 'remove'] as const)(
     'keeps player transport and GM memory context usable with unavailable storage: %s',
     async (failure) => {

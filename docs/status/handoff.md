@@ -10,18 +10,30 @@ restart/replay и forward0011. Campaign birth, original SUBMIT receipts,
 local FINAL и исторические baseline IDs не переписываются. Copies, seats,
 capacity reservations, final admission и Start не создаются.
 
-Авторские node/web typecheck проходят. Focused проверены реальные SQLite/TCP
-review, CANCEL race и старый schema10 SUBMIT→forward11→lost-first-BIND-ACK.
-Последний request-store/peer run — 57/57; client — 64/64. Production browser
-проходит исходный manual-address→restart→CANCEL, QR batch, а также owner CANCEL
-с очищением выбранной строки/причины GM. Новый GM accept→restart→reject→safe
-return→повторный SUBMIT прошёл полностью (55.3 s на весь сценарий). Устранены
-повторные synchronous folds одной уже проверенной операции; подписка owner
-polling теперь следует успешно опубликованной NET-005 и снимается после выхода.
-Проверки source/CAS после private await сохранены. Полный verify/E2E и
-независимые финальные gates на окончательном committed SHA ещё требуются.
-Таймауты, workers, byte assertions и fixtures не ослаблялись. Raw traces,
-phase measurements и пределы выводов сохранены в `reports/171-integration`.
+На c2c87cb normal verify прошёл 165 файлов / 4206 tests. Полный production
+E2E того SHA завершился 34/38: две проверки CMP-006 ещё ожидали отсутствие
+теперь разрешённого CTA, выход APP-011→APP-001 сохранял две GM capability,
+повторный SUBMIT не успевал доставить NET-005 за 5 s. CI того же SHA отдельно
+остановился на новом полном GM test (32.039 s при лимите30 s). Эти результаты
+не объявлены flaky; исходные логи/trace сохранены в reports.
+
+Исправлены exact CTA expectations и удаление трёх GM capability на переходе
+в обычный shell; строгий decoder сохранён. Повторные проверки одной GM queue
+и одного SUBMIT заменены синхронным reuse уже проверенного source. Сохраняются
+ownership, live channel/key, current source/CAS и post-write guards; ничего
+не переносится через await/SQL write. В парном диагностическом browser run
+вторая отправка до actual NET-005 send сократилась с4878 до4352 ms, весь
+сценарий — с59.9 до49.5 s. Это единичные instrumented измерения, не гарантия
+CI; inclusive timings нельзя складывать. Instrumentation снята побайтово.
+
+После исправлений node/web types, scoped lint и 80 request-store/peer/runtime
+cases проходят, включая lost ACK, CANCEL race и настоящий schema10 upgrade.
+Полный GM unit прошёл за16.598 s. Новые capability negatives проходят в39
+client tests; facts negatives сохраняют exact DB bytes. Обычный fresh-build
+browser run прошёл все четыре CMP и полный GM сценарий:5/5,1.3 min без retry.
+Окончательный committed SHA всё ещё требует normal full verify, всех38 E2E,
+отдельных независимых gates и зелёного CI. Таймауты, workers, byte assertions
+и fixtures не ослаблялись; evidence — в reports/171-integration.
 
 Первая полная проверка c1aa195 прошла types/lint/format и 4198 из 4204 tests.
 Шесть failures были сверены с новым контрактом: три старых migration consumers

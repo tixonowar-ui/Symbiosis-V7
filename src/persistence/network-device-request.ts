@@ -314,8 +314,7 @@ function readCurrentRequest(
   p: HostedNetworkPrincipal,
   id: string,
 ): HostedRequestReviewCurrent {
-  const base = readRequest(db, p, id),
-    submit = rawCommand(db, p, base.submitCommandId) ?? s.fail();
+  const { request: base, submit } = readRequestRecord(db, p, id);
   if (submit.input.operation !== 'SUBMIT' || submit.receipt.operation !== 'SUBMIT') return s.fail();
   const ownerRow = s.at(db, 'campaign_private_owner', 'campaign_id', p.campaignId) ?? s.fail();
   const ownerRecord = s.object(s.checked(ownerRow));
@@ -1294,6 +1293,13 @@ function readRequest(
   p: HostedNetworkPrincipal,
   id: string,
 ): HostedDeviceRequest {
+  return readRequestRecord(db, p, id).request;
+}
+function readRequestRecord(
+  db: Database.Database,
+  p: HostedNetworkPrincipal,
+  id: string,
+): { request: HostedDeviceRequest; submit: Omit<HostedNetworkCommand, 'current'> } {
   const row = s.at(db, 'hosted_device_request', 'request_id', id);
   if (row === undefined) return s.fail('NOT_FOUND');
   if (
@@ -1323,7 +1329,7 @@ function readRequest(
     if (!s.same(cancellation.receipt.request, expected)) return s.fail();
   }
   if (row['closed'] !== (close === null ? 0 : 1) || !s.same(value, expected)) return s.fail();
-  return expected;
+  return { request: expected, submit };
 }
 function command(
   db: Database.Database,

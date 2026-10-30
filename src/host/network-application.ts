@@ -2034,7 +2034,7 @@ export function createGmNetworkRuntime(d: {
   readonly vocabulary: ProtocolVocabulary & WireV2Vocabulary;
   readonly campaignNetwork: Pick<
     ReturnType<typeof createCampaignNetworkRuntime>,
-    'requestConnectionFacts'
+    'requestConnectionFacts' | 'requestConnectionFactsFromSource'
   >;
   readonly campaignPresentation: (
     c: CampaignConnection,
@@ -2103,7 +2103,10 @@ export function createGmNetworkRuntime(d: {
     verifiedQueue(source.queue);
     return source;
   };
-  const guard = (c: CampaignConnection) => {
+  const guard = (
+    c: CampaignConnection,
+    connections?: ReturnType<typeof d.campaignNetwork.requestConnectionFacts>,
+  ) => {
     const bound = scope(c);
     return (source: GmRequestReviewSource): void => {
       exact(scope(c), bound);
@@ -2117,10 +2120,7 @@ export function createGmNetworkRuntime(d: {
           view,
           queue,
           campaign: readHostedCurrentPausedCampaign(db, bound.campaignId, validateOwner),
-          connections: d.campaignNetwork.requestConnectionFacts(
-            bound.campaignId,
-            queue.requests.map((r) => r.submittedRequest.requestId),
-          ),
+          connections: connections ?? d.campaignNetwork.requestConnectionFactsFromSource(source),
           supported: c.executableReview ?? [],
         });
         if (
@@ -2164,12 +2164,7 @@ export function createGmNetworkRuntime(d: {
         view,
         queue,
         campaign: readHostedCurrentPausedCampaign(db, own.campaignId, validateOwner),
-        connections:
-          connections ??
-          d.campaignNetwork.requestConnectionFacts(
-            own.campaignId,
-            queue.requests.map((r) => r.submittedRequest.requestId),
-          ),
+        connections: connections ?? d.campaignNetwork.requestConnectionFactsFromSource(source),
         supported: c.executableReview ?? [],
       }),
     };
@@ -2216,10 +2211,7 @@ export function createGmNetworkRuntime(d: {
     if (source.viewOrNull?.formId !== 'NET-017') return { source, facts: null };
     const own = source.scope,
       view = source.viewOrNull;
-    const facts = d.campaignNetwork.requestConnectionFacts(
-      own.campaignId,
-      source.queue.requests.map((r) => r.submittedRequest.requestId),
-    );
+    const facts = d.campaignNetwork.requestConnectionFactsFromSource(source);
     const connectionFactsSha256 = postSaveSha256(canonicalPostSaveJson(facts));
     if (source.connectionFactsSha256OrNull !== connectionFactsSha256) {
       commitGmRequestReviewConnectionRefresh(
@@ -2231,14 +2223,9 @@ export function createGmNetworkRuntime(d: {
         },
         validateOwner,
         (actual) => {
-          guard(c)(actual);
-          exact(
-            d.campaignNetwork.requestConnectionFacts(
-              own.campaignId,
-              actual.queue.requests.map((r) => r.submittedRequest.requestId),
-            ),
-            facts,
-          );
+          const currentFacts = d.campaignNetwork.requestConnectionFactsFromSource(actual);
+          guard(c, currentFacts)(actual);
+          exact(currentFacts, facts);
         },
       );
       source = verifiedSource(c);

@@ -29,6 +29,7 @@ import {
   createLocalGmContext,
   createCampaignDraft,
   readCampaignDraft,
+  readHostedCampaignCreationOrigin,
   commitCampaignDraftUpdate,
   navigateCampaignDraft,
   commitCampaignCreation,
@@ -37,6 +38,7 @@ import {
 import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import {
   readHostedNetworkCommand,
+  readGmRequestReviewSource,
   commitHostedNetworkCommand,
   readHostedDeviceRequest,
   readHostedPausedCampaignIds,
@@ -1182,6 +1184,68 @@ it('derives deterministic request connection facts from live signed channels and
   expect(facts).toEqual(
     sorted.map((requestId) => ({ requestId, requestOwnerDeviceId: owner, connected: true })),
   );
+  const source = () =>
+    readGmRequestReviewSource(
+      p.db,
+      {
+        ownerDeviceId: loadDeviceId(p.db),
+        gmLocalContextId: readHostedCampaignCreationOrigin(p.db, p.campaignId, p.validate).command
+          .request.payload.gmLocalContextId,
+        campaignId: p.campaignId,
+      },
+      p.validate,
+    );
+  const current = source();
+  expect(p.runtime.requestConnectionFactsFromSource(current)).toEqual(facts);
+  for (const change of [
+    { ownerDeviceId: randomUUID() },
+    { gmLocalContextId: randomUUID() },
+    { campaignId: randomUUID() },
+  ]) {
+    expect(() =>
+      p.runtime.requestConnectionFactsFromSource({
+        ...current,
+        scope: { ...current.scope, ...change },
+      }),
+    ).toThrow();
+  }
+  for (const change of [
+    { requestId: randomUUID() },
+    {
+      principal: {
+        ...p.principal,
+        peerIdentity: {
+          ...p.principal.peerIdentity,
+          ownerDeviceId: randomUUID(),
+        },
+      },
+    },
+    {
+      principal: {
+        ...p.principal,
+        peerIdentity: {
+          ...p.principal.peerIdentity,
+          publicKeySpkiBase64: 'wrong-key',
+        },
+      },
+    },
+  ]) {
+    const firstRequest = current.queue.requests[0]!;
+    expect(() =>
+      p.runtime.requestConnectionFactsFromSource({
+        ...current,
+        queue: {
+          ...current.queue,
+          requests: [
+            {
+              ...firstRequest,
+              submittedRequest: { ...firstRequest.submittedRequest, ...change },
+            },
+          ],
+        },
+      }),
+    ).toThrow();
+  }
   expect(Object.isFrozen(facts)).toBe(true);
   expect(facts.every(Object.isFrozen)).toBe(true);
   expect(() =>
@@ -1207,6 +1271,9 @@ it('derives deterministic request connection facts from live signed channels and
     ),
   );
   expect(changedKey.closed).toBe(false);
+  expect(p.runtime.requestConnectionFactsFromSource(source())).toEqual(
+    sorted.map((requestId) => ({ requestId, requestOwnerDeviceId: owner, connected: false })),
+  );
   expect(p.db.serialize().equals(before)).toBe(true);
   await p.runtime.close();
   expect(p.runtime.requestConnectionFacts(p.campaignId, ids)).toEqual(
