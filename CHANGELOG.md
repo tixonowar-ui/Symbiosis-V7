@@ -9,6 +9,13 @@
 
 ### Добавлено
 
+- **2026-10-30, issue #195:** отдельная shared библиотека закрытых player
+  network DTO и GM NET-017 draft/queue/decision contracts по Atlas 1.6.
+  Standalone codecs проверяют поля, ревизии и receipt consistency, сохраняя
+  отдельные player/GM vocabularies. Core wire dispatch и приложение ещё не
+  публикуют эти families; полный сценарий остаётся в #171 / PR #185.
+  [ADR 0070](docs/adr/0070-network-request-source-contracts.md).
+
 - **2026-10-30, issue #177:** разрешённая поставка Atlas 1.6 задаёт адресную
   очередь NET-017 и отдельные предварительные ACCEPT-TO-REVIEW / REJECT.
   IN_REVIEW не создаёт campaign copies, seats или capacity reservations;

@@ -5,13 +5,14 @@
 
 ## Application #171 — интеграция
 
-Player-срез f9a6a539 объединён с main ecd398458c (#190 и Atlas 1.6 / #177).
+Player-срез f9a6a539 объединён с main f7e6ade3d0 (#190, Atlas 1.6 / #177 и source contracts #195).
 В рабочей ветке подключены GM queue, отдельный GM v3 draft, два preliminary
 workflow, forward0011, peer lane provenance и live owner recovery. Полный #171
-ещё не готов к merge: types/client focused прошли, полный GM runtime case и
-production E2E остаются в проверке. Предыдущие 3539 tests / 36 E2E не являются
+ещё не готов к merge: types/client focused прошли, полный GM runtime case прошёл за 20 s;
+новые regressions и production E2E остаются в проверке. Предыдущие 3539 tests / 36 E2E не являются
 проверкой нового снимка. Фактический итоговый бюджет и независимые final-SHA
-проверки обязательны; source-contract foundation #195 выделяется отдельно.
+проверки обязательны; source-contract foundation #195 смёржена через PR #196; её standalone
+контракты и encoder redaction сохранены, runtime registration добавляется в #171.
 
 ## Source-снимок #177 — 2026-10-30
 
@@ -256,8 +257,8 @@ immutable ACK от текущего состояния; неизвестный �
 команду. После подтверждённого выхода восстанавливается собственный APP-002
 или CHR-040 без создания нового входа. Новые формы зарегистрированы только
 в рабочей ветке; готовность полного #171 ещё не подтверждена.
-Предварительные решения мастера, NET-017 и новые GM-команды не добавлены:
-нужен [#177](https://github.com/tixonowar-ui/Symbiosis-V7/issues/177).
+Предварительные решения мастера, NET-017 и две GM-команды подключены в рабочей
+ветке по смёрженной поставке #177; final verification полного среза ещё требуется.
 
 Текущая очередь — завершить #171, затем #172 → #173 → #174 → #113. Для #113
 исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.

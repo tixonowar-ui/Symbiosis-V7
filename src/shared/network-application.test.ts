@@ -1,14 +1,20 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { loadProtocolVocabulary } from '../host/protocol-vocabulary.js';
 import {
-  decodeClientMessageV3,
-  decodeHostMessageV3,
-  encodeClientMessageV3,
-  encodeHostMessageV3,
+  decodeClientMessageV3 as decodeCoreClientMessageV3,
+  decodeHostMessageV3 as decodeCoreHostMessageV3,
 } from './wire-v3-codec.js';
 import {
   isNetworkApplicationProjection,
+  encodeNetworkClientMessageV3,
+  decodeNetworkHostMessageV3,
+  encodeNetworkHostMessageV3,
+  decodeNetworkGmRequestClientMessageV3,
+  encodeNetworkGmRequestClientMessageV3,
+  decodeNetworkGmRequestHostMessageV3,
+  encodeNetworkGmRequestHostMessageV3,
   networkWorkflowPayloadValue,
   networkGmRequestProjectionValue,
   networkGmRequestDraftValues,
@@ -18,12 +24,19 @@ import {
 import {
   NETWORK_APPLICATION_FORM_IDS,
   type NetworkApplicationFormId,
+  type NetworkDraftRefusalV3Message,
+  type NetworkGmRequestDraftRefusalV3Message,
   type Net017Projection,
   type NetworkGmRequestCandidateSummary,
   type NetworkGmRequestDecisionReceipt,
   type NetworkGmRequestDraftReplaceV3Message,
   type NetworkGmRequestDraftResultV3Message,
 } from './network-application.js';
+import {
+  decodeNetworkClientMessageV3,
+  type NetworkDraftReplaceV3Message,
+  type NetworkLocalContextResumeV3Message,
+} from './device-admission.js';
 import type { JsonObject, JsonValue } from './wire-protocol.js';
 import type { WireV2Vocabulary } from './wire-v2-protocol.js';
 
@@ -158,10 +171,52 @@ const fixtures: Readonly<Record<NetworkApplicationFormId, JsonObject>> = {
   },
 };
 let vocabulary: WireV2Vocabulary;
+let runtimeVocabulary: WireV2Vocabulary;
 beforeAll(async () => {
-  vocabulary = await loadProtocolVocabulary(resolve('.'));
+  runtimeVocabulary = await loadProtocolVocabulary(resolve('.'));
+  const source: unknown = JSON.parse(
+    readFileSync(resolve('generated/spec/atlas/forms-by-id.json'), 'utf8'),
+  );
+  if (source === null || typeof source !== 'object' || Array.isArray(source))
+    throw new Error('Expected source-backed Atlas form map');
+  const forms = source as Record<string, unknown>;
+  const fixtures = new Map<string, { type: 'screen'; route: string }>();
+  for (const id of ['NET-005', 'NET-017', 'CMP-006']) {
+    const candidate = forms[id];
+    if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate))
+      throw new Error(`Missing Atlas ${id}`);
+    const metadata = candidate as Record<string, unknown>;
+    if (
+      metadata['id'] !== id ||
+      metadata['type'] !== 'screen' ||
+      typeof metadata['route'] !== 'string' ||
+      !metadata['route'].includes(':campaignId')
+    )
+      throw new Error(`Invalid Atlas fixture metadata ${id}`);
+    fixtures.set(id, { type: 'screen', route: metadata['route'] });
+  }
+  // A source-contract fixture deliberately supplies only these exact presentation bindings.
+  // This isolated vocabulary still proves the standalone contract independently of runtime registration.
+  vocabulary = {
+    ...runtimeVocabulary,
+    isPresentedForm: (formId, formType, routeTemplate, bindings) => {
+      const form = fixtures.get(formId);
+      if (form === undefined)
+        return runtimeVocabulary.isPresentedForm(formId, formType, routeTemplate, bindings);
+      const binding = bindings[0];
+      return (
+        form.type === formType &&
+        form.route === routeTemplate &&
+        bindings.length === 1 &&
+        binding?.parameterIndex === 0 &&
+        binding.source === 'inherited' &&
+        binding.value === id(5)
+      );
+    },
+  };
 });
-const draft = {
+
+const draft: NetworkDraftReplaceV3Message = {
   messageType: 'network.draft.replace',
   protocolVersion: 3,
   draftUpdateId: 'edit-1',
@@ -174,6 +229,9 @@ const draft = {
 function result(formId: NetworkApplicationFormId = 'NET-005') {
   const payload: Record<string, JsonValue> = structuredClone(fixtures[formId]);
   const scopeId = payload['networkScopeId'];
+  const campaignId = payload['campaignIdOrNull'];
+  if (campaignId !== null && typeof campaignId !== 'string')
+    throw new Error('Fixture must have a valid nullable campaign ID');
   if (typeof scopeId !== 'string') throw new Error('Fixture must contain a network scope');
   return {
     messageType: 'network.draft.result',
@@ -189,14 +247,14 @@ function result(formId: NetworkApplicationFormId = 'NET-005') {
     presentation: {
       base: {
         formId,
-        formType: 'screen',
+        formType: 'screen' as const,
         availableActionKeys: [],
         routeTemplate: `/player/campaigns/:campaignId/network/${formId.toLowerCase()}`,
         routeBindings: [
           {
             parameterIndex: 0,
-            source: 'inherited',
-            value: payload['campaignIdOrNull'] ?? `unbound:${scopeId}`,
+            source: 'inherited' as const,
+            value: campaignId ?? `unbound:${scopeId}`,
           },
         ],
         roleFilteredPayload: payload,
@@ -320,32 +378,29 @@ describe('closed #171 public projection boundary', () => {
 });
 describe('network wire-v3 application drafts', () => {
   it('stores the exact local cancellation reason as input without a workflow execution', () => {
-    const decoded = decodeClientMessageV3(JSON.stringify(draft), vocabulary);
+    const decoded = decodeNetworkClientMessageV3(JSON.stringify(draft));
     expect(decoded).toEqual({ ok: true, value: draft });
     for (const values of [
       { cancelReason: 1 },
       { cancelReason: null },
       { cancelReason: 'x', reason: 'x' },
     ])
-      expect(decodeClientMessageV3(JSON.stringify({ ...draft, values }), vocabulary).ok).toBe(
-        false,
-      );
+      expect(decodeNetworkClientMessageV3(JSON.stringify({ ...draft, values })).ok).toBe(false);
     expect(
-      decodeClientMessageV3(
+      decodeNetworkClientMessageV3(
         JSON.stringify({ ...draft, scope: { ...draft.scope, sourceFormId: 'NET-003' } }),
-        vocabulary,
       ).ok,
     ).toBe(false);
   });
   it('keeps immutable applied facts separate from a current view with a new executor context', () => {
     const input = result();
     input.presentation.base.roleFilteredPayload['contextId'] = id(9);
-    expect(decodeHostMessageV3(JSON.stringify(input), vocabulary).ok).toBe(true);
+    expect(decodeNetworkHostMessageV3(JSON.stringify(input), vocabulary).ok).toBe(true);
     input.appliedDraftRevision = 2;
-    expect(decodeHostMessageV3(JSON.stringify(input), vocabulary).ok).toBe(false);
+    expect(decodeNetworkHostMessageV3(JSON.stringify(input), vocabulary).ok).toBe(false);
   });
   it('checks role, scope, current vector, exact route binding and absence of private payloads', () => {
-    expect(decodeHostMessageV3(JSON.stringify(result()), vocabulary).ok).toBe(true);
+    expect(decodeNetworkHostMessageV3(JSON.stringify(result()), vocabulary).ok).toBe(true);
     const mutations = [
       (x: ReturnType<typeof result>) => {
         x.projectionRole = 'gm';
@@ -366,7 +421,7 @@ describe('network wire-v3 application drafts', () => {
     for (const mutate of mutations) {
       const input = result();
       mutate(input);
-      expect(decodeHostMessageV3(JSON.stringify(input), vocabulary).ok).toBe(false);
+      expect(decodeNetworkHostMessageV3(JSON.stringify(input), vocabulary).ok).toBe(false);
     }
   });
   it('accepts only the exact source workflow payload and preserves nonblank reason bytes', () => {
@@ -781,12 +836,14 @@ function gmWireResult(
     },
   };
 }
-const decodeGmClient = (value: unknown) => decodeClientMessageV3(JSON.stringify(value), vocabulary);
-const decodeGmHost = (value: unknown) => decodeHostMessageV3(JSON.stringify(value), vocabulary);
+const decodeGmClient = (value: unknown) =>
+  decodeNetworkGmRequestClientMessageV3(JSON.stringify(value));
+const decodeGmHost = (value: unknown) =>
+  decodeNetworkGmRequestHostMessageV3(JSON.stringify(value), vocabulary);
 
 describe('separate GM request-review wire v3 family', () => {
   it('round-trips exact GM draft values without a player scope or a separate draft revision', () => {
-    const encoded = encodeClientMessageV3(gmDraftMessage, vocabulary);
+    const encoded = encodeNetworkGmRequestClientMessageV3(gmDraftMessage);
     expect(encoded.ok).toBe(true);
     const decoded = decodeGmClient(gmDraftMessage);
     expect(decoded).toEqual({ ok: true, value: gmDraftMessage });
@@ -837,7 +894,7 @@ describe('separate GM request-review wire v3 family', () => {
       const value = gmWireResult(form),
         decoded = decodeGmHost(value);
       expect(decoded).toEqual({ ok: true, value });
-      expect(encodeHostMessageV3(value, vocabulary).ok).toBe(true);
+      expect(encodeNetworkGmRequestHostMessageV3(value, vocabulary).ok).toBe(true);
       expect(value.appliedRevisions.projectionRevision).toBe(2);
       expect(value.revisions.projectionRevision).toBe(8);
       for (const key of Object.keys(value))
@@ -979,5 +1036,280 @@ describe('separate GM request-review wire v3 family', () => {
         refusal: { code: 'DRAFT_UNAVAILABLE' },
       }).ok,
     ).toBe(false);
+  });
+});
+
+const playerRefusal: NetworkDraftRefusalV3Message = {
+  protocolVersion: 3,
+  messageType: 'network.draft.refusal',
+  draftUpdateId: draft.draftUpdateId,
+  scope: draft.scope,
+  revisions: draft.expectedRevisions,
+  presentationUnchanged: true,
+  refusal: { code: 'DRAFT_UNAVAILABLE' },
+};
+const gmRefusal: NetworkGmRequestDraftRefusalV3Message = {
+  protocolVersion: 3,
+  messageType: 'network.gm-request-draft.refusal',
+  draftUpdateId: gmDraftMessage.draftUpdateId,
+  scope: gmDraftMessage.scope,
+  revisions: gmDraftMessage.expectedRevisions,
+  presentationUnchanged: true,
+  refusal: { code: 'DRAFT_UNAVAILABLE' },
+};
+const resume: NetworkLocalContextResumeV3Message = {
+  protocolVersion: 3,
+  messageType: 'network.local-context.resume',
+  networkScopeId: id(1),
+  reconnectRequestId: 'source-resume',
+  knownRevisions: {
+    stateRevision: common.stateRevision,
+    projectionRevision: common.projectionRevision,
+    actorVisibilityRevision: common.actorVisibilityRevision,
+  },
+  supportedWorkflowCommandIds: [
+    'UI-CMD-CONNECTION-OPEN',
+    'UI-CMD-DEVICE-REQUEST-SUBMIT',
+    'UI-CMD-DEVICE-REQUEST-CANCEL',
+  ],
+  unacknowledgedCommandIds: [],
+};
+describe('standalone network codecs and explicit runtime wire-v3 registration', () => {
+  it('round-trips both player client contracts and both host reply kinds through their standalone codecs', () => {
+    for (const message of [draft, resume]) {
+      const encoded = encodeNetworkClientMessageV3(message);
+      expect(encoded.ok).toBe(true);
+      if (!encoded.ok) throw new Error('Expected standalone encoding');
+      expect(decodeNetworkClientMessageV3(encoded.text)).toEqual({ ok: true, value: message });
+    }
+    for (const message of [result(), playerRefusal]) {
+      const decoded = decodeNetworkHostMessageV3(JSON.stringify(message), vocabulary);
+      expect(decoded.ok).toBe(true);
+      if (!decoded.ok) throw new Error('Expected standalone decoding');
+      const encoded = encodeNetworkHostMessageV3(decoded.value, vocabulary);
+      expect(encoded.ok).toBe(true);
+      if (!encoded.ok) throw new Error('Expected standalone encoding');
+      expect(decodeNetworkHostMessageV3(encoded.text, vocabulary)).toEqual({
+        ok: true,
+        value: message,
+      });
+    }
+    const gmEncoded = encodeNetworkGmRequestClientMessageV3(gmDraftMessage);
+    expect(gmEncoded.ok).toBe(true);
+    if (!gmEncoded.ok) throw new Error('Expected GM encoding');
+    expect(decodeNetworkGmRequestClientMessageV3(gmEncoded.text)).toEqual({
+      ok: true,
+      value: gmDraftMessage,
+    });
+    for (const message of [gmWireResult(), gmWireResult('CMP-006'), gmRefusal]) {
+      const encoded = encodeNetworkGmRequestHostMessageV3(message, vocabulary);
+      expect(encoded.ok).toBe(true);
+      if (!encoded.ok) throw new Error('Expected GM encoding');
+      expect(decodeNetworkGmRequestHostMessageV3(encoded.text, vocabulary)).toEqual({
+        ok: true,
+        value: message,
+      });
+    }
+  });
+  it('registers the source-checked families in core wire v3 and keeps unknown fields closed', () => {
+    for (const message of [draft, resume, gmDraftMessage]) {
+      expect(decodeCoreClientMessageV3(JSON.stringify(message), runtimeVocabulary)).toEqual({
+        ok: true,
+        value: message,
+      });
+      expect(
+        decodeCoreClientMessageV3(
+          JSON.stringify({ ...message, privateField: 'forbidden' }),
+          runtimeVocabulary,
+        ).ok,
+      ).toBe(false);
+    }
+    for (const message of [
+      result(),
+      playerRefusal,
+      gmWireResult(),
+      gmWireResult('CMP-006'),
+      gmRefusal,
+    ]) {
+      expect(decodeCoreHostMessageV3(JSON.stringify(message), runtimeVocabulary)).toEqual({
+        ok: true,
+        value: message,
+      });
+      expect(
+        decodeCoreHostMessageV3(
+          JSON.stringify({ ...message, privateField: 'forbidden' }),
+          runtimeVocabulary,
+        ).ok,
+      ).toBe(false);
+    }
+  });
+  it('limits the fixture vocabulary to exact Atlas type, route, campaign and inherited binding', () => {
+    const forms = [
+      result().presentation.base,
+      gmWireResult().presentation.base,
+      gmWireResult('CMP-006').presentation.base,
+    ];
+    for (const base of forms) {
+      expect(
+        vocabulary.isPresentedForm(
+          base.formId,
+          base.formType,
+          base.routeTemplate,
+          base.routeBindings,
+        ),
+      ).toBe(true);
+      expect(
+        vocabulary.isPresentedForm(base.formId, 'dialog', base.routeTemplate, base.routeBindings),
+      ).toBe(false);
+      expect(
+        vocabulary.isPresentedForm(
+          base.formId,
+          base.formType,
+          base.routeTemplate + '/extra',
+          base.routeBindings,
+        ),
+      ).toBe(false);
+      for (const bindings of [
+        [],
+        [{ parameterIndex: 0, source: 'inherited' as const, value: id(9) }],
+        [{ parameterIndex: 1, source: 'inherited' as const, value: id(5) }],
+        [{ parameterIndex: 0, source: 'executor-allocated' as const, value: id(5) }],
+      ])
+        expect(
+          vocabulary.isPresentedForm(base.formId, base.formType, base.routeTemplate, bindings),
+        ).toBe(false);
+    }
+    for (const base of forms.slice(0, 2))
+      expect(
+        runtimeVocabulary.isPresentedForm(
+          base.formId,
+          base.formType,
+          base.routeTemplate,
+          base.routeBindings,
+        ),
+      ).toBe(true);
+    expect(vocabulary.isPresentedForm('APP-001', 'screen', '/', [])).toBe(
+      runtimeVocabulary.isPresentedForm('APP-001', 'screen', '/', []),
+    );
+  });
+  it('rejects raw non-string decoder input without coercion or diagnostic reflection', () => {
+    const decoders: readonly ((source: string) => unknown)[] = [
+      decodeNetworkClientMessageV3,
+      (source) => decodeNetworkHostMessageV3(source, vocabulary),
+      decodeNetworkGmRequestClientMessageV3,
+      (source) => decodeNetworkGmRequestHostMessageV3(source, vocabulary),
+    ];
+    for (const decode of decoders) {
+      const toString = () => {
+        throw new Error('private-coercion-sentinel');
+      };
+      for (const input of [null, undefined, 1, true, [], { toString }]) {
+        const parsed: unknown = Reflect.apply(decode, undefined, [input]);
+        expect(parsed).toMatchObject({
+          ok: false,
+          refusal: { code: 'INVALID_SHAPE', path: '$', expected: 'JSON string' },
+        });
+        expect(JSON.stringify(parsed)).not.toContain('private-coercion-sentinel');
+      }
+      const malformed = decode('{"private-key-sentinel":');
+      expect(malformed).toMatchObject({ ok: false, refusal: { code: 'MALFORMED_JSON' } });
+      expect(JSON.stringify(malformed)).not.toContain('private-key-sentinel');
+    }
+  });
+  it('redacts private unrecognized input fields for decoding and encoding in each standalone family', () => {
+    const malformedPlayer = {
+      ...draft,
+      values: { cancelReason: 'Public', privateKey: 'private-source-sentinel' },
+    };
+    const malformedGm = {
+      ...gmDraftMessage,
+      values: { ...gmDraftMessage.values, privateKey: 'private-source-sentinel' },
+    };
+    const malformedHost = { ...result(), privateKey: 'private-source-sentinel' },
+      malformedGmHost = { ...gmWireResult(), privateKey: 'private-source-sentinel' };
+    const failures: readonly unknown[] = [
+      decodeNetworkClientMessageV3(JSON.stringify(malformedPlayer)),
+      decodeNetworkHostMessageV3(JSON.stringify(malformedHost), vocabulary),
+      decodeNetworkGmRequestClientMessageV3(JSON.stringify(malformedGm)),
+      decodeNetworkGmRequestHostMessageV3(JSON.stringify(malformedGmHost), vocabulary),
+      Reflect.apply(encodeNetworkClientMessageV3, undefined, [malformedPlayer]),
+      Reflect.apply(encodeNetworkHostMessageV3, undefined, [malformedHost, vocabulary]),
+      Reflect.apply(encodeNetworkGmRequestClientMessageV3, undefined, [malformedGm]),
+      Reflect.apply(encodeNetworkGmRequestHostMessageV3, undefined, [malformedGmHost, vocabulary]),
+    ];
+    for (const failure of failures) {
+      expect(failure).toMatchObject({ ok: false });
+      expect(JSON.stringify(failure)).not.toContain('private-source-sentinel');
+    }
+  });
+  it('redacts unknown property names when the encoder JSON prewalk refuses non-JSON values', () => {
+    const secretKey = 'private-property-name-sentinel',
+      secretValue = 'private-property-value-sentinel';
+    const circular: Record<string, unknown> = { secretValue };
+    circular[secretKey] = circular;
+    const nonJsonValues: readonly unknown[] = [
+      undefined,
+      1n,
+      () => secretValue,
+      Symbol(secretValue),
+      circular,
+    ];
+    const families: readonly {
+      message: object;
+      encode: (value: unknown) => unknown;
+    }[] = [
+      {
+        message: draft,
+        encode: (value) => {
+          const failure: unknown = Reflect.apply(encodeNetworkClientMessageV3, undefined, [value]);
+          return failure;
+        },
+      },
+      {
+        message: result(),
+        encode: (value) => {
+          const failure: unknown = Reflect.apply(encodeNetworkHostMessageV3, undefined, [
+            value,
+            vocabulary,
+          ]);
+          return failure;
+        },
+      },
+      {
+        message: gmDraftMessage,
+        encode: (value) => {
+          const failure: unknown = Reflect.apply(encodeNetworkGmRequestClientMessageV3, undefined, [
+            value,
+          ]);
+          return failure;
+        },
+      },
+      {
+        message: gmWireResult(),
+        encode: (value) => {
+          const failure: unknown = Reflect.apply(encodeNetworkGmRequestHostMessageV3, undefined, [
+            value,
+            vocabulary,
+          ]);
+          return failure;
+        },
+      },
+    ];
+    for (const { message, encode } of families) {
+      for (const value of nonJsonValues) {
+        for (const malformed of [
+          { ...message, [secretKey]: value },
+          { ...message, [secretKey]: { [secretKey]: value } },
+        ]) {
+          const failure = encode(malformed);
+          expect(failure).toMatchObject({
+            ok: false,
+            refusal: { code: 'INVALID_SHAPE', path: '$' },
+          });
+          expect(JSON.stringify(failure)).not.toContain(secretKey);
+          expect(JSON.stringify(failure)).not.toContain(secretValue);
+        }
+      }
+    }
   });
 });

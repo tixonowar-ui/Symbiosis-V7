@@ -1,7 +1,13 @@
-import { wireCodecPrimitives } from './wire-codec.js';
+import { redactProtocolInputRefusal, wireCodecPrimitives } from './wire-codec.js';
+import type { DecodeResult, EncodeResult } from './wire-protocol.js';
 import { encodeHostMessageV2 } from './wire-v2-codec.js';
 import type { PresentedBaseForm, WireV2Vocabulary } from './wire-v2-protocol.js';
-import type { NetworkDraftScope, PublicCandidateRef } from './device-admission.js';
+import { networkClientValue } from './device-admission.js';
+import type {
+  NetworkClientV3Message,
+  NetworkDraftScope,
+  PublicCandidateRef,
+} from './device-admission.js';
 import type {
   NetworkApplicationFormId,
   NetworkApplicationProjection,
@@ -921,3 +927,64 @@ export function networkGmRequestHostValue(
   if (!encoded.ok) invalid('$.presentation', 'valid signed GM queue presentation', null);
   return validated(row);
 }
+
+/** Standalone syntax contracts; registering a family and granting authority belong to the host. */
+function decodeNetworkFamily<T>(source: string, reader: (value: unknown) => T): DecodeResult<T> {
+  // JSON.parse would otherwise coerce an object and invoke its custom getters.
+  if (typeof source !== 'string')
+    return {
+      ok: false,
+      refusal: {
+        code: 'INVALID_SHAPE',
+        path: '$',
+        expected: 'JSON string',
+        actualType: source === null ? 'null' : Array.isArray(source) ? 'array' : typeof source,
+      },
+    };
+  const result = wireCodecPrimitives.parse(source, reader);
+  return result.ok ? result : { ok: false, refusal: redactProtocolInputRefusal(result.refusal) };
+}
+
+function encodeNetworkFamily<T>(value: T, reader: (candidate: unknown) => T): EncodeResult {
+  const result = wireCodecPrimitives.encode(value, reader);
+  // The JSON prewalk can fail before the closed reader sees an unknown private property name.
+  return result.ok
+    ? result
+    : { ok: false, refusal: { ...redactProtocolInputRefusal(result.refusal), path: '$' } };
+}
+
+export const encodeNetworkClientMessageV3 = (value: NetworkClientV3Message): EncodeResult =>
+  encodeNetworkFamily(value, networkClientValue);
+
+export const decodeNetworkHostMessageV3 = (
+  source: string,
+  vocabulary: WireV2Vocabulary,
+): DecodeResult<NetworkHostV3Message> =>
+  decodeNetworkFamily(source, (value) => networkHostValue(value, vocabulary));
+
+export const encodeNetworkHostMessageV3 = (
+  value: NetworkHostV3Message,
+  vocabulary: WireV2Vocabulary,
+): EncodeResult =>
+  encodeNetworkFamily(value, (candidate) => networkHostValue(candidate, vocabulary));
+
+export const decodeNetworkGmRequestClientMessageV3 = (
+  source: string,
+): DecodeResult<NetworkGmClientV3Message> =>
+  decodeNetworkFamily(source, networkGmRequestClientValue);
+
+export const encodeNetworkGmRequestClientMessageV3 = (
+  value: NetworkGmClientV3Message,
+): EncodeResult => encodeNetworkFamily(value, networkGmRequestClientValue);
+
+export const decodeNetworkGmRequestHostMessageV3 = (
+  source: string,
+  vocabulary: WireV2Vocabulary,
+): DecodeResult<NetworkGmHostV3Message> =>
+  decodeNetworkFamily(source, (value) => networkGmRequestHostValue(value, vocabulary));
+
+export const encodeNetworkGmRequestHostMessageV3 = (
+  value: NetworkGmHostV3Message,
+  vocabulary: WireV2Vocabulary,
+): EncodeResult =>
+  encodeNetworkFamily(value, (candidate) => networkGmRequestHostValue(candidate, vocabulary));
