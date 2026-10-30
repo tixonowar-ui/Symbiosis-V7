@@ -811,6 +811,12 @@ function checked(row: Row): unknown {
   if (canonical(value) !== json) return fail();
   return value;
 }
+/** The replayed value is authoritative; exact canonical bytes also prove stored JSON canonicality. */
+function checkedEqual(row: Row, expected: unknown): boolean {
+  const json = text(row['record_json']);
+  if (sha(json) !== row['record_sha256']) return fail();
+  return json === canonical(expected);
+}
 function changes(db: Database.Database): number {
   return integer((db.prepare('SELECT total_changes() AS n').get() as Row)['n']);
 }
@@ -2117,7 +2123,7 @@ function readHistory(
     head === undefined ||
     head['owner_device_id'] !== tab.ownerDeviceId ||
     head['head_event_id'] !== events.at(-1)!.input.eventId ||
-    !same(checked(head), current)
+    !checkedEqual(head, current)
   )
     return fail();
   if (!same(vectorOf(tab), vectorOf(current)) || tab.lifecycleState !== lifecycle(current))
@@ -2136,7 +2142,7 @@ function readHistory(
       row['object_id'] !==
         (o.intent.operation === 'OPEN' ? o.intent.attemptId : o.intent.requestId) ||
       row['acknowledged'] !== (o.acknowledgementOrNull === null ? 0 : 1) ||
-      !same(checked(row), o)
+      !checkedEqual(row, o)
     )
       return fail();
   }
@@ -2158,7 +2164,7 @@ function readHistory(
         if (
           row === undefined ||
           row['owner_device_id'] !== tab.ownerDeviceId ||
-          !same(checked(row), value)
+          !checkedEqual(row, value)
         )
           return fail();
         if (table === 'local_network_lane_binding') {

@@ -441,6 +441,46 @@ function client() {
         lastExit = null;
         start();
       },
+      async additionalOwnerView() {
+        const connection: LocalNetworkConnection = { ...c, contextId: null, networkScopeId: null };
+        const messages: LocalNetworkHostMessage[] = [];
+        let failNextPush = false,
+          failedPushes = 0;
+        await runtime.handle(
+          {
+            messageType: 'network.local-context.resume',
+            protocolVersion: 3,
+            networkScopeId: scope().networkScopeId,
+            reconnectRequestId: randomUUID(),
+            knownRevisions: vector(state()),
+            supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+            unacknowledgedCommandIds: [],
+          },
+          connection,
+          shell,
+          (message) => {
+            if (
+              failNextPush &&
+              message.messageType === 'projection.snapshot' &&
+              message.protocolVersion === 2 &&
+              message.presentation.assignment.reason === 'HOST_SYSTEM_EVENT'
+            ) {
+              failNextPush = false;
+              failedPushes++;
+              throw new Error('Simulated transient owner publication failure');
+            }
+            messages.push(message);
+          },
+        );
+        return {
+          connection,
+          messages,
+          failNextPush() {
+            failNextPush = true;
+          },
+          failedPushes: () => failedPushes,
+        };
+      },
       async restart(pending: readonly string[] = [], retiredScope?: string) {
         const id = retiredScope ?? c.networkScopeId!,
           v = retiredScope === undefined ? vector(state()) : zero;
@@ -810,6 +850,51 @@ describe('local network application with durable SQLite and real Node peers', ()
     expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
       n: 0,
     });
+  }, 30000);
+  it('publishes one durable review to two valid own contexts and retries a failed send without another mutation', async () => {
+    const h = await host(),
+      { p, submit, batch } = await submittedPlayer(h);
+    const original = readLocalNetworkOutbox(p.db, p.scope(), submit.commandId);
+    const other = await p.additionalOwnerView();
+    expect(other.connection.networkScopeId).toBe(p.c.networkScopeId);
+    expect(other.connection.contextId).not.toBe(p.c.contextId);
+    const status = (messages: readonly LocalNetworkHostMessage[]) => {
+      const m = messages.findLast(
+        (value) => value.messageType === 'projection.snapshot' && value.protocolVersion === 2,
+      );
+      return m?.messageType === 'projection.snapshot' && m.protocolVersion === 2
+        ? m.presentation.base.roleFilteredPayload['requestStatus']
+        : null;
+    };
+    expect(status(other.messages)).toBe('PENDING');
+    other.failNextPush();
+    gmDecision(h, batch.requestId);
+    await expect.poll(() => other.failedPushes(), { timeout: 10000 }).toBe(1);
+    expect(status(p.sent)).toBe('IN_REVIEW');
+    expect(status(other.messages)).toBe('PENDING');
+    const committed = p.db.serialize(),
+      hosted = h.db.serialize(),
+      reconnects = p.reconnectCount();
+    await expect.poll(() => status(other.messages), { timeout: 10000 }).toBe('IN_REVIEW');
+    expect(p.db.serialize().equals(committed)).toBe(true);
+    expect(other.failedPushes()).toBe(1);
+    expect(h.db.serialize().equals(hosted)).toBe(true);
+    expect(p.reconnectCount()).toBe(reconnects);
+    expect(p.peerErrors).toEqual([]);
+    expect(readLocalNetworkOutbox(p.db, p.scope(), submit.commandId)).toEqual(original);
+    expect(h.db.prepare('SELECT COUNT(*) AS n FROM hosted_device_request_decision').get()).toEqual({
+      n: 1,
+    });
+    const pushes = other.messages.filter(
+      (m) =>
+        m.messageType === 'projection.snapshot' &&
+        m.protocolVersion === 2 &&
+        m.presentation.assignment.reason === 'HOST_SYSTEM_EVENT',
+    );
+    expect(pushes).toHaveLength(1);
+    expect(JSON.stringify(other.messages)).not.toMatch(
+      /canonicalWitnessText|privateKeyPkcs8Base64|learnedNodeRefs/u,
+    );
   }, 30000);
   it.each(['live', 'missing'] as const)(
     'uses the authenticated %s channel correctly before CANCEL',

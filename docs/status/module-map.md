@@ -13,7 +13,10 @@ CANCEL race, legacy lane recovery и forward0011. Common technical view head
 остаются за последующими задачами. Shared encoder redaction сохранён.
 
 Точные browser reproducers проходят, включая reject→safe return→новый SUBMIT
-и CANCEL выбранной GM строки. Полный verify, все 38 production E2E,
+и CANCEL выбранной GM строки. Owner publication имеет отдельный token
+последнего успешного публичного send для каждого scope/context; failed send
+и второе собственное соединение не теряют уже сохранённое решение. Полный
+verify, все 38 production E2E,
 независимые final-SHA проверки и CI остаются обязательными merge gates.
 Их текущий результат фиксируется в handoff и PR; прежние успешные запуски
 не считаются проверкой изменённого снимка. После merge #185 работа останавливается.

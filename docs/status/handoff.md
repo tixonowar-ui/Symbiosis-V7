@@ -10,30 +10,43 @@ restart/replay и forward0011. Campaign birth, original SUBMIT receipts,
 local FINAL и исторические baseline IDs не переписываются. Copies, seats,
 capacity reservations, final admission и Start не создаются.
 
-На c2c87cb normal verify прошёл 165 файлов / 4206 tests. Полный production
-E2E того SHA завершился 34/38: две проверки CMP-006 ещё ожидали отсутствие
-теперь разрешённого CTA, выход APP-011→APP-001 сохранял две GM capability,
-повторный SUBMIT не успевал доставить NET-005 за 5 s. CI того же SHA отдельно
-остановился на новом полном GM test (32.039 s при лимите30 s). Эти результаты
-не объявлены flaky; исходные логи/trace сохранены в reports.
+На промежуточном ca2a7e2 авторские normal verify (165 файлов / 4209 tests)
+и все38 production E2E прошли без retry. Независимый verify завершился
+4207/4209: approved-Atlas recovery занял5245 ms и новый connection-facts test
+5634 ms при прежних лимитах5000 ms. CI того же SHA завершился зелёным только
+после одного E2E retry: первый GM run не доставил owner REJECT за5 s. Это
+не принято за достаточный gate. Логи, trace и durable-status сохранены.
+Контрольная пара полного campaign suite прошла14/14 на main756 и ca2;
+причина разброса старого Atlas test не объявлена устранённой.
 
-Исправлены exact CTA expectations и удаление трёх GM capability на переходе
-в обычный shell; строгий decoder сохранён. Повторные проверки одной GM queue
-и одного SUBMIT заменены синхронным reuse уже проверенного source. Сохраняются
-ownership, live channel/key, current source/CAS и post-write guards; ничего
-не переносится через await/SQL write. В парном диагностическом browser run
-вторая отправка до actual NET-005 send сократилась с4878 до4352 ms, весь
-сценарий — с59.9 до49.5 s. Это единичные instrumented измерения, не гарантия
-CI; inclusive timings нельзя складывать. Instrumentation снята побайтово.
+Убраны доказанные повторные чтения уже проверенной request/key строки внутри
+одной синхронной операции и тройная сериализация materialized history tails.
+Последние по-прежнему требуют SHA исходных байтов и точного совпадения с
+каноническим результатом полного replay. Все события, ownership, индексы,
+CAS и post-write guards сохранены. На одинаковых116 чтениях истории три
+сравнения заняли1938→595 ms; общий разброс времени не приписан целиком этой
+замене. Пятнадцать проверок на реальных независимых SQLite copies охватывают
+все пять tail-таблиц: rehashed noncanonical/extra-field JSON и неверный SHA
+отклоняются без записи.
 
-После исправлений node/web types, scoped lint и 80 request-store/peer/runtime
-cases проходят, включая lost ACK, CANCEL race и настоящий schema10 upgrade.
-Полный GM unit прошёл за16.598 s. Новые capability negatives проходят в39
-client tests; facts negatives сохраняют exact DB bytes. Обычный fresh-build
-browser run прошёл все четыре CMP и полный GM сценарий:5/5,1.3 min без retry.
-Окончательный committed SHA всё ещё требует normal full verify, всех38 E2E,
-отдельных независимых gates и зелёного CI. Таймауты, workers, byte assertions
-и fixtures не ослаблялись; evidence — в reports/171-integration.
+Отдельно исправлена потеря owner update после сбоя отправки или доставки
+другому собственному соединению. Для каждого соединения хранится только
+последнее успешно отправленное публичное представление NET-005, связанное
+с его scope/context. Точный token меняется после успешного send; тихий poll
+повторяет недоставленное состояние без нового receipt/SQL события. Свежий
+проверенный v2 bundle используется синхронно, через await передаётся только
+boolean; legacy/BIND и missing-channel recovery сохраняют полный путь.
+Actual regression подтверждает два собственных context и один failed send
+с неизменными обеими SQLite, SUBMIT receipt и reconnect count.
+
+После этих исправлений node/web types, scoped lint,31 store cases и три
+owner-publication cases прошли. Обычный fresh-build browser run прошёл все
+четыре NET сценария без retry: manual/restart37.7 s, полный GM46.4 s,
+selected-CANCEL25.2 s, QR/batch26.4 s. Предыдущий plain GM failure на ACCEPT
+и последующие диагностические запуски также сохранены в reports; они не
+заменяют финальные gates. Последний committed SHA требует normal full
+verify, всех38 E2E, отдельного независимого прогона и зелёного CI. Таймауты,
+workers, byte assertions и реальные fixtures не ослаблялись.
 
 Первая полная проверка c1aa195 прошла types/lint/format и 4198 из 4204 tests.
 Шесть failures были сверены с новым контрактом: три старых migration consumers

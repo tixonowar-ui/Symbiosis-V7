@@ -346,6 +346,90 @@ function advanceReview(p: ReturnType<typeof setup>, proof: VerifiedRequestReview
   );
 }
 describe('owner request review enrichment and delivery', () => {
+  it('requires exact canonical replay bytes and valid hashes for every materialized history tail', () => {
+    const p = setup(),
+      s = submittedForReview(p);
+    const lane = prepareLocalRequestLaneBinding(
+      p.db,
+      p.scope,
+      s.batch.requestId,
+      randomUUID(),
+      allow,
+    );
+    acknowledgeLocalRequestLaneBinding(
+      p.db,
+      p.scope,
+      lane.request.commandId,
+      bindingReceipt(p, lane),
+      allow,
+    );
+    let current = readLocalNetworkApplication(p.db, p.scope);
+    current = update(p.db, current, { kind: 'CANCEL_REASON', cancelReason: 'Отмена' }).current;
+    const commandId = randomUUID(),
+      body = canonical({ commandId, reason: 'Отмена' });
+    current = update(p.db, current, {
+      kind: 'INTENT',
+      intent: {
+        operation: 'CANCEL',
+        commandId,
+        requestId: s.batch.requestId,
+        technicalSessionId: s.batch.technicalSessionId,
+        requestRevision: 0,
+        reason: 'Отмена',
+        semanticBodyJson: body,
+        clientRequestJson: canonical({ sourceFormId: 'NET-005' }),
+      },
+    }).current;
+    commitLocalNetworkCancelSettlement(
+      p.db,
+      {
+        ...p.scope,
+        expectedRevisions: vector(current),
+        expectedDraftRevision: current.draftRevision,
+      },
+      {
+        eventId: randomUUID(),
+        receiptId: randomUUID(),
+        commandId,
+        proof: decisionProof(p, s.batch),
+      },
+      allow,
+    );
+    const expected = readLocalNetworkApplication(p.db, p.scope),
+      snapshot = p.db.serialize();
+    for (const table of [
+      'local_network_application',
+      'local_network_outbox',
+      'local_network_lane_binding',
+      'local_network_request_current',
+      'local_network_cancel_settlement',
+    ]) {
+      const original = p.db
+        .prepare('SELECT record_json FROM ' + table + ' WHERE network_scope_id=? LIMIT 1')
+        .get(p.scope.networkScopeId) as { record_json: string };
+      const parsed = JSON.parse(original.record_json) as Record<string, unknown>;
+      for (const [json, hash] of [
+        [JSON.stringify(parsed, null, 2), null],
+        [canonical({ ...parsed, unexpected: true }), null],
+        [original.record_json, '0'.repeat(64)],
+      ] as const) {
+        const db = new Database(snapshot);
+        dbs.push(db);
+        db.pragma('foreign_keys=ON');
+        expect(readLocalNetworkApplication(db, p.scope)).toEqual(expected);
+        expect(
+          db
+            .prepare('UPDATE ' + table + ' SET record_json=?,record_sha256=? WHERE record_json=?')
+            .run(json, hash ?? sha(json), original.record_json).changes,
+        ).toBe(1);
+        const corrupt = db.serialize();
+        expect(() => readLocalNetworkApplication(db, p.scope)).toThrow('CORRUPT_STORAGE');
+        expect(db.serialize().equals(corrupt)).toBe(true);
+      }
+    }
+    expect(p.db.serialize().equals(snapshot)).toBe(true);
+  });
+
   it('derives the active request bundle from the same owned history and refuses corrupt outbox bytes without writes', () => {
     const p = setup();
     expect(readLocalNetworkRequestDeliverySnapshot(p.db, p.scope).outbox).toBeNull();

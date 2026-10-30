@@ -1101,7 +1101,11 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         },
         validateOwner,
       );
-      return connectionFacts(campaignId, authoritativeRequestIds, queue);
+      // The complete queue fold just proved these rows and pins in this read transaction.
+      return connectionFacts(
+        campaignId,
+        connectionRequests(campaignId, authoritativeRequestIds, queue),
+      );
     };
     // A command guard reads its existing snapshot; standalone refresh opens only a deferred read.
     return d.database.inTransaction ? read() : d.database.transaction(read).deferred();
@@ -1119,28 +1123,38 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       queue.campaignId !== scope.campaignId
     )
       throw new NetworkApplicationStoreError('FOREIGN_OWNER');
-    return connectionFacts(
+    const requests = connectionRequests(
       scope.campaignId,
       queue.requests.map((r) => r.submittedRequest.requestId),
       queue,
     );
+    // A supplied source object is not itself a durable request/key proof.
+    for (const request of requests)
+      readHostedDeviceRequest(d.database, request.principal, request.requestId, validateOwner);
+    return connectionFacts(scope.campaignId, requests);
   }
-  function connectionFacts(
+  function connectionRequests(
     campaignId: string,
     requestIds: readonly string[],
     queue: VerifiedGmRequestQueue,
-  ): readonly DeviceAdmissionPeerRequestConnectionFact[] {
+  ): readonly HostedDeviceRequest[] {
     if (new Set(requestIds).size !== requestIds.length)
       throw new NetworkApplicationStoreError('INVALID_INPUT');
+    return [...requestIds].sort().map((requestId) => {
+      const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
+      if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
+      if (stored.submittedRequest.principal.campaignId !== campaignId)
+        throw new NetworkApplicationStoreError('FOREIGN_OWNER');
+      return stored.submittedRequest;
+    });
+  }
+  function connectionFacts(
+    campaignId: string,
+    requests: readonly HostedDeviceRequest[],
+  ): readonly DeviceAdmissionPeerRequestConnectionFact[] {
     return Object.freeze(
-      [...requestIds].sort().map((requestId) => {
-        const stored = queue.requests.find((r) => r.submittedRequest.requestId === requestId);
-        if (stored === undefined) throw new NetworkApplicationStoreError('NOT_FOUND');
-        const expected = stored.submittedRequest.principal;
-        if (expected.campaignId !== campaignId)
-          throw new NetworkApplicationStoreError('FOREIGN_OWNER');
-        // This also proves disconnected identities; a supplied UUID/key is never authority.
-        readHostedDeviceRequest(d.database, expected, requestId, validateOwner);
+      requests.map((request) => {
+        const expected = request.principal;
         const connected =
           !closed &&
           [...connections].some((connection) => {
@@ -1153,7 +1167,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
             return same(source(connection).principal, expected);
           });
         return Object.freeze({
-          requestId,
+          requestId: request.requestId,
           requestOwnerDeviceId: expected.peerIdentity.ownerDeviceId,
           connected,
         });

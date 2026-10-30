@@ -53,8 +53,11 @@
   Подписка ограничена опубликованной NET-005; потерянный ACK восстанавливается
   с прежними IDs. Выход в обычный shell снимает только три GM capability;
   повторные проверки одной синхронной операции переиспользуют проверенный
-  source при сохранённых owner/key/CAS guards. Финальный допуск, copies и seats
-  не создаются.
+  source при сохранённых owner/key/CAS guards. Сбой owner-send повторяется
+  по отдельному token последней успешной публикации каждого соединения без
+  нового receipt или SQL события. History tails сравниваются по точным
+  каноническим байтам и SHA после полного replay. Финальный допуск, copies
+  и seats не создаются.
   [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md);
   результаты обязательных merge gates — в [handoff](docs/status/handoff.md).
 

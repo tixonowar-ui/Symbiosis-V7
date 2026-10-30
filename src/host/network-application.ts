@@ -444,9 +444,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     response: DeviceAdmissionPeerResponse,
     verifiedDelivery?: LocalNetworkDeliverySnapshot,
-  ) {
+    consumeVerifiedCurrent?: (current: LocalNetworkApplication) => void,
+  ): Promise<boolean> {
     let parsed = requestProof(c, response, verifiedDelivery);
-    if (parsed === null) return;
+    if (parsed === null) return false;
     const bound = scope(c),
       contextId = c.contextId;
     const check = (s = current(c)) => {
@@ -548,14 +549,21 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           guard(c),
         );
       }
-      return;
+      return false;
     }
     const confirmed = sameRead
       ? parsed.delivery
       : readLocalNetworkDeliverySnapshot(db, bound, parsed.submit.intent.commandId);
-    if (isDeepStrictEqual(confirmed.requestCurrentOrNull?.proof, parsed.proof)) return;
+    const consume = (delivery: LocalNetworkDeliverySnapshot): boolean => {
+      if (!sameRead || consumeVerifiedCurrent === undefined) return false;
+      // Only a callback result crosses the caller's await, never this authoritative read.
+      consumeVerifiedCurrent(delivery.current);
+      return true;
+    };
+    if (isDeepStrictEqual(confirmed.requestCurrentOrNull?.proof, parsed.proof))
+      return consume(confirmed);
     const source = confirmed.current;
-    commitLocalNetworkRequestAdvance(
+    const advanced = commitLocalNetworkRequestAdvance(
       db,
       {
         ...bound,
@@ -565,15 +573,17 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       { eventId: randomUUID(), receiptId: randomUUID(), proof: parsed.proof },
       guard(c),
     );
+    return consume(advanced);
   }
   async function refreshRequest(
     c: LocalNetworkConnection,
     verifiedBefore?: LocalNetworkDeliverySnapshot,
-  ) {
+    consumeVerifiedCurrent?: (current: LocalNetworkApplication) => void,
+  ): Promise<boolean> {
     const before = verifiedBefore ?? readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
       s = before.current,
       request = s.requestOrNull;
-    if (request === null) return;
+    if (request === null) return false;
     const submit = before.outbox;
     if (
       submit?.intent.operation !== 'SUBMIT' ||
@@ -599,8 +609,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     exact(response.receipt.request, submit.acknowledgementOrNull.request);
     if (response.current.kind === 'REQUEST') exact(response.current.request, request);
     else if (response.current.kind === 'REQUEST_REVIEW')
-      await applyRequestCurrent(c, response, after);
+      return applyRequestCurrent(c, response, after, consumeVerifiedCurrent);
     else unavailable();
+    return false;
   }
 
   function receipt(
@@ -1873,9 +1884,16 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     }
     return true;
   }
+  const ownerViewToken = (revisions: RevisionVector, base: PresentedBaseForm): string =>
+    canonicalPostSaveJson({ revisions, base });
   const ownerViews = new Map<
     LocalNetworkConnection,
-    { contextId: string; scopeId: string; send: (m: LocalNetworkHostMessage) => void }
+    {
+      contextId: string;
+      scopeId: string;
+      publishedToken: string;
+      send: (m: LocalNetworkHostMessage) => void;
+    }
   >();
   let polling = false;
   const ownerTimer = setInterval(() => {
@@ -1894,33 +1912,44 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           }
           const observed = readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
             before = observed.current;
-          if (
-            before.formId !== 'NET-005' ||
-            before.pendingCommandIdOrNull !== null ||
-            before.requestOrNull === null
-          )
+          if (before.formId !== 'NET-005') {
+            ownerViews.delete(c);
             continue;
+          }
+          if (before.pendingCommandIdOrNull !== null || before.requestOrNull === null) continue;
+          const publish = (after: LocalNetworkApplication): void => {
+            trust(c);
+            if (
+              c.contextId !== binding.contextId ||
+              c.networkScopeId !== binding.scopeId ||
+              ownerViews.get(c) !== binding
+            )
+              return;
+            if (after.formId !== 'NET-005') {
+              ownerViews.delete(c);
+              return;
+            }
+            if (after.pendingCommandIdOrNull !== null) return;
+            const correlation =
+              'network-owner-view:' +
+              postSaveSha256(
+                canonicalPostSaveJson({
+                  scope: scope(c),
+                  contextId: c.contextId,
+                  revisions: vector(after),
+                }),
+              );
+            const message = snapshot(c, correlation, 'HOST_SYSTEM_EVENT', after);
+            const token = ownerViewToken(message.revisions, message.presentation.base);
+            if (token === binding.publishedToken) return;
+            binding.send(message);
+            // Publication failure retains the old token, so a quiet poll retries the same current.
+            binding.publishedToken = token;
+          };
+          let consumed = false;
           if (d.peer.current(binding.scopeId) === null) await reconnect(c, true);
-          else await refreshRequest(c, observed);
-          trust(c);
-          if (c.contextId !== binding.contextId || c.networkScopeId !== binding.scopeId) continue;
-          const after = current(c);
-          if (
-            after.formId !== 'NET-005' ||
-            after.pendingCommandIdOrNull !== null ||
-            isDeepStrictEqual(vector(before), vector(after))
-          )
-            continue;
-          const correlation =
-            'network-owner-view:' +
-            postSaveSha256(
-              canonicalPostSaveJson({
-                scope: scope(c),
-                contextId: c.contextId,
-                revisions: vector(after),
-              }),
-            );
-          binding.send(snapshot(c, correlation, 'HOST_SYSTEM_EVENT', after));
+          else consumed = await refreshRequest(c, observed, publish);
+          if (!consumed) publish(current(c));
         } catch {
           // A missing or unverifiable reply never replaces the last confirmed own view.
         }
@@ -1952,6 +1981,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           previous.scopeId === c.networkScopeId;
         let watchedContextId = previous?.contextId ?? null;
         let watchedScopeId = previous?.scopeId ?? null;
+        let publishedToken = watching ? previous!.publishedToken : null;
         const handled = await handle(m, c, shell, (message) => {
           send(message);
           // Subscription follows our published form, never a browser's claim. The tick
@@ -1962,12 +1992,16 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           else if (message.messageType === 'network.draft.result')
             watching = message.presentation.base.formId === 'NET-005';
           else return;
+          publishedToken = watching
+            ? ownerViewToken(message.revisions, message.presentation.base)
+            : null;
           watchedContextId = watching ? c.contextId : null;
           watchedScopeId = watching ? c.networkScopeId : null;
         });
         if (
           handled &&
           watching &&
+          publishedToken !== null &&
           watchedContextId === c.contextId &&
           watchedScopeId === c.networkScopeId &&
           !closed &&
@@ -1975,7 +2009,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           c.networkScopeId !== null &&
           c.contextId !== null
         )
-          ownerViews.set(c, { contextId: c.contextId, scopeId: c.networkScopeId, send });
+          ownerViews.set(c, {
+            contextId: c.contextId,
+            scopeId: c.networkScopeId,
+            publishedToken,
+            send,
+          });
         else ownerViews.delete(c);
         return handled;
       });
