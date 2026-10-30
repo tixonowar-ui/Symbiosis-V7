@@ -1,62 +1,51 @@
 # Передача контекста — 2026-10-30
 
-## Текущая поставка #177
+## Текущий срез #195
 
-Ветка `codex/177-request-review-atlas`, база
-`24c726c91ffe760802c690ad382c21e84782f923`. PR #193 смёржен; #190 фактически
-CLOSED/COMPLETED. Squash tree совпал с независимо проверенным `6736692`.
-Независимый verify 150/3211 и 34/34 production E2E без retry прошли на точном
-SHA. Первый CI timeout неизменного AUTO Advisor разобран без ослабления
-проверок; paired 280/280 main/PR прошёл, один повтор CI дал 3211/3211 и 34/34.
-Единственная причина первого таймаута не доказана; логи обеих попыток сохранены.
+База `ecd398458cbbc9eb4a146953930b452cb7579406`: #190 / PR #193 и #177 /
+PR #194 смёржены, обе issues фактически CLOSED/COMPLETED. Exact tested source
+SHA #177 — `5e929973078314cfeff2cd5ab81eea045ff753b5`; squash tree совпал.
+Независимый verify 150/3739 и все 34 production E2E без retry прошли на этом
+SHA. Финальный CI зелёный; исходные неудачные попытки с таймаутами прежних
+SQLite suites сохранены. Причина разброса времени не объявлена доказанной,
+проверки/fixtures/таймауты/workers не ослаблялись.
 
-Разрешённые JSON/Markdown Atlas 1.6 материализованы побайтово из проверенного
-кандидата #177. SHA совпадают с successor pins ADR 0068; 20 non-Atlas файлов
-не меняются. Паспорт: 2026-10-30, schema 1.2.0, 376/1688/108/2445 и 1252 CTA.
-Исторические author semantic digests сохранены по прежним ADR, фактическая
-целостность задаётся санкционированными checksums.
+Поставка Atlas 1.6 имеет 376/1688/108/2445 и 1252 CTA; seed 114/20302/9.
+Exact current baseline B1 —
+`sha256:0fb6bf63fa399d7715fa75ae251dce83d3cdff670688bb025228756a2478343f`.
+Исторический B0 и его bytes/receipts сохраняются по ADR 0068; 20 non-Atlas
+artifact paths и Runtime Pack не менялись. Preliminary request decisions
+отделены от final admission ADR 0069.
 
-Новый [ADR 0069](../adr/0069-device-request-review-atlas-amendment.md) разделяет
-preliminary request review #171 и final admission #172. Новые importer и
-standalone Markdown guards защищают точные изменённые контракты, все зеркала,
-закрытые composites, CANCELLED selection-clear и узкую PAUSED ingress policy.
-Финальные NET-018–022/027/workflows/QA сохранены. Generated пересобирается
-только importer; результаты import/reproducibility/focused/full/independent
-проверок записываются в PR и `reports/177-*`.
+#195 выделяет самостоятельную библиотеку shared DTO/standalone codecs перед
+runtime #171. Точные player network projections, самостоятельная 12-полевая
+GM NET-017 projection, drafts, applied/current envelopes, payloads и закрытые
+14-полевые receipts соответствуют source. GM summary checksum означает все
+canonical export bytes (checksum+LF); player candidate checksum сохраняет
+FINAL sourceChecksum. [ADR 0070](../adr/0070-network-request-source-contracts.md).
 
-Авторский import и import:verify прошли: 319 файлов с одинаковыми путями/SHA,
-включая media и seed 114/20302/9. Focused Atlas/Markdown/seed/lineage проверки
-прошли 835/835. Независимый authority probe выявил и после исправления отверг
-32/32 подмены roles/route/authority четырёх форм; source bytes не менялись.
-Полный final-SHA verify/E2E и CI всё ещё обязательны перед merge этой поставки.
+Core wire v3 families, executable capabilities, host/routes, SQL/migrations и
+приложение в #195 не включаются. Source-only tests проверяют строгую форму,
+согласование, изоляцию player/GM и отказ прежнего core decoder от новых families.
+Результаты author/independent проверок и точный SHA фиксируются в PR и
+`reports/195-*`; перед merge требуются полные verify/E2E и зелёный CI.
 
-После полного прогона source expectations NET-005/общих counts обновлены точно
-по поставке; 86/86 mirror cases прошли. Реальный CREATE hot-swap timeout
-5070/5000 ms исследован без изменения лимита: приватное повторное использование
-одной сверенной Atlas byte pair в test fixture сократило целевой case в парном
-измерении 3276→2468 ms (оба campaign набора 14/14). Полные данные и production
-reloads сохранены, фактические исходные/итоговые SHA проверяются каждый раз;
-каталоги не кэшируются. Цена пары около 45 MiB Buffer data, peak RSS не измерен.
-Новый warm-cache corruption refusal и cold-process replay прошли 11/11.
-Единственная причина исходного timeout этим не объявляется доказанной.
+Первый author verify прошёл 151/3773. Независимое чтение выявило отражение
+неизвестного приватного имени поля при отказе encoder JSON prewalk на
+не-JSON значении. Узкое исправление сохраняет отказ и переносит его путь на
+`$`; регрессия охватывает четыре encoders и пять типов значений. После
+исправления нужны новые полные проверки окончательного committed SHA.
 
-Коммит поставки `37c7c38` прошёл author verify 150/3739 и CI с 34 E2E, но
-независимый verify получил два старых timeout: server closed-command 5049 ms
-и local-tab closure/replay 6937 ms. Этот failed gate сохранён; E2E после него
-не запускался. Все 33 оставшихся `serialize().toEqual(Buffer)` заменены
-эквивалентным native `.equals` в четырёх test files: 176 expect и 65 serialize
-сохранены, обратная замена byte-identical. Парные реальные наборы 124/124
-прошли за 59.87→37.17 s, отдельные 4/4 — 4.90→0.65 s; local-tab suite
-59.17→0.88 s, целевой closure case 2711→154 ms. Причина отдельного server
-timeout не объявляется доказанной. Перед merge нужны новый committed SHA,
-свежие author/independent verify, все production E2E и CI этого нового SHA.
+PR #185 остаётся draft до завершения полного #171. #177 и #190 больше не
+блокируют реализацию; source contracts #195 интегрируются до финальных проверок.
+Нужно закончить GM queue/decisions, actual owner recovery, two-installation
+journey и независимо проверить окончательный committed SHA. Частичный player
+срез не закрывает #171. Новых решений владельца сейчас не требуется.
 
-PR #185 `f9a6a53` имеет зелёный CI (3539 tests, 36 E2E), но остаётся draft:
-не реализован GM runtime и не интегрированы application-only callers #190.
-Никаких новых решений владельца для продолжения не требуется. После merge
-#177 подтянуть обе предпосылки, завершить GM journey и повторить независимые
-полные проверки final SHA; только затем закрывать #171. Далее #172 → #173 →
-#174 и source/runtime цепочка #186 → #187 → #188 для полного #113.
+Далее #172 → #173 → #174. Для полного #113 цепочка #186 → #187 → #188:
+ребазировать source delivery на Atlas 1.6 с сохранением NET contracts, затем
+полные NPC/ENM формы и общий GM ingress. Арт уже подготовлен; source approvals
+не означают готовность runtime.
 
 ## Исторический срез #190
 

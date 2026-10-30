@@ -19,3 +19,20 @@ export * from './wire-v2-protocol.js';
 export * from './wire-v3-codec.js';
 export * from './wire-v3-protocol.js';
 export * from './campaign-creation.js';
+export * from './device-admission.js';
+export * from './network-application.js';
+export {
+  decodeNetworkGmRequestClientMessageV3,
+  decodeNetworkGmRequestHostMessageV3,
+  decodeNetworkHostMessageV3,
+  encodeNetworkClientMessageV3,
+  encodeNetworkGmRequestClientMessageV3,
+  encodeNetworkGmRequestHostMessageV3,
+  encodeNetworkHostMessageV3,
+  isNetworkApplicationProjection,
+  networkGmRequestDecisionReceiptValue,
+  networkGmRequestDraftValues,
+  networkGmRequestProjectionValue,
+  networkGmRequestWorkflowPayloadValue,
+  networkWorkflowPayloadValue,
+} from './network-application-codec.js';
