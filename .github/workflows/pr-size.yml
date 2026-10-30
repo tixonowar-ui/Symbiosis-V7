@@ -162,6 +162,7 @@ jobs:
       - name: Measure hand-written change
         shell: bash
         env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           MAX_CODE_ADDED: 15000
           MAX_CODE_DELETED: 1500
           MAX_CODE_FILES: 40
@@ -170,6 +171,9 @@ jobs:
           MAX_ARTIFACT_LINES: 2000
           MAX_TOTAL_FILES: 90
         run: |
+          # Issue #197: the owner authorized this one PR; every other PR keeps 15000.
+          if [ "$PR_NUMBER" = "185" ]; then MAX_CODE_ADDED=20000; fi
+
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
           git fetch --no-tags origin "$base" "$head"
