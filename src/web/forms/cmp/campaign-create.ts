@@ -392,7 +392,7 @@ export function expectedCampaignActions(
         ? ['CMP-005::CTA::001', 'CMP-005::CTA::002']
         : ['CMP-005::CTA::002'];
     case 'CMP-006':
-      return [];
+      return ['CMP-006::CTA::002'];
   }
 }
 

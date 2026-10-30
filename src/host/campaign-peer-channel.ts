@@ -84,6 +84,7 @@ export interface CampaignPeerConnectOptions {
   readonly deviceMaterial: DeviceInstallationIdentityMaterial;
   readonly hostTrust: CampaignPeerHostTrust;
   readonly limits: CampaignPeerChannelLimits;
+  readonly signal?: AbortSignal;
 }
 export interface CampaignPeerAcceptOptions {
   readonly limits: CampaignPeerChannelLimits;
@@ -686,7 +687,9 @@ export async function connectCampaignPeerChannel(
   options: CampaignPeerConnectOptions,
 ): Promise<CampaignPeerClientChannel> {
   let inbox: FrameInbox | null = null;
+  const abort = () => inbox?.close('CLOSED');
   try {
+    if (options.signal?.aborted) return fail('CLOSED');
     const config = limits(options.limits);
     const target = parseCampaignLanAddress(options.target.canonicalOrigin);
     if (
@@ -718,6 +721,8 @@ export async function connectCampaignPeerChannel(
       maxPayload: CAMPAIGN_PEER_CHANNEL_MAX_BYTES,
     });
     inbox = new FrameInbox(socket, config);
+    options.signal?.addEventListener('abort', abort, { once: true });
+    if (options.signal?.aborted) return fail('CLOSED');
     await inbox.opened();
     await inbox.send(helloText, config.handshakeTimeoutMs);
     const rawChallenge = decodeCampaignPeerHandshakeMessage(await inbox.next());
@@ -744,5 +749,7 @@ export async function connectCampaignPeerChannel(
     const safe = safeError(error, 'INVALID_HANDSHAKE');
     inbox?.close(safe.code);
     throw safe;
+  } finally {
+    options.signal?.removeEventListener('abort', abort);
   }
 }

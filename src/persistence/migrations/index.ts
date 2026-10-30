@@ -11,6 +11,8 @@ import { migration0006 } from './0006-local-character-post-save.js';
 import { migration0007 } from './0007-campaign-creation.js';
 import { migration0008 } from './0008-network-installation-identity.js';
 import { migration0009 } from './0009-device-admission.js';
+import { migration0010 } from './0010-network-application.js';
+import { migration0011 } from './0011-device-request-review.js';
 
 interface SchemaObjectRow {
   name: string;
@@ -35,6 +37,8 @@ const MIGRATIONS: readonly Migration[] = [
   migration0007,
   migration0008,
   migration0009,
+  migration0010,
+  migration0011,
 ];
 
 const CREATE_MIGRATION_REGISTRY_SQL = `CREATE TABLE schema_migration (

@@ -196,7 +196,7 @@ beforeAll(async () => {
     fixtures.set(id, { type: 'screen', route: metadata['route'] });
   }
   // A source-contract fixture deliberately supplies only these exact presentation bindings.
-  // Production vocabulary remains unchanged; this does not register any runtime family.
+  // This isolated vocabulary still proves the standalone contract independently of runtime registration.
   vocabulary = {
     ...runtimeVocabulary,
     isPresentedForm: (formId, formType, routeTemplate, bindings) => {
@@ -1074,7 +1074,7 @@ const resume: NetworkLocalContextResumeV3Message = {
   ],
   unacknowledgedCommandIds: [],
 };
-describe('standalone network codecs without core wire-v3 registration', () => {
+describe('standalone network codecs and explicit runtime wire-v3 registration', () => {
   it('round-trips both player client contracts and both host reply kinds through their standalone codecs', () => {
     for (const message of [draft, resume]) {
       const encoded = encodeNetworkClientMessageV3(message);
@@ -1111,17 +1111,37 @@ describe('standalone network codecs without core wire-v3 registration', () => {
       });
     }
   });
-  it('keeps every new network message family rejected by the existing core wire-v3 decoder', () => {
-    for (const message of [draft, resume, gmDraftMessage])
-      expect(decodeCoreClientMessageV3(JSON.stringify(message), vocabulary).ok).toBe(false);
+  it('registers the source-checked families in core wire v3 and keeps unknown fields closed', () => {
+    for (const message of [draft, resume, gmDraftMessage]) {
+      expect(decodeCoreClientMessageV3(JSON.stringify(message), runtimeVocabulary)).toEqual({
+        ok: true,
+        value: message,
+      });
+      expect(
+        decodeCoreClientMessageV3(
+          JSON.stringify({ ...message, privateField: 'forbidden' }),
+          runtimeVocabulary,
+        ).ok,
+      ).toBe(false);
+    }
     for (const message of [
       result(),
       playerRefusal,
       gmWireResult(),
       gmWireResult('CMP-006'),
       gmRefusal,
-    ])
-      expect(decodeCoreHostMessageV3(JSON.stringify(message), vocabulary).ok).toBe(false);
+    ]) {
+      expect(decodeCoreHostMessageV3(JSON.stringify(message), runtimeVocabulary)).toEqual({
+        ok: true,
+        value: message,
+      });
+      expect(
+        decodeCoreHostMessageV3(
+          JSON.stringify({ ...message, privateField: 'forbidden' }),
+          runtimeVocabulary,
+        ).ok,
+      ).toBe(false);
+    }
   });
   it('limits the fixture vocabulary to exact Atlas type, route, campaign and inherited binding', () => {
     const forms = [
@@ -1167,7 +1187,7 @@ describe('standalone network codecs without core wire-v3 registration', () => {
           base.routeTemplate,
           base.routeBindings,
         ),
-      ).toBe(false);
+      ).toBe(true);
     expect(vocabulary.isPresentedForm('APP-001', 'screen', '/', [])).toBe(
       runtimeVocabulary.isPresentedForm('APP-001', 'screen', '/', []),
     );

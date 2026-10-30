@@ -12,6 +12,12 @@ import type {
 } from '../shared/campaign-creation.js';
 import type { CommandReceipt, JsonObject } from '../shared/wire-protocol.js';
 import { loadDeviceId } from './device-identity.js';
+import type { FormActionIntentV2Message } from '../shared/wire-v2-protocol.js';
+import type {
+  NetworkGmRequestDraftValues,
+  NetworkGmRequestReturnContext,
+} from '../shared/network-application.js';
+import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
 import {
   commitNewCampaignCheckpoint,
   loadCampaignCheckpoint,
@@ -51,6 +57,7 @@ export type CampaignCreationCursor = {
   | { readonly kind: 'MENU'; readonly formId: 'APP-011'; readonly targetId: string }
   | { readonly kind: 'DRAFT'; readonly formId: CampaignDraftFormId; readonly targetId: string }
   | { readonly kind: 'CAMPAIGN'; readonly formId: 'CMP-006'; readonly targetId: string }
+  | { readonly kind: 'QUEUE'; readonly formId: 'NET-017' | 'CMP-006'; readonly targetId: string }
 );
 export type RedactedCampaignDraftRequest =
   | Exclude<CampaignDraftReplaceV3Message, { variant: 'SECRET' }>
@@ -514,6 +521,35 @@ function assertUnusedId(db: Database.Database, id: string): void {
   ])
     if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
       return fail('IDEMPOTENCY_CONFLICT');
+  const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+    'version'
+  ];
+  // An older campaign writer must not reuse identities already committed by a network family.
+  const network =
+    version === 10 || version === 11
+      ? ([
+          ['local_network_application_event', ['event_id', 'receipt_id']],
+          ['hosted_network_command', ['command_id', 'receipt_id']],
+          ['local_network_tab_entry', ['entry_command_id', 'entry_receipt_id']],
+          ['local_network_tab_close', ['close_command_id', 'close_receipt_id']],
+          ['local_network_tab', ['network_scope_id', 'tab_id']],
+          ['hosted_technical_session', ['technical_session_id', 'attempt_id']],
+          ['hosted_device_request', ['request_id']],
+        ] as const)
+      : [];
+  const review =
+    version === 11
+      ? ([
+          ['hosted_device_request_decision', ['command_id', 'receipt_id']],
+          ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
+          ['local_network_lane_binding', ['command_id']],
+          ['gm_request_queue_event', ['event_id']],
+        ] as const)
+      : [];
+  for (const [table, columns] of [...network, ...review])
+    for (const column of columns)
+      if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
+        return fail('IDEMPOTENCY_CONFLICT');
 }
 function draftDocument(
   draft: Omit<StoredCampaignDraft, 'snapshotSha256'> | StoredCampaignDraft,
@@ -668,6 +704,15 @@ export function readCampaignCreationCursor(
       cursor.targetSha256 !== campaignCreationHash(checkpoint)
     )
       return fail();
+  } else if (cursor.kind === 'QUEUE') {
+    const state = readOriginTransaction(db, () =>
+      readGmRequestReviewViewStateInTransaction(db, {
+        ownerDeviceId: context.ownerDeviceId,
+        gmLocalContextId,
+        campaignId: cursor.targetId,
+      }),
+    );
+    if (state.viewOrNull === null || !same(cursor, queueCursor(state.viewOrNull))) return fail();
   } else return fail();
   return cursor;
 }
@@ -1653,4 +1698,704 @@ export function commitCampaignCreation(
       return replayKnown();
     throw error;
   }
+}
+
+export interface GmRequestReviewScope {
+  readonly ownerDeviceId: string;
+  readonly gmLocalContextId: string;
+  readonly campaignId: string;
+}
+/** Structural alias of the frozen v3 envelope; public wire codecs remain in shared. */
+export interface GmRequestReviewDraftRequest {
+  readonly messageType: 'network.gm-request-draft.replace';
+  readonly protocolVersion: 3;
+  readonly draftUpdateId: string;
+  readonly scope: {
+    readonly gmLocalContextId: string;
+    readonly campaignId: string;
+    readonly sourceFormId: 'NET-017';
+  };
+  readonly expectedRevisions: RevisionTriple;
+  readonly expectedRequestQueueRevision: number;
+  readonly values: NetworkGmRequestDraftValues;
+}
+export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTriple {
+  readonly schemaVersion: 1;
+  readonly formId: 'NET-017' | 'CMP-006';
+  readonly requestQueueRevision: number;
+  readonly values: NetworkGmRequestDraftValues;
+  readonly returnContext: Extract<NetworkGmRequestReturnContext, { originFormId: 'CMP-006' }>;
+  readonly snapshotSha256: string;
+}
+export interface GmRequestQueueFact {
+  readonly requestId: string;
+  readonly submitCommandId: string;
+  readonly cancelCommandIdOrNull: string | null;
+  readonly decisionCommandIds: readonly string[];
+  readonly laneBindingCommandIdOrNull: string | null;
+}
+export interface GmRequestQueueEvidence {
+  readonly requestQueueRevision: number;
+  readonly requestFacts: readonly GmRequestQueueFact[];
+  readonly visibleRequestIds: readonly string[];
+  readonly queueEvidenceSha256: string;
+}
+export type GmRequestReviewMutation =
+  | {
+      readonly kind: 'NAV';
+      readonly request: FormActionIntentV2Message;
+      readonly initialQueueOrNull: GmRequestQueueEvidence | null;
+    }
+  | { readonly kind: 'DRAFT'; readonly request: GmRequestReviewDraftRequest }
+  | {
+      readonly kind: 'REQUEST_REFRESH';
+      readonly causeCommandId: string;
+      readonly causeReceiptId: string;
+      readonly queue: GmRequestQueueEvidence;
+    }
+  | { readonly kind: 'CONNECTION_REFRESH'; readonly connectionFactsSha256: string };
+export interface StoredGmRequestQueueEvent {
+  readonly schemaVersion: 1;
+  readonly eventId: string;
+  readonly scope: GmRequestReviewScope;
+  readonly eventIndex: number;
+  readonly previousEventSha256OrNull: string | null;
+  readonly mutation: GmRequestReviewMutation;
+  readonly view: GmRequestReviewView;
+  readonly changed: boolean;
+  readonly recordSha256: string;
+}
+export interface GmRequestReviewViewState {
+  readonly viewOrNull: GmRequestReviewView | null;
+  readonly queueOrNull: GmRequestQueueEvidence | null;
+  readonly connectionFactsSha256OrNull: string | null;
+  readonly events: readonly StoredGmRequestQueueEvent[];
+}
+
+const queueScopeKeys = ['ownerDeviceId', 'gmLocalContextId', 'campaignId'] as const;
+function queueObject(value: unknown, keys: readonly string[]): Row {
+  const result = object(value, keys);
+  const prototype: unknown = Object.getPrototypeOf(result);
+  if (prototype !== Object.prototype && prototype !== null) return fail('INVALID_INPUT');
+  if (Reflect.ownKeys(result).length !== keys.length) return fail('INVALID_INPUT');
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(result, key);
+    if (descriptor === undefined || !Object.hasOwn(descriptor, 'value'))
+      return fail('INVALID_INPUT');
+  }
+  return result;
+}
+const queueHash = (value: unknown): string => {
+  const result = text(value);
+  return /^[0-9a-f]{64}$/.test(result) ? result : fail();
+};
+function queueScope(value: unknown): GmRequestReviewScope {
+  const row = queueObject(value, queueScopeKeys);
+  return {
+    ownerDeviceId: text(row['ownerDeviceId']),
+    gmLocalContextId: text(row['gmLocalContextId']),
+    campaignId: text(row['campaignId']),
+  };
+}
+function queueValues(value: unknown): NetworkGmRequestDraftValues {
+  const row = queueObject(value, ['selectedRequestIdOrNull', 'decisionReason']);
+  if (typeof row['decisionReason'] !== 'string') return fail('INVALID_INPUT');
+  return {
+    selectedRequestIdOrNull:
+      row['selectedRequestIdOrNull'] === null ? null : text(row['selectedRequestIdOrNull']),
+    decisionReason: row['decisionReason'],
+  };
+}
+function queueEvidence(value: unknown): GmRequestQueueEvidence {
+  const row = queueObject(value, [
+    'requestQueueRevision',
+    'requestFacts',
+    'visibleRequestIds',
+    'queueEvidenceSha256',
+  ]);
+  if (!Array.isArray(row['requestFacts']) || !Array.isArray(row['visibleRequestIds']))
+    return fail();
+  const ids = new Set<string>();
+  const commands = new Set<string>();
+  let requestQueueRevision = 0;
+  const requestFacts = row['requestFacts'].map((entry: unknown): GmRequestQueueFact => {
+    const fact = queueObject(entry, [
+      'requestId',
+      'submitCommandId',
+      'cancelCommandIdOrNull',
+      'decisionCommandIds',
+      'laneBindingCommandIdOrNull',
+    ]);
+    if (!Array.isArray(fact['decisionCommandIds']) || fact['decisionCommandIds'].length > 2)
+      return fail();
+    const requestId = text(fact['requestId']);
+    if (ids.has(requestId)) return fail();
+    ids.add(requestId);
+    const result = {
+      requestId,
+      submitCommandId: text(fact['submitCommandId']),
+      cancelCommandIdOrNull:
+        fact['cancelCommandIdOrNull'] === null ? null : text(fact['cancelCommandIdOrNull']),
+      decisionCommandIds: fact['decisionCommandIds'].map((id: unknown) => text(id)),
+      laneBindingCommandIdOrNull:
+        fact['laneBindingCommandIdOrNull'] === null
+          ? null
+          : text(fact['laneBindingCommandIdOrNull']),
+    };
+    if (result.cancelCommandIdOrNull !== null && result.decisionCommandIds.length !== 0)
+      return fail();
+    for (const id of [
+      result.submitCommandId,
+      result.cancelCommandIdOrNull,
+      ...result.decisionCommandIds,
+      result.laneBindingCommandIdOrNull,
+    ]) {
+      if (id === null) continue;
+      if (commands.has(id)) return fail();
+      commands.add(id);
+      requestQueueRevision = next(requestQueueRevision);
+    }
+    return result;
+  });
+  if (
+    !same(
+      requestFacts.map((fact) => fact.requestId),
+      [...ids].sort(),
+    )
+  )
+    return fail();
+  const visibleRequestIds = requestFacts
+    .filter((fact) => fact.cancelCommandIdOrNull === null)
+    .map((fact) => fact.requestId);
+  const queueEvidenceSha256 = campaignCreationHash(requestFacts);
+  if (
+    count(row['requestQueueRevision']) !== requestQueueRevision ||
+    !same(row['visibleRequestIds'], visibleRequestIds) ||
+    row['queueEvidenceSha256'] !== queueEvidenceSha256
+  )
+    return fail();
+  return { requestQueueRevision, requestFacts, visibleRequestIds, queueEvidenceSha256 };
+}
+function queueNav(value: unknown): FormActionIntentV2Message {
+  const row = queueObject(value, [
+    'messageType',
+    'protocolVersion',
+    'actionKey',
+    'expectedProjectionRevision',
+    'navigationRequestId',
+    'sourceFormId',
+  ]);
+  if (
+    row['messageType'] !== 'navigation.form-action' ||
+    row['protocolVersion'] !== 2 ||
+    !(
+      (row['sourceFormId'] === 'CMP-006' && row['actionKey'] === 'CMP-006::CTA::002') ||
+      (row['sourceFormId'] === 'NET-017' && row['actionKey'] === 'NET-017::CTA::009')
+    )
+  )
+    return fail('INVALID_INPUT');
+  text(row['navigationRequestId']);
+  count(row['expectedProjectionRevision']);
+  return row as unknown as FormActionIntentV2Message;
+}
+function queueDraft(value: unknown): GmRequestReviewDraftRequest {
+  const row = queueObject(value, [
+    'messageType',
+    'protocolVersion',
+    'draftUpdateId',
+    'scope',
+    'expectedRevisions',
+    'expectedRequestQueueRevision',
+    'values',
+  ]);
+  const scope = queueObject(row['scope'], ['gmLocalContextId', 'campaignId', 'sourceFormId']);
+  if (
+    row['messageType'] !== 'network.gm-request-draft.replace' ||
+    row['protocolVersion'] !== 3 ||
+    scope['sourceFormId'] !== 'NET-017'
+  )
+    return fail('INVALID_INPUT');
+  return {
+    messageType: 'network.gm-request-draft.replace',
+    protocolVersion: 3,
+    draftUpdateId: text(row['draftUpdateId']),
+    scope: {
+      gmLocalContextId: text(scope['gmLocalContextId']),
+      campaignId: text(scope['campaignId']),
+      sourceFormId: 'NET-017',
+    },
+    expectedRevisions: exactRevisions(row['expectedRevisions']),
+    expectedRequestQueueRevision: count(row['expectedRequestQueueRevision']),
+    values: queueValues(row['values']),
+  };
+}
+function queueMutation(value: unknown): GmRequestReviewMutation {
+  const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'NAV') {
+    const row = queueObject(value, ['kind', 'request', 'initialQueueOrNull']);
+    return {
+      kind: 'NAV',
+      request: queueNav(row['request']),
+      initialQueueOrNull:
+        row['initialQueueOrNull'] === null ? null : queueEvidence(row['initialQueueOrNull']),
+    };
+  }
+  if (record['kind'] === 'DRAFT') {
+    const row = queueObject(value, ['kind', 'request']);
+    return { kind: 'DRAFT', request: queueDraft(row['request']) };
+  }
+  if (record['kind'] === 'REQUEST_REFRESH') {
+    const row = queueObject(value, ['kind', 'causeCommandId', 'causeReceiptId', 'queue']);
+    return {
+      kind: 'REQUEST_REFRESH',
+      causeCommandId: text(row['causeCommandId']),
+      causeReceiptId: text(row['causeReceiptId']),
+      queue: queueEvidence(row['queue']),
+    };
+  }
+  const row = queueObject(value, ['kind', 'connectionFactsSha256']);
+  if (row['kind'] !== 'CONNECTION_REFRESH') return fail('INVALID_INPUT');
+  return {
+    kind: 'CONNECTION_REFRESH',
+    connectionFactsSha256: queueHash(row['connectionFactsSha256']),
+  };
+}
+function queueView(
+  scope: GmRequestReviewScope,
+  value: Omit<GmRequestReviewView, 'snapshotSha256'>,
+): GmRequestReviewView {
+  if (
+    !same(
+      queueScope(scope),
+      queueScope({
+        ownerDeviceId: value.ownerDeviceId,
+        gmLocalContextId: value.gmLocalContextId,
+        campaignId: value.campaignId,
+      }),
+    )
+  )
+    return fail('FOREIGN_OWNER');
+  return { ...value, snapshotSha256: campaignCreationHash(value) };
+}
+function queueViewDocument(
+  value: GmRequestReviewView,
+): Omit<GmRequestReviewView, 'snapshotSha256'> {
+  const { snapshotSha256: _ignored, ...document } = value;
+  return document;
+}
+function queueBase(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+): { cursor: CampaignCreationCursor; receiptId: string } {
+  const context = readLocalGmContext(db, scope.gmLocalContextId);
+  if (context.ownerDeviceId !== scope.ownerDeviceId) return fail('FOREIGN_OWNER');
+  const privateOwner = readCampaignOwnerBinding(db, scope.gmLocalContextId, scope.campaignId);
+  const row =
+    rowAt(db, 'campaign_creation_command', 'campaign_id', scope.campaignId) ?? fail('NOT_FOUND');
+  const request = createRequest(parse(row['request_json']));
+  const receipt = queueObject(parse(row['receipt_json']), [
+    'commandId',
+    'receiptId',
+    'result',
+    'revisions',
+  ]) as unknown as CommandReceipt<CampaignCreateResult>;
+  const draft = readCampaignDraft(db, scope.gmLocalContextId, request.payload.campaignDraftId);
+  const result = object(receipt.result);
+  const payload = pausedPayload({
+    kind: 'PAUSED_CAMPAIGN',
+    schemaVersion: 1,
+    campaignId: scope.campaignId,
+    sourceCampaignDraftId: draft.campaignDraftId,
+    ...draft.values,
+    status: 'PAUSED',
+    createdAt: result['createdAt'],
+    qrPayload: result['qrPayload'],
+    baselineVersion: result['baselineVersion'],
+    creationCommandId: request.commandId,
+    creationReceiptId: receipt.receiptId,
+  });
+  validateCreationJournal(row, request, receipt, payload, draft);
+  if (
+    request.payload.gmLocalContextId !== scope.gmLocalContextId ||
+    privateOwner.ownerDeviceId !== scope.ownerDeviceId
+  )
+    return fail('FOREIGN_OWNER');
+  const checkpoint: CampaignCheckpoint = {
+    campaignId: scope.campaignId,
+    snapshotJson: JSON.stringify({
+      campaign: {
+        campaignId: scope.campaignId,
+        lifecycleState: 'PAUSED',
+        payloadJson: canonical(payload),
+      },
+      campaignCharacterCopies: [],
+    }),
+    ...zero(),
+  };
+  return {
+    cursor: {
+      gmLocalContextId: scope.gmLocalContextId,
+      ownerDeviceId: scope.ownerDeviceId,
+      kind: 'CAMPAIGN',
+      formId: 'CMP-006',
+      targetId: scope.campaignId,
+      revisions: zero(),
+      targetSha256: campaignCreationHash(checkpoint),
+    },
+    receiptId: receipt.receiptId,
+  };
+}
+function assertQueueDelta(
+  before: GmRequestQueueEvidence,
+  after: GmRequestQueueEvidence,
+  cause: string,
+): void {
+  if (after.requestQueueRevision !== next(before.requestQueueRevision)) return fail();
+  const changed = after.requestFacts.filter(
+    (fact) =>
+      !same(fact, before.requestFacts.find((old) => old.requestId === fact.requestId) ?? null),
+  );
+  if (
+    changed.length !== 1 ||
+    before.requestFacts.some(
+      (old) => !after.requestFacts.some((fact) => fact.requestId === old.requestId),
+    )
+  )
+    return fail();
+  const fact = changed[0] ?? fail();
+  const previous = before.requestFacts.find((old) => old.requestId === fact.requestId);
+  if (previous === undefined) {
+    if (
+      fact.submitCommandId !== cause ||
+      fact.cancelCommandIdOrNull !== null ||
+      fact.decisionCommandIds.length !== 0 ||
+      fact.laneBindingCommandIdOrNull !== null
+    )
+      return fail();
+    return;
+  }
+  const expected =
+    fact.cancelCommandIdOrNull === cause && previous.cancelCommandIdOrNull === null
+      ? { ...previous, cancelCommandIdOrNull: cause }
+      : fact.laneBindingCommandIdOrNull === cause && previous.laneBindingCommandIdOrNull === null
+        ? { ...previous, laneBindingCommandIdOrNull: cause }
+        : { ...previous, decisionCommandIds: [...previous.decisionCommandIds, cause] };
+  if (!same(expected, fact)) return fail();
+}
+interface QueueReduced {
+  readonly view: GmRequestReviewView;
+  readonly queue: GmRequestQueueEvidence;
+  readonly connectionFactsSha256OrNull: string | null;
+  readonly changed: boolean;
+}
+function reduceQueue(
+  scope: GmRequestReviewScope,
+  initial: ReturnType<typeof queueBase>,
+  state: GmRequestReviewViewState,
+  mutation: GmRequestReviewMutation,
+): QueueReduced {
+  const old = state.viewOrNull;
+  if (old === null) {
+    if (
+      mutation.kind !== 'NAV' ||
+      mutation.initialQueueOrNull === null ||
+      mutation.request.sourceFormId !== 'CMP-006' ||
+      mutation.request.expectedProjectionRevision !== initial.cursor.revisions.projectionRevision
+    )
+      return fail('STALE_REVISION');
+    const queue = mutation.initialQueueOrNull;
+    const view = queueView(scope, {
+      schemaVersion: 1,
+      ...scope,
+      formId: 'NET-017',
+      ...initial.cursor.revisions,
+      projectionRevision: next(initial.cursor.revisions.projectionRevision),
+      requestQueueRevision: queue.requestQueueRevision,
+      values: { selectedRequestIdOrNull: null, decisionReason: '' },
+      returnContext: {
+        originFormId: 'CMP-006',
+        campaignId: scope.campaignId,
+        creationReceiptId: initial.receiptId,
+      },
+    });
+    return { view, queue, connectionFactsSha256OrNull: null, changed: true };
+  }
+  let queue = state.queueOrNull ?? fail();
+  let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
+  let document = queueViewDocument(old);
+  let changed = true;
+  if (mutation.kind === 'NAV') {
+    if (
+      mutation.initialQueueOrNull !== null ||
+      mutation.request.sourceFormId !== old.formId ||
+      mutation.request.expectedProjectionRevision !== old.projectionRevision
+    )
+      return fail('STALE_REVISION');
+    document = {
+      ...document,
+      formId: old.formId === 'CMP-006' ? 'NET-017' : 'CMP-006',
+      projectionRevision: next(old.projectionRevision),
+    };
+  } else if (mutation.kind === 'DRAFT') {
+    const request = mutation.request;
+    if (
+      old.formId !== 'NET-017' ||
+      request.scope.gmLocalContextId !== scope.gmLocalContextId ||
+      request.scope.campaignId !== scope.campaignId
+    )
+      return fail('DRAFT_UNAVAILABLE');
+    if (
+      !same(request.expectedRevisions, revisions(old)) ||
+      request.expectedRequestQueueRevision !== old.requestQueueRevision
+    )
+      return fail('STALE_REVISION');
+    if (
+      request.values.selectedRequestIdOrNull !== null &&
+      !queue.visibleRequestIds.includes(request.values.selectedRequestIdOrNull)
+    )
+      return fail('INVALID_INPUT');
+    const values =
+      request.values.selectedRequestIdOrNull === old.values.selectedRequestIdOrNull
+        ? request.values
+        : { selectedRequestIdOrNull: request.values.selectedRequestIdOrNull, decisionReason: '' };
+    changed = !same(values, old.values);
+    document = {
+      ...document,
+      values,
+      stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
+      projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+    };
+  } else if (mutation.kind === 'REQUEST_REFRESH') {
+    assertQueueDelta(queue, mutation.queue, mutation.causeCommandId);
+    queue = mutation.queue;
+    const values =
+      old.values.selectedRequestIdOrNull !== null &&
+      !queue.visibleRequestIds.includes(old.values.selectedRequestIdOrNull)
+        ? { selectedRequestIdOrNull: null, decisionReason: '' }
+        : old.values;
+    document = {
+      ...document,
+      values,
+      requestQueueRevision: queue.requestQueueRevision,
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+    };
+  } else {
+    changed = state.connectionFactsSha256OrNull !== mutation.connectionFactsSha256;
+    connectionFactsSha256OrNull = mutation.connectionFactsSha256;
+    document = {
+      ...document,
+      projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+    };
+  }
+  return { view: queueView(scope, document), queue, connectionFactsSha256OrNull, changed };
+}
+function queueSchema(db: Database.Database): void {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
+  if (row['version'] !== 11) return fail();
+  for (const table of DEVICE_REQUEST_REVIEW_TABLES)
+    db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+}
+/** Structural journal reader. Public request-store readers additionally verify every referenced request prefix. */
+export function readGmRequestReviewViewStateInTransaction(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+): GmRequestReviewViewState {
+  queueSchema(db);
+  const scope = queueScope(value);
+  owner(db, scope.ownerDeviceId);
+  const initial = queueBase(db, scope);
+  const rows = db
+    .prepare(
+      'SELECT * FROM gm_request_queue_event WHERE context_id=? AND campaign_id=? ORDER BY event_index',
+    )
+    .all(scope.gmLocalContextId, scope.campaignId) as Row[];
+  const head = db
+    .prepare('SELECT * FROM gm_request_queue_view WHERE context_id=? AND campaign_id=?')
+    .get(scope.gmLocalContextId, scope.campaignId) as Row | undefined;
+  let state: GmRequestReviewViewState = {
+    viewOrNull: null,
+    queueOrNull: null,
+    connectionFactsSha256OrNull: null,
+    events: [],
+  };
+  const events: StoredGmRequestQueueEvent[] = [];
+  for (const [eventIndex, row] of rows.entries()) {
+    const saved = queueObject(checkedJson(row), [
+      'schemaVersion',
+      'eventId',
+      'scope',
+      'eventIndex',
+      'previousEventSha256OrNull',
+      'mutation',
+      'view',
+      'changed',
+    ]);
+    const eventId = text(saved['eventId']);
+    const mutation = queueMutation(saved['mutation']);
+    if (
+      saved['schemaVersion'] !== 1 ||
+      saved['eventIndex'] !== eventIndex ||
+      row['event_index'] !== eventIndex ||
+      row['event_id'] !== eventId ||
+      row['owner_device_id'] !== scope.ownerDeviceId ||
+      row['kind'] !== mutation.kind ||
+      !same(queueScope(saved['scope']), scope) ||
+      saved['previousEventSha256OrNull'] !== (events.at(-1)?.recordSha256 ?? null)
+    )
+      return fail();
+    if (
+      (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
+      (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
+      (mutation.kind === 'REQUEST_REFRESH' &&
+        eventId !==
+          gmRequestReviewRefreshEventId(scope, mutation.causeCommandId, mutation.causeReceiptId))
+    )
+      return fail();
+    const reduced = reduceQueue(scope, initial, state, mutation);
+    if (!same(saved['view'], reduced.view) || saved['changed'] !== reduced.changed) return fail();
+    const event: StoredGmRequestQueueEvent = {
+      schemaVersion: 1,
+      eventId,
+      scope,
+      eventIndex,
+      previousEventSha256OrNull: events.at(-1)?.recordSha256 ?? null,
+      mutation,
+      view: reduced.view,
+      changed: reduced.changed,
+      recordSha256: text(row['record_sha256']),
+    };
+    events.push(event);
+    state = {
+      viewOrNull: reduced.view,
+      queueOrNull: reduced.queue,
+      connectionFactsSha256OrNull: reduced.connectionFactsSha256OrNull,
+      events,
+    };
+  }
+  if (head === undefined) {
+    if (events.length !== 0) return fail();
+  } else if (
+    head['owner_device_id'] !== scope.ownerDeviceId ||
+    head['head_event_id'] !== events.at(-1)?.eventId ||
+    !same(checkedJson(head), state.viewOrNull)
+  )
+    return fail();
+  return state;
+}
+export function gmRequestReviewRefreshEventId(
+  scope: GmRequestReviewScope,
+  causeCommandId: string,
+  causeReceiptId: string,
+): string {
+  return `gm-request-refresh:${campaignCreationHash({ scope: queueScope(scope), causeCommandId: text(causeCommandId), causeReceiptId: text(causeReceiptId) })}`;
+}
+function queueCursor(view: GmRequestReviewView): CampaignCreationCursor {
+  return {
+    gmLocalContextId: view.gmLocalContextId,
+    ownerDeviceId: view.ownerDeviceId,
+    kind: 'QUEUE',
+    formId: view.formId,
+    targetId: view.campaignId,
+    revisions: revisions(view),
+    targetSha256: view.snapshotSha256,
+  };
+}
+/** Called only by the full request writer, inside its IMMEDIATE transaction after source/ID guards. */
+export function appendGmRequestReviewEventInTransaction(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+  input: { readonly eventId: string; readonly mutation: GmRequestReviewMutation },
+): {
+  readonly event: StoredGmRequestQueueEvent;
+  readonly view: GmRequestReviewView;
+  readonly rowWrites: number;
+} {
+  queueSchema(db);
+  queueObject(input, ['eventId', 'mutation']);
+  const scope = queueScope(value);
+  const eventId = text(input.eventId);
+  const mutation = queueMutation(input.mutation);
+  if (
+    (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
+    (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
+    (mutation.kind === 'REQUEST_REFRESH' &&
+      eventId !==
+        gmRequestReviewRefreshEventId(scope, mutation.causeCommandId, mutation.causeReceiptId))
+  )
+    return fail('INVALID_INPUT');
+  const state = readGmRequestReviewViewStateInTransaction(db, scope);
+  const known = state.events.find((event) => event.eventId === eventId);
+  if (known !== undefined) {
+    if (!same(known.mutation, mutation)) return fail('IDEMPOTENCY_CONFLICT');
+    return { event: known, view: state.viewOrNull ?? fail(), rowWrites: 0 };
+  }
+  if (
+    db.prepare('SELECT 1 FROM gm_request_queue_event WHERE event_id=?').get(eventId) !== undefined
+  )
+    return fail('IDEMPOTENCY_CONFLICT');
+  const cursor = readCampaignCreationCursor(db, scope.gmLocalContextId);
+  const initial = queueBase(db, scope);
+  if (state.viewOrNull === null) {
+    if (!same(cursor, initial.cursor)) return fail('STALE_REVISION');
+  } else if (
+    (mutation.kind === 'NAV' || mutation.kind === 'DRAFT') &&
+    !same(cursor, queueCursor(state.viewOrNull))
+  )
+    return fail('DRAFT_UNAVAILABLE');
+  const reduced = reduceQueue(scope, initial, state, mutation);
+  const document = {
+    schemaVersion: 1 as const,
+    eventId,
+    scope,
+    eventIndex: state.events.length,
+    previousEventSha256OrNull: state.events.at(-1)?.recordSha256 ?? null,
+    mutation,
+    view: reduced.view,
+    changed: reduced.changed,
+  };
+  const event: StoredGmRequestQueueEvent = {
+    ...document,
+    recordSha256: campaignCreationHash(document),
+  };
+  const before = (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+  db.prepare('INSERT INTO gm_request_queue_event VALUES (?,?,?,?,?,?,?,?)').run(
+    eventId,
+    scope.gmLocalContextId,
+    scope.campaignId,
+    scope.ownerDeviceId,
+    event.eventIndex,
+    mutation.kind,
+    canonical(document),
+    event.recordSha256,
+  );
+  db.prepare(
+    'INSERT INTO gm_request_queue_view VALUES (?,?,?,?,?,?) ON CONFLICT(context_id,campaign_id) DO UPDATE SET owner_device_id=excluded.owner_device_id,head_event_id=excluded.head_event_id,record_json=excluded.record_json,record_sha256=excluded.record_sha256',
+  ).run(
+    scope.gmLocalContextId,
+    scope.campaignId,
+    scope.ownerDeviceId,
+    eventId,
+    canonical(reduced.view),
+    campaignCreationHash(reduced.view),
+  );
+  const selected =
+    state.viewOrNull === null || (cursor.kind === 'QUEUE' && cursor.targetId === scope.campaignId);
+  if (selected) writeCursor(db, queueCursor(reduced.view));
+  const rowWrites = selected ? 3 : 2;
+  if (
+    !db.inTransaction ||
+    (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n !== before + rowWrites
+  )
+    return fail('SOURCE_CHANGED');
+  const saved = readGmRequestReviewViewStateInTransaction(db, scope);
+  if (!same(saved.viewOrNull, reduced.view) || !same(saved.events.at(-1), event))
+    return fail('SOURCE_CHANGED');
+  if (
+    selected &&
+    !same(readCampaignCreationCursor(db, scope.gmLocalContextId), queueCursor(reduced.view))
+  )
+    return fail('SOURCE_CHANGED');
+  return { event, view: reduced.view, rowWrites };
 }

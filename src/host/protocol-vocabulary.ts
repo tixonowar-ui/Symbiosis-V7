@@ -11,6 +11,7 @@ import type { AddressableRouteTemplate, WireV2Vocabulary } from '@shared/wire-v2
 
 import { array, readJsonFile, record, string } from './json-source.js';
 import { CORE_169_SPECIES_BY_FACE, SYMBIOTIC_MONSTER_SPECIES_KEYS } from '../domain/index.js';
+import { NETWORK_APPLICATION_FORM_IDS } from '../shared/network-application.js';
 
 const WORKFLOW_QA_PREFIX = 'QA-WORKFLOW-';
 const WORKFLOW_COMMAND = /^UI-CMD-[A-Z0-9-]+$/u;
@@ -22,6 +23,14 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'NET-001',
+  'NET-002',
+  'NET-003',
+  'NET-004',
+  'NET-005',
+  'NET-011',
+  'NET-017',
+  'CHR-027',
   'APP-011',
   'CMP-001',
   'CMP-002',
@@ -243,6 +252,25 @@ export async function loadProtocolVocabulary(
       const form = presentedForms.get(formId);
       if (form === undefined || form.type !== formType || form.route !== routeTemplate)
         return false;
+      if ((NETWORK_APPLICATION_FORM_IDS as readonly string[]).includes(formId)) {
+        const binding = bindings[0];
+        if (
+          bindings.length !== 1 ||
+          binding?.parameterIndex !== 0 ||
+          binding.source !== 'inherited'
+        )
+          return false;
+        if (formId === 'CHR-027') return binding.value.length > 0;
+        return (
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+            binding.value,
+          ) ||
+          (['NET-001', 'NET-002', 'NET-011'].includes(formId) &&
+            /^unbound:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+              binding.value,
+            ))
+        );
+      }
       if (formId === 'CHR-014' || formId === 'CHR-018') {
         return (
           bindings.length === 2 &&
@@ -272,13 +300,13 @@ export async function loadProtocolVocabulary(
           bindings[0].value.length > 0
         );
       }
-      if (/^CMP-00[1-6]$/u.test(formId)) {
+      if (/^CMP-00[1-6]$/u.test(formId) || formId === 'NET-017') {
         const binding = bindings[0];
         return (
           bindings.length === 1 &&
           binding?.parameterIndex === 0 &&
           binding.source === 'inherited' &&
-          (formId === 'CMP-006'
+          (formId === 'CMP-006' || formId === 'NET-017'
             ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(binding.value)
             : /^draft:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
                 binding.value,

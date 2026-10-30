@@ -15,6 +15,11 @@ import type {
   JsonObject,
   FormActionIntentV2Message,
 } from '../shared/index.js';
+import type {
+  WorkflowCommandCapabilityId,
+  WorkflowCommandId,
+  CommandReceipt,
+} from '../shared/wire-protocol.js';
 import {
   CAMPAIGN_CREATE_COMMAND_ID,
   campaignQrPayload,
@@ -58,7 +63,7 @@ import {
   validateMasterSecretVerifier,
   MasterSecretError,
 } from './campaign-secret.js';
-import type { createCampaignBindManager } from './campaign-bind.js';
+import type { createCampaignBindManager, CampaignBindRecovery } from './campaign-bind.js';
 import { CAMPAIGN_CREATE_SCREEN_CONTRACTS } from './projections/cmp-create.js';
 import {
   loadLocalCharacterExportBaseline,
@@ -79,13 +84,24 @@ export type CampaignHostMessage =
 export interface CampaignConnection {
   gmLocalContextId: string | null;
   executableCreate: boolean;
+  executableReview?: readonly WorkflowCommandCapabilityId[];
   readonly trusted: () => boolean;
 }
 interface Dependencies {
+  readonly schedule?: <T>(run: () => Promise<T>) => Promise<T>;
   readonly database: Database.Database;
   readonly projectRoot: string;
   readonly baseline: LocalCharacterExportBaseline;
   readonly bind: ReturnType<typeof createCampaignBindManager>;
+  /** The application composition publishes the saved bind on the actual private listener. */
+  readonly requestReview?: {
+    readonly project: (
+      c: CampaignConnection,
+    ) => Promise<{ base: PresentedBaseForm; revisions: RevisionVector }>;
+    readonly receipt: (c: CampaignConnection, id: string) => CommandReceipt | null;
+    readonly refreshConnectionPresentation: (c: CampaignConnection) => void;
+  };
+  readonly publishCampaign?: (campaignId: string) => Promise<CampaignBindRecovery>;
 }
 export interface CampaignShell {
   readonly formId: string | null;
@@ -324,13 +340,21 @@ export function createCampaignCreationRuntime(d: Dependencies) {
     let available = actions[cursor.formId] ?? [];
     if (cursor.kind === 'MENU') {
       payload = menuPayload(ctx);
-    } else if (cursor.kind === 'CAMPAIGN') {
+    } else if (cursor.kind === 'QUEUE' && cursor.formId === 'NET-017') {
+      if (d.requestReview === undefined) return unavailable();
+      return d.requestReview.project(c);
+    } else if (cursor.kind === 'CAMPAIGN' || cursor.kind === 'QUEUE') {
       validateMasterSecretVerifier(
         readCampaignPrivateOwner(db, ctx.gmLocalContextId, cursor.targetId).verifier,
       );
+      if (d.requestReview !== undefined && (c.executableReview?.length ?? 0) > 0)
+        available = ['CMP-006::CTA::002'];
       const saved = readPausedCampaign(db, ctx.gmLocalContextId, cursor.targetId);
       assertStoredBaseline(saved.baselineVersion);
-      const recovery = await d.bind.recover(saved.campaignId, saved.host);
+      const recovery =
+        d.publishCampaign === undefined
+          ? await d.bind.recover(saved.campaignId, saved.host)
+          : await d.publishCampaign(saved.campaignId);
       context(c);
       payload = {
         ...shared,
@@ -944,15 +968,31 @@ export function createCampaignCreationRuntime(d: Dependencies) {
           c.executableCreate = message.supportedWorkflowCommandIds.includes(
             CAMPAIGN_CREATE_COMMAND_ID,
           );
+          c.executableReview =
+            d.requestReview === undefined
+              ? []
+              : message.supportedWorkflowCommandIds.filter(
+                  (id) =>
+                    id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||
+                    id === 'UI-CMD-DEVICE-REQUEST-REJECT',
+                );
           shell.enter();
+          if (readCampaignCreationCursor(db, resumed.gmLocalContextId).kind === 'QUEUE')
+            d.requestReview?.refreshConnectionPresentation(c);
           for (const id of message.unacknowledgedCommandIds) {
             const known = commandAt(resumed, id);
-            if (known !== null)
+            const reviewed =
+              known === null &&
+              d.requestReview !== undefined &&
+              readCampaignCreationCursor(db, resumed.gmLocalContextId).kind === 'QUEUE'
+                ? d.requestReview.receipt(c, id)
+                : null;
+            if (known !== null || reviewed !== null)
               send({
                 messageType: 'command.replay',
                 protocolVersion: 1,
                 lifecycleState: 'IDEMPOTENT_REPLAY',
-                receipt: known.receipt,
+                receipt: known?.receipt ?? reviewed!,
               });
             else
               send({
@@ -970,7 +1010,10 @@ export function createCampaignCreationRuntime(d: Dependencies) {
             protocolVersion: 2,
             reconnectRequestId: message.reconnectRequestId,
             revisions: target.revisions,
-            executableWorkflowCommandIds: c.executableCreate ? [CAMPAIGN_CREATE_COMMAND_ID] : [],
+            executableWorkflowCommandIds: [
+              ...(c.executableCreate ? [CAMPAIGN_CREATE_COMMAND_ID] : []),
+              ...(c.executableReview ?? []),
+            ] as WorkflowCommandId[],
           });
           send(target);
         } else if (message.messageType === 'navigation.form-action')
@@ -1050,6 +1093,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
   let frames = Promise.resolve();
   return {
     currentVector,
+    project,
     handle(
       message: AnyClient,
       c: CampaignConnection,
@@ -1073,6 +1117,8 @@ export function createCampaignCreationRuntime(d: Dependencies) {
         return Promise.resolve(false);
       // One host serializes GM work across transports; async preparation never
       // lets another GM frame borrow or retire an intermediate lease/snapshot.
+      if (d.schedule !== undefined)
+        return d.schedule(() => runtime.handle(message, c, shell, send));
       const pending = frames.then(() => runtime.handle(message, c, shell, send));
       frames = pending.then(
         () => {},

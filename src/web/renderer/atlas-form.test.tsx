@@ -76,6 +76,14 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CMP-004',
   'CMP-005',
   'CMP-006',
+  'NET-001',
+  'NET-002',
+  'NET-003',
+  'NET-004',
+  'NET-005',
+  'NET-011',
+  'CHR-027',
+  'NET-017',
 ] as const satisfies readonly ImplementedFormId[];
 
 interface MountedRoot {
@@ -206,7 +214,7 @@ describe('atlas implemented-form renderer', () => {
       expect(container.textContent).not.toMatch(/QA-FORM|Required fields|CORE-|SYM-\d/);
     },
   );
-  it('registers and renders APP plus the implemented CHR wizard slice with atlas types', () => {
+  it('registers and renders APP, CHR and both NET application families with atlas types', () => {
     expect(IMPLEMENTED_FORM_IDS).toEqual(TEST_IMPLEMENTED_FORM_IDS);
 
     let screens = 0;
@@ -222,8 +230,8 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // APP has nine screens/two dialogs; CHR includes the three new post-save screens.
-    expect(screens).toBe(49);
+    // The player NET slice and the GM request queue extend the existing screens; dialogs are unchanged.
+    expect(screens).toBe(57);
     expect(dialogs).toBe(4);
   });
 
@@ -390,8 +398,8 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
-    expect(() => getAtlasFormModel('CHR-027')).toThrow(
-      `form "CHR-027" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
+    expect(() => getAtlasFormModel('NET-018')).toThrow(
+      `form "NET-018" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 

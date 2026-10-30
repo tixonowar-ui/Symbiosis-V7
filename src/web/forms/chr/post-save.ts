@@ -510,6 +510,7 @@ export function expectedPostSaveActions(
   formId: PostSaveFormId,
   p: PostSaveProjection,
   capabilities: readonly WorkflowCommandId[],
+  networkProposalAvailable = false,
 ): readonly ActionKey[] {
   const can = (variant: PostSavePayload['variant']) =>
     capabilities.includes(POST_SAVE_COMMAND_IDS[variant]);
@@ -536,6 +537,9 @@ export function expectedPostSaveActions(
     case 'CHR-040':
       return [
         'CHR-040::CTA::001',
+        ...(networkProposalAvailable && capabilities.includes('UI-CMD-CONNECTION-OPEN')
+          ? ['CHR-040::CTA::002' as const]
+          : []),
         'CHR-040::CTA::003',
         ...(can('METADATA_PATCH') ? ['CHR-040::CTA::004' as const] : []),
       ];

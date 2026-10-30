@@ -43,6 +43,24 @@
   Прикладные peer/SQL/discovery callers интегрируются отдельно в #171.
   [ADR 0068](docs/adr/0068-verified-artifact-baseline-lineage.md).
 
+- **2026-10-30, issue #171:** player NET-контур собственной
+  Node/SQLite-установки сохраняет local outbox, original receipts и current view.
+  В application-ветку локально интегрирована разрешённая Atlas1.6-поставка #177
+  и проверенная baseline lineage #190. Подключены GM queue, отдельный draft,
+  preliminary decisions, forward0011 и live owner recovery. Полный browser
+  сценарий включает accept/restart/reject/новый SUBMIT; при CANCEL выбранная
+  строка и причина GM очищаются. Immutable receipts отделены от current view.
+  Подписка ограничена опубликованной NET-005; потерянный ACK восстанавливается
+  с прежними IDs. Выход в обычный shell снимает только три GM capability;
+  повторные проверки одной синхронной операции переиспользуют проверенный
+  source при сохранённых owner/key/CAS guards. Сбой owner-send повторяется
+  по отдельному token последней успешной публикации каждого соединения без
+  нового receipt или SQL события. History tails сравниваются по точным
+  каноническим байтам и SHA после полного replay. Финальный допуск, copies
+  и seats не создаются.
+  [ADR 0066](docs/adr/0066-device-connection-and-admission-request.md);
+  результаты обязательных merge gates — в [handoff](docs/status/handoff.md).
+
 - **2026-10-30, issue #182, предпосылка #171:** закрытые installation keys,
   LAN locator/discovery и подписанный peer channel с ограниченными очередями.
   FINAL candidates проверяются полным existing creation replay и точным DTO,

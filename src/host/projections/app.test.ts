@@ -139,10 +139,14 @@ describe('APP host projection', () => {
     });
   });
 
-  it('loads the sixty-six slice actions with their exact source-owned guards', () => {
-    expect(APP_002_VERTICAL_ACTION_KEYS).toEqual(['APP-002::CTA::002', 'APP-002::CTA::007']);
+  it('loads the sixty-eight slice actions with their exact source-owned guards', () => {
+    expect(APP_002_VERTICAL_ACTION_KEYS).toEqual([
+      'APP-002::CTA::002',
+      'APP-002::CTA::003',
+      'APP-002::CTA::007',
+    ]);
     expect(APP_004_VERTICAL_ACTION_KEYS).toEqual(['APP-004::CTA::001', 'APP-004::CTA::007']);
-    expect(catalog.actions.size).toBe(66);
+    expect(catalog.actions.size).toBe(68);
     expect(catalog.actions.get('CHR-017::CTA::004')).toMatchObject({
       from: 'CHR-017',
       to: 'CHR-021',

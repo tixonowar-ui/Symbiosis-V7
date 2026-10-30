@@ -70,6 +70,16 @@ const chunk: Extract<DeviceAdmissionPeerCommand, { operation: 'DEVICE_REQUEST_CH
   chunkIndex: 0,
   bytesBase64: Buffer.from('private witness bytes').toString('base64'),
 };
+const bindLane: Extract<DeviceAdmissionPeerCommand, { operation: 'DEVICE_REQUEST_BIND_LANE' }> = {
+  schemaVersion: 1,
+  operation: 'DEVICE_REQUEST_BIND_LANE',
+  commandId: 'bind-command',
+  requestId: REQUEST,
+  technicalSessionId: SESSION,
+  submitCommandId: 'original-submit',
+  batchSha256: 'f'.repeat(64),
+  localControllerSeatId: '55555555-5555-4555-8555-555555555555',
+};
 const commands: readonly DeviceAdmissionPeerCommand[] = [
   open,
   {
@@ -90,6 +100,7 @@ const commands: readonly DeviceAdmissionPeerCommand[] = [
   begin,
   chunk,
   { schemaVersion: 1, operation: 'DEVICE_REQUEST_COMMIT', transferId: TRANSFER },
+  bindLane,
 ];
 function encode(value: unknown, useLimits = limits): string {
   return encodeDeviceAdmissionPeerCommand(value as DeviceAdmissionPeerCommand, useLimits);
@@ -576,5 +587,27 @@ describe('closed private device admission RPC commands', () => {
     const error = rejection(() => encode(value));
     expect(error.field).toBe('command');
     expect(`${error.message}${JSON.stringify(error)}`).not.toContain(privateText);
+  });
+});
+
+describe('explicit lane enrichment command closure', () => {
+  it('requires original scope/batch identity and a distinct actual lane identifier', () => {
+    for (const key of [
+      'commandId',
+      'requestId',
+      'technicalSessionId',
+      'submitCommandId',
+      'batchSha256',
+      'localControllerSeatId',
+    ]) {
+      const value = { ...bindLane } as Record<string, unknown>;
+      delete value[key];
+      rejectJson(value);
+    }
+    rejectJson({ ...bindLane, localControllerSeatId: SESSION });
+    rejectJson({ ...bindLane, batchSha256: 'F'.repeat(64) });
+    rejectJson({ ...bindLane, role: 'gm' });
+    rejectJson({ ...bindLane, requestRevision: 1 });
+    expect(decode(encode(bindLane))).toEqual(bindLane);
   });
 });

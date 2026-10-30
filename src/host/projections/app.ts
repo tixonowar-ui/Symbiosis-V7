@@ -1,5 +1,6 @@
 import { assertCreationValidationScreenContracts } from './chr-creation-validation.js';
 import { assertCampaignCreateScreenContracts } from './cmp-create.js';
+import { assertNetConnectScreenContracts } from './net-connect.js';
 import { assertPostSaveScreenContracts } from './chr-post-save.js';
 import { assertFiveStartingPositionsScreenContracts } from './chr-five-starting-positions.js';
 import { assertStartingMoneyScreenContracts } from './chr-starting-money.js';
@@ -132,6 +133,7 @@ export const APP_002_LOCAL_CHARACTERS_ACTION_KEY = 'APP-002::CTA::002' as const 
 /** Guard passes and its target is implemented by this vertical. */
 export const APP_002_VERTICAL_ACTION_KEYS = [
   APP_002_LOCAL_CHARACTERS_ACTION_KEY,
+  'APP-002::CTA::003',
   APP_002_CREATE_CHARACTER_ACTION_KEY,
 ] as const satisfies readonly ActionKey[];
 export const APP_004_CREATE_CHARACTER_ACTION_KEY = 'APP-004::CTA::001' as const satisfies ActionKey;
@@ -406,6 +408,7 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
       'otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; bootState=READY',
     ],
     ['APP-002', APP_002_LOCAL_CHARACTERS_ACTION_KEY, 'player launch-mode'],
+    ['APP-002', 'APP-002::CTA::003', 'player launch-mode'],
     [
       'APP-002',
       APP_002_CREATE_CHARACTER_ACTION_KEY,
@@ -504,7 +507,7 @@ function appNavigationActions(source: unknown): ReadonlyMap<ActionKey, AppNaviga
     ['CHR-025', [8, 9]],
     ['CHR-026', [1, 2]],
     ['CHR-039', [1, 2, 3, 4]],
-    ['CHR-040', [1, 3, 4]],
+    ['CHR-040', [1, 2, 3, 4]],
     ['APP-009', [2, 3]],
     ['APP-010', [1, 2, 3, 4, 5]],
   ] as const) {
@@ -668,6 +671,7 @@ function appFormContracts(source: unknown): ReadonlyMap<AppFormId, AppFormContra
   assertCreationValidationScreenContracts(forms, assertScreenContract);
   assertPostSaveScreenContracts(forms, assertScreenContract);
   assertCampaignCreateScreenContracts(forms, assertScreenContract);
+  assertNetConnectScreenContracts(forms);
   return result;
 }
 

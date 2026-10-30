@@ -318,6 +318,27 @@ describe('configured Fastify and ws host shell', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('terminates noncanonical locator URLs and keeps public locator separate from local identity', async () => {
+    const origin = await localHostBaseUrl(app);
+    const query = await fetch(new URL('/campaign-locator?x=1', origin), {
+      signal: AbortSignal.timeout(2_000),
+    });
+    expect(query.status).toBe(404);
+    await query.arrayBuffer();
+    const locator = await fetch(new URL('/campaign-locator', origin), {
+      signal: AbortSignal.timeout(2_000),
+    });
+    expect(locator.status).toBe(200);
+    expect(locator.headers.get('cache-control')).toBe('no-store');
+    expect(await locator.json()).toEqual({ protocolVersion: 3, campaigns: [] });
+    const browserRequest = await fetch(new URL('/campaign-locator', origin), {
+      headers: { origin },
+      signal: AbortSignal.timeout(2_000),
+    });
+    expect(browserRequest.status).toBe(403);
+    expect(await browserRequest.json()).toEqual({ error: 'LOCATOR_UNAVAILABLE' });
+  });
+
   it('serves the persisted device identity without caching or rotating it', async () => {
     const origin = await localHostBaseUrl(app);
     const first = await fetch(new URL('/device-identity', origin), { headers: { origin } });

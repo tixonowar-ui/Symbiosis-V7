@@ -2293,6 +2293,9 @@ describe('APP-001 web entry', () => {
         'UI-CMD-CHAR-LOCAL-METADATA-PATCH',
         'UI-CMD-CHAR-VARIANT-CREATE',
         'UI-CMD-CHAR-EXPORT',
+        'UI-CMD-CONNECTION-OPEN',
+        'UI-CMD-DEVICE-REQUEST-SUBMIT',
+        'UI-CMD-DEVICE-REQUEST-CANCEL',
       ],
       unacknowledgedCommandIds: [],
     });

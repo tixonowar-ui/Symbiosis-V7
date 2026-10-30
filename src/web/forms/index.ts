@@ -6,14 +6,27 @@ import type { AppFormId } from './app/index.js';
 import { CHR_FORM_IDS } from './chr/index.js';
 import type { ChrFormId } from './chr/index.js';
 import { CMP_CREATE_FORM_IDS } from './cmp/campaign-create.js';
+import {
+  NETWORK_APPLICATION_FORM_IDS,
+  type NetworkApplicationFormId,
+} from '@shared/network-application.js';
 
 export const IMPLEMENTED_FORM_IDS = [
   ...APP_FORM_IDS,
   ...CHR_FORM_IDS,
   ...CMP_CREATE_FORM_IDS,
+  ...NETWORK_APPLICATION_FORM_IDS,
+  'NET-017',
 ] as const;
-export type ImplementedFormId = AppFormId | ChrFormId | (typeof CMP_CREATE_FORM_IDS)[number];
+export type ImplementedFormId =
+  | AppFormId
+  | ChrFormId
+  | (typeof CMP_CREATE_FORM_IDS)[number]
+  | NetworkApplicationFormId
+  | 'NET-017';
 export type SupportedPresentationFormId =
+  | NetworkApplicationFormId
+  | 'NET-017'
   | 'APP-001'
   | 'APP-002'
   | 'APP-004'
@@ -65,6 +78,8 @@ export type SupportedPresentationFormId =
 
 const IMPLEMENTED = new Set<string>(IMPLEMENTED_FORM_IDS);
 const SUPPORTED = new Set<FormId>([
+  ...NETWORK_APPLICATION_FORM_IDS,
+  'NET-017',
   'APP-001',
   'APP-002',
   'APP-004',

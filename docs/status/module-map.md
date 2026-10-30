@@ -3,22 +3,25 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
-## Текущий срез #195 — 2026-10-30
+## Application #171 — реализация полного сценария
 
-#177 смёржена через PR #194 в `ecd3984`: независимо проверенный `5e92997`
-прошёл verify 150/3739 и 34/34 production E2E без retry. Финальный CI зелёный;
-две предыдущие попытки получили таймауты существующих SQLite suites, их логи
-сохранены. Единственная причина разброса времени не доказана, лимиты и
-конфигурация проверок сохранены. #190 также закрыта после PR #193.
+На базе main `7568488a13` (#190, Atlas 1.6 / #177, source contracts #195 и
+исключение #197 только для PR #185) реализованы player NET entry/connect/batch,
+GM CMP-006↔NET-017, предварительные accept/reject, owner-only delivery,
+CANCEL race, legacy lane recovery и forward0011. Common technical view head
+отделён от неизменяемого campaign birth; copies, admitted seats и Start
+остаются за последующими задачами. Shared encoder redaction сохранён.
 
-#195 добавляет самостоятельные shared DTO и standalone codecs player network
-и GM NET-017 по этому source. Закрытые поля, enum, UUID, revision vectors,
-payload/receipt consistency и player/GM isolation проверяются в библиотеке.
-Core wire dispatch, host/routes/capabilities и SQL остаются прежними. Формы
-в приложении не публикуются; #171 / draft PR #185 ещё требует полного GM
-journey и независимых проверок. [ADR 0070](../adr/0070-network-request-source-contracts.md).
+Точные browser reproducers проходят, включая reject→safe return→новый SUBMIT
+и CANCEL выбранной GM строки. Owner publication имеет отдельный token
+последнего успешного публичного send для каждого scope/context; failed send
+и второе собственное соединение не теряют уже сохранённое решение. Полный
+verify, все 38 production E2E,
+независимые final-SHA проверки и CI остаются обязательными merge gates.
+Их текущий результат фиксируется в handoff и PR; прежние успешные запуски
+не считаются проверкой изменённого снимка. После merge #185 работа останавливается.
 
-## Завершённая поставка #177
+## Source-снимок #177 — 2026-10-30
 
 База `24c726c`: #190 смёржена через PR #193 после независимого полного
 verify 150/3211, 34/34 production E2E без retry и зелёного CI на том же SHA.
@@ -32,8 +35,9 @@ NET-003/005 и CMP-006 согласованы с ним. NET-018–022/027 и к
 семантические проверки сохранены. [ADR 0069](../adr/0069-device-request-review-atlas-amendment.md).
 
 Это source/guard-поставка: GM queue/decisions не опубликованы в приложении,
-draft PR #185 остаётся неполным до завершения #171. Результаты source-поставки
-зафиксированы в PR #194 и [handoff](handoff.md).
+draft PR #185 остаётся неполным до завершения #171. Проверки текущей поставки
+фиксируются в PR и [handoff](handoff.md); перед merge обязательны независимый
+полный verify/E2E окончательного committed SHA и зелёный CI.
 
 ## Исторический срез #190
 
@@ -48,9 +52,10 @@ context B0/B1. Archive/candidate и read/replay сохранённой камп�
 authority context. Точные filesystem freshness guards сохраняются. SQL/schema,
 артефакты и опубликованные формы не меняются. [ADR 0068](../adr/0068-verified-artifact-baseline-lineage.md).
 
-На момент исторического среза #190 Atlas 1.6 использовался только в patch
-fixture; теперь поставка #177 применена. Application-only integration
-peer/SQL/discovery остаётся в #171.
+Поставка Atlas 1.6 #177 ещё не применена: её реальные bytes используются только
+в проверяемом patch fixture. Application-only integration peer/SQL/discovery
+остаётся в #171. Полные verify/E2E и независимый final-SHA review обязательны
+до merge текущего среза; результаты фиксируются в PR и [handoff](handoff.md).
 
 ## Предыдущий снимок #182
 
@@ -238,33 +243,61 @@ runtime этим не реализованы.
 Срез #170 реализует APP-011 и CMP-001–006: отдельный durable GM context,
 черновик, write-only секрет, actual bind/baseline preflight и атомарный
 CREATE. QR реально декодируется; восстановление сохраняет campaign/receipt.
-Admission, Start, игровой clock и сцены ещё не реализованы.
+Финальный допуск в кампанию, Start, игровой clock и сцены ещё не реализованы.
 
-#182 реализует отдельный технический фундамент: private installation identity
+#182 слита в PR #183 и реализует технический фундамент: private installation identity
 и peer channel, LAN discovery, immutable FINAL evidence и owner-bound local tab
 entry/close. Source assertions NET-001–005/009–012 и CHR-027 не регистрируют формы
 и не расширяют player authority. [ADR 0067](../adr/0067-private-campaign-network-foundation.md)
 принят для APIs; прикладной [ADR 0066](../adr/0066-device-connection-and-admission-request.md)
-остаётся предложенным. UI/outbox/request/GM runtime #171 не готов; нормативная
-поставка preliminary GM decisions #177 завершена. Shared контракты #195
-поставляются отдельно от включения этих обработчиков в приложение.
+вступает в силу с merge #185 после финальных gates.
 
-После #170 очередь — #171 → #172 → #173 → #174 → #113. Для #113
-исходный арт подготовлен; мастерский runtime NPC/ENM/GM ещё не начат.
+В #171 реализация связывает этот фундамент с player NET UI, local/host
+журналами и ограниченным peer executor. APP-002 и текущий FINAL CHR-040
+дают явные входы. Адрес или QR заполняют ввод, OPEN подтверждает только
+техническую сессию, SUBMIT передаёт один pinned batch из 1–3 собственных FINAL,
+CANCEL требует подтверждённую локальную причину. Сессия и input lane не
+являются campaign seat и не резервируют вместимость. Исходная контрольная
+сумма механики отделена от контрольной суммы безопасного экспорта.
+Resume использует известный opaque scope, сохраняет command ID и различает
+immutable ACK от текущего состояния; неизвестный исход удерживает pending
+команду. После подтверждённого выхода восстанавливается собственный APP-002
+или CHR-040 без создания нового входа. NET-017 и две preliminary GM-команды
+подключены по смёрженной поставке #177. Финальная приёмка полного среза
+требует проверок одного окончательного committed SHA.
+
+Текущее поручение — завершить и смёржить #171 / PR #185, затем остановиться.
+#172, #173, #174, #113 и подготовка #186 сейчас не продолжаются.
 Остальные прикладные слои остаются частичными, заглушками или не начаты.
 
-| Слой                         | Состояние    | Что нужно / реализовано                                                                        | Веха |
-| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------- | ---- |
-| `src/shared`                 | **готов**    | wire v1/v2/v3 identity/campaign; standalone network/player и GM request contracts              | M4   |
-| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime          | M3   |
-| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                  | M3   |
-| `src/persistence`            | **частично** | checkpoints, library/owner, отдельные metadata/post-save journal/cursor и birth proof варианта | M2   |
-| `src/persistence/migrations` | **готов**    | forward-only `0001`–`0009`, включая post-save, paused campaign, private identity и local tabs  | M2   |
-| `src/host`                   | **частично** | character FINAL/post-save, GM launch, durable campaign draft и CREATE PAUSED                   | M4   |
-| `src/host/projections`       | **частично** | APP-001/002/004/009/010/011, CHR-001–026/028/031/032/036–042, CMP-001–006                      | M4   |
-| `src/web`                    | **частично** | character/post-save и GM campaign creation; production E2E с настоящим host                    | M5   |
-| `src/web/renderer`           | **частично** | добавлены CHR-026/039/040 и APP-009/010; незарегистрированные формы fail-closed                | M5   |
-| `src/web/forms`              | **частично** | character wizard, финальный лист, recovery, библиотека, локальные варианты и экспорт           | M6   |
+| Слой                         | Состояние    | Что нужно / реализовано                                                                                              | Веха |
+| ---------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- | ---- |
+| `src/shared`                 | **частично** | прежние wire v1/v2/v3 готовы; closed NET projection/draft/resume contracts добавлены в #171                          | M4   |
+| `src/domain/rules`           | **частично** | создание, итоговая механика, удержание навыков, постоянные grants и начальное runtime                                | M3   |
+| `src/domain/entities`        | **частично** | roll source/face/replay contract; lifecycle-переходов ещё нет                                                        | M3   |
+| `src/persistence`            | **частично** | character/post-save; local application/outbox и hosted request journals в #171                                       | M2   |
+| `src/persistence/migrations` | **частично** | `0010` сохраняет NET sidecars; forward `0011` добавляет GM queue, решения и lane provenance                          | M2   |
+| `src/host`                   | **частично** | character/post-save, CREATE PAUSED; local NET coordinator и peer runtime в #171                                      | M4   |
+| `src/host/projections`       | **частично** | прежние APP/CHR/CMP; NET-001–005/011/017 и CHR-027 подключены в #171                                                 | M4   |
+| `src/web`                    | **частично** | character/post-save/CMP; player/GM NET UI и recovery в #171; точные browser reproducers прошли, full gates ожидаются | M5   |
+| `src/web/renderer`           | **частично** | NET-001–005/011/017 и CHR-027 зарегистрированы в #171; неизвестные формы fail-closed                                 | M5   |
+| `src/web/forms`              | **частично** | character/CMP и player NET inputs, confirmed CANCEL_REASON, local QR decoder в #171                                  | M6   |
+
+### Модули полного сценария #171
+
+| Модуль                                                                                                 | Текущее состояние                                                                                             |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `src/shared/network-application*.ts`                                                                   | Закрытые public DTO и deep validator семи форм; NET draft/resume wire v3.                                     |
+| `src/persistence/network-local-application.ts`, `network-device-request.ts`                            | Local intent/outbox/ACK, pins и pinned FINAL batch; отдельные hosted sessions/requests/receipts.              |
+| `src/host/campaign-network-endpoint.ts`, `campaign-network-executor.ts`, `campaign-network-runtime.ts` | Реальные held listeners, ограниченные transport leases и lifecycle сетевой кампании.                          |
+| `src/host/device-admission-peer-runtime.ts`, `device-admission-peer-response.ts`                       | OPEN/SUBMIT/CANCEL/RECOVER через authenticated Node channel, current view отдельно от immutable receipt.      |
+| `src/host/network-local-peer.ts`, `network-application.ts`                                             | Локальный coordinator, explicit entry/resume/exit, discovery/locator, проверка FINAL и восстановление outbox. |
+| `src/host/projections/net-application.ts`                                                              | Отдельные player/GM projections, точные bindings/source CTAs, owner-only текущие результаты.                  |
+| `src/web/forms/net`, `src/web/ws-client.ts`                                                            | Подтверждённые player/GM drafts, FINAL/QR, immutable receipt/current view, live delivery и recovery.          |
+
+Это реализованный прикладной срез #171. Полный verify, production E2E и
+независимая проверка окончательного SHA обязательны до merge. Покрытие форм
+перегенерировано штатным traceability CLI.
 
 ## generated/ — вывод конвейера
 
@@ -277,11 +310,11 @@ entry/close. Source assertions NET-001–005/009–012 и CHR-027 не реги�
 
 ## tests/
 
-| Каталог             | Состояние    | Примечание                                                                                                            |
-| ------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                                    |
-| `tests/e2e`         | **частично** | 34 production-сценария, включая character/post-save и paused campaign creation; NET двух устройств пока не реализован |
-| `tests/fixtures`    | **частично** | source-backed domain fixtures и изолированный temp-SQLite host harness                                                |
+| Каталог             | Состояние    | Примечание                                                                                                  |
+| ------------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `tests/integration` | **не начат** | кросс-слойные тесты. Появятся с M2                                                                          |
+| `tests/e2e`         | **частично** | 38 production-сценариев; четыре NET с отдельными Node/SQLite и Chrome проверяют player/GM review и recovery |
+| `tests/fixtures`    | **частично** | source-backed fixtures, изолированный SQLite host harness; новый двухпроцессный NET harness в #171          |
 
 ---
 

@@ -1,10 +1,73 @@
 # Передача контекста — 2026-10-30
 
+## Полный сценарий #171 / PR #185 — перед финальными gates
+
+Ветка `codex/171-device-request-flow` интегрирована с main `7568488a13`:
+#190, Atlas 1.6 / #177 и shared source contracts #195 слиты. Старые migrations
+0009/0010 сохранены. Подключены полный player NET-контур, GM queue
+CMP-006↔NET-017, отдельный draft, preliminary decisions, owner-only delivery,
+restart/replay и forward0011. Campaign birth, original SUBMIT receipts,
+local FINAL и исторические baseline IDs не переписываются. Copies, seats,
+capacity reservations, final admission и Start не создаются.
+
+На промежуточном ca2a7e2 авторские normal verify (165 файлов / 4209 tests)
+и все38 production E2E прошли без retry. Независимый verify завершился
+4207/4209: approved-Atlas recovery занял5245 ms и новый connection-facts test
+5634 ms при прежних лимитах5000 ms. CI того же SHA завершился зелёным только
+после одного E2E retry: первый GM run не доставил owner REJECT за5 s. Это
+не принято за достаточный gate. Логи, trace и durable-status сохранены.
+Контрольная пара полного campaign suite прошла14/14 на main756 и ca2;
+причина разброса старого Atlas test не объявлена устранённой.
+
+Убраны доказанные повторные чтения уже проверенной request/key строки внутри
+одной синхронной операции и тройная сериализация materialized history tails.
+Последние по-прежнему требуют SHA исходных байтов и точного совпадения с
+каноническим результатом полного replay. Все события, ownership, индексы,
+CAS и post-write guards сохранены. На одинаковых116 чтениях истории три
+сравнения заняли1938→595 ms; общий разброс времени не приписан целиком этой
+замене. Пятнадцать проверок на реальных независимых SQLite copies охватывают
+все пять tail-таблиц: rehashed noncanonical/extra-field JSON и неверный SHA
+отклоняются без записи.
+
+Отдельно исправлена потеря owner update после сбоя отправки или доставки
+другому собственному соединению. Для каждого соединения хранится только
+последнее успешно отправленное публичное представление NET-005, связанное
+с его scope/context. Точный token меняется после успешного send; тихий poll
+повторяет недоставленное состояние без нового receipt/SQL события. Свежий
+проверенный v2 bundle используется синхронно, через await передаётся только
+boolean; legacy/BIND и missing-channel recovery сохраняют полный путь.
+Actual regression подтверждает два собственных context и один failed send
+с неизменными обеими SQLite, SUBMIT receipt и reconnect count.
+
+После этих исправлений node/web types, scoped lint,31 store cases и три
+owner-publication cases прошли. Обычный fresh-build browser run прошёл все
+четыре NET сценария без retry: manual/restart37.7 s, полный GM46.4 s,
+selected-CANCEL25.2 s, QR/batch26.4 s. Предыдущий plain GM failure на ACCEPT
+и последующие диагностические запуски также сохранены в reports; они не
+заменяют финальные gates. Последний committed SHA требует normal full
+verify, всех38 E2E, отдельного независимого прогона и зелёного CI. Таймауты,
+workers, byte assertions и реальные fixtures не ослаблялись.
+
+Первая полная проверка c1aa195 прошла types/lint/format и 4198 из 4204 tests.
+Шесть failures были сверены с новым контрактом: три старых migration consumers
+ожидали10 вместо forward11, три CMP-006 проверки использовали прежний action
+helper/нулевой current vector. Исправления сохраняют прежние rows/bytes,
+exact zero CREATE birth и отдельный current view. Исходный полный лог сохранён
+в `reports/171-integration`; следующий final SHA требует нового полного прогона.
+
+Окончательный бюджет от main `7568488a13` и проверяемый SHA записываются в
+`reports/171-integration/budget-final.json`. Владелец разрешил 20000 additions
+кода только для PR #185 (смёрженный PR #198 / #197); прочие оси неизменны.
+После успешного merge #185 работа останавливается. #186 и backlog не продолжаются.
+
+Ниже сохранена история зависимостей. Её старые будущие шаги не отменяют
+остановку после #185 и не описывают актуальную полноту реализации.
+
 ## Текущее указание владельца и процессный срез #197
 
 Владелец разрешил 20000 добавленных строк кода **только для PR #185** и
 потребовал остановиться после его успешного merge. #197 материализует это
-отдельным процессным PR; default15000, остальные семь порогов и все проверки
+смёрженным PR #198; default15000, остальные семь порогов и все проверки
 сохранены. Это не завершение #171 и не разрешение merge частичной реализации.
 
 #195 фактически закрыта после PR #196, squash `f7e6ade`; дерево совпало с

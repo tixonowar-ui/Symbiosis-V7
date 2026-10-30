@@ -183,3 +183,35 @@ describe('host protocol vocabulary implemented presentation support', () => {
     expect(CHR_011_SET_DECIDE_ACTION_KEYS).toEqual(['CHR-011::CTA::001']);
   });
 });
+
+describe('GM request queue route boundary', () => {
+  it('admits only the exact inherited campaign address and leaves final admission forms closed', async () => {
+    const vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
+    const route = '/master/campaigns/:campaignId/network/net-017';
+    const value = '00000000-0000-4000-8000-000000000001';
+    expect(
+      vocabulary.isPresentedForm('NET-017', 'screen', route, [
+        { parameterIndex: 0, source: 'inherited', value },
+      ]),
+    ).toBe(true);
+    expect(vocabulary.isPresentedForm('NET-017', 'screen', route, [])).toBe(false);
+    expect(
+      vocabulary.isPresentedForm('NET-017', 'screen', route, [
+        { parameterIndex: 0, source: 'client-selected', value },
+      ]),
+    ).toBe(false);
+    expect(
+      vocabulary.isPresentedForm('NET-017', 'screen', route, [
+        { parameterIndex: 0, source: 'inherited', value: 'unbound:' + value },
+      ]),
+    ).toBe(false);
+    expect(
+      vocabulary.isPresentedForm(
+        'NET-018',
+        'screen',
+        '/master/campaigns/:campaignId/network/net-018',
+        [{ parameterIndex: 0, source: 'inherited', value }],
+      ),
+    ).toBe(false);
+  });
+});

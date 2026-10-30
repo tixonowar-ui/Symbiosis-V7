@@ -43,7 +43,11 @@ const DRAFT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CAMPAIGN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const PROFILE = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const ZERO = { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 };
-const CAPABILITIES = ['UI-CMD-CAMPAIGN-CREATE'] as const;
+const CAPABILITIES = [
+  'UI-CMD-CAMPAIGN-CREATE',
+  'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+  'UI-CMD-DEVICE-REQUEST-REJECT',
+] as const;
 const common = { gmLocalContextId: CONTEXT, hostDeviceId: DEVICE, masterAuthorityRevision: 0 };
 const draft = {
   ...common,
@@ -383,7 +387,9 @@ describe('campaign projection contract', () => {
     expect(expectedCampaignActions('CMP-005', projections['CMP-005'], [])).toEqual([
       'CMP-005::CTA::002',
     ]);
-    expect(expectedCampaignActions('CMP-006', projections['CMP-006'], CAPABILITIES)).toEqual([]);
+    expect(expectedCampaignActions('CMP-006', projections['CMP-006'], CAPABILITIES)).toEqual([
+      'CMP-006::CTA::002',
+    ]);
     expect(
       expectedCampaignActions(
         'CMP-002',
@@ -444,6 +450,29 @@ describe('campaign projection contract', () => {
 });
 
 describe('campaign draft transport', () => {
+  it.each(CAPABILITIES)(
+    'refuses GM capability %s on an ordinary shell snapshot',
+    async (capability) => {
+      const h = await harness('APP-001');
+      h.socket.serverClose();
+      h.connection.reconnect();
+      const resumed = Socket.instances.at(-1)!;
+      resumed.open();
+      const request = lastFrame<{ reconnectRequestId: string }>(resumed);
+      resumed.message({
+        messageType: 'session.reconnect.capabilities',
+        protocolVersion: 2,
+        executableWorkflowCommandIds: [capability],
+        revisions: ZERO,
+        reconnectRequestId: request.reconnectRequestId,
+      });
+      resumed.message(snapshot('APP-001', shell, ZERO, request.reconnectRequestId));
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { code: 'UNRECOGNIZED', path: '$.executableWorkflowCommandIds' },
+      });
+    },
+  );
   it.each(['missing', 'getter', 'read', 'write', 'remove'] as const)(
     'keeps player transport and GM memory context usable with unavailable storage: %s',
     async (failure) => {
@@ -735,7 +764,7 @@ describe('campaign draft transport', () => {
     ['APP-011', { ...ZERO, stateRevision: 1 }],
     ['APP-011', { ...ZERO, actorVisibilityRevision: 1 }],
     ['CMP-006', { ...ZERO, stateRevision: 1 }],
-    ['CMP-006', { ...ZERO, projectionRevision: 1 }],
+    ['CMP-006', { ...ZERO, stateRevision: 2, projectionRevision: 1 }],
     ['CMP-006', { ...ZERO, actorVisibilityRevision: 1 }],
   ] as const)('rejects an invalid resumed %s revision vector %j', async (formId, revisions) => {
     const h = await harness(formId, projections[formId], revisions);
@@ -747,6 +776,8 @@ describe('campaign draft transport', () => {
   it.each([
     ['APP-011', { ...ZERO, projectionRevision: 7 }],
     ['CMP-006', ZERO],
+    ['CMP-006', { ...ZERO, projectionRevision: 1 }],
+    ['CMP-006', { ...ZERO, stateRevision: 2, projectionRevision: 4 }],
   ] as const)('accepts the persisted resumed %s revision vector %j', async (formId, revisions) => {
     const h = await harness(formId, projections[formId], revisions);
     expect(h.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId, revisions } });
@@ -956,7 +987,7 @@ describe('campaign creation receipt and UI', () => {
     );
     expect(h.states.at(-1)).toMatchObject({
       kind: 'ready',
-      snapshot: { formId: 'CMP-006', revisions: ZERO, availableActionKeys: [] },
+      snapshot: { formId: 'CMP-006', revisions: ZERO, availableActionKeys: ['CMP-006::CTA::002'] },
     });
     expect(h.connection.requestFormAction('CMP-006::CTA::001').ok).toBe(false);
   });

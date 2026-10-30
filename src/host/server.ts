@@ -401,6 +401,19 @@ import {
   handleSymbiontAddressableRoute,
 } from './creation-manual-composition-navigation.js';
 import { loadSymbiontMediaCatalog } from './symbiont-media.js';
+import { createCampaignNetworkRuntime } from './campaign-network-runtime.js';
+import { loadNetworkApplicationConfig } from './network-application-config.js';
+import { createLocalNetworkPeer } from './network-local-peer.js';
+import {
+  createLocalNetworkRuntime,
+  createGmNetworkRuntime,
+  type LocalNetworkConnection,
+  type LocalNetworkHostMessage,
+} from './network-application.js';
+import {
+  NETWORK_WORKFLOW_COMMAND_IDS,
+  NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+} from '../shared/device-admission.js';
 
 export interface HostServerConfig {
   /** Explicit export-fixture adapter; normal startup supplies no campaign authority. */
@@ -522,8 +535,14 @@ type AddressableNavigationJournal = Map<
 >;
 interface ConnectionNavigation {
   readonly campaign: CampaignConnection;
+  readonly network: LocalNetworkConnection;
   activeLayer: ActiveCreationLayer | null;
   current: ConfirmedNavigationContext | null;
+  networkExitAssignment: {
+    readonly navigationRequestId: string;
+    readonly context: ConfirmedNavigationContext;
+    readonly revisions: RevisionVector;
+  } | null;
   executableWorkflowCommandIds: ReadonlySet<WorkflowCommandId>;
   sessionEstablished: boolean;
 }
@@ -534,6 +553,8 @@ interface LibraryRevisionRuntime {
 }
 interface NavigationDependencies {
   readonly campaignCreation: ReturnType<typeof createCampaignCreationRuntime>;
+  readonly network: ReturnType<typeof createLocalNetworkRuntime>;
+  readonly gmNetwork: ReturnType<typeof createGmNetworkRuntime>;
   readonly archivedCharacterExport?: ArchivedCharacterExportDependencies;
   readonly localCharacterExportBaseline: LocalCharacterExportBaseline;
   readonly advanceRevisions: HostServerConfig['advanceRevisions'];
@@ -777,10 +798,11 @@ function confirmedPlayerContext(
 }
 
 function app002Navigation(
-  message: FormActionIntentV2Message,
+  message: Pick<FormActionIntentV2Message, 'navigationRequestId'>,
   current: ConfirmedPlayerContext,
   before: RevisionVector,
   dependencies: NavigationDependencies,
+  capabilities: ReadonlySet<WorkflowCommandId>,
 ): NavigationSuccess {
   const after = advanceProjection(before, dependencies.advanceRevisions);
   const projected = projectApp002(dependencies.catalog, 'player', {
@@ -801,7 +823,11 @@ function app002Navigation(
     snapshot: projectionSnapshot(
       message.navigationRequestId,
       {
-        availableActionKeys: APP_002_VERTICAL_ACTION_KEYS,
+        availableActionKeys: APP_002_VERTICAL_ACTION_KEYS.filter(
+          (key) =>
+            key !== 'APP-002::CTA::003' ||
+            NETWORK_WORKFLOW_COMMAND_IDS.every((id) => capabilities.has(id)),
+        ),
         formId: 'APP-002',
         formType: 'screen',
         roleFilteredPayload: projected.projection,
@@ -958,6 +984,8 @@ function currentNavigationRevisions(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
 ): RevisionVector {
+  if (connection.network.networkScopeId !== null)
+    return dependencies.network.currentVector(connection.network);
   if (connection.campaign.gmLocalContextId !== null)
     return dependencies.campaignCreation.currentVector(connection.campaign);
   const current = connection.current;
@@ -1095,6 +1123,7 @@ function adoptNavigationContext(
     dependencies.identitySessions.delete(next.deviceId);
   }
   connection.current = next;
+  connection.networkExitAssignment = null;
   connection.activeLayer = null;
   const restoredCursor = next.restoredPostSaveCursor;
   if (next.postSaveReplayCommandId !== undefined) {
@@ -3460,6 +3489,7 @@ function handleFormAction(
         },
         revisions,
         dependencies,
+        connection.executableWorkflowCommandIds,
       );
       break;
     }
@@ -3505,7 +3535,13 @@ function handleFormAction(
         current.formId === 'APP-004' &&
         confirmedPlayerContext(current, dependencies)
       ) {
-        success = app002Navigation(message, current, revisions, dependencies);
+        success = app002Navigation(
+          message,
+          current,
+          revisions,
+          dependencies,
+          connection.executableWorkflowCommandIds,
+        );
       }
       break;
     case CHR_014_RETURN_ACTION_KEY:
@@ -6083,6 +6119,7 @@ function handleReconnectV2(
       message.supportedWorkflowCommandIds.filter(
         (commandId): commandId is WorkflowCommandId =>
           commandId !== 'UI-CMD-CAMPAIGN-CREATE' &&
+          (NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS as readonly string[]).includes(commandId) &&
           dependencies.vocabulary.isWorkflowCommandId(commandId),
       ),
     ),
@@ -6457,7 +6494,9 @@ async function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
+    if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
+    if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     if (decoded.value.messageType !== 'character.identity-draft.replace')
       throw new Error('Unhandled campaign protocol');
     handleClientMessageV3(socket, decoded.value, dependencies, connection);
@@ -6469,7 +6508,9 @@ async function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
+    if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
+    if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
     handleClientMessageV2(socket, decoded.value, dependencies, commandJournal, connection);
     return;
   }
@@ -6478,8 +6519,163 @@ async function handleFrame(
     sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
     return;
   }
+  if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
   if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
+  if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
   handleClientMessage(socket, decoded.value, dependencies, commandJournal, connection);
+}
+
+async function handleGmNetworkMessage(
+  socket: WebSocket,
+  message: ClientToHostMessage | ClientToHostV2Message | ClientToHostV3Message,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+): Promise<boolean> {
+  return dependencies.gmNetwork.handle(message, connection.campaign, (result) => {
+    if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+    else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+    else sendChecked(socket, result, dependencies.vocabulary);
+  });
+}
+
+async function handleNetworkMessage(
+  socket: WebSocket,
+  message: ClientToHostMessage | ClientToHostV2Message | ClientToHostV3Message,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+): Promise<boolean> {
+  if (connection.network.networkScopeId === null)
+    connection.network.executableWorkflowCommandIds = [...connection.executableWorkflowCommandIds];
+  const player = (): ConfirmedPlayerContext => ({
+    contextId: allocatedId(
+      dependencies.allocateContextId,
+      'network return player context',
+      UUID_V4_PATTERN,
+    ),
+    deviceId: loadDeviceId(dependencies.database),
+    entityLocalCharacterId: null,
+    entityRevisions: null,
+    formId: 'APP-002',
+    identityDraftScope: null,
+  });
+  const handled = await dependencies.network.handle(
+    message,
+    connection.network,
+    {
+      get formId() {
+        return connection.current?.formId ?? null;
+      },
+      get contextId() {
+        return connection.current?.contextId ?? null;
+      },
+      get deviceId() {
+        const current = connection.current;
+        return current !== null && confirmedPlayerContext(current, dependencies)
+          ? current.deviceId
+          : null;
+      },
+      get revisions() {
+        return currentNavigationRevisions(connection, dependencies);
+      },
+      get sourceFinalIdOrNull() {
+        const current = connection.current;
+        if (
+          current?.formId !== 'CHR-040' ||
+          current.postSaveReplayCommandId !== undefined ||
+          !confirmedPlayerContext(current, dependencies)
+        )
+          return null;
+        validatePostSaveSource(
+          postSaveDependencies(dependencies),
+          postSavePresentationHead(current, dependencies),
+        );
+        return current.entityLocalCharacterId;
+      },
+      get lastNetworkExitNavigationIdOrNull() {
+        const assignment = connection.networkExitAssignment;
+        return assignment !== null &&
+          connection.current === assignment.context &&
+          isDeepStrictEqual(
+            currentNavigationRevisions(connection, dependencies),
+            assignment.revisions,
+          )
+          ? assignment.navigationRequestId
+          : null;
+      },
+      enterNetwork: () => {
+        connection.networkExitAssignment = null;
+        connection.current = null;
+        connection.activeLayer = null;
+        connection.campaign.gmLocalContextId = null;
+        connection.campaign.executableCreate = false;
+        connection.sessionEstablished = true;
+      },
+      exitToPlayer: (navigationId) => {
+        connection.executableWorkflowCommandIds = new Set(
+          connection.network.executableWorkflowCommandIds.filter((id): id is WorkflowCommandId =>
+            dependencies.vocabulary.isWorkflowCommandId(id),
+          ),
+        );
+        const navigation = app002Navigation(
+          { navigationRequestId: navigationId },
+          player(),
+          checkedRevisions(dependencies.readRevisions()),
+          dependencies,
+          connection.executableWorkflowCommandIds,
+        );
+        adoptNavigationContext(connection, dependencies, navigation.nextContext);
+        connection.networkExitAssignment = {
+          navigationRequestId: navigationId,
+          context: navigation.nextContext,
+          revisions: navigation.snapshot.revisions,
+        };
+        return navigation.snapshot;
+      },
+      returnToFinal: (sourceUuid, navigationId) => {
+        connection.executableWorkflowCommandIds = new Set(
+          connection.network.executableWorkflowCommandIds.filter((id): id is WorkflowCommandId =>
+            dependencies.vocabulary.isWorkflowCommandId(id),
+          ),
+        );
+        const head = openPlayerPostSave(
+          postSaveDependencies(dependencies),
+          sourceUuid,
+          'CHR-040',
+          'CHR-040',
+          navigationId,
+        );
+        const navigation = postSaveNavigation(
+          head,
+          player(),
+          connection,
+          dependencies,
+          navigationId,
+          'FORM_ACTION',
+        );
+        adoptNavigationContext(connection, dependencies, navigation.nextContext);
+        connection.networkExitAssignment = {
+          navigationRequestId: navigationId,
+          context: navigation.nextContext,
+          revisions: navigation.snapshot.revisions,
+        };
+        return navigation.snapshot;
+      },
+    },
+    (result: LocalNetworkHostMessage) => {
+      if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+      else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+      else sendChecked(socket, result, dependencies.vocabulary);
+    },
+  );
+  if (handled) {
+    connection.executableWorkflowCommandIds = new Set(
+      connection.network.executableWorkflowCommandIds.filter((id): id is WorkflowCommandId =>
+        dependencies.vocabulary.isWorkflowCommandId(id),
+      ),
+    );
+    connection.sessionEstablished = true;
+  }
+  return handled;
 }
 
 async function handleCampaignMessage(
@@ -6513,7 +6709,7 @@ async function handleCampaignMessage(
     routeBindings: [],
     roleFilteredPayload: projectApp001Bootstrap(dependencies.catalog),
   });
-  return dependencies.campaignCreation.handle(
+  const handled = await dependencies.campaignCreation.handle(
     message,
     connection.campaign,
     {
@@ -6533,6 +6729,9 @@ async function handleCampaignMessage(
         ),
       base: shellBase,
       enter: () => {
+        connection.networkExitAssignment = null;
+        connection.network.networkScopeId = null;
+        connection.network.contextId = null;
         connection.current = null;
         connection.activeLayer = null;
         connection.sessionEstablished = true;
@@ -6557,6 +6756,13 @@ async function handleCampaignMessage(
       else sendChecked(socket, result, dependencies.vocabulary);
     },
   );
+  if (handled)
+    dependencies.gmNetwork.watch(connection.campaign, (result) => {
+      if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+      else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+      else sendChecked(socket, result, dependencies.vocabulary);
+    });
+  return handled;
 }
 
 function rawDataText(data: RawData): string {
@@ -6638,6 +6844,11 @@ function sendGeneratedMediaFile(
   return sendStaticFile(mediaRoot, relative(mediaRoot, filePath).split(sep).join('/'), reply);
 }
 
+const NETWORK_HOST_LIFECYCLE = new WeakMap<
+  FastifyInstance,
+  ReturnType<typeof createCampaignNetworkRuntime>
+>();
+
 export async function createHost(config: HostServerConfig): Promise<FastifyInstance> {
   if (
     config.readArchivedCharacterExportAuthority !== undefined &&
@@ -6662,6 +6873,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     throw new TypeError('host onFrameError configuration must be a function');
   const projectRoot = resolve(config.projectRoot);
   const localCharacterExportBaseline = await loadLocalCharacterExportBaseline(projectRoot);
+  const networkConfig = await loadNetworkApplicationConfig(projectRoot);
   const staticRoot = await realpath(resolve(config.staticRoot));
   const [
     catalog,
@@ -6694,17 +6906,80 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
       : null;
   };
   const campaignBind = createCampaignBindManager({ readShellListener });
-  app.addHook('onClose', async () => {
+  const campaignNetwork = createCampaignNetworkRuntime({
+    database: config.database,
+    baseline: localCharacterExportBaseline,
+    bind: campaignBind,
+    shellServer: app.server,
+    config: networkConfig,
+  });
+  const localPeer = createLocalNetworkPeer({
+    database: config.database,
+    baseline: localCharacterExportBaseline,
+    config: networkConfig,
+  });
+  const localNetwork = createLocalNetworkRuntime({
+    database: config.database,
+    projectRoot,
+    baseline: localCharacterExportBaseline,
+    config: networkConfig,
+    peer: localPeer,
+    discover: campaignNetwork.discover,
+    postSave: {
+      database: config.database,
+      symbiontCatalog,
+      baseline: localCharacterExportBaseline,
+      loadCheckpoint: (id) =>
+        loadCreationWizardCheckpoint(config.database, id, skillStageCatalog, symbiontCatalog),
+      resumeForm: creationPresentationFormId,
+    },
+  });
+  NETWORK_HOST_LIFECYCLE.set(app, campaignNetwork);
+  // Private upgrades must be closed before HTTP close waits for its upgraded sockets.
+  app.addHook('preClose', async () => {
+    gmNetwork.close();
+    localNetwork.close();
+    localPeer.close();
+    await campaignNetwork.close();
     await campaignBind.close();
+    NETWORK_HOST_LIFECYCLE.delete(app);
+  });
+  let gmFrames = Promise.resolve();
+  const scheduleGm = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = gmFrames.then(run);
+    gmFrames = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  };
+  const campaignCreation = createCampaignCreationRuntime({
+    schedule: scheduleGm,
+    database: config.database,
+    projectRoot,
+    baseline: localCharacterExportBaseline,
+    bind: campaignBind,
+    publishCampaign: campaignNetwork.publishCampaign,
+    requestReview: {
+      project: (c) => gmNetwork.project(c),
+      refreshConnectionPresentation: (c) => gmNetwork.refreshConnectionPresentation(c),
+      receipt: (c, id) => gmNetwork.receipt(c, id),
+    },
+  });
+  const gmNetwork = createGmNetworkRuntime({
+    schedule: scheduleGm,
+    config: networkConfig,
+    database: config.database,
+    baseline: localCharacterExportBaseline,
+    vocabulary,
+    campaignNetwork,
+    campaignPresentation: campaignCreation.project,
   });
   const commandJournal: CommandJournal = new Map();
   const dependencies: NavigationDependencies = {
-    campaignCreation: createCampaignCreationRuntime({
-      database: config.database,
-      projectRoot,
-      baseline: localCharacterExportBaseline,
-      bind: campaignBind,
-    }),
+    network: localNetwork,
+    campaignCreation,
+    gmNetwork,
     localCharacterExportBaseline,
     ...(config.readArchivedCharacterExportAuthority === undefined
       ? {}
@@ -6741,10 +7016,16 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     symbiontMediaCatalog,
     vocabulary,
   };
-  await app.register(websocket);
+  await app.register(websocket, { options: { server: campaignNetwork.localUpgradeServer } });
 
   app.get('/state', { websocket: true }, (socket, request) => {
     const connection: ConnectionNavigation = {
+      network: {
+        networkScopeId: null,
+        contextId: null,
+        executableWorkflowCommandIds: [],
+        trusted: () => connection.campaign.trusted(),
+      },
       campaign: {
         gmLocalContextId: null,
         executableCreate: false,
@@ -6760,6 +7041,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
       },
       activeLayer: null,
       current: null,
+      networkExitAssignment: null,
       executableWorkflowCommandIds: new Set(),
       sessionEstablished: false,
     };
@@ -6787,6 +7069,17 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
 
   app.get('/health', async (_request, reply) => {
     await reply.code(204).send();
+  });
+  app.get('/campaign-state', async (_request, reply) => {
+    await reply.code(404).send();
+  });
+  app.get('/campaign-locator', async (request, reply) => {
+    if (request.raw.url !== '/campaign-locator') {
+      await reply.code(404).send();
+      return;
+    }
+    reply.hijack();
+    campaignNetwork.servePublicLocator(request.raw, reply.raw);
   });
   app.get('/device-identity', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -6858,5 +7151,12 @@ export async function startHost(app: FastifyInstance, network: HostNetworkConfig
   if (!Number.isInteger(network.port) || network.port < 0 || network.port > 65_535) {
     throw new TypeError('host port configuration must be an integer from 0 through 65535');
   }
-  return app.listen({ host: network.interface, port: network.port });
+  const address = await app.listen({ host: network.interface, port: network.port });
+  try {
+    await NETWORK_HOST_LIFECYCLE.get(app)?.start();
+  } catch (error: unknown) {
+    await app.close();
+    throw error;
+  }
+  return address;
 }
