@@ -10,6 +10,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '057462be4694e7623b1225bd8efe9cd620bef9510c3a849a1e344ef017d7ceb0',
   },
+  // ADR 0071 / #199 authorizes this exact Atlas-only successor, not a version range.
+  admissionBaselineVersion:
+    'sha256:86556630d19ca9d3581f182c153d0a520016d143612a999e9c8417d073a6182f',
+  admissionAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '04a372d909c2ca576651047ef4c6e90d59b3372e54a3ff05c6852a2371764c01',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '26669e296a3b1117925e7efce4704977b79e8d94d3693be234a1ba7cbb9c54e5',
+  },
   replayCatalogDigests: {
     'generated/spec/character/classes.json':
       '6bfdb854b7d3158c882017a2b89314795dd88f674b540a91e89fdea1db0c62e6',

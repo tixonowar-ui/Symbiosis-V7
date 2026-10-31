@@ -24,6 +24,7 @@ import { array, record, string } from './json-source.js';
 import {
   assertReplayCatalogDigestsUnchanged,
   captureReplayCatalogDigests,
+  isApprovedBaselineLineagePair,
   verifyHistoricalBaselineLineage,
   type ReplayCatalogDigests,
 } from './baseline-lineage.js';
@@ -109,12 +110,7 @@ export function isStoredLocalCharacterExportBaselineCompatible(
 ): boolean {
   const { current } = verifiedContext(baseline);
   if (storedBaselineVersion === current.baselineVersion) return true;
-  if (storedBaselineVersion !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion) return false;
-  if (
-    current.baselineVersion !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion &&
-    current.baselineVersion !== BASELINE_LINEAGE_SEALS.successorBaselineVersion
-  )
-    return false;
+  if (!isApprovedBaselineLineagePair(storedBaselineVersion, current.baselineVersion)) return false;
   resolveStoredLocalCharacterExportBaseline(baseline, storedBaselineVersion);
   return true;
 }
@@ -127,13 +123,22 @@ export function resolveStoredLocalCharacterExportBaseline(
   const proof = verifiedContext(baseline);
   const current = proof.current;
   if (storedBaselineVersion === current.baselineVersion) return current;
-  if (storedBaselineVersion !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion)
-    return fail('unknown stored baseline');
-  verifyHistoricalBaselineLineage(proof.manifest, proof.replayCatalogDigests, {
-    registryVersion: current.registryVersion,
-    catalogVersion: current.catalogVersion,
-    builtAgainstTuple: current.builtAgainstTuple,
-  });
+  const knownStored: readonly string[] = [
+    BASELINE_LINEAGE_SEALS.historicalBaselineVersion,
+    BASELINE_LINEAGE_SEALS.successorBaselineVersion,
+    BASELINE_LINEAGE_SEALS.admissionBaselineVersion,
+  ];
+  if (!knownStored.includes(storedBaselineVersion)) return fail('unknown stored baseline');
+  verifyHistoricalBaselineLineage(
+    proof.manifest,
+    proof.replayCatalogDigests,
+    {
+      registryVersion: current.registryVersion,
+      catalogVersion: current.catalogVersion,
+      builtAgainstTuple: current.builtAgainstTuple,
+    },
+    storedBaselineVersion,
+  );
   const known = proof.historicalViews.get(storedBaselineVersion);
   if (known !== undefined) {
     verifiedContext(known);

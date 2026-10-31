@@ -4126,7 +4126,7 @@
     "from": "NET-022",
     "guard": "SERVER_ONLY_ROLE_PROJECTION; UI-CMD-ADMISSION-GM-REJECT committed with reason",
     "kind": "system-event",
-    "to": "NET-005",
+    "to": "NET-007",
     "trigger": "Server publishes batch rejection"
   },
   {
@@ -6478,14 +6478,14 @@
     "from": "NET-027",
     "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=ACCEPT",
     "kind": "workflow-command",
-    "to": "PLY-001",
+    "to": "NET-006",
     "trigger": "Принять весь batch diff"
   },
   {
     "from": "NET-027",
     "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=DECLINE",
     "kind": "workflow-command",
-    "to": "APP-002",
+    "to": "NET-007",
     "trigger": "Отказаться от всего batch"
   },
   {
@@ -8037,7 +8037,7 @@
   },
   {
     "from": "GM-019",
-    "guard": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+    "guard": "weaponOwnerScope.kind=CAMPAIGN_COPY; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
     "kind": "workflow-command",
     "to": "GM-021",
     "trigger": "Утвердить или переопределить оружейную заявку"
@@ -11814,5 +11814,47 @@
     "kind": "safe-return",
     "to": "NET-003",
     "trigger": "Вернуться к выбору персонажей"
+  },
+  {
+    "from": "NET-017",
+    "guard": "UI-CMD-ADMISSION-REVIEW-OPEN guards; Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+    "kind": "workflow-command",
+    "to": "NET-018",
+    "trigger": "Начать рассмотрение кампанийных копий"
+  },
+  {
+    "from": "NET-007",
+    "guard": "admissionOrigin=DEVICE_REQUEST; Own GM_REJECTED or PLAYER_DECLINED result; same live technical session; no conflicting pending admission; original source and receipts preserved.",
+    "kind": "subflow",
+    "to": "NET-003",
+    "trigger": "Выбрать персонажей заново"
+  },
+  {
+    "from": "NET-019",
+    "guard": "Sole current GM; ORDINARY_DRAFT; owning requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; owned new reviewItemId and exact catalog weaponTypeId; open ADMISSION_GRANT input, no source player request or validation receipt required.",
+    "kind": "subflow",
+    "to": "GM-019",
+    "trigger": "Подготовить новое оружие из каталога"
+  },
+  {
+    "from": "GM-019",
+    "guard": "weaponOwnerScope.kind=ADMISSION_REVIEW; requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+    "kind": "workflow-command",
+    "to": "NET-019",
+    "trigger": "Подтвердить профиль рабочей копии"
+  },
+  {
+    "from": "NET-007",
+    "guard": "Own terminal result confirmed; DEVICE_REQUEST or MASTER_IMPORT with signed returnMode=REMOTE_PLAYER; no pending command; preserve original receipts/local FINAL and release only presentation context. Imported LOCAL_HANDOFF must use its signed privacy return, never this direct APP-002 route.",
+    "kind": "safe-return",
+    "to": "APP-002",
+    "trigger": "Вернуться в меню игрока"
+  },
+  {
+    "from": "NET-007",
+    "guard": "MASTER_IMPORT terminal result; committed NET-028 owner claim retains signed returnMode=LOCAL_HANDOFF, returnFormId=PLY-030, handoffId and initiating GM context; no pending command; receipt-gated return only, never expose GM data in the player projection.",
+    "kind": "safe-return",
+    "to": "PLY-030",
+    "trigger": "Вернуться через экран приватности"
   }
 ]

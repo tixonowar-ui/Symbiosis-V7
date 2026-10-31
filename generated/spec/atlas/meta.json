@@ -1,5 +1,5 @@
 {
-  "atlasVersion": "1.6",
+  "atlasVersion": "1.7",
   "contentDigest": "ceace6ea95167e81b8cbbd86670930270b0b177e81db07e8e0fa437d21747a5c",
   "counts": {
     "activeRules": 699,
@@ -44,13 +44,13 @@
     "modeledEffectTypes": 66,
     "newForms": 21,
     "operations": 70,
-    "qaScenarios": 2445,
+    "qaScenarios": 2446,
     "qnaRows": 444,
     "qnaUniqueIds": 410,
     "requirements": 91,
     "tombstoneRules": 40,
-    "transitions": 1688,
-    "workflowCommands": 108
+    "transitions": 1694,
+    "workflowCommands": 109
   },
   "graphDigest": "693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df",
   "guardStates": [

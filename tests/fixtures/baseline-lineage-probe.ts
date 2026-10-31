@@ -151,7 +151,7 @@ const archiveDependencies = (
 });
 
 async function createOld(directory: string, baseline: LocalCharacterExportBaseline): Promise<void> {
-  assert.equal(baseline.baselineVersion, BASELINE_FIXTURE_IDS.B0);
+  assert.equal(baseline.baselineVersion, sourceBaselineId);
   const finals: SavedFinal[] = [];
   for (const options of cases) {
     const prefix = `lineage-${options.raceChoice}`;
@@ -182,7 +182,7 @@ async function createOld(directory: string, baseline: LocalCharacterExportBaseli
         current.localCharacter.localCharacterId,
         limits,
       );
-      assert.equal(candidate.descriptor.baselineVersion, BASELINE_FIXTURE_IDS.B0);
+      assert.equal(candidate.descriptor.baselineVersion, sourceBaselineId);
       const head = navigateLocalPostSave(
         d,
         openPlayerPostSave(d, current.localCharacter.localCharacterId, 'CHR-040'),
@@ -230,7 +230,7 @@ async function createOld(directory: string, baseline: LocalCharacterExportBaseli
 }
 
 function verifyNew(directory: string, baseline: LocalCharacterExportBaseline): void {
-  assert.equal(baseline.baselineVersion, BASELINE_FIXTURE_IDS.B1);
+  assert.equal(baseline.baselineVersion, targetBaselineId);
   const state = JSON.parse(readFileSync(join(directory, 'old-state.json'), 'utf8')) as SavedState;
   assert.notEqual(state.creatorPid, process.pid, 'catalog caches must be fresh');
   for (const saved of state.finals) {
@@ -261,7 +261,7 @@ function verifyNew(directory: string, baseline: LocalCharacterExportBaseline): v
       const archiveHead = createArchivedCharacterExportContext(archive);
       assert.equal(
         projectArchivedCharacterExport(archive, archiveHead).roleFilteredPayload['baselineVersion'],
-        BASELINE_FIXTURE_IDS.B0,
+        sourceBaselineId,
       );
       const replay = commitLocalPostSave(d, saved.exportRequest, 'unused-receipt', noAllocate);
       assert.equal(replay.replayed, true);
@@ -290,7 +290,7 @@ function verifyNew(directory: string, baseline: LocalCharacterExportBaseline): v
       corrupted.checkpoint.snapshotSha256 = postSaveSha256(corrupted.checkpoint.snapshotJson);
       assert.throws(() => receive(canonicalPostSaveJson(corrupted)));
       assert.throws(() =>
-        resolveStoredLocalCharacterExportBaseline({ ...baseline }, BASELINE_FIXTURE_IDS.B0),
+        resolveStoredLocalCharacterExportBaseline({ ...baseline }, sourceBaselineId),
       );
       assert.equal(
         snapshot(database),
@@ -307,14 +307,14 @@ function verifyNew(directory: string, baseline: LocalCharacterExportBaseline): v
         'downloadOrNull'
       ] as JsonObject;
       const document = JSON.parse(download['contentText'] as string) as JsonObject;
-      assert.equal(document['baselineVersion'], BASELINE_FIXTURE_IDS.B1);
+      assert.equal(document['baselineVersion'], targetBaselineId);
       const newCandidate = prepareOwnedFinalAdmissionCandidate(
         d,
         saved.owner,
         candidate.descriptor.sourceUuid,
         limits,
       );
-      assert.equal(newCandidate.descriptor.baselineVersion, BASELINE_FIXTURE_IDS.B1);
+      assert.equal(newCandidate.descriptor.baselineVersion, targetBaselineId);
       assert.equal(newCandidate.canonicalWitnessText, candidate.canonicalWitnessText);
       assert.deepEqual(receive(), {
         descriptor: candidate.descriptor,
@@ -337,6 +337,12 @@ function verifyNew(directory: string, baseline: LocalCharacterExportBaseline): v
 
 const phase = process.argv[2];
 const directory = process.argv[3];
+const sourceRelease = process.argv[4] ?? 'B0';
+const targetRelease = process.argv[5] ?? 'B1';
+assert.ok(sourceRelease === 'B0' || sourceRelease === 'B1');
+assert.ok(targetRelease === 'B1' || targetRelease === 'B2');
+const sourceBaselineId = BASELINE_FIXTURE_IDS[sourceRelease];
+const targetBaselineId = BASELINE_FIXTURE_IDS[targetRelease];
 assert.ok(directory);
 const baseline = await loadLocalCharacterExportBaseline(join(directory, 'project'));
 if (phase === 'create-old') await createOld(directory, baseline);

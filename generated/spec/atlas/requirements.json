@@ -1201,11 +1201,13 @@
           "Вернуться к «Клиенты и локальные места»",
           "Принять заявку к рассмотрению",
           "Отклонить заявку с причиной",
-          "Вернуться к созданной кампании"
+          "Вернуться к созданной кампании",
+          "Начать рассмотрение кампанийных копий"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-          "UI-CMD-DEVICE-REQUEST-REJECT"
+          "UI-CMD-DEVICE-REQUEST-REJECT",
+          "UI-CMD-ADMISSION-REVIEW-OPEN"
         ]
       },
       {
@@ -1224,7 +1226,8 @@
         "executableOperationIds": [],
         "formId": "NET-019",
         "primaryActions": [
-          "Рассмотреть валидированную оружейную заявку"
+          "Рассмотреть валидированную оружейную заявку",
+          "Подготовить новое оружие из каталога"
         ],
         "workflowCommandIds": []
       },
@@ -1269,13 +1272,36 @@
         "workflowCommandIds": [
           "UI-CMD-ADMISSION-PLAYER-DECIDE"
         ]
+      },
+      {
+        "executableOperationIds": [
+          "OP-REQ-GM"
+        ],
+        "formId": "GM-019",
+        "primaryActions": [
+          "Применить patch существующего оружия",
+          "Утвердить или переопределить оружейную заявку",
+          "Отменить",
+          "Подтвердить профиль рабочей копии"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "GM-020",
+        "primaryActions": [
+          "Вернуться к review после проверки навыка"
+        ],
+        "workflowCommandIds": []
       }
     ],
     "coverageStatus": "COVERED",
-    "errorOfflinePath": "Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
+    "errorOfflinePath": "Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, GM-019, GM-020 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. UI-CMD-ADMISSION-REVIEW-OPEN creates only separate review workspace/receipt. Uncommitted typed draft is never source mutation or confirmed mechanics. GM-ACCEPT alone publishes final IDs/PROPOSED copies. Whole-batch player ACCEPT binds admission/controller and group assignment; PAUSED goes to NET-006, not active PLY-001.",
       "terminalStatesByForm": {
         "NET-017": [
           "QUEUE_EMPTY",
@@ -1308,9 +1334,11 @@
       "NET-020",
       "NET-021",
       "NET-022",
-      "NET-027"
+      "NET-027",
+      "GM-019",
+      "GM-020"
     ],
-    "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, GM-019, GM-020; использовать только admission-ветви primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-ADMISSION-REVIEW-OPEN, UI-CMD-GM-WEAPON-REQUEST-RESOLVE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. PATCH_EXISTING не относится к этому requirement.",
     "journeyIds": [
       "J-JOIN-REVIEW"
     ],
@@ -1319,7 +1347,8 @@
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
       "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
       "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
-      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.",
+      "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment."
     ],
     "preconditions": [
       "Роль и authority соответствуют player/gm.",
@@ -1360,7 +1389,9 @@
       "UI-CMD-ADMISSION-GM-REJECT",
       "UI-CMD-ADMISSION-PLAYER-DECIDE",
       "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-      "UI-CMD-DEVICE-REQUEST-REJECT"
+      "UI-CMD-DEVICE-REQUEST-REJECT",
+      "UI-CMD-ADMISSION-REVIEW-OPEN",
+      "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"
     ]
   },
   {
@@ -1412,7 +1443,8 @@
           "Вернуться к «Клиенты и локальные места»",
           "Принять заявку к рассмотрению",
           "Отклонить заявку с причиной",
-          "Вернуться к созданной кампании"
+          "Вернуться к созданной кампании",
+          "Начать рассмотрение кампанийных копий"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
@@ -2099,7 +2131,8 @@
           "Вернуться к «Клиенты и локальные места»",
           "Принять заявку к рассмотрению",
           "Отклонить заявку с причиной",
-          "Вернуться к созданной кампании"
+          "Вернуться к созданной кампании",
+          "Начать рассмотрение кампанийных копий"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
@@ -3766,7 +3799,8 @@
         "primaryActions": [
           "Применить patch существующего оружия",
           "Утвердить или переопределить оружейную заявку",
-          "Отменить"
+          "Отменить",
+          "Подтвердить профиль рабочей копии"
         ],
         "workflowCommandIds": [
           "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"

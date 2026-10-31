@@ -28,6 +28,11 @@ import {
   validateRendererFormGraph,
 } from './atlas.js';
 import { validateQuestionRefs } from './question-refs.js';
+import {
+  assertAdr0071Admission,
+  assertAdr0071AdmissionMarkdown,
+} from '../import/admission-atlas-contract.js';
+import type { JsonObject as ImportJsonObject } from '../import/lib/json.js';
 
 interface Problem {
   readonly file: string;
@@ -318,6 +323,24 @@ try {
 // --- orphans ---------------------------------------------------------------
 
 const transitionRows = rows('atlas/transitions.json');
+try {
+  assertAdr0071Admission(JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as ImportJsonObject);
+  assertAdr0071Admission({
+    counts: atlasMeta?.['counts'],
+    forms: formRows,
+    transitions: transitionRows,
+    journeys: rows('atlas/journeys.json'),
+    coverageRequirements: rows('atlas/requirements.json'),
+    qaScenarios: qaScenarioRows,
+    registryCoverage: { workflowCommands: rows('atlas/workflow-commands.json') },
+  } as unknown as ImportJsonObject);
+} catch (cause) {
+  report(
+    'atlas admission contract',
+    'ADR 0071',
+    cause instanceof Error ? cause.message : 'invalid admission source',
+  );
+}
 if (rendererFormsById !== null) {
   validateRendererFormGraph(forms, transitionRows).forEach((problem) =>
     report(problem.file, problem.id, problem.message),
@@ -329,6 +352,7 @@ validateChr001IdentityTextMirrors(formRows, rows('atlas/journeys.json'), transit
 
 try {
   const atlasMarkdown = readFileSync(ARTIFACT.atlasMd, 'utf8');
+  assertAdr0071AdmissionMarkdown(atlasMarkdown);
   validateAtlasMarkdownIdentityTextMirrors(atlasMarkdown).forEach((problem) =>
     report(problem.file, problem.id, problem.message),
   );

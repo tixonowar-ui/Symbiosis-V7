@@ -9,6 +9,7 @@ import {
 import { BASELINE_LINEAGE_SEALS } from './baseline-lineage-seals.js';
 import {
   captureReplayCatalogDigests,
+  isApprovedBaselineLineagePair,
   verifyHistoricalBaselineLineage,
   verifyHistoricalBaselineManifest,
 } from './baseline-lineage.js';
@@ -35,6 +36,56 @@ beforeAll(async () => {
 afterAll(() => fixture?.close());
 
 describe('verified baseline lineage', () => {
+  it('accepts only explicit forward pairs among the three reviewed releases', () => {
+    const ids = BASELINE_FIXTURE_IDS;
+    for (const [from, to] of [
+      ['B0', 'B1'],
+      ['B0', 'B2'],
+      ['B1', 'B2'],
+    ] as const) {
+      expect(isApprovedBaselineLineagePair(ids[from], ids[to])).toBe(true);
+      expect(() =>
+        verifyHistoricalBaselineLineage(
+          baselineFixtureManifest(to),
+          seals.replayCatalogDigests,
+          seals.runtimeTuple,
+          ids[from],
+        ),
+      ).not.toThrow();
+      expect(isApprovedBaselineLineagePair(ids[to], ids[from])).toBe(false);
+      expect(() =>
+        verifyHistoricalBaselineLineage(
+          baselineFixtureManifest(from),
+          seals.replayCatalogDigests,
+          seals.runtimeTuple,
+          ids[to],
+        ),
+      ).toThrow('not an approved');
+    }
+    expect(isApprovedBaselineLineagePair(ids.B1, 'sha256:future')).toBe(false);
+    expect(isApprovedBaselineLineagePair('sha256:unknown', ids.B2)).toBe(false);
+  });
+
+  it('registers immutable B0 and B1 views under real B2 bytes without rewriting either manifest', async () => {
+    const probe = createBaselineLineageFixture('B2');
+    try {
+      const next = await loadLocalCharacterExportBaseline(probe.projectRoot);
+      expect(next.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B2);
+      for (const release of ['B0', 'B1'] as const) {
+        const id = BASELINE_FIXTURE_IDS[release];
+        expect(isStoredLocalCharacterExportBaselineCompatible(next, id)).toBe(true);
+        const historical = resolveStoredLocalCharacterExportBaseline(next, id);
+        expect(historical.baselineVersion).toBe(id);
+        expect(historical.catalog).toBe(next.catalog);
+        expect(Object.isFrozen(historical)).toBe(true);
+        expect(resolveStoredLocalCharacterExportBaseline(historical, BASELINE_FIXTURE_IDS.B2)).toBe(
+          next,
+        );
+      }
+    } finally {
+      probe.close();
+    }
+  });
   it('refuses unknown current Atlas bytes before a warm fixture cache can overwrite them', () => {
     const probe = createBaselineLineageFixture('B0');
     try {

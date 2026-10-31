@@ -2939,6 +2939,13 @@
       "to": "NET-019",
       "trigger": "Отменить"
     },
+    "Подтвердить профиль рабочей копии": {
+      "from": "GM-019",
+      "guard": "weaponOwnerScope.kind=ADMISSION_REVIEW; requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+      "kind": "workflow-command",
+      "to": "NET-019",
+      "trigger": "Подтвердить профиль рабочей копии"
+    },
     "Применить patch существующего оружия": {
       "from": "GM-019",
       "guard": "mode=PATCH_EXISTING; OP-GM-PATCH-WEAPON preparation valid; UI-CMD-GM-PROFILE-OP-CONFIRM follows closed allowlist",
@@ -2948,10 +2955,19 @@
     },
     "Утвердить или переопределить оружейную заявку": {
       "from": "GM-019",
-      "guard": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+      "guard": "weaponOwnerScope.kind=CAMPAIGN_COPY; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
       "kind": "workflow-command",
       "to": "GM-021",
       "trigger": "Утвердить или переопределить оружейную заявку"
+    }
+  },
+  "GM-020": {
+    "Вернуться к review после проверки навыка": {
+      "from": "GM-020",
+      "guard": "skill decision recorded in the uncommitted admission draft",
+      "kind": "subflow-return",
+      "to": "NET-021",
+      "trigger": "Вернуться к review после проверки навыка"
     }
   },
   "GM-021": {
@@ -3575,6 +3591,13 @@
       "to": "CMP-006",
       "trigger": "Вернуться к созданной кампании"
     },
+    "Начать рассмотрение кампанийных копий": {
+      "from": "NET-017",
+      "guard": "UI-CMD-ADMISSION-REVIEW-OPEN guards; Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+      "kind": "workflow-command",
+      "to": "NET-018",
+      "trigger": "Начать рассмотрение кампанийных копий"
+    },
     "Отклонить заявку с причиной": {
       "from": "NET-017",
       "guard": "UI-CMD-DEVICE-REQUEST-REJECT guards",
@@ -3591,6 +3614,13 @@
     }
   },
   "NET-019": {
+    "Подготовить новое оружие из каталога": {
+      "from": "NET-019",
+      "guard": "Sole current GM; ORDINARY_DRAFT; owning requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; owned new reviewItemId and exact catalog weaponTypeId; open ADMISSION_GRANT input, no source player request or validation receipt required.",
+      "kind": "subflow",
+      "to": "GM-019",
+      "trigger": "Подготовить новое оружие из каталога"
+    },
     "Рассмотреть валидированную оружейную заявку": {
       "from": "NET-019",
       "guard": "confirmed GM authority; selected request PENDING and OP-REQ-VALIDATE receipt current; mode=REQUEST_REVIEW",
@@ -3684,14 +3714,14 @@
       "from": "NET-027",
       "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=DECLINE",
       "kind": "workflow-command",
-      "to": "APP-002",
+      "to": "NET-007",
       "trigger": "Отказаться от всего batch"
     },
     "Принять весь batch diff": {
       "from": "NET-027",
       "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=ACCEPT",
       "kind": "workflow-command",
-      "to": "PLY-001",
+      "to": "NET-006",
       "trigger": "Принять весь batch diff"
     }
   },

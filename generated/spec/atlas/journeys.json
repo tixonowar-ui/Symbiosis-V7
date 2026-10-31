@@ -501,7 +501,9 @@
       "NET-022",
       "NET-027",
       "NET-006",
-      "NET-007"
+      "NET-007",
+      "GM-019",
+      "GM-020"
     ],
     "id": "J-JOIN-REVIEW",
     "operationIds": [
@@ -568,7 +570,7 @@
           "NET-019",
           "NET-020"
         ],
-        "guards": "Локальный лист/provenance read-only; GM правит только отдельную campaign copy в разрешённых границах.",
+        "guards": "Локальный лист/provenance read-only; GM правит только отдельную campaign copy в разрешённых границах. Ordinary IN_REVIEW first opens stable reviewCopyIds through UI-CMD-ADMISSION-REVIEW-OPEN; no final campaignCharacterId or player authority until the respective final commits.",
         "result": "Полный diff и blockers.",
         "state": "REVIEW_COPY"
       },
@@ -588,7 +590,7 @@
           "NET-007"
         ],
         "guards": "Игрок принимает diff целиком или отказывается.",
-        "result": "Ready либо возврат к выбору.",
+        "result": "Целый batch принят в собственное лобби с явными blockers либо отклонён без admission; Ready и Start не подтверждаются этим решением.",
         "state": "PLAYER_DECISION"
       }
     ],
@@ -601,7 +603,9 @@
       "UI-CMD-DEVICE-REQUEST-CANCEL",
       "UI-CMD-DEVICE-REQUEST-SUBMIT",
       "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-      "UI-CMD-DEVICE-REQUEST-REJECT"
+      "UI-CMD-DEVICE-REQUEST-REJECT",
+      "UI-CMD-ADMISSION-REVIEW-OPEN",
+      "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"
     ]
   },
   {

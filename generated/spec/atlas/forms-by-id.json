@@ -4899,12 +4899,6 @@
         "trigger": "Закрыть результат и вернуться в меню игрока"
       },
       {
-        "from": "NET-027",
-        "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=DECLINE",
-        "kind": "workflow-command",
-        "trigger": "Отказаться от всего batch"
-      },
-      {
         "from": "NET-002",
         "guard": "no technical session created",
         "kind": "normative",
@@ -4945,6 +4939,12 @@
         "guard": "activeRole=PLAYER; returnContext=PLAYER_MENU; no admission request submitted and no technical session created; local data preserved",
         "kind": "safe-return",
         "trigger": "Вернуться в главное меню игрока"
+      },
+      {
+        "from": "NET-007",
+        "guard": "Own terminal result confirmed; DEVICE_REQUEST or MASTER_IMPORT with signed returnMode=REMOTE_PLAYER; no pending command; preserve original receipts/local FINAL and release only presentation context. Imported LOCAL_HANDOFF must use its signed privacy return, never this direct APP-002 route.",
+        "kind": "safe-return",
+        "trigger": "Вернуться в меню игрока"
       }
     ],
     "transitionsOut": [
@@ -103114,8 +103114,14 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Два взаимоисключающих типизированных режима: PATCH_EXISTING создаёт новую версию существующего weapon instance; REQUEST_REVIEW утверждает валидированную заявку либо применяет разрешённый master override с причиной и создаёт неэкипированную WeaponProfileVersion.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Два взаимоисключающих режима: PATCH_EXISTING создаёт новую версию существующего weapon instance; REQUEST_REVIEW рассматривает валидированную заявку или, только для admission draft, выдачу нового оружия из каталога. Существующая campaign copy получает UNEQUIPPED WeaponProfileVersion; рабочая review copy получает staged profile/receipt, материализуемый один раз при GM-ACCEPT. Выдача нового типа сохраняет исходные заявки и не использует вымышленный validation receipt.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "REQUEST_REVIEW is bound either to an existing campaignCharacterId or, for pre-publication admission, to reviewCopyId plus the closed weaponReviewInput and current reviewRevision. The latter stores one staged typed decision, profile and receipt without a live inventory instance; GM-ACCEPT atomically materializes the complete UNEQUIPPED WeaponProfileVersion and immutable source-to-copy mapping. APPROVE keeps the validated profile; MASTER_OVERRIDE requires a reason and CORE-187/188/190 typed fields. PATCH_EXISTING still requires a real existing campaignCharacterId/weaponInstanceId and is never available for a review-only copy.",
+      "Closed weaponOwnerScope variants: CAMPAIGN_COPY={kind,campaignCharacterId}; ADMISSION_REVIEW={kind,admissionBatchId,requestId,reviewCopyId,reviewRevision}. ADMISSION_REVIEW requires mode=REQUEST_REVIEW and weaponInstanceIdOrNull=null, profileVersionBeforeOrNull=null; preview is a staged decision/profile, not a live inventory instance. An unchanged staged decision replays its original receipt; a changed or opposite decision conflicts. The original validated request remains immutable.",
+      "ADMISSION_REVIEW weapon resolve rechecks sole GM authority, owning requestStatus=IN_REVIEW, review phase=GM_REVIEW, exact reviewRevision and the request or grant input selected by weaponReviewInput and absence of a published proposal inside the same transaction. Preliminary reject, GM publication, foreign scope or stale revision causes zero new write. Published draft/profile/receipt is immutable; direct navigation or a retained weapon dialog cannot bypass the freeze.",
+      "Closed weaponReviewInput variants: VALIDATED_REQUEST={kind,requestId,validationReceiptId}; ADMISSION_GRANT={kind,reviewItemId,weaponTypeId,profileSource,reason}. ADMISSION_GRANT is admission-only, requires a new stable reviewItemId, mode=REQUEST_REVIEW, decision=MASTER_OVERRIDE, non-empty reason and null requestIdOrNull/validationReceiptIdOrNull/commonWitness; it never invents a player request or changes an existing instance type. profileSource is CATALOG_TEMPLATE={kind,templateId} only when the exact supplied template has a complete profile, otherwise GM_DEFINED={kind,typedProfile} validated under CORE-187/188/190 with all required fields and immutable audit. Host derives the canonical template profile or validates the complete typed input; missing fields never receive guessed defaults. Replacing a source weapon creates a distinct proposed item/profile and preserves the removed source entry and original request decision in history. Draft selection alone cannot create a live weapon instance.",
+      "weaponReviewInputOrNull is null only for mode=PATCH_EXISTING, which keeps its existing instance/profile inputs. mode=REQUEST_REVIEW requires exactly one closed VALIDATED_REQUEST or ADMISSION_GRANT input; no fabricated request or grant is used for PATCH_EXISTING.",
+      "ADMISSION_GRANT prepares only admission draft data: operationId=null, no OP-REQ-GM player-request decision and no general live OP-GM-GIVE commit. The final GM-ACCEPT materialization enforces the supplied CORE-183/187/188/190 grant contract and audit. Existing VALIDATED_REQUEST and PATCH_EXISTING keep their original operation mappings and guards."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -103129,7 +103135,7 @@
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Разрешённые mutation OperationID этой формы: OP-REQ-GM.",
         "Разрешённые atlas workflow commands этой формы: UI-CMD-GM-WEAPON-REQUEST-RESOLVE.",
-        "Разрешённые видимые действия/CTA именно этой формы: Применить patch существующего оружия; Утвердить или переопределить оружейную заявку; Отменить."
+        "Разрешённые видимые действия/CTA именно этой формы: Применить patch существующего оружия; Утвердить или переопределить оружейную заявку; Отменить; Подтвердить профиль рабочей копии."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -103373,7 +103379,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+          "guard": "weaponOwnerScope.kind=CAMPAIGN_COPY; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -103472,6 +103478,62 @@
           ],
           "targetFormId": "NET-019",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "GM-019::CTA::005",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "weaponOwnerScope.kind=ADMISSION_REVIEW; requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Подтвердить профиль рабочей копии",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-019",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -103544,7 +103606,8 @@
       "visible": [
         "Применить patch существующего оружия",
         "Утвердить или переопределить оружейную заявку",
-        "Отменить"
+        "Отменить",
+        "Подтвердить профиль рабочей копии"
       ],
       "workflowCommandAvailability": [
         {
@@ -103589,7 +103652,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
-          "guard": "GM authority; mode=REQUEST_REVIEW; exact PENDING request and OP-REQ-VALIDATE receipt; common L/Lw/Ls witness/profile current; decision APPROVE or MASTER_OVERRIDE; override is structurally allowed and has reason.",
+          "guard": "GM authority; mode=REQUEST_REVIEW. VALIDATED_REQUEST requires the exact PENDING request and OP-REQ-VALIDATE receipt, current common L/Lw/Ls witness/profile and APPROVE or reasoned structurally valid MASTER_OVERRIDE. ADMISSION_GRANT requires ADMISSION_REVIEW scope, a new owned reviewItemId, exact catalog type, complete canonical template or CORE-187/188/190 validated GM-defined profile, MASTER_OVERRIDE and reason; no fabricated request/validation receipt. ADMISSION_REVIEW additionally requires current owning request IN_REVIEW, GM_REVIEW phase, current reviewRevision and no published proposal; every guard is rechecked before write. Published or rejected review is immutable.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -103649,7 +103712,7 @@
       "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Два взаимоисключающих типизированных режима: PATCH_EXISTING создаёт новую версию существующего weapon instance; REQUEST_REVIEW утверждает валидированную заявку либо применяет разрешённый master override с причиной и создаёт неэкипированную WeaponProfileVersion.",
+    "purpose": "Два взаимоисключающих режима: PATCH_EXISTING создаёт новую версию существующего weapon instance; REQUEST_REVIEW рассматривает валидированную заявку или, только для admission draft, выдачу нового оружия из каталога. Существующая campaign copy получает UNEQUIPPED WeaponProfileVersion; рабочая review copy получает staged profile/receipt, материализуемый один раз при GM-ACCEPT. Выдача нового типа сохраняет исходные заявки и не использует вымышленный validation receipt.",
     "qaScenarioIds": [
       "QA-FORM-GM-019",
       "QA-CHANGE-GM-019"
@@ -103722,7 +103785,7 @@
     },
     "requiredFields": [
       "mode=PATCH_EXISTING|REQUEST_REVIEW",
-      "campaignCharacterId",
+      "weaponOwnerScope",
       "weaponInstanceIdOrNull",
       "requestIdOrNull",
       "validationReceiptIdOrNull",
@@ -103733,13 +103796,14 @@
       "typedPatchOrOverrideProfile",
       "formulaReachabilityValidation",
       "profileVersionBeforeOrNull",
-      "profileVersionAfterPreview",
-      "createdEquipmentState=UNEQUIPPED for request",
+      "profileVersionOrStagedDecisionPreview",
+      "equipmentState=UNEQUIPPED_ON_MATERIALIZATION for request",
       "reason(required for patch/override)",
-      "operationId=OP-GM-PATCH-WEAPON|OP-REQ-GM",
+      "operationId=OP-GM-PATCH-WEAPON|OP-REQ-GM|null for admission grant",
       "stateRevision",
       "masterAuthorityRevision",
-      "commandId"
+      "commandId",
+      "weaponReviewInputOrNull"
     ],
     "roles": [
       "gm"
@@ -103775,6 +103839,12 @@
         "guard": "confirmed GM authority; selected request PENDING and OP-REQ-VALIDATE receipt current; mode=REQUEST_REVIEW",
         "kind": "normative",
         "trigger": "Рассмотреть валидированную оружейную заявку"
+      },
+      {
+        "from": "NET-019",
+        "guard": "Sole current GM; ORDINARY_DRAFT; owning requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; owned new reviewItemId and exact catalog weaponTypeId; open ADMISSION_GRANT input, no source player request or validation receipt required.",
+        "kind": "subflow",
+        "trigger": "Подготовить новое оружие из каталога"
       }
     ],
     "transitionsOut": [
@@ -103791,7 +103861,7 @@
         "trigger": "Применить patch существующего оружия"
       },
       {
-        "guard": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+        "guard": "weaponOwnerScope.kind=CAMPAIGN_COPY; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
         "kind": "workflow-command",
         "to": "GM-021",
         "trigger": "Утвердить или переопределить оружейную заявку"
@@ -103801,6 +103871,12 @@
         "kind": "safe-return",
         "to": "NET-019",
         "trigger": "Отменить"
+      },
+      {
+        "guard": "weaponOwnerScope.kind=ADMISSION_REVIEW; requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+        "kind": "workflow-command",
+        "to": "NET-019",
+        "trigger": "Подтвердить профиль рабочей копии"
       }
     ],
     "type": "screen"
@@ -103812,7 +103888,17 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Навык добавляется при допуске кампанийной копии либо в иной явно разрешённой транзакции с проверкой требований и слотов; универсального мастерского обучения нет.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Ordinary review scope: requestStatus=IN_REVIEW remains unchanged by review opening or draft edits; GM_REVIEW is the separate review phase. Stable reviewCopyId addresses one immutable submitted sourceUuid/snapshot/checksum. campaignCharacterId is null until GM-ACCEPT; the published reviewCopyId-to-campaignCharacterId mapping is immutable.",
+      "Review drafts are durable, host-validated uncommitted input, never confirmed mechanics or player authority. DEVICE_REQUEST checks exact expected reviewRevision and campaign/request/GM scope; MASTER_IMPORT checks its actual candidate/owner-claim/copy scope and current proposal revision. An unknown field, stale edit or changed replay is rejected. Navigation alone does not publish a copy or commit admission.",
+      "For DEVICE_REQUEST only, draft editing and weapon staging require IN_REVIEW plus GM_REVIEW and no published proposal. GM-ACCEPT freezes the draft and complete diff. Preliminary rejection revokes workspace access without deleting history; every queued edit/publication rechecks the request. MASTER_IMPORT retains its existing owner-claimed PROPOSED copy review before final diff publication; an imported PROPOSED lifecycle alone is not proof that its diff was already published. Both origins become read-only after final diff publication.",
+      "Closed reviewScope variants: ORDINARY_DRAFT={kind,admissionBatchId,requestId,reviewCopyId,reviewRevision}; IMPORTED_REVIEW={kind,admissionBatchId,campaignCharacterId,candidateId,ownerClaimReceiptId,proposalRevision}; PUBLISHED_COPY={kind,admissionBatchId,campaignCharacterId,proposalRevision,origin,requestIdOrNull,reviewCopyIdOrNull}. ORDINARY_DRAFT has no campaignCharacterId. IMPORTED_REVIEW preserves the real OWNER_CLAIMED candidate and existing PROPOSED copy from J-GM-IMPORT-ADMISSION; sole current GM may finalize it before its final diff is published, with current proposal revision and no fabricated ordinary request/review identity. PUBLISHED_COPY means the final diff was published and is read-only for both origins; DEVICE_REQUEST requires original request/review IDs, MASTER_IMPORT retains actual candidate/owner-claim provenance and null ordinary request/review IDs. Existing PROPOSED import ingress guards are preserved.",
+      "Closed review draft fields: statAdjustments, startingSkills, massReview, inventoryReview, moneyReview, weaponDecisionRefs, groupAssignment, locationAssignment. All original FINAL base values, natural rolls, provenance, source bytes and free racial/class grants remain read-only.",
+      "statAdjustments follow AQ2-002: permanent GM corrections to the accepted base followed by existing race/class/symbiont/bounds/derived recalculation, every final stat at least 1. startingSkills may add/remove/replace only editable starting skills within source requirements and capacity; no universal training or free-grant edits.",
+      "massReview follows AQA-010: positive kilograms at 0.1 precision, no invented PC race min/max; explicit PENDING_MASTER_APPROVAL or APPROVED. inventoryReview and moneyReview follow AQ2-004 and item registry types: final item, quantity, descriptive quality, effective weapon profile and money; empty categories and zero money allowed, unfinished review is not silently finalized. Granted items remain UNEQUIPPED per Q-CHAR-014.",
+      "Complete diff covers every source-to-proposal mechanical change, identity mapping, master correction, skill replacement, mass approval, inventory item/quantity/quality/profile, money and group/location assignment. A no-change section is explicit. Player and GM see the same complete published batch diff and blockers; player payload omits GM-private review context, private provenance witnesses, keys and internal rule IDs.",
+      "Structural validation failure blocks GM publication and player ACCEPT. Pending mass or mandatory starting-property approval is a visible Ready/active/scene blocker, not a fabricated successful review. Unresolved typed weapon requests still block batch finalization under NET-019. No automatic equipment, Ready, Start, scene, combat, group-transfer or general inventory runtime is implied.",
+      "No effectInstanceId, EffectTypeID or duration/stackPolicy is required or fabricated for starting-skill admission. This form edits only the selected review draft under AQ2-002, not the immutable source, free grants or general progression."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -104033,13 +104119,16 @@
     },
     "requiredFields": [
       "contextId",
-      "stateRevision",
-      "projectionRevision",
-      "effectInstanceId/EffectTypeID",
-      "source",
-      "duration/stackPolicy",
       "campaignId",
-      "campaignStatus"
+      "reviewScope",
+      "originalStartingSkills(read-only)",
+      "proposedStartingSkills",
+      "immutableRaceAndClassGrants(read-only)",
+      "skillRequirementsAndPoolValidation",
+      "campaignCopyDiff",
+      "returnContext",
+      "stateRevision",
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -105128,12 +105217,6 @@
         "trigger": "Сохранить narrative-only пометку"
       },
       {
-        "from": "GM-019",
-        "guard": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
-        "kind": "workflow-command",
-        "trigger": "Утвердить или переопределить оружейную заявку"
-      },
-      {
         "from": "GM-035",
         "guard": "UI-CMD-GM-CONSUMABLE-CORRECT guards",
         "kind": "workflow-command",
@@ -105162,6 +105245,12 @@
         "guard": "UI-CMD-GM-BURNING-APPLY guards",
         "kind": "workflow-command",
         "trigger": "Применить или усилить горение"
+      },
+      {
+        "from": "GM-019",
+        "guard": "weaponOwnerScope.kind=CAMPAIGN_COPY; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+        "kind": "workflow-command",
+        "trigger": "Утвердить или переопределить оружейную заявку"
       }
     ],
     "transitionsOut": [
@@ -123546,6 +123635,12 @@
         "guard": "projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt.",
         "kind": "safe-return",
         "trigger": "Вернуться к выбору персонажей"
+      },
+      {
+        "from": "NET-007",
+        "guard": "admissionOrigin=DEVICE_REQUEST; Own GM_REJECTED or PLAYER_DECLINED result; same live technical session; no conflicting pending admission; original source and receipts preserved.",
+        "kind": "subflow",
+        "trigger": "Выбрать персонажей заново"
       }
     ],
     "transitionsOut": [
@@ -124458,12 +124553,6 @@
         "trigger": "J-JOIN-REVIEW::WAIT::return"
       },
       {
-        "from": "NET-022",
-        "guard": "SERVER_ONLY_ROLE_PROJECTION; UI-CMD-ADMISSION-GM-REJECT committed with reason",
-        "kind": "system-event",
-        "trigger": "Server publishes batch rejection"
-      },
-      {
         "from": "NET-004",
         "guard": "UI-CMD-DEVICE-REQUEST-SUBMIT guards",
         "kind": "workflow-command",
@@ -124541,7 +124630,9 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Статус каждого героя, blockers, свободные места и явная готовность; Start выполняет только мастер.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Admission result is owner-only and restores the same copy/controller identities and original receipt. Pending mass/property blockers are explicit; absence of blockers is explicit too. Admission alone never confirms Ready or Start; the PLY-001 route remains unavailable until separately confirmed Start.",
+      "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -124801,6 +124892,14 @@
     },
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "admissionBatchId",
+      "ownCampaignCopies[1..3]",
+      "controllerBindings",
+      "blockers[]",
+      "campaignStatus",
+      "readyStatus",
+      "startStatus",
       "stateRevision",
       "projectionRevision"
     ],
@@ -124835,6 +124934,12 @@
         "guard": "role=player; все entryConditions и guardStates целевой формы выполнены",
         "kind": "role-state-reachability",
         "trigger": "Адресуемый route либо server/system event текущей роли"
+      },
+      {
+        "from": "NET-027",
+        "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=ACCEPT",
+        "kind": "workflow-command",
+        "trigger": "Принять весь batch diff"
       }
     ],
     "transitionsOut": [
@@ -124859,8 +124964,11 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Причина, повторная отправка либо выбор другого сохранённого персонажа без редактирования финальной локальной механики.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Показать реальное отклонение всего AdmissionBatch мастером с причиной либо типизированный отказ игрока; безопасный новый выбор при действующей technical session, без изменения финальных локальных листов.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "GM_REJECTED requires the actual non-empty public GM reason; PLAYER_DECLINED has gmReasonOrNull=null and requires no invented player reason. No effect entity or duration/stackPolicy is present. Retry selection preserves old source/proposal/receipts and never submits a new request automatically.",
+      "Closed ownerProvenance variants: DEVICE_REQUEST={kind,requestId,requestOwnerDeviceId}; MASTER_IMPORT={kind,candidateId,ownerClaimReceiptId,claimingPlayerId,controllingDeviceId,controllerSeat}. Values come only from the verified original submission or committed NET-028 owner claim respectively. admissionOrigin equals ownerProvenance.kind. Where present on the form, requestIdOrNull and reviewRevisionOrNull are non-null for DEVICE_REQUEST and null for MASTER_IMPORT; ordinary draft decisions use reviewRevision, published player decisions use proposalRevision. MASTER_IMPORT uses its actual candidate, claim, existing campaignCharacterId and proposal revision. No false submission/validation receipt is created for an import. Current GM authority, full-batch decision, capacity and exclusive-controller checks apply to both origins. This preserves the supplied import contract; runtime #172 still implements DEVICE_REQUEST only.",
+      "signedReturnContextOrNull is null for DEVICE_REQUEST and the unchanged committed NET-028 return envelope for MASTER_IMPORT: returnMode, returnFormId, handoffIdOrNull and server-held initiatingGmContextOrNull. The player never receives the GM context. A remote claimant returns APP-002; LOCAL_HANDOFF returns through PLY-030. New ordinary retry does not resubmit an imported candidate."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -124873,7 +124981,7 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Итог согласования персонажа»."
+        "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Итог согласования персонажа»; Выбрать персонажей заново; Вернуться в меню игрока; Вернуться через экран приватности."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -124969,6 +125077,168 @@
           ],
           "targetFormId": "NET-027",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-007::CTA::002",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "admissionOrigin=DEVICE_REQUEST; Own GM_REJECTED or PLAYER_DECLINED result; same live technical session; no conflicting pending admission; original source and receipts preserved.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "subflow",
+          "label": "Выбрать персонажей заново",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-003",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-007::CTA::003",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Own terminal result confirmed; DEVICE_REQUEST or MASTER_IMPORT with signed returnMode=REMOTE_PLAYER; no pending command; preserve original receipts/local FINAL and release only presentation context. Imported LOCAL_HANDOFF must use its signed privacy return, never this direct APP-002 route.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "safe-return",
+          "label": "Вернуться в меню игрока",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "APP-002",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-007::CTA::004",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "MASTER_IMPORT terminal result; committed NET-028 owner claim retains signed returnMode=LOCAL_HANDOFF, returnFormId=PLY-030, handoffId and initiating GM context; no pending command; receipt-gated return only, never expose GM data in the player projection.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "safe-return",
+          "label": "Вернуться через экран приватности",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "PLY-030",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -124981,7 +125251,10 @@
         "Любой CTA, route target или same-form command, отсутствующий в visible и ctaAvailabilityByAction этой записи, запрещён."
       ],
       "visible": [
-        "Вернуться к «Итог согласования персонажа»"
+        "Вернуться к «Итог согласования персонажа»",
+        "Выбрать персонажей заново",
+        "Вернуться в меню игрока",
+        "Вернуться через экран приватности"
       ],
       "workflowCommandAvailability": []
     },
@@ -124992,7 +125265,7 @@
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Причина, повторная отправка либо выбор другого сохранённого персонажа без редактирования финальной локальной механики.",
+      "Содержательная область: Показать реальное отклонение всего AdmissionBatch мастером с причиной либо типизированный отказ игрока; безопасный новый выбор при действующей technical session, без изменения финальных локальных листов.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
       "Индикатор связи и ревизии"
@@ -125023,7 +125296,7 @@
       "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Причина, повторная отправка либо выбор другого сохранённого персонажа без редактирования финальной локальной механики.",
+    "purpose": "Показать реальное отклонение всего AdmissionBatch мастером с причиной либо типизированный отказ игрока; безопасный новый выбор при действующей technical session, без изменения финальных локальных листов.",
     "qaScenarioIds": [
       "QA-FORM-NET-007"
     ],
@@ -125061,11 +125334,18 @@
     },
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "requestIdOrNull",
+      "admissionBatchId",
+      "result=GM_REJECTED|PLAYER_DECLINED",
+      "gmReasonOrNull",
+      "decisionReceiptId",
+      "technicalSessionAvailable",
       "stateRevision",
       "projectionRevision",
-      "effectInstanceId/EffectTypeID",
-      "source",
-      "duration/stackPolicy"
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance",
+      "signedReturnContextOrNull"
     ],
     "roles": [
       "player"
@@ -125098,6 +125378,18 @@
         "guard": "role=player; все entryConditions и guardStates целевой формы выполнены",
         "kind": "role-state-reachability",
         "trigger": "Адресуемый route либо server/system event текущей роли"
+      },
+      {
+        "from": "NET-022",
+        "guard": "SERVER_ONLY_ROLE_PROJECTION; UI-CMD-ADMISSION-GM-REJECT committed with reason",
+        "kind": "system-event",
+        "trigger": "Server publishes batch rejection"
+      },
+      {
+        "from": "NET-027",
+        "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=DECLINE",
+        "kind": "workflow-command",
+        "trigger": "Отказаться от всего batch"
       }
     ],
     "transitionsOut": [
@@ -125106,6 +125398,24 @@
         "kind": "subflow-return",
         "to": "NET-027",
         "trigger": "J-JOIN-REVIEW::PLAYER_DECISION::return"
+      },
+      {
+        "guard": "admissionOrigin=DEVICE_REQUEST; Own GM_REJECTED or PLAYER_DECLINED result; same live technical session; no conflicting pending admission; original source and receipts preserved.",
+        "kind": "subflow",
+        "to": "NET-003",
+        "trigger": "Выбрать персонажей заново"
+      },
+      {
+        "guard": "Own terminal result confirmed; DEVICE_REQUEST or MASTER_IMPORT with signed returnMode=REMOTE_PLAYER; no pending command; preserve original receipts/local FINAL and release only presentation context. Imported LOCAL_HANDOFF must use its signed privacy return, never this direct APP-002 route.",
+        "kind": "safe-return",
+        "to": "APP-002",
+        "trigger": "Вернуться в меню игрока"
+      },
+      {
+        "guard": "MASTER_IMPORT terminal result; committed NET-028 owner claim retains signed returnMode=LOCAL_HANDOFF, returnFormId=PLY-030, handoffId and initiating GM context; no pending command; receipt-gated return only, never expose GM data in the player projection.",
+        "kind": "safe-return",
+        "to": "PLY-030",
+        "trigger": "Вернуться через экран приватности"
       }
     ],
     "type": "screen"
@@ -128890,7 +129200,10 @@
       "Closed field composite capacity: {\"activePlayerCapacity\":\"configured campaign capacity\",\"occupiedActivePcCount\":\"confirmed active PC count\",\"preview\":\"requestedCandidateCount compared with current occupied count/capacity; no reservation and not a preliminary decision side effect\"}. Unknown fields are rejected.",
       "Closed field composite returnContext: {\"variants\":[{\"originFormId\":\"CMP-006\",\"campaignId\":\"same bound campaign\",\"creationReceiptId\":\"confirmed original creation receipt\"},{\"originFormId\":\"GM-002\",\"campaignId\":\"existing original route context\"},{\"originFormId\":\"CMP-009\",\"campaignId\":\"existing original route context\"}],\"authority\":\"Host-issued saved context, not freely supplied by browser\"}. Unknown fields are rejected.",
       "Closed request command UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW: payload campaignId, requestId, requestRevision; Existing commandId, expected revision vector and verified GM authority; no outer protocol bump; unknownFieldPolicy=REJECT. Receipt fields: receiptId, commandId, workflowCommandId, campaignId, requestId, requestOwnerDeviceId, beforeRequestStatus, afterRequestStatus, beforeRequestRevision, requestRevision, decisionReasonOrNull, candidateSnapshotChecksums, authoritativeGmActorId, timestamp. Original immutable receipt; current projection may be newer and is carried separately; no cursor rollback.",
-      "Closed request command UI-CMD-DEVICE-REQUEST-REJECT: payload campaignId, requestId, requestRevision, reason; Existing commandId, expected revision vector and verified GM authority; no outer protocol bump; unknownFieldPolicy=REJECT. Receipt fields: receiptId, commandId, workflowCommandId, campaignId, requestId, requestOwnerDeviceId, beforeRequestStatus, afterRequestStatus, beforeRequestRevision, requestRevision, decisionReasonOrNull, candidateSnapshotChecksums, authoritativeGmActorId, timestamp. Original immutable receipt; current projection may be newer and is carried separately; no cursor rollback."
+      "Closed request command UI-CMD-DEVICE-REQUEST-REJECT: payload campaignId, requestId, requestRevision, reason; Existing commandId, expected revision vector and verified GM authority; no outer protocol bump; unknownFieldPolicy=REJECT. Receipt fields: receiptId, commandId, workflowCommandId, campaignId, requestId, requestOwnerDeviceId, beforeRequestStatus, afterRequestStatus, beforeRequestRevision, requestRevision, decisionReasonOrNull, candidateSnapshotChecksums, authoritativeGmActorId, timestamp. Original immutable receipt; current projection may be newer and is carried separately; no cursor rollback.",
+      "The new ordinary IN_REVIEW review-open capability is distinct from the unchanged PROPOSED import guards. It creates only a durable review workspace and receipt; preliminary decisions and their immutable receipts remain unchanged.",
+      "occupiedActivePcCount remains the actual active PC count, not a renamed slot count. With final admission implemented, capacity forecasts also consult occupied campaign places including admitted lobby-only copies under owner decision #199 B. Preliminary review still reserves nothing; the complete slot-based capacity proof is exposed only at the final admission decision.",
+      "Closed UI-CMD-ADMISSION-REVIEW-OPEN payload: campaignId, requestId, requestRevision. Existing commandId, expected revision vector and verified sole GM authority are required. No reviewRevision is supplied before opening. Closed original receipt: receiptId, commandId, workflowCommandId, campaignId, requestId, requestOwnerDeviceId, admissionBatchId, reviewCopies, reviewRevision, authoritativeGmActorId, timestamp. Each reviewCopies row has exactly reviewCopyId, sourceUuid, sourceSnapshotId, snapshotChecksum; original submitted order and cardinality are preserved. Current review/proposal state is delivered separately from the original immutable receipt."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -128902,9 +129215,9 @@
       "allowed": [
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-        "Разрешённые atlas workflow commands этой формы: UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT.",
+        "Разрешённые atlas workflow commands этой формы: UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-ADMISSION-REVIEW-OPEN.",
         "Исполняемых профильных OperationID нет; предварительные решения меняют только адресованную заявку и её журнал.",
-        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Исходный локальный лист»; Открыть «Финализация кампанийной копии»; Открыть «Итог персонажа: группа и локация»; Открыть «Принять запрос устройства»; Вернуться к «Список персонажей кампании»; Вернуться к «Клиенты и локальные места»; Принять заявку к рассмотрению; Отклонить заявку с причиной; Вернуться к созданной кампании."
+        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Исходный локальный лист»; Открыть «Финализация кампанийной копии»; Открыть «Итог персонажа: группа и локация»; Открыть «Принять запрос устройства»; Вернуться к «Список персонажей кампании»; Вернуться к «Клиенты и локальные места»; Принять заявку к рассмотрению; Отклонить заявку с причиной; Вернуться к созданной кампании; Начать рассмотрение кампанийных копий."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -128916,7 +129229,8 @@
           "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
           "workflowCommandIds": [
             "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-            "UI-CMD-DEVICE-REQUEST-REJECT"
+            "UI-CMD-DEVICE-REQUEST-REJECT",
+            "UI-CMD-ADMISSION-REVIEW-OPEN"
           ]
         },
         "availabilityInputs": [
@@ -129453,6 +129767,62 @@
           ],
           "targetFormId": "CMP-006",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-017::CTA::010",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-ADMISSION-REVIEW-OPEN"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "UI-CMD-ADMISSION-REVIEW-OPEN guards; Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Начать рассмотрение кампанийных копий",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-018",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -129473,7 +129843,8 @@
         "Вернуться к «Клиенты и локальные места»",
         "Принять заявку к рассмотрению",
         "Отклонить заявку с причиной",
-        "Вернуться к созданной кампании"
+        "Вернуться к созданной кампании",
+        "Начать рассмотрение кампанийных копий"
       ],
       "workflowCommandAvailability": [
         {
@@ -129559,6 +129930,48 @@
             "game time/campaign state",
             "stateRevision/projectionRevision"
           ]
+        },
+        {
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-ADMISSION-REVIEW-OPEN"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "commandId": "UI-CMD-ADMISSION-REVIEW-OPEN",
+          "guard": "Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+          "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ]
         }
       ]
     },
@@ -129611,7 +130024,8 @@
       "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
       "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT",
       "QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE",
-      "QA-CMP-006-DEVICE-REQUEST-QUEUE"
+      "QA-CMP-006-DEVICE-REQUEST-QUEUE",
+      "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN"
     ],
     "references": {
       "abilityIds": [],
@@ -129651,7 +130065,8 @@
       ],
       "workflowCommandIds": [
         "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-        "UI-CMD-DEVICE-REQUEST-REJECT"
+        "UI-CMD-DEVICE-REQUEST-REJECT",
+        "UI-CMD-ADMISSION-REVIEW-OPEN"
       ]
     },
     "requiredFields": [
@@ -129844,6 +130259,12 @@
         "kind": "system-event",
         "to": "NET-005",
         "trigger": "Server publishes preliminary request rejection"
+      },
+      {
+        "guard": "UI-CMD-ADMISSION-REVIEW-OPEN guards; Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+        "kind": "workflow-command",
+        "to": "NET-018",
+        "trigger": "Начать рассмотрение кампанийных копий"
       }
     ],
     "type": "screen"
@@ -129854,8 +130275,17 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Read-only механика, UUID/provenance и натуральные броски каждого персонажа перед созданием кампанийной копии.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Read-only механика, UUID/provenance и натуральные броски каждого immutable source; отдельная адресованная рабочая review copy до создания campaignCharacterId, либо уже опубликованная PROPOSED copy.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Ordinary review scope: requestStatus=IN_REVIEW remains unchanged by review opening or draft edits; GM_REVIEW is the separate review phase. Stable reviewCopyId addresses one immutable submitted sourceUuid/snapshot/checksum. campaignCharacterId is null until GM-ACCEPT; the published reviewCopyId-to-campaignCharacterId mapping is immutable.",
+      "Review drafts are durable, host-validated uncommitted input, never confirmed mechanics or player authority. DEVICE_REQUEST checks exact expected reviewRevision and campaign/request/GM scope; MASTER_IMPORT checks its actual candidate/owner-claim/copy scope and current proposal revision. An unknown field, stale edit or changed replay is rejected. Navigation alone does not publish a copy or commit admission.",
+      "For DEVICE_REQUEST only, draft editing and weapon staging require IN_REVIEW plus GM_REVIEW and no published proposal. GM-ACCEPT freezes the draft and complete diff. Preliminary rejection revokes workspace access without deleting history; every queued edit/publication rechecks the request. MASTER_IMPORT retains its existing owner-claimed PROPOSED copy review before final diff publication; an imported PROPOSED lifecycle alone is not proof that its diff was already published. Both origins become read-only after final diff publication.",
+      "Closed reviewScope variants: ORDINARY_DRAFT={kind,admissionBatchId,requestId,reviewCopyId,reviewRevision}; IMPORTED_REVIEW={kind,admissionBatchId,campaignCharacterId,candidateId,ownerClaimReceiptId,proposalRevision}; PUBLISHED_COPY={kind,admissionBatchId,campaignCharacterId,proposalRevision,origin,requestIdOrNull,reviewCopyIdOrNull}. ORDINARY_DRAFT has no campaignCharacterId. IMPORTED_REVIEW preserves the real OWNER_CLAIMED candidate and existing PROPOSED copy from J-GM-IMPORT-ADMISSION; sole current GM may finalize it before its final diff is published, with current proposal revision and no fabricated ordinary request/review identity. PUBLISHED_COPY means the final diff was published and is read-only for both origins; DEVICE_REQUEST requires original request/review IDs, MASTER_IMPORT retains actual candidate/owner-claim provenance and null ordinary request/review IDs. Existing PROPOSED import ingress guards are preserved.",
+      "Closed review draft fields: statAdjustments, startingSkills, massReview, inventoryReview, moneyReview, weaponDecisionRefs, groupAssignment, locationAssignment. All original FINAL base values, natural rolls, provenance, source bytes and free racial/class grants remain read-only.",
+      "statAdjustments follow AQ2-002: permanent GM corrections to the accepted base followed by existing race/class/symbiont/bounds/derived recalculation, every final stat at least 1. startingSkills may add/remove/replace only editable starting skills within source requirements and capacity; no universal training or free-grant edits.",
+      "massReview follows AQA-010: positive kilograms at 0.1 precision, no invented PC race min/max; explicit PENDING_MASTER_APPROVAL or APPROVED. inventoryReview and moneyReview follow AQ2-004 and item registry types: final item, quantity, descriptive quality, effective weapon profile and money; empty categories and zero money allowed, unfinished review is not silently finalized. Granted items remain UNEQUIPPED per Q-CHAR-014.",
+      "Complete diff covers every source-to-proposal mechanical change, identity mapping, master correction, skill replacement, mass approval, inventory item/quantity/quality/profile, money and group/location assignment. A no-change section is explicit. Player and GM see the same complete published batch diff and blockers; player payload omits GM-private review context, private provenance witnesses, keys and internal rule IDs.",
+      "Structural validation failure blocks GM publication and player ACCEPT. Pending mass or mandatory starting-property approval is a visible Ready/active/scene blocker, not a fabricated successful review. Unresolved typed weapon requests still block batch finalization under NET-019. No automatic equipment, Ready, Start, scene, combat, group-transfer or general inventory runtime is implied."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -130207,7 +130637,7 @@
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Read-only механика, UUID/provenance и натуральные броски каждого персонажа перед созданием кампанийной копии.",
+      "Содержательная область: Read-only механика, UUID/provenance и натуральные броски каждого immutable source; отдельная адресованная рабочая review copy до создания campaignCharacterId, либо уже опубликованная PROPOSED copy.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
       "Индикатор связи и ревизии"
@@ -130239,7 +130669,7 @@
       "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Read-only механика, UUID/provenance и натуральные броски каждого персонажа перед созданием кампанийной копии.",
+    "purpose": "Read-only механика, UUID/provenance и натуральные броски каждого immutable source; отдельная адресованная рабочая review copy до создания campaignCharacterId, либо уже опубликованная PROPOSED copy.",
     "qaScenarioIds": [
       "QA-FORM-NET-018",
       "QA-CHANGE-NET-018"
@@ -130286,10 +130716,14 @@
     },
     "requiredFields": [
       "contextId",
-      "stateRevision",
-      "projectionRevision",
       "campaignId",
-      "campaignStatus"
+      "reviewScope",
+      "immutableSourceSnapshot(read-only)",
+      "sourceProvenanceAndNaturalRolls(read-only)",
+      "batchReviewCopies[1..3]",
+      "returnContext",
+      "stateRevision",
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -130340,6 +130774,12 @@
         "guard": "Исключение/замена выполняются только на safe boundary; новый персонаж проходит полный proposal/review/acceptance.",
         "kind": "subflow",
         "trigger": "J-CAMPAIGN-LIFECYCLE::REMOVE_REPLACE::open"
+      },
+      {
+        "from": "NET-017",
+        "guard": "UI-CMD-ADMISSION-REVIEW-OPEN guards; Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+        "kind": "workflow-command",
+        "trigger": "Начать рассмотрение кампанийных копий"
       }
     ],
     "transitionsOut": [
@@ -130382,8 +130822,27 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Финализировать отдельную campaign copy и показать её валидированные pending weapon requests; исходный локальный лист read-only, а каждый запрос открывается в типизированном GM review до batch commit.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Финализировать отдельную review copy: разрешённые мастерские поправки, навыки, масса, имущество и деньги; полный diff и blockers. DEVICE_REQUEST использует рабочий draft и получает campaignCharacterId при GM-ACCEPT. MASTER_IMPORT сохраняет существующую PROPOSED copy и подтверждённый owner claim до финальной публикации diff. Исходный лист read-only; опубликованный diff неизменен.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Ordinary review scope: requestStatus=IN_REVIEW remains unchanged by review opening or draft edits; GM_REVIEW is the separate review phase. Stable reviewCopyId addresses one immutable submitted sourceUuid/snapshot/checksum. campaignCharacterId is null until GM-ACCEPT; the published reviewCopyId-to-campaignCharacterId mapping is immutable.",
+      "Review drafts are durable, host-validated uncommitted input, never confirmed mechanics or player authority. DEVICE_REQUEST checks exact expected reviewRevision and campaign/request/GM scope; MASTER_IMPORT checks its actual candidate/owner-claim/copy scope and current proposal revision. An unknown field, stale edit or changed replay is rejected. Navigation alone does not publish a copy or commit admission.",
+      "For DEVICE_REQUEST only, draft editing and weapon staging require IN_REVIEW plus GM_REVIEW and no published proposal. GM-ACCEPT freezes the draft and complete diff. Preliminary rejection revokes workspace access without deleting history; every queued edit/publication rechecks the request. MASTER_IMPORT retains its existing owner-claimed PROPOSED copy review before final diff publication; an imported PROPOSED lifecycle alone is not proof that its diff was already published. Both origins become read-only after final diff publication.",
+      "Closed reviewScope variants: ORDINARY_DRAFT={kind,admissionBatchId,requestId,reviewCopyId,reviewRevision}; IMPORTED_REVIEW={kind,admissionBatchId,campaignCharacterId,candidateId,ownerClaimReceiptId,proposalRevision}; PUBLISHED_COPY={kind,admissionBatchId,campaignCharacterId,proposalRevision,origin,requestIdOrNull,reviewCopyIdOrNull}. ORDINARY_DRAFT has no campaignCharacterId. IMPORTED_REVIEW preserves the real OWNER_CLAIMED candidate and existing PROPOSED copy from J-GM-IMPORT-ADMISSION; sole current GM may finalize it before its final diff is published, with current proposal revision and no fabricated ordinary request/review identity. PUBLISHED_COPY means the final diff was published and is read-only for both origins; DEVICE_REQUEST requires original request/review IDs, MASTER_IMPORT retains actual candidate/owner-claim provenance and null ordinary request/review IDs. Existing PROPOSED import ingress guards are preserved.",
+      "Closed review draft fields: statAdjustments, startingSkills, massReview, inventoryReview, moneyReview, weaponDecisionRefs, groupAssignment, locationAssignment. All original FINAL base values, natural rolls, provenance, source bytes and free racial/class grants remain read-only.",
+      "statAdjustments follow AQ2-002: permanent GM corrections to the accepted base followed by existing race/class/symbiont/bounds/derived recalculation, every final stat at least 1. startingSkills may add/remove/replace only editable starting skills within source requirements and capacity; no universal training or free-grant edits.",
+      "massReview follows AQA-010: positive kilograms at 0.1 precision, no invented PC race min/max; explicit PENDING_MASTER_APPROVAL or APPROVED. inventoryReview and moneyReview follow AQ2-004 and item registry types: final item, quantity, descriptive quality, effective weapon profile and money; empty categories and zero money allowed, unfinished review is not silently finalized. Granted items remain UNEQUIPPED per Q-CHAR-014.",
+      "Complete diff covers every source-to-proposal mechanical change, identity mapping, master correction, skill replacement, mass approval, inventory item/quantity/quality/profile, money and group/location assignment. A no-change section is explicit. Player and GM see the same complete published batch diff and blockers; player payload omits GM-private review context, private provenance witnesses, keys and internal rule IDs.",
+      "Structural validation failure blocks GM publication and player ACCEPT. Pending mass or mandatory starting-property approval is a visible Ready/active/scene blocker, not a fabricated successful review. Unresolved typed weapon requests still block batch finalization under NET-019. No automatic equipment, Ready, Start, scene, combat, group-transfer or general inventory runtime is implied.",
+      "For ORDINARY_DRAFT only, weapon REQUEST_REVIEW uses reviewCopyId and expected reviewRevision before final campaignCharacterId exists. VALIDATED_REQUEST additionally requires the original requestId/validationReceiptId; ADMISSION_GRANT instead uses its own new reviewItemId and closed grant input, without a fabricated player request. A staged decision/profile is not an inventory instance or a published campaign copy.",
+      "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment.",
+      "Closed statAdjustments: exactly S,D,M,Z,I,W,C signed integer corrections, validated by AQ2-002 and existing stat bounds. Closed startingSkills: entries only; each ordered unique entry contains skillKey and targetBonus, validated with CORE-165 and the existing source pool, costs and requirements. No assumed bonus of 1; free grants are retained from immutable source and cannot be supplied as edits. Unknown stat/skill keys are rejected.",
+      "Closed massReview: massKg, decision=PENDING_MASTER_APPROVAL|APPROVED. Closed moneyReview: status=PENDING|FINAL, amountOrNull; PENDING requires null amount, FINAL requires an explicit finite nonnegative amount of existing RES-CUR-000 (zero allowed), not a guessed conversion of the immutable D20 recommendation. No new denomination or currency is introduced.",
+      "Closed inventoryReview: status=PENDING|FINAL, entries, unresolvedSourceEntryIds. Each entry has reviewItemId, sourceEntryIdOrNull, item, quantity, qualityLabel, weaponDecisionReceiptIdOrNull. item is CATALOG={kind,itemTypeId} or CUSTOM_ITEM={kind,name,description,statBonusOrNull}; statBonusOrNull is null or {statCode,positiveIntegerBonus} under Q-CHAR-019. Quantity follows Item instance-model INTEGER>=1; zero means absence of an entry, not a zero stack. Catalog/quality values obey supplied registries; descriptive quality alone has no mechanical bonus. Original entry references are immutable source entries, new reviewItemIds are stable host-owned IDs, unknown/foreign/duplicate refs fail. FINAL requires an explicit completed inventory (possibly empty) and no unresolved mandatory source entries; PENDING preserves each unresolved entry as a visible blocker. A weapon profile comes only from its bound immutable source or verified staged decision, never arbitrary browser profile bytes.",
+      "Closed weaponDecisionRefs variants: VALIDATED_REQUEST={kind,requestId,validationReceiptId,decisionReceiptId}; ADMISSION_GRANT={kind,reviewItemId,decisionReceiptId}. For ORDINARY_DRAFT, all refer to host-verified staged decisions bound to this reviewCopyId and the exact validated request or new admission grant respectively. Unknown, foreign or changed references fail. Existing unresolved typed requests must still be explicitly resolved; inventory replacement never silently discards one.",
+      "Closed blocker fields: kind, reviewCopyIdOrNull, campaignCharacterIdOrNull, sourceEntryIdOrNull, message. kind=MASS_PENDING requires null sourceEntryId; kind=STARTING_PROPERTY_PENDING names an unresolved immutable source property entry or explicit money/inventory review, using sourceEntryIdOrNull=null only for the aggregate review. These are lobby blockers only; source/schema/skill/stat/weapon/controller/capacity invalidity is a structural validation failure, never disguised as an admissible blocker. Player messages contain no internal rule IDs, private witness or unrelated source.",
+      "Closed weaponReviewInput variants: VALIDATED_REQUEST={kind,requestId,validationReceiptId}; ADMISSION_GRANT={kind,reviewItemId,weaponTypeId,profileSource,reason}. ADMISSION_GRANT is admission-only, requires a new stable reviewItemId, mode=REQUEST_REVIEW, decision=MASTER_OVERRIDE, non-empty reason and null requestIdOrNull/validationReceiptIdOrNull/commonWitness; it never invents a player request or changes an existing instance type. profileSource is CATALOG_TEMPLATE={kind,templateId} only when the exact supplied template has a complete profile, otherwise GM_DEFINED={kind,typedProfile} validated under CORE-187/188/190 with all required fields and immutable audit. Host derives the canonical template profile or validates the complete typed input; missing fields never receive guessed defaults. Replacing a source weapon creates a distinct proposed item/profile and preserves the removed source entry and original request decision in history. Draft selection alone cannot create a live weapon instance.",
+      "CustomItem stat bonuses from AQ2-005 / Q-CHAR-019 apply only while the item is in the backpack. They are separate from permanent GM statAdjustments; the complete before/after sheet recalculates their contribution on item addition/removal and never persists that contribution into base stats.",
+      "For IMPORTED_REVIEW, weapon operations retain the existing CAMPAIGN_COPY owner scope and real campaignCharacterId; ordinary staged weaponDecisionRefs are not required or fabricated. Imported decisions remain bound to their actual source and copy. Closed blocker.reviewCopyIdOrNull is non-null for DEVICE_REQUEST and null for MASTER_IMPORT; imported blockers instead carry the real campaignCharacterId and candidate/source entry provenance."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -130396,7 +130855,7 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Рассмотреть валидированную оружейную заявку."
+        "Разрешённые видимые действия/CTA именно этой формы: Рассмотреть валидированную оружейную заявку; Подготовить новое оружие из каталога."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -130664,6 +131123,60 @@
           ],
           "targetFormId": "GM-019",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-019::CTA::005",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Sole current GM; ORDINARY_DRAFT; owning requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; owned new reviewItemId and exact catalog weaponTypeId; open ADMISSION_GRANT input, no source player request or validation receipt required.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "subflow",
+          "label": "Подготовить новое оружие из каталога",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "GM-019",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -130676,7 +131189,8 @@
         "Любой CTA, route target или same-form command, отсутствующий в visible и ctaAvailabilityByAction этой записи, запрещён."
       ],
       "visible": [
-        "Рассмотреть валидированную оружейную заявку"
+        "Рассмотреть валидированную оружейную заявку",
+        "Подготовить новое оружие из каталога"
       ],
       "workflowCommandAvailability": []
     },
@@ -130721,7 +131235,7 @@
       "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Финализировать отдельную campaign copy и показать её валидированные pending weapon requests; исходный локальный лист read-only, а каждый запрос открывается в типизированном GM review до batch commit.",
+    "purpose": "Финализировать отдельную review copy: разрешённые мастерские поправки, навыки, масса, имущество и деньги; полный diff и blockers. DEVICE_REQUEST использует рабочий draft и получает campaignCharacterId при GM-ACCEPT. MASTER_IMPORT сохраняет существующую PROPOSED copy и подтверждённый owner claim до финальной публикации diff. Исходный лист read-only; опубликованный diff неизменен.",
     "qaScenarioIds": [
       "QA-FORM-NET-019",
       "QA-CHANGE-NET-019"
@@ -130778,16 +131292,19 @@
       "workflowCommandIds": []
     },
     "requiredFields": [
-      "admissionBatchId",
-      "campaignCharacterId",
+      "contextId",
+      "campaignId",
+      "reviewScope",
       "localSourceSnapshot(read-only)",
+      "reviewDraft",
       "campaignCopyDiff",
       "massStatus",
       "startingInventoryAndMoneyStatus",
-      "groupAndLocation",
+      "groupAndLocationAssignment",
       "validatedWeaponRequests[]=(requestId,weaponTypeId,commonWitness,proposedWeaponProfile,validationReceiptId,status)",
       "unresolvedWeaponRequestIds[]",
       "batchFinalizationStatus",
+      "blockers[]",
       "stateRevision",
       "projectionRevision"
     ],
@@ -130834,6 +131351,12 @@
         "guard": "mode=REQUEST_REVIEW and no request decision, or mode=PATCH_EXISTING and no profile write",
         "kind": "safe-return",
         "trigger": "Отменить"
+      },
+      {
+        "from": "GM-019",
+        "guard": "weaponOwnerScope.kind=ADMISSION_REVIEW; requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; UI-CMD-GM-WEAPON-REQUEST-RESOLVE guards",
+        "kind": "workflow-command",
+        "trigger": "Подтвердить профиль рабочей копии"
       }
     ],
     "transitionsOut": [
@@ -130860,6 +131383,12 @@
         "kind": "normative",
         "to": "GM-019",
         "trigger": "Рассмотреть валидированную оружейную заявку"
+      },
+      {
+        "guard": "Sole current GM; ORDINARY_DRAFT; owning requestStatus=IN_REVIEW; phase=GM_REVIEW; current reviewRevision; no published proposal; owned new reviewItemId and exact catalog weaponTypeId; open ADMISSION_GRANT input, no source player request or validation receipt required.",
+        "kind": "subflow",
+        "to": "GM-019",
+        "trigger": "Подготовить новое оружие из каталога"
       }
     ],
     "type": "screen"
@@ -130870,8 +131399,18 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Назначить группу/стартовую локацию, показать полный diff и blockers перед финализацией.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Сохранить предложение existing/new/start group и явно заданной мастером location/subLocation; показать полный diff и blockers без фиктивной активной сцены, координат, clock или marker.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Ordinary review scope: requestStatus=IN_REVIEW remains unchanged by review opening or draft edits; GM_REVIEW is the separate review phase. Stable reviewCopyId addresses one immutable submitted sourceUuid/snapshot/checksum. campaignCharacterId is null until GM-ACCEPT; the published reviewCopyId-to-campaignCharacterId mapping is immutable.",
+      "Review drafts are durable, host-validated uncommitted input, never confirmed mechanics or player authority. DEVICE_REQUEST checks exact expected reviewRevision and campaign/request/GM scope; MASTER_IMPORT checks its actual candidate/owner-claim/copy scope and current proposal revision. An unknown field, stale edit or changed replay is rejected. Navigation alone does not publish a copy or commit admission.",
+      "For DEVICE_REQUEST only, draft editing and weapon staging require IN_REVIEW plus GM_REVIEW and no published proposal. GM-ACCEPT freezes the draft and complete diff. Preliminary rejection revokes workspace access without deleting history; every queued edit/publication rechecks the request. MASTER_IMPORT retains its existing owner-claimed PROPOSED copy review before final diff publication; an imported PROPOSED lifecycle alone is not proof that its diff was already published. Both origins become read-only after final diff publication.",
+      "Closed reviewScope variants: ORDINARY_DRAFT={kind,admissionBatchId,requestId,reviewCopyId,reviewRevision}; IMPORTED_REVIEW={kind,admissionBatchId,campaignCharacterId,candidateId,ownerClaimReceiptId,proposalRevision}; PUBLISHED_COPY={kind,admissionBatchId,campaignCharacterId,proposalRevision,origin,requestIdOrNull,reviewCopyIdOrNull}. ORDINARY_DRAFT has no campaignCharacterId. IMPORTED_REVIEW preserves the real OWNER_CLAIMED candidate and existing PROPOSED copy from J-GM-IMPORT-ADMISSION; sole current GM may finalize it before its final diff is published, with current proposal revision and no fabricated ordinary request/review identity. PUBLISHED_COPY means the final diff was published and is read-only for both origins; DEVICE_REQUEST requires original request/review IDs, MASTER_IMPORT retains actual candidate/owner-claim provenance and null ordinary request/review IDs. Existing PROPOSED import ingress guards are preserved.",
+      "Closed review draft fields: statAdjustments, startingSkills, massReview, inventoryReview, moneyReview, weaponDecisionRefs, groupAssignment, locationAssignment. All original FINAL base values, natural rolls, provenance, source bytes and free racial/class grants remain read-only.",
+      "statAdjustments follow AQ2-002: permanent GM corrections to the accepted base followed by existing race/class/symbiont/bounds/derived recalculation, every final stat at least 1. startingSkills may add/remove/replace only editable starting skills within source requirements and capacity; no universal training or free-grant edits.",
+      "massReview follows AQA-010: positive kilograms at 0.1 precision, no invented PC race min/max; explicit PENDING_MASTER_APPROVAL or APPROVED. inventoryReview and moneyReview follow AQ2-004 and item registry types: final item, quantity, descriptive quality, effective weapon profile and money; empty categories and zero money allowed, unfinished review is not silently finalized. Granted items remain UNEQUIPPED per Q-CHAR-014.",
+      "Complete diff covers every source-to-proposal mechanical change, identity mapping, master correction, skill replacement, mass approval, inventory item/quantity/quality/profile, money and group/location assignment. A no-change section is explicit. Player and GM see the same complete published batch diff and blockers; player payload omits GM-private review context, private provenance witnesses, keys and internal rule IDs.",
+      "Structural validation failure blocks GM publication and player ACCEPT. Pending mass or mandatory starting-property approval is a visible Ready/active/scene blocker, not a fabricated successful review. Unresolved typed weapon requests still block batch finalization under NET-019. No automatic equipment, Ready, Start, scene, combat, group-transfer or general inventory runtime is implied.",
+      "Closed groupAssignment variants: EXISTING={kind,groupId}; NEW={kind,groupDraftId,name}; START={kind}. groupDraftId is a stable host-issued batch-scoped identity independent of the displayed name: two copies share a new group only through the same groupDraftId; equal names never merge identities. locationAssignment={location,subLocationOrNull} contains explicit GM display labels, never inferred coordinates/scene/clock/marker. NEW/START has no fabricated groupId before player ACCEPT. Player ACCEPT atomically creates or reuses the unique campaign starting-group/new-group identity and records the assignment with the whole batch; EXISTING is revalidated. Replay preserves group IDs and mappings; Start reuses them rather than creating replacements. Admission assignment alone does not activate a scene or grant Ready."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -131064,7 +131603,7 @@
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Назначить группу/стартовую локацию, показать полный diff и blockers перед финализацией.",
+      "Содержательная область: Сохранить предложение existing/new/start group и явно заданной мастером location/subLocation; показать полный diff и blockers без фиктивной активной сцены, координат, clock или marker.",
       "Контекст операции",
       "Подтверждение либо безопасная отмена"
     ],
@@ -131096,7 +131635,7 @@
       "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Назначить группу/стартовую локацию, показать полный diff и blockers перед финализацией.",
+    "purpose": "Сохранить предложение existing/new/start group и явно заданной мастером location/subLocation; показать полный diff и blockers без фиктивной активной сцены, координат, clock или marker.",
     "qaScenarioIds": [
       "QA-FORM-NET-020",
       "QA-CHANGE-NET-020"
@@ -131142,13 +131681,15 @@
     },
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "reviewScope",
+      "groupAssignment",
+      "locationAssignment",
+      "campaignCopyDiff",
+      "blockers[]",
+      "returnContext",
       "stateRevision",
-      "projectionRevision",
-      "artAssetKey/filePickerState",
-      "groupId",
-      "location/subLocation",
-      "markerRevision",
-      "originatingCommandId/requestId"
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -131208,7 +131749,15 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Атомарно создать допустимые campaignCharacterId; незакрытая масса/имущество оставляют героя в лобби без Ready и сцены.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "GM-ACCEPT publishes all reviewed copies, complete diffs/checksum and the original immutable receipt atomically or publishes none. For DEVICE_REQUEST campaignCharacterIds are allocated once at this commit; MASTER_IMPORT preserves its existing source-backed PROPOSED copy IDs and publishes their final diff without replacement allocation. No player authority is granted until the whole-batch player decision. A technical failure rolls back every created copy/profile; repeated commandId returns the original receipt separately from current view.",
+      "allRequiredFieldsValid means a structurally valid complete batch including explicit pending statuses; it does not erase source-permitted lobby blockers or claim Ready. Unknown or invalid source, typed weapon request or controller/capacity proof blocks the commit.",
+      "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment.",
+      "Closed capacityPreview/capacityRecheck fields: activePlayerCapacity, occupiedCampaignPlaceCount, activePcCount, candidateCount, fitsCurrentCapacity, evaluatedCampaignRevision. Candidate count equals the complete batch size; fits uses occupiedCampaignPlaceCount plus candidateCount against capacity, with replay excluding its already committed places. This is a fresh proof, not a reservation.",
+      "Closed fullCampaignCopyDiff row fields: sourceUuid, sourceSnapshotChecksum, reviewCopyIdOrNull, campaignCharacterIdOrNull, characterName, beforeSheet, afterSheet, changes, blockers. beforeSheet and afterSheet are complete owner-visible mechanical sheets with the same fixed source-backed projection schema; hidden provenance witness and GM-private metadata are excluded. changes rows have section, fieldPath, beforeValue, afterValue; section is STATS|SKILLS|MASS|INVENTORY|MONEY|GROUP_LOCATION, and fieldPath/value types must match that closed mechanical sheet schema. Host recomputes the exhaustive diff from the immutable source and fully validated proposal; clients cannot submit arbitrary diff rows. Unchanged sections are explicit through identical before/after values. Full ordered batch, review revision, mappings and blockers bind the canonical proposalChecksum; partial or mismatched diff is rejected.",
+      "beforeSheet/afterSheet use the versioned AdmissionMechanicalSheetV1 contract in ADR 0071: identical closed schema for source/proposal, including full derived resources, skill bonuses and slot costs, inventory profiles/quality/quantity, money, group/location and unchanged mechanical sections. A delta of editable inputs alone is not a complete sheet.",
+      "Closed ownerProvenance variants: DEVICE_REQUEST={kind,requestId,requestOwnerDeviceId}; MASTER_IMPORT={kind,candidateId,ownerClaimReceiptId,claimingPlayerId,controllingDeviceId,controllerSeat}. Values come only from the verified original submission or committed NET-028 owner claim respectively. admissionOrigin equals ownerProvenance.kind. Where present on the form, requestIdOrNull and reviewRevisionOrNull are non-null for DEVICE_REQUEST and null for MASTER_IMPORT; ordinary draft decisions use reviewRevision, published player decisions use proposalRevision. MASTER_IMPORT uses its actual candidate, claim, existing campaignCharacterId and proposal revision. No false submission/validation receipt is created for an import. Current GM authority, full-batch decision, capacity and exclusive-controller checks apply to both origins. This preserves the supplied import contract; runtime #172 still implements DEVICE_REQUEST only.",
+      "fullCampaignCopyDiff.reviewCopyIdOrNull is the stable reviewCopyId for DEVICE_REQUEST and null for MASTER_IMPORT, whose candidate/claim/copy provenance remains in ownerProvenance. Both full sheets and the immutable proposal checksum remain mandatory."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -131707,12 +132256,22 @@
       ]
     },
     "requiredFields": [
-      "requestId",
+      "contextId",
+      "campaignId",
+      "requestIdOrNull",
       "admissionBatchId",
+      "reviewRevisionOrNull",
       "proposedCampaignCopies[1..3]",
+      "fullCampaignCopyDiffs[1..3]",
+      "proposalChecksum",
       "allRequiredFieldsValid",
+      "blockers[]",
       "capacityPreview",
-      "commandId"
+      "commandId",
+      "stateRevision",
+      "projectionRevision",
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance"
     ],
     "roles": [
       "gm"
@@ -131823,7 +132382,9 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Отклонение всего device request с явной причиной и без изменения кампании.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Reject requires a non-empty GM reason and rejects the whole pending admission batch. It does not mutate source, activate a slot or grant controller authority. Repeated commandId returns the original immutable reason/receipt.",
+      "Closed ownerProvenance variants: DEVICE_REQUEST={kind,requestId,requestOwnerDeviceId}; MASTER_IMPORT={kind,candidateId,ownerClaimReceiptId,claimingPlayerId,controllingDeviceId,controllerSeat}. Values come only from the verified original submission or committed NET-028 owner claim respectively. admissionOrigin equals ownerProvenance.kind. Where present on the form, requestIdOrNull and reviewRevisionOrNull are non-null for DEVICE_REQUEST and null for MASTER_IMPORT; ordinary draft decisions use reviewRevision, published player decisions use proposalRevision. MASTER_IMPORT uses its actual candidate, claim, existing campaignCharacterId and proposal revision. No false submission/validation receipt is created for an import. Current GM authority, full-batch decision, capacity and exclusive-controller checks apply to both origins. This preserves the supplied import contract; runtime #172 still implements DEVICE_REQUEST only."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -132187,10 +132748,17 @@
       ]
     },
     "requiredFields": [
-      "requestId",
+      "contextId",
+      "campaignId",
+      "requestIdOrNull",
       "admissionBatchId",
+      "reviewRevisionOrNull",
       "reason(required)",
-      "commandId"
+      "commandId",
+      "stateRevision",
+      "projectionRevision",
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance"
     ],
     "roles": [
       "gm"
@@ -132239,7 +132807,7 @@
       {
         "guard": "SERVER_ONLY_ROLE_PROJECTION; UI-CMD-ADMISSION-GM-REJECT committed with reason",
         "kind": "system-event",
-        "to": "NET-005",
+        "to": "NET-007",
         "trigger": "Server publishes batch rejection"
       },
       {
@@ -133792,7 +134360,13 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Diff неизменяемого локального листа и отдельной кампанийной копии; войти целиком либо отказаться от добавления.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Only the verified owner sees this complete immutable published proposal: the submitting device owner for DEVICE_REQUEST, or the committed NET-028 claimant for MASTER_IMPORT. ACCEPT or DECLINE applies to all 1..3 copies, never a subset. ACCEPT revalidates the proposal revision/checksum, current capacity and exclusive controller in the same transaction; failure writes nothing. DECLINE needs no invented free-text reason and activates no copy or slot.",
+      "For a PAUSED campaign, successful ACCEPT publishes only the owning NET-006 admitted lobby context, including every blocker; it does not navigate to PLY-001, mark Ready or activate a scene. The existing NET-006 Start-confirmed boundary owns the later PLY-001 transition.",
+      "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment.",
+      "Closed controllerDeviceRecheck fields: ownerProvenance, controllerBindings, valid, evaluatedCampaignRevision. Each controller binding has campaignCharacterId, deviceId, localControllerSeatId, inputLaneId. Device/key/owned lane come from the authenticated original submission or committed NET-028 owner claim, according to admissionOrigin, and current host state, never a browser authority claim; duplicate controller or foreign/retired lane fails atomically.",
+      "Only a pending published proposal accepts a new player decision. After terminal ACCEPT or DECLINE, reopening the proposal is read-only; a new/opposite command performs zero writes. Exact replay of the original command returns its original receipt separately from the current lobby/result view, without recreating groups, places, profiles or controller bindings.",
+      "Closed ownerProvenance variants: DEVICE_REQUEST={kind,requestId,requestOwnerDeviceId}; MASTER_IMPORT={kind,candidateId,ownerClaimReceiptId,claimingPlayerId,controllingDeviceId,controllerSeat}. Values come only from the verified original submission or committed NET-028 owner claim respectively. admissionOrigin equals ownerProvenance.kind. Where present on the form, requestIdOrNull and reviewRevisionOrNull are non-null for DEVICE_REQUEST and null for MASTER_IMPORT; ordinary draft decisions use reviewRevision, published player decisions use proposalRevision. MASTER_IMPORT uses its actual candidate, claim, existing campaignCharacterId and proposal revision. No false submission/validation receipt is created for an import. Current GM authority, full-batch decision, capacity and exclusive-controller checks apply to both origins. This preserves the supplied import contract; runtime #172 still implements DEVICE_REQUEST only."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -134016,7 +134590,7 @@
             "game time/campaign state",
             "stateRevision/projectionRevision"
           ],
-          "targetFormId": "PLY-001",
+          "targetFormId": "NET-006",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         },
         {
@@ -134072,7 +134646,7 @@
             "game time/campaign state",
             "stateRevision/projectionRevision"
           ],
-          "targetFormId": "APP-002",
+          "targetFormId": "NET-007",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
@@ -134220,12 +134794,22 @@
       ]
     },
     "requiredFields": [
+      "contextId",
+      "campaignId",
+      "requestIdOrNull",
       "admissionBatchId",
+      "proposalRevision",
+      "proposalChecksum",
       "fullCampaignCopyDiffs[1..3]",
+      "blockers[]",
       "capacityRecheck",
       "controllerDeviceRecheck",
       "decision=ACCEPT|DECLINE",
-      "commandId"
+      "commandId",
+      "stateRevision",
+      "projectionRevision",
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance"
     ],
     "roles": [
       "player"
@@ -134316,13 +134900,13 @@
       {
         "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=ACCEPT",
         "kind": "workflow-command",
-        "to": "PLY-001",
+        "to": "NET-006",
         "trigger": "Принять весь batch diff"
       },
       {
         "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=DECLINE",
         "kind": "workflow-command",
-        "to": "APP-002",
+        "to": "NET-007",
         "trigger": "Отказаться от всего batch"
       }
     ],
@@ -143279,12 +143863,6 @@
         "guard": "otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; handoffReceiptId committed; activeContext=PLAYER_1_ACTIVE|PLAYER_2_ACTIVE|PLAYER_3_ACTIVE; sceneContext=PEACE; returnFormId(server-authoritative)=PLY-001; matching active role/seat; no client URL/history/cache route; availableActions recomputed",
         "kind": "system-event",
         "trigger": "Dispatch committed local context to exact scene"
-      },
-      {
-        "from": "NET-027",
-        "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=ACCEPT",
-        "kind": "workflow-command",
-        "trigger": "Принять весь batch diff"
       },
       {
         "from": "SET-004",
@@ -158893,6 +159471,12 @@
         "guard": "at least two admitted local player seats; selected target seat differs; safeBoundary=true; prior projection erased; source scene/returnFormId server-signed",
         "kind": "normative",
         "trigger": "Выбрать другую допущенную вкладку игрока"
+      },
+      {
+        "from": "NET-007",
+        "guard": "MASTER_IMPORT terminal result; committed NET-028 owner claim retains signed returnMode=LOCAL_HANDOFF, returnFormId=PLY-030, handoffId and initiating GM context; no pending command; receipt-gated return only, never expose GM data in the player projection.",
+        "kind": "safe-return",
+        "trigger": "Вернуться через экран приватности"
       }
     ],
     "transitionsOut": [

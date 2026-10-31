@@ -13554,6 +13554,10 @@
         {
           "actionKey": "GM-019::CTA::004",
           "label": "Отменить"
+        },
+        {
+          "actionKey": "GM-019::CTA::005",
+          "label": "Подтвердить профиль рабочей копии"
         }
       ]
     },
@@ -13578,7 +13582,7 @@
     ],
     "requiredFields": [
       "mode=PATCH_EXISTING|REQUEST_REVIEW",
-      "campaignCharacterId",
+      "weaponOwnerScope",
       "weaponInstanceIdOrNull",
       "requestIdOrNull",
       "validationReceiptIdOrNull",
@@ -13589,13 +13593,14 @@
       "typedPatchOrOverrideProfile",
       "formulaReachabilityValidation",
       "profileVersionBeforeOrNull",
-      "profileVersionAfterPreview",
-      "createdEquipmentState=UNEQUIPPED for request",
+      "profileVersionOrStagedDecisionPreview",
+      "equipmentState=UNEQUIPPED_ON_MATERIALIZATION for request",
       "reason(required for patch/override)",
-      "operationId=OP-GM-PATCH-WEAPON|OP-REQ-GM",
+      "operationId=OP-GM-PATCH-WEAPON|OP-REQ-GM|null for admission grant",
       "stateRevision",
       "masterAuthorityRevision",
-      "commandId"
+      "commandId",
+      "weaponReviewInputOrNull"
     ],
     "roles": [
       "gm"
@@ -13645,13 +13650,16 @@
     ],
     "requiredFields": [
       "contextId",
-      "stateRevision",
-      "projectionRevision",
-      "effectInstanceId/EffectTypeID",
-      "source",
-      "duration/stackPolicy",
       "campaignId",
-      "campaignStatus"
+      "reviewScope",
+      "originalStartingSkills(read-only)",
+      "proposedStartingSkills",
+      "immutableRaceAndClassGrants(read-only)",
+      "skillRequirementsAndPoolValidation",
+      "campaignCopyDiff",
+      "returnContext",
+      "stateRevision",
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -16552,6 +16560,14 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "admissionBatchId",
+      "ownCampaignCopies[1..3]",
+      "controllerBindings",
+      "blockers[]",
+      "campaignStatus",
+      "readyStatus",
+      "startStatus",
       "stateRevision",
       "projectionRevision"
     ],
@@ -16580,12 +16596,24 @@
         {
           "actionKey": "NET-007::CTA::001",
           "label": "Вернуться к «Итог согласования персонажа»"
+        },
+        {
+          "actionKey": "NET-007::CTA::002",
+          "label": "Выбрать персонажей заново"
+        },
+        {
+          "actionKey": "NET-007::CTA::003",
+          "label": "Вернуться в меню игрока"
+        },
+        {
+          "actionKey": "NET-007::CTA::004",
+          "label": "Вернуться через экран приватности"
         }
       ]
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Причина, повторная отправка либо выбор другого сохранённого персонажа без редактирования финальной локальной механики.",
+      "Содержательная область: Показать реальное отклонение всего AdmissionBatch мастером с причиной либо типизированный отказ игрока; безопасный новый выбор при действующей technical session, без изменения финальных локальных листов.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
       "Индикатор связи и ревизии"
@@ -16600,11 +16628,18 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "requestIdOrNull",
+      "admissionBatchId",
+      "result=GM_REJECTED|PLAYER_DECLINED",
+      "gmReasonOrNull",
+      "decisionReceiptId",
+      "technicalSessionAvailable",
       "stateRevision",
       "projectionRevision",
-      "effectInstanceId/EffectTypeID",
-      "source",
-      "duration/stackPolicy"
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance",
+      "signedReturnContextOrNull"
     ],
     "roles": [
       "player"
@@ -17295,6 +17330,10 @@
         {
           "actionKey": "NET-017::CTA::009",
           "label": "Вернуться к созданной кампании"
+        },
+        {
+          "actionKey": "NET-017::CTA::010",
+          "label": "Начать рассмотрение кампанийных копий"
         }
       ]
     },
@@ -17319,7 +17358,8 @@
       "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
       "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT",
       "QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE",
-      "QA-CMP-006-DEVICE-REQUEST-QUEUE"
+      "QA-CMP-006-DEVICE-REQUEST-QUEUE",
+      "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN"
     ],
     "requiredFields": [
       "contextId",
@@ -17386,7 +17426,7 @@
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Read-only механика, UUID/provenance и натуральные броски каждого персонажа перед созданием кампанийной копии.",
+      "Содержательная область: Read-only механика, UUID/provenance и натуральные броски каждого immutable source; отдельная адресованная рабочая review copy до создания campaignCharacterId, либо уже опубликованная PROPOSED copy.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
       "Индикатор связи и ревизии"
@@ -17402,10 +17442,14 @@
     ],
     "requiredFields": [
       "contextId",
-      "stateRevision",
-      "projectionRevision",
       "campaignId",
-      "campaignStatus"
+      "reviewScope",
+      "immutableSourceSnapshot(read-only)",
+      "sourceProvenanceAndNaturalRolls(read-only)",
+      "batchReviewCopies[1..3]",
+      "returnContext",
+      "stateRevision",
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -17444,6 +17488,10 @@
         {
           "actionKey": "NET-019::CTA::004",
           "label": "Рассмотреть валидированную оружейную заявку"
+        },
+        {
+          "actionKey": "NET-019::CTA::005",
+          "label": "Подготовить новое оружие из каталога"
         }
       ]
     },
@@ -17466,16 +17514,19 @@
       "QA-CHANGE-NET-019"
     ],
     "requiredFields": [
-      "admissionBatchId",
-      "campaignCharacterId",
+      "contextId",
+      "campaignId",
+      "reviewScope",
       "localSourceSnapshot(read-only)",
+      "reviewDraft",
       "campaignCopyDiff",
       "massStatus",
       "startingInventoryAndMoneyStatus",
-      "groupAndLocation",
+      "groupAndLocationAssignment",
       "validatedWeaponRequests[]=(requestId,weaponTypeId,commonWitness,proposedWeaponProfile,validationReceiptId,status)",
       "unresolvedWeaponRequestIds[]",
       "batchFinalizationStatus",
+      "blockers[]",
       "stateRevision",
       "projectionRevision"
     ],
@@ -17513,7 +17564,7 @@
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Назначить группу/стартовую локацию, показать полный diff и blockers перед финализацией.",
+      "Содержательная область: Сохранить предложение existing/new/start group и явно заданной мастером location/subLocation; показать полный diff и blockers без фиктивной активной сцены, координат, clock или marker.",
       "Контекст операции",
       "Подтверждение либо безопасная отмена"
     ],
@@ -17528,13 +17579,15 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "reviewScope",
+      "groupAssignment",
+      "locationAssignment",
+      "campaignCopyDiff",
+      "blockers[]",
+      "returnContext",
       "stateRevision",
-      "projectionRevision",
-      "artAssetKey/filePickerState",
-      "groupId",
-      "location/subLocation",
-      "markerRevision",
-      "originatingCommandId/requestId"
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -17598,12 +17651,22 @@
       "QA-CHANGE-NET-021"
     ],
     "requiredFields": [
-      "requestId",
+      "contextId",
+      "campaignId",
+      "requestIdOrNull",
       "admissionBatchId",
+      "reviewRevisionOrNull",
       "proposedCampaignCopies[1..3]",
+      "fullCampaignCopyDiffs[1..3]",
+      "proposalChecksum",
       "allRequiredFieldsValid",
+      "blockers[]",
       "capacityPreview",
-      "commandId"
+      "commandId",
+      "stateRevision",
+      "projectionRevision",
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance"
     ],
     "roles": [
       "gm"
@@ -17661,10 +17724,17 @@
       "QA-CHANGE-NET-022"
     ],
     "requiredFields": [
-      "requestId",
+      "contextId",
+      "campaignId",
+      "requestIdOrNull",
       "admissionBatchId",
+      "reviewRevisionOrNull",
       "reason(required)",
-      "commandId"
+      "commandId",
+      "stateRevision",
+      "projectionRevision",
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance"
     ],
     "roles": [
       "gm"
@@ -17966,12 +18036,22 @@
       "QA-CHANGE-NET-027"
     ],
     "requiredFields": [
+      "contextId",
+      "campaignId",
+      "requestIdOrNull",
       "admissionBatchId",
+      "proposalRevision",
+      "proposalChecksum",
       "fullCampaignCopyDiffs[1..3]",
+      "blockers[]",
       "capacityRecheck",
       "controllerDeviceRecheck",
       "decision=ACCEPT|DECLINE",
-      "commandId"
+      "commandId",
+      "stateRevision",
+      "projectionRevision",
+      "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
+      "ownerProvenance"
     ],
     "roles": [
       "player"

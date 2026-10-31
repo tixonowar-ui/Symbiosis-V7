@@ -193,10 +193,10 @@ describe('generated atlas spec', () => {
   });
 
   it('matches the counts the audit states about the atlas', () => {
-    expect(spec('transitions.json')).toHaveLength(1688);
+    expect(spec('transitions.json')).toHaveLength(1694);
     expect(spec('journeys.json')).toHaveLength(66);
     expect(spec('requirements.json')).toHaveLength(91);
-    expect(spec('qa-scenarios.json')).toHaveLength(2445);
+    expect(spec('qa-scenarios.json')).toHaveLength(2446);
     expect(spec('lifecycles.json')).toHaveLength(19);
     expect(spec('diagrams.json')).toHaveLength(11);
   });
@@ -254,7 +254,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.6', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.7', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',
@@ -420,7 +420,7 @@ describe('generated atlas types', () => {
     const known: ActionKey = 'APP-002::CTA::007';
     // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
     const absent: ActionKey = 'APP-002::CTA::999';
-    expect(members).toHaveLength(1_252);
+    expect(members).toHaveLength(1_258);
     expect(members).toEqual(extractActionKeys(clonedForms()));
     expect(members).toContain(known);
     expect(members).not.toContain(absent);
@@ -439,8 +439,8 @@ describe('action key export guards', () => {
     [rows[0], rows[1]] = [rows[1]!, rows[0]!];
     const actionKeys = extractActionKeys(forms);
 
-    expect(actionKeys).toHaveLength(1_252);
-    expect(new Set(actionKeys).size).toBe(1_252);
+    expect(actionKeys).toHaveLength(1_258);
+    expect(new Set(actionKeys).size).toBe(1_258);
     expect(actionKeys.slice(0, 4)).toEqual([
       'APP-001::CTA::002',
       'APP-001::CTA::001',
@@ -488,7 +488,7 @@ describe('action key export guards', () => {
     const forms = clonedForms();
     firstFormActionRows(forms).pop();
 
-    expect(() => extractActionKeys(forms)).toThrow(/expected 1252 action keys, got 1251/u);
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1258 action keys, got 1257/u);
   });
 });
 
@@ -658,7 +658,7 @@ describe('ADR 0049 missing decision channels', () => {
     expect(() => assertAdr0049MissingChannels(root)).toThrow();
   };
 
-  it('accepts the exact v1.6 delivery', () => {
+  it('accepts the exact v1.7 delivery', () => {
     expect(() => assertAdr0049MissingChannels(clonedAtlas())).not.toThrow();
   });
 
@@ -1100,7 +1100,7 @@ describe('ADR 0052 advisor intelligence floor channel', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(root)).toThrow();
   };
 
-  it('accepts the exact v1.6 delivery', () => {
+  it('accepts the exact v1.7 delivery', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(clonedAtlas())).not.toThrow();
   });
 
@@ -1246,7 +1246,7 @@ describe('ADR 0069 request-level review source boundary', () => {
       });
     }
   }
-  it('accepts the complete real v1.6 delivery and preserves both older semantic guards', () => {
+  it('accepts the complete real v1.7 delivery and preserves both older semantic guards', () => {
     const root = clonedAtlas();
     expect(() => {
       assertAdr0069RequestReview(root);
