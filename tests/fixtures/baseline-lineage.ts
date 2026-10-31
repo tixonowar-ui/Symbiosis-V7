@@ -7,9 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { BASELINE_LINEAGE_SEALS } from '../../src/host/baseline-lineage-seals.js';
 
-export type BaselineFixtureRelease = 'B0' | 'B1';
+export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
+const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
 );
@@ -33,23 +34,32 @@ const matchesAtlas = (bytes: AtlasBytes, digests: Readonly<Record<string, string
 // Repeated real git applies dominate these filesystem fixtures. Retain one
 // privately verified byte pair, never catalogs or a production baseline context.
 let atlasByteCache:
-  | { readonly patchSha256: string; readonly releases: Record<BaselineFixtureRelease, AtlasBytes> }
+  | {
+      readonly patchSha256: string;
+      readonly releases: Partial<Record<BaselineFixtureRelease, AtlasBytes>>;
+    }
   | undefined;
 export const BASELINE_FIXTURE_IDS = {
   B0: BASELINE_LINEAGE_SEALS.historicalBaselineVersion,
   B1: BASELINE_LINEAGE_SEALS.successorBaselineVersion,
+  B2: BASELINE_LINEAGE_SEALS.admissionBaselineVersion,
+} as const;
+const releaseAtlas = {
+  B0: historicalAtlas,
+  B1: BASELINE_LINEAGE_SEALS.successorAtlas,
+  B2: BASELINE_LINEAGE_SEALS.admissionAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
   if (release === 'B0') return Buffer.from(historicalManifest);
   let text = historicalManifest.toString('utf8');
-  for (const [path, digest] of Object.entries(BASELINE_LINEAGE_SEALS.successorAtlas)) {
+  for (const [path, digest] of Object.entries(releaseAtlas[release])) {
     const prior = historicalAtlas[path as keyof typeof historicalAtlas];
     assert.ok(text.includes(`${prior}  ${path}`));
     text = text.replace(`${prior}  ${path}`, `${digest}  ${path}`);
   }
   const bytes = Buffer.from(text);
-  assert.equal(`sha256:${sha(bytes)}`, BASELINE_FIXTURE_IDS.B1);
+  assert.equal(`sha256:${sha(bytes)}`, BASELINE_FIXTURE_IDS[release]);
   return bytes;
 }
 
@@ -59,32 +69,45 @@ export function applyBaselineFixtureRelease(
   release: BaselineFixtureRelease,
 ): void {
   const before = readAtlasBytes(projectRoot);
-  const actual = matchesAtlas(before, historicalAtlas)
-    ? 'B0'
-    : matchesAtlas(before, BASELINE_LINEAGE_SEALS.successorAtlas)
-      ? 'B1'
-      : null;
+  const releases = ['B0', 'B1', 'B2'] as const;
+  const actual =
+    releases.find((candidate) => matchesAtlas(before, releaseAtlas[candidate])) ?? null;
   assert.notEqual(actual, null, 'fixture requires exact known Atlas bytes');
-  const patchSha256 = sha(readFileSync(patchPath));
-  const expected = release === 'B0' ? historicalAtlas : BASELINE_LINEAGE_SEALS.successorAtlas;
-  let appliedPatch = false;
+  const patchSeal = (): string =>
+    sha(Buffer.concat([readFileSync(patchPath), readFileSync(admissionPatchPath)]));
+  const patchSha256 = patchSeal();
+  const expected = releaseAtlas[release];
+  const verified: Partial<Record<BaselineFixtureRelease, AtlasBytes>> = { [actual!]: before };
   if (actual !== release) {
     const cached =
       atlasByteCache?.patchSha256 === patchSha256 ? atlasByteCache.releases[release] : undefined;
     if (cached === undefined) {
-      execFileSync(
-        'git',
-        [
-          '-c',
-          'core.autocrlf=false',
-          'apply',
-          '--no-index',
-          ...(release === 'B0' ? ['--reverse'] : []),
-          patchPath,
-        ],
-        { cwd: projectRoot, stdio: 'pipe' },
-      );
-      appliedPatch = true;
+      let position = releases.indexOf(actual!);
+      const target = releases.indexOf(release);
+      while (position !== target) {
+        const reverse = position > target;
+        const edge = reverse ? position - 1 : position;
+        execFileSync(
+          'git',
+          [
+            '-c',
+            'core.autocrlf=false',
+            'apply',
+            '--no-index',
+            ...(reverse ? ['--reverse'] : []),
+            edge === 0 ? patchPath : admissionPatchPath,
+          ],
+          { cwd: projectRoot, stdio: 'pipe' },
+        );
+        position += reverse ? -1 : 1;
+        const reached = releases[position]!;
+        const bytes = readAtlasBytes(projectRoot);
+        assert.ok(
+          matchesAtlas(bytes, releaseAtlas[reached]),
+          'intermediate Atlas bytes differ from their seal',
+        );
+        verified[reached] = bytes;
+      }
     } else {
       assert.ok(matchesAtlas(cached, expected), 'cached Atlas bytes differ from their seal');
       for (const path of atlasPaths)
@@ -93,16 +116,19 @@ export function applyBaselineFixtureRelease(
   }
   const after = readAtlasBytes(projectRoot);
   assert.ok(matchesAtlas(after, expected));
-  assert.equal(sha(readFileSync(patchPath)), patchSha256, 'fixture patch changed during apply');
-  if (appliedPatch)
-    atlasByteCache = {
-      patchSha256,
-      releases: actual === 'B0' ? { B0: before, B1: after } : { B0: after, B1: before },
-    };
+  assert.equal(patchSeal(), patchSha256, 'fixture patch changed during apply');
+  atlasByteCache = {
+    patchSha256,
+    releases: {
+      ...(atlasByteCache?.patchSha256 === patchSha256 ? atlasByteCache.releases : {}),
+      ...verified,
+      [release]: after,
+    },
+  };
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Works before and after #177: an exact B1 checkout is reversed to the actual B0 source first. */
+/** Exact B0/B1/B2 sources are reconstructed through the two reviewed delivery patches. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

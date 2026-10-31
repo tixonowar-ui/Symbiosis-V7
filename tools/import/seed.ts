@@ -51,8 +51,8 @@ export const SKIPPED_INDEX_PATHS = [
 const EXPECTED = {
   files: 129,
   arrayFiles: 114,
-  // ADR 0069 adds seven transitions, two workflows and five QA rows to Atlas 1.5.
-  rows: 20_302,
+  // ADR 0071 adds six transitions, one workflow and one QA row to Atlas 1.6.
+  rows: 20_310,
   metadataFiles: 9,
   skippedIndexes: 6,
 } as const;

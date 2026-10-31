@@ -14,7 +14,22 @@ const fail = (detail: string): never => {
 };
 const sha256 = (value: Uint8Array): string => createHash('sha256').update(value).digest('hex');
 const historicalManifestUrl = new URL('./baselines/atlas-v1.5.checksums.sha256', import.meta.url);
+const successorManifestUrl = new URL('./baselines/atlas-v1.6.checksums.sha256', import.meta.url);
 const atlasPaths = new Set(Object.keys(BASELINE_LINEAGE_SEALS.successorAtlas));
+
+/** Explicit forward pairs only; no semantic-version comparison or inferred transitivity. */
+export function isApprovedBaselineLineagePair(stored: string, current: string): boolean {
+  const {
+    historicalBaselineVersion: b0,
+    successorBaselineVersion: b1,
+    admissionBaselineVersion: b2,
+  } = BASELINE_LINEAGE_SEALS;
+  return (
+    (stored === b0 && (current === b0 || current === b1 || current === b2)) ||
+    (stored === b1 && (current === b1 || current === b2)) ||
+    (stored === b2 && current === b2)
+  );
+}
 
 function entries(bytes: Uint8Array): ReadonlyMap<string, string> {
   const result = new Map<string, string>();
@@ -75,17 +90,21 @@ export function verifyHistoricalBaselineLineage(
   currentManifest: Uint8Array,
   catalogDigests: ReplayCatalogDigests,
   tuple: BaselineRuntimeTuple,
+  storedBaselineVersion: string = BASELINE_LINEAGE_SEALS.historicalBaselineVersion,
 ): void {
-  const historicalBytes = readFileSync(historicalManifestUrl);
-  verifyHistoricalBaselineManifest(historicalBytes);
+  const currentId = `sha256:${sha256(currentManifest)}`;
+  if (!isApprovedBaselineLineagePair(storedBaselineVersion, currentId))
+    fail('current release is not an approved historical successor');
+  const historicalBytes =
+    storedBaselineVersion === BASELINE_LINEAGE_SEALS.historicalBaselineVersion
+      ? readFileSync(historicalManifestUrl)
+      : storedBaselineVersion === BASELINE_LINEAGE_SEALS.successorBaselineVersion
+        ? readFileSync(successorManifestUrl)
+        : currentManifest;
+  if (`sha256:${sha256(historicalBytes)}` !== storedBaselineVersion)
+    fail('historical manifest seal differs');
   const historical = entries(historicalBytes);
   const current = entries(currentManifest);
-  const currentId = `sha256:${sha256(currentManifest)}`;
-  if (
-    currentId !== BASELINE_LINEAGE_SEALS.historicalBaselineVersion &&
-    currentId !== BASELINE_LINEAGE_SEALS.successorBaselineVersion
-  )
-    fail('current release is not an approved historical successor');
   if (current.size !== historical.size || [...historical.keys()].some((path) => !current.has(path)))
     fail('manifest path set differs');
   for (const [path, digest] of historical) {
@@ -94,6 +113,9 @@ export function verifyHistoricalBaselineLineage(
   }
   if (currentId === BASELINE_LINEAGE_SEALS.successorBaselineVersion)
     for (const [path, digest] of Object.entries(BASELINE_LINEAGE_SEALS.successorAtlas))
+      if (current.get(path) !== digest) fail(`approved Atlas bytes differ: ${path}`);
+  if (currentId === BASELINE_LINEAGE_SEALS.admissionBaselineVersion)
+    for (const [path, digest] of Object.entries(BASELINE_LINEAGE_SEALS.admissionAtlas))
       if (current.get(path) !== digest) fail(`approved Atlas bytes differ: ${path}`);
   const expected = BASELINE_LINEAGE_SEALS.replayCatalogDigests;
   if (

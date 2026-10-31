@@ -88,7 +88,7 @@
     "title": "Отклонить AdmissionBatch с причиной"
   },
   {
-    "atomicity": "ACCEPT activates the whole valid batch or none; DECLINE activates none.",
+    "atomicity": "ACCEPT admits the whole structurally valid batch or none and occupies one place per copy, including blocked lobby-only copies; recheck occupied places and exclusive controllers atomically. It never marks Ready or activates a scene; PAUSED result is NET-006. DECLINE admits no copy and occupies no place; owner receives the typed NET-007 result without a required reason. Both keep immutable source/proposal and original replay receipts.",
     "commandId": "UI-CMD-ADMISSION-PLAYER-DECIDE",
     "formIds": [
       "NET-027"
@@ -1121,14 +1121,14 @@
     "title": "Вернуть неподыбранный брошенный предмет метателю"
   },
   {
-    "atomicity": "Resolve one request and create one unequipped WeaponProfileVersion in the campaign copy. APPROVE preserves validated profile; override persists typed diff/reason. No source local-sheet mutation.",
+    "atomicity": "Existing campaign owner: create one UNEQUIPPED WeaponProfileVersion and decision receipt. Pre-publication admission VALIDATED_REQUEST: persist one staged decision/profile/receipt bound to reviewCopyId and validated request/revision; GM-ACCEPT atomically materializes the final UNEQUIPPED WeaponProfileVersion. Source request/profile and other instances remain unchanged. ADMISSION_GRANT stages its own immutable grant profile/receipt bound to reviewCopyId and new reviewItemId, preserving every original source request; it follows the same GM-ACCEPT materialization boundary.",
     "commandId": "UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
     "formIds": [
       "GM-019"
     ],
-    "guards": "GM authority; mode=REQUEST_REVIEW; exact PENDING request and OP-REQ-VALIDATE receipt; common L/Lw/Ls witness/profile current; decision APPROVE or MASTER_OVERRIDE; override is structurally allowed and has reason.",
+    "guards": "GM authority; mode=REQUEST_REVIEW. VALIDATED_REQUEST requires the exact PENDING request and OP-REQ-VALIDATE receipt, current common L/Lw/Ls witness/profile and APPROVE or reasoned structurally valid MASTER_OVERRIDE. ADMISSION_GRANT requires ADMISSION_REVIEW scope, a new owned reviewItemId, exact catalog type, complete canonical template or CORE-187/188/190 validated GM-defined profile, MASTER_OVERRIDE and reason; no fabricated request/validation receipt. ADMISSION_REVIEW additionally requires current owning request IN_REVIEW, GM_REVIEW phase, current reviewRevision and no published proposal; every guard is rechecked before write. Published or rejected review is immutable.",
     "qa": "QA-WORKFLOW-UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
-    "reconnect": "Same request/command returns the prior version/decision receipt; opposite or changed payload is rejected.",
+    "reconnect": "Same closed input identity and command returns the original staged or materialized decision receipt. VALIDATED_REQUEST retains its exact request/validation identity; ADMISSION_GRANT retains its exact reviewItemId/catalog input. Opposite or changed payload conflicts; replay never creates a second profile or grants authority.",
     "title": "Утвердить или типизированно переопределить оружейную заявку"
   },
   {
@@ -1251,5 +1251,16 @@
     "qa": "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT",
     "reconnect": "Same commandId and payload return the original rejection receipt even if the UI has moved. A changed payload conflicts; stale requestRevision and a concurrent terminal decision perform no write.",
     "title": "Отклонить заявку с причиной"
+  },
+  {
+    "atomicity": "Create or recover one admissionBatchId and stable reviewCopyIds in GM_REVIEW for this IN_REVIEW request; immutable source and separate draft; requestStatus remains IN_REVIEW. No campaignCharacterId, PROPOSED copy, seat, capacity reservation or player authority.",
+    "commandId": "UI-CMD-ADMISSION-REVIEW-OPEN",
+    "formIds": [
+      "NET-017"
+    ],
+    "guards": "Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision.",
+    "qa": "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN",
+    "reconnect": "Exact command replay returns the original review-open receipt and IDs with a separate current review view. Changed payload, foreign owner or stale source fails without writes; an existing review is never replaced.",
+    "title": "Открыть отдельные рабочие копии для рассмотрения допуска"
   }
 ]

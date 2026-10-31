@@ -102,6 +102,7 @@
 | [0068](0068-verified-artifact-baseline-lineage.md)                   | Проверенная совместимость исторического baseline   | принято; #190, предпосылка #177             |
 | [0069](0069-device-request-review-atlas-amendment.md)                | Предварительное рассмотрение заявки в Atlas        | принято; #177                               |
 | [0070](0070-network-request-source-contracts.md)                     | Отдельная библиотека сетевых контрактов заявки     | принято; #195                               |
+| [0071](0071-campaign-admission-source-closure.md)                    | Рабочие копии, финальный допуск и лобби в Atlas    | принято; #199                               |
 
 ## Перенос решений аудита
 
