@@ -173,6 +173,11 @@ jobs:
         run: |
           # Issue #197: the owner authorized this one PR; every other PR keeps 15000.
           if [ "$PR_NUMBER" = "185" ]; then MAX_CODE_ADDED=20000; fi
+          # Issue #201: the owner authorized the complete #172 runtime only in PR #202.
+          if [ "$PR_NUMBER" = "202" ]; then
+            MAX_CODE_ADDED=20000
+            MAX_CODE_FILES=55
+          fi
 
           base="${{ github.event.pull_request.base.sha }}"
           head="${{ github.event.pull_request.head.sha }}"
