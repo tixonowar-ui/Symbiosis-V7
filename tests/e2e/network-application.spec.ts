@@ -416,9 +416,10 @@ test('GM reviews an actual owner request, delivers live decisions and restores t
       .getByLabel('Причина отклонения заявки', { exact: true })
       .fill('Нужно уточнить состав заявки');
     await action(masterPage, 'NET-017::CTA::008');
-    await expect(
-      playerPage.getByText('Нужно уточнить состав заявки', { exact: true }),
-    ).toBeVisible();
+    // The peer poll uses the real network operation budget, not a local UI locator budget.
+    await expect(playerPage.getByText('Нужно уточнить состав заявки', { exact: true })).toBeVisible(
+      { timeout: player.operationTimeoutMs },
+    );
     await expect(playerPage.locator('[data-atlas-action-key="NET-005::CTA::003"]')).toBeVisible();
     const rejectedHistory = gm.inspect();
     await action(playerPage, 'NET-005::CTA::003');
@@ -429,7 +430,8 @@ test('GM reviews an actual owner request, delivers live decisions and restores t
     await action(playerPage, 'NET-003::CTA::001');
     await expect(form(playerPage, 'NET-004')).toBeVisible();
     await action(playerPage, 'NET-004::CTA::002');
-    await expect(form(playerPage, 'NET-005')).toBeVisible();
+    // SUBMIT transfers the immutable source and waits for a peer RPC before its destination.
+    await expect(form(playerPage, 'NET-005')).toBeVisible({ timeout: player.operationTimeoutMs });
     await expect(masterPage.getByRole('radio')).toHaveCount(2);
     expect(gm.inspect().requests).toHaveLength(2);
     for (const row of rejectedHistory.requests) expect(gm.inspect().requests).toContainEqual(row);

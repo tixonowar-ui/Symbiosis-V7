@@ -808,6 +808,27 @@ export function readLocalAdmission(
 }
 /** Resolve a prepared tab only through its original owner's complete, authenticated journal. */
 export function readLocalAdmissionPresentation(db: Database.Database, scope: LocalNetworkScope) {
+  return readPresentation(db, scope);
+}
+/** Receipt and owner overlay are checked against one complete history before either is sent. */
+export function readLocalAdmissionDelivery(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  commandId?: string,
+) {
+  const { delivery, observed } = s.readDeliveryWith(
+    db,
+    scope,
+    commandId === undefined ? { kind: 'CURRENT_REQUEST' } : { kind: 'COMMAND', commandId },
+    (history) => readPresentation(db, scope, history),
+  );
+  return { delivery, presentation: observed };
+}
+function readPresentation(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  verifiedRootHistory?: ReturnType<typeof s.admissionHistory>,
+) {
   if (readAppliedMigrationVersion(db) < 12) return null;
   return s.read(db, scope.ownerDeviceId, () => {
     const tab =
@@ -826,7 +847,7 @@ export function readLocalAdmissionPresentation(db: Database.Database, scope: Loc
       rootScope = record.scope;
       requestId = extra.requestId;
     } else {
-      const history = s.admissionHistory(db, scope);
+      const history = verifiedRootHistory ?? s.admissionHistory(db, scope);
       verifiedHistory = history;
       const last = history.events.at(-1)?.input.mutation;
       requestId =

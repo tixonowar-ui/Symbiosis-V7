@@ -73,6 +73,8 @@ import {
 import {
   receiveLocalAdmissionPublication,
   readLocalAdmission,
+  readLocalAdmissionPresentation,
+  readLocalAdmissionDelivery,
   prepareLocalAdmissionDecision,
   acknowledgeLocalAdmissionDecision,
   returnFromLocalAdmission,
@@ -86,6 +88,8 @@ import {
 import {
   commitLocalNetworkMutation,
   readLocalNetworkApplication,
+  readLocalNetworkDeliverySnapshot,
+  readLocalNetworkRequestDeliverySnapshot,
 } from '../persistence/network-local-application.js';
 import {
   commitAdmissionReviewOpen,
@@ -2507,6 +2511,68 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         input: { kind: 'ACK' as const, receipt: result.current.playerDecisionOrNull!.receipt },
       };
     };
+    describe('a receipt and admission projection in one read snapshot', () => {
+      it.each([false, true])(
+        'preserves the complete checked view with publication=%s',
+        (published) => {
+          if (published) receivePublication();
+          const commandId = f.submitted.receipt.commandId,
+            before = owner.db.serialize(),
+            expectedDelivery = readLocalNetworkDeliverySnapshot(owner.db, owner.scope, commandId),
+            expectedPresentation = readLocalAdmissionPresentation(owner.db, owner.scope);
+          const prepare = vi.spyOn(owner.db, 'prepare');
+          try {
+            const actual = readLocalAdmissionDelivery(owner.db, owner.scope, commandId);
+            expect(actual).toEqual({
+              delivery: expectedDelivery,
+              presentation: expectedPresentation,
+            });
+            expect(actual.presentation !== null).toBe(published);
+            expect(
+              prepare.mock.calls.filter(([sql]) =>
+                sql.includes(
+                  'SELECT * FROM local_network_application_event WHERE network_scope_id=? ORDER BY event_index',
+                ),
+              ),
+            ).toHaveLength(1);
+          } finally {
+            prepare.mockRestore();
+          }
+          expect(readLocalAdmissionDelivery(owner.db, owner.scope)).toEqual({
+            delivery: readLocalNetworkRequestDeliverySnapshot(owner.db, owner.scope),
+            presentation: expectedPresentation,
+          });
+          for (const invalid of [null, undefined])
+            expect(() =>
+              readLocalNetworkDeliverySnapshot(owner.db, owner.scope, invalid as unknown as string),
+            ).toThrow();
+          expect(() =>
+            readLocalAdmissionDelivery(owner.db, owner.scope, null as unknown as string),
+          ).toThrow();
+          expect(owner.db.serialize().equals(before)).toBe(true);
+        },
+      );
+      it.each(['missing-publication', 'corrupt-network-head', 'foreign-outbox'] as const)(
+        'still rejects %s without a partial result or write',
+        (corruption) => {
+          receivePublication();
+          const commandId = f.submitted.receipt.commandId;
+          if (corruption === 'missing-publication')
+            owner.db.prepare('DELETE FROM local_admission_publication').run();
+          else if (corruption === 'corrupt-network-head')
+            owner.db
+              .prepare('UPDATE local_network_application SET record_sha256=?')
+              .run('0'.repeat(64));
+          else
+            owner.db
+              .prepare('UPDATE local_network_outbox SET owner_device_id=? WHERE command_id=?')
+              .run(randomUUID(), commandId);
+          const before = owner.db.serialize();
+          expect(() => readLocalAdmissionDelivery(owner.db, owner.scope, commandId)).toThrow();
+          expect(owner.db.serialize().equals(before)).toBe(true);
+        },
+      );
+    });
     describe('the ordering of owner-to-network mirrors', () => {
       beforeEach(() => {
         receivePublication();

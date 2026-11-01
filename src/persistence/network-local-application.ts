@@ -2460,12 +2460,7 @@ export function readLocalNetworkRequestDeliverySnapshot(
   db: Database.Database,
   scope: LocalNetworkScope,
 ): LocalNetworkDeliverySnapshot {
-  return read(db, scope.ownerDeviceId, () => {
-    const tab = readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId);
-    if (tab === null) return fail('UNAVAILABLE');
-    const history = readHistory(db, tab);
-    return localDeliverySnapshot(history, history.current.requestOrNull?.submitCommandId ?? null);
-  });
+  return readDeliveryWith(db, scope, { kind: 'CURRENT_REQUEST' }, () => undefined).delivery;
 }
 function localDeliverySnapshot(
   history: ReturnType<typeof readHistory>,
@@ -2525,8 +2520,27 @@ export function readLocalNetworkDeliverySnapshot(
   scope: LocalNetworkScope,
   commandId: string,
 ): LocalNetworkDeliverySnapshot {
+  return readDeliveryWith(db, scope, { kind: 'COMMAND', commandId }, () => undefined).delivery;
+}
+/** Internal composition only: the observer shares this verified SQL snapshot, never an await. */
+function readDeliveryWith<T>(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  selector:
+    { readonly kind: 'COMMAND'; readonly commandId: string } | { readonly kind: 'CURRENT_REQUEST' },
+  observe: (history: ReturnType<typeof readHistory>) => T,
+): { delivery: LocalNetworkDeliverySnapshot; observed: T } {
   return read(db, scope.ownerDeviceId, () => {
-    const row = at(db, 'local_network_outbox', 'command_id', text(commandId));
+    const commandId =
+      selector.kind === 'COMMAND'
+        ? text(selector.commandId)
+        : selector.kind === 'CURRENT_REQUEST'
+          ? null
+          : fail('INVALID_INPUT');
+    const row =
+      commandId === null
+        ? undefined
+        : at(db, 'local_network_outbox', 'command_id', text(commandId));
     if (
       row !== undefined &&
       (row['owner_device_id'] !== scope.ownerDeviceId ||
@@ -2536,8 +2550,17 @@ export function readLocalNetworkDeliverySnapshot(
     const tab = readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId);
     if (tab === null) return fail('UNAVAILABLE');
     const history = readHistory(db, tab);
-    if (row !== undefined && !history.outboxes.has(commandId)) return fail();
-    return localDeliverySnapshot(history, commandId);
+    if (row !== undefined && commandId !== null && !history.outboxes.has(commandId)) return fail();
+    const delivery = localDeliverySnapshot(
+        history,
+        commandId ?? history.current.requestOrNull?.submitCommandId ?? null,
+      ),
+      before = changes(db),
+      observed = observe(history);
+    consume(observed);
+    if (types.isPromise(observed) || !db.inTransaction || changes(db) !== before)
+      return fail('SOURCE_CHANGED');
+    return { delivery, observed };
   });
 }
 export function readLocalNetworkShellExitByNavigationId(
@@ -3177,6 +3200,7 @@ export function commitLocalNetworkHostPin(
 
 /** Shared internal storage mechanics; the host supplies rules/crypto checks through guards. */
 export const networkApplicationStorage = {
+  readDeliveryWith,
   deliverySnapshot: localDeliverySnapshot,
   admissionHistory(
     db: Database.Database,

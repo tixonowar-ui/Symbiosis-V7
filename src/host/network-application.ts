@@ -98,6 +98,7 @@ import {
 import {
   readLocalAdmission,
   readLocalAdmissionPresentation,
+  readLocalAdmissionDelivery,
   readLocalAdmissionByEvent,
   readLocalAdmissionMenuReturn,
   receiveLocalAdmissionPublication,
@@ -265,8 +266,15 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       )
       .map((row) => prepared(c, row.localCharacterId));
   }
-  const project = (c: LocalNetworkConnection, s = current(c)) => {
-    const owned = readLocalAdmissionPresentation(db, scope(c));
+  const project = (
+    c: LocalNetworkConnection,
+    s = current(c),
+    verifiedAdmission?: ReturnType<typeof readLocalAdmissionPresentation>,
+  ) => {
+    const owned =
+      verifiedAdmission === undefined
+        ? readLocalAdmissionPresentation(db, scope(c))
+        : verifiedAdmission;
     if (owned !== null && owned.admission.returnedOrNull === null)
       return projectOwnerAdmission({
         ...owned,
@@ -302,9 +310,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     id: string,
     reason: 'FORM_ACTION' | 'RECONNECT' | 'COMMAND_DESTINATION' | 'HOST_SYSTEM_EVENT',
     verifiedCurrent?: LocalNetworkApplication,
+    verifiedAdmission?: ReturnType<typeof readLocalAdmissionPresentation>,
   ): ProjectionSnapshotV2Message => {
     const s = verifiedCurrent ?? current(c),
-      base = project(c, s);
+      base = project(c, s, verifiedAdmission);
     return {
       messageType: 'projection.snapshot',
       protocolVersion: 2,
@@ -1198,7 +1207,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     out: LocalNetworkOutbox,
     recovery: boolean,
-    publish?: (delivery: LocalNetworkDeliverySnapshot) => void,
+    publish?: (
+      delivery: LocalNetworkDeliverySnapshot,
+      presentation: ReturnType<typeof readLocalAdmissionPresentation>,
+    ) => void,
     verifiedInitial?: LocalNetworkDeliverySnapshot,
   ): Promise<boolean> {
     const bound = scope(c),
@@ -1313,7 +1325,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       response.outcome === 'ACK' &&
       response.current.kind === 'REQUEST_REVIEW'
     ) {
-      const delivery = readLocalNetworkDeliverySnapshot(db, bound, out.intent.commandId);
+      const { delivery, presentation } = readLocalAdmissionDelivery(
+        db,
+        bound,
+        out.intent.commandId,
+      );
       const parsed = requestProof(c, response, delivery) ?? unavailable();
       if (
         delivery.current.pendingCommandIdOrNull === null &&
@@ -1324,7 +1340,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       ) {
         // ACK already sealed the inline lane and current proof. Publish this fresh,
         // unchanged proof synchronously; never return it as authority across await.
-        publish(delivery);
+        publish(delivery, presentation);
         return true;
       }
     }
@@ -1582,11 +1598,17 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         c,
         out,
         false,
-        (delivery) => {
+        (delivery, presentation) => {
           publicationAttempted = true;
           const messages: LocalNetworkHostMessage[] = [];
           terminal(c, delivery.outbox!, false, (message) => messages.push(message), delivery);
-          const destination = snapshot(c, m.commandId, 'COMMAND_DESTINATION', delivery.current);
+          const destination = snapshot(
+            c,
+            m.commandId,
+            'COMMAND_DESTINATION',
+            delivery.current,
+            presentation,
+          );
           if (messages.length !== 1 || messages[0]?.messageType !== 'command.result') unavailable();
           send(messages[0]);
           send(destination);
@@ -2433,7 +2455,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             ownerViews.delete(c);
             continue;
           }
-          const owned = readLocalAdmissionPresentation(db, scope(c));
+          const { presentation: owned, delivery: observed } = readLocalAdmissionDelivery(
+            db,
+            scope(c),
+          );
           if (owned !== null && owned.application.networkScopeId !== binding.scopeId) {
             // A prepared tab reads the original authenticated journal; it has no separate peer session.
             const message = snapshot(
@@ -2455,8 +2480,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             }
             continue;
           }
-          const observed = readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
-            before = observed.current;
+          const before = observed.current;
           if (before.formId !== 'NET-005') {
             ownerViews.delete(c);
             continue;
@@ -2484,10 +2508,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
                   revisions: vector(after),
                 }),
               );
-            const message = snapshot(c, correlation, 'HOST_SYSTEM_EVENT', after);
+            const presentation = readLocalAdmissionPresentation(db, scope(c));
+            const message = snapshot(c, correlation, 'HOST_SYSTEM_EVENT', after, presentation);
             const token = ownerViewToken(message.revisions, message.presentation.base);
             if (token === binding.publishedToken) return;
-            const admission = readLocalAdmissionPresentation(db, scope(c))?.admission;
+            const admission = presentation?.admission;
             if (
               binding.publishedPendingCommandId !== null &&
               admission?.lastAbsenceOrNull?.commandId === binding.publishedPendingCommandId
