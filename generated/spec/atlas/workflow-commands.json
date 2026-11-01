@@ -429,14 +429,14 @@
     "title": "Поставить кампанию на паузу или возобновить"
   },
   {
-    "atomicity": "Set campaign HOSTING and create the initial peace scene once; free capacity remains unchanged.",
+    "atomicity": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
     "commandId": "UI-CMD-CAMPAIGN-START",
     "formIds": [
       "NET-016"
     ],
-    "guards": "At least one valid active PC; every included controlling device Ready; one master authority; campaign PAUSED.",
+    "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
     "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-START",
-    "reconnect": "Start receipt restores without a second scene or duplicate authority.",
+    "reconnect": "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
     "title": "Запустить подготовленную кампанию"
   },
   {
@@ -1262,5 +1262,27 @@
     "qa": "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN",
     "reconnect": "Exact command replay returns the original review-open receipt and IDs with a separate current review view. Changed payload, foreign owner or stale source fails without writes; an existing review is never replaced.",
     "title": "Открыть отдельные рабочие копии для рассмотрения допуска"
+  },
+  {
+    "atomicity": "Persist one owner-bound Ready decision for the exact ordered ACTIVE subset and lobbySnapshotRevision. Never mutate admission copies, capacity, group IDs or another device readiness. Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
+    "commandId": "UI-CMD-CAMPAIGN-READY-SET",
+    "formIds": [
+      "NET-006"
+    ],
+    "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET",
+    "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
+    "title": "Подтвердить или отменить готовность своего ACTIVE-набора"
+  },
+  {
+    "atomicity": "Persist one explicit initial time and receipt before Start; changed time advances lobbySnapshotRevision and invalidates Ready proofs. No scene or ticking clock is created. Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
+    "commandId": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+    "formIds": [
+      "NET-016"
+    ],
+    "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+    "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
+    "title": "Сохранить начальное виртуальное время кампании"
   }
 ]

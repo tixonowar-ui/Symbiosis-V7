@@ -9855,13 +9855,15 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
       "stateRevision",
       "projectionRevision",
-      "groupId",
-      "location/subLocation",
-      "markerRevision",
-      "campaignId",
-      "campaignStatus"
+      "panelVariant=PRE_START|STARTED_PEACE",
+      "campaignStatus",
+      "groups[]",
+      "activePeaceSceneOrNull",
+      "lobbySummary",
+      "campaignArtChecksumOrNull"
     ],
     "roles": [
       "gm"
@@ -12278,12 +12280,14 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
       "stateRevision",
       "projectionRevision",
-      "artAssetKey/filePickerState",
-      "groupId",
-      "location/subLocation",
-      "markerRevision"
+      "panelVariant=PRE_START|STARTED_PEACE",
+      "campaignStatus",
+      "groups[]",
+      "activePeaceSceneOrNull",
+      "campaignArtChecksumOrNull"
     ],
     "roles": [
       "gm"
@@ -15066,11 +15070,13 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
       "stateRevision",
       "projectionRevision",
-      "groupId",
-      "location/subLocation",
-      "markerRevision"
+      "panelVariant=PRE_START|STARTED_PEACE",
+      "campaignStatus",
+      "groups[]",
+      "activePeaceSceneOrNull"
     ],
     "roles": [
       "gm"
@@ -16539,6 +16545,14 @@
         {
           "actionKey": "NET-006::CTA::002",
           "label": "Start подтверждён мастером"
+        },
+        {
+          "actionKey": "NET-006::CTA::003",
+          "label": "Готов"
+        },
+        {
+          "actionKey": "NET-006::CTA::004",
+          "label": "Отменить готовность"
         }
       ]
     },
@@ -16556,7 +16570,8 @@
     "id": "NET-006",
     "qaScenarioIds": [
       "QA-FORM-NET-006",
-      "QA-CHANGE-NET-006"
+      "QA-CHANGE-NET-006",
+      "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET"
     ],
     "requiredFields": [
       "contextId",
@@ -17238,6 +17253,10 @@
         {
           "actionKey": "NET-016::CTA::003",
           "label": "Вернуться к панели кампании"
+        },
+        {
+          "actionKey": "NET-016::CTA::004",
+          "label": "Сохранить начальное время"
         }
       ]
     },
@@ -17247,7 +17266,8 @@
       "Ready status",
       "Validation blockers",
       "Start preflight",
-      "Atomic Start CTA"
+      "Atomic Start CTA",
+      "Поля начального времени: день, часы, минуты; отдельное сохранение и ошибки полей; подтверждённое значение показано отдельно от ввода."
     ],
     "contexts": [
       "network"
@@ -17256,16 +17276,24 @@
     "id": "NET-016",
     "qaScenarioIds": [
       "QA-FORM-NET-016",
-      "QA-CHANGE-NET-016"
+      "QA-CHANGE-NET-016",
+      "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
     ],
     "requiredFields": [
+      "contextId",
       "campaignId",
+      "stateRevision",
+      "projectionRevision",
       "activePlayerCapacity[1..5]",
       "admissionBatches[]",
       "activeCampaignCharacters[]",
       "controllingDevices[]",
       "readyByDevice",
       "requiredFieldBlockers[]",
+      "lobbySnapshotRevision",
+      "readinessRevision",
+      "initialTimeInput(dayNumber,hour,minute)",
+      "initialCampaignTimeOrNull",
       "startPreflightStatus",
       "commandId"
     ],
@@ -17274,8 +17302,8 @@
     ],
     "route": "/master/campaigns/:campaignId/network/net-016",
     "states": {
-      "NOT_READY": "Хотя бы одно включённое controlling device не Ready либо персонаж невалиден.",
-      "READY_TO_START": "Есть ≥1 active PC и все включённые devices Ready.",
+      "NOT_READY": "Есть неподтверждённая готовность включённого устройства, невалидный персонаж или не сохранено начальное время; Start CTA отсутствует.",
+      "READY_TO_START": "Есть ≥1 валидный ACTIVE PC, все включённые devices Ready на текущем snapshot и начальное время подтверждено.",
       "STARTED": "Campaign status и начальная мирная сцена созданы один раз.",
       "ZERO_ACTIVE_PLAYERS": "Start CTA отсутствует; свободная подготовка кампании разрешена.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
@@ -19332,34 +19360,28 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "campaignCharacterId",
       "stateRevision",
       "projectionRevision",
-      "S",
-      "D",
-      "M",
-      "Z",
-      "I",
-      "W",
-      "C",
+      "projectionVariant=PEACE_SNAPSHOT",
+      "sceneId",
+      "mechanicalSheet(read-only)",
       "currentHP",
       "maxHP(read-only)",
       "derivedCondition",
-      "symbiontInstanceId",
-      "currentOE",
-      "maxOE(read-only)",
-      "effectInstanceId/EffectTypeID",
-      "source",
-      "duration/stackPolicy",
+      "symbionts[]",
+      "temporaryEffects[]",
       "campaignTimestamp",
       "clockMode",
       "dayPhase",
       "groupId",
       "location/subLocation",
-      "markerRevision",
-      "combatId",
-      "actorId",
       "effectiveController",
-      "phase/turnOrReactionWindow"
+      "ownMarkerVisibility=UNKNOWN",
+      "markerReason=NOT_SET",
+      "combatId/combatActor/phase/turnOrReactionWindow=ABSENT",
+      "markerId/markerRevision/coordinates=ABSENT"
     ],
     "roles": [
       "player"

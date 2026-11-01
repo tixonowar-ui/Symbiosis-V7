@@ -1108,9 +1108,13 @@
         "formId": "NET-006",
         "primaryActions": [
           "Вернуться к «Итог согласования персонажа»",
-          "Start подтверждён мастером"
+          "Start подтверждён мастером",
+          "Готов",
+          "Отменить готовность"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-READY-SET"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
@@ -1148,7 +1152,7 @@
       "NET-005",
       "NET-006"
     ],
-    "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-READY-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults.",
     "journeyIds": [
       "J-JOIN-REVIEW"
     ],
@@ -1158,7 +1162,8 @@
       "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
       "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
       "REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.",
-      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.",
+      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
     ],
     "preconditions": [
       "Роль и authority соответствуют player.",
@@ -1184,7 +1189,8 @@
     "workflowCommandIds": [
       "UI-CMD-CONNECTION-OPEN",
       "UI-CMD-DEVICE-REQUEST-CANCEL",
-      "UI-CMD-DEVICE-REQUEST-SUBMIT"
+      "UI-CMD-DEVICE-REQUEST-SUBMIT",
+      "UI-CMD-CAMPAIGN-READY-SET"
     ]
   },
   {
@@ -1854,7 +1860,9 @@
         "executableOperationIds": [],
         "formId": "GM-001",
         "primaryActions": [
-          "Химера: скрытые пороги и внешние Пожирания"
+          "Химера: скрытые пороги и внешние Пожирания",
+          "Группы",
+          "Кампания и настройки host"
         ],
         "workflowCommandIds": []
       },
@@ -9218,10 +9226,12 @@
         "formId": "NET-016",
         "primaryActions": [
           "Начать кампанию",
-          "Вернуться к панели кампании"
+          "Вернуться к панели кампании",
+          "Сохранить начальное время"
         ],
         "workflowCommandIds": [
-          "UI-CMD-CAMPAIGN-START"
+          "UI-CMD-CAMPAIGN-START",
+          "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
         ]
       },
       {
@@ -9312,14 +9322,15 @@
       "CMP-015",
       "NET-023"
     ],
-    "happyPath": "Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-INITIAL-TIME-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults.",
     "journeyIds": [
       "J-HOST-PUBLISH-SETTINGS"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -9341,7 +9352,8 @@
       "UI-CMD-CAMPAIGN-CAPACITY-SET",
       "UI-CMD-CAMPAIGN-START",
       "UI-CMD-CLIENT-DISCONNECT",
-      "UI-CMD-MASTER-PASSWORD-CHANGE"
+      "UI-CMD-MASTER-PASSWORD-CHANGE",
+      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
     ]
   },
   {

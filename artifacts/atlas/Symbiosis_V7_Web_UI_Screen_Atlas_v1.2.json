@@ -1,10 +1,10 @@
 {
   "$schema": "urn:symbiosis:v7:web-ui-screen-atlas:1.2",
   "schemaVersion": "1.2.0",
-  "atlasVersion": "1.7",
+  "atlasVersion": "1.8",
   "title": "Symbiosis V7 Web UI Screen Atlas",
   "language": "ru-RU",
-  "releaseDate": "2026-11-01",
+  "releaseDate": "2026-11-02",
   "normativeStatus": "APPROVED_BASELINE_DERIVATIVE_NO_OPEN_UX_QUESTIONS",
   "sourceRefs": [
     {
@@ -2456,12 +2456,21 @@
           ],
           "guards": "Игрок принимает diff целиком или отказывается.",
           "result": "Целый batch принят в собственное лобби с явными blockers либо отклонён без admission; Ready и Start не подтверждаются этим решением."
+        },
+        {
+          "state": "LOBBY_READY",
+          "formIds": [
+            "NET-006"
+          ],
+          "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+          "result": "The admitted device explicitly confirms or withdraws Ready for its exact included ACTIVE set. Blocked PROPOSED copies remain visibly outside that set; admission acceptance itself never confirms Ready or starts the campaign."
         }
       ],
       "alternatives": [
         "Незаполненные масса/имущество блокируют Ready, но сохраняют lobby copy.",
         "Игровая вкладка host-PC появляется только после полного допуска и назначения local seat.",
-        "После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы."
+        "После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы.",
+        "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy."
       ],
       "errorOfflineReconnect": [
         "NET-008..015 восстанавливают server revision и pending review без второго commit."
@@ -2503,7 +2512,8 @@
         "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
         "UI-CMD-DEVICE-REQUEST-REJECT",
         "UI-CMD-ADMISSION-REVIEW-OPEN",
-        "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"
+        "UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
+        "UI-CMD-CAMPAIGN-READY-SET"
       ],
       "qnaIds": [
         "Q-CAMP-001",
@@ -2528,7 +2538,8 @@
       "id": "J-CAMPAIGN-CREATE",
       "title": "Создание и запуск кампании",
       "roles": [
-        "gm"
+        "gm",
+        "player"
       ],
       "steps": [
         {
@@ -2563,19 +2574,28 @@
           "state": "LOBBY_START",
           "formIds": [
             "CMP-007",
-            "NET-016"
+            "NET-016",
+            "NET-006",
+            "GM-001",
+            "GRP-001",
+            "PLY-001"
           ],
-          "guards": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
-          "result": "Активная мирная сцена."
+          "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+          "result": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene."
         }
       ],
       "alternatives": [
         "Свободные места не блокируют Start.",
         "NPC не занимает PC capacity.",
-        "Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards."
+        "Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards.",
+        "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
+        "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
+        "Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
+        "Journey participants include GM and player, without broadening form authority: campaign creation, initial-time input and Start remain GM-only; the player can confirm only its own exact Ready set on NET-006 and receive its own PLY-001 projection."
       ],
       "errorOfflineReconnect": [
-        "Host close/checkpoint/refresh возвращают paused state; два master authority блокируются NET-026."
+        "Host close/checkpoint/refresh возвращают paused state; два master authority блокируются NET-026.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
       ],
       "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
       "formIds": [
@@ -2587,13 +2607,19 @@
         "CMP-005",
         "CMP-006",
         "CMP-007",
-        "NET-016"
+        "NET-016",
+        "NET-006",
+        "GM-001",
+        "GRP-001",
+        "PLY-001"
       ],
       "ruleIds": [],
       "operationIds": [],
       "workflowCommandIds": [
         "UI-CMD-CAMPAIGN-CREATE",
-        "UI-CMD-CAMPAIGN-START"
+        "UI-CMD-CAMPAIGN-START",
+        "UI-CMD-CAMPAIGN-READY-SET",
+        "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
       ],
       "qnaIds": [
         "Q-CAMP-001",
@@ -7005,7 +7031,8 @@
         }
       ],
       "alternatives": [
-        "Player password is not invented; master password never enters player payload."
+        "Player password is not invented; master password never enters player payload.",
+        "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME."
       ],
       "errorOfflineReconnect": [
         "Reconnect requires a new validated session and does not delete or duplicate characters."
@@ -7025,7 +7052,8 @@
         "UI-CMD-CAMPAIGN-CAPACITY-SET",
         "UI-CMD-CAMPAIGN-START",
         "UI-CMD-CLIENT-DISCONNECT",
-        "UI-CMD-MASTER-PASSWORD-CHANGE"
+        "UI-CMD-MASTER-PASSWORD-CHANGE",
+        "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
       ],
       "qnaIds": [
         "Q-CAMP-001",
@@ -12732,13 +12760,14 @@
       "roles": [
         "player"
       ],
-      "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+      "happyPath": "Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-READY-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults.",
       "errorOfflinePath": "Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
       "qa": "QA-REQ-004",
       "workflowCommandIds": [
         "UI-CMD-CONNECTION-OPEN",
         "UI-CMD-DEVICE-REQUEST-CANCEL",
-        "UI-CMD-DEVICE-REQUEST-SUBMIT"
+        "UI-CMD-DEVICE-REQUEST-SUBMIT",
+        "UI-CMD-CAMPAIGN-READY-SET"
       ],
       "qnaIds": [
         "Q-CAMP-001",
@@ -12813,10 +12842,14 @@
           "formId": "NET-006",
           "primaryActions": [
             "Вернуться к «Итог согласования персонажа»",
-            "Start подтверждён мастером"
+            "Start подтверждён мастером",
+            "Готов",
+            "Отменить готовность"
           ],
           "executableOperationIds": [],
-          "workflowCommandIds": []
+          "workflowCommandIds": [
+            "UI-CMD-CAMPAIGN-READY-SET"
+          ]
         }
       ],
       "expectedStateDeltas": {
@@ -12850,7 +12883,8 @@
         "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
         "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
         "REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.",
-        "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
+        "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
       ],
       "coverageStatus": "COVERED"
     },
@@ -13602,7 +13636,9 @@
         {
           "formId": "GM-001",
           "primaryActions": [
-            "Химера: скрытые пороги и внешние Пожирания"
+            "Химера: скрытые пороги и внешние Пожирания",
+            "Группы",
+            "Кампания и настройки host"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -20885,14 +20921,15 @@
       "roles": [
         "gm"
       ],
-      "happyPath": "Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+      "happyPath": "Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-INITIAL-TIME-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults.",
       "errorOfflinePath": "Для CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
       "qa": "QA-REQ-055",
       "workflowCommandIds": [
         "UI-CMD-CAMPAIGN-CAPACITY-SET",
         "UI-CMD-CAMPAIGN-START",
         "UI-CMD-CLIENT-DISCONNECT",
-        "UI-CMD-MASTER-PASSWORD-CHANGE"
+        "UI-CMD-MASTER-PASSWORD-CHANGE",
+        "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
       ],
       "qnaIds": [
         "Q-CAMP-001",
@@ -20919,11 +20956,13 @@
           "formId": "NET-016",
           "primaryActions": [
             "Начать кампанию",
-            "Вернуться к панели кампании"
+            "Вернуться к панели кампании",
+            "Сохранить начальное время"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
-            "UI-CMD-CAMPAIGN-START"
+            "UI-CMD-CAMPAIGN-START",
+            "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
           ]
         },
         {
@@ -21007,7 +21046,8 @@
       "offlineReconnectAssertions": [
         "Uncommitted local input may restore as draft but never as confirmed state.",
         "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-        "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+        "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
       ],
       "coverageStatus": "COVERED"
     },
@@ -38379,14 +38419,17 @@
       "actions": {
         "visible": [
           "Вернуться к «Итог согласования персонажа»",
-          "Start подтверждён мастером"
+          "Start подтверждён мастером",
+          "Готов",
+          "Отменить готовность"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Итог согласования персонажа»; Start подтверждён мастером."
+          "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Итог согласования персонажа»; Start подтверждён мастером; Готов; Отменить готовность.",
+          "Разрешённые atlas workflow commands этой формы: UI-CMD-CAMPAIGN-READY-SET."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -38418,7 +38461,9 @@
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
             "ruleIds": [],
             "operationIds": [],
-            "workflowCommandIds": [],
+            "workflowCommandIds": [
+              "UI-CMD-CAMPAIGN-READY-SET"
+            ],
             "abilityIds": []
           },
           "recomputeTriggers": [
@@ -38493,7 +38538,7 @@
           {
             "label": "Start подтверждён мастером",
             "targetFormId": "PLY-001",
-            "guard": "Ready and admitted",
+            "guard": "SERVER_ONLY_ROLE_PROJECTION; confirmed singleton Start receipt; this owned campaignCharacterId is in the committed included ACTIVE set; current authenticated admitted binding. No client navigation can Start or enter a blocked copy.",
             "kind": "normative",
             "actionKey": "NET-006::CTA::002",
             "availabilityInputs": [
@@ -38543,10 +38588,165 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Готов",
+            "targetFormId": "NET-006",
+            "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+            "kind": "workflow-command",
+            "actionKey": "NET-006::CTA::003",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CAMPAIGN-READY-SET"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Отменить готовность",
+            "targetFormId": "NET-006",
+            "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+            "kind": "workflow-command",
+            "actionKey": "NET-006::CTA::004",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CAMPAIGN-READY-SET"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
-        "workflowCommandAvailability": []
+        "workflowCommandAvailability": [
+          {
+            "commandId": "UI-CMD-CAMPAIGN-READY-SET",
+            "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CAMPAIGN-READY-SET"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
+          }
+        ]
       },
       "states": {
         "loading": "Данные ещё не готовы; mutation CTA отсутствуют.",
@@ -38578,6 +38778,18 @@
           "trigger": "Принять весь batch diff",
           "guard": "UI-CMD-ADMISSION-PLAYER-DECIDE decision=ACCEPT",
           "kind": "workflow-command"
+        },
+        {
+          "from": "NET-006",
+          "trigger": "Готов",
+          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+          "kind": "workflow-command"
+        },
+        {
+          "from": "NET-006",
+          "trigger": "Отменить готовность",
+          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+          "kind": "workflow-command"
         }
       ],
       "transitionsOut": [
@@ -38590,14 +38802,28 @@
         {
           "to": "PLY-001",
           "trigger": "Start подтверждён мастером",
-          "guard": "Ready and admitted",
+          "guard": "SERVER_ONLY_ROLE_PROJECTION; confirmed singleton Start receipt; this owned campaignCharacterId is in the committed included ACTIVE set; current authenticated admitted binding. No client navigation can Start or enter a blocked copy.",
           "kind": "normative"
+        },
+        {
+          "to": "NET-006",
+          "trigger": "Готов",
+          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "NET-006",
+          "trigger": "Отменить готовность",
+          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+          "kind": "workflow-command"
         }
       ],
       "references": {
         "ruleIds": [],
         "operationIds": [],
-        "workflowCommandIds": [],
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-READY-SET"
+        ],
         "abilityIds": [],
         "effectTypeIds": [],
         "qnaIds": [
@@ -38652,11 +38878,18 @@
         "Назначение реализовано буквально: Статус каждого героя, blockers, свободные места и явная готовность; Start выполняет только мастер.",
         "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
         "Admission result is owner-only and restores the same copy/controller identities and original receipt. Pending mass/property blockers are explicit; absence of blockers is explicit too. Admission alone never confirms Ready or Start; the PLY-001 route remains unavailable until separately confirmed Start.",
-        "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment."
+        "Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment.",
+        "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
+        "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
+        "Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+        "Closed Ready command payload: commandId, campaignId, expectedLobbySnapshotRevision, ready boolean. Device/controller identity comes only from the authenticated host session. Original receipt: receiptId, commandId, workflowCommandId, campaignId, ownerDeviceId, includedCampaignCharacterIds, lobbySnapshotRevision, ready, readinessRevision, committedAt. ownCampaignCopies stays owner-only; pre-Start receipt-era NOT_READY is not a current readiness proof. Host-derived lobby extension supplies lobbySnapshotRevision, ownIncludedCampaignCharacterIds, currentReady and initialTimeConfirmed only when this capability is implemented. No fake values are added to the historical admission result.",
+        "Any authenticated own admitted tab with a proven current campaign binding may request device Ready for its entire included ACTIVE subset; original admission submit-tab authority is not reused as a substitute. A mixed blocked-copy tab may show device readiness for the ACTIVE subset but that blocked copy never enters PLY-001. Ready may be confirmed before initial time exists, against that exact absence; first confirmed time then invalidates that proof. Initial-time absence blocks Start, not the Ready intent itself."
       ],
       "qaScenarioIds": [
         "QA-FORM-NET-006",
-        "QA-CHANGE-NET-006"
+        "QA-CHANGE-NET-006",
+        "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET"
       ],
       "supersedes": []
     },
@@ -43023,13 +43256,20 @@
         "Symbiosis_V7_Windows_UI_Screen_Atlas_v1.1.pdf"
       ],
       "requiredFields": [
+        "contextId",
         "campaignId",
+        "stateRevision",
+        "projectionRevision",
         "activePlayerCapacity[1..5]",
         "admissionBatches[]",
         "activeCampaignCharacters[]",
         "controllingDevices[]",
         "readyByDevice",
         "requiredFieldBlockers[]",
+        "lobbySnapshotRevision",
+        "readinessRevision",
+        "initialTimeInput(dayNumber,hour,minute)",
+        "initialCampaignTimeOrNull",
         "startPreflightStatus",
         "commandId"
       ],
@@ -43039,20 +43279,22 @@
         "Ready status",
         "Validation blockers",
         "Start preflight",
-        "Atomic Start CTA"
+        "Atomic Start CTA",
+        "Поля начального времени: день, часы, минуты; отдельное сохранение и ошибки полей; подтверждённое значение показано отдельно от ввода."
       ],
       "actions": {
         "visible": [
           "Начать кампанию",
-          "Вернуться к панели кампании"
+          "Вернуться к панели кампании",
+          "Сохранить начальное время"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-          "Разрешённые atlas workflow commands этой формы: UI-CMD-CAMPAIGN-START.",
+          "Разрешённые atlas workflow commands этой формы: UI-CMD-CAMPAIGN-START, UI-CMD-CAMPAIGN-INITIAL-TIME-SET.",
           "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-          "Разрешённые видимые действия/CTA именно этой формы: Начать кампанию; Вернуться к панели кампании."
+          "Разрешённые видимые действия/CTA именно этой формы: Начать кампанию; Вернуться к панели кампании; Сохранить начальное время."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -43085,7 +43327,8 @@
             "ruleIds": [],
             "operationIds": [],
             "workflowCommandIds": [
-              "UI-CMD-CAMPAIGN-START"
+              "UI-CMD-CAMPAIGN-START",
+              "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
             ],
             "abilityIds": []
           },
@@ -43163,7 +43406,7 @@
           {
             "label": "Начать кампанию",
             "targetFormId": "GM-001",
-            "guard": "UI-CMD-CAMPAIGN-START guards",
+            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
             "kind": "workflow-command",
             "actionKey": "NET-016::CTA::002",
             "availabilityInputs": [
@@ -43271,13 +43514,69 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Сохранить начальное время",
+            "targetFormId": "NET-016",
+            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+            "kind": "workflow-command",
+            "actionKey": "NET-016::CTA::004",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CAMPAIGN-START",
-            "guard": "At least one valid active PC; every included controlling device Ready; one master authority; campaign PAUSED.",
+            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -43316,6 +43615,48 @@
               "stateRevision/projectionRevision"
             ],
             "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
+          },
+          {
+            "commandId": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
           }
         ]
       },
@@ -43331,15 +43672,15 @@
         "reconnecting": "Восстанавливаются server-authoritative seat, projection и pending command.",
         "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода.",
         "ZERO_ACTIVE_PLAYERS": "Start CTA отсутствует; свободная подготовка кампании разрешена.",
-        "NOT_READY": "Хотя бы одно включённое controlling device не Ready либо персонаж невалиден.",
-        "READY_TO_START": "Есть ≥1 active PC и все включённые devices Ready.",
+        "NOT_READY": "Есть неподтверждённая готовность включённого устройства, невалидный персонаж или не сохранено начальное время; Start CTA отсутствует.",
+        "READY_TO_START": "Есть ≥1 валидный ACTIVE PC, все включённые devices Ready на текущем snapshot и начальное время подтверждено.",
         "STARTED": "Campaign status и начальная мирная сцена созданы один раз."
       },
       "transitionsIn": [
         {
           "from": "CMP-007",
           "trigger": "J-CAMPAIGN-CREATE::LOBBY_START::open",
-          "guard": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
+          "guard": "Sole current campaign GM authority; pre-Start PAUSED; lobby available even with zero ACTIVE PCs or unconfirmed time/Ready; navigation does not Start.",
           "kind": "subflow"
         },
         {
@@ -43347,6 +43688,12 @@
           "trigger": "J-HOST-PUBLISH-SETTINGS::HOST_LOBBY::open",
           "guard": "Single master authority and host running.",
           "kind": "subflow"
+        },
+        {
+          "from": "NET-016",
+          "trigger": "Сохранить начальное время",
+          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+          "kind": "workflow-command"
         }
       ],
       "transitionsOut": [
@@ -43365,7 +43712,7 @@
         {
           "to": "GM-001",
           "trigger": "Начать кампанию",
-          "guard": "UI-CMD-CAMPAIGN-START guards",
+          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "kind": "workflow-command"
         },
         {
@@ -43373,13 +43720,20 @@
           "trigger": "Вернуться к панели кампании",
           "guard": "campaign remains PAUSED",
           "kind": "normative"
+        },
+        {
+          "to": "NET-016",
+          "trigger": "Сохранить начальное время",
+          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+          "kind": "workflow-command"
         }
       ],
       "references": {
         "ruleIds": [],
         "operationIds": [],
         "workflowCommandIds": [
-          "UI-CMD-CAMPAIGN-START"
+          "UI-CMD-CAMPAIGN-START",
+          "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
         ],
         "abilityIds": [],
         "effectTypeIds": [],
@@ -43434,11 +43788,20 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Мастер видит capacity 1–5, устройства, выбранных персонажей, прогноз мест, Ready/blockers и кнопку Start с preflight.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
+        "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
+        "Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+        "The host validates the complete admitted ACTIVE roster before deriving includedCopies. A corrupt ACTIVE sheet, missing/duplicate controller or inconsistent blocker state refuses preflight entirely; never silently filter an invalid ACTIVE character out to enable Start. Only explicitly lobby-only PROPOSED copies are excluded. Ready sets are ordered by canonical campaignCharacterId, independent of browser/tab order.",
+        "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
+        "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
+        "Closed initial-time command payload: commandId, campaignId, expectedLobbySnapshotRevision, dayNumber, hour, minute. Closed Start command payload: commandId, campaignId, expectedLobbySnapshotRevision, expectedReadinessRevision. Initial-time receipt records original explicit input, campaignTimestamp, resulting lobbySnapshotRevision and readinessRevision. Start receipt records sceneId, includedCampaignCharacterIds, existing group/controller references, campaignTimestamp, clockMode=STOPPED, dayPhase, checkpointId and resulting campaign revision. Technical receipt committedAt is not game time. Secret, GM authority tokens and internal witnesses never enter owner projections."
       ],
       "qaScenarioIds": [
         "QA-FORM-NET-016",
-        "QA-CHANGE-NET-016"
+        "QA-CHANGE-NET-016",
+        "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
       ],
       "supersedes": []
     },
@@ -50656,13 +51019,15 @@
       ],
       "requiredFields": [
         "contextId",
+        "campaignId",
         "stateRevision",
         "projectionRevision",
-        "groupId",
-        "location/subLocation",
-        "markerRevision",
-        "campaignId",
-        "campaignStatus"
+        "panelVariant=PRE_START|STARTED_PEACE",
+        "campaignStatus",
+        "groups[]",
+        "activePeaceSceneOrNull",
+        "lobbySummary",
+        "campaignArtChecksumOrNull"
       ],
       "components": [
         "Заголовок и текущий контекст",
@@ -50736,7 +51101,7 @@
           {
             "label": "Открыть «Лобби подключений и Start»",
             "targetFormId": "NET-016",
-            "guard": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
+            "guard": "Sole current campaign GM authority; pre-Start PAUSED; lobby available even with zero ACTIVE PCs or unconfirmed time/Ready; navigation does not Start.",
             "kind": "subflow",
             "actionKey": "CMP-007::CTA::001",
             "availabilityInputs": [
@@ -51067,7 +51432,7 @@
         {
           "to": "NET-016",
           "trigger": "J-CAMPAIGN-CREATE::LOBBY_START::open",
-          "guard": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
+          "guard": "Sole current campaign GM authority; pre-Start PAUSED; lobby available even with zero ACTIVE PCs or unconfirmed time/Ready; navigation does not Start.",
           "kind": "subflow"
         },
         {
@@ -51150,7 +51515,9 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
       ],
       "qaScenarioIds": [
         "QA-FORM-CMP-007"
@@ -75671,34 +76038,28 @@
       ],
       "requiredFields": [
         "contextId",
+        "campaignId",
+        "campaignCharacterId",
         "stateRevision",
         "projectionRevision",
-        "S",
-        "D",
-        "M",
-        "Z",
-        "I",
-        "W",
-        "C",
+        "projectionVariant=PEACE_SNAPSHOT",
+        "sceneId",
+        "mechanicalSheet(read-only)",
         "currentHP",
         "maxHP(read-only)",
         "derivedCondition",
-        "symbiontInstanceId",
-        "currentOE",
-        "maxOE(read-only)",
-        "effectInstanceId/EffectTypeID",
-        "source",
-        "duration/stackPolicy",
+        "symbionts[]",
+        "temporaryEffects[]",
         "campaignTimestamp",
         "clockMode",
         "dayPhase",
         "groupId",
         "location/subLocation",
-        "markerRevision",
-        "combatId",
-        "actorId",
         "effectiveController",
-        "phase/turnOrReactionWindow"
+        "ownMarkerVisibility=UNKNOWN",
+        "markerReason=NOT_SET",
+        "combatId/combatActor/phase/turnOrReactionWindow=ABSENT",
+        "markerId/markerRevision/coordinates=ABSENT"
       ],
       "components": [
         "Заголовок и текущий контекст",
@@ -76835,7 +77196,7 @@
         {
           "from": "NET-006",
           "trigger": "Start подтверждён мастером",
-          "guard": "Ready and admitted",
+          "guard": "SERVER_ONLY_ROLE_PROJECTION; confirmed singleton Start receipt; this owned campaignCharacterId is in the committed included ACTIVE set; current authenticated admitted binding. No client navigation can Start or enter a blocked copy.",
           "kind": "normative"
         },
         {
@@ -77356,7 +77717,12 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: HP, характеристики, эффекты, симбионты, группа, время и быстрые действия.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "Closed PEACE_SNAPSHOT is owner-only for one admitted included campaignCharacterId after confirmed Start. mechanicalSheet is the committed AdmissionMechanicalSheetV1 (ADR 0071), with preserved stats, skills, permanent passives, body/resource states and exact symbiont current/max OE. No generic effective-stat/inventory/effect/time/combat runtime is introduced. currentHP/maxHP and derivedCondition come from the same saved initialRuntime, not guessed values. symbionts[] permits zero entries; temporaryEffects[] comes from saved initialRuntime and does not contain permanent passives.",
+        "PEACE_SNAPSHOT contains real sceneId, preserved groupId and GM-entered location/subLocation labels, committed campaignTimestamp/clockMode/dayPhase and authenticated admitted effectiveController. No combatId, combatActor, turn or reaction window exists in this variant. An uncreated map marker has ownMarkerVisibility=UNKNOWN and markerReason=NOT_SET; marker identity/revision/coordinates are ABSENT under MAP-007 semantics. Never fabricate a markerRevision=0, combat actor, effect instance or symbiont to satisfy fields. Own labels are not inferred map geometry.",
+        "Only this owned sheet is serialized; another device/character sheet, GM-private data, review witness, master secrets and hidden action diagnostics are absent. The variant is read-only; routes to generic inventory/effect/rest/time/combat or conditional future capabilities remain unavailable until independently implemented. Existing conditional screen contracts remain guarded, not automatically granted by Start.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+        "The global Start receipt and full lobby are GM/server-only. Owner projections expose only this authenticated copy, its permitted group/location context and own readiness; never serialize all device IDs or other owners mechanical sheets through a shared receipt. Browser-supplied character identity cannot choose another tab binding."
       ],
       "qaScenarioIds": [
         "QA-FORM-PLY-001",
@@ -93172,11 +93538,13 @@
       ],
       "requiredFields": [
         "contextId",
+        "campaignId",
         "stateRevision",
         "projectionRevision",
-        "groupId",
-        "location/subLocation",
-        "markerRevision"
+        "panelVariant=PRE_START|STARTED_PEACE",
+        "campaignStatus",
+        "groups[]",
+        "activePeaceSceneOrNull"
       ],
       "components": [
         "Заголовок и текущий контекст",
@@ -93942,7 +94310,10 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Все группы, состав, статус, координата и активная сцена.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+        "Location labels belong to individual admitted copies. Preserve different location/subLocation values within one group; never present the first member location as the whole group location. Scene membership contains only included ACTIVE copies, even when the same preserved group also contains blocked lobby-only members."
       ],
       "qaScenarioIds": [
         "QA-FORM-GRP-001"
@@ -127326,12 +127697,14 @@
       ],
       "requiredFields": [
         "contextId",
+        "campaignId",
         "stateRevision",
         "projectionRevision",
-        "artAssetKey/filePickerState",
-        "groupId",
-        "location/subLocation",
-        "markerRevision"
+        "panelVariant=PRE_START|STARTED_PEACE",
+        "campaignStatus",
+        "groups[]",
+        "activePeaceSceneOrNull",
+        "campaignArtChecksumOrNull"
       ],
       "components": [
         "Заголовок и текущий контекст",
@@ -127342,14 +127715,16 @@
       ],
       "actions": {
         "visible": [
-          "Химера: скрытые пороги и внешние Пожирания"
+          "Химера: скрытые пороги и внешние Пожирания",
+          "Группы",
+          "Кампания и настройки host"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Химера: скрытые пороги и внешние Пожирания."
+          "Разрешённые видимые действия/CTA именно этой формы: Химера: скрытые пороги и внешние Пожирания; Группы; Кампания и настройки host."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -128235,7 +128610,7 @@
         {
           "from": "NET-016",
           "trigger": "Начать кампанию",
-          "guard": "UI-CMD-CAMPAIGN-START guards",
+          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "kind": "workflow-command"
         },
         {
@@ -128721,7 +129096,9 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Быстрый доступ к группам, карте, времени, боям, персонажам и каталогам.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
+        "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
       ],
       "qaScenarioIds": [
         "QA-FORM-GM-001"
@@ -217415,7 +217792,7 @@
       "from": "CMP-007",
       "to": "NET-016",
       "trigger": "J-CAMPAIGN-CREATE::LOBBY_START::open",
-      "guard": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
+      "guard": "Sole current campaign GM authority; pre-Start PAUSED; lobby available even with zero ACTIVE PCs or unconfirmed time/Ready; navigation does not Start.",
       "kind": "subflow"
     },
     {
@@ -221083,7 +221460,7 @@
       "from": "NET-006",
       "to": "PLY-001",
       "trigger": "Start подтверждён мастером",
-      "guard": "Ready and admitted",
+      "guard": "SERVER_ONLY_ROLE_PROJECTION; confirmed singleton Start receipt; this owned campaignCharacterId is in the committed included ACTIVE set; current authenticated admitted binding. No client navigation can Start or enter a blocked copy.",
       "kind": "normative"
     },
     {
@@ -223582,7 +223959,7 @@
       "from": "NET-016",
       "to": "GM-001",
       "trigger": "Начать кампанию",
-      "guard": "UI-CMD-CAMPAIGN-START guards",
+      "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
       "kind": "workflow-command"
     },
     {
@@ -229023,6 +229400,27 @@
       "trigger": "Вернуться через экран приватности",
       "guard": "MASTER_IMPORT terminal result; committed NET-028 owner claim retains signed returnMode=LOCAL_HANDOFF, returnFormId=PLY-030, handoffId and initiating GM context; no pending command; receipt-gated return only, never expose GM data in the player projection.",
       "kind": "safe-return"
+    },
+    {
+      "from": "NET-006",
+      "to": "NET-006",
+      "trigger": "Готов",
+      "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "NET-006",
+      "to": "NET-006",
+      "trigger": "Отменить готовность",
+      "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "NET-016",
+      "to": "NET-016",
+      "trigger": "Сохранить начальное время",
+      "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+      "kind": "workflow-command"
     }
   ],
   "qaScenarios": [
@@ -229485,7 +229883,7 @@
     {
       "qaId": "QA-FORM-NET-006",
       "scope": "NET-006",
-      "scenario": "Проверить буквальное назначение NET-006: Статус каждого героя, blockers, свободные места и явная готовность; Start выполняет только мастер. Поля: contextId, campaignId, admissionBatchId, ownCampaignCopies[1..3], controllerBindings, blockers[], campaignStatus, readyStatus, startStatus, stateRevision, projectionRevision. CTA: Вернуться к «Итог согласования персонажа», Start подтверждён мастером.",
+      "scenario": "Проверить буквальное назначение NET-006: Статус каждого героя, blockers, свободные места и явная готовность; Start выполняет только мастер. Поля: contextId, campaignId, admissionBatchId, ownCampaignCopies[1..3], controllerBindings, blockers[], campaignStatus, readyStatus, startStatus, stateRevision, projectionRevision. CTA: Вернуться к «Итог согласования персонажа», Start подтверждён мастером, Готов, Отменить готовность. Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -229611,7 +230009,7 @@
     {
       "qaId": "QA-FORM-NET-016",
       "scope": "NET-016",
-      "scenario": "Проверить буквальное назначение NET-016: Мастер видит capacity 1–5, устройства, выбранных персонажей, прогноз мест, Ready/blockers и кнопку Start с preflight. Поля: campaignId, activePlayerCapacity[1..5], admissionBatches[], activeCampaignCharacters[], controllingDevices[], readyByDevice, requiredFieldBlockers[], startPreflightStatus, commandId. CTA: Начать кампанию, Вернуться к панели кампании.",
+      "scenario": "Проверить буквальное назначение NET-016: Мастер видит capacity 1–5, устройства, выбранных персонажей, прогноз мест, Ready/blockers и кнопку Start с preflight. Поля: contextId, campaignId, stateRevision, projectionRevision, activePlayerCapacity[1..5], admissionBatches[], activeCampaignCharacters[], controllingDevices[], readyByDevice, requiredFieldBlockers[], lobbySnapshotRevision, readinessRevision, initialTimeInput(dayNumber,hour,minute), initialCampaignTimeOrNull, startPreflightStatus, commandId. CTA: Начать кампанию, Вернуться к панели кампании, Сохранить начальное время. Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -229809,7 +230207,7 @@
     {
       "qaId": "QA-FORM-CMP-007",
       "scope": "CMP-007",
-      "scenario": "Проверить буквальное назначение CMP-007: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight. Поля: contextId, stateRevision, projectionRevision, groupId, location/subLocation, markerRevision, campaignId, campaignStatus. CTA: Открыть «Лобби подключений и Start», Открыть «Настройки кампании», Открыть активную кампанию, Вернуться на главный экран мастера.",
+      "scenario": "Проверить буквальное назначение CMP-007: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight. Поля: contextId, campaignId, stateRevision, projectionRevision, panelVariant=PRE_START|STARTED_PEACE, campaignStatus, groups[], activePeaceSceneOrNull, lobbySummary, campaignArtChecksumOrNull. CTA: Открыть «Лобби подключений и Start», Открыть «Настройки кампании», Открыть активную кампанию, Вернуться на главный экран мастера. Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -230397,7 +230795,7 @@
     {
       "qaId": "QA-FORM-PLY-001",
       "scope": "PLY-001",
-      "scenario": "Проверить буквальное назначение PLY-001: HP, характеристики, эффекты, симбионты, группа, время и быстрые действия. Поля: contextId, stateRevision, projectionRevision, S, D, M, Z, I, W, C, currentHP, maxHP(read-only), derivedCondition, symbiontInstanceId, currentOE, maxOE(read-only), effectInstanceId/EffectTypeID, source, duration/stackPolicy, campaignTimestamp, clockMode, dayPhase, groupId, location/subLocation, markerRevision, combatId, actorId, effectiveController, phase/turnOrReactionWindow. CTA: Открыть «Закрытая панель мирных команд», Открыть «Характеристики и модификаторы», Открыть «Навыки персонажа», Открыть «Эффекты, болезни, раны и травмы», Открыть «Симбионты персонажа», Открыть «Симбионт: подробности», Открыть «Дерево развития симбионта», Открыть «Инвентарь», Открыть «Карточка предмета», Открыть «Экипировка и занятость рук», Запросить длительный отдых, Открыть своё местоположение, Соединение потеряно, Быстрый звук, Открыть переключатель локального контекста, Открыть кабинет Хранителя, Открыть историю Пожираний Химеры, Открыть монитор заражённых Чумного доктора.",
+      "scenario": "Проверить буквальное назначение PLY-001: HP, характеристики, эффекты, симбионты, группа, время и быстрые действия. Поля: contextId, campaignId, campaignCharacterId, stateRevision, projectionRevision, projectionVariant=PEACE_SNAPSHOT, sceneId, mechanicalSheet(read-only), currentHP, maxHP(read-only), derivedCondition, symbionts[], temporaryEffects[], campaignTimestamp, clockMode, dayPhase, groupId, location/subLocation, effectiveController, ownMarkerVisibility=UNKNOWN, markerReason=NOT_SET, combatId/combatActor/phase/turnOrReactionWindow=ABSENT, markerId/markerRevision/coordinates=ABSENT. CTA: Открыть «Закрытая панель мирных команд», Открыть «Характеристики и модификаторы», Открыть «Навыки персонажа», Открыть «Эффекты, болезни, раны и травмы», Открыть «Симбионты персонажа», Открыть «Симбионт: подробности», Открыть «Дерево развития симбионта», Открыть «Инвентарь», Открыть «Карточка предмета», Открыть «Экипировка и занятость рук», Запросить длительный отдых, Открыть своё местоположение, Соединение потеряно, Быстрый звук, Открыть переключатель локального контекста, Открыть кабинет Хранителя, Открыть историю Пожираний Химеры, Открыть монитор заражённых Чумного доктора. Closed PEACE_SNAPSHOT is owner-only for one admitted included campaignCharacterId after confirmed Start. mechanicalSheet is the committed AdmissionMechanicalSheetV1 (ADR 0071), with preserved stats, skills, permanent passives, body/resource states and exact symbiont current/max OE. No generic effective-stat/inventory/effect/time/combat runtime is introduced. currentHP/maxHP and derivedCondition come from the same saved initialRuntime, not guessed values. symbionts[] permits zero entries; temporaryEffects[] comes from saved initialRuntime and does not contain permanent passives. PEACE_SNAPSHOT contains real sceneId, preserved groupId and GM-entered location/subLocation labels, committed campaignTimestamp/clockMode/dayPhase and authenticated admitted effectiveController. No combatId, combatActor, turn or reaction window exists in this variant. An uncreated map marker has ownMarkerVisibility=UNKNOWN and markerReason=NOT_SET; marker identity/revision/coordinates are ABSENT under MAP-007 semantics. Never fabricate a markerRevision=0, combat actor, effect instance or symbiont to satisfy fields. Own labels are not inferred map geometry. Only this owned sheet is serialized; another device/character sheet, GM-private data, review witness, master secrets and hidden action diagnostics are absent. The variant is read-only; routes to generic inventory/effect/rest/time/combat or conditional future capabilities remain unavailable until independently implemented. Existing conditional screen contracts remain guarded, not automatically granted by Start. The global Start receipt and full lobby are GM/server-only. Owner projections expose only this authenticated copy, its permitted group/location context and own readiness; never serialize all device IDs or other owners mechanical sheets through a shared receipt. Browser-supplied character identity cannot choose another tab binding.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -230715,7 +231113,7 @@
     {
       "qaId": "QA-FORM-GRP-001",
       "scope": "GRP-001",
-      "scenario": "Проверить буквальное назначение GRP-001: Все группы, состав, статус, координата и активная сцена. Поля: contextId, stateRevision, projectionRevision, groupId, location/subLocation, markerRevision. CTA: Открыть «Создание и редактирование группы», Открыть «Состав группы», Открыть «Карточка группы», Открыть «Переместить персонажа между группами», Открыть «Разделить группу», Открыть «Объединить группы», Открыть «Удалить пустую группу», Открыть «Карта мира мастера», Вернуться на главный экран мастера.",
+      "scenario": "Проверить буквальное назначение GRP-001: Все группы, состав, статус, координата и активная сцена. Поля: contextId, campaignId, stateRevision, projectionRevision, panelVariant=PRE_START|STARTED_PEACE, campaignStatus, groups[], activePeaceSceneOrNull. CTA: Открыть «Создание и редактирование группы», Открыть «Состав группы», Открыть «Карточка группы», Открыть «Переместить персонажа между группами», Открыть «Разделить группу», Открыть «Объединить группы», Открыть «Удалить пустую группу», Открыть «Карта мира мастера», Вернуться на главный экран мастера. Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -231483,7 +231881,7 @@
     {
       "qaId": "QA-FORM-GM-001",
       "scope": "GM-001",
-      "scenario": "Проверить буквальное назначение GM-001: Быстрый доступ к группам, карте, времени, боям, персонажам и каталогам. Поля: contextId, stateRevision, projectionRevision, artAssetKey/filePickerState, groupId, location/subLocation, markerRevision. CTA: Химера: скрытые пороги и внешние Пожирания.",
+      "scenario": "Проверить буквальное назначение GM-001: Быстрый доступ к группам, карте, времени, боям, персонажам и каталогам. Поля: contextId, campaignId, stateRevision, projectionRevision, panelVariant=PRE_START|STARTED_PEACE, campaignStatus, groups[], activePeaceSceneOrNull, campaignArtChecksumOrNull. CTA: Химера: скрытые пороги и внешние Пожирания, Группы, Кампания и настройки host. Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -233373,7 +233771,7 @@
     {
       "qaId": "QA-REQ-004",
       "scope": "REQ-004",
-      "scenario": "Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
+      "scenario": "Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-READY-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
       "expected": "Terminal states/deltas: {\"terminalStatesByForm\":{\"NET-002\":[\"EMPTY_ADDRESS\",\"PARSE_INVALID\",\"READY_TO_CONNECT\",\"CONNECTING\",\"CONNECTED_TECHNICAL\"],\"NET-004\":[\"DRAFT_REQUEST\",\"SUBMITTED\"],\"NET-005\":[\"WAITING_GM\",\"READY_TO_CANCEL\",\"CANCELLED\",\"DECISION_WON_RACE\",\"IN_REVIEW\",\"REJECTED\"]},\"mutationBoundary\":\"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\",\"audit\":\"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\"} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
     },
     {
@@ -233679,7 +234077,7 @@
     {
       "qaId": "QA-REQ-055",
       "scope": "REQ-055",
-      "scenario": "Требование «Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client». Preconditions: Роль и authority соответствуют gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
+      "scenario": "Требование «Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client». Preconditions: Роль и authority соответствуют gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-INITIAL-TIME-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults. Error/offline: Для CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
       "expected": "Terminal states/deltas: {\"audit\": \"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\", \"mutationBoundary\": \"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\", \"terminalStatesByForm\": {\"CMP-014\": [\"BLOCKED_ACTIVE_CONTEXT\", \"BELOW_ROSTER_REJECTED\", \"READY_TO_SAVE\", \"SAVED\"], \"CMP-015\": [\"CURRENT_PASSWORD_INVALID\", \"CONFIRMATION_MISMATCH\", \"READY_TO_CHANGE\", \"CHANGED\"], \"NET-016\": [\"ZERO_ACTIVE_PLAYERS\", \"NOT_READY\", \"READY_TO_START\", \"STARTED\"], \"NET-023\": [\"BLOCKED_UNSAFE_BOUNDARY\", \"READY_TO_DISCONNECT\", \"DISCONNECTED\", \"IDEMPOTENT_REPLAY\"]}} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
     },
     {
@@ -238984,7 +239382,7 @@
       "qaId": "QA-WORKFLOW-UI-CMD-CAMPAIGN-START",
       "scope": "UI-CMD-CAMPAIGN-START",
       "scenario": "Выполнить UI-CMD-CAMPAIGN-START через NET-016, затем replay, stale, reconnect и противоположный повторный ответ.",
-      "expected": "Set campaign HOSTING and create the initial peace scene once; free capacity remains unchanged. Start receipt restores without a second scene or duplicate authority."
+      "expected": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene. Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write."
     },
     {
       "qaId": "QA-WORKFLOW-UI-CMD-COMBAT-START",
@@ -243701,6 +244099,18 @@
       "scope": "UI-CMD-ADMISSION-REVIEW-OPEN",
       "scenario": "Из NET-017 открыть ordinary IN_REVIEW batch через UI-CMD-ADMISSION-REVIEW-OPEN; проверить exact replay, changed payload, stale revision, потерю GM authority, concurrent reject, restart и неизменность исходных FINAL.",
       "expected": "Create or recover one admissionBatchId and stable reviewCopyIds in GM_REVIEW for this IN_REVIEW request; immutable source and separate draft; requestStatus remains IN_REVIEW. No campaignCharacterId, PROPOSED copy, seat, capacity reservation or player authority. Exact command replay returns the original review-open receipt and IDs with a separate current review view. Changed payload, foreign owner or stale source fails without writes; an existing review is never replaced."
+    },
+    {
+      "qaId": "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET",
+      "scope": "UI-CMD-CAMPAIGN-READY-SET",
+      "scenario": "Через реальные controls NET-006 выполнить Подтвердить или отменить готовность своего ACTIVE-набора; проверить guards, foreign scope, stale revision, rollback, exact replay и restart, без подмены проекции.",
+      "expected": "Persist one owner-bound Ready decision for the exact ordered ACTIVE subset and lobbySnapshotRevision. Never mutate admission copies, capacity, group IDs or another device readiness. Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write."
+    },
+    {
+      "qaId": "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+      "scope": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+      "scenario": "Через реальные controls NET-016 выполнить Сохранить начальное виртуальное время кампании; проверить guards, foreign scope, stale revision, rollback, exact replay и restart, без подмены проекции.",
+      "expected": "Persist one explicit initial time and receipt before Start; changed time advances lobbySnapshotRevision and invalidates Ready proofs. No scene or ticking clock is created. Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write."
     }
   ],
   "registryCoverage": {
@@ -259524,9 +259934,9 @@
         "formIds": [
           "NET-016"
         ],
-        "guards": "At least one valid active PC; every included controlling device Ready; one master authority; campaign PAUSED.",
-        "atomicity": "Set campaign HOSTING and create the initial peace scene once; free capacity remains unchanged.",
-        "reconnect": "Start receipt restores without a second scene or duplicate authority.",
+        "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "atomicity": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
+        "reconnect": "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
         "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-START"
       },
       {
@@ -260352,6 +260762,28 @@
         "atomicity": "Create or recover one admissionBatchId and stable reviewCopyIds in GM_REVIEW for this IN_REVIEW request; immutable source and separate draft; requestStatus remains IN_REVIEW. No campaignCharacterId, PROPOSED copy, seat, capacity reservation or player authority.",
         "reconnect": "Exact command replay returns the original review-open receipt and IDs with a separate current review view. Changed payload, foreign owner or stale source fails without writes; an existing review is never replaced.",
         "qa": "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN"
+      },
+      {
+        "commandId": "UI-CMD-CAMPAIGN-READY-SET",
+        "title": "Подтвердить или отменить готовность своего ACTIVE-набора",
+        "formIds": [
+          "NET-006"
+        ],
+        "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+        "atomicity": "Persist one owner-bound Ready decision for the exact ordered ACTIVE subset and lobbySnapshotRevision. Never mutate admission copies, capacity, group IDs or another device readiness. Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
+        "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
+        "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET"
+      },
+      {
+        "commandId": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+        "title": "Сохранить начальное виртуальное время кампании",
+        "formIds": [
+          "NET-016"
+        ],
+        "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+        "atomicity": "Persist one explicit initial time and receipt before Start; changed time advances lobbySnapshotRevision and invalidates Ready proofs. No scene or ticking clock is created. Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
+        "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
+        "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
       }
     ],
     "qna": [
@@ -276817,14 +277249,14 @@
     "forms": 376,
     "legacyFormsPreserved": 355,
     "newForms": 21,
-    "transitions": 1694,
+    "transitions": 1697,
     "journeys": 66,
     "requirements": 91,
-    "qaScenarios": 2446,
+    "qaScenarios": 2448,
     "activeRules": 699,
     "tombstoneRules": 40,
     "operations": 70,
-    "workflowCommands": 109,
+    "workflowCommands": 111,
     "qnaRows": 444,
     "qnaUniqueIds": 410,
     "automatedAbilities": 167,
@@ -276902,7 +277334,7 @@
       "unmapped": []
     },
     "workflowCommands": {
-      "mapped": 109,
+      "mapped": 111,
       "unmapped": []
     },
     "qna": {

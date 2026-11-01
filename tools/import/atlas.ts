@@ -1,8 +1,8 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1694
- * transitions, 66 journeys, 91 requirements, 2446 QA scenarios. Nothing is
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1697
+ * transitions, 66 journeys, 91 requirements, 2448 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
  */
@@ -27,14 +27,19 @@ import {
   assertAdr0071AdmissionMarkdown,
 } from './admission-atlas-contract.js';
 
+import {
+  assertAdr0073LobbyStart,
+  assertAdr0073LobbyStartMarkdown,
+} from './campaign-lobby-atlas-contract.js';
+
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.7';
+const ATLAS_VERSION = '1.8';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.7 has 1,258 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_258;
+/** Atlas v1.8 has 1,261 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_261;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -1591,18 +1596,18 @@ function adr0049CheckQnaChannels(
 
 /** ADR 0049 pins every new channel and every independent JSON mirror. */
 export function assertAdr0049MissingChannels(root: JsonObject): void {
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-01');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_694);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_697);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_694,
+    1_697,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1804,19 +1809,19 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
 
 /** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
 export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.7');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-01');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.8');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_694);
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_697);
   expectCount(
     WHERE,
     'ADR 0052 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_694,
+    1_697,
   );
 
   const advisor = adr0049Form(forms, 'CHR-041');
@@ -2440,9 +2445,14 @@ const ADR0069_CONTRACTS = [
       },
       {
         formId: 'NET-006',
-        primaryActions: ['Вернуться к «Итог согласования персонажа»', 'Start подтверждён мастером'],
+        primaryActions: [
+          'Вернуться к «Итог согласования персонажа»',
+          'Start подтверждён мастером',
+          'Готов',
+          'Отменить готовность',
+        ],
         executableOperationIds: [],
-        workflowCommandIds: [],
+        workflowCommandIds: ['UI-CMD-CAMPAIGN-READY-SET'],
       },
     ],
   },
@@ -2486,6 +2496,7 @@ const ADR0069_CONTRACTS = [
       'Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.',
       'REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.',
       'CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
+      'Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.',
     ],
   },
   {
@@ -3149,6 +3160,14 @@ const ADR0069_CONTRACTS = [
         result:
           'Целый batch принят в собственное лобби с явными blockers либо отклонён без admission; Ready и Start не подтверждаются этим решением.',
       },
+      {
+        state: 'LOBBY_READY',
+        formIds: ['NET-006'],
+        guards:
+          'Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.',
+        result:
+          'The admitted device explicitly confirms or withdraws Ready for its exact included ACTIVE set. Blocked PROPOSED copies remain visibly outside that set; admission acceptance itself never confirms Ready or starts the campaign.',
+      },
     ],
   },
   {
@@ -3159,6 +3178,7 @@ const ADR0069_CONTRACTS = [
       'Незаполненные масса/имущество блокируют Ready, но сохраняют lobby copy.',
       'Игровая вкладка host-PC появляется только после полного допуска и назначения local seat.',
       'После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы.',
+      'Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.',
     ],
   },
   {
@@ -3176,6 +3196,7 @@ const ADR0069_CONTRACTS = [
       'UI-CMD-DEVICE-REQUEST-REJECT',
       'UI-CMD-ADMISSION-REVIEW-OPEN',
       'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
+      'UI-CMD-CAMPAIGN-READY-SET',
     ],
   },
   {
@@ -3186,6 +3207,10 @@ const ADR0069_CONTRACTS = [
       'Свободные места не блокируют Start.',
       'NPC не занимает PC capacity.',
       'Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards.',
+      'Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.',
+      'Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.',
+      'Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.',
+      'Journey participants include GM and player, without broadening form authority: campaign creation, initial-time input and Start remain GM-only; the player can confirm only its own exact Ready set on NET-006 and receive its own PLY-001 projection.',
     ],
   },
   {
@@ -3260,7 +3285,7 @@ const ADR0069_CONTRACTS = [
       qaId: 'QA-REQ-004',
       scope: 'REQ-004',
       scenario:
-        'Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.',
+        'Требование «Подключение игрока к кампании». Preconditions: Роль и authority соответствуют player.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-JOIN-REVIEW через формы NET-001, NET-002, NET-003, NET-004, NET-005, NET-006; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-READY-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults. Error/offline: Для NET-001, NET-002, NET-003, NET-004, NET-005, NET-006 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.',
       expected:
         'Terminal states/deltas: {"terminalStatesByForm":{"NET-002":["EMPTY_ADDRESS","PARSE_INVALID","READY_TO_CONNECT","CONNECTING","CONNECTED_TECHNICAL"],"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
     },
@@ -4071,8 +4096,8 @@ function adr0069Row(root: JsonObject, target: string, id: string): JsonObject {
   );
 }
 export function assertAdr0069RequestReview(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.7');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-01');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.8');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
   for (const expected of ADR0069_AUTHORITY_CONTRACTS) {
     const form = adr0069Row(root, 'forms', expected.id);
     for (const [key, value] of Object.entries(expected.fields))
@@ -4086,9 +4111,9 @@ export function assertAdr0069RequestReview(root: JsonObject): void {
   const counts = asObject(root['counts'], WHERE, 'counts');
   for (const [key, count] of Object.entries({
     forms: 376,
-    transitions: 1694,
-    workflowCommands: 109,
-    qaScenarios: 2446,
+    transitions: 1697,
+    workflowCommands: 111,
+    qaScenarios: 2448,
   })) {
     adr0069Expect(counts[key], count, 'counts.' + key);
   }
@@ -4229,6 +4254,8 @@ export async function importAtlas(): Promise<AtlasImport> {
   assertAdr0052AdvisorIntelligenceFloor(root);
   assertAdr0069RequestReview(root);
   assertAdr0071Admission(root);
+  assertAdr0073LobbyStart(root);
+  assertAdr0073LobbyStartMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0071AdmissionMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
 
   // --- forms --------------------------------------------------------------

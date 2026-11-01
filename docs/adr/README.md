@@ -104,6 +104,7 @@
 | [0070](0070-network-request-source-contracts.md)                     | Отдельная библиотека сетевых контрактов заявки     | принято; #195                               |
 | [0071](0071-campaign-admission-source-closure.md)                    | Рабочие копии, финальный допуск и лобби в Atlas    | принято; #199                               |
 | [0072](0072-campaign-copy-admission-runtime.md)                      | Runtime рабочих копий и решения владельца          | принято                                     |
+| [0073](0073-campaign-lobby-start-source.md)                          | Ready, начальное время и первая мирная проекция    | принято; #206                               |
 
 ## Перенос решений аудита
 

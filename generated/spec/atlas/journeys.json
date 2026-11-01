@@ -480,7 +480,8 @@
     "alternatives": [
       "Незаполненные масса/имущество блокируют Ready, но сохраняют lobby copy.",
       "Игровая вкладка host-PC появляется только после полного допуска и назначения local seat.",
-      "После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы."
+      "После REJECTED владелец заявки при действующей technical session возвращается NET-005→NET-003 для выбора персонажей. Старые request и receipt сохраняются; переход не делает новый submit, не удаляет заявку и не меняет локальные листы.",
+      "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
@@ -592,6 +593,14 @@
         "guards": "Игрок принимает diff целиком или отказывается.",
         "result": "Целый batch принят в собственное лобби с явными blockers либо отклонён без admission; Ready и Start не подтверждаются этим решением.",
         "state": "PLAYER_DECISION"
+      },
+      {
+        "formIds": [
+          "NET-006"
+        ],
+        "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+        "result": "The admitted device explicitly confirms or withdraws Ready for its exact included ACTIVE set. Blocked PROPOSED copies remain visibly outside that set; admission acceptance itself never confirms Ready or starts the campaign.",
+        "state": "LOBBY_READY"
       }
     ],
     "title": "Подключение устройства, review и допуск кампанийной копии",
@@ -605,18 +614,24 @@
       "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
       "UI-CMD-DEVICE-REQUEST-REJECT",
       "UI-CMD-ADMISSION-REVIEW-OPEN",
-      "UI-CMD-GM-WEAPON-REQUEST-RESOLVE"
+      "UI-CMD-GM-WEAPON-REQUEST-RESOLVE",
+      "UI-CMD-CAMPAIGN-READY-SET"
     ]
   },
   {
     "alternatives": [
       "Свободные места не блокируют Start.",
       "NPC не занимает PC capacity.",
-      "Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards."
+      "Из CMP-006 единственный GM может открыть NET-017 и вернуться в CMP-006; это read-only переход к отдельному J-JOIN-REVIEW, доступный при нуле заявок и без выполнения Start. The PAUSED requirement belongs to the new CMP-006 ingress/return route. It does not introduce a global PAUSED-only restriction on request-level decisions or alter the guards of other NET-017 entry paths. The preliminary delivery exposes only the CMP-006 capability; other campaign phases and routes remain subject to their separately implemented source guards.",
+      "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
+      "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
+      "Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
+      "Journey participants include GM and player, without broadening form authority: campaign creation, initial-time input and Start remain GM-only; the player can confirm only its own exact Ready set on NET-006 and receive its own PLY-001 projection."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Host close/checkpoint/refresh возвращают paused state; два master authority блокируются NET-026."
+      "Host close/checkpoint/refresh возвращают paused state; два master authority блокируются NET-026.",
+      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
     ],
     "formIds": [
       "APP-011",
@@ -627,7 +642,11 @@
       "CMP-005",
       "CMP-006",
       "CMP-007",
-      "NET-016"
+      "NET-016",
+      "NET-006",
+      "GM-001",
+      "GRP-001",
+      "PLY-001"
     ],
     "id": "J-CAMPAIGN-CREATE",
     "operationIds": [],
@@ -636,7 +655,8 @@
       "Q-GM-030"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "player"
     ],
     "ruleIds": [],
     "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
@@ -672,17 +692,23 @@
       {
         "formIds": [
           "CMP-007",
-          "NET-016"
+          "NET-016",
+          "NET-006",
+          "GM-001",
+          "GRP-001",
+          "PLY-001"
         ],
-        "guards": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
-        "result": "Активная мирная сцена.",
+        "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "result": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
         "state": "LOBBY_START"
       }
     ],
     "title": "Создание и запуск кампании",
     "workflowCommandIds": [
       "UI-CMD-CAMPAIGN-CREATE",
-      "UI-CMD-CAMPAIGN-START"
+      "UI-CMD-CAMPAIGN-START",
+      "UI-CMD-CAMPAIGN-READY-SET",
+      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
     ]
   },
   {
@@ -5055,7 +5081,8 @@
   },
   {
     "alternatives": [
-      "Player password is not invented; master password never enters player payload."
+      "Player password is not invented; master password never enters player payload.",
+      "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
@@ -5114,7 +5141,8 @@
       "UI-CMD-CAMPAIGN-CAPACITY-SET",
       "UI-CMD-CAMPAIGN-START",
       "UI-CMD-CLIENT-DISCONNECT",
-      "UI-CMD-MASTER-PASSWORD-CHANGE"
+      "UI-CMD-MASTER-PASSWORD-CHANGE",
+      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
     ]
   },
   {

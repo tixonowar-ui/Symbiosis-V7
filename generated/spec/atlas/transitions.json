@@ -246,7 +246,7 @@
   },
   {
     "from": "CMP-007",
-    "guard": "Start при ≥1 валидном active PC и Ready всех включённых controlling devices.",
+    "guard": "Sole current campaign GM authority; pre-Start PAUSED; lobby available even with zero ACTIVE PCs or unconfirmed time/Ready; navigation does not Start.",
     "kind": "subflow",
     "to": "NET-016",
     "trigger": "J-CAMPAIGN-CREATE::LOBBY_START::open"
@@ -3914,7 +3914,7 @@
   },
   {
     "from": "NET-006",
-    "guard": "Ready and admitted",
+    "guard": "SERVER_ONLY_ROLE_PROJECTION; confirmed singleton Start receipt; this owned campaignCharacterId is in the committed included ACTIVE set; current authenticated admitted binding. No client navigation can Start or enter a blocked copy.",
     "kind": "normative",
     "to": "PLY-001",
     "trigger": "Start подтверждён мастером"
@@ -6413,7 +6413,7 @@
   },
   {
     "from": "NET-016",
-    "guard": "UI-CMD-CAMPAIGN-START guards",
+    "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
     "kind": "workflow-command",
     "to": "GM-001",
     "trigger": "Начать кампанию"
@@ -11856,5 +11856,26 @@
     "kind": "safe-return",
     "to": "PLY-030",
     "trigger": "Вернуться через экран приватности"
+  },
+  {
+    "from": "NET-006",
+    "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+    "kind": "workflow-command",
+    "to": "NET-006",
+    "trigger": "Готов"
+  },
+  {
+    "from": "NET-006",
+    "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+    "kind": "workflow-command",
+    "to": "NET-006",
+    "trigger": "Отменить готовность"
+  },
+  {
+    "from": "NET-016",
+    "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+    "kind": "workflow-command",
+    "to": "NET-016",
+    "trigger": "Сохранить начальное время"
   }
 ]

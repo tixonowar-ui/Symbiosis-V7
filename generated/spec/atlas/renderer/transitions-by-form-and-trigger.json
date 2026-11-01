@@ -2685,6 +2685,20 @@
     }
   },
   "GM-001": {
+    "Группы": {
+      "from": "GM-001",
+      "guard": "confirmed host authority",
+      "kind": "normative",
+      "to": "GRP-001",
+      "trigger": "Группы"
+    },
+    "Кампания и настройки host": {
+      "from": "GM-001",
+      "guard": "confirmed GM authority; campaign active or paused; safe boundary; no incompatible pending operation",
+      "kind": "normative",
+      "to": "CMP-007",
+      "trigger": "Кампания и настройки host"
+    },
     "Химера: скрытые пороги и внешние Пожирания": {
       "from": "GM-001",
       "guard": "confirmed GM authority; campaign contains an active/imported CHIMERA instance; GM-only data are absent from every player projection",
@@ -3506,10 +3520,24 @@
   "NET-006": {
     "Start подтверждён мастером": {
       "from": "NET-006",
-      "guard": "Ready and admitted",
+      "guard": "SERVER_ONLY_ROLE_PROJECTION; confirmed singleton Start receipt; this owned campaignCharacterId is in the committed included ACTIVE set; current authenticated admitted binding. No client navigation can Start or enter a blocked copy.",
       "kind": "normative",
       "to": "PLY-001",
       "trigger": "Start подтверждён мастером"
+    },
+    "Готов": {
+      "from": "NET-006",
+      "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+      "kind": "workflow-command",
+      "to": "NET-006",
+      "trigger": "Готов"
+    },
+    "Отменить готовность": {
+      "from": "NET-006",
+      "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+      "kind": "workflow-command",
+      "to": "NET-006",
+      "trigger": "Отменить готовность"
     }
   },
   "NET-008": {
@@ -3577,10 +3605,17 @@
     },
     "Начать кампанию": {
       "from": "NET-016",
-      "guard": "UI-CMD-CAMPAIGN-START guards",
+      "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
       "kind": "workflow-command",
       "to": "GM-001",
       "trigger": "Начать кампанию"
+    },
+    "Сохранить начальное время": {
+      "from": "NET-016",
+      "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+      "kind": "workflow-command",
+      "to": "NET-016",
+      "trigger": "Сохранить начальное время"
     }
   },
   "NET-017": {
