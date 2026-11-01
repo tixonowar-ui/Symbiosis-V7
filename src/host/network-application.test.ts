@@ -2324,9 +2324,11 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
       expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
     });
     beforeEach(async () => {
-      // Restoring the published proposal is the common starting state for all decision/recovery assertions.
+      // This composite SQLite/peer restoration previously ran inside a 30s scenario.
+      // Moving initial setup to a hook must not impose the implicit 10s hook deadline.
+      // Later recovery/fault assertions retain their separate 30s scenario budget.
       await p.restart();
-    });
+    }, 30000);
     it('delivers the complete owner result, preserves source and recovers original decisions after SQLite reopen', async () => {
       let owner = p.payload();
       admissionOwnerProjectionValue(scenario === 'REJECT' ? 'NET-007' : 'NET-027', owner);
