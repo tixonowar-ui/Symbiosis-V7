@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import { campaignQrPayload } from '@shared/campaign-creation.js';
 import {
@@ -43,7 +43,39 @@ import {
   readHostedDeviceRequest,
   readHostedPausedCampaignIds,
   type HostedNetworkPrincipal,
+  commitGmRequestReviewNavigation,
+  commitGmRequestReviewDraft,
+  readGmRequestReviewView,
+  commitGmDeviceRequestDecision,
 } from '../persistence/network-device-request.js';
+import {
+  commitAdmissionReviewOpen,
+  commitAdmissionReviewEdit,
+  type AdmissionReviewRead,
+} from '../persistence/campaign-admission-review.js';
+import {
+  commitAdmissionGmDecision,
+  readAdmissionDecision,
+} from '../persistence/campaign-admission-decision.js';
+import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import { validateFinalAdmissionReviewSource } from './device-admission-candidate.js';
+import { deriveAdmissionSourceProperties } from './campaign-admission-inventory.js';
+import {
+  encodeAdmissionPeerCommand,
+  decodeAdmissionPeerResponse,
+  encodeAdmissionCapacityCommand,
+  decodeAdmissionCapacityResponse,
+  type AdmissionPeerCommand,
+  type AdmissionPeerResponse,
+} from './campaign-admission-peer-codec.js';
+import { validateAdmissionOwnerPublication } from '../persistence/local-campaign-admission.js';
+import {
+  admissionPlayerDecisionReceiptValue,
+  admissionGmDecisionNotice,
+  type AdmissionOwnerPublication,
+  type AdmissionPlayerDecisionRequest,
+} from '@shared/campaign-admission-proposal.js';
+import type { AdmissionReviewMutation } from '@shared/campaign-admission-review.js';
 import type { NetworkPreparedBatch } from '../persistence/network-local-application.js';
 import { loadCampaignCheckpoint } from '../persistence/store.js';
 import {
@@ -476,6 +508,18 @@ async function host(
 }
 type Host = Awaited<ReturnType<typeof host>>;
 type Client = Awaited<ReturnType<Host['connect']>>;
+const admissionLimits = {
+  maxPublicationBytes: limits.maxSubmitBodyBytes,
+  maxChunkBytes: limits.maxChunkBytes,
+};
+const admissionCall = async (
+  client: Client,
+  command: AdmissionPeerCommand,
+): Promise<AdmissionPeerResponse> =>
+  decodeAdmissionPeerResponse(
+    await client.call(encodeAdmissionPeerCommand(command)),
+    admissionLimits,
+  );
 const call = async (
   client: Client,
   command: DeviceAdmissionPeerCommand,
@@ -570,6 +614,458 @@ async function transferred(
     }),
   };
 }
+
+describe('final admission over the actual authenticated peer channel', () => {
+  let p: Host,
+    connection: Awaited<ReturnType<typeof opened>>,
+    prepared: NetworkPreparedBatch,
+    review: AdmissionReviewRead;
+  const allow = () => undefined;
+  const scope = () => ({
+    ownerDeviceId: p.principal.hostOwnerDeviceId,
+    campaignId: p.campaignId,
+    gmLocalContextId: readHostedCampaignCreationOrigin(p.db, p.campaignId, p.validate).command
+      .request.payload.gmLocalContextId,
+  });
+  const rules = () => createCampaignAdmissionRules(baseline, limits.maxWitnessBytes);
+  const binding = () => ({
+    requestId: prepared.requestId,
+    technicalSessionId: prepared.technicalSessionId,
+    submitCommandId: 'submit-command',
+  });
+  beforeEach(async () => {
+    p = await host({ limits: { maxActiveTransfers: 1 } });
+    connection = await opened(p);
+    prepared = batch(connection.session);
+    expect((await transferred(connection.peer, prepared)).result.outcome).toBe('ACK');
+  });
+  const preliminary = () => {
+    const s = scope();
+    commitGmRequestReviewNavigation(
+      p.db,
+      s,
+      {
+        messageType: 'navigation.form-action',
+        protocolVersion: 2,
+        navigationRequestId: randomUUID(),
+        sourceFormId: 'CMP-006',
+        actionKey: 'CMP-006::CTA::002',
+        expectedProjectionRevision: 0,
+      },
+      p.validate,
+      allow,
+    );
+    const view = readGmRequestReviewView(p.db, s, p.validate)!;
+    const selected = commitGmRequestReviewDraft(
+      p.db,
+      s,
+      {
+        messageType: 'network.gm-request-draft.replace',
+        protocolVersion: 3,
+        draftUpdateId: randomUUID(),
+        scope: {
+          gmLocalContextId: s.gmLocalContextId,
+          campaignId: p.campaignId,
+          sourceFormId: 'NET-017',
+        },
+        expectedRevisions: vector(view),
+        expectedRequestQueueRevision: view.requestQueueRevision,
+        values: { selectedRequestIdOrNull: prepared.requestId, decisionReason: '' },
+      },
+      p.validate,
+      allow,
+    ).current;
+    return commitGmDeviceRequestDecision(
+      p.db,
+      s,
+      {
+        request: {
+          messageType: 'command.request',
+          protocolVersion: 1,
+          commandKind: 'workflow-command',
+          role: 'gm',
+          workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+          commandId: randomUUID(),
+          expectedRevisions: vector(selected),
+          payload: { campaignId: p.campaignId, requestId: prepared.requestId, requestRevision: 0 },
+        },
+        receiptId: randomUUID(),
+        timestamp: '2026-11-01T00:01:00.000Z',
+      },
+      p.validate,
+      allow,
+    ).current;
+  };
+  const edit = (mutation: Extract<AdmissionReviewMutation, { kind: 'EDIT' | 'WEAPON' }>) => {
+    review = commitAdmissionReviewEdit(
+      p.db,
+      scope(),
+      {
+        request: {
+          commandId: randomUUID(),
+          admissionBatchId: review.current.admissionBatchId,
+          expectedReviewRevision: review.current.reviewRevision,
+          intent: mutation,
+        },
+        receiptId: randomUUID(),
+        timestamp: '2026-11-01T00:03:00.000Z',
+      },
+      p.validate,
+      rules().rules,
+      () => mutation,
+      allow,
+    ).review;
+  };
+  const capacityAt = async (peer: Client, technicalSessionId: string) =>
+    decodeAdmissionCapacityResponse(
+      await peer.call(
+        encodeAdmissionCapacityCommand({
+          schemaVersion: 1,
+          operation: 'ADMISSION_CAPACITY_READ',
+          technicalSessionId,
+        }),
+      ),
+    );
+  it('does not manufacture a publication before final GM review', async () => {
+    const before = p.db.serialize();
+    expect(
+      await admissionCall(connection.peer, {
+        schemaVersion: 1,
+        operation: 'ADMISSION_PUBLICATION_BEGIN',
+        ...binding(),
+      }),
+    ).toMatchObject({ outcome: 'NOT_READY' });
+    expect(p.db.serialize().equals(before)).toBe(true);
+    expect(await capacityAt(connection.peer, prepared.technicalSessionId)).toMatchObject({
+      outcome: 'CAPACITY',
+      occupiedCampaignPlaceCount: 0,
+      alreadyImportedSourceUuids: [],
+    });
+  });
+  describe('published whole proposal', () => {
+    let decision: AdmissionPlayerDecisionRequest, publication: AdmissionOwnerPublication;
+    beforeEach(() => {
+      const view = preliminary(),
+        service = rules();
+      review = commitAdmissionReviewOpen(
+        p.db,
+        scope(),
+        {
+          request: {
+            messageType: 'command.request',
+            protocolVersion: 1,
+            commandKind: 'workflow-command',
+            role: 'gm',
+            workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN',
+            commandId: randomUUID(),
+            expectedRevisions: vector(view),
+            payload: {
+              campaignId: p.campaignId,
+              requestId: prepared.requestId,
+              requestRevision: 1,
+            },
+          },
+          receiptId: randomUUID(),
+          timestamp: '2026-11-01T00:02:00.000Z',
+        },
+        p.validate,
+        service.rules,
+        (request) => service.initial(request, randomUUID),
+        allow,
+      ).review;
+    });
+    beforeEach(() => {
+      const copy = review.current.copies[0]!;
+      edit({
+        kind: 'EDIT',
+        reviewCopyId: copy.reviewCopyId,
+        inputs: {
+          ...copy.inputs,
+          groupAssignmentOrNull: { kind: 'START' },
+          locationAssignmentOrNull: { location: 'Город', subLocationOrNull: null },
+        },
+      });
+      const source = validateFinalAdmissionReviewSource(
+        candidate.canonicalWitnessText,
+        playerMaterial.ownerDeviceId,
+        candidate.descriptor,
+        candidate.exportDocument,
+        baseline,
+        { maxWitnessBytes: limits.maxWitnessBytes },
+      );
+      for (const property of deriveAdmissionSourceProperties(source))
+        if (property.weaponRequestOrNull !== null)
+          edit({
+            kind: 'WEAPON',
+            reviewCopyId: copy.reviewCopyId,
+            input: {
+              weaponReviewInput: { kind: 'VALIDATED_REQUEST', ...property.weaponRequestOrNull },
+              decision: 'APPROVE',
+              overrideProfileOrNull: null,
+              reasonOrNull: null,
+            },
+          });
+    });
+    beforeEach(() => {
+      const service = rules(),
+        preview = service.rules.buildProposal(review, [null]);
+      const published = commitAdmissionGmDecision(
+        p.db,
+        scope(),
+        {
+          request: {
+            commandId: randomUUID(),
+            campaignId: p.campaignId,
+            admissionBatchId: review.current.admissionBatchId,
+            reviewRevision: review.current.reviewRevision,
+            expectedCampaignRevision: p.header().stateRevision,
+            decision: 'ACCEPT',
+            previewChecksumOrNull: preview.proposalChecksum,
+            reasonOrNull: null,
+          },
+          receiptId: randomUUID(),
+          timestamp: '2026-11-01T00:04:00.000Z',
+        },
+        p.validate,
+        service.rules,
+        randomUUID,
+        allow,
+      ).current;
+      const proposal = published.gmDecisionOrNull!.proposalOrNull!;
+      const body = {
+        schemaVersion: 1 as const,
+        gmDecision: admissionGmDecisionNotice(published.gmDecisionOrNull!.receipt),
+        groupLabels: [],
+        proposalOrNull: proposal,
+      };
+      publication = { ...body, publicationChecksum: postSaveSha256(canonicalPostSaveJson(body)) };
+      decision = {
+        commandId: randomUUID(),
+        campaignId: p.campaignId,
+        admissionBatchId: proposal.admissionBatchId,
+        proposalRevision: proposal.proposalRevision,
+        proposalChecksum: proposal.proposalChecksum,
+        expectedCampaignRevision: p.header().stateRevision,
+        decision: 'DECLINE',
+        controllerPreparationOrNull: null,
+      };
+    });
+    const recover = (): AdmissionPeerCommand => ({
+      schemaVersion: 1,
+      operation: 'ADMISSION_PLAYER_RECOVER',
+      ...binding(),
+      commandId: decision.commandId,
+      admissionBatchId: decision.admissionBatchId,
+      semanticBodySha256: postSaveSha256(canonicalPostSaveJson(decision)),
+    });
+    beforeEach(async () => {
+      // Human GM review can outlive the idle transport. Resume the actual original session.
+      connection = { ...connection, peer: await p.connect() };
+      expect(
+        await call(connection.peer, {
+          schemaVersion: 1,
+          operation: 'DEVICE_REQUEST_RECOVER',
+          ...binding(),
+        }),
+      ).toMatchObject({ outcome: 'ACK' });
+    });
+    it('downloads exact canonical owner bytes, releases the shared slot and refuses another original request scope', async () => {
+      const manifest = await admissionCall(connection.peer, {
+        schemaVersion: 1,
+        operation: 'ADMISSION_PUBLICATION_BEGIN',
+        ...binding(),
+      });
+      if (manifest.outcome !== 'MANIFEST') throw new Error(JSON.stringify(manifest));
+      const chunks: Buffer[] = [];
+      for (let index = 0; index < manifest.chunkCount; index++) {
+        const chunk = await admissionCall(connection.peer, {
+          schemaVersion: 1,
+          operation: 'ADMISSION_PUBLICATION_CHUNK',
+          ...binding(),
+          transferId: manifest.transferId,
+          publicationChecksum: manifest.publicationChecksum,
+          chunkIndex: index,
+        });
+        if (chunk.outcome !== 'CHUNK') throw new Error(JSON.stringify(chunk));
+        chunks.push(Buffer.from(chunk.bytesBase64, 'base64'));
+      }
+      const bytes = Buffer.concat(chunks),
+        publication = validateAdmissionOwnerPublication(
+          JSON.parse(bytes.toString('utf8')) as unknown,
+        );
+      expect(bytes.length).toBe(manifest.byteLength);
+      expect(postSaveSha256(bytes)).toBe(manifest.bodySha256);
+      expect(publication.publicationChecksum).toBe(manifest.publicationChecksum);
+      expect(publication.gmDecision.requestId).toBe(prepared.requestId);
+      expect(
+        publication.proposalOrNull!.fullCampaignCopyDiffs[0]!.campaignCharacterIdOrNull,
+      ).not.toBeNull();
+      expect(bytes.toString('utf8')).not.toContain('authoritativeGmActorId');
+      expect(
+        await admissionCall(connection.peer, {
+          schemaVersion: 1,
+          operation: 'ADMISSION_PUBLICATION_CHUNK',
+          ...binding(),
+          requestId: randomUUID(),
+          transferId: manifest.transferId,
+          publicationChecksum: manifest.publicationChecksum,
+          chunkIndex: 0,
+        }),
+      ).toMatchObject({ outcome: 'REFUSED', code: 'TRANSFER_UNAVAILABLE' });
+      const uploadFromAnotherDevice = async () => {
+        const client = await p.connect(generateDeviceInstallationIdentityMaterial(randomUUID()));
+        const next = await opened(p, client, randomUUID(), randomUUID());
+        // The upload manifest is only a bounded reservation, never a trusted FINAL or a committed request.
+        return call(client, begin(batch(next.session), randomUUID()));
+      };
+      expect(await uploadFromAnotherDevice()).toMatchObject({ outcome: 'TRANSFER_READY' });
+      connection.peer.close();
+      // Closing the completed download must not release the other device's reservation a second time.
+      expect(await uploadFromAnotherDevice()).toMatchObject({
+        outcome: 'REFUSED',
+        code: 'TRANSFER_LIMIT',
+      });
+    });
+    it('commits the whole decision and recovers the exact receipt after losing its first reply', async () => {
+      const command: AdmissionPeerCommand = {
+        schemaVersion: 1,
+        operation: 'ADMISSION_PLAYER_DECIDE',
+        ...binding(),
+        decision,
+      };
+      const first = await admissionCall(connection.peer, command);
+      expect(first.outcome, JSON.stringify(first)).toBe('DECIDED');
+      if (first.outcome !== 'DECIDED') throw new Error(JSON.stringify(first));
+      const receipt = admissionPlayerDecisionReceiptValue(
+        JSON.parse(first.receiptCanonicalJson) as unknown,
+        publication,
+      );
+      expect(receipt.decision).toBe('DECLINE');
+      expect(
+        receipt.copies.every((c) => c.lifecycleState === 'DECLINED' && !c.occupiesCampaignPlace),
+      ).toBe(true);
+      const next = await p.connect(),
+        replay = await admissionCall(next, recover());
+      expect(replay).toEqual({ ...first, operation: 'ADMISSION_PLAYER_RECOVER' });
+      expect(
+        await admissionCall(next, {
+          ...recover(),
+          commandId: randomUUID(),
+        } as AdmissionPeerCommand),
+      ).toMatchObject({ outcome: 'REFUSED', code: 'IDEMPOTENCY_CONFLICT' });
+      expect(p.header().activePcCount).toBe(0);
+    });
+    it('fences late decisions before proving absence and releases the previous download', async () => {
+      const first = await admissionCall(connection.peer, {
+        schemaVersion: 1,
+        operation: 'ADMISSION_PUBLICATION_BEGIN',
+        ...binding(),
+      });
+      expect(first.outcome).toBe('MANIFEST');
+      const next = await p.connect(),
+        absent = await admissionCall(next, recover());
+      expect(absent).toMatchObject({
+        outcome: 'NOT_APPLIED',
+        proof: {
+          fenced: true,
+          commandId: decision.commandId,
+          requestId: prepared.requestId,
+          technicalSessionId: prepared.technicalSessionId,
+          code: 'NOT_APPLIED',
+        },
+      });
+      expect(
+        await admissionCall(connection.peer, {
+          schemaVersion: 1,
+          operation: 'ADMISSION_PLAYER_DECIDE',
+          ...binding(),
+          decision,
+        }),
+      ).toMatchObject({ outcome: 'REFUSED', code: 'STALE_GENERATION' });
+      expect(
+        readAdmissionDecision(p.db, scope(), decision.admissionBatchId, p.validate, rules().rules)
+          .playerDecisionOrNull,
+      ).toBeNull();
+      expect(
+        await admissionCall(next, {
+          schemaVersion: 1,
+          operation: 'ADMISSION_PUBLICATION_BEGIN',
+          ...binding(),
+        }),
+      ).toMatchObject({ outcome: 'MANIFEST' });
+    });
+    it('returns fresh proof and occupied lobby places but only the authenticated owners imported sources', async () => {
+      const before = await capacityAt(connection.peer, prepared.technicalSessionId);
+      expect(before).toMatchObject({
+        outcome: 'CAPACITY',
+        occupiedCampaignPlaceCount: 0,
+        alreadyImportedSourceUuids: [candidate.descriptor.sourceUuid],
+      });
+      const proposal = publication.proposalOrNull!;
+      if (prepared.schemaVersion !== 2) throw new Error('Expected real submitted lane');
+      const request: AdmissionPlayerDecisionRequest = {
+        ...decision,
+        decision: 'ACCEPT',
+        controllerPreparationOrNull: {
+          schemaVersion: 1,
+          preparationId: randomUUID(),
+          requestId: prepared.requestId,
+          ownerDeviceId: playerMaterial.ownerDeviceId,
+          campaignId: p.campaignId,
+          admissionBatchId: proposal.admissionBatchId,
+          proposalRevision: proposal.proposalRevision,
+          proposalChecksum: proposal.proposalChecksum,
+          controllerBindings: [
+            {
+              campaignCharacterId: proposal.fullCampaignCopyDiffs[0]!.campaignCharacterIdOrNull!,
+              deviceId: playerMaterial.ownerDeviceId,
+              localControllerSeatId: prepared.localControllerSeatId,
+              inputLaneId: prepared.localControllerSeatId,
+            },
+          ],
+        },
+      };
+      const accepted = await admissionCall(connection.peer, {
+        schemaVersion: 1,
+        operation: 'ADMISSION_PLAYER_DECIDE',
+        ...binding(),
+        decision: request,
+      });
+      expect(accepted.outcome, JSON.stringify(accepted)).toBe('DECIDED');
+      const after = await capacityAt(connection.peer, prepared.technicalSessionId);
+      expect(after).toMatchObject({
+        outcome: 'CAPACITY',
+        occupiedCampaignPlaceCount: 1,
+        campaign: { activePcCount: 0 },
+        alreadyImportedSourceUuids: [candidate.descriptor.sourceUuid],
+      });
+      if (after.outcome !== 'CAPACITY') throw new Error('Expected capacity');
+      expect(after.campaign.checkpointSha256).toBe(p.header().checkpointSha256);
+      expect(after.campaign.revisions.stateRevision).toBeGreaterThan(
+        connection.peer.campaign.revisions.stateRevision,
+      );
+      const foreign = await p.connect(generateDeviceInstallationIdentityMaterial(randomUUID())),
+        foreignSession = await opened(p, foreign, randomUUID(), randomUUID());
+      expect(await capacityAt(foreign, foreignSession.session.technicalSessionId)).toMatchObject({
+        outcome: 'CAPACITY',
+        occupiedCampaignPlaceCount: 1,
+        alreadyImportedSourceUuids: [],
+      });
+    });
+    it('does not turn a different batch or corrupted terminal history into permission to replace an intent', async () => {
+      const next = await p.connect();
+      expect(
+        await admissionCall(next, {
+          ...recover(),
+          admissionBatchId: randomUUID(),
+        } as AdmissionPeerCommand),
+      ).toMatchObject({ outcome: 'REFUSED', code: 'IDEMPOTENCY_CONFLICT' });
+      p.db.pragma('foreign_keys = OFF');
+      p.db.prepare('DELETE FROM campaign_admission_gm_decision').run();
+      expect(await admissionCall(next, recover())).toMatchObject({ outcome: 'REFUSED' });
+    });
+  });
+});
 
 describe('actual owner-bound campaign peer application', () => {
   it('commits OPEN/SUBMIT/CANCEL with short receipts, source-backed replay and no copy/capacity/source mutation', async () => {

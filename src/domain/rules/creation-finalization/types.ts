@@ -1,6 +1,6 @@
 import type { ClassCode, RaceCode, StatCode } from '@generated/types/character.js';
 
-import type { LearnedSkill } from '../skill-stage/skills.js';
+import type { LearnedSkill, SelectedSkillInput } from '../skill-stage/skills.js';
 import type { CreationMode, StatBlock } from '../skill-stage/stats.js';
 import type { SymbiontCatalog, SymbiontSpeciesKey } from '../symbiont-stage/catalog.js';
 import type { SymbiontComposition, SymbiontInstanceStatus } from '../symbiont-stage/composition.js';
@@ -139,4 +139,19 @@ export interface CreationFinalMechanics {
   readonly symbionts: readonly CreationInitialSymbiont[];
   readonly initialRuntime: CreationInitialRuntime;
   readonly blockers: readonly CreationValidationBlocker[];
+}
+
+/** AQ2-002 edits a campaign proposal; the verified local FINAL remains immutable. */
+export interface AdmissionMechanicsInput {
+  readonly source: CreationFinalMechanicsInput;
+  readonly permanentGmAdjustments: StatBlock;
+  readonly backpackItemAdjustments: StatBlock;
+  readonly selectedSkills: readonly SelectedSkillInput[];
+}
+export interface AdmissionMechanics {
+  readonly mechanics: CreationFinalMechanics;
+  readonly permanentEffectiveStats: StatBlock;
+  readonly maxSlots: number;
+  readonly usedSlots: number;
+  readonly remainingSlots: number;
 }

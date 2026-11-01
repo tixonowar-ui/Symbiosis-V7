@@ -11,6 +11,7 @@ import type {
   HostToClientV2Message,
   HostToClientV3Message,
   PresentedBaseForm,
+  PresentedLayerForm,
   RevisionVector,
   JsonObject,
   FormActionIntentV2Message,
@@ -95,9 +96,11 @@ interface Dependencies {
   readonly bind: ReturnType<typeof createCampaignBindManager>;
   /** The application composition publishes the saved bind on the actual private listener. */
   readonly requestReview?: {
-    readonly project: (
-      c: CampaignConnection,
-    ) => Promise<{ base: PresentedBaseForm; revisions: RevisionVector }>;
+    readonly project: (c: CampaignConnection) => Promise<{
+      base: PresentedBaseForm;
+      layers?: readonly PresentedLayerForm[];
+      revisions: RevisionVector;
+    }>;
     readonly receipt: (c: CampaignConnection, id: string) => CommandReceipt | null;
     readonly refreshConnectionPresentation: (c: CampaignConnection) => void;
   };
@@ -330,9 +333,11 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       roleFilteredPayload: payload,
     };
   }
-  async function project(
-    c: CampaignConnection,
-  ): Promise<{ base: PresentedBaseForm; revisions: RevisionVector }> {
+  async function project(c: CampaignConnection): Promise<{
+    base: PresentedBaseForm;
+    layers?: readonly PresentedLayerForm[];
+    revisions: RevisionVector;
+  }> {
     const ctx = context(c),
       cursor = readCampaignCreationCursor(db, ctx.gmLocalContextId),
       shared = common(ctx);
@@ -340,7 +345,10 @@ export function createCampaignCreationRuntime(d: Dependencies) {
     let available = actions[cursor.formId] ?? [];
     if (cursor.kind === 'MENU') {
       payload = menuPayload(ctx);
-    } else if (cursor.kind === 'QUEUE' && cursor.formId === 'NET-017') {
+    } else if (
+      cursor.kind === 'ADMISSION' ||
+      (cursor.kind === 'QUEUE' && cursor.formId === 'NET-017')
+    ) {
       if (d.requestReview === undefined) return unavailable();
       return d.requestReview.project(c);
     } else if (cursor.kind === 'CAMPAIGN' || cursor.kind === 'QUEUE') {
@@ -486,7 +494,11 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       protocolVersion: 2,
       projectionRole: 'gm',
       revisions: view.revisions,
-      presentation: { assignment: { correlationId: id, reason }, base: view.base, layers: [] },
+      presentation: {
+        assignment: { correlationId: id, reason },
+        base: view.base,
+        layers: view.layers ?? [],
+      },
     };
   };
   const launchSnapshot = (ctx: LocalGmContext, id: string): HostToClientV2Message => ({
@@ -974,17 +986,27 @@ export function createCampaignCreationRuntime(d: Dependencies) {
               : message.supportedWorkflowCommandIds.filter(
                   (id) =>
                     id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||
-                    id === 'UI-CMD-DEVICE-REQUEST-REJECT',
+                    id === 'UI-CMD-DEVICE-REQUEST-REJECT' ||
+                    id === 'UI-CMD-ADMISSION-REVIEW-OPEN' ||
+                    id === 'UI-CMD-ADMISSION-GM-ACCEPT' ||
+                    id === 'UI-CMD-ADMISSION-GM-REJECT' ||
+                    id === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
                 );
           shell.enter();
-          if (readCampaignCreationCursor(db, resumed.gmLocalContextId).kind === 'QUEUE')
+          if (
+            ['QUEUE', 'ADMISSION'].includes(
+              readCampaignCreationCursor(db, resumed.gmLocalContextId).kind,
+            )
+          )
             d.requestReview?.refreshConnectionPresentation(c);
           for (const id of message.unacknowledgedCommandIds) {
             const known = commandAt(resumed, id);
             const reviewed =
               known === null &&
               d.requestReview !== undefined &&
-              readCampaignCreationCursor(db, resumed.gmLocalContextId).kind === 'QUEUE'
+              ['QUEUE', 'ADMISSION', 'CAMPAIGN'].includes(
+                readCampaignCreationCursor(db, resumed.gmLocalContextId).kind,
+              )
                 ? d.requestReview.receipt(c, id)
                 : null;
             if (known !== null || reviewed !== null)

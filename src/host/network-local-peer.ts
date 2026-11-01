@@ -39,6 +39,19 @@ import {
 } from './device-admission-peer-response.js';
 import type { NetworkApplicationConfig } from './network-application-config.js';
 import type { NetworkPublicErrorCode } from '../shared/network-application.js';
+import {
+  readLocalAdmission,
+  validateAdmissionOwnerPublication,
+} from '../persistence/local-campaign-admission.js';
+import {
+  decodeAdmissionPeerResponse,
+  decodeAdmissionCapacityResponse,
+  encodeAdmissionCapacityCommand,
+  type AdmissionCapacityResponse,
+  encodeAdmissionPeerCommand,
+  type AdmissionPeerCommand,
+  type AdmissionPeerResponse,
+} from './campaign-admission-peer-codec.js';
 
 export class LocalNetworkPeerError extends Error {
   constructor(readonly code: NetworkPublicErrorCode) {
@@ -129,11 +142,24 @@ export function createLocalNetworkPeer(d: {
     { target: CampaignLanAddress; channel: CampaignPeerClientChannel }
   >();
   const connecting = new Map<string, AbortController>();
+  const capacities = new Map<
+    string,
+    {
+      channel: CampaignPeerClientChannel;
+      value: Extract<AdmissionCapacityResponse, { outcome: 'CAPACITY' }>;
+    }
+  >();
   const limits = {
     maxSubmitBodyBytes: d.config.transfer.maxSubmitBodyBytes,
     maxWitnessBytes: d.config.transfer.maxWitnessBytes,
     maxChunkBytes: d.config.transfer.maxChunkBytes,
   };
+  const admissionLimits = {
+    maxPublicationBytes: limits.maxSubmitBodyBytes,
+    maxChunkBytes: limits.maxChunkBytes,
+  };
+  const downloading = new Set<string>();
+  let receivingBytes = 0;
   let closed = false;
   const owned = (scope: LocalNetworkScope) => {
     if (closed) return fail('PEER_UNAVAILABLE');
@@ -142,6 +168,7 @@ export function createLocalNetworkPeer(d: {
     return material;
   };
   function closeScope(networkScopeId: string) {
+    capacities.delete(networkScopeId);
     connecting.get(networkScopeId)?.abort();
     connecting.delete(networkScopeId);
     channels.get(networkScopeId)?.channel.close();
@@ -228,7 +255,198 @@ export function createLocalNetworkPeer(d: {
       return fail('UNCONFIRMED_OUTCOME');
     }
   }
+  async function admissionCall(
+    scope: LocalNetworkScope,
+    command: AdmissionPeerCommand,
+  ): Promise<AdmissionPeerResponse> {
+    const channel = live(scope);
+    try {
+      const response = decodeAdmissionPeerResponse(
+        await channel.call(encodeAdmissionPeerCommand(command)),
+        admissionLimits,
+      );
+      owned(scope);
+      if (
+        live(scope) !== channel ||
+        response.operation !== command.operation ||
+        response.requestId !== command.requestId ||
+        response.technicalSessionId !== command.technicalSessionId ||
+        response.submitCommandId !== command.submitCommandId
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+      return response;
+    } catch {
+      return fail('UNCONFIRMED_OUTCOME');
+    }
+  }
   return {
+    async refreshAdmissionCapacity(scope: LocalNetworkScope) {
+      const current = readLocalNetworkApplication(d.database, scope),
+        session = current.sessionOrNull,
+        channel = live(scope);
+      if (session === null || session.campaignProof.campaignId !== channel.campaign.campaignId)
+        return fail('UNCONFIRMED_OUTCOME');
+      capacities.delete(scope.networkScopeId);
+      try {
+        const response = decodeAdmissionCapacityResponse(
+          await channel.call(
+            encodeAdmissionCapacityCommand({
+              schemaVersion: 1,
+              operation: 'ADMISSION_CAPACITY_READ',
+              technicalSessionId: session.technicalSessionId,
+            }),
+          ),
+        );
+        owned(scope);
+        if (live(scope) !== channel || response.technicalSessionId !== session.technicalSessionId)
+          return fail('UNCONFIRMED_OUTCOME');
+        if (response.outcome === 'REFUSED') return response;
+        if (
+          response.campaign.campaignId !== session.campaignProof.campaignId ||
+          !isStoredLocalCharacterExportBaselineCompatible(
+            d.baseline,
+            response.campaign.baselineVersion,
+          )
+        )
+          return fail('UNCONFIRMED_OUTCOME');
+        resolveStoredLocalCharacterExportBaseline(d.baseline, response.campaign.baselineVersion);
+        capacities.set(scope.networkScopeId, { channel, value: response });
+        return response;
+      } catch {
+        return fail('UNCONFIRMED_OUTCOME');
+      }
+    },
+    admissionCapacity(networkScopeId: string) {
+      const saved = capacities.get(networkScopeId);
+      return saved !== undefined &&
+        channels.get(networkScopeId)?.channel === saved.channel &&
+        !saved.channel.closed
+        ? saved.value
+        : null;
+    },
+    async fetchAdmission(scope: LocalNetworkScope) {
+      if (
+        downloading.has(scope.networkScopeId) ||
+        downloading.size >= d.config.transfer.maxActiveTransfers
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+      downloading.add(scope.networkScopeId);
+      try {
+        const current = readLocalNetworkApplication(d.database, scope),
+          request = current.requestOrNull,
+          channel = live(scope);
+        if (
+          request === null ||
+          current.requestReviewOrNull?.requestStatus !== 'IN_REVIEW' ||
+          current.sessionOrNull?.technicalSessionId !== request.technicalSessionId ||
+          current.sessionOrNull.campaignProof.campaignId !== channel.campaign.campaignId
+        )
+          return fail('UNCONFIRMED_OUTCOME');
+        const binding = {
+          requestId: request.requestId,
+          technicalSessionId: request.technicalSessionId,
+          submitCommandId: request.submitCommandId,
+        };
+        const manifest = await admissionCall(scope, {
+          schemaVersion: 1,
+          operation: 'ADMISSION_PUBLICATION_BEGIN',
+          ...binding,
+        });
+        if (manifest.outcome === 'REFUSED' || manifest.outcome === 'NOT_READY') return manifest;
+        if (manifest.outcome !== 'MANIFEST') return fail('UNCONFIRMED_OUTCOME');
+        const reservation = manifest.byteLength * 2;
+        if (reservation > d.config.transfer.maxStagedBytes - receivingBytes)
+          return fail('UNCONFIRMED_OUTCOME');
+        const bytes = Buffer.alloc(manifest.byteLength);
+        receivingBytes += reservation;
+        try {
+          for (let index = 0; index < manifest.chunkCount; index++) {
+            const response = await admissionCall(scope, {
+              schemaVersion: 1,
+              operation: 'ADMISSION_PUBLICATION_CHUNK',
+              ...binding,
+              transferId: manifest.transferId,
+              publicationChecksum: manifest.publicationChecksum,
+              chunkIndex: index,
+            });
+            if (response.outcome === 'REFUSED') return response;
+            if (
+              response.outcome !== 'CHUNK' ||
+              response.transferId !== manifest.transferId ||
+              response.publicationChecksum !== manifest.publicationChecksum ||
+              response.chunkIndex !== index ||
+              live(scope) !== channel
+            )
+              return fail('UNCONFIRMED_OUTCOME');
+            const part = Buffer.from(response.bytesBase64, 'base64'),
+              offset = index * manifest.chunkBytes;
+            if (part.length !== Math.min(manifest.chunkBytes, bytes.length - offset))
+              return fail('UNCONFIRMED_OUTCOME');
+            part.copy(bytes, offset);
+            part.fill(0);
+          }
+          if (postSaveSha256(bytes) !== manifest.bodySha256) return fail('UNCONFIRMED_OUTCOME');
+          const text = bytes.toString('utf8');
+          if (!Buffer.from(text, 'utf8').equals(bytes)) return fail('UNCONFIRMED_OUTCOME');
+          const publication = validateAdmissionOwnerPublication(JSON.parse(text) as unknown);
+          if (
+            canonicalPostSaveJson(publication) !== text ||
+            publication.publicationChecksum !== manifest.publicationChecksum ||
+            publication.gmDecision.campaignId !== channel.campaign.campaignId ||
+            publication.gmDecision.requestId !== request.requestId ||
+            publication.gmDecision.requestOwnerDeviceId !== scope.ownerDeviceId ||
+            live(scope) !== channel
+          )
+            return fail('UNCONFIRMED_OUTCOME');
+          return {
+            outcome: 'PUBLICATION' as const,
+            publication,
+            campaignRevision: manifest.campaignRevision,
+            hostIdentity: channel.hostIdentity,
+          };
+        } catch (error: unknown) {
+          if (error instanceof LocalNetworkPeerError) throw error;
+          return fail('UNCONFIRMED_OUTCOME');
+        } finally {
+          bytes.fill(0);
+          receivingBytes -= reservation;
+        }
+      } finally {
+        downloading.delete(scope.networkScopeId);
+      }
+    },
+    async deliverAdmissionDecision(scope: LocalNetworkScope, requestId: string, recovery: boolean) {
+      const saved = readLocalAdmission(d.database, scope, requestId),
+        request = saved?.pendingDecisionOrNull,
+        channel = live(scope);
+      if (
+        saved === null ||
+        request === null ||
+        request === undefined ||
+        canonicalPostSaveJson(saved.record.hostIdentity) !==
+          canonicalPostSaveJson(channel.hostIdentity) ||
+        request.campaignId !== channel.campaign.campaignId
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+      const binding = {
+        requestId,
+        technicalSessionId: saved.record.technicalSessionId,
+        submitCommandId: saved.record.submitCommandId,
+      };
+      const command: AdmissionPeerCommand = recovery
+        ? {
+            schemaVersion: 1,
+            operation: 'ADMISSION_PLAYER_RECOVER',
+            ...binding,
+            commandId: request.commandId,
+            admissionBatchId: request.admissionBatchId,
+            semanticBodySha256: postSaveSha256(canonicalPostSaveJson(request)),
+          }
+        : { schemaVersion: 1, operation: 'ADMISSION_PLAYER_DECIDE', ...binding, decision: request };
+      const response = await admissionCall(scope, command);
+      if (live(scope) !== channel) return fail('UNCONFIRMED_OUTCOME');
+      return { response, hostIdentity: channel.hostIdentity };
+    },
     async open(
       scope: LocalNetworkScope,
       address: string,

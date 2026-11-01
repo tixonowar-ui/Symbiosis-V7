@@ -7,7 +7,7 @@ import type {
   CapacityForecast,
 } from './device-admission.js';
 import type { JsonObject, RevisionVector, WorkflowCommandRequestMessage } from './wire-protocol.js';
-import type { PresentedBaseForm } from './wire-v2-protocol.js';
+import type { PresentedBaseForm, PresentedLayerForm } from './wire-v2-protocol.js';
 
 /** Player application surfaces of #171; GM review is a separate projection family. */
 export const NETWORK_APPLICATION_FORM_IDS = [
@@ -157,6 +157,7 @@ export interface NetworkGmRequestDraftValues extends JsonObject {
 }
 /** Independent GM projection: it cannot inherit a player scope, device, or controller seat. */
 export interface Net017Projection extends NetworkGmRequestDraftValues {
+  readonly selectedAdmissionOrNull: Readonly<{ published: boolean; hasProposed: boolean }> | null;
   readonly contextId: string;
   readonly campaignId: string;
   readonly stateRevision: number;
@@ -364,7 +365,10 @@ export interface NetworkGmRequestDraftResultV3Message {
   readonly revisions: RevisionVector;
   readonly requestQueueRevision: number;
   readonly projectionRole: 'gm';
-  readonly presentation: { readonly base: PresentedBaseForm; readonly layers: readonly [] };
+  readonly presentation: {
+    readonly base: PresentedBaseForm;
+    readonly layers: readonly PresentedLayerForm[];
+  };
 }
 export type NetworkGmRequestDraftRefusal =
   | {

@@ -1,5 +1,14 @@
 import type { ActionKey } from '@generated/types/atlas.js';
-import type { PresentedBaseForm } from '../../shared/wire-v2-protocol.js';
+import type { PresentedBaseForm, PresentedLayerForm } from '../../shared/wire-v2-protocol.js';
+import type { GmAdmissionView } from '../../persistence/campaign-creation.js';
+import type { AdmissionDecisionRead } from '../../persistence/campaign-admission-decision.js';
+import type { AdmissionHistory } from '../../persistence/campaign-admission-player.js';
+import {
+  admissionSelectedGroupLabels,
+  type createCampaignAdmissionRules,
+} from '../campaign-admission-service.js';
+import type { AdmissionGmViewFormId } from '../../shared/campaign-admission-review.js';
+import { isDeepStrictEqual } from 'node:util';
 import type {
   WorkflowCommandCapabilityId,
   JsonObject,
@@ -23,6 +32,136 @@ import type { PeerCampaignHeader } from '../campaign-peer-handshake.js';
 import type { CampaignDiscoveryScan } from '../campaign-discovery.js';
 import { parseCampaignLanAddress } from '../campaign-lan-address.js';
 import { isNetworkApplicationProjection } from '../../shared/network-application-codec.js';
+import { admissionGmProjectionValue } from '../../shared/campaign-admission-presentation.js';
+import { admissionOwnerProjectionValue } from '../../shared/campaign-admission-presentation.js';
+import {
+  localAdmissionForm,
+  type LocalAdmissionRead,
+} from '../../persistence/local-campaign-admission.js';
+import type { AdmissionCapacityResponse } from '../campaign-admission-peer-codec.js';
+
+export function projectOwnerAdmission(i: {
+  admission: LocalAdmissionRead;
+  application: LocalNetworkApplication;
+  contextId: string;
+  networkScopeId: string;
+  controllerSeat: string;
+  itemLabels: readonly { itemTypeId: string; name: string }[];
+  capacity: Extract<AdmissionCapacityResponse, { outcome: 'CAPACITY' }> | null;
+  connected: boolean;
+  supported: readonly WorkflowCommandCapabilityId[];
+}): PresentedBaseForm {
+  const state = i.admission,
+    publication = state.record.publication,
+    notice = publication.gmDecision;
+  if (
+    state.returnedOrNull !== null ||
+    i.application.ownerDeviceId !== notice.requestOwnerDeviceId ||
+    i.application.networkScopeId !== state.record.scope.networkScopeId ||
+    (i.controllerSeat !== state.record.originalTabId &&
+      !state.additionalTabs.some(
+        (t) => t.tabId === i.controllerSeat && t.networkScopeId === i.networkScopeId,
+      ))
+  )
+    throw new Error('owner admission scope mismatch');
+  const proposal = publication.proposalOrNull,
+    receipt = state.receiptOrNull,
+    formId = localAdmissionForm(state);
+  const capacity =
+    i.capacity === null || proposal === null
+      ? null
+      : {
+          evaluatedCampaignRevision: i.capacity.campaign.revisions.stateRevision,
+          activePlayerCapacity: i.capacity.campaign.activePlayerCapacity,
+          occupiedCampaignPlaceCount: i.capacity.occupiedCampaignPlaceCount,
+          activePcCount: i.capacity.campaign.activePcCount,
+          candidateCount: proposal.fullCampaignCopyDiffs.length,
+          fitsCurrentCapacity:
+            proposal.fullCampaignCopyDiffs.length <=
+            i.capacity.campaign.activePlayerCapacity -
+              i.capacity.occupiedCampaignPlaceCount +
+              (receipt?.decision === 'ACCEPT' ? receipt.copies.length : 0),
+        };
+  const actions: ActionKey[] = [];
+  if (formId === 'NET-027') {
+    if (receipt?.decision === 'ACCEPT') actions.push('NET-027::CTA::001');
+    else if (receipt?.decision === 'DECLINE') actions.push('NET-027::CTA::002');
+    else if (
+      i.connected &&
+      capacity !== null &&
+      state.pendingDecisionOrNull === null &&
+      i.controllerSeat === state.record.originalTabId &&
+      i.supported.includes('UI-CMD-ADMISSION-PLAYER-DECIDE')
+    ) {
+      if (capacity.fitsCurrentCapacity) actions.push('NET-027::CTA::003');
+      actions.push('NET-027::CTA::004');
+    }
+  } else if (formId === 'NET-006') actions.push('NET-006::CTA::001');
+  else {
+    if (proposal !== null) actions.push('NET-007::CTA::001');
+    if (i.connected) actions.push('NET-007::CTA::002');
+    actions.push('NET-007::CTA::003');
+  }
+  const payload = {
+    contextId: i.contextId,
+    networkScopeId: i.networkScopeId,
+    controllerSeat: i.controllerSeat,
+    deviceId: notice.requestOwnerDeviceId,
+    campaignId: notice.campaignId,
+    requestIdOrNull: notice.requestId,
+    admissionBatchId: notice.admissionBatchId,
+    stateRevision: i.application.stateRevision,
+    projectionRevision: i.application.projectionRevision,
+    actorVisibilityRevision: i.application.actorVisibilityRevision,
+    draftRevision: i.application.draftRevision,
+    publication,
+    receiptOrNull: receipt,
+    pendingCommandIdOrNull: state.pendingDecisionOrNull?.commandId ?? null,
+    campaignRevisionOrNull: i.capacity?.campaign.revisions.stateRevision ?? null,
+    technicalSessionAvailable: i.connected,
+    itemLabels: i.itemLabels,
+    admissionOrigin: 'DEVICE_REQUEST',
+    ownerProvenance: {
+      kind: 'DEVICE_REQUEST',
+      requestId: notice.requestId,
+      requestOwnerDeviceId: notice.requestOwnerDeviceId,
+    },
+    fullCampaignCopyDiffs: proposal?.fullCampaignCopyDiffs ?? [],
+    blockers: proposal?.blockers ?? [],
+    proposalRevision: proposal?.proposalRevision ?? null,
+    proposalChecksum: proposal?.proposalChecksum ?? null,
+    decision: receipt?.decision ?? null,
+    commandId: state.pendingDecisionOrNull?.commandId ?? null,
+    capacityRecheck: capacity,
+    controllerDeviceRecheck:
+      i.connected && state.record.scope.ownerDeviceId === notice.requestOwnerDeviceId,
+    ownCampaignCopies: receipt?.copies ?? [],
+    controllerBindings: receipt?.controllerProofOrNull?.controllerBindings ?? [],
+    campaignStatus: 'PAUSED',
+    readyStatus: 'NOT_READY',
+    startStatus: 'NOT_STARTED',
+    result:
+      notice.decision === 'REJECT'
+        ? 'GM_REJECTED'
+        : receipt?.decision === 'DECLINE'
+          ? 'PLAYER_DECLINED'
+          : receipt?.decision === 'ACCEPT'
+            ? 'PLAYER_ACCEPTED'
+            : 'AWAITING_PLAYER',
+    gmReasonOrNull: notice.reasonOrNull,
+    decisionReceiptId: receipt?.receiptId ?? notice.receiptId,
+    signedReturnContextOrNull: null,
+  } as unknown as JsonObject;
+  admissionOwnerProjectionValue(formId, payload);
+  return {
+    formId,
+    formType: 'screen',
+    routeTemplate: `/player/campaigns/:campaignId/network/${formId.toLowerCase()}`,
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: notice.campaignId }],
+    availableActionKeys: actions,
+    roleFilteredPayload: payload,
+  };
+}
 
 export const NETWORK_DIAGNOSTICS: Readonly<Record<NetworkPublicErrorCode, string>> = {
   INVALID_ADDRESS: 'Проверьте адрес и порт сервера.',
@@ -34,6 +173,386 @@ export const NETWORK_DIAGNOSTICS: Readonly<Record<NetworkPublicErrorCode, string
   UNCONFIRMED_OUTCOME:
     'Результат отправленной команды пока не подтверждён. Дождитесь восстановления связи.',
 };
+
+/** GM-only allowlist. A partial review is presented as inputs/core, never as a publishable sheet. */
+export function projectGmAdmission(i: {
+  readonly view: GmAdmissionView;
+  readonly current: AdmissionDecisionRead;
+  readonly history: AdmissionHistory;
+  readonly service: ReturnType<typeof createCampaignAdmissionRules>;
+  readonly campaign: PeerCampaignHeader;
+  readonly supported: readonly WorkflowCommandCapabilityId[];
+}) {
+  const { view, current, service, history, campaign } = i;
+  if (
+    !view.active ||
+    view.admissionBatchId !== current.review.current.admissionBatchId ||
+    view.campaignId !== campaign.campaignId ||
+    view.campaignId !== current.review.source.scope.campaignId ||
+    view.ownerDeviceId !== current.review.source.scope.ownerDeviceId ||
+    view.gmLocalContextId !== current.review.source.scope.gmLocalContextId ||
+    history.checkpoint.campaignId !== view.campaignId ||
+    !isDeepStrictEqual(campaign.revisions, {
+      stateRevision: history.checkpoint.stateRevision,
+      projectionRevision: history.checkpoint.projectionRevision,
+      actorVisibilityRevision: history.checkpoint.actorVisibilityRevision,
+    }) ||
+    [...history.groups.values()].some((group) => group.campaignId !== view.campaignId)
+  )
+    throw new Error('GM admission projection source mismatch');
+  const review = service.reviewPresentation(current.review),
+    selected = review.copies.find((copy) => copy.reviewCopyId === view.values.selectedReviewCopyId);
+  if (selected === undefined) throw new Error('GM admission selected copy is missing');
+  const proposal = current.gmDecisionOrNull?.proposalOrNull ?? review.proposalOrNull;
+  const blockers = proposal?.blockers ?? review.copies.flatMap((copy) => copy.blockers);
+  const missing = review.copies.flatMap((copy) => {
+    const group = copy.inputs.groupAssignmentOrNull;
+    return [
+      ...copy.missing,
+      ...(group?.kind === 'EXISTING' &&
+      history.groups.get(group.groupId)?.campaignId !== view.campaignId
+        ? ['GROUP_UNAVAILABLE']
+        : []),
+    ].map((code) => ({ reviewCopyId: copy.reviewCopyId, code }));
+  });
+  const editable = current.review.editable && current.gmDecisionOrNull === null,
+    fullDiffs = proposal?.fullCampaignCopyDiffs ?? [],
+    selectedDiff =
+      fullDiffs.find((copy) => copy.reviewCopyIdOrNull === selected.reviewCopyId) ?? null,
+    ready = proposal !== null && missing.length === 0,
+    rawCapacity = networkCapacity(
+      campaign,
+      review.copies.length,
+      history.occupiedCampaignPlaceCount,
+    ),
+    ownerProvenance = {
+      kind: 'DEVICE_REQUEST',
+      requestId: current.review.current.requestId,
+      requestOwnerDeviceId: current.review.open.receipt.requestOwnerDeviceId,
+    },
+    ordinaryScope = {
+      kind: 'ORDINARY_DRAFT',
+      admissionBatchId: view.admissionBatchId,
+      requestId: current.review.current.requestId,
+      reviewCopyId: selected.reviewCopyId,
+      reviewRevision: current.review.current.reviewRevision,
+    };
+  const publishedCopy = current.gmDecisionOrNull?.copies.find(
+    (copy) => copy.reviewCopyId === selected.reviewCopyId,
+  );
+  if (
+    current.gmDecisionOrNull?.request.decision === 'ACCEPT' &&
+    (publishedCopy === undefined || proposal === null)
+  )
+    throw new Error('GM admission published copy identity is missing');
+  const reviewScope =
+    publishedCopy === undefined
+      ? ordinaryScope
+      : {
+          kind: 'PUBLISHED_COPY',
+          admissionBatchId: view.admissionBatchId,
+          campaignCharacterId: publishedCopy.campaignCharacterId,
+          proposalRevision: proposal!.proposalRevision,
+          origin: 'DEVICE_REQUEST',
+          requestIdOrNull: current.review.current.requestId,
+          reviewCopyIdOrNull: selected.reviewCopyId,
+        };
+  const common = {
+    contextId: view.gmLocalContextId,
+    campaignId: view.campaignId,
+    admissionBatchId: view.admissionBatchId,
+    requestIdOrNull: current.review.current.requestId,
+    deviceRequestId: current.review.current.requestId,
+    reviewRevisionOrNull: current.review.current.reviewRevision,
+    stateRevision: view.stateRevision,
+    projectionRevision: view.projectionRevision,
+    actorVisibilityRevision: view.actorVisibilityRevision,
+    editable,
+    reviewScope,
+    selectedReviewCopyId: selected.reviewCopyId,
+    viewValues: structuredClone(view.values),
+    itemLabels: service.catalogs.items,
+    groupLabels: admissionSelectedGroupLabels(fullDiffs, [...history.groups.values()]),
+    batchReviewCopies: review.copies.map((copy) => ({
+      reviewCopyId: copy.reviewCopyId,
+      sourceUuid: copy.sourceUuid,
+      name: copy.beforeSheet.identity.name,
+    })),
+    returnContext: { formId: 'NET-017', campaignId: view.campaignId },
+  };
+  const capable = (id: string) => i.supported.some((value) => value === id);
+  const committedPlaces =
+    current.playerDecisionOrNull?.request.decision === 'ACCEPT'
+      ? current.playerDecisionOrNull.receipt.copies.filter((copy) => copy.occupiesCampaignPlace)
+          .length
+      : 0;
+  const capacity = {
+    evaluatedCampaignRevision: rawCapacity.campaignRevision,
+    activePlayerCapacity: rawCapacity.activePlayerCapacity,
+    occupiedCampaignPlaceCount: rawCapacity.occupiedCampaignPlaceCount,
+    activePcCount: rawCapacity.activePcCount,
+    candidateCount: rawCapacity.selectedCandidateCount,
+    fitsCurrentCapacity:
+      rawCapacity.selectedCandidateCount <=
+      rawCapacity.activePlayerCapacity - rawCapacity.occupiedCampaignPlaceCount + committedPlaces,
+  };
+  const originalSelectedSkills = selected.beforeSheet.skills.entries
+    .filter((skill) => skill.source === 'SELECTED')
+    .map((skill) => ({ skillKey: skill.skillKey, targetBonus: skill.bonus }));
+  const skillChangeProposed = !isDeepStrictEqual(
+    originalSelectedSkills,
+    selected.inputs.startingSkills.entries,
+  );
+  const skillDecisionRecorded = current.review.events.some(
+    (event) =>
+      event.mutation.kind === 'EDIT' &&
+      event.mutation.reviewCopyId === selected.reviewCopyId &&
+      isDeepStrictEqual(event.mutation.inputs.startingSkills, selected.inputs.startingSkills),
+  );
+  const form = (
+    id: AdmissionGmViewFormId,
+    enabled: boolean,
+  ): PresentedBaseForm | PresentedLayerForm => {
+    let fields: unknown;
+    const actions: ActionKey[] = [];
+    const add = (suffix: string, yes = true) => {
+      if (enabled && yes) actions.push(`${id}::CTA::${suffix}` as ActionKey);
+    };
+    if (id === 'NET-018') {
+      fields = {
+        immutableSourceSnapshot: selected.beforeSheet,
+        sourceProvenanceAndNaturalRolls: {
+          provenance: selected.provenance,
+          naturalRolls: selected.naturalRolls,
+        },
+      };
+      for (const suffix of ['001', '002', '003', '004']) add(suffix);
+    } else if (id === 'NET-019') {
+      fields = {
+        localSourceSnapshot: selected.beforeSheet,
+        reviewDraft: selected.inputs,
+        afterCore: selected.afterCore,
+        campaignCopyDiff: selectedDiff,
+        massStatus: selected.inputs.massReview,
+        startingInventoryAndMoneyStatus: {
+          inventory: selected.inputs.inventoryReview,
+          money: selected.inputs.moneyReview,
+        },
+        groupAndLocationAssignment: {
+          group: selected.inputs.groupAssignmentOrNull,
+          location: selected.inputs.locationAssignmentOrNull,
+        },
+        validatedWeaponRequests: selected.weaponRequests,
+        unresolvedWeaponRequestIds: selected.unresolvedWeapons.requestIds,
+        batchFinalizationStatus: ready ? 'READY_ALL_OR_NONE' : 'BLOCKED_INVALID_BATCH',
+        blockers,
+        missingRequiredFields: missing,
+        reviewItemIdentities: selected.reviewItemIdentities,
+        catalogs: service.catalogs,
+      };
+      add('001');
+      add('002');
+      add('004', editable && selected.unresolvedWeapons.requestIds.length > 0);
+      add(
+        '005',
+        editable &&
+          selected.inputs.inventoryReview.entries.some(
+            (entry) =>
+              entry.sourceEntryIdOrNull === null &&
+              entry.item.kind === 'CATALOG' &&
+              entry.item.itemTypeId.startsWith('ITM-WPN-') &&
+              entry.weaponDecisionReceiptIdOrNull === null,
+          ),
+      );
+    } else if (id === 'NET-020') {
+      fields = {
+        reviewDraft: selected.inputs,
+        groupAssignment: selected.inputs.groupAssignmentOrNull,
+        locationAssignment: selected.inputs.locationAssignmentOrNull,
+        diff: selectedDiff,
+        blockers,
+        missingRequiredFields: missing,
+        groupDraftIds: current.review.current.groupDraftIds,
+        existingGroups: [...history.groups.values()].map((group) => ({
+          groupId: group.groupId,
+          name: group.origin === 'START' ? 'Стартовая группа' : group.nameOrNull,
+        })),
+      };
+      add('001');
+      add('002');
+    } else if (id === 'NET-021') {
+      fields = {
+        proposedCampaignCopies: fullDiffs.map((copy) => ({
+          reviewCopyId: copy.reviewCopyIdOrNull,
+          campaignCharacterIdOrNull: copy.campaignCharacterIdOrNull,
+          characterName: copy.characterName,
+        })),
+        fullCampaignCopyDiffs: fullDiffs,
+        proposalChecksum: proposal?.proposalChecksum ?? null,
+        allRequiredFieldsValid: ready,
+        blockers,
+        missingRequiredFields: missing,
+        incompleteReviews:
+          proposal === null
+            ? review.copies.map((copy) => ({
+                reviewCopyId: copy.reviewCopyId,
+                beforeSheet: copy.beforeSheet,
+                afterCore: copy.afterCore,
+                inputs: copy.inputs,
+              }))
+            : [],
+        capacityPreview: capacity,
+        commandId: null,
+        admissionOrigin: 'DEVICE_REQUEST',
+        ownerProvenance,
+        published: current.gmDecisionOrNull !== null,
+      };
+      add('001');
+      add('002', editable);
+      add('003', editable && skillChangeProposed);
+      add('004', editable);
+      add('005', editable && ready && capable('UI-CMD-ADMISSION-GM-ACCEPT'));
+    } else if (id === 'NET-022') {
+      fields = {
+        capacityPreview: capacity,
+        reason: view.values.rejectionReason,
+        commandId: null,
+        admissionOrigin: 'DEVICE_REQUEST',
+        ownerProvenance,
+      };
+      add('001');
+      add('002', current.gmDecisionOrNull === null);
+      add(
+        '003',
+        editable &&
+          view.values.rejectionReason.trim().length > 0 &&
+          capable('UI-CMD-ADMISSION-GM-REJECT'),
+      );
+    } else if (id === 'GM-020') {
+      fields = {
+        originalStartingSkills: selected.beforeSheet.skills,
+        proposedStartingSkills: selected.inputs.startingSkills,
+        reviewDraft: selected.inputs,
+        immutableRaceAndClassGrants: selected.afterCore.skills.entries.filter(
+          (skill) => skill.source !== 'SELECTED',
+        ),
+        skillRequirementsAndPoolValidation: selected.afterCore.skills,
+        campaignCopyDiff: selectedDiff,
+        selectableSkills: service.catalogs.skills,
+      };
+      add('001', editable && skillDecisionRecorded);
+    } else {
+      const input = view.values.weaponDraftOrNull;
+      const requestedWeapon = input?.weaponReviewInput;
+      const request =
+        requestedWeapon?.kind === 'VALIDATED_REQUEST'
+          ? selected.weaponRequests.find((entry) => entry.requestId === requestedWeapon.requestId)
+          : null;
+      const preview =
+        input === null ? null : service.weaponPreview(current.review, selected.reviewCopyId, input);
+      const terminal =
+        input !== null &&
+        current.review.current.copies
+          .find((copy) => copy.reviewCopyId === selected.reviewCopyId)!
+          .weaponDecisions.some((decision) => {
+            const target = decision.input.weaponReviewInput;
+            return requestedWeapon?.kind === 'VALIDATED_REQUEST'
+              ? target.kind === 'VALIDATED_REQUEST' &&
+                  target.requestId === requestedWeapon.requestId
+              : requestedWeapon?.kind === 'ADMISSION_GRANT' &&
+                  target.kind === 'ADMISSION_GRANT' &&
+                  target.reviewItemId === requestedWeapon.reviewItemId;
+          });
+      fields = {
+        mode: 'REQUEST_REVIEW',
+        weaponOwnerScope: { ...ordinaryScope, kind: 'ADMISSION_REVIEW' },
+        weaponInstanceIdOrNull: null,
+        requestIdOrNull: request?.requestId ?? null,
+        validationReceiptIdOrNull: request?.validationReceiptId ?? null,
+        weaponTypeId:
+          input?.weaponReviewInput.kind === 'ADMISSION_GRANT'
+            ? input.weaponReviewInput.weaponTypeId
+            : (request?.proposedWeaponProfile?.weaponTypeId ?? null),
+        commonWitness: request?.commonWitness ?? null,
+        proposedWeaponProfileOrCurrentProfile:
+          request?.proposedWeaponProfile ?? preview?.beforeProfileOrNull ?? null,
+        currentProfileOrNull: preview?.beforeProfileOrNull ?? null,
+        decision: input?.decision ?? null,
+        typedPatchOrOverrideProfile: input?.overrideProfileOrNull ?? null,
+        formulaReachabilityValidation:
+          request === null || request === undefined
+            ? null
+            : { valid: true, commonWitness: request.commonWitness },
+        profileVersionBeforeOrNull: null,
+        profileVersionOrStagedDecisionPreview: preview?.afterProfile ?? null,
+        equipmentState: 'UNEQUIPPED_ON_MATERIALIZATION',
+        reason:
+          requestedWeapon?.kind === 'ADMISSION_GRANT'
+            ? requestedWeapon.reason
+            : (input?.reasonOrNull ?? null),
+        operationId: request == null ? null : 'OP-REQ-GM',
+        masterAuthorityRevision: history.checkpoint.actorVisibilityRevision,
+        commandId: null,
+        weaponReviewInputOrNull: input?.weaponReviewInput ?? null,
+        weaponDraftOrNull: input,
+        validatedWeaponRequests: selected.weaponRequests.filter(
+          (row) =>
+            selected.unresolvedWeapons.requestIds.includes(row.requestId) ||
+            row.requestId === request?.requestId,
+        ),
+        grantItems: selected.inputs.inventoryReview.entries.filter(
+          (entry) =>
+            entry.sourceEntryIdOrNull === null &&
+            (entry.weaponDecisionReceiptIdOrNull === null ||
+              (requestedWeapon?.kind === 'ADMISSION_GRANT' &&
+                requestedWeapon.reviewItemId === entry.reviewItemId)),
+        ),
+        weaponTemplates: service.catalogs.weaponTemplates,
+        weaponVariants: service.catalogs.weaponVariants,
+      };
+      add('004', !terminal);
+      add(
+        '005',
+        editable && !terminal && preview !== null && capable('UI-CMD-GM-WEAPON-REQUEST-RESOLVE'),
+      );
+    }
+    const payload = { ...common, ...(fields as object) } as unknown as JsonObject;
+    // Validate the allowlist without replacing its plain records by codec-owned null prototypes.
+    admissionGmProjectionValue(id, payload);
+    if (id === 'NET-020' || id === 'NET-021' || id === 'NET-022')
+      return {
+        formId: id,
+        formType: 'dialog',
+        routeTemplate: `@dialog/${id.toLowerCase()}`,
+        routeBindings: [],
+        availableActionKeys: actions,
+        roleFilteredPayload: payload,
+      };
+    return {
+      formId: id,
+      formType: 'screen',
+      routeTemplate: `/master/campaigns/:campaignId/${id.startsWith('GM-') ? 'gm-operations' : 'network'}/${id.toLowerCase()}`,
+      routeBindings: [{ parameterIndex: 0, source: 'inherited', value: view.campaignId }],
+      availableActionKeys: actions,
+      roleFilteredPayload: payload,
+    };
+  };
+  const active = form(view.formId, true);
+  return {
+    revisions: {
+      stateRevision: view.stateRevision,
+      projectionRevision: view.projectionRevision,
+      actorVisibilityRevision: view.actorVisibilityRevision,
+    },
+    base: active.formType === 'screen' ? active : (form('NET-018', false) as PresentedBaseForm),
+    layers:
+      active.formType === 'screen'
+        ? []
+        : view.formId === 'NET-022'
+          ? [form('NET-021', false) as PresentedLayerForm, active]
+          : [active],
+  };
+}
 function publicObject(value: JsonValue | undefined): JsonObject {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
     throw new Error('network public facts unavailable');
@@ -59,15 +578,28 @@ export function candidateSummary(
     name: publicText(metadata['name']),
   };
 }
-export function networkCapacity(campaign: PeerCampaignHeader, selected: number): CapacityForecast {
-  if (!Number.isInteger(selected) || selected < 0 || selected > 3)
+export function networkCapacity(
+  campaign: PeerCampaignHeader,
+  selected: number,
+  occupied: number | null,
+): CapacityForecast {
+  if (
+    !Number.isInteger(selected) ||
+    selected < 0 ||
+    selected > 3 ||
+    occupied === null ||
+    !Number.isSafeInteger(occupied) ||
+    occupied < campaign.activePcCount ||
+    occupied > campaign.activePlayerCapacity
+  )
     throw new Error('network selection unavailable');
   return {
     campaignRevision: campaign.revisions.stateRevision,
     activePlayerCapacity: campaign.activePlayerCapacity,
     activePcCount: campaign.activePcCount,
+    occupiedCampaignPlaceCount: occupied,
     selectedCandidateCount: selected as 0 | 1 | 2 | 3,
-    fitsCurrentCapacity: selected <= campaign.activePlayerCapacity - campaign.activePcCount,
+    fitsCurrentCapacity: selected <= campaign.activePlayerCapacity - occupied,
   };
 }
 export interface NetworkProjectionInput {
@@ -75,6 +607,8 @@ export interface NetworkProjectionInput {
   readonly contextId: string;
   readonly supported: readonly WorkflowCommandCapabilityId[];
   readonly campaign: PeerCampaignHeader | null;
+  readonly occupiedCampaignPlaceCount: number | null;
+  readonly alreadyImportedSourceUuids: readonly string[];
   readonly candidates: readonly NetworkPreparedCandidate[];
   readonly discovery: CampaignDiscoveryScan | null;
   readonly discoveryUnavailable: boolean;
@@ -88,6 +622,9 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
     session = s.sessionOrNull,
     pending = s.pendingCommandIdOrNull !== null;
   const status = s.schemaVersion === 2 ? s.requestReviewOrNull?.requestStatus : undefined;
+  const selectionEligible = s.selectedCandidates.every(
+    (ref) => !i.alreadyImportedSourceUuids.includes(ref.sourceUuid),
+  );
   const activeRequest =
     s.requestOrNull !== null &&
     s.requestOrNull.closureOrNull === null &&
@@ -206,7 +743,11 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
       break;
     case 'NET-003': {
       if (session === null || i.campaign === null) throw new Error('network campaign unavailable');
-      const forecast = networkCapacity(i.campaign, s.selectedCandidates.length);
+      const forecast = networkCapacity(
+        i.campaign,
+        s.selectedCandidates.length,
+        i.occupiedCampaignPlaceCount,
+      );
       payload = {
         ...common,
         ownRequestIdOrNull: activeRequest ? s.requestOrNull.requestId : null,
@@ -220,11 +761,19 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
       };
       add(
         'NET-003::CTA::001',
-        idle && live && s.selectedCandidates.length > 0 && forecast.fitsCurrentCapacity,
+        idle &&
+          live &&
+          selectionEligible &&
+          s.selectedCandidates.length > 0 &&
+          forecast.fitsCurrentCapacity,
       );
       add(
         'NET-003::CTA::002',
-        idle && live && s.selectedCandidates.length === 1 && forecast.fitsCurrentCapacity,
+        idle &&
+          live &&
+          selectionEligible &&
+          s.selectedCandidates.length === 1 &&
+          forecast.fitsCurrentCapacity,
       );
       add('NET-003::CTA::003', !pending && live && activeRequest);
       break;
@@ -232,7 +781,11 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
     case 'NET-004': {
       const b = s.preparedBatchOrNull;
       if (b === null || i.campaign === null) throw new Error('network batch unavailable');
-      const forecast = networkCapacity(i.campaign, b.candidates.length);
+      const forecast = networkCapacity(
+        i.campaign,
+        b.candidates.length,
+        i.occupiedCampaignPlaceCount,
+      );
       payload = {
         ...common,
         sessionId: b.technicalSessionId,
@@ -251,7 +804,11 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
       add('NET-004::CTA::001', idle);
       add(
         'NET-004::CTA::002',
-        idle && live && forecast.fitsCurrentCapacity && capable('UI-CMD-DEVICE-REQUEST-SUBMIT'),
+        idle &&
+          live &&
+          selectionEligible &&
+          forecast.fitsCurrentCapacity &&
+          capable('UI-CMD-DEVICE-REQUEST-SUBMIT'),
       );
       add('NET-004::CTA::003', idle);
       break;
@@ -343,7 +900,11 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
         ref.candidateSnapshotChecksum === currentCandidate.candidateSnapshotChecksum &&
         ref.requestedControllerSeat === s.tabId;
       const eligible =
-        live && selectionCurrent && networkCapacity(i.campaign, 1).fitsCurrentCapacity;
+        live &&
+        selectionCurrent &&
+        selectionEligible &&
+        i.occupiedCampaignPlaceCount !== null &&
+        networkCapacity(i.campaign, 1, i.occupiedCampaignPlaceCount).fitsCurrentCapacity;
       const raw = publicObject(candidate.exportDocument['provenance']);
       const provenance: NetworkPublicProvenance = {
         registryVersion: publicText(raw['registryVersion']),
@@ -422,6 +983,7 @@ export function projectGmRequestQueue(i: {
     readonly connected: boolean;
   }[];
   readonly supported: readonly WorkflowCommandCapabilityId[];
+  readonly selectedAdmission?: { readonly published: boolean; readonly hasProposed: boolean };
 }): PresentedBaseForm {
   const { view, queue, campaign } = i;
   if (
@@ -469,6 +1031,8 @@ export function projectGmRequestQueue(i: {
       };
     });
   const payload: Net017Projection = {
+    selectedAdmissionOrNull:
+      view.values.selectedRequestIdOrNull === null ? null : (i.selectedAdmission ?? null),
     contextId: view.gmLocalContextId,
     campaignId: view.campaignId,
     stateRevision: view.stateRevision,
@@ -491,10 +1055,22 @@ export function projectGmRequestQueue(i: {
     actions.push('NET-017::CTA::007');
   if (
     (selected?.requestStatus === 'PENDING' || selected?.requestStatus === 'IN_REVIEW') &&
+    i.selectedAdmission?.published !== true &&
     view.values.decisionReason.trim().length > 0 &&
     i.supported.includes('UI-CMD-DEVICE-REQUEST-REJECT')
   )
     actions.push('NET-017::CTA::008');
+  if (selected?.requestStatus === 'IN_REVIEW' && i.selectedAdmission !== undefined) {
+    if (!i.selectedAdmission.published && i.supported.includes('UI-CMD-ADMISSION-REVIEW-OPEN'))
+      actions.push('NET-017::CTA::010');
+    if (i.selectedAdmission.hasProposed)
+      actions.push(
+        'NET-017::CTA::001',
+        'NET-017::CTA::002',
+        'NET-017::CTA::003',
+        'NET-017::CTA::004',
+      );
+  }
   actions.push('NET-017::CTA::009');
   return {
     formId: 'NET-017',

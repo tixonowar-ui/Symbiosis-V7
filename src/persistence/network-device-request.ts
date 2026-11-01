@@ -15,9 +15,11 @@ import {
   readHostedCampaignCreationOrigin,
   readLocalGmProfile,
   readLocalGmContext,
-  readCampaignPrivateOwner,
+  readCampaignOwnerBinding,
   readCampaignCreationCursor,
   readGmRequestReviewViewStateInTransaction,
+  readGmAdmissionViewStateInTransaction,
+  verifyGmAdmissionSourceMirrorsInTransaction,
   appendGmRequestReviewEventInTransaction,
   gmRequestReviewRefreshEventId,
   type GmRequestReviewScope,
@@ -37,6 +39,11 @@ import {
   validatePeerLaneBindingReceipt,
   validateRequestReviewProof,
 } from './network-local-application.js';
+import {
+  assertNoCampaignAdmissionEvidence,
+  readCampaignAdmissionAvailability,
+  type AdmissionPublicationRules,
+} from './campaign-admission-decision.js';
 import type {
   NetworkCampaignProof,
   NetworkPreparedBatch,
@@ -163,7 +170,7 @@ export interface VerifiedGmRequestQueue {
 export interface GmRequestReviewSource {
   readonly scope: GmRequestReviewScope;
   readonly context: ReturnType<typeof readLocalGmContext>;
-  readonly privateOwner: ReturnType<typeof readCampaignPrivateOwner>;
+  readonly privateOwner: ReturnType<typeof readCampaignOwnerBinding>;
   readonly creationOrigin: ReturnType<typeof readHostedCampaignCreationOrigin>;
   readonly cursor: ReturnType<typeof readCampaignCreationCursor>;
   readonly viewOrNull: GmRequestReviewView | null;
@@ -254,7 +261,7 @@ function legacyReceipt(record: Omit<HostedNetworkCommand, 'current'>): LegacyReq
 function reviewSchema(db: Database.Database): void {
   s.schema(db);
   const r = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (r['version'] !== 11) return s.fail();
+  if (r['version'] !== 11 && r['version'] !== 12) return s.fail();
 }
 function rawDecision(
   db: Database.Database,
@@ -323,7 +330,7 @@ function readCurrentRequest(
     gmLocalContextId: s.text(ownerRecord['gmLocalContextId']),
     campaignId: p.campaignId,
   };
-  const privateOwner = readCampaignPrivateOwner(db, scope.gmLocalContextId, scope.campaignId);
+  const privateOwner = readCampaignOwnerBinding(db, scope.gmLocalContextId, scope.campaignId);
   if (privateOwner.ownerDeviceId !== p.hostOwnerDeviceId) return s.fail('FOREIGN_OWNER');
   const rows = db
     .prepare(
@@ -518,7 +525,7 @@ function gmSource(
   const scope = gmScope(value);
   s.owner(db, scope.ownerDeviceId);
   const context = readLocalGmContext(db, scope.gmLocalContextId),
-    privateOwner = readCampaignPrivateOwner(db, scope.gmLocalContextId, scope.campaignId);
+    privateOwner = readCampaignOwnerBinding(db, scope.gmLocalContextId, scope.campaignId);
   if (
     context.ownerDeviceId !== scope.ownerDeviceId ||
     privateOwner.ownerDeviceId !== scope.ownerDeviceId ||
@@ -530,6 +537,10 @@ function gmSource(
   readHostedCurrentPausedCampaign(db, scope.campaignId, validate);
   const state = readGmRequestReviewViewStateInTransaction(db, scope),
     queue = queueInTransaction(db, scope);
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined) {
+    readGmAdmissionViewStateInTransaction(db, scope);
+    verifyGmAdmissionSourceMirrorsInTransaction(db, scope);
+  }
   for (const event of state.events) {
     const m = event.mutation;
     if (m.kind === 'NAV' && m.initialQueueOrNull !== null)
@@ -875,6 +886,19 @@ export function commitGmDeviceRequestDecision(
           source.queue.requests.find(
             (r) => r.submittedRequest.requestId === request.payload.requestId,
           ) ?? s.fail('NOT_FOUND');
+        // A final admission decision owns the next boundary. An old NET-017 dialog
+        // cannot retract its immutable proposal or reopen a terminal rejection.
+        if (
+          db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined &&
+          db
+            .prepare(
+              `SELECT 1 FROM campaign_admission_batch b
+            JOIN campaign_admission_gm_decision d USING(admission_batch_id)
+            WHERE b.request_id=?`,
+            )
+            .get(request.payload.requestId) !== undefined
+        )
+          return s.fail('STALE_REVISION');
         const accept = request.workflowCommandId === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW';
         if (
           current.proof.laneProvenance === null ||
@@ -1440,6 +1464,7 @@ export function commitHostedNetworkCommand(
   validatePrivateOwner: CampaignPrivateOwnerValidator,
   guard: HostedNetworkSourceGuard,
   validateCandidateBaseline?: HostedCandidateBaselineGuard,
+  admissionRules?: AdmissionPublicationRules,
 ): HostedNetworkCommand {
   if (db.inTransaction) return s.fail('INVALID_INPUT');
   const p = s.input(() => principal(value)),
@@ -1513,7 +1538,8 @@ export function commitHostedNetworkCommand(
             const schemaVersion = (
               db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
             )['version'];
-            if (schemaVersion === 11 && i.batch.schemaVersion !== 2) return s.fail('INVALID_INPUT');
+            if ((schemaVersion === 11 || schemaVersion === 12) && i.batch.schemaVersion !== 2)
+              return s.fail('INVALID_INPUT');
             if (sessionOrNull.connectionRevision !== i.expectedConnectionRevision)
               return s.fail('STALE_REVISION');
             exactCampaign(i.batch.campaignProof, campaign);
@@ -1524,7 +1550,40 @@ export function commitHostedNetworkCommand(
               i.requestId === i.technicalSessionId
             )
               return s.fail('INVALID_INPUT');
-            if (i.batch.candidates.length > campaign.activePlayerCapacity - campaign.activePcCount)
+            let occupied = campaign.activePcCount;
+            const released = new Set<string>();
+            if (schemaVersion === 12) {
+              if (admissionRules === undefined) assertNoCampaignAdmissionEvidence(db);
+              else {
+                const origin = readHostedCampaignCreationOrigin(
+                    db,
+                    p.campaignId,
+                    validatePrivateOwner,
+                  ),
+                  availability = readCampaignAdmissionAvailability(
+                    db,
+                    {
+                      ownerDeviceId: p.hostOwnerDeviceId,
+                      campaignId: p.campaignId,
+                      gmLocalContextId: origin.command.request.payload.gmLocalContextId,
+                    },
+                    validatePrivateOwner,
+                    admissionRules,
+                  );
+                occupied = availability.occupiedCampaignPlaceCount;
+                // AQA-018 / Q-CAMP-004: even a subsequently DECLINED copy consumes this source UUID's single import.
+                if (
+                  i.batch.candidates.some((candidate) =>
+                    availability.importedSources.some(
+                      (copy) => copy.sourceUuid === candidate.descriptor.sourceUuid,
+                    ),
+                  )
+                )
+                  return s.fail('IDEMPOTENCY_CONFLICT');
+                for (const id of availability.releasedRequestIds) released.add(id);
+              }
+            }
+            if (i.batch.candidates.length > campaign.activePlayerCapacity - occupied)
               return s.fail('CAPACITY_EXCEEDED');
             candidateBaselineGuard(db, campaign, i.batch, 'APPLY', validateCandidateBaseline);
             const existing = db
@@ -1537,8 +1596,9 @@ export function commitHostedNetworkCommand(
             );
             if (
               currentRequests.some((r) =>
-                schemaVersion === 11
-                  ? ['PENDING', 'IN_REVIEW'].includes(
+                schemaVersion === 11 || schemaVersion === 12
+                  ? !released.has(r.requestId) &&
+                    ['PENDING', 'IN_REVIEW'].includes(
                       readCurrentRequest(db, p, r.requestId).requestStatus,
                     )
                   : r.closureOrNull === null,
@@ -1549,9 +1609,7 @@ export function commitHostedNetworkCommand(
           } else {
             requestOrNull = readRequest(db, p, i.requestId);
             if (
-              (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
-                'version'
-              ] === 11 &&
+              s.hasRequestReviewSchema(db) &&
               readCurrentRequest(db, p, i.requestId).requestStatus !== 'PENDING'
             )
               return s.fail('STALE_REVISION');
@@ -1578,12 +1636,7 @@ export function commitHostedNetworkCommand(
                 request: current as HostedDeviceRequest,
               };
         const record = { principal: p, input: i, receipt };
-        if (
-          (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
-            'version'
-          ] === 11
-        )
-          verifyViews(db, p.campaignId, validatePrivateOwner);
+        if (s.hasRequestReviewSchema(db)) verifyViews(db, p.campaignId, validatePrivateOwner);
         const before = s.changes(db);
         let expected = 2;
         if (addPeer) {
@@ -1655,12 +1708,7 @@ export function commitHostedNetworkCommand(
           );
           expected++;
         }
-        if (
-          i.operation !== 'OPEN' &&
-          (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
-            'version'
-          ] === 11
-        )
+        if (i.operation !== 'OPEN' && s.hasRequestReviewSchema(db))
           expected += refreshViews(
             db,
             p.campaignId,

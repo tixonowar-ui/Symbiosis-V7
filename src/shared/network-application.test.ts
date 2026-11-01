@@ -68,6 +68,7 @@ const forecast = {
   campaignRevision: 0,
   activePlayerCapacity: 3,
   activePcCount: 1,
+  occupiedCampaignPlaceCount: 1,
   selectedCandidateCount: 1,
   fitsCurrentCapacity: true,
 };
@@ -488,6 +489,7 @@ const gmProjection: Net017Projection = {
   ],
   selectedRequestIdOrNull: 'request:one',
   activePlayerCapacity: 3,
+  selectedAdmissionOrNull: null,
   occupiedActivePcCount: 2,
   decisionReason: '',
   commandId: null,

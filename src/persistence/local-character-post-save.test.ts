@@ -283,7 +283,7 @@ describe('receipt-backed restore cursor', () => {
     'missing-review-table',
     'unknown-version',
   ] as const)(
-    'does not downgrade a version-11 store when %s invalidates cursor retirement',
+    'does not downgrade a version-12 store when %s invalidates cursor retirement',
     (damage) => {
       const p = setup('DRAFT');
       const original = readLocalCharacter(p.db, p.scope.entityId);
@@ -298,7 +298,7 @@ describe('receipt-backed restore cursor', () => {
       else if (damage === 'missing-network-application-table')
         p.db.exec('DROP TABLE local_network_host_pin');
       else if (damage === 'missing-review-table') p.db.exec('DROP TABLE gm_request_queue_event');
-      else p.db.prepare('UPDATE schema_migration SET version = 12 WHERE version = 11').run();
+      else p.db.prepare('UPDATE schema_migration SET version = 13 WHERE version = 12').run();
       expect(() =>
         commitLocalCharacterCheckpoint(p.db, p.scope.entityId, p.complete.checkpointId, (write) =>
           write(

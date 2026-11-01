@@ -7,6 +7,7 @@ import {
   validateSkillSelectionDraft,
 } from '../skill-stage/skills.js';
 import { calculateSkillStageStats } from '../skill-stage/stats.js';
+import type { StatBlock } from '../skill-stage/stats.js';
 import { resolveSymbiontComposition } from '../symbiont-stage/composition.js';
 import { CreationFinalizationError } from './catalog.js';
 import type {
@@ -19,6 +20,9 @@ import type {
   CreationInitialSymbiont,
   CreationPermanentSkillGrant,
   CreationValidationBlocker,
+  CreationTrainingSlotLedger,
+  AdmissionMechanicsInput,
+  AdmissionMechanics,
 } from './types.js';
 
 const STATS = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
@@ -137,13 +141,20 @@ function permanentSkills(
   return { learnedSkills: Object.freeze(skills), permanentGrants: Object.freeze(grants) };
 }
 
-/** AQA-005/008/009: no RNG, mutations, equipment, XP, or incremental stat updates. */
-export function deriveCreationFinalMechanics(
+interface AdmissionContext {
+  readonly permanentGmAdjustments: StatBlock;
+  readonly backpackItemAdjustments: StatBlock;
+  readonly originalSkillStageStats: StatBlock;
+  readonly preservedLedger: CreationTrainingSlotLedger | null;
+}
+
+function deriveFinalMechanics(
   catalog: CreationFinalizationCatalog,
   input: CreationFinalMechanicsInput,
+  admission: AdmissionContext | null,
 ): CreationFinalMechanics {
   validateComposition(catalog, input);
-  const { skillStageStats } = calculateSkillStageStats(catalog.symbionts.skillStage, {
+  const stage = calculateSkillStageStats(catalog.symbionts.skillStage, {
     baseStats: input.baseStats,
     raceCode: input.raceCode,
     classCode: input.classCode,
@@ -151,6 +162,13 @@ export function deriveCreationFinalMechanics(
     // for PURE because every matching predicate is ownerRace=PURE.
     creationMode: input.creationMode === null ? 'MANUAL' : input.creationMode,
   });
+  // AQ2-002 retains the accepted base (including its creation constraints).
+  // A signed GM correction is a distinct permanent source, not a replacement
+  // natural roll or a new character-creation allocation.
+  const skillStageStats =
+    admission === null
+      ? stage.skillStageStats
+      : adjustedStats(stage.skillStageStats, admission.permanentGmAdjustments);
   const blockers: CreationValidationBlocker[] = [];
   const instances = input.composition?.instances ?? [];
   const active = (key: string) =>
@@ -210,7 +228,12 @@ export function deriveCreationFinalMechanics(
       input.creationMode === 'RANDOM'
         ? Math.max(negative[statCode], Math.min(0, 1 - beforeNegative))
         : negative[statCode];
-    const beforeLimits = beforeNegative + appliedNegativeDelta;
+    // Q-CHAR-019 adds backpack instances after the creation-only negative floor;
+    // the common explicit bounds still apply to their combined final value.
+    const beforeLimits =
+      beforeNegative + appliedNegativeDelta + (admission?.backpackItemAdjustments[statCode] ?? 0);
+    if (!Number.isSafeInteger(beforeLimits))
+      fail('pre-limit stat exceeds safe integer representation');
     let minimumOrNull: number | null = null;
     let maximumOrNull: number | null = null;
     if (statCode === 'W' && active('TEACHER') !== undefined) maximumOrNull = 20;
@@ -298,7 +321,7 @@ export function deriveCreationFinalMechanics(
     const expected = validateSkillSelectionDraft(catalog.symbionts.skillStage, {
       raceCode: input.raceCode,
       classCode: input.classCode,
-      skillStageStats,
+      skillStageStats: admission?.originalSkillStageStats ?? skillStageStats,
       selectedSkills: [],
     });
     const normalized = (skills: readonly CreationFinalLearnedSkill[]) =>
@@ -327,7 +350,10 @@ export function deriveCreationFinalMechanics(
       }),
     );
   }
-  if (skillStageStats.W < 1 || used < calculateStartSkillSlots(skillStageStats))
+  if (
+    admission === null &&
+    (skillStageStats.W < 1 || used < calculateStartSkillSlots(skillStageStats))
+  )
     blockers.push(
       Object.freeze({
         kind: 'SKILLS',
@@ -428,13 +454,17 @@ export function deriveCreationFinalMechanics(
   }
   const maxPermanentWisdom = Math.max(
     priorLedger?.maxPermanentWisdom ?? 0,
-    skillStageStats.W,
+    // CORE-081: only the new permanent final W can extend the recorded maximum
+    // during admission. The original pre-symbiont history is already in the ledger.
+    admission === null ? skillStageStats.W : 0,
     effective.W,
   );
-  const trainingSlotLedger = Object.freeze({
-    maxPermanentWisdom,
-    everIssued: Math.floor(maxPermanentWisdom / 2),
-  });
+  const trainingSlotLedger =
+    admission?.preservedLedger ??
+    Object.freeze({
+      maxPermanentWisdom,
+      everIssued: Math.floor(maxPermanentWisdom / 2),
+    });
   return Object.freeze({
     skillStageStats,
     effectiveStats: Object.freeze(effective),
@@ -444,5 +474,130 @@ export function deriveCreationFinalMechanics(
     symbionts: Object.freeze(symbionts),
     initialRuntime,
     blockers: Object.freeze(blockers),
+  });
+}
+
+/** AQA-005/008/009: the original creation path retains exact slot-fill validation. */
+export function deriveCreationFinalMechanics(
+  catalog: CreationFinalizationCatalog,
+  input: CreationFinalMechanicsInput,
+): CreationFinalMechanics {
+  return deriveFinalMechanics(catalog, input, null);
+}
+
+function checkedAdjustments(value: StatBlock, minimum: number, label: string): StatBlock {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).sort().join(',') !== [...STATS].sort().join(',')
+  )
+    fail(`${label} must contain exactly S,D,M,Z,I,W,C`);
+  for (const stat of STATS) safeInteger(value[stat], `${label}.${stat}`, minimum);
+  return Object.freeze({ ...value });
+}
+function adjustedStats(base: StatBlock, adjustments: StatBlock): StatBlock {
+  const result = zeroStats();
+  for (const stat of STATS) {
+    result[stat] = base[stat] + adjustments[stat];
+    if (!Number.isSafeInteger(result[stat]))
+      fail(`adjusted ${stat} exceeds safe integer representation`);
+  }
+  return Object.freeze(result);
+}
+
+/** AQ2-002 / Q-CHAR-019 / CORE-081. No mutation, RNG or live inventory operation. */
+export function deriveAdmissionMechanics(
+  catalog: CreationFinalizationCatalog,
+  input: AdmissionMechanicsInput,
+): AdmissionMechanics {
+  const original = deriveCreationFinalMechanics(catalog, input.source);
+  if (original.blockers.length !== 0) fail('admission requires a complete valid source FINAL');
+  const permanentGmAdjustments = checkedAdjustments(
+    input.permanentGmAdjustments,
+    Number.MIN_SAFE_INTEGER,
+    'permanent GM adjustments',
+  );
+  const backpackItemAdjustments = checkedAdjustments(
+    input.backpackItemAdjustments,
+    0,
+    'backpack item adjustments',
+  );
+  const maxSlots = calculateStartSkillSlots(original.skillStageStats);
+  const learnedSkills = input.source.learnedSkills
+    .filter((skill) => skill.source !== 'SELECTED')
+    .map((skill) => Object.freeze({ ...skill }));
+  const selected = new Set<string>();
+  for (const skill of input.selectedSkills) {
+    if (
+      skill === null ||
+      typeof skill !== 'object' ||
+      Array.isArray(skill) ||
+      Object.keys(skill).sort().join(',') !== 'skillKey,targetBonus'
+    )
+      fail('admission skill requires only skillKey and targetBonus');
+    const definition = catalog.symbionts.skillStage.skills.find(
+      (entry) => entry.skillKey === skill.skillKey,
+    );
+    if (definition === undefined || definition.category !== 'SELECTABLE_GENERAL')
+      fail('admission cannot edit an unknown skill or a free grant');
+    if (selected.has(skill.skillKey)) fail('duplicate admission starting skill');
+    selected.add(skill.skillKey);
+    learnedSkills.push(
+      Object.freeze({
+        source: 'SELECTED',
+        skillKey: skill.skillKey,
+        bonus: skill.targetBonus,
+        slotCost: calculateSkillSlotCost(skill.targetBonus),
+      }),
+    );
+  }
+  const usedSlots = learnedSkills.reduce((sum, skill) => sum + skill.slotCost, 0);
+  if (!Number.isSafeInteger(usedSlots) || usedSlots > maxSlots)
+    fail('admission starting skills exceed the original starting pool');
+  const derivedInput: CreationFinalMechanicsInput = {
+    ...input.source,
+    learnedSkills,
+    permanentGrants: original.permanentGrants,
+    trainingSlotLedger: original.trainingSlotLedger,
+  };
+  const context: AdmissionContext = {
+    permanentGmAdjustments,
+    backpackItemAdjustments: zeroStats(),
+    originalSkillStageStats: original.skillStageStats,
+    preservedLedger: null,
+  };
+  const permanent = deriveFinalMechanics(catalog, derivedInput, context);
+  // CORE-078/166: a removable item cannot legalize invalid permanent stats or
+  // permanently learned skills. Check those before adding backpack modifiers.
+  if (permanent.blockers.length !== 0)
+    fail(
+      `invalid admission permanent mechanics: ${permanent.blockers.map((blocker) => blocker.code).join(', ')}`,
+    );
+  // A once-only Trogr grant can add GROSS after the original selection checks.
+  // AQ2-002/CORE-166 also bind that final skill to its permanent requirements.
+  for (const skill of permanent.learnedSkills) {
+    try {
+      validateSkillRequirements(
+        catalog.symbionts.skillStage,
+        skill.skillKey,
+        permanent.effectiveStats,
+      );
+    } catch {
+      fail('invalid admission permanent mechanics: SKILL_REQUIREMENT');
+    }
+  }
+  const mechanics = deriveFinalMechanics(catalog, derivedInput, {
+    ...context,
+    backpackItemAdjustments,
+    preservedLedger: permanent.trainingSlotLedger,
+  });
+  if (mechanics.blockers.length !== 0) fail('invalid admission mechanics after backpack modifiers');
+  return Object.freeze({
+    mechanics,
+    permanentEffectiveStats: permanent.effectiveStats,
+    maxSlots,
+    usedSlots,
+    remainingSlots: maxSlots - usedSlots,
   });
 }

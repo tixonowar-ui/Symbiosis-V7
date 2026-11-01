@@ -24,6 +24,7 @@ export type NetworkGmRequestReviewWorkflowId =
 /** Client implementation vocabulary across a local NET entry/exit; not a role or form grant. */
 export const NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS = Object.freeze([
   ...NETWORK_WORKFLOW_COMMAND_IDS,
+  'UI-CMD-ADMISSION-PLAYER-DECIDE',
   'UI-CMD-CHAR-WIZARD-CHECKPOINT',
   'UI-CMD-CHAR-CREATION-SET-DECIDE',
   'UI-CMD-CHAR-CREATION-ROLL-COMMIT',
@@ -56,6 +57,8 @@ export interface CapacityForecast extends JsonObject {
   readonly activePlayerCapacity: 1 | 2 | 3 | 4 | 5;
   /** Counts only literal ACTIVE PCs; admitted or pending candidates are not this count. */
   readonly activePcCount: number;
+  /** Owner decision #199 B: accepted copies in the blocked lobby also occupy campaign places. */
+  readonly occupiedCampaignPlaceCount: number;
   readonly selectedCandidateCount: 0 | 1 | 2 | 3;
   readonly fitsCurrentCapacity: boolean;
 }

@@ -14,7 +14,9 @@ import {
 } from './network-local-tab.js';
 import {
   commitLocalNetworkHostPin,
+  networkApplicationStorage,
   commitLocalNetworkMutation,
+  commitLocalAdmissionNetworkMutation,
   readLocalNetworkApplication,
   readLocalNetworkApplicationEvent,
   readLocalNetworkHostPin,
@@ -829,6 +831,58 @@ describe('owner request review enrichment and delivery', () => {
 });
 
 describe('local network application/outbox aggregate', () => {
+  it('preserves canonical bytes and rejects changed object descriptors while reusing immutable strings', () => {
+    const s = networkApplicationStorage;
+    const witness = 'текст "quoted" \\ newline\n'.repeat(300);
+    const value = { z: witness, nested: [{ a: witness, n: -0 }] };
+    s.safe(() => {
+      expect(s.canonical(value)).toBe(canonical(value));
+      value.nested[0]!.a += 'changed';
+      expect(s.canonical(value)).toBe(canonical(value));
+      const getter = vi.fn(() => witness);
+      Object.defineProperty(value, 'z', { get: getter, enumerable: true });
+      expect(() => s.canonical(value)).toThrow();
+      expect(getter).not.toHaveBeenCalled();
+      expect(() => s.canonical({ [Symbol('hidden')]: witness })).toThrow();
+      const sparse = Array<string>(2);
+      sparse[1] = witness;
+      expect(() => s.canonical(sparse)).toThrow();
+    });
+    expect(s.canonical({ witness })).toBe(canonical({ witness }));
+  });
+  it.each(['mutation', 'ownerDeviceId', 'kind'] as const)(
+    'refuses a %s accessor before either mutation entry point reads it',
+    (field) => {
+      const p = setup(),
+        getter = vi.fn(() => 'ADMISSION_ADVANCE'),
+        mutation: LocalNetworkMutation = {
+          kind: 'NAVIGATE',
+          targetFormId: 'NET-002',
+          plannedAttemptIdOrNull: randomUUID(),
+          singleCandidateOrNull: null,
+        },
+        value: LocalNetworkMutationInput = {
+          ...p.scope,
+          mutation,
+          expectedRevisions: zero,
+          expectedDraftRevision: 0,
+          eventId: randomUUID(),
+          receiptId: randomUUID(),
+          clientRequestJsonOrNull: null,
+        };
+      Object.defineProperty(field === 'kind' ? mutation : value, field, {
+        enumerable: true,
+        get: getter,
+      });
+      const before = p.db.serialize();
+      expect(() => commitLocalNetworkMutation(p.db, value, allow)).toThrow(/INVALID_INPUT/);
+      expect(() =>
+        p.db.transaction(() => commitLocalAdmissionNetworkMutation(p.db, value))(),
+      ).toThrow(/INVALID_INPUT/);
+      expect(getter).not.toHaveBeenCalled();
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
   it('binds a retained shell exit to the exact navigation and rejects forged source/route before writing', () => {
     const p = setup();
     let s = connected(p);

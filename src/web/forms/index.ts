@@ -1,5 +1,7 @@
 import rendererFormsByIdSource from '@generated/spec/atlas/renderer/forms-by-id.json?raw';
 import type { ActionKey, FormId } from '@generated/types/atlas.js';
+import { ADMISSION_GM_VIEW_FORM_IDS } from '@shared/campaign-admission-review.js';
+import { ADMISSION_OWNER_FORM_IDS } from '@shared/campaign-admission-presentation.js';
 
 import { APP_FORM_IDS } from './app/index.js';
 import type { AppFormId } from './app/index.js';
@@ -12,6 +14,8 @@ import {
 } from '@shared/network-application.js';
 
 export const IMPLEMENTED_FORM_IDS = [
+  ...ADMISSION_OWNER_FORM_IDS,
+  ...ADMISSION_GM_VIEW_FORM_IDS,
   ...APP_FORM_IDS,
   ...CHR_FORM_IDS,
   ...CMP_CREATE_FORM_IDS,
@@ -19,12 +23,16 @@ export const IMPLEMENTED_FORM_IDS = [
   'NET-017',
 ] as const;
 export type ImplementedFormId =
+  | (typeof ADMISSION_OWNER_FORM_IDS)[number]
+  | (typeof ADMISSION_GM_VIEW_FORM_IDS)[number]
   | AppFormId
   | ChrFormId
   | (typeof CMP_CREATE_FORM_IDS)[number]
   | NetworkApplicationFormId
   | 'NET-017';
 export type SupportedPresentationFormId =
+  | (typeof ADMISSION_OWNER_FORM_IDS)[number]
+  | (typeof ADMISSION_GM_VIEW_FORM_IDS)[number]
   | NetworkApplicationFormId
   | 'NET-017'
   | 'APP-001'
@@ -78,6 +86,8 @@ export type SupportedPresentationFormId =
 
 const IMPLEMENTED = new Set<string>(IMPLEMENTED_FORM_IDS);
 const SUPPORTED = new Set<FormId>([
+  ...ADMISSION_OWNER_FORM_IDS,
+  ...ADMISSION_GM_VIEW_FORM_IDS,
   ...NETWORK_APPLICATION_FORM_IDS,
   'NET-017',
   'APP-001',

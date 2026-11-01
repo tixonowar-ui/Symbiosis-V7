@@ -15,7 +15,10 @@ import {
 } from '../persistence/index.js';
 import { parseSkillPresentationStage } from '../persistence/skill-presentation.js';
 import { parseSymbiontPresentationStage } from '../persistence/symbiont-presentation.js';
-import { validateDurableCreationWizardCheckpoint } from './creation-set-decide.js';
+import {
+  validateDurableCreationWizardCheckpoint,
+  type DurableCreationWizardCheckpoint,
+} from './creation-set-decide.js';
 import { validateArchivedLocalExportDocument } from './local-character-archive-export.js';
 import {
   canonicalPostSaveJson,
@@ -42,6 +45,11 @@ export interface FinalAdmissionCandidateDescriptor {
 export interface ValidatedFinalAdmissionCandidate {
   readonly descriptor: FinalAdmissionCandidateDescriptor;
   readonly exportDocument: JsonObject;
+}
+/** Private replay input for a separate review copy; never a peer response or role projection. */
+export interface ValidatedFinalAdmissionReviewSource {
+  readonly candidate: ValidatedFinalAdmissionCandidate;
+  readonly checkpoint: DurableCreationWizardCheckpoint;
 }
 export interface PreparedOwnedFinalAdmissionCandidate extends ValidatedFinalAdmissionCandidate {
   /** Private Node-to-Node evidence: never a projection, readback, or diagnostic payload. */
@@ -263,7 +271,7 @@ function derive(
   metadata: PostSaveMetadata,
   metadataRevision: number,
   baseline: LocalCharacterExportBaseline,
-) {
+): ValidatedFinalAdmissionReviewSource {
   const actual = validateDurableCreationWizardCheckpoint(
     w.localCharacter,
     w.checkpoint,
@@ -311,7 +319,7 @@ function derive(
     exportBytesSha256: result.bytesSha256,
     baselineVersion: result.baselineVersion,
   });
-  return freeze({ descriptor: d, exportDocument });
+  return { candidate: freeze({ descriptor: d, exportDocument }), checkpoint: actual };
 }
 
 /**
@@ -319,14 +327,14 @@ function derive(
  * Caller must separately bind peer keys and authorize payloads. Later metadata is a pinned DTO;
  * its actual private revision chain is checked only by the owning producer.
  */
-export function validateFinalAdmissionCandidate(
+function validateCandidateSource(
   witnessText: unknown,
   expectedOwnerDeviceId: string,
   expectedDescriptor: unknown,
   expectedExportDocument: unknown,
   baseline: LocalCharacterExportBaseline,
   limits: AdmissionCandidateLimits,
-): ValidatedFinalAdmissionCandidate {
+): ValidatedFinalAdmissionReviewSource {
   const maximum = limit(limits);
   assertText(expectedOwnerDeviceId, 'ownerDeviceId');
   if (typeof witnessText !== 'string') return fail('INVALID_INPUT', 'witness');
@@ -349,12 +357,54 @@ export function validateFinalAdmissionCandidate(
       sourceBaseline,
     );
     if (
-      !isDeepStrictEqual(result.descriptor, expected) ||
-      !isDeepStrictEqual(result.exportDocument, doc)
+      !isDeepStrictEqual(result.candidate.descriptor, expected) ||
+      !isDeepStrictEqual(result.candidate.exportDocument, doc)
     )
       return fail('CANDIDATE_MISMATCH', 'exportDocument');
     return result;
   });
+}
+
+/** Keep the existing public-safe result closed; the replay checkpoint does not escape here. */
+export function validateFinalAdmissionCandidate(
+  witnessText: unknown,
+  expectedOwnerDeviceId: string,
+  expectedDescriptor: unknown,
+  expectedExportDocument: unknown,
+  baseline: LocalCharacterExportBaseline,
+  limits: AdmissionCandidateLimits,
+): ValidatedFinalAdmissionCandidate {
+  return validateCandidateSource(
+    witnessText,
+    expectedOwnerDeviceId,
+    expectedDescriptor,
+    expectedExportDocument,
+    baseline,
+    limits,
+  ).candidate;
+}
+
+/** ADR 0071: GM adjustments consume a verified immutable source, never browser-supplied mechanics. */
+export function validateFinalAdmissionReviewSource(
+  witnessText: unknown,
+  expectedOwnerDeviceId: string,
+  expectedDescriptor: unknown,
+  expectedExportDocument: unknown,
+  baseline: LocalCharacterExportBaseline,
+  limits: AdmissionCandidateLimits,
+): ValidatedFinalAdmissionReviewSource {
+  // Freezing the full private history is needed only by review consumers. Ordinary
+  // candidate validation retains its existing small public result and cost boundary.
+  return freeze(
+    validateCandidateSource(
+      witnessText,
+      expectedOwnerDeviceId,
+      expectedDescriptor,
+      expectedExportDocument,
+      baseline,
+      limits,
+    ),
+  );
 }
 
 /** Reads original owner-bound FINAL state; it allocates no scope, command, export, or metadata row. */
@@ -408,7 +458,7 @@ export function prepareOwnedFinalAdmissionCandidate(
         !isDeepStrictEqual(metadataForFinal(d, loaded), metadata)
       )
         return fail('NOT_OWNED_FINAL', 'source');
-      const result = derive(w, metadata.values, metadata.revision, d.baseline);
+      const { candidate: result } = derive(w, metadata.values, metadata.revision, d.baseline);
       if (
         loadDeviceId(d.database) !== ownerDeviceId ||
         !isDeepStrictEqual(

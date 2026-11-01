@@ -185,7 +185,7 @@ describe('host protocol vocabulary implemented presentation support', () => {
 });
 
 describe('GM request queue route boundary', () => {
-  it('admits only the exact inherited campaign address and leaves final admission forms closed', async () => {
+  it('admits queue and final review only at inherited campaign addresses, leaving master import closed', async () => {
     const vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
     const route = '/master/campaigns/:campaignId/network/net-017';
     const value = '00000000-0000-4000-8000-000000000001';
@@ -211,6 +211,30 @@ describe('GM request queue route boundary', () => {
         'screen',
         '/master/campaigns/:campaignId/network/net-018',
         [{ parameterIndex: 0, source: 'inherited', value }],
+      ),
+    ).toBe(true);
+    for (const bindings of [
+      [],
+      [{ parameterIndex: 0, source: 'client-selected' as const, value }],
+      [{ parameterIndex: 0, source: 'inherited' as const, value: 'unbound:' + value }],
+    ])
+      expect(
+        vocabulary.isPresentedForm(
+          'NET-018',
+          'screen',
+          '/master/campaigns/:campaignId/network/net-018',
+          bindings,
+        ),
+      ).toBe(false);
+    expect(
+      vocabulary.isPresentedForm(
+        'NET-028',
+        'screen',
+        '/campaigns/:campaignId/imported-candidate/:candidateId/owner-link',
+        [
+          { parameterIndex: 0, source: 'inherited', value },
+          { parameterIndex: 1, source: 'inherited', value: '00000000-0000-4000-8000-000000000002' },
+        ],
       ),
     ).toBe(false);
   });

@@ -109,6 +109,17 @@ describe('persistence schema', () => {
       .map(({ name }) => name);
     expect(tables).toEqual([
       'campaign',
+      'campaign_admission_batch',
+      'campaign_admission_checkpoint_event',
+      'campaign_admission_controller',
+      'campaign_admission_copy',
+      'campaign_admission_event',
+      'campaign_admission_gm_decision',
+      'campaign_admission_group',
+      'campaign_admission_head',
+      'campaign_admission_identity',
+      'campaign_admission_inventory',
+      'campaign_admission_player_decision',
       'campaign_character_copy',
       'campaign_checkpoint',
       'campaign_creation_command',
@@ -119,6 +130,8 @@ describe('persistence schema', () => {
       'campaign_private_owner',
       'device_identity',
       'device_installation_identity',
+      'gm_admission_view',
+      'gm_admission_view_event',
       'gm_request_queue_event',
       'gm_request_queue_view',
       'hosted_device_request',
@@ -127,6 +140,8 @@ describe('persistence schema', () => {
       'hosted_network_command',
       'hosted_network_peer',
       'hosted_technical_session',
+      'local_admission_event',
+      'local_admission_publication',
       'local_character',
       'local_character_checkpoint',
       'local_character_metadata_revision',
@@ -165,12 +180,12 @@ describe('persistence schema', () => {
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
 
     insertCampaign(database, 'preserved');
-    expect(applyMigrations(database)).toBe(11);
+    expect(applyMigrations(database)).toBe(12);
     expect(
       database.prepare('SELECT payload_json FROM campaign WHERE campaign_id = ?').get('preserved'),
     ).toEqual({ payload_json: '{}' });
     expect(database.prepare('SELECT count(*) AS count FROM schema_migration').get()).toEqual({
-      count: 11,
+      count: 12,
     });
 
     database

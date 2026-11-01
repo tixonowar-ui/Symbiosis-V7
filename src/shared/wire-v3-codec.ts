@@ -1,4 +1,5 @@
 import { wireCodecPrimitives } from './wire-codec.js';
+import { admissionGmClientValue, admissionGmHostValue } from './campaign-admission-review.js';
 import { redactProtocolInputRefusal } from './wire-codec.js';
 import { campaignClientValue, campaignHostValue } from './campaign-creation-codec.js';
 import { networkClientValue } from './device-admission.js';
@@ -421,6 +422,11 @@ const identityDraftRefusalMessage = (value: unknown): IdentityDraftRefusalV3Mess
 
 const clientValue = (value: unknown): ClientToHostV3Message => {
   const object = base(value);
+  if (
+    object['messageType'] === 'network.admission-review.edit' ||
+    object['messageType'] === 'network.admission-view.replace'
+  )
+    return admissionGmClientValue(value);
   if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('campaign.'))
     return campaignClientValue(value);
   if (object['messageType'] === 'network.gm-request-draft.replace')
@@ -435,6 +441,11 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
 
 const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3Message => {
   const object = base(value);
+  if (
+    object['messageType'] === 'network.admission-draft.result' ||
+    object['messageType'] === 'network.admission-draft.refusal'
+  )
+    return admissionGmHostValue(value, vocabulary);
   if (typeof object['messageType'] === 'string' && object['messageType'].startsWith('campaign.'))
     return campaignHostValue(value, vocabulary);
   if (

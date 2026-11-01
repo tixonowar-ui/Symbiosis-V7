@@ -140,6 +140,8 @@ function input(formId: NetworkApplicationFormId): NetworkProjectionInput {
     contextId: id(4),
     supported,
     campaign: bound ? campaign : null,
+    occupiedCampaignPlaceCount: bound ? campaign.activePcCount : null,
+    alreadyImportedSourceUuids: [],
     candidates: [candidate],
     discovery: {
       offers: [{ origin: 'http://127.0.0.1:3000', campaign }],
@@ -346,19 +348,38 @@ describe('own local network public projection boundary', () => {
     },
   );
 
-  it('counts ACTIVE PCs only and prevents over-capacity submit/single selection without changing the immutable batch', () => {
+  it('preserves the literal ACTIVE count and prevents over-capacity submit without changing the immutable batch', () => {
     const i = input('NET-004'),
       campaign = { ...i.campaign!, activePcCount: 3 },
-      p = payload({ ...i, campaign });
+      p = payload({ ...i, campaign, occupiedCampaignPlaceCount: 3 });
     expect(p['capacityForecast']).toMatchObject({
       activePcCount: 3,
       selectedCandidateCount: 1,
       fitsCurrentCapacity: false,
     });
-    expect(keys({ ...i, campaign })).not.toContain('NET-004::CTA::002');
-    expect(networkCapacity(campaign, 0).fitsCurrentCapacity).toBe(true);
-    expect(() => networkCapacity(campaign, 4)).toThrow();
+    expect(keys({ ...i, campaign, occupiedCampaignPlaceCount: 3 })).not.toContain(
+      'NET-004::CTA::002',
+    );
+    expect(networkCapacity(campaign, 0, campaign.activePcCount).fitsCurrentCapacity).toBe(true);
+    expect(() => networkCapacity(campaign, 4, campaign.activePcCount)).toThrow();
     expect(i.state.preparedBatchOrNull!.candidates).toHaveLength(1);
+  });
+  it('counts accepted blocked lobby places separately and suppresses already imported FINAL actions', () => {
+    const i = input('NET-004'),
+      campaign = { ...i.campaign!, activePcCount: 0 },
+      full = { ...i, campaign, occupiedCampaignPlaceCount: 3 };
+    expect(payload(full)['capacityForecast']).toMatchObject({
+      activePcCount: 0,
+      occupiedCampaignPlaceCount: 3,
+      fitsCurrentCapacity: false,
+    });
+    expect(keys(full)).not.toContain('NET-004::CTA::002');
+    const duplicate = {
+      ...i,
+      alreadyImportedSourceUuids: [i.state.selectedCandidates[0]!.sourceUuid],
+    };
+    expect(keys(duplicate)).not.toContain('NET-004::CTA::002');
+    expect(() => networkCapacity(campaign, 1, null)).toThrow();
   });
 
   it('keeps a pending request visible after remote loss but disables cancellation until reconnection', () => {
@@ -372,7 +393,11 @@ describe('own local network public projection boundary', () => {
 
   it('does not advertise a full campaign as eligible for a single candidate while retaining the own back path', () => {
     const i = input('CHR-027'),
-      full = { ...i, campaign: { ...i.campaign!, activePcCount: 3 } },
+      full = {
+        ...i,
+        campaign: { ...i.campaign!, activePcCount: 3 },
+        occupiedCampaignPlaceCount: 3,
+      },
       p = payload(full);
     expect(p['eligibleCampaignIds']).toEqual([]);
     expect(p['selectedCampaignId']).toBeNull();

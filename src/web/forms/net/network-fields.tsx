@@ -70,8 +70,9 @@ function DraftStatus({ state }: { readonly state: NetworkDraftClientState | null
 function Capacity({ value }: { readonly value: CapacityForecast }) {
   return (
     <p>
-      Подтверждённый прогноз: активных персонажей {value.activePcCount} из{' '}
-      {value.activePlayerCapacity}; в выборе {value.selectedCandidateCount}.{' '}
+      Подтверждённый прогноз: занято мест {value.occupiedCampaignPlaceCount} из{' '}
+      {value.activePlayerCapacity}; в выборе {value.selectedCandidateCount}. Активных персонажей:{' '}
+      {value.activePcCount}.{' '}
       {value.fitsCurrentCapacity
         ? 'Выбор помещается в текущую вместимость.'
         : 'Выбор превышает текущую вместимость.'}{' '}

@@ -14,12 +14,18 @@ import type { NetworkApplicationFormId } from '@shared/network-application.js';
 import { NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS } from '@shared/device-admission.js';
 import {
   connectProjection,
+  gmDecisionDestination,
   LOCAL_ROLE_CHOICE_DETAIL,
   type ProjectionConnection,
   type NetworkGmRequestDraftClientState,
   type WebClientState,
 } from './ws-client.js';
 import { NETWORK_CONTEXT_STORAGE_KEY } from './forms/net/network-application.js';
+import {
+  admissionBrowserReceipt,
+  type AdmissionBrowserRequest,
+} from './forms/net/admission-client.js';
+import type { ConfirmedProjectionSnapshot } from './ws-client.js';
 import { GM_CONTEXT_STORAGE_KEY } from './forms/cmp/campaign-create.js';
 import { presentedFormDefinition } from './forms/index.js';
 import { App } from './app.js';
@@ -88,6 +94,7 @@ const selection = (v = ZERO, draftRevision = 0, selected = true): JsonObject => 
     campaignRevision: 0,
     activePlayerCapacity: 5,
     activePcCount: 1,
+    occupiedCampaignPlaceCount: 1,
     selectedCandidateCount: selected ? 1 : 0,
     fitsCurrentCapacity: true,
   },
@@ -123,6 +130,7 @@ const batch = (v = ZERO): JsonObject => ({
     campaignRevision: 0,
     activePlayerCapacity: 5,
     activePcCount: 1,
+    occupiedCampaignPlaceCount: 1,
     selectedCandidateCount: 1,
     fitsCurrentCapacity: true,
   },
@@ -1276,6 +1284,10 @@ const GM_CAPS = [
   'UI-CMD-CAMPAIGN-CREATE',
   'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
   'UI-CMD-DEVICE-REQUEST-REJECT',
+  'UI-CMD-ADMISSION-REVIEW-OPEN',
+  'UI-CMD-ADMISSION-GM-ACCEPT',
+  'UI-CMD-ADMISSION-GM-REJECT',
+  'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
 ] as const;
 const GM_ROW = {
   requestId: REQUEST,
@@ -1306,6 +1318,7 @@ const gmQueue = (v: RevisionVector = ZERO, overrides: JsonObject = {}): JsonObje
   selectedRequestIdOrNull: REQUEST,
   decisionReason: '',
   activePlayerCapacity: 3,
+  selectedAdmissionOrNull: null,
   occupiedActivePcCount: 0,
   commandId: null,
   returnContext: {
@@ -1332,6 +1345,94 @@ const gmBirth = (): JsonObject => ({
   creationReceiptId: 'original-create-receipt',
   creationCommandId: 'original-create-command',
   hostBindRecovery: { status: 'RESERVED', reasonCode: null },
+});
+
+describe('historical GM receipts after projection-only navigation', () => {
+  const applied = { stateRevision: 4, projectionRevision: 6, actorVisibilityRevision: 0 };
+  const before = { ...applied, stateRevision: 3, projectionRevision: 5 };
+  // The closed decoder precedes this correlation check; these isolate its scope/vector contract.
+  const snapshot = (formId: string, revisions: RevisionVector, projection: JsonObject) =>
+    ({ formId, revisions, projection, layers: [] }) as unknown as ConfirmedProjectionSnapshot;
+  const scope = { contextId: CONTEXT, campaignId: CAMPAIGN };
+  it.each(['ACCEPT', 'REJECT'] as const)(
+    'recovers GM %s after RETURN with unchanged S and higher P',
+    (decision) => {
+      const receipt = {
+        commandId: 'lost-gm-command',
+        receiptId: 'original-gm-receipt',
+        revisions: applied,
+        result: {
+          workflowCommandId: `UI-CMD-ADMISSION-GM-${decision}`,
+          admissionBatchId: SCOPE,
+          proposalChecksumOrNull: '1'.repeat(64),
+          campaignCharacterIds: [REF.sourceUuid],
+          reasonOrNull: 'Причина',
+        },
+      };
+      const source = snapshot('NET-021', before, scope);
+      const returned = snapshot('NET-017', { ...applied, projectionRevision: 7 }, gmQueue(applied));
+      expect(gmDecisionDestination(returned, source, receipt, true)).toBe(true);
+      expect(
+        gmDecisionDestination({ ...returned, revisions: applied }, source, receipt, true),
+      ).toBe(false);
+      for (const changed of [
+        { ...returned, revisions: { ...applied, stateRevision: 2, projectionRevision: 7 } },
+        { ...returned, projection: { ...returned.projection, contextId: NEXT_CONTEXT } },
+        { ...returned, projection: { ...returned.projection, campaignId: NEXT_CONTEXT } },
+      ])
+        expect(
+          gmDecisionDestination(
+            changed as unknown as ConfirmedProjectionSnapshot,
+            source,
+            receipt,
+            true,
+          ),
+        ).toBe(false);
+      const original = snapshot(decision === 'ACCEPT' ? 'NET-021' : 'NET-022', applied, {
+        ...scope,
+        admissionBatchId: SCOPE,
+        published: true,
+        editable: false,
+        proposalChecksum: '1'.repeat(64),
+        proposedCampaignCopies: [{ campaignCharacterIdOrNull: REF.sourceUuid }],
+        reason: 'Причина',
+      });
+      expect(gmDecisionDestination(original, source, receipt, true)).toBe(true);
+      expect(
+        gmDecisionDestination(
+          {
+            ...original,
+            projection: { ...original.projection, editable: true },
+          } as unknown as ConfirmedProjectionSnapshot,
+          source,
+          receipt,
+          true,
+        ),
+      ).toBe(false);
+    },
+  );
+  it('recovers preliminary ACCEPT after OPEN while still checking the exact applied vector', () => {
+    const receipt = {
+      commandId: 'lost-preliminary',
+      receiptId: 'original-preliminary',
+      revisions: applied,
+      result: { afterRequestStatus: 'IN_REVIEW' },
+    };
+    const source = snapshot('NET-017', before, gmQueue(before));
+    const opened = snapshot('NET-018', { ...applied, projectionRevision: 7 }, scope);
+    expect(gmDecisionDestination(opened, source, receipt, true)).toBe(true);
+    expect(gmDecisionDestination({ ...opened, revisions: applied }, source, receipt, true)).toBe(
+      false,
+    );
+    expect(
+      gmDecisionDestination(
+        opened,
+        source,
+        { ...receipt, result: { afterRequestStatus: 'REJECTED' } },
+        true,
+      ),
+    ).toBe(false);
+  });
 });
 function gmSnapshot(
   formId: 'NET-017' | 'CMP-006',
@@ -1471,7 +1572,68 @@ function gmDecision(command: Record<string, unknown>) {
   };
 }
 describe('NET-017 actual GM client transport family', () => {
-  it('resumes the own GM ticket with exactly CREATE plus two GM capabilities, without player fields', async () => {
+  it('checks admission OPEN as a presentation advance and rejects a fabricated state advance', () => {
+    const v = { stateRevision: 2, projectionRevision: 4, actorVisibilityRevision: 0 };
+    const source = { projection: gmQueue(v), layers: [] } as unknown as ConfirmedProjectionSnapshot;
+    const request: AdmissionBrowserRequest = {
+      messageType: 'command.request',
+      protocolVersion: 1,
+      commandKind: 'workflow-command',
+      role: 'gm',
+      commandId: 'open',
+      workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN',
+      expectedRevisions: v,
+      payload: { campaignId: CAMPAIGN, requestId: REQUEST, requestRevision: 1 },
+    };
+    const receipt = {
+      commandId: 'open',
+      receiptId: ATTEMPT,
+      revisions: { ...v, projectionRevision: 5 },
+      result: {
+        workflowCommandId: request.workflowCommandId,
+        contextId: CONTEXT,
+        campaignId: CAMPAIGN,
+        admissionBatchId: SESSION,
+        timestamp: '2026-11-01T00:00:00.000Z',
+        originalOpenReceipt: {
+          receiptId: ATTEMPT,
+          commandId: 'open',
+          workflowCommandId: request.workflowCommandId,
+          campaignId: CAMPAIGN,
+          requestId: REQUEST,
+          requestOwnerDeviceId: NEXT_CONTEXT,
+          admissionBatchId: SESSION,
+          reviewCopies: [
+            {
+              reviewCopyId: SCOPE,
+              sourceUuid: GM_ROW.batchCharacterSummaries[0].sourceUuid,
+              sourceSnapshotId: GM_ROW.batchCharacterSummaries[0].sourceSnapshotId,
+              snapshotChecksum: 'a'.repeat(64),
+            },
+          ],
+          reviewRevision: 0,
+          authoritativeGmActorId: 'gm',
+          timestamp: '2026-11-01T00:00:00.000Z',
+        },
+      },
+    };
+    expect(admissionBrowserReceipt(receipt, request, source)).toEqual(receipt);
+    expect(() =>
+      admissionBrowserReceipt(
+        { ...receipt, revisions: { ...receipt.revisions, stateRevision: 3 } },
+        request,
+        source,
+      ),
+    ).toThrow();
+    expect(() =>
+      admissionBrowserReceipt(
+        { ...receipt, result: { ...receipt.result, contextId: NEXT_CONTEXT } },
+        request,
+        source,
+      ),
+    ).toThrow();
+  });
+  it('resumes the own GM ticket with creation, preliminary review and final admission capabilities, without player fields', async () => {
     const f = await gmStart();
     expect(sent(f.socket)).toMatchObject({
       messageType: 'campaign.local-context.resume',
@@ -1662,36 +1824,39 @@ describe('NET-017 actual GM client transport family', () => {
       snapshot: { projection: { requests: [{ requestStatus: 'REJECTED', requestRevision: 2 }] } },
     });
   });
-  it('keeps CMP-006 birth bytes and a monotonic technical vector through explicit back and ingress', async () => {
-    const initial = { stateRevision: 4, projectionRevision: 7, actorVisibilityRevision: 0 },
-      f = await gmStart(gmQueue(initial), initial);
-    f.connection.requestFormAction('NET-017::CTA::009');
-    const back = sent(f.socket),
-      v = { ...initial, projectionRevision: 8 };
-    f.socket.message(
-      gmSnapshot('CMP-006', gmBirth(), v, back['navigationRequestId'] as string, 'FORM_ACTION'),
-    );
-    expect(f.states.at(-1)).toMatchObject({
-      kind: 'ready',
-      snapshot: { formId: 'CMP-006', revisions: v },
-    });
-    expect(f.connection.requestFormAction('CMP-006::CTA::002')).toEqual({ ok: true });
-    const enter = sent(f.socket),
-      next = { ...v, projectionRevision: 9 };
-    f.socket.message(
-      gmSnapshot(
-        'NET-017',
-        gmQueue(next),
-        next,
-        enter['navigationRequestId'] as string,
-        'FORM_ACTION',
-      ),
-    );
-    expect(f.states.at(-1)).toMatchObject({
-      kind: 'ready',
-      snapshot: { formId: 'NET-017', revisions: next },
-    });
-  });
+  it.each([0, 1, 2])(
+    'keeps CMP-006 birth bytes and a monotonic technical vector through explicit back and ingress at visibility %s',
+    async (actorVisibilityRevision) => {
+      const initial = { stateRevision: 4, projectionRevision: 7, actorVisibilityRevision },
+        f = await gmStart(gmQueue(initial), initial);
+      f.connection.requestFormAction('NET-017::CTA::009');
+      const back = sent(f.socket),
+        v = { ...initial, projectionRevision: 8 };
+      f.socket.message(
+        gmSnapshot('CMP-006', gmBirth(), v, back['navigationRequestId'] as string, 'FORM_ACTION'),
+      );
+      expect(f.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { formId: 'CMP-006', revisions: v },
+      });
+      expect(f.connection.requestFormAction('CMP-006::CTA::002')).toEqual({ ok: true });
+      const enter = sent(f.socket),
+        next = { ...v, projectionRevision: 9 };
+      f.socket.message(
+        gmSnapshot(
+          'NET-017',
+          gmQueue(next),
+          next,
+          enter['navigationRequestId'] as string,
+          'FORM_ACTION',
+        ),
+      );
+      expect(f.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { formId: 'NET-017', revisions: next },
+      });
+    },
+  );
   it.each(['scope', 'form', 'prefix', 'regression'])(
     'refuses unsolicited %s refresh',
     async (fault) => {

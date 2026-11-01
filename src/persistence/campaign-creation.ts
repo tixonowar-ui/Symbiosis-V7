@@ -13,11 +13,24 @@ import type {
 import type { CommandReceipt, JsonObject } from '../shared/wire-protocol.js';
 import { loadDeviceId } from './device-identity.js';
 import type { FormActionIntentV2Message } from '../shared/wire-v2-protocol.js';
+import {
+  ADMISSION_GM_VIEW_FORM_IDS,
+  admissionGmViewValuesValue,
+  admissionGmClientBindingValue,
+  admissionReviewStateValue,
+  type AdmissionGmViewFormId,
+  type AdmissionGmViewValues,
+  type AdmissionGmClientBinding,
+} from '../shared/campaign-admission-review.js';
 import type {
   NetworkGmRequestDraftValues,
   NetworkGmRequestReturnContext,
 } from '../shared/network-application.js';
 import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
+import {
+  CAMPAIGN_ADMISSION_IDENTITIES,
+  CAMPAIGN_ADMISSION_TABLES,
+} from './migrations/0012-campaign-admission.js';
 import {
   commitNewCampaignCheckpoint,
   loadCampaignCheckpoint,
@@ -58,6 +71,11 @@ export type CampaignCreationCursor = {
   | { readonly kind: 'DRAFT'; readonly formId: CampaignDraftFormId; readonly targetId: string }
   | { readonly kind: 'CAMPAIGN'; readonly formId: 'CMP-006'; readonly targetId: string }
   | { readonly kind: 'QUEUE'; readonly formId: 'NET-017' | 'CMP-006'; readonly targetId: string }
+  | {
+      readonly kind: 'ADMISSION';
+      readonly formId: AdmissionGmViewFormId;
+      readonly targetId: string;
+    }
 );
 export type RedactedCampaignDraftRequest =
   | Exclude<CampaignDraftReplaceV3Message, { variant: 'SECRET' }>
@@ -259,6 +277,23 @@ const revisions = (value: unknown): RevisionTriple => {
   return result;
 };
 const exactRevisions = (value: unknown): RevisionTriple => revisions(object(value, revisionKeys));
+/** Admission can change visibility; creation/draft receipts still require their original A=0. */
+const presentationRevisions = (value: unknown): RevisionTriple => {
+  const row = object(value);
+  const result = {
+    stateRevision: count(row['stateRevision']),
+    projectionRevision: count(row['projectionRevision']),
+    actorVisibilityRevision: count(row['actorVisibilityRevision']),
+  };
+  if (
+    result.projectionRevision < result.stateRevision ||
+    result.actorVisibilityRevision > result.stateRevision
+  )
+    return fail();
+  return result;
+};
+const exactPresentationRevisions = (value: unknown): RevisionTriple =>
+  presentationRevisions(object(value, revisionKeys));
 const next = (value: number): number =>
   value === Number.MAX_SAFE_INTEGER ? fail('REVISION_OVERFLOW') : value + 1;
 function assertExpected(
@@ -526,7 +561,7 @@ function assertUnusedId(db: Database.Database, id: string): void {
   ];
   // An older campaign writer must not reuse identities already committed by a network family.
   const network =
-    version === 10 || version === 11
+    version === 10 || version === 11 || version === 12
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -538,7 +573,7 @@ function assertUnusedId(db: Database.Database, id: string): void {
         ] as const)
       : [];
   const review =
-    version === 11
+    version === 11 || version === 12
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -546,7 +581,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
           ['gm_request_queue_event', ['event_id']],
         ] as const)
       : [];
-  for (const [table, columns] of [...network, ...review])
+  const admission = version === 12 ? CAMPAIGN_ADMISSION_IDENTITIES : [];
+  for (const [table, columns] of [...network, ...review, ...admission])
     for (const column of columns)
       if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
         return fail('IDEMPOTENCY_CONFLICT');
@@ -676,7 +712,10 @@ export function readCampaignCreationCursor(
   ]);
   const cursor = {
     ...parsed,
-    revisions: exactRevisions(parsed['revisions']),
+    revisions:
+      parsed['kind'] === 'QUEUE' || parsed['kind'] === 'ADMISSION'
+        ? exactPresentationRevisions(parsed['revisions'])
+        : exactRevisions(parsed['revisions']),
   } as unknown as CampaignCreationCursor;
   if (
     cursor.gmLocalContextId !== gmLocalContextId ||
@@ -713,6 +752,24 @@ export function readCampaignCreationCursor(
       }),
     );
     if (state.viewOrNull === null || !same(cursor, queueCursor(state.viewOrNull))) return fail();
+    if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined)
+      readOriginTransaction(db, () =>
+        readGmAdmissionViewStateInTransaction(db, {
+          ownerDeviceId: context.ownerDeviceId,
+          gmLocalContextId,
+          campaignId: cursor.targetId,
+        }),
+      );
+  } else if (cursor.kind === 'ADMISSION') {
+    const state = readOriginTransaction(db, () =>
+      readGmAdmissionViewStateInTransaction(db, {
+        ownerDeviceId: context.ownerDeviceId,
+        gmLocalContextId,
+        campaignId: cursor.targetId,
+      }),
+    );
+    if (state.viewOrNull?.active !== true || !same(cursor, admissionCursor(state.viewOrNull)))
+      return fail();
   } else return fail();
   return cursor;
 }
@@ -1290,7 +1347,8 @@ function campaignPayload(
     return fail();
   return { checkpoint, payload };
 }
-function readCampaignOwnerBinding(
+/** Ownership evidence only; current readers must also verify CREATE origin and current checkpoint. */
+export function readCampaignOwnerBinding(
   db: Database.Database,
   gmLocalContextId: string,
   campaignId: string,
@@ -1740,7 +1798,135 @@ export interface GmRequestQueueEvidence {
   readonly visibleRequestIds: readonly string[];
   readonly queueEvidenceSha256: string;
 }
+const admissionCauseTables = {
+  REVIEW_EDIT: 'campaign_admission_event',
+  GM_DECISION: 'campaign_admission_gm_decision',
+  PLAYER_DECISION: 'campaign_admission_player_decision',
+} as const;
+export interface GmAdmissionSourceCause {
+  readonly kind: keyof typeof admissionCauseTables;
+  readonly admissionBatchId: string;
+  readonly commandId: string;
+  readonly recordSha256: string;
+}
+function admissionCause(value: unknown): GmAdmissionSourceCause {
+  const row = queueObject(value, ['kind', 'admissionBatchId', 'commandId', 'recordSha256']);
+  const kind = row['kind'];
+  if (kind !== 'REVIEW_EDIT' && kind !== 'GM_DECISION' && kind !== 'PLAYER_DECISION') return fail();
+  return {
+    kind,
+    admissionBatchId: text(row['admissionBatchId']),
+    commandId: text(row['commandId']),
+    recordSha256: queueHash(row['recordSha256']),
+  };
+}
+function admissionCauseEventId(scope: GmRequestReviewScope, cause: GmAdmissionSourceCause): string {
+  return `gm-admission-source:${campaignCreationHash({ scope, cause })}`;
+}
+/** Immutable source-row proof only: the owning writer may not have sealed its checkpoint yet. */
+function verifyAdmissionCause(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  cause: GmAdmissionSourceCause,
+) {
+  admissionBatchAnchor(db, scope, cause.admissionBatchId);
+  const row = rowAt(db, admissionCauseTables[cause.kind], 'command_id', cause.commandId) ?? fail();
+  const saved = checkedJson(row),
+    request = object(saved['request']);
+  const client =
+    cause.kind === 'PLAYER_DECISION'
+      ? null
+      : admissionClientBinding(saved['clientRequestJsonOrNull']);
+  if (
+    client !== null &&
+    (client.commandId !== cause.commandId ||
+      client.contextId !== scope.gmLocalContextId ||
+      client.campaignId !== scope.campaignId ||
+      client.admissionBatchId !== cause.admissionBatchId ||
+      (cause.kind === 'REVIEW_EDIT'
+        ? client.reviewRevision !== request['expectedReviewRevision'] ||
+          !same(client.intentOrNull, request['intent']) ||
+          client.decisionOrNull !== null
+        : !same(client.decisionOrNull, request) || client.intentOrNull !== null))
+  )
+    return fail();
+  if (
+    row['admission_batch_id'] !== cause.admissionBatchId ||
+    row['record_sha256'] !== cause.recordSha256 ||
+    request['commandId'] !== cause.commandId ||
+    request['admissionBatchId'] !== cause.admissionBatchId
+  )
+    return fail();
+  if (cause.kind === 'REVIEW_EDIT') {
+    const revision = count(saved['reviewRevision']);
+    if (
+      revision !== row['event_index'] ||
+      revision !== next(count(request['expectedReviewRevision'])) ||
+      saved['receiptId'] !== row['receipt_id']
+    )
+      return fail();
+    return {
+      client,
+      actorVisibilityChanged: false,
+      reviewRevision: revision,
+      checkpointRevisionOrNull: null,
+    };
+  }
+  const receipt = object(saved['receipt']);
+  if (
+    !same(queueScope(saved['scope']), scope) ||
+    row['campaign_id'] !== scope.campaignId ||
+    request['campaignId'] !== scope.campaignId ||
+    receipt['commandId'] !== cause.commandId ||
+    receipt['receiptId'] !== row['receipt_id'] ||
+    receipt['admissionBatchId'] !== cause.admissionBatchId ||
+    receipt['campaignId'] !== scope.campaignId ||
+    request['decision'] !== row['decision'] ||
+    receipt['decision'] !== request['decision']
+  )
+    return fail();
+  const accepted = request['decision'] === 'ACCEPT';
+  if (!accepted && request['decision'] !== (cause.kind === 'GM_DECISION' ? 'REJECT' : 'DECLINE'))
+    return fail();
+  const actorVisibilityChanged = cause.kind === 'PLAYER_DECISION' || accepted;
+  let checkpointRevisionOrNull: number | null = null;
+  if (actorVisibilityChanged) {
+    const checkpoint =
+      rowAt(db, 'campaign_admission_checkpoint_event', 'command_id', cause.commandId) ?? fail();
+    const proof = checkedJson(checkpoint);
+    const kind =
+      cause.kind === 'GM_DECISION' ? 'GM_ACCEPT' : accepted ? 'PLAYER_ACCEPT' : 'PLAYER_DECLINE';
+    checkpointRevisionOrNull = next(count(request['expectedCampaignRevision']));
+    if (
+      checkpoint['campaign_id'] !== scope.campaignId ||
+      proof['campaignId'] !== scope.campaignId ||
+      checkpoint['admission_batch_id'] !== cause.admissionBatchId ||
+      proof['admissionBatchId'] !== cause.admissionBatchId ||
+      checkpoint['kind'] !== kind ||
+      proof['kind'] !== kind ||
+      proof['commandId'] !== cause.commandId ||
+      proof['receiptId'] !== receipt['receiptId'] ||
+      checkpoint['state_revision'] !== checkpointRevisionOrNull ||
+      proof['stateRevision'] !== checkpointRevisionOrNull
+    )
+      return fail();
+  }
+  return {
+    client,
+    actorVisibilityChanged,
+    reviewRevision: cause.kind === 'GM_DECISION' ? count(request['reviewRevision']) : null,
+    checkpointRevisionOrNull,
+  };
+}
 export type GmRequestReviewMutation =
+  | { readonly kind: 'SOURCE_ADVANCE'; readonly cause: GmAdmissionSourceCause }
+  | {
+      readonly kind: 'ADMISSION_RETURN';
+      readonly viewEventId: string;
+      readonly viewEventSha256: string;
+      readonly queuePrefix: AdmissionQueuePrefix;
+      readonly revisions: RevisionTriple;
+    }
   | {
       readonly kind: 'NAV';
       readonly request: FormActionIntentV2Message;
@@ -1924,13 +2110,33 @@ function queueDraft(value: unknown): GmRequestReviewDraftRequest {
       campaignId: text(scope['campaignId']),
       sourceFormId: 'NET-017',
     },
-    expectedRevisions: exactRevisions(row['expectedRevisions']),
+    expectedRevisions: exactPresentationRevisions(row['expectedRevisions']),
     expectedRequestQueueRevision: count(row['expectedRequestQueueRevision']),
     values: queueValues(row['values']),
   };
 }
 function queueMutation(value: unknown): GmRequestReviewMutation {
   const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'SOURCE_ADVANCE') {
+    const row = queueObject(value, ['kind', 'cause']);
+    return { kind: 'SOURCE_ADVANCE', cause: admissionCause(row['cause']) };
+  }
+  if (record['kind'] === 'ADMISSION_RETURN') {
+    const row = queueObject(value, [
+      'kind',
+      'viewEventId',
+      'viewEventSha256',
+      'queuePrefix',
+      'revisions',
+    ]);
+    return {
+      kind: 'ADMISSION_RETURN',
+      viewEventId: text(row['viewEventId']),
+      viewEventSha256: queueHash(row['viewEventSha256']),
+      queuePrefix: admissionPrefix(row['queuePrefix']),
+      revisions: exactPresentationRevisions(row['revisions']),
+    };
+  }
   if (record['kind'] === 'NAV') {
     const row = queueObject(value, ['kind', 'request', 'initialQueueOrNull']);
     return {
@@ -2089,6 +2295,7 @@ interface QueueReduced {
   readonly changed: boolean;
 }
 function reduceQueue(
+  db: Database.Database,
   scope: GmRequestReviewScope,
   initial: ReturnType<typeof queueBase>,
   state: GmRequestReviewViewState,
@@ -2124,7 +2331,28 @@ function reduceQueue(
   let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
   let document = queueViewDocument(old);
   let changed = true;
-  if (mutation.kind === 'NAV') {
+  if (mutation.kind === 'SOURCE_ADVANCE') {
+    const proof = verifyAdmissionCause(db, scope, mutation.cause);
+    document = {
+      ...document,
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+      actorVisibilityRevision: proof.actorVisibilityChanged
+        ? next(old.actorVisibilityRevision)
+        : old.actorVisibilityRevision,
+    };
+  } else if (mutation.kind === 'ADMISSION_RETURN') {
+    const last = state.events.at(-1);
+    if (
+      last?.eventId !== mutation.queuePrefix.eventId ||
+      last.recordSha256 !== mutation.queuePrefix.recordSha256 ||
+      mutation.revisions.projectionRevision <= old.projectionRevision ||
+      mutation.revisions.stateRevision < old.stateRevision ||
+      mutation.revisions.actorVisibilityRevision < old.actorVisibilityRevision
+    )
+      return fail();
+    document = { ...document, formId: 'NET-017', ...mutation.revisions };
+  } else if (mutation.kind === 'NAV') {
     if (
       mutation.initialQueueOrNull !== null ||
       mutation.request.sourceFormId !== old.formId ||
@@ -2145,7 +2373,7 @@ function reduceQueue(
     )
       return fail('DRAFT_UNAVAILABLE');
     if (
-      !same(request.expectedRevisions, revisions(old)) ||
+      !same(request.expectedRevisions, presentationRevisions(old)) ||
       request.expectedRequestQueueRevision !== old.requestQueueRevision
     )
       return fail('STALE_REVISION');
@@ -2193,14 +2421,18 @@ function reduceQueue(
 function queueSchema(db: Database.Database): void {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 11) return fail();
+  if (row['version'] !== 11 && row['version'] !== 12) return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (row['version'] === 12)
+    for (const table of CAMPAIGN_ADMISSION_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 /** Structural journal reader. Public request-store readers additionally verify every referenced request prefix. */
 export function readGmRequestReviewViewStateInTransaction(
   db: Database.Database,
   value: GmRequestReviewScope,
+  pendingAdmissionReturnId?: string,
 ): GmRequestReviewViewState {
   queueSchema(db);
   const scope = queueScope(value);
@@ -2253,7 +2485,14 @@ export function readGmRequestReviewViewStateInTransaction(
           gmRequestReviewRefreshEventId(scope, mutation.causeCommandId, mutation.causeReceiptId))
     )
       return fail();
-    const reduced = reduceQueue(scope, initial, state, mutation);
+    if (
+      mutation.kind === 'SOURCE_ADVANCE' &&
+      eventId !== admissionCauseEventId(scope, mutation.cause)
+    )
+      return fail();
+    const reduced = reduceQueue(db, scope, initial, state, mutation);
+    if (mutation.kind === 'ADMISSION_RETURN')
+      verifyAdmissionReturnBridge(db, scope, eventId, mutation, pendingAdmissionReturnId);
     if (!same(saved['view'], reduced.view) || saved['changed'] !== reduced.changed) return fail();
     const event: StoredGmRequestQueueEvent = {
       schemaVersion: 1,
@@ -2291,6 +2530,93 @@ export function gmRequestReviewRefreshEventId(
 ): string {
   return `gm-request-refresh:${campaignCreationHash({ scope: queueScope(scope), causeCommandId: text(causeCommandId), causeReceiptId: text(causeReceiptId) })}`;
 }
+/** Closed row/hash coverage; never calls the full admission reader back into gmSource. */
+export function verifyGmAdmissionSourceMirrorsInTransaction(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+): void {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const scope = queueScope(value);
+  const events = readGmRequestReviewViewStateInTransaction(db, scope).events;
+  const actual = new Map<string, GmAdmissionSourceCause>();
+  for (const kind of Object.keys(admissionCauseTables) as (keyof typeof admissionCauseTables)[]) {
+    const rows = db
+      .prepare(
+        `SELECT e.* FROM ${admissionCauseTables[kind]} e JOIN campaign_admission_batch b ON b.admission_batch_id=e.admission_batch_id WHERE b.campaign_id=?`,
+      )
+      .all(scope.campaignId) as Row[];
+    for (const row of rows) {
+      const cause: GmAdmissionSourceCause = {
+        kind,
+        admissionBatchId: text(row['admission_batch_id']),
+        commandId: text(row['command_id']),
+        recordSha256: queueHash(row['record_sha256']),
+      };
+      verifyAdmissionCause(db, scope, cause);
+      if (actual.has(cause.commandId)) return fail();
+      actual.set(cause.commandId, cause);
+    }
+  }
+  const batches = new Map<string, { reviewRevision: number; gm: boolean; player: boolean }>();
+  let checkpointRevision = 0;
+  for (const event of events) {
+    if (event.mutation.kind !== 'SOURCE_ADVANCE') continue;
+    const cause = event.mutation.cause;
+    if (!actual.has(cause.commandId) || !same(actual.get(cause.commandId), cause)) return fail();
+    actual.delete(cause.commandId);
+    const proof = verifyAdmissionCause(db, scope, cause);
+    if (
+      proof.client !== null &&
+      db
+        .prepare(
+          'SELECT 1 FROM gm_admission_view_event WHERE event_id=? AND context_id=? AND campaign_id=? AND owner_device_id=?',
+        )
+        .get(
+          `gm-admission-view-source:${event.eventId}`,
+          scope.gmLocalContextId,
+          scope.campaignId,
+          scope.ownerDeviceId,
+        ) === undefined
+    )
+      return fail();
+    const batch = batches.get(cause.admissionBatchId) ?? {
+      reviewRevision: 0,
+      gm: false,
+      player: false,
+    };
+    if (cause.kind === 'REVIEW_EDIT') {
+      if (batch.gm || batch.player || proof.reviewRevision !== next(batch.reviewRevision))
+        return fail();
+      batch.reviewRevision = proof.reviewRevision;
+    } else if (cause.kind === 'GM_DECISION') {
+      if (batch.gm || batch.player || proof.reviewRevision !== batch.reviewRevision) return fail();
+      batch.gm = true;
+    } else {
+      if (!batch.gm || batch.player) return fail();
+      batch.player = true;
+    }
+    if (proof.checkpointRevisionOrNull !== null) {
+      if (proof.checkpointRevisionOrNull !== next(checkpointRevision)) return fail();
+      checkpointRevision = proof.checkpointRevisionOrNull;
+    }
+    batches.set(cause.admissionBatchId, batch);
+  }
+  if (actual.size !== 0) return fail();
+}
+/** Called after the domain rows are sealed and before the owning transaction may return. */
+export function appendGmAdmissionSourceInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  value: GmAdmissionSourceCause,
+): void {
+  const cause = admissionCause(admissionViewInput(value));
+  verifyAdmissionCause(db, scope, cause);
+  appendGmRequestReviewEventInTransaction(db, scope, {
+    eventId: admissionCauseEventId(scope, cause),
+    mutation: { kind: 'SOURCE_ADVANCE', cause },
+  });
+  verifyGmAdmissionSourceMirrorsInTransaction(db, scope);
+}
 function queueCursor(view: GmRequestReviewView): CampaignCreationCursor {
   return {
     gmLocalContextId: view.gmLocalContextId,
@@ -2298,7 +2624,7 @@ function queueCursor(view: GmRequestReviewView): CampaignCreationCursor {
     kind: 'QUEUE',
     formId: view.formId,
     targetId: view.campaignId,
-    revisions: revisions(view),
+    revisions: presentationRevisions(view),
     targetSha256: view.snapshotSha256,
   };
 }
@@ -2325,7 +2651,11 @@ export function appendGmRequestReviewEventInTransaction(
         gmRequestReviewRefreshEventId(scope, mutation.causeCommandId, mutation.causeReceiptId))
   )
     return fail('INVALID_INPUT');
-  const state = readGmRequestReviewViewStateInTransaction(db, scope);
+  const state = readGmRequestReviewViewStateInTransaction(
+    db,
+    scope,
+    mutation.kind === 'ADMISSION_RETURN' ? mutation.viewEventId : undefined,
+  );
   const known = state.events.find((event) => event.eventId === eventId);
   if (known !== undefined) {
     if (!same(known.mutation, mutation)) return fail('IDEMPOTENCY_CONFLICT');
@@ -2335,7 +2665,10 @@ export function appendGmRequestReviewEventInTransaction(
     db.prepare('SELECT 1 FROM gm_request_queue_event WHERE event_id=?').get(eventId) !== undefined
   )
     return fail('IDEMPOTENCY_CONFLICT');
-  const cursor = readCampaignCreationCursor(db, scope.gmLocalContextId);
+  const cursor =
+    mutation.kind === 'ADMISSION_RETURN'
+      ? admissionReturnCursor(db, scope, mutation)
+      : readCampaignCreationCursor(db, scope.gmLocalContextId);
   const initial = queueBase(db, scope);
   if (state.viewOrNull === null) {
     if (!same(cursor, initial.cursor)) return fail('STALE_REVISION');
@@ -2344,7 +2677,17 @@ export function appendGmRequestReviewEventInTransaction(
     !same(cursor, queueCursor(state.viewOrNull))
   )
     return fail('DRAFT_UNAVAILABLE');
-  const reduced = reduceQueue(scope, initial, state, mutation);
+  if (
+    mutation.kind === 'SOURCE_ADVANCE' &&
+    eventId !== admissionCauseEventId(scope, mutation.cause)
+  )
+    return fail('INVALID_INPUT');
+  const admissionBefore =
+    (mutation.kind === 'SOURCE_ADVANCE' || mutation.kind === 'REQUEST_REFRESH') &&
+    db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined
+      ? readGmAdmissionViewStateInTransaction(db, scope)
+      : null;
+  const reduced = reduceQueue(db, scope, initial, state, mutation);
   const document = {
     schemaVersion: 1 as const,
     eventId,
@@ -2381,14 +2724,18 @@ export function appendGmRequestReviewEventInTransaction(
     campaignCreationHash(reduced.view),
   );
   const selected =
-    state.viewOrNull === null || (cursor.kind === 'QUEUE' && cursor.targetId === scope.campaignId);
+    mutation.kind === 'ADMISSION_RETURN' ||
+    state.viewOrNull === null ||
+    (cursor.kind === 'QUEUE' && cursor.targetId === scope.campaignId);
   if (selected) writeCursor(db, queueCursor(reduced.view));
-  const rowWrites = selected ? 3 : 2;
+  let rowWrites = selected ? 3 : 2;
   if (
     !db.inTransaction ||
     (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n !== before + rowWrites
   )
     return fail('SOURCE_CHANGED');
+  if (admissionBefore?.viewOrNull !== null && admissionBefore !== null)
+    rowWrites += appendAdmissionSourceView(db, scope, admissionBefore, event, cursor);
   const saved = readGmRequestReviewViewStateInTransaction(db, scope);
   if (!same(saved.viewOrNull, reduced.view) || !same(saved.events.at(-1), event))
     return fail('SOURCE_CHANGED');
@@ -2398,4 +2745,1059 @@ export function appendGmRequestReviewEventInTransaction(
   )
     return fail('SOURCE_CHANGED');
   return { event, view: reduced.view, rowWrites };
+}
+
+export interface GmAdmissionView extends GmRequestReviewScope, RevisionTriple {
+  readonly schemaVersion: 1;
+  readonly admissionBatchId: string;
+  readonly formId: AdmissionGmViewFormId;
+  readonly values: AdmissionGmViewValues;
+  readonly active: boolean;
+  readonly snapshotSha256: string;
+}
+function admissionClientBinding(value: unknown): AdmissionGmClientBinding | null {
+  if (value === null) return null;
+  const json = text(value),
+    parsed: unknown = JSON.parse(json);
+  if (canonical(parsed) !== json) return fail();
+  return admissionGmClientBindingValue(parsed);
+}
+function assertAdmissionClientView(
+  scope: GmRequestReviewScope,
+  view: GmAdmissionView | null,
+  client: AdmissionGmClientBinding,
+): void {
+  if (
+    view === null ||
+    !view.active ||
+    client.contextId !== scope.gmLocalContextId ||
+    client.campaignId !== scope.campaignId ||
+    client.admissionBatchId !== view.admissionBatchId ||
+    client.sourceFormId !== view.formId ||
+    !same(client.expectedRevisions, presentationRevisions(view))
+  )
+    return fail('STALE_REVISION');
+  const intent = client.intentOrNull;
+  if (
+    intent !== null &&
+    intent.kind !== 'ALLOCATE_GROUP' &&
+    intent.reviewCopyId !== view.values.selectedReviewCopyId
+  )
+    return fail('FOREIGN_OWNER');
+  if (intent?.kind === 'WEAPON' && !same(intent.input, view.values.weaponDraftOrNull))
+    return fail('STALE_REVISION');
+  if (
+    client.decisionOrNull?.decision === 'REJECT' &&
+    client.decisionOrNull.reasonOrNull !== view.values.rejectionReason
+  )
+    return fail('STALE_REVISION');
+}
+/** Fresh browser commands require the selected durable view; historical replay uses its source mirror. */
+export function assertGmAdmissionClientViewInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  json: string | null,
+): void {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const client = admissionClientBinding(json);
+  if (client === null) return;
+  const view = readGmAdmissionViewStateInTransaction(db, scope).viewOrNull;
+  assertAdmissionClientView(scope, view, client);
+  if (
+    view === null ||
+    !same(readCampaignCreationCursor(db, scope.gmLocalContextId), admissionCursor(view))
+  )
+    return fail('DRAFT_UNAVAILABLE');
+}
+interface AdmissionQueuePrefix {
+  readonly eventId: string;
+  readonly recordSha256: string;
+}
+export type GmAdmissionViewMutation =
+  | { readonly kind: 'SOURCE_ADVANCE'; readonly queuePrefix: AdmissionQueuePrefix }
+  | {
+      readonly kind: 'ENTER_PUBLISHED';
+      readonly admissionBatchId: string;
+      readonly selectedReviewCopyId: string;
+      readonly request: FormActionIntentV2Message;
+      readonly publicationRecordSha256: string;
+      readonly queuePrefix: AdmissionQueuePrefix;
+    }
+  | {
+      readonly kind: 'ENTER';
+      readonly admissionBatchId: string;
+      readonly clientRequestJson: string;
+      readonly receiptId: string;
+      readonly timestamp: string;
+      readonly queuePrefix: AdmissionQueuePrefix;
+    }
+  | { readonly kind: 'NAV'; readonly request: FormActionIntentV2Message }
+  | {
+      readonly kind: 'VALUES';
+      readonly updateId: string;
+      readonly sourceFormId: AdmissionGmViewFormId;
+      readonly expectedRevisions: RevisionTriple;
+      readonly values: AdmissionGmViewValues;
+    }
+  | {
+      readonly kind: 'RETURN';
+      readonly request: FormActionIntentV2Message;
+      readonly queuePrefix: AdmissionQueuePrefix;
+    };
+export interface StoredGmAdmissionViewEvent {
+  readonly eventId: string;
+  readonly scope: GmRequestReviewScope;
+  readonly eventIndex: number;
+  readonly previousSha256OrNull: string | null;
+  readonly mutation: GmAdmissionViewMutation;
+  readonly view: GmAdmissionView;
+  readonly recordSha256: string;
+}
+const admissionNavTargets: Readonly<Record<string, AdmissionGmViewFormId | 'NET-017'>> = {
+  'NET-018::CTA::001': 'NET-017',
+  'NET-018::CTA::002': 'NET-019',
+  'NET-018::CTA::003': 'NET-020',
+  'NET-018::CTA::004': 'NET-021',
+  'NET-019::CTA::001': 'NET-017',
+  'NET-019::CTA::002': 'NET-018',
+  'NET-019::CTA::004': 'GM-019',
+  'NET-019::CTA::005': 'GM-019',
+  'NET-020::CTA::001': 'NET-017',
+  'NET-020::CTA::002': 'NET-018',
+  'NET-021::CTA::001': 'NET-017',
+  'NET-021::CTA::002': 'NET-022',
+  'NET-021::CTA::003': 'GM-020',
+  'NET-021::CTA::004': 'NET-017',
+  'NET-022::CTA::001': 'NET-021',
+  'NET-022::CTA::002': 'NET-017',
+  'GM-019::CTA::004': 'NET-019',
+  'GM-020::CTA::001': 'NET-021',
+};
+function admissionForm(value: unknown): AdmissionGmViewFormId {
+  const found = ADMISSION_GM_VIEW_FORM_IDS.find((form) => form === value);
+  return found ?? fail('INVALID_INPUT');
+}
+/** Only JSON data crosses the presentation writer, before any shared parser reads its properties. */
+function admissionViewInput(value: unknown, seen = new Set<object>()): unknown {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'object' || types.isProxy(value) || seen.has(value))
+    return fail('INVALID_INPUT');
+  const array = Array.isArray(value);
+  if (
+    Object.getPrototypeOf(value) !== (array ? Array.prototype : Object.prototype) &&
+    Object.getPrototypeOf(value) !== null
+  )
+    return fail('INVALID_INPUT');
+  seen.add(value);
+  const descriptors = Object.getOwnPropertyDescriptors(value),
+    result: Row = {};
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (array && key === 'length') continue;
+    const descriptor = typeof key === 'string' ? descriptors[key] : undefined;
+    if (descriptor === undefined || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
+      return fail('INVALID_INPUT');
+    Object.defineProperty(result, key, {
+      value: admissionViewInput(descriptor.value, seen),
+      enumerable: true,
+    });
+  }
+  seen.delete(value);
+  if (!array) return result;
+  const length = count(descriptors['length']?.value);
+  if (Object.keys(result).length !== length) return fail('INVALID_INPUT');
+  return Array.from({ length }, (_, i) =>
+    Object.hasOwn(result, String(i)) ? result[String(i)] : fail('INVALID_INPUT'),
+  );
+}
+function admissionPrefix(value: unknown): AdmissionQueuePrefix {
+  const row = queueObject(value, ['eventId', 'recordSha256']);
+  return { eventId: text(row['eventId']), recordSha256: queueHash(row['recordSha256']) };
+}
+export function admissionNavigation(value: unknown): FormActionIntentV2Message {
+  const row = queueObject(value, [
+    'messageType',
+    'protocolVersion',
+    'navigationRequestId',
+    'sourceFormId',
+    'actionKey',
+    'expectedProjectionRevision',
+  ]);
+  if (row['messageType'] !== 'navigation.form-action' || row['protocolVersion'] !== 2)
+    return fail('INVALID_INPUT');
+  const sourceFormId = admissionForm(row['sourceFormId']),
+    actionKey = text(row['actionKey']);
+  if (
+    !actionKey.startsWith(sourceFormId + '::CTA::') ||
+    admissionNavTargets[actionKey] === undefined
+  )
+    return fail('INVALID_INPUT');
+  return {
+    messageType: 'navigation.form-action',
+    protocolVersion: 2,
+    navigationRequestId: text(row['navigationRequestId']),
+    sourceFormId,
+    actionKey: actionKey as FormActionIntentV2Message['actionKey'],
+    expectedProjectionRevision: count(row['expectedProjectionRevision']),
+  };
+}
+function admissionMutation(value: unknown): GmAdmissionViewMutation {
+  const row = object(admissionViewInput(value));
+  if (row['kind'] === 'ENTER_PUBLISHED') {
+    queueObject(row, [
+      'kind',
+      'admissionBatchId',
+      'selectedReviewCopyId',
+      'request',
+      'publicationRecordSha256',
+      'queuePrefix',
+    ]);
+    return {
+      kind: 'ENTER_PUBLISHED',
+      admissionBatchId: text(row['admissionBatchId']),
+      selectedReviewCopyId: text(row['selectedReviewCopyId']),
+      request: publishedAdmissionNavigation(row['request']),
+      publicationRecordSha256: queueHash(row['publicationRecordSha256']),
+      queuePrefix: admissionPrefix(row['queuePrefix']),
+    };
+  }
+  if (row['kind'] === 'SOURCE_ADVANCE') {
+    queueObject(row, ['kind', 'queuePrefix']);
+    return { kind: 'SOURCE_ADVANCE', queuePrefix: admissionPrefix(row['queuePrefix']) };
+  }
+  if (row['kind'] === 'ENTER') {
+    queueObject(row, [
+      'kind',
+      'admissionBatchId',
+      'clientRequestJson',
+      'receiptId',
+      'timestamp',
+      'queuePrefix',
+    ]);
+    admissionEnterRequest(text(row['clientRequestJson']));
+    return {
+      kind: 'ENTER',
+      admissionBatchId: text(row['admissionBatchId']),
+      clientRequestJson: text(row['clientRequestJson']),
+      receiptId: text(row['receiptId']),
+      timestamp: text(row['timestamp']),
+      queuePrefix: admissionPrefix(row['queuePrefix']),
+    };
+  }
+  if (row['kind'] === 'NAV' || row['kind'] === 'RETURN') {
+    queueObject(
+      row,
+      row['kind'] === 'NAV' ? ['kind', 'request'] : ['kind', 'request', 'queuePrefix'],
+    );
+    const request = admissionNavigation(row['request']);
+    return row['kind'] === 'NAV'
+      ? { kind: 'NAV', request }
+      : { kind: 'RETURN', request, queuePrefix: admissionPrefix(row['queuePrefix']) };
+  }
+  queueObject(row, ['kind', 'updateId', 'sourceFormId', 'expectedRevisions', 'values']);
+  if (row['kind'] !== 'VALUES') return fail('INVALID_INPUT');
+  return {
+    kind: 'VALUES',
+    updateId: text(row['updateId']),
+    sourceFormId: admissionForm(row['sourceFormId']),
+    expectedRevisions: exactPresentationRevisions(row['expectedRevisions']),
+    values: admissionGmViewValuesValue(row['values']),
+  };
+}
+function admissionEnterRequest(json: string) {
+  const row = queueObject(parse(json), [
+    'messageType',
+    'protocolVersion',
+    'commandKind',
+    'workflowCommandId',
+    'commandId',
+    'role',
+    'expectedRevisions',
+    'payload',
+  ]);
+  if (
+    canonical(row) !== json ||
+    row['messageType'] !== 'command.request' ||
+    row['protocolVersion'] !== 1 ||
+    row['commandKind'] !== 'workflow-command' ||
+    row['workflowCommandId'] !== 'UI-CMD-ADMISSION-REVIEW-OPEN' ||
+    row['role'] !== 'gm'
+  )
+    return fail('INVALID_INPUT');
+  const payload = queueObject(row['payload'], ['campaignId', 'requestId', 'requestRevision']);
+  return {
+    commandId: text(row['commandId']),
+    expectedRevisions: exactPresentationRevisions(row['expectedRevisions']),
+    campaignId: text(payload['campaignId']),
+    requestId: text(payload['requestId']),
+    requestRevision: count(payload['requestRevision']),
+  };
+}
+const publishedAdmissionTargets = {
+  'NET-017::CTA::001': 'NET-018',
+  'NET-017::CTA::002': 'NET-019',
+  'NET-017::CTA::003': 'NET-020',
+  'NET-017::CTA::004': 'NET-021',
+} as const;
+function publishedAdmissionNavigation(value: unknown): FormActionIntentV2Message {
+  const row = queueObject(value, [
+    'messageType',
+    'protocolVersion',
+    'navigationRequestId',
+    'sourceFormId',
+    'actionKey',
+    'expectedProjectionRevision',
+  ]);
+  if (
+    row['messageType'] !== 'navigation.form-action' ||
+    row['protocolVersion'] !== 2 ||
+    row['sourceFormId'] !== 'NET-017' ||
+    typeof row['actionKey'] !== 'string' ||
+    !Object.hasOwn(publishedAdmissionTargets, row['actionKey'])
+  )
+    return fail('INVALID_INPUT');
+  text(row['navigationRequestId']);
+  count(row['expectedProjectionRevision']);
+  return row as unknown as FormActionIntentV2Message;
+}
+function publishedAdmissionAnchor(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  mutation: Extract<GmAdmissionViewMutation, { kind: 'ENTER_PUBLISHED' }>,
+): AdmissionGmViewFormId {
+  const row =
+    rowAt(db, 'campaign_admission_gm_decision', 'admission_batch_id', mutation.admissionBatchId) ??
+    fail();
+  const saved = checkedJson(row),
+    request = object(saved['request']);
+  if (
+    row['decision'] !== 'ACCEPT' ||
+    request['decision'] !== 'ACCEPT' ||
+    !same(queueScope(saved['scope']), scope) ||
+    row['record_sha256'] !== mutation.publicationRecordSha256 ||
+    row['campaign_id'] !== scope.campaignId ||
+    request['admissionBatchId'] !== mutation.admissionBatchId ||
+    request['commandId'] !== row['command_id']
+  )
+    return fail();
+  const cause: GmAdmissionSourceCause = {
+    kind: 'GM_DECISION',
+    admissionBatchId: mutation.admissionBatchId,
+    commandId: text(row['command_id']),
+    recordSha256: mutation.publicationRecordSha256,
+  };
+  verifyAdmissionCause(db, scope, cause);
+  const prefix =
+    rowAt(db, 'gm_request_queue_event', 'event_id', mutation.queuePrefix.eventId) ?? fail();
+  const causeIndex = (value: GmAdmissionSourceCause): number => {
+    verifyAdmissionCause(db, scope, value);
+    const id = admissionCauseEventId(scope, value);
+    const mirror = rowAt(db, 'gm_request_queue_event', 'event_id', id) ?? fail();
+    const document = checkedJson(mirror);
+    if (
+      document['eventId'] !== id ||
+      !same(queueScope(document['scope']), scope) ||
+      !same(document['mutation'], { kind: 'SOURCE_ADVANCE', cause: value })
+    )
+      return fail();
+    return count(mirror['event_index']);
+  };
+  const prefixIndex = count(prefix['event_index']);
+  if (causeIndex(cause) > prefixIndex) return fail();
+  if (!Array.isArray(saved['copies'])) return fail();
+  const copies = saved['copies'].map((copy: unknown) => object(copy));
+  let eligible = copies;
+  // Only the immutable queue prefix defines the ingress lifecycle. A later player writer
+  // may currently be between its domain row and companion append in this same transaction.
+  const playerMirrors = db
+    .prepare(
+      "SELECT * FROM gm_request_queue_event WHERE context_id=? AND campaign_id=? AND event_index<=? AND kind='SOURCE_ADVANCE' AND json_extract(record_json,'$.mutation.cause.kind')='PLAYER_DECISION' AND json_extract(record_json,'$.mutation.cause.admissionBatchId')=?",
+    )
+    .all(scope.gmLocalContextId, scope.campaignId, prefixIndex, mutation.admissionBatchId) as Row[];
+  if (playerMirrors.length > 1) return fail();
+  if (playerMirrors.length === 1) {
+    const priorCause = queueMutation(checkedJson(playerMirrors[0]!)['mutation']);
+    if (priorCause.kind !== 'SOURCE_ADVANCE' || causeIndex(priorCause.cause) > prefixIndex)
+      return fail();
+    const player =
+      rowAt(
+        db,
+        'campaign_admission_player_decision',
+        'admission_batch_id',
+        mutation.admissionBatchId,
+      ) ?? fail();
+    if (
+      row['player_command_id'] !== player['command_id'] ||
+      row['player_record_sha256'] !== player['record_sha256']
+    )
+      return fail();
+    const receipt = object(checkedJson(player)['receipt']);
+    if (!Array.isArray(receipt['copies'])) return fail();
+    const results = receipt['copies'].map((copy: unknown) => object(copy));
+    eligible = copies.filter((copy) =>
+      results.some(
+        (result) =>
+          result['campaignCharacterId'] === copy['campaignCharacterId'] &&
+          result['lifecycleState'] === 'PROPOSED',
+      ),
+    );
+  }
+  if (eligible[0]?.['reviewCopyId'] !== mutation.selectedReviewCopyId) return fail();
+  return publishedAdmissionTargets[
+    mutation.request.actionKey as keyof typeof publishedAdmissionTargets
+  ];
+}
+function admissionQueueAnchor(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  prefix: AdmissionQueuePrefix,
+): GmRequestReviewView {
+  const row = rowAt(db, 'gm_request_queue_event', 'event_id', prefix.eventId) ?? fail();
+  const event = object(checkedJson(row));
+  if (
+    row['record_sha256'] !== prefix.recordSha256 ||
+    event['eventId'] !== prefix.eventId ||
+    !same(queueScope(event['scope']), scope) ||
+    row['context_id'] !== scope.gmLocalContextId ||
+    row['campaign_id'] !== scope.campaignId ||
+    row['owner_device_id'] !== scope.ownerDeviceId
+  )
+    return fail();
+  const view = event['view'] as GmRequestReviewView;
+  if (view.formId !== 'NET-017' || !same(view, queueView(scope, queueViewDocument(view))))
+    return fail();
+  exactPresentationRevisions(presentationRevisions(view));
+  return view;
+}
+function admissionBatchAnchor(db: Database.Database, scope: GmRequestReviewScope, id: string) {
+  const row = rowAt(db, 'campaign_admission_batch', 'admission_batch_id', id) ?? fail();
+  const saved = object(checkedJson(row)),
+    initial = admissionReviewStateValue(saved['initialState']),
+    request = admissionEnterRequest(canonical(saved['request']));
+  if (
+    initial.admissionBatchId !== id ||
+    initial.reviewRevision !== 0 ||
+    !same(queueScope(saved['scope']), scope) ||
+    row['context_id'] !== scope.gmLocalContextId ||
+    row['campaign_id'] !== scope.campaignId ||
+    row['owner_device_id'] !== scope.ownerDeviceId ||
+    row['request_id'] !== initial.requestId ||
+    request.requestId !== initial.requestId ||
+    request.campaignId !== scope.campaignId ||
+    row['open_command_id'] !== request.commandId
+  )
+    return fail();
+  return { ...initial, requestRevision: request.requestRevision };
+}
+function admissionView(
+  scope: GmRequestReviewScope,
+  value: Omit<GmAdmissionView, 'snapshotSha256'>,
+): GmAdmissionView {
+  if (
+    !same(
+      queueScope({
+        ownerDeviceId: value.ownerDeviceId,
+        gmLocalContextId: value.gmLocalContextId,
+        campaignId: value.campaignId,
+      }),
+      scope,
+    )
+  )
+    return fail('FOREIGN_OWNER');
+  return { ...value, snapshotSha256: campaignCreationHash(value) };
+}
+function reduceAdmissionView(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  old: GmAdmissionView | null,
+  mutation: GmAdmissionViewMutation,
+): GmAdmissionView {
+  if (mutation.kind === 'SOURCE_ADVANCE') {
+    if (old === null) return fail();
+    const proof = admissionQueueAdvance(db, scope, mutation.queuePrefix);
+    if (proof.client !== null) assertAdmissionClientView(scope, old, proof.client);
+    const weaponCommitted = proof.client?.intentOrNull?.kind === 'WEAPON';
+    const { snapshotSha256: _hash, ...previous } = old;
+    return admissionView(scope, {
+      ...previous,
+      formId: weaponCommitted ? 'NET-019' : previous.formId,
+      values: weaponCommitted ? { ...previous.values, weaponDraftOrNull: null } : previous.values,
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+      actorVisibilityRevision: proof.actorVisibilityChanged
+        ? next(old.actorVisibilityRevision)
+        : old.actorVisibilityRevision,
+    });
+  }
+  if (mutation.kind === 'ENTER' || mutation.kind === 'ENTER_PUBLISHED') {
+    if (old?.active === true) return fail('DRAFT_UNAVAILABLE');
+    const queue = admissionQueueAnchor(db, scope, mutation.queuePrefix),
+      batch = admissionBatchAnchor(db, scope, mutation.admissionBatchId);
+    if (queue.values.selectedRequestIdOrNull !== batch.requestId) return fail('STALE_REVISION');
+    let formId: AdmissionGmViewFormId = 'NET-018';
+    let selectedReviewCopyId = batch.copies[0]!.reviewCopyId;
+    if (mutation.kind === 'ENTER') {
+      const request = admissionEnterRequest(mutation.clientRequestJson);
+      if (
+        request.campaignId !== scope.campaignId ||
+        request.requestId !== batch.requestId ||
+        request.requestRevision !== batch.requestRevision ||
+        !same(request.expectedRevisions, presentationRevisions(queue))
+      )
+        return fail('STALE_REVISION');
+    } else {
+      if (mutation.request.expectedProjectionRevision !== queue.projectionRevision)
+        return fail('STALE_REVISION');
+      formId = publishedAdmissionAnchor(db, scope, mutation);
+      selectedReviewCopyId = mutation.selectedReviewCopyId;
+    }
+    return admissionView(scope, {
+      schemaVersion: 1,
+      ...scope,
+      admissionBatchId: batch.admissionBatchId,
+      formId,
+      active: true,
+      values: {
+        selectedReviewCopyId,
+        rejectionReason: '',
+        weaponDraftOrNull: null,
+      },
+      stateRevision: Math.max(queue.stateRevision, old?.stateRevision ?? 0),
+      projectionRevision: next(Math.max(queue.projectionRevision, old?.projectionRevision ?? 0)),
+      actorVisibilityRevision: Math.max(
+        queue.actorVisibilityRevision,
+        old?.actorVisibilityRevision ?? 0,
+      ),
+    });
+  }
+  if (old === null || !old.active) return fail('DRAFT_UNAVAILABLE');
+  const { snapshotSha256: _hash, ...previous } = old;
+  if (mutation.kind === 'VALUES') {
+    if (
+      old.formId !== mutation.sourceFormId ||
+      !same(presentationRevisions(old), mutation.expectedRevisions)
+    )
+      return fail('STALE_REVISION');
+    const batch = admissionBatchAnchor(db, scope, old.admissionBatchId);
+    if (!batch.copies.some((copy) => copy.reviewCopyId === mutation.values.selectedReviewCopyId))
+      return fail('FOREIGN_OWNER');
+    if (old.formId !== 'NET-022' && old.values.rejectionReason !== mutation.values.rejectionReason)
+      return fail('INVALID_INPUT');
+    if (
+      old.formId !== 'GM-019' &&
+      !same(old.values.weaponDraftOrNull, mutation.values.weaponDraftOrNull) &&
+      !(
+        old.values.selectedReviewCopyId !== mutation.values.selectedReviewCopyId &&
+        mutation.values.weaponDraftOrNull === null
+      )
+    )
+      return fail('INVALID_INPUT');
+    const changed = !same(old.values, mutation.values);
+    return admissionView(scope, {
+      ...previous,
+      values: mutation.values,
+      stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
+      projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+    });
+  }
+  const request = mutation.request,
+    target = admissionNavTargets[request.actionKey];
+  if (
+    request.sourceFormId !== old.formId ||
+    request.expectedProjectionRevision !== old.projectionRevision
+  )
+    return fail('STALE_REVISION');
+  if (mutation.kind === 'RETURN') {
+    if (target !== 'NET-017') return fail('INVALID_INPUT');
+    const queue = admissionQueueAnchor(db, scope, mutation.queuePrefix);
+    return admissionView(scope, {
+      ...previous,
+      active: false,
+      stateRevision: Math.max(old.stateRevision, queue.stateRevision),
+      projectionRevision: next(Math.max(old.projectionRevision, queue.projectionRevision)),
+      actorVisibilityRevision: Math.max(old.actorVisibilityRevision, queue.actorVisibilityRevision),
+    });
+  }
+  if (target === undefined || target === 'NET-017') return fail('INVALID_INPUT');
+  return admissionView(scope, {
+    ...previous,
+    formId: target,
+    projectionRevision: next(old.projectionRevision),
+  });
+}
+function admissionCursor(view: GmAdmissionView): CampaignCreationCursor {
+  return {
+    kind: 'ADMISSION',
+    gmLocalContextId: view.gmLocalContextId,
+    ownerDeviceId: view.ownerDeviceId,
+    targetId: view.campaignId,
+    formId: view.formId,
+    revisions: presentationRevisions(view),
+    targetSha256: view.snapshotSha256,
+  };
+}
+/** Leaf structural fold: no cursor or full gameplay reader may be called from this function. */
+export function readGmAdmissionViewStateInTransaction(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+): { viewOrNull: GmAdmissionView | null; events: readonly StoredGmAdmissionViewEvent[] } {
+  return readAdmissionViewState(db, value);
+}
+function readAdmissionViewState(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+  pendingReturnEventId?: string,
+): { viewOrNull: GmAdmissionView | null; events: readonly StoredGmAdmissionViewEvent[] } {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const scope = queueScope(value);
+  owner(db, scope.ownerDeviceId);
+  const rows = db
+    .prepare(
+      'SELECT * FROM gm_admission_view_event WHERE context_id=? AND campaign_id=? ORDER BY event_index',
+    )
+    .all(scope.gmLocalContextId, scope.campaignId) as Row[];
+  const head = db
+    .prepare('SELECT * FROM gm_admission_view WHERE context_id=? AND campaign_id=?')
+    .get(scope.gmLocalContextId, scope.campaignId) as Row | undefined;
+  let view: GmAdmissionView | null = null;
+  const events: StoredGmAdmissionViewEvent[] = [];
+  for (const [index, row] of rows.entries()) {
+    const saved = queueObject(checkedJson(row), [
+      'eventId',
+      'scope',
+      'eventIndex',
+      'previousSha256OrNull',
+      'mutation',
+      'view',
+    ]);
+    const mutation = admissionMutation(saved['mutation']),
+      eventId = text(saved['eventId']);
+    const openCommandId =
+      mutation.kind === 'ENTER'
+        ? admissionEnterRequest(mutation.clientRequestJson).commandId
+        : null;
+    if (
+      row['open_command_id'] !== openCommandId ||
+      row['open_receipt_id'] !== (mutation.kind === 'ENTER' ? mutation.receiptId : null) ||
+      (openCommandId !== null && eventId !== `gm-admission-enter:${openCommandId}`)
+    )
+      return fail();
+    if (mutation.kind === 'ENTER') {
+      const batch =
+        rowAt(db, 'campaign_admission_batch', 'admission_batch_id', mutation.admissionBatchId) ??
+        fail();
+      const originalReceipt = object(checkedJson(batch)['receipt']);
+      if (
+        mutation.receiptId === openCommandId ||
+        (batch['open_command_id'] === openCommandId
+          ? mutation.receiptId !== batch['open_receipt_id'] ||
+            mutation.timestamp !== originalReceipt['timestamp']
+          : mutation.receiptId === batch['open_receipt_id'])
+      )
+        return fail();
+    }
+    if (
+      saved['eventIndex'] !== index ||
+      row['event_index'] !== index ||
+      row['event_id'] !== eventId ||
+      row['kind'] !== mutation.kind ||
+      row['owner_device_id'] !== scope.ownerDeviceId ||
+      !same(queueScope(saved['scope']), scope) ||
+      saved['previousSha256OrNull'] !== (events.at(-1)?.recordSha256 ?? null)
+    )
+      return fail();
+    if (
+      mutation.kind !== 'ENTER' &&
+      mutation.kind !== 'SOURCE_ADVANCE' &&
+      eventId !==
+        (mutation.kind === 'VALUES' ? mutation.updateId : mutation.request.navigationRequestId)
+    )
+      return fail();
+    if (
+      mutation.kind === 'SOURCE_ADVANCE' &&
+      eventId !== `gm-admission-view-source:${mutation.queuePrefix.eventId}`
+    )
+      return fail();
+    view = reduceAdmissionView(db, scope, view, mutation);
+    if (!same(view, saved['view'])) return fail();
+    events.push({
+      eventId,
+      scope,
+      eventIndex: index,
+      previousSha256OrNull: events.at(-1)?.recordSha256 ?? null,
+      mutation,
+      view,
+      recordSha256: text(row['record_sha256']),
+    });
+  }
+  if (
+    head === undefined
+      ? events.length !== 0
+      : head['owner_device_id'] !== scope.ownerDeviceId ||
+        head['head_event_id'] !== events.at(-1)?.eventId ||
+        !same(checkedJson(head), view)
+  )
+    return fail();
+  for (const event of events) {
+    if (event.mutation.kind !== 'RETURN') continue;
+    const mirrorId = `gm-admission-return:${event.eventId}`,
+      mirrors = db
+        .prepare(
+          "SELECT * FROM gm_request_queue_event WHERE event_id=? OR json_extract(record_json,'$.mutation.viewEventId')=?",
+        )
+        .all(mirrorId, event.eventId) as Row[];
+    if (
+      mirrors.length === 0 &&
+      event.eventId === pendingReturnEventId &&
+      event.eventIndex === events.length - 1
+    ) {
+      // Only the owning synchronous RETURN writer may observe its last unpaired append.
+      const previous = events[event.eventIndex - 1]?.view,
+        cursor = rowAt(db, 'campaign_creation_cursor', 'context_id', scope.gmLocalContextId);
+      if (
+        previous?.active !== true ||
+        cursor === undefined ||
+        !same(checkedJson(cursor), admissionCursor(previous))
+      )
+        return fail();
+      continue;
+    }
+    if (mirrors.length !== 1) return fail();
+    const mirror = mirrors[0]!,
+      document = object(checkedJson(mirror)),
+      mutation = queueMutation(document['mutation']);
+    if (
+      mirror['event_id'] !== mirrorId ||
+      document['eventId'] !== mirrorId ||
+      mirror['kind'] !== 'ADMISSION_RETURN' ||
+      mirror['context_id'] !== scope.gmLocalContextId ||
+      mirror['campaign_id'] !== scope.campaignId ||
+      mirror['owner_device_id'] !== scope.ownerDeviceId ||
+      !same(queueScope(document['scope']), scope) ||
+      mutation.kind !== 'ADMISSION_RETURN' ||
+      mutation.viewEventId !== event.eventId ||
+      mutation.viewEventSha256 !== event.recordSha256 ||
+      !same(mutation.queuePrefix, event.mutation.queuePrefix) ||
+      !same(mutation.revisions, presentationRevisions(event.view)) ||
+      document['previousEventSha256OrNull'] !== event.mutation.queuePrefix.recordSha256
+    )
+      return fail();
+  }
+  const first = events[0];
+  if (first !== undefined) {
+    if (first.mutation.kind !== 'ENTER' && first.mutation.kind !== 'ENTER_PUBLISHED') return fail();
+    const firstPrefix = first.mutation.queuePrefix;
+    const queueRows = db
+      .prepare(
+        'SELECT * FROM gm_request_queue_event WHERE context_id=? AND campaign_id=? ORDER BY event_index',
+      )
+      .all(scope.gmLocalContextId, scope.campaignId) as Row[];
+    const prefixIndex = queueRows.findIndex((row) => row['event_id'] === firstPrefix.eventId);
+    if (prefixIndex < 0 || queueRows[prefixIndex]?.['record_sha256'] !== firstPrefix.recordSha256)
+      return fail();
+    const advances = queueRows
+      .slice(prefixIndex + 1)
+      .filter((row) => row['kind'] === 'SOURCE_ADVANCE' || row['kind'] === 'REQUEST_REFRESH');
+    const mirrors = events.filter((event) => event.mutation.kind === 'SOURCE_ADVANCE');
+    if (
+      advances.length !== mirrors.length ||
+      advances.some((row, index) => {
+        const mutation = mirrors[index]?.mutation;
+        return (
+          mutation?.kind !== 'SOURCE_ADVANCE' ||
+          mutation.queuePrefix.eventId !== row['event_id'] ||
+          mutation.queuePrefix.recordSha256 !== row['record_sha256']
+        );
+      })
+    )
+      return fail();
+  }
+  return { viewOrNull: view, events };
+}
+/** True only for an actual campaign visibility transition; queue refreshes never invent one. */
+function admissionQueueAdvance(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  prefix: AdmissionQueuePrefix,
+) {
+  const row = rowAt(db, 'gm_request_queue_event', 'event_id', prefix.eventId) ?? fail();
+  const saved = checkedJson(row),
+    mutation = queueMutation(saved['mutation']);
+  if (
+    row['record_sha256'] !== prefix.recordSha256 ||
+    row['context_id'] !== scope.gmLocalContextId ||
+    row['campaign_id'] !== scope.campaignId ||
+    row['owner_device_id'] !== scope.ownerDeviceId ||
+    saved['eventId'] !== prefix.eventId ||
+    !same(queueScope(saved['scope']), scope) ||
+    row['kind'] !== mutation.kind
+  )
+    return fail();
+  if (mutation.kind === 'REQUEST_REFRESH') return { actorVisibilityChanged: false, client: null };
+  if (
+    mutation.kind !== 'SOURCE_ADVANCE' ||
+    prefix.eventId !== admissionCauseEventId(scope, mutation.cause)
+  )
+    return fail();
+  return verifyAdmissionCause(db, scope, mutation.cause);
+}
+/** Both queue and admission appends are private halves of the same synchronous source write. */
+function appendAdmissionSourceView(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  before: ReturnType<typeof readGmAdmissionViewStateInTransaction>,
+  queueEvent: StoredGmRequestQueueEvent,
+  cursor: CampaignCreationCursor,
+): number {
+  const previous = before.viewOrNull ?? fail();
+  const eventId = `gm-admission-view-source:${queueEvent.eventId}`;
+  assertUnusedId(db, eventId);
+  const mutation: GmAdmissionViewMutation = {
+    kind: 'SOURCE_ADVANCE',
+    queuePrefix: { eventId: queueEvent.eventId, recordSha256: queueEvent.recordSha256 },
+  };
+  const view = reduceAdmissionView(db, scope, previous, mutation);
+  const document = {
+    eventId,
+    scope,
+    eventIndex: before.events.length,
+    previousSha256OrNull: before.events.at(-1)?.recordSha256 ?? null,
+    mutation,
+    view,
+  };
+  const beforeWrites = (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+  db.prepare('INSERT INTO gm_admission_view_event VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+    eventId,
+    scope.gmLocalContextId,
+    scope.campaignId,
+    scope.ownerDeviceId,
+    before.events.length,
+    mutation.kind,
+    null,
+    null,
+    canonical(document),
+    campaignCreationHash(document),
+  );
+  db.prepare(
+    'UPDATE gm_admission_view SET head_event_id=?,record_json=?,record_sha256=? WHERE context_id=? AND campaign_id=?',
+  ).run(
+    eventId,
+    canonical(view),
+    campaignCreationHash(view),
+    scope.gmLocalContextId,
+    scope.campaignId,
+  );
+  const selected = cursor.kind === 'ADMISSION' && cursor.targetId === scope.campaignId;
+  if (selected) {
+    if (!same(cursor, admissionCursor(previous))) return fail();
+    writeCursor(db, admissionCursor(view));
+  }
+  const writes = selected ? 3 : 2;
+  if (
+    !db.inTransaction ||
+    (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n !== beforeWrites + writes
+  )
+    return fail('SOURCE_CHANGED');
+  const fresh = readGmAdmissionViewStateInTransaction(db, scope);
+  if (
+    !same(fresh.viewOrNull, view) ||
+    fresh.events.at(-1)?.recordSha256 !== campaignCreationHash(document)
+  )
+    return fail('SOURCE_CHANGED');
+  return writes;
+}
+/** Internal companion of the full source-owning transaction; it never changes gameplay state. */
+export function appendGmAdmissionViewEventInTransaction(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+  input: { readonly eventId: string; readonly mutation: GmAdmissionViewMutation },
+) {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  queueObject(input, ['eventId', 'mutation']);
+  const scope = queueScope(value),
+    eventId = text(input.eventId),
+    mutation = admissionMutation(input.mutation),
+    state = readGmAdmissionViewStateInTransaction(db, scope);
+  // Source companions can only be created by the queue writer after its guarded source mutation.
+  if (mutation.kind === 'SOURCE_ADVANCE') return fail('INVALID_INPUT');
+  const old = state.events.find((event) => event.eventId === eventId);
+  if (old !== undefined) {
+    if (!same(old.mutation, mutation)) return fail('IDEMPOTENCY_CONFLICT');
+    return { event: old, current: state.viewOrNull ?? fail(), replayed: true };
+  }
+  assertUnusedId(db, eventId);
+  const openCommandId =
+    mutation.kind === 'ENTER' ? admissionEnterRequest(mutation.clientRequestJson).commandId : null;
+  if (mutation.kind === 'ENTER') {
+    if (eventId !== `gm-admission-enter:${String(openCommandId)}`) return fail('INVALID_INPUT');
+    const batch =
+      rowAt(db, 'campaign_admission_batch', 'admission_batch_id', mutation.admissionBatchId) ??
+      fail();
+    if (batch['open_command_id'] !== openCommandId) assertUnusedId(db, text(openCommandId));
+    if (batch['open_command_id'] !== openCommandId) assertUnusedId(db, mutation.receiptId);
+  }
+  const cursor = readCampaignCreationCursor(db, scope.gmLocalContextId);
+  if (mutation.kind === 'ENTER' || mutation.kind === 'ENTER_PUBLISHED') {
+    const queue = readGmRequestReviewViewStateInTransaction(db, scope);
+    if (
+      queue.viewOrNull === null ||
+      !same(cursor, queueCursor(queue.viewOrNull)) ||
+      !same(mutation.queuePrefix, {
+        eventId: queue.events.at(-1)?.eventId,
+        recordSha256: queue.events.at(-1)?.recordSha256,
+      })
+    )
+      return fail('STALE_REVISION');
+  } else if (state.viewOrNull?.active !== true || !same(cursor, admissionCursor(state.viewOrNull)))
+    return fail('DRAFT_UNAVAILABLE');
+  if (mutation.kind === 'RETURN') {
+    const queue = readGmRequestReviewViewStateInTransaction(db, scope);
+    if (
+      !same(mutation.queuePrefix, {
+        eventId: queue.events.at(-1)?.eventId,
+        recordSha256: queue.events.at(-1)?.recordSha256,
+      })
+    )
+      return fail('STALE_REVISION');
+  }
+  const view = reduceAdmissionView(db, scope, state.viewOrNull, mutation),
+    document = {
+      eventId,
+      scope,
+      eventIndex: state.events.length,
+      previousSha256OrNull: state.events.at(-1)?.recordSha256 ?? null,
+      mutation,
+      view,
+    },
+    recordSha256 = campaignCreationHash(document),
+    beforeWrites = (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n;
+  db.prepare('INSERT INTO gm_admission_view_event VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+    eventId,
+    scope.gmLocalContextId,
+    scope.campaignId,
+    scope.ownerDeviceId,
+    state.events.length,
+    mutation.kind,
+    openCommandId,
+    mutation.kind === 'ENTER' ? mutation.receiptId : null,
+    canonical(document),
+    recordSha256,
+  );
+  db.prepare(
+    'INSERT INTO gm_admission_view VALUES (?,?,?,?,?,?) ON CONFLICT(context_id,campaign_id) DO UPDATE SET owner_device_id=excluded.owner_device_id,head_event_id=excluded.head_event_id,record_json=excluded.record_json,record_sha256=excluded.record_sha256',
+  ).run(
+    scope.gmLocalContextId,
+    scope.campaignId,
+    scope.ownerDeviceId,
+    eventId,
+    canonical(view),
+    campaignCreationHash(view),
+  );
+  if (mutation.kind !== 'RETURN') writeCursor(db, admissionCursor(view));
+  if (
+    !db.inTransaction ||
+    (db.prepare('SELECT total_changes() AS n').get() as { n: number }).n !==
+      beforeWrites + (mutation.kind === 'RETURN' ? 2 : 3)
+  )
+    return fail('SOURCE_CHANGED');
+  const verified = readAdmissionViewState(
+    db,
+    scope,
+    mutation.kind === 'RETURN' ? eventId : undefined,
+  );
+  if (!same(verified.viewOrNull, view) || verified.events.at(-1)?.recordSha256 !== recordSha256)
+    return fail('SOURCE_CHANGED');
+  return { event: { ...document, recordSha256 }, current: view, replayed: false };
+}
+function verifyAdmissionReturnBridge(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  eventId: string,
+  mutation: Extract<GmRequestReviewMutation, { kind: 'ADMISSION_RETURN' }>,
+  pendingReturnEventId?: string,
+) {
+  const state = readAdmissionViewState(db, scope, pendingReturnEventId),
+    event = state.events.find((entry) => entry.eventId === mutation.viewEventId);
+  if (
+    event?.mutation.kind !== 'RETURN' ||
+    event.recordSha256 !== mutation.viewEventSha256 ||
+    eventId !== `gm-admission-return:${event.eventId}` ||
+    !same(event.mutation.queuePrefix, mutation.queuePrefix) ||
+    !same(presentationRevisions(event.view), mutation.revisions)
+  )
+    return fail();
+  return { state, event };
+}
+function admissionReturnCursor(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  mutation: Extract<GmRequestReviewMutation, { kind: 'ADMISSION_RETURN' }>,
+): CampaignCreationCursor {
+  const { state, event } = verifyAdmissionReturnBridge(
+      db,
+      scope,
+      `gm-admission-return:${mutation.viewEventId}`,
+      mutation,
+      mutation.viewEventId,
+    ),
+    previous = state.events[event.eventIndex - 1]?.view;
+  if (
+    state.events.at(-1)?.eventId !== event.eventId ||
+    previous?.active !== true ||
+    state.viewOrNull?.active !== false
+  )
+    return fail();
+  const row = rowAt(db, 'campaign_creation_cursor', 'context_id', scope.gmLocalContextId) ?? fail();
+  const expected = admissionCursor(previous);
+  if (
+    row['kind'] !== expected.kind ||
+    row['target_id'] !== expected.targetId ||
+    row['form_id'] !== expected.formId ||
+    !same(checkedJson(row), expected)
+  )
+    return fail();
+  return expected;
+}
+/** Both histories and the cursor change together; exact replay must never select a dormant view. */
+export function returnGmAdmissionViewInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  value: FormActionIntentV2Message,
+) {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const request = admissionNavigation(admissionViewInput(value)),
+    view = readGmAdmissionViewStateInTransaction(db, scope),
+    known = view.events.find((event) => event.eventId === request.navigationRequestId);
+  if (known !== undefined) {
+    if (known.mutation.kind !== 'RETURN' || !same(known.mutation.request, request))
+      return fail('IDEMPOTENCY_CONFLICT');
+    const queue = readGmRequestReviewViewStateInTransaction(db, scope);
+    const mirror = queue.events.find(
+      (event) => event.eventId === `gm-admission-return:${known.eventId}`,
+    );
+    if (mirror?.mutation.kind !== 'ADMISSION_RETURN') return fail();
+    verifyAdmissionReturnBridge(db, scope, mirror.eventId, mirror.mutation);
+    return { event: known, current: queue.viewOrNull ?? fail(), replayed: true };
+  }
+  const queue = readGmRequestReviewViewStateInTransaction(db, scope),
+    prefix = queue.events.at(-1) ?? fail();
+  const saved = appendGmAdmissionViewEventInTransaction(db, scope, {
+    eventId: request.navigationRequestId,
+    mutation: {
+      kind: 'RETURN',
+      request,
+      queuePrefix: { eventId: prefix.eventId, recordSha256: prefix.recordSha256 },
+    },
+  });
+  const returned = appendGmRequestReviewEventInTransaction(db, scope, {
+    eventId: `gm-admission-return:${saved.event.eventId}`,
+    mutation: {
+      kind: 'ADMISSION_RETURN',
+      viewEventId: saved.event.eventId,
+      viewEventSha256: saved.event.recordSha256,
+      queuePrefix: { eventId: prefix.eventId, recordSha256: prefix.recordSha256 },
+      revisions: presentationRevisions(saved.current),
+    },
+  });
+  return { event: saved.event, current: returned.view, replayed: false };
 }

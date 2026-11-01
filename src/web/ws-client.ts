@@ -12,6 +12,32 @@ import type {
   NetworkGmAcceptToReviewPayload,
   NetworkGmRejectRequestPayload,
 } from '@shared/network-application.js';
+import { CAMPAIGN_ADMISSION_FORM_IDS } from '@shared/campaign-admission-review.js';
+import {
+  admissionBrowserCommand,
+  admissionBrowserReceipt,
+  admissionBrowserDraft,
+  admissionDraftDestinationMatches,
+  admissionOwnerActions,
+  isAdmissionWorkflow,
+  type AdmissionBrowserRequest,
+  type AdmissionBrowserEdit,
+  admissionOwnerBrowserCommand,
+  admissionOwnerBrowserReceipt,
+  admissionOwnerMonotonic,
+  admissionOwnerDecisionDestination,
+} from './forms/net/admission-client.js';
+import type { AdmissionGmClientV3Message } from '@shared/campaign-admission-review.js';
+import {
+  ADMISSION_GM_WORKFLOW_IDS,
+  ADMISSION_GM_NAV_TARGETS,
+  admissionGmPresentationValue,
+  admissionGmProjectionValue,
+  isAdmissionGmForm,
+  isAdmissionOwnerForm,
+  admissionOwnerProjectionValue,
+  type AdmissionOwnerCommand,
+} from '@shared/campaign-admission-presentation.js';
 import {
   networkGmRequestDraftFromProjection,
   networkGmAcceptToReviewPayload,
@@ -445,6 +471,16 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     const definition = presentedFormDefinition(formId);
     if (definition === null || formType !== definition.type || routeTemplate !== definition.route)
       return false;
+    if ((CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)) {
+      if (formType === 'dialog') return bindings.length === 0;
+      const binding = bindings[0];
+      return (
+        bindings.length === 1 &&
+        binding?.parameterIndex === 0 &&
+        binding.source === 'inherited' &&
+        DEVICE_ID_PATTERN.test(binding.value)
+      );
+    }
     if (formId === 'NET-017')
       return (
         bindings.length === 1 &&
@@ -501,8 +537,10 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    value === 'UI-CMD-ADMISSION-PLAYER-DECIDE' ||
     (NETWORK_WORKFLOW_COMMAND_IDS as readonly string[]).includes(value) ||
     (NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS as readonly string[]).includes(value) ||
+    (ADMISSION_GM_WORKFLOW_IDS as readonly string[]).includes(value) ||
     value === CAMPAIGN_CREATE_COMMAND_ID ||
     value === IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID ||
     value === SET_DECIDE_WORKFLOW_COMMAND_ID ||
@@ -1826,7 +1864,14 @@ interface ConfirmedInvalidWeaponProfileLayer {
   readonly projection: Chr031Projection;
 }
 export type ConfirmedPresentationLayer =
-  ConfirmedAbandonmentLayer | ConfirmedInvalidWeaponProfileLayer;
+  | ConfirmedAbandonmentLayer
+  | ConfirmedInvalidWeaponProfileLayer
+  | {
+      readonly formId: 'NET-020' | 'NET-021' | 'NET-022';
+      readonly path: string;
+      readonly projection: JsonObject;
+      readonly availableActionKeys: readonly ActionKey[];
+    };
 
 export type WebClientState =
   | { readonly kind: 'awaiting-snapshot' }
@@ -1866,6 +1911,7 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  replaceAdmissionDraft(edit: AdmissionBrowserEdit): FormActionRequestResult;
   replaceNetworkGmRequestDraft(values: NetworkGmRequestDraftValues): FormActionRequestResult;
   replaceNetworkDraft(edit: NetworkEdit): FormActionRequestResult;
   setNetworkInputPending(pending: boolean): void;
@@ -4040,6 +4086,22 @@ function decodePresentationLayers(
 ): DecodeResult<readonly ConfirmedPresentationLayer[]> {
   const layers = message.presentation.layers;
   if (layers.length === 0) return { ok: true, value: [] };
+  if (isAdmissionGmForm(baseFormId)) {
+    try {
+      admissionGmPresentationValue(message.presentation.base, layers, message.revisions);
+      return {
+        ok: true,
+        value: layers.map((layer) => ({
+          formId: layer.formId as 'NET-020' | 'NET-021' | 'NET-022',
+          path: layer.routeTemplate,
+          projection: layer.roleFilteredPayload,
+          availableActionKeys: layer.availableActionKeys,
+        })),
+      };
+    } catch {
+      return unrecognized('$.presentation.layers', null);
+    }
+  }
   if (baseFormId === 'CHR-023' && layers.length === 1 && layers[0]?.formId === 'CHR-031') {
     const layer = layers[0];
     const decoded = decodeChr031Projection(
@@ -4135,7 +4197,9 @@ function decodeConfirmedSnapshot(
   const expectedRole =
     base.formId === 'APP-001'
       ? null
-      : base.formId === 'NET-017' || isCampaignCreationForm(base.formId)
+      : base.formId === 'NET-017' ||
+          isCampaignCreationForm(base.formId) ||
+          isAdmissionGmForm(base.formId)
         ? 'gm'
         : base.formId === 'APP-010' &&
             base.roleFilteredPayload['ownerContext'] === 'GM_ARCHIVE_EXPORT'
@@ -4147,13 +4211,45 @@ function decodeConfirmedSnapshot(
   if (
     message.projectionRole !== 'gm' &&
     (executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
-      NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((id) =>
+      [...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS, ...ADMISSION_GM_WORKFLOW_IDS].some((id) =>
         executableWorkflowCommandIds.includes(id),
       ))
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (base.formId === 'NET-017') {
+  if (isAdmissionOwnerForm(base.formId)) {
+    try {
+      const p = admissionOwnerProjectionValue(base.formId, base.roleFilteredPayload);
+      if (
+        message.presentation.layers.length !== 0 ||
+        base.routeBindings.length !== 1 ||
+        base.routeBindings[0]?.parameterIndex !== 0 ||
+        base.routeBindings[0].source !== 'inherited' ||
+        base.routeBindings[0]?.value !== p['campaignId'] ||
+        !sameNetworkRevisions(message.revisions, p as unknown as RevisionVector)
+      )
+        return unrecognized('$.presentation', null);
+      const actions = exactSymbiontActionKeys(
+        base.availableActionKeys,
+        admissionOwnerActions(base.formId, p, executableWorkflowCommandIds),
+        '$.presentation.base.availableActionKeys',
+      );
+      if (!actions.ok) return actions;
+      projection = { ok: true, value: p };
+    } catch {
+      return unrecognized('$.presentation', null);
+    }
+  } else if (isAdmissionGmForm(base.formId)) {
+    try {
+      admissionGmPresentationValue(base, message.presentation.layers, message.revisions);
+      projection = {
+        ok: true,
+        value: admissionGmProjectionValue(base.formId, base.roleFilteredPayload),
+      };
+    } catch {
+      return unrecognized('$.presentation', null);
+    }
+  } else if (base.formId === 'NET-017') {
     const p = gmRequestProjection(base.roleFilteredPayload);
     if (p === null) return unrecognized('$.presentation.base.roleFilteredPayload', null);
     if (
@@ -4164,7 +4260,7 @@ function decodeConfirmedSnapshot(
       base.routeBindings[0].value !== p.campaignId ||
       message.revisions.stateRevision !== p.stateRevision ||
       message.revisions.projectionRevision !== p.projectionRevision ||
-      message.revisions.actorVisibilityRevision !== 0 ||
+      message.revisions.actorVisibilityRevision > message.revisions.stateRevision ||
       p.projectionRevision < p.stateRevision
     )
       return unrecognized('$.revisions', null);
@@ -4216,7 +4312,7 @@ function decodeConfirmedSnapshot(
           ? message.revisions.stateRevision !== 0 || message.revisions.actorVisibilityRevision !== 0
           : base.formId === 'CMP-006'
             ? message.revisions.projectionRevision < message.revisions.stateRevision ||
-              message.revisions.actorVisibilityRevision !== 0
+              message.revisions.actorVisibilityRevision > message.revisions.stateRevision
             : p['draftRevision'] !== message.revisions.stateRevision ||
               message.revisions.projectionRevision < message.revisions.stateRevision ||
               message.revisions.actorVisibilityRevision !== 0;
@@ -5518,6 +5614,58 @@ function decodeFormActionSnapshot(
   if (message.presentation.assignment.reason !== 'FORM_ACTION') {
     return unrecognized('$.presentation.assignment.reason', message.presentation.assignment.reason);
   }
+  if (isAdmissionOwnerForm(pending.sourceFormId)) {
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    const target = (
+      {
+        'NET-006::CTA::001': 'NET-027',
+        'NET-007::CTA::001': 'NET-027',
+        'NET-027::CTA::001': 'NET-006',
+        'NET-027::CTA::002': 'NET-007',
+        'NET-007::CTA::002': 'NET-003',
+        'NET-007::CTA::003': 'APP-002',
+      } as Record<string, string>
+    )[pending.actionKey];
+    if (
+      target !== decoded.value.formId ||
+      previous.formId !== pending.sourceFormId ||
+      decoded.value.projection['deviceId'] !== previous.projection['deviceId']
+    )
+      return unrecognized('$.presentation', null);
+    if (target === 'APP-002') return decoded;
+    if (target === 'NET-003')
+      return decoded.value.projection['networkScopeId'] === previous.projection['networkScopeId'] &&
+        decoded.value.projection['campaignIdOrNull'] === previous.projection['campaignId'] &&
+        decoded.value.revisions.stateRevision > previous.revisions.stateRevision &&
+        decoded.value.revisions.projectionRevision > previous.revisions.projectionRevision
+        ? decoded
+        : unrecognized('$.presentation', null);
+    return admissionOwnerMonotonic(decoded.value, previous) &&
+      decoded.value.revisions.stateRevision > previous.revisions.stateRevision &&
+      decoded.value.revisions.projectionRevision > previous.revisions.projectionRevision
+      ? decoded
+      : unrecognized('$.presentation', null);
+  }
+  if (
+    isAdmissionGmForm(pending.sourceFormId) ||
+    (pending.sourceFormId === 'NET-017' &&
+      Object.hasOwn(ADMISSION_GM_NAV_TARGETS, pending.actionKey))
+  ) {
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    const target =
+      ADMISSION_GM_NAV_TARGETS[pending.actionKey as keyof typeof ADMISSION_GM_NAV_TARGETS];
+    if (
+      activePresentedForm(previous).formId !== pending.sourceFormId ||
+      activePresentedForm(decoded.value).formId !== target ||
+      !gmQueueMonotonic(decoded.value, previous) ||
+      decoded.value.revisions.stateRevision < previous.revisions.stateRevision ||
+      decoded.value.revisions.projectionRevision < previous.revisions.projectionRevision + 1
+    )
+      return unrecognized('$.presentation', null);
+    return decoded;
+  }
   if (
     (previous.formId === 'CMP-006' && pending.actionKey === 'CMP-006::CTA::002') ||
     (previous.formId === 'NET-017' && pending.actionKey === 'NET-017::CTA::009')
@@ -5699,7 +5847,8 @@ function decodeFormActionSnapshot(
         ? previous.executableWorkflowCommandIds.filter(
             (id) =>
               id !== CAMPAIGN_CREATE_COMMAND_ID &&
-              !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id),
+              !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id) &&
+              !ADMISSION_GM_WORKFLOW_IDS.some((gmId) => gmId === id),
           )
         : previous.executableWorkflowCommandIds,
     );
@@ -8420,6 +8569,7 @@ type NetworkGmDecisionRequest =
       NetworkGmAcceptToReviewPayload
     >
   | WorkflowCommandRequestMessage<'UI-CMD-DEVICE-REQUEST-REJECT', NetworkGmRejectRequestPayload>;
+type GmBrowserRequest = NetworkGmDecisionRequest | AdmissionBrowserRequest;
 export interface NetworkGmRequestDraftClientState extends NetworkGmRequestEditState {
   readonly lastRefusal: NetworkGmRequestDraftRefusal | null;
 }
@@ -8440,8 +8590,26 @@ function expectedGmRequestActions(
     networkGmAcceptToReviewPayload(p) !== null
       ? ['NET-017::CTA::007' as const]
       : []),
-    ...(caps.includes('UI-CMD-DEVICE-REQUEST-REJECT') && networkGmRejectRequestPayload(p) !== null
+    ...(caps.includes('UI-CMD-DEVICE-REQUEST-REJECT') &&
+    networkGmRejectRequestPayload(p) !== null &&
+    p.selectedAdmissionOrNull?.published !== true
       ? ['NET-017::CTA::008' as const]
+      : []),
+    ...(p.requests.find((row) => row.requestId === p.selectedRequestIdOrNull)?.requestStatus ===
+      'IN_REVIEW' && p.selectedAdmissionOrNull !== null
+      ? [
+          ...(!p.selectedAdmissionOrNull.published && caps.includes('UI-CMD-ADMISSION-REVIEW-OPEN')
+            ? ['NET-017::CTA::010' as const]
+            : []),
+          ...(p.selectedAdmissionOrNull.hasProposed
+            ? [
+                'NET-017::CTA::001' as const,
+                'NET-017::CTA::002' as const,
+                'NET-017::CTA::003' as const,
+                'NET-017::CTA::004' as const,
+              ]
+            : []),
+        ]
       : []),
     'NET-017::CTA::009',
   ];
@@ -8450,7 +8618,7 @@ function gmQueueScope(
   s: ConfirmedProjectionSnapshot,
 ): { contextId: string; campaignId: string } | null {
   const contextId =
-    s.formId === 'NET-017'
+    s.formId === 'NET-017' || isAdmissionGmForm(s.formId)
       ? s.projection['contextId']
       : s.formId === 'CMP-006'
         ? s.projection['gmLocalContextId']
@@ -8471,9 +8639,22 @@ function gmQueueMonotonic(
     b === null ||
     a.contextId !== b.contextId ||
     a.campaignId !== b.campaignId ||
-    next.revisions.actorVisibilityRevision !== previous.revisions.actorVisibilityRevision ||
+    next.revisions.actorVisibilityRevision < previous.revisions.actorVisibilityRevision ||
     next.revisions.stateRevision < previous.revisions.stateRevision ||
     next.revisions.projectionRevision < previous.revisions.projectionRevision
+  )
+    return false;
+  if (
+    (isAdmissionGmForm(next.formId) || isAdmissionGmForm(previous.formId)) &&
+    sameCampaignRevisions(next.revisions, previous.revisions) &&
+    (next.formId !== previous.formId ||
+      !sameJson(next.projection, previous.projection) ||
+      next.layers.length !== previous.layers.length ||
+      next.layers.some(
+        (layer, i) =>
+          layer.formId !== previous.layers[i]?.formId ||
+          !sameJson(layer.projection, previous.layers[i].projection),
+      ))
   )
     return false;
   if (next.formId === 'NET-017' && previous.formId === 'NET-017') {
@@ -8529,6 +8710,23 @@ function sameGmCampaignBirth(a: JsonObject, b: JsonObject): boolean {
 }
 function gmDecisionReceipt(
   value: CommandReceipt<JsonObject>,
+  request: GmBrowserRequest,
+  source: ConfirmedProjectionSnapshot,
+): DecodeResult<CommandReceipt> {
+  if (isAdmissionWorkflow(request.workflowCommandId)) {
+    try {
+      return {
+        ok: true,
+        value: admissionBrowserReceipt(value, request as AdmissionBrowserRequest, source),
+      };
+    } catch {
+      return unrecognized('$.receipt', null);
+    }
+  }
+  return preliminaryGmDecisionReceipt(value, request as NetworkGmDecisionRequest, source);
+}
+function preliminaryGmDecisionReceipt(
+  value: CommandReceipt<JsonObject>,
   request: NetworkGmDecisionRequest,
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<CommandReceipt<NetworkGmRequestDecisionReceipt>> {
@@ -8562,7 +8760,72 @@ function gmDecisionReceipt(
     return unrecognized('$.receipt', null);
   return { ok: true, value: { ...value, result } };
 }
-function gmDecisionDestination(
+export function gmDecisionDestination(
+  next: ConfirmedProjectionSnapshot,
+  source: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt,
+  replay: boolean,
+): boolean {
+  const workflow = receipt.result['workflowCommandId'];
+  if (typeof workflow !== 'string' || !isAdmissionWorkflow(workflow))
+    return preliminaryGmDecisionDestination(
+      next,
+      source,
+      receipt as CommandReceipt<NetworkGmRequestDecisionReceipt>,
+      replay,
+    );
+  if (
+    !gmQueueMonotonic(next, source) ||
+    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).some(
+      (axis) => next.revisions[axis] < receipt.revisions[axis],
+    )
+  )
+    return false;
+  if (!sameCampaignRevisions(next.revisions, receipt.revisions)) return true;
+  const active = activePresentedForm(next),
+    target =
+      workflow === 'UI-CMD-ADMISSION-REVIEW-OPEN'
+        ? 'NET-018'
+        : workflow === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE'
+          ? 'NET-019'
+          : workflow === 'UI-CMD-ADMISSION-GM-ACCEPT'
+            ? 'NET-021'
+            : 'NET-022';
+  const p = active.projection,
+    result = receipt.result;
+  if (active.formId !== target || p['admissionBatchId'] !== result['admissionBatchId'])
+    return false;
+  if (workflow === 'UI-CMD-ADMISSION-GM-ACCEPT')
+    return (
+      p['published'] === true &&
+      p['editable'] === false &&
+      p['proposalChecksum'] === result['proposalChecksumOrNull'] &&
+      sameJson(
+        (p['proposedCampaignCopies'] as readonly JsonObject[]).map(
+          (copy) => copy['campaignCharacterIdOrNull']!,
+        ),
+        result['campaignCharacterIds']!,
+      )
+    );
+  if (workflow === 'UI-CMD-ADMISSION-GM-REJECT')
+    return p['editable'] === false && p['reason'] === result['reasonOrNull'];
+  if (workflow === 'UI-CMD-ADMISSION-REVIEW-OPEN') {
+    const original = result['originalOpenReceipt'] as JsonObject;
+    return sameJson(
+      (p['batchReviewCopies'] as readonly JsonObject[]).map((copy) => copy['reviewCopyId']!),
+      (original['reviewCopies'] as readonly JsonObject[]).map((copy) => copy['reviewCopyId']!),
+    );
+  }
+  return (
+    p['selectedReviewCopyId'] === result['reviewCopyId'] &&
+    p['reviewRevisionOrNull'] === result['reviewRevision'] &&
+    (p['viewValues'] as JsonObject)['weaponDraftOrNull'] === null &&
+    ((p['reviewDraft'] as JsonObject)['weaponDecisionRefs'] as readonly JsonObject[]).some(
+      (ref) => ref['decisionReceiptId'] === receipt.receiptId,
+    )
+  );
+}
+function preliminaryGmDecisionDestination(
   next: ConfirmedProjectionSnapshot,
   source: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<NetworkGmRequestDecisionReceipt>,
@@ -8576,11 +8839,15 @@ function gmDecisionDestination(
     return false;
   const old = gmRequestProjection(source.projection);
   if (old === null) return false;
+  const later = !sameCampaignRevisions(next.revisions, receipt.revisions);
   if (next.formId === 'CMP-006')
     return (
+      later &&
       old.returnContext.originFormId === 'CMP-006' &&
       next.projection['creationReceiptId'] === old.returnContext.creationReceiptId
     );
+  if (isAdmissionGmForm(next.formId))
+    return later && receipt.result.afterRequestStatus === 'IN_REVIEW';
   const p = gmRequestProjection(next.projection),
     row = p?.requests.find((r) => r.requestId === receipt.result.requestId);
   if (
@@ -8701,7 +8968,16 @@ export function connectProjection(
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
   let gmLocalContextId: string | null = null;
   let networkScopeId: string | null = null;
+  let pendingOwnerCommand: {
+    request: AdmissionOwnerCommand;
+    source: ConfirmedProjectionSnapshot;
+    receipt: CommandReceipt | null;
+  } | null = null;
   let gmEdit: NetworkGmRequestDraftValues | null = null;
+  let pendingAdmissionDraft: {
+    request: AdmissionGmClientV3Message;
+    source: ConfirmedProjectionSnapshot;
+  } | null = null;
   let gmEditVersion = 0;
   let gmDraftRefusal: NetworkGmRequestDraftRefusal | null = null;
   let gmTimer: ReturnType<typeof setTimeout> | null = null;
@@ -8710,13 +8986,13 @@ export function connectProjection(
     editVersion: number;
   } | null = null;
   let pendingGmCommand: {
-    request: NetworkGmDecisionRequest;
-    receipt: CommandReceipt<NetworkGmRequestDecisionReceipt> | null;
+    request: GmBrowserRequest;
+    receipt: CommandReceipt | null;
     source: ConfirmedProjectionSnapshot;
     replay: boolean;
   } | null = null;
   let pendingGmRefusal: {
-    request: NetworkGmDecisionRequest;
+    request: GmBrowserRequest;
     source: ConfirmedProjectionSnapshot;
     refusal: CommandRefusalMessage;
   } | null = null;
@@ -8828,6 +9104,8 @@ export function connectProjection(
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
   const commandPending = () =>
+    pendingOwnerCommand !== null ||
+    pendingAdmissionDraft !== null ||
     pendingGmDraft !== null ||
     pendingGmCommand !== null ||
     pendingGmRefusal !== null ||
@@ -8864,6 +9142,15 @@ export function connectProjection(
       skillCardDraft,
       manualCompositionDraft,
     );
+    if (isAdmissionGmForm(snapshot.formId) || isAdmissionOwnerForm(snapshot.formId))
+      return {
+        ...visible,
+        availableActionKeys: pending ? [] : visible.availableActionKeys,
+        layers: visible.layers.map((layer) => ({
+          ...layer,
+          availableActionKeys: pending ? [] : layer.availableActionKeys,
+        })),
+      };
     if (snapshot.formId === 'NET-017')
       return {
         ...visible,
@@ -9073,6 +9360,8 @@ export function connectProjection(
   const failProtocol = (refusal: DecodeRefusal, detail: string) => {
     if (disposed || terminal) return;
     terminal = true;
+    pendingOwnerCommand = null;
+    pendingAdmissionDraft = null;
     clearGmDraft();
     pendingGmCommand = null;
     pendingGmRefusal = null;
@@ -9275,7 +9564,7 @@ export function connectProjection(
               networkEditFromProjection(next.formId, next.projection)?.variant)))
     )
       clearNetworkDraft();
-    if (isNetworkApplicationForm(next.formId)) {
+    if (isNetworkApplicationForm(next.formId) || isAdmissionOwnerForm(next.formId)) {
       networkScopeId = next.projection['networkScopeId'] as string;
       networkContextTicket(networkScopeId);
       gmLocalContextId = null;
@@ -9307,8 +9596,11 @@ export function connectProjection(
         );
         return;
       }
-    } else if (next.formId === 'NET-017') {
-      const p = gmRequestProjection(next.projection);
+    } else if (next.formId === 'NET-017' || isAdmissionGmForm(next.formId)) {
+      const p =
+        next.formId === 'NET-017'
+          ? gmRequestProjection(next.projection)
+          : admissionGmProjectionValue(next.formId, next.projection);
       if (p === null || p.contextId !== gmLocalContextId) {
         failUnexpected('$.contextId', null, 'GM queue changed the owned ticket.');
         return;
@@ -9409,6 +9701,15 @@ export function connectProjection(
       const oldSocket = socket;
       openTransport(deviceId);
       oldSocket?.close(1000, 'launch capability negotiation');
+    } else if (
+      reconnect &&
+      pendingAdmissionDraft !== null &&
+      socket?.readyState === WebSocket.OPEN
+    ) {
+      const encoded = encodeClientMessageV3(pendingAdmissionDraft.request, WEB_PROTOCOL_VOCABULARY);
+      if (encoded.ok) socket.send(encoded.text);
+      else
+        failUnexpected('$.admission', null, 'The original admission draft could not be replayed.');
     } else if (reconnect && gmDraftRefresh !== null) {
       const original = gmDraftRefresh;
       gmDraftRefresh = null;
@@ -9546,7 +9847,27 @@ export function connectProjection(
         }
         const message = decoded.value;
         if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
-          if (pendingGmCommand !== null) {
+          if (pendingOwnerCommand !== null) {
+            try {
+              const receipt = admissionOwnerBrowserReceipt(
+                message.receipt,
+                pendingOwnerCommand.request,
+                pendingOwnerCommand.source,
+              );
+              if (
+                pendingOwnerCommand.receipt !== null &&
+                !sameJson(
+                  pendingOwnerCommand.receipt as unknown as JsonObject,
+                  receipt as unknown as JsonObject,
+                )
+              )
+                throw new Error('changed original admission receipt');
+              pendingOwnerCommand = { ...pendingOwnerCommand, receipt };
+            } catch {
+              failUnexpected('$.receipt', null, 'Invalid whole-batch decision receipt');
+            }
+            return;
+          } else if (pendingGmCommand !== null) {
             const receipt = gmDecisionReceipt(
               message.receipt,
               pendingGmCommand.request,
@@ -9753,6 +10074,29 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'command.refusal') {
+          if (
+            pendingOwnerCommand !== null &&
+            message.commandId === pendingOwnerCommand.request.commandId
+          ) {
+            if (pendingOwnerCommand.receipt !== null) {
+              failUnexpected('$.commandId', null, 'Admission refusal followed a committed receipt');
+              return;
+            }
+            pendingOwnerCommand = null;
+            if (!expectingCapabilities && lastSnapshot !== null) {
+              onState({
+                kind: 'command-refusal',
+                refusal: message.refusal,
+                snapshot: visibleSnapshotBase(lastSnapshot, identity, false),
+              });
+              if (deviceId !== null) {
+                const old = socket;
+                openTransport(deviceId);
+                old?.close(1000, 'refresh admission decision refusal');
+              }
+            }
+            return;
+          }
           const matchesGm =
             (pendingGmCommand !== null &&
               pendingGmCommand.receipt === null &&
@@ -9910,6 +10254,90 @@ export function connectProjection(
             message.messageType,
             'A wire v3 frame interrupted the staged reconnect pair.',
           );
+          return;
+        }
+        if (
+          message.messageType === 'network.admission-draft.result' ||
+          message.messageType === 'network.admission-draft.refusal'
+        ) {
+          const pending = pendingAdmissionDraft;
+          if (
+            pending === null ||
+            lastSnapshot === null ||
+            message.draftUpdateId !== pending.request.draftUpdateId ||
+            message.contextId !== pending.request.contextId ||
+            message.contextId !== gmLocalContextId ||
+            message.campaignId !== pending.request.campaignId ||
+            message.admissionBatchId !== pending.request.admissionBatchId
+          ) {
+            failUnexpected(
+              '$.admission',
+              null,
+              'Admission draft response changed its owner or correlation.',
+            );
+            return;
+          }
+          if (message.messageType === 'network.admission-draft.refusal') {
+            pendingAdmissionDraft = null;
+            onState({
+              kind: 'command-refusal',
+              refusal: { code: 'GUARD_REJECTED' },
+              snapshot: visibleSnapshotBase(lastSnapshot, identity, commandPending()),
+            });
+            if (deviceId !== null) {
+              const old = socket;
+              openTransport(deviceId);
+              old?.close(1000, 'refresh admission refusal');
+            }
+            return;
+          }
+          const decoded = decodeConfirmedSnapshot(
+            {
+              messageType: 'projection.snapshot',
+              protocolVersion: 2,
+              projectionRole: 'gm',
+              revisions: message.revisions,
+              presentation: {
+                assignment: { reason: 'FORM_ACTION', correlationId: message.draftUpdateId },
+                ...message.presentation,
+              },
+            },
+            lastSnapshot.executableWorkflowCommandIds,
+          );
+          const source = activePresentedForm(pending.source),
+            increment =
+              pending.request.messageType === 'network.admission-view.replace' &&
+              sameJson(
+                source.projection['viewValues']!,
+                pending.request.values as unknown as JsonObject,
+              )
+                ? 0
+                : 1,
+            expected = {
+              stateRevision: pending.request.expectedRevisions.stateRevision + increment,
+              projectionRevision: pending.request.expectedRevisions.projectionRevision + increment,
+              actorVisibilityRevision: pending.request.expectedRevisions.actorVisibilityRevision,
+            };
+          if (!decoded.ok) {
+            failProtocol(decoded.refusal, 'Invalid admission draft presentation.');
+            return;
+          }
+          if (
+            !sameCampaignRevisions(message.appliedRevisions, expected) ||
+            !ownGmQueue(decoded.value) ||
+            !gmQueueMonotonic(decoded.value, lastSnapshot) ||
+            (sameCampaignRevisions(message.revisions, message.appliedRevisions) &&
+              !admissionDraftDestinationMatches(decoded.value, pending.source, pending.request))
+          ) {
+            failUnexpected(
+              '$.admission',
+              null,
+              'Admission draft receipt or current scope regressed.',
+            );
+            return;
+          }
+          pendingAdmissionDraft = null;
+          adoptSnapshot(decoded.value, false);
           return;
         }
         if (
@@ -10297,8 +10725,8 @@ export function connectProjection(
             return;
           }
           const gm =
-            lastSnapshot.formId === 'NET-017' &&
-            candidate.value.formId === 'NET-017' &&
+            (lastSnapshot.formId === 'NET-017' || isAdmissionGmForm(lastSnapshot.formId)) &&
+            (candidate.value.formId === 'NET-017' || isAdmissionGmForm(candidate.value.formId)) &&
             /^network-gm-view:[0-9a-f]{64}$/u.test(message.presentation.assignment.correlationId) &&
             ownGmQueue(candidate.value) &&
             gmQueueMonotonic(candidate.value, lastSnapshot);
@@ -10307,7 +10735,8 @@ export function connectProjection(
               message.presentation.assignment.correlationId,
             ) &&
             candidate.value.projection['deviceId'] === deviceId &&
-            ownerRequestPush(candidate.value, lastSnapshot);
+            (ownerRequestPush(candidate.value, lastSnapshot) ||
+              admissionOwnerMonotonic(candidate.value, lastSnapshot));
           if (!gm && !player) {
             failUnexpected(
               '$.presentation.assignment',
@@ -10315,6 +10744,26 @@ export function connectProjection(
               'System refresh changed the active family or owner.',
             );
             return;
+          }
+          if (pendingOwnerCommand !== null) {
+            if (
+              !admissionOwnerDecisionDestination(
+                candidate.value,
+                pendingOwnerCommand.request,
+                pendingOwnerCommand.source,
+                pendingOwnerCommand.receipt,
+                false,
+                lastSnapshot.projection['contextId'] as string,
+              )
+            ) {
+              failUnexpected(
+                '$.presentation',
+                null,
+                'Owner update changed the pending batch decision',
+              );
+              return;
+            }
+            if (candidate.value.projection['receiptOrNull'] !== null) pendingOwnerCommand = null;
           }
           adoptSnapshot(candidate.value, false);
           return;
@@ -10328,7 +10777,8 @@ export function connectProjection(
           if (
             snapshot.ok &&
             resumedNetworkScopeId !== null &&
-            !isNetworkApplicationForm(snapshot.value.formId)
+            !isNetworkApplicationForm(snapshot.value.formId) &&
+            !isAdmissionOwnerForm(snapshot.value.formId)
           ) {
             const next = snapshot.value,
               p = next.projection,
@@ -10353,7 +10803,8 @@ export function connectProjection(
           }
           if (
             snapshot.ok &&
-            isNetworkApplicationForm(snapshot.value.formId) &&
+            (isNetworkApplicationForm(snapshot.value.formId) ||
+              isAdmissionOwnerForm(snapshot.value.formId)) &&
             (snapshot.value.projection['deviceId'] !== deviceId ||
               (networkScopeId !== null &&
                 snapshot.value.projection['networkScopeId'] !== networkScopeId))
@@ -10366,11 +10817,15 @@ export function connectProjection(
               snapshot.value.projection['hostDeviceId'] !== deviceId)
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
-          if (snapshot.ok && snapshot.value.formId === 'NET-017' && !ownGmQueue(snapshot.value))
+          if (
+            snapshot.ok &&
+            (snapshot.value.formId === 'NET-017' || isAdmissionGmForm(snapshot.value.formId)) &&
+            !ownGmQueue(snapshot.value)
+          )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload.contextId', null);
           if (
             snapshot.ok &&
-            (snapshot.value.formId === 'NET-017' || snapshot.value.formId === 'CMP-006') &&
+            gmQueueScope(snapshot.value) !== null &&
             lastSnapshot !== null &&
             gmQueueScope(lastSnapshot) !== null &&
             gmQueueScope(snapshot.value)?.campaignId === gmQueueScope(lastSnapshot)?.campaignId &&
@@ -10521,6 +10976,26 @@ export function connectProjection(
               );
             }
           }
+        } else if (pendingOwnerCommand !== null) {
+          snapshot = decodeConfirmedSnapshot(
+            message,
+            pendingOwnerCommand.source.executableWorkflowCommandIds,
+          );
+          if (
+            snapshot.ok &&
+            (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
+              message.presentation.assignment.correlationId !==
+                pendingOwnerCommand.request.commandId ||
+              !admissionOwnerDecisionDestination(
+                snapshot.value,
+                pendingOwnerCommand.request,
+                pendingOwnerCommand.source,
+                pendingOwnerCommand.receipt,
+                false,
+                lastSnapshot?.projection['contextId'] as string | undefined,
+              ))
+          )
+            snapshot = unrecognized('$.presentation', null);
         } else if (pendingGmCommand !== null || pendingGmRefusal !== null) {
           const pending = pendingGmCommand ?? pendingGmRefusal!;
           snapshot = decodeConfirmedSnapshot(message, pending.source.executableWorkflowCommandIds);
@@ -10715,7 +11190,8 @@ export function connectProjection(
           return;
         }
         if (
-          isNetworkApplicationForm(snapshot.value.formId) &&
+          (isNetworkApplicationForm(snapshot.value.formId) ||
+            isAdmissionOwnerForm(snapshot.value.formId)) &&
           snapshot.value.projection['deviceId'] !== deviceId
         ) {
           failUnexpected(
@@ -10726,7 +11202,7 @@ export function connectProjection(
           return;
         }
         if (
-          (snapshot.value.formId === 'NET-017' || snapshot.value.formId === 'CMP-006') &&
+          gmQueueScope(snapshot.value) !== null &&
           gmQueueScope(snapshot.value) !== null &&
           !ownGmQueue(snapshot.value)
         ) {
@@ -10736,6 +11212,22 @@ export function connectProjection(
             'GM queue changed owner or regressed its durable head.',
           );
           return;
+        }
+        if (pendingOwnerCommand !== null) {
+          if (
+            !admissionOwnerDecisionDestination(
+              snapshot.value,
+              pendingOwnerCommand.request,
+              pendingOwnerCommand.source,
+              pendingOwnerCommand.receipt,
+              reconnecting,
+              lastSnapshot?.projection['contextId'] as string | undefined,
+            )
+          ) {
+            failUnexpected('$.presentation', null, 'Invalid recovered owner decision');
+            return;
+          }
+          if (snapshot.value.projection['receiptOrNull'] !== null) pendingOwnerCommand = null;
         }
         if (pendingGmCommand?.receipt !== null && pendingGmCommand?.receipt !== undefined)
           pendingGmCommand = null;
@@ -10866,27 +11358,30 @@ export function connectProjection(
         WEAPON_PROFILE_SUBMIT_WORKFLOW,
         ...Object.values(POST_SAVE_COMMAND_IDS),
         ...NETWORK_WORKFLOW_COMMAND_IDS,
+        'UI-CMD-ADMISSION-PLAYER-DECIDE',
       ],
       unacknowledgedCommandIds:
-        pendingGmCommand !== null
-          ? [pendingGmCommand.request.commandId]
-          : pendingGmRefusal !== null
-            ? [pendingGmRefusal.request.commandId]
-            : pendingNetworkCommand !== null
-              ? [pendingNetworkCommand.request.commandId]
-              : pendingNetworkRefusal !== null
-                ? [pendingNetworkRefusal.request.commandId]
-                : pendingCampaignCreate !== null
-                  ? [pendingCampaignCreate.request.commandId]
-                  : pendingPostSave !== null
-                    ? [pendingPostSave.request.commandId]
-                    : pendingCheckpoint !== null
-                      ? [pendingCheckpoint.request.commandId]
-                      : pendingSetDecision !== null
-                        ? [pendingSetDecision.request.commandId]
-                        : pendingRollCommit !== null
-                          ? [pendingRollCommit.request.commandId]
-                          : [],
+        pendingOwnerCommand !== null
+          ? [pendingOwnerCommand.request.commandId]
+          : pendingGmCommand !== null
+            ? [pendingGmCommand.request.commandId]
+            : pendingGmRefusal !== null
+              ? [pendingGmRefusal.request.commandId]
+              : pendingNetworkCommand !== null
+                ? [pendingNetworkCommand.request.commandId]
+                : pendingNetworkRefusal !== null
+                  ? [pendingNetworkRefusal.request.commandId]
+                  : pendingCampaignCreate !== null
+                    ? [pendingCampaignCreate.request.commandId]
+                    : pendingPostSave !== null
+                      ? [pendingPostSave.request.commandId]
+                      : pendingCheckpoint !== null
+                        ? [pendingCheckpoint.request.commandId]
+                        : pendingSetDecision !== null
+                          ? [pendingSetDecision.request.commandId]
+                          : pendingRollCommit !== null
+                            ? [pendingRollCommit.request.commandId]
+                            : [],
     } as const satisfies SessionReconnectV2Message;
     const gmResume: CampaignLocalContextResumeV3Message | null =
       gmLocalContextId === null
@@ -10900,6 +11395,7 @@ export function connectProjection(
             supportedWorkflowCommandIds: [
               CAMPAIGN_CREATE_COMMAND_ID,
               ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+              ...ADMISSION_GM_WORKFLOW_IDS,
             ],
             unacknowledgedCommandIds: reconnect.unacknowledgedCommandIds,
           };
@@ -11104,6 +11600,36 @@ export function connectProjection(
       contextChoiceRequired = false;
       terminal = false;
       openTransport(deviceId);
+      return { ok: true };
+    },
+    replaceAdmissionDraft: (edit) => {
+      if (
+        disposed ||
+        terminal ||
+        stagedCapabilities !== null ||
+        lastSnapshot === null ||
+        socket?.readyState !== WebSocket.OPEN ||
+        commandPending() ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null ||
+        gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId
+      )
+        return { ok: false, detail: 'Admission input is unavailable' };
+      let request: AdmissionGmClientV3Message;
+      try {
+        request = admissionBrowserDraft(lastSnapshot, edit, createRequestId('network-draft'));
+      } catch {
+        return { ok: false, detail: 'Admission fields are invalid' };
+      }
+      const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) return { ok: false, detail: 'Admission input could not be encoded' };
+      pendingAdmissionDraft = { request, source: lastSnapshot };
+      try {
+        socket.send(encoded.text);
+      } catch {
+        socket.close(1000, 'admission draft interrupted');
+      }
+      notifyReady();
       return { ok: true };
     },
     replaceNetworkGmRequestDraft: (values) => {
@@ -12077,6 +12603,52 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (actionKey === 'NET-027::CTA::003' || actionKey === 'NET-027::CTA::004') {
+        let request: AdmissionOwnerCommand;
+        try {
+          request = admissionOwnerBrowserCommand(
+            lastSnapshot,
+            actionKey,
+            createRequestId('command'),
+          );
+        } catch {
+          return { ok: false, detail: 'Whole-batch proposal is not confirmed' };
+        }
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: 'Whole-batch intention failed encoding' };
+        pendingOwnerCommand = { request, source: lastSnapshot, receipt: null };
+        try {
+          socket.send(encoded.text);
+        } catch {
+          socket.close(1000, 'admission decision interrupted');
+        }
+        notifyReady();
+        return { ok: true };
+      }
+      if (
+        ['NET-017::CTA::010', 'NET-021::CTA::005', 'NET-022::CTA::003', 'GM-019::CTA::005'].some(
+          (key) => key === actionKey,
+        )
+      ) {
+        let request: AdmissionBrowserRequest | null;
+        try {
+          request = admissionBrowserCommand(lastSnapshot, actionKey, createRequestId('command'));
+        } catch {
+          return { ok: false, detail: 'Admission input is not confirmed' };
+        }
+        if (request === null || gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId)
+          return { ok: false, detail: 'Admission capability or owner is unavailable' };
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: 'Admission command could not be encoded' };
+        pendingGmCommand = { request, receipt: null, source: lastSnapshot, replay: false };
+        try {
+          socket.send(encoded.text);
+        } catch {
+          socket.close(1000, 'admission delivery interrupted');
+        }
+        notifyReady();
+        return { ok: true };
       }
       if (
         activeForm.formId === 'NET-017' &&
