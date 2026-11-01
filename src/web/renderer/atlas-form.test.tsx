@@ -23,6 +23,16 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Exact literals are intentional: applied traceability requires every implemented form in a test. */
 const TEST_IMPLEMENTED_FORM_IDS = [
+  'NET-027',
+  'NET-006',
+  'NET-007',
+  'NET-018',
+  'NET-019',
+  'NET-020',
+  'NET-021',
+  'NET-022',
+  'GM-019',
+  'GM-020',
   'APP-001',
   'APP-002',
   'APP-003',
@@ -230,9 +240,9 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // The player NET slice and the GM request queue extend the existing screens; dialogs are unchanged.
-    expect(screens).toBe(57);
-    expect(dialogs).toBe(4);
+    // Atlas 1.7 adds seven admission screens and three GM admission dialogs.
+    expect(screens).toBe(64);
+    expect(dialogs).toBe(7);
   });
 
   it('renders APP-001 actions once and emits only its exact atlas transition', () => {
@@ -366,7 +376,21 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('matches the artifact-derived APP action and transition totals', () => {
-    const models = TEST_IMPLEMENTED_FORM_IDS.slice(0, 11).map((id) => getAtlasFormModel(id));
+    const appIds = TEST_IMPLEMENTED_FORM_IDS.filter((id) => id.startsWith('APP-'));
+    expect(appIds).toEqual([
+      'APP-001',
+      'APP-002',
+      'APP-003',
+      'APP-004',
+      'APP-005',
+      'APP-006',
+      'APP-007',
+      'APP-008',
+      'APP-009',
+      'APP-010',
+      'APP-011',
+    ]);
+    const models = appIds.map((id) => getAtlasFormModel(id));
     const actions = models.flatMap((model) => model.actions.items);
 
     // Measured from requirements.json and the exact (from, trigger) join in issue #33.
@@ -398,8 +422,8 @@ describe('atlas implemented-form renderer', () => {
   });
 
   it('rejects an atlas form outside the implemented allowlist and lists the boundary', () => {
-    expect(() => getAtlasFormModel('NET-018')).toThrow(
-      `form "NET-018" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
+    expect(() => getAtlasFormModel('NET-028')).toThrow(
+      `form "NET-028" is not implemented; implemented forms: ${TEST_IMPLEMENTED_FORM_IDS.join(', ')}`,
     );
   });
 

@@ -2669,8 +2669,8 @@ import {
 import { encodeHostMessageV3 } from '../shared/wire-v3-codec.js';
 import {
   readAdmissionDecision,
+  readAdmissionDecisionWithHistory,
   readAdmissionDecisionByRequest,
-  admissionDecisionStorage,
 } from '../persistence/campaign-admission-decision.js';
 import type { PresentedLayerForm } from '../shared/wire-v2-protocol.js';
 
@@ -2744,14 +2744,13 @@ export function createGmNetworkRuntime(d: {
           service = admissionService(),
           view = readGmAdmissionViewStateInTransaction(db, own).viewOrNull;
         if (view === null || !view.active) unavailable();
-        const current = readAdmissionDecision(
+        const { current, history } = readAdmissionDecisionWithHistory(
             db,
             own,
             view.admissionBatchId,
             validateOwner,
             service.rules,
           ),
-          history = admissionDecisionStorage.readHistory(db, own, validateOwner, service.rules),
           header = readHostedCurrentPausedCampaign(db, own.campaignId, validateOwner);
         return projectGmAdmission({
           view,

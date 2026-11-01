@@ -2270,6 +2270,8 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
           expect(gm.sent[0]?.messageType).toBe('command.result');
         }
       }
+    });
+    beforeEach(async () => {
       await gmNav('NET-019', 'NET-019::CTA::002');
       await gmNav('NET-018', 'NET-018::CTA::004');
       if (scenario === 'REJECT') {
@@ -2321,8 +2323,11 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
       });
       expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
     });
-    it('delivers the complete owner result, preserves source and recovers original decisions after SQLite reopen', async () => {
+    beforeEach(async () => {
+      // Restoring the published proposal is the common starting state for all decision/recovery assertions.
       await p.restart();
+    });
+    it('delivers the complete owner result, preserves source and recovers original decisions after SQLite reopen', async () => {
       let owner = p.payload();
       admissionOwnerProjectionValue(scenario === 'REJECT' ? 'NET-007' : 'NET-027', owner);
       expect(JSON.stringify(owner)).not.toMatch(
@@ -2412,7 +2417,6 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
     }, 30000);
     if (scenario === 'ACCEPT')
       it('recovers a committed ACK after projection construction fails without publishing a false refusal', async () => {
-        await p.restart();
         const owner = p.payload();
         const command = {
           messageType: 'command.request',
@@ -2455,9 +2459,6 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
       }, 30000);
     if (scenario === 'DECLINE')
       describe('lost decision delivery after a restored proposal', () => {
-        beforeEach(async () => {
-          await p.restart();
-        });
         it('replays a lost DECLINE receipt before the menu reached by another own context', async () => {
           const source = p.payload(),
             originalScope = p.scope().networkScopeId;
@@ -2518,7 +2519,6 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
       });
     if (scenario === 'ACCEPT')
       it('publishes a fenced absence only to a connection that observed the pending decision', async () => {
-        await p.restart();
         const other = await p.additionalOwnerView();
         const source = p.payload();
         const command = {
@@ -2570,7 +2570,6 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
       }, 30000);
     if (scenario === 'ACCEPT')
       it('publishes a recovered ACK when the subsequent capacity read is unavailable', async () => {
-        await p.restart();
         const source = p.payload();
         const command = {
           messageType: 'command.request',
@@ -2624,194 +2623,203 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
 );
 
 describe('actual GM request review orchestration', () => {
-  it('opens a real admission review and rejects the incomplete batch with stable receipts', async () => {
-    const h = await host(),
-      { batch } = await submittedPlayer(h),
+  describe('final admission of an incomplete submitted batch', () => {
+    let h: Awaited<ReturnType<typeof host>>,
+      batch: Awaited<ReturnType<typeof submittedPlayer>>['batch'],
+      gm: ReturnType<typeof gmClient>;
+    beforeEach(async () => {
+      h = await host();
+    });
+    beforeEach(async () => {
+      ({ batch } = await submittedPlayer(h));
+    });
+    it('opens a real admission review and rejects the incomplete batch with stable receipts', async () => {
       gm = gmClient(h);
-    gm.c.executableReview = [
-      ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
-      'UI-CMD-ADMISSION-REVIEW-OPEN',
-      'UI-CMD-ADMISSION-GM-ACCEPT',
-      'UI-CMD-ADMISSION-GM-REJECT',
-      'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
-    ];
-    await gm.nav();
-    const selection = {
-      messageType: 'network.gm-request-draft.replace',
-      protocolVersion: 3,
-      draftUpdateId: randomUUID(),
-      scope: {
-        gmLocalContextId: h.gmLocalContextId,
-        campaignId: h.campaignId,
-        sourceFormId: 'NET-017',
-      },
-      expectedRevisions: vector(gm.view()),
-      expectedRequestQueueRevision: gm.view().requestQueueRevision,
-      values: { selectedRequestIdOrNull: batch.requestId, decisionReason: '' },
-    } as const;
-    await gm.send(selection);
-    const selectedResult = structuredClone(gm.sent[0]!);
-    await gm.send({
-      messageType: 'command.request',
-      protocolVersion: 1,
-      commandKind: 'workflow-command',
-      role: 'gm',
-      commandId: randomUUID(),
-      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
-      expectedRevisions: vector(gm.view()),
-      payload: { campaignId: h.campaignId, requestId: batch.requestId, requestRevision: 0 },
-    });
-    expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
-    const opening = {
-      messageType: 'command.request' as const,
-      protocolVersion: 1 as const,
-      commandKind: 'workflow-command' as const,
-      role: 'gm' as const,
-      commandId: randomUUID(),
-      workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN' as const,
-      expectedRevisions: vector(gm.view()),
-      payload: { campaignId: h.campaignId, requestId: batch.requestId, requestRevision: 1 },
-    };
-    await gm.send(opening);
-    expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
-    expect(gm.sent[1]).toMatchObject({ presentation: { base: { formId: 'NET-018' } } });
-    const originalReceipt = structuredClone(gm.sent[0]!);
-    expect(gm.runtime.receipt(gm.c, opening.commandId)).toEqual(
-      'receipt' in originalReceipt ? originalReceipt.receipt : null,
-    );
-    const navigate = async (
-      sourceFormId: FormActionIntentV2Message['sourceFormId'],
-      actionKey: FormActionIntentV2Message['actionKey'],
-    ) => {
-      const p = await gm.runtime.project(gm.c);
+      gm.c.executableReview = [
+        ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+        'UI-CMD-ADMISSION-REVIEW-OPEN',
+        'UI-CMD-ADMISSION-GM-ACCEPT',
+        'UI-CMD-ADMISSION-GM-REJECT',
+        'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
+      ];
+      await gm.nav();
+      const selection = {
+        messageType: 'network.gm-request-draft.replace',
+        protocolVersion: 3,
+        draftUpdateId: randomUUID(),
+        scope: {
+          gmLocalContextId: h.gmLocalContextId,
+          campaignId: h.campaignId,
+          sourceFormId: 'NET-017',
+        },
+        expectedRevisions: vector(gm.view()),
+        expectedRequestQueueRevision: gm.view().requestQueueRevision,
+        values: { selectedRequestIdOrNull: batch.requestId, decisionReason: '' },
+      } as const;
+      await gm.send(selection);
+      const selectedResult = structuredClone(gm.sent[0]!);
       await gm.send({
-        messageType: 'navigation.form-action',
-        protocolVersion: 2,
-        navigationRequestId: randomUUID(),
-        sourceFormId,
-        actionKey,
-        expectedProjectionRevision: p.revisions.projectionRevision,
+        messageType: 'command.request',
+        protocolVersion: 1,
+        commandKind: 'workflow-command',
+        role: 'gm',
+        commandId: randomUUID(),
+        workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+        expectedRevisions: vector(gm.view()),
+        payload: { campaignId: h.campaignId, requestId: batch.requestId, requestRevision: 0 },
       });
-      expect(gm.sent[0]).toMatchObject({ messageType: 'projection.snapshot' });
-    };
-    await navigate('NET-018', 'NET-018::CTA::004');
-    const incomplete = await gm.runtime.project(gm.c);
-    expect(incomplete.layers?.at(-1)).toMatchObject({
-      formId: 'NET-021',
-      roleFilteredPayload: { allRequiredFieldsValid: false },
-    });
-    const beforeQueueReplay = h.db.serialize();
-    await gm.send(selection);
-    expect(gm.sent[0]).toMatchObject({
-      messageType: 'network.gm-request-draft.result',
-      appliedRevisions:
-        'appliedRevisions' in selectedResult ? selectedResult.appliedRevisions : null,
-      presentation: { base: { formId: 'NET-018' }, layers: [{ formId: 'NET-021' }] },
-    });
-    expect(h.db.serialize().equals(beforeQueueReplay)).toBe(true);
-    expect(gm.sent[0]?.protocolVersion).toBe(3);
-    if (gm.sent[0]?.protocolVersion !== 3) throw new Error('Missing draft replay');
-    expect(encodeHostMessageV3(gm.sent[0], await loadProtocolVocabulary(process.cwd())).ok).toBe(
-      true,
-    );
-    await navigate('NET-021', 'NET-021::CTA::002');
-    const p = await gm.runtime.project(gm.c),
-      payload = p.layers!.at(-1)!.roleFilteredPayload;
-    const update = {
-      messageType: 'network.admission-view.replace' as const,
-      protocolVersion: 3 as const,
-      draftUpdateId: randomUUID(),
-      contextId: h.gmLocalContextId,
-      campaignId: h.campaignId,
-      admissionBatchId: payload['admissionBatchId'] as string,
-      sourceFormId: 'NET-022' as const,
-      expectedRevisions: p.revisions,
-      values: {
-        selectedReviewCopyId: payload['selectedReviewCopyId'] as string,
-        rejectionReason: 'Проверка состава группы',
-        weaponDraftOrNull: null,
-      },
-    };
-    await gm.send(update);
-    expect(gm.sent[0]).toMatchObject({ messageType: 'network.admission-draft.result' });
-    const after = await gm.runtime.project(gm.c),
-      rejecting = {
+      expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+      const opening = {
         messageType: 'command.request' as const,
         protocolVersion: 1 as const,
         commandKind: 'workflow-command' as const,
         role: 'gm' as const,
         commandId: randomUUID(),
-        workflowCommandId: 'UI-CMD-ADMISSION-GM-REJECT' as const,
-        expectedRevisions: after.revisions,
-        payload: {
-          contextId: h.gmLocalContextId,
-          campaignId: h.campaignId,
-          admissionBatchId: update.admissionBatchId,
-          reviewRevision: payload['reviewRevisionOrNull'] as number,
-          expectedCampaignRevision: 0,
-          previewChecksumOrNull: null,
-          reasonOrNull: update.values.rejectionReason,
+        workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN' as const,
+        expectedRevisions: vector(gm.view()),
+        payload: { campaignId: h.campaignId, requestId: batch.requestId, requestRevision: 1 },
+      };
+      await gm.send(opening);
+      expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+      expect(gm.sent[1]).toMatchObject({ presentation: { base: { formId: 'NET-018' } } });
+      const originalReceipt = structuredClone(gm.sent[0]!);
+      expect(gm.runtime.receipt(gm.c, opening.commandId)).toEqual(
+        'receipt' in originalReceipt ? originalReceipt.receipt : null,
+      );
+      const navigate = async (
+        sourceFormId: FormActionIntentV2Message['sourceFormId'],
+        actionKey: FormActionIntentV2Message['actionKey'],
+      ) => {
+        const p = await gm.runtime.project(gm.c);
+        await gm.send({
+          messageType: 'navigation.form-action',
+          protocolVersion: 2,
+          navigationRequestId: randomUUID(),
+          sourceFormId,
+          actionKey,
+          expectedProjectionRevision: p.revisions.projectionRevision,
+        });
+        expect(gm.sent[0]).toMatchObject({ messageType: 'projection.snapshot' });
+      };
+      await navigate('NET-018', 'NET-018::CTA::004');
+      const incomplete = await gm.runtime.project(gm.c);
+      expect(incomplete.layers?.at(-1)).toMatchObject({
+        formId: 'NET-021',
+        roleFilteredPayload: { allRequiredFieldsValid: false },
+      });
+      const beforeQueueReplay = h.db.serialize();
+      await gm.send(selection);
+      expect(gm.sent[0]).toMatchObject({
+        messageType: 'network.gm-request-draft.result',
+        appliedRevisions:
+          'appliedRevisions' in selectedResult ? selectedResult.appliedRevisions : null,
+        presentation: { base: { formId: 'NET-018' }, layers: [{ formId: 'NET-021' }] },
+      });
+      expect(h.db.serialize().equals(beforeQueueReplay)).toBe(true);
+      expect(gm.sent[0]?.protocolVersion).toBe(3);
+      if (gm.sent[0]?.protocolVersion !== 3) throw new Error('Missing draft replay');
+      expect(encodeHostMessageV3(gm.sent[0], await loadProtocolVocabulary(process.cwd())).ok).toBe(
+        true,
+      );
+      await navigate('NET-021', 'NET-021::CTA::002');
+      const p = await gm.runtime.project(gm.c),
+        payload = p.layers!.at(-1)!.roleFilteredPayload;
+      const update = {
+        messageType: 'network.admission-view.replace' as const,
+        protocolVersion: 3 as const,
+        draftUpdateId: randomUUID(),
+        contextId: h.gmLocalContextId,
+        campaignId: h.campaignId,
+        admissionBatchId: payload['admissionBatchId'] as string,
+        sourceFormId: 'NET-022' as const,
+        expectedRevisions: p.revisions,
+        values: {
+          selectedReviewCopyId: payload['selectedReviewCopyId'] as string,
+          rejectionReason: 'Проверка состава группы',
+          weaponDraftOrNull: null,
         },
       };
-    await gm.send(rejecting);
-    expect(gm.sent[0]).toMatchObject({
-      messageType: 'command.result',
-      receipt: { result: { decision: 'REJECT' } },
-    });
-    const rejected = structuredClone(gm.sent[0]);
-    await navigate('NET-022', 'NET-022::CTA::001');
-    await navigate('NET-021', 'NET-021::CTA::001');
-    const beforeRecovery = h.db.serialize();
-    expect(gm.runtime.receipt(gm.c, rejecting.commandId)).toEqual(
-      'receipt' in rejected ? rejected.receipt : null,
-    );
-    expect(gm.runtime.receipt(gm.c, opening.commandId)).toEqual(
-      'receipt' in originalReceipt ? originalReceipt.receipt : null,
-    );
-    expect(gm.runtime.receipt(gm.c, randomUUID())).toBeNull();
-    expect(h.db.serialize().equals(beforeRecovery)).toBe(true);
-    const delivered: LocalNetworkHostMessage[] = [];
-    await expect(
-      gm.runtime.handle(rejecting, gm.c, (message) => {
-        delivered.push(message);
-        throw new Error('Lost browser acknowledgement');
-      }),
-    ).rejects.toThrow('Network publication failed after durable acknowledgement');
-    expect(delivered).toHaveLength(1);
-    expect(delivered[0]?.messageType).toBe('command.replay');
-    expect(h.db.serialize().equals(beforeRecovery)).toBe(true);
-    await gm.send({
-      messageType: 'command.request',
-      protocolVersion: 1,
-      commandKind: 'workflow-command',
-      role: 'gm',
-      commandId: randomUUID(),
-      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
-      expectedRevisions: vector(gm.view()),
-      payload: {
-        campaignId: h.campaignId,
-        requestId: batch.requestId,
-        requestRevision: 1,
-        reason: 'Forged preliminary rejection after final decision',
-      },
-    });
-    expect(gm.sent[0]?.messageType).toBe('command.refusal');
-    expect(h.db.serialize().equals(beforeRecovery)).toBe(true);
-    await gm.send(rejecting);
-    expect(gm.sent[0]).toMatchObject({
-      messageType: 'command.replay',
-      receipt: 'receipt' in rejected ? rejected.receipt : null,
-    });
-    await gm.send(opening);
-    expect(gm.sent[0]).toMatchObject({
-      messageType: 'command.replay',
-      receipt: 'receipt' in originalReceipt ? originalReceipt.receipt : null,
-    });
-    expect(gm.sent[1]).toMatchObject({ presentation: { base: { formId: 'NET-017' } } });
-    expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
-      n: 0,
-    });
-  }, 30000);
+      await gm.send(update);
+      expect(gm.sent[0]).toMatchObject({ messageType: 'network.admission-draft.result' });
+      const after = await gm.runtime.project(gm.c),
+        rejecting = {
+          messageType: 'command.request' as const,
+          protocolVersion: 1 as const,
+          commandKind: 'workflow-command' as const,
+          role: 'gm' as const,
+          commandId: randomUUID(),
+          workflowCommandId: 'UI-CMD-ADMISSION-GM-REJECT' as const,
+          expectedRevisions: after.revisions,
+          payload: {
+            contextId: h.gmLocalContextId,
+            campaignId: h.campaignId,
+            admissionBatchId: update.admissionBatchId,
+            reviewRevision: payload['reviewRevisionOrNull'] as number,
+            expectedCampaignRevision: 0,
+            previewChecksumOrNull: null,
+            reasonOrNull: update.values.rejectionReason,
+          },
+        };
+      await gm.send(rejecting);
+      expect(gm.sent[0]).toMatchObject({
+        messageType: 'command.result',
+        receipt: { result: { decision: 'REJECT' } },
+      });
+      const rejected = structuredClone(gm.sent[0]);
+      await navigate('NET-022', 'NET-022::CTA::001');
+      await navigate('NET-021', 'NET-021::CTA::001');
+      const beforeRecovery = h.db.serialize();
+      expect(gm.runtime.receipt(gm.c, rejecting.commandId)).toEqual(
+        'receipt' in rejected ? rejected.receipt : null,
+      );
+      expect(gm.runtime.receipt(gm.c, opening.commandId)).toEqual(
+        'receipt' in originalReceipt ? originalReceipt.receipt : null,
+      );
+      expect(gm.runtime.receipt(gm.c, randomUUID())).toBeNull();
+      expect(h.db.serialize().equals(beforeRecovery)).toBe(true);
+      const delivered: LocalNetworkHostMessage[] = [];
+      await expect(
+        gm.runtime.handle(rejecting, gm.c, (message) => {
+          delivered.push(message);
+          throw new Error('Lost browser acknowledgement');
+        }),
+      ).rejects.toThrow('Network publication failed after durable acknowledgement');
+      expect(delivered).toHaveLength(1);
+      expect(delivered[0]?.messageType).toBe('command.replay');
+      expect(h.db.serialize().equals(beforeRecovery)).toBe(true);
+      await gm.send({
+        messageType: 'command.request',
+        protocolVersion: 1,
+        commandKind: 'workflow-command',
+        role: 'gm',
+        commandId: randomUUID(),
+        workflowCommandId: 'UI-CMD-DEVICE-REQUEST-REJECT',
+        expectedRevisions: vector(gm.view()),
+        payload: {
+          campaignId: h.campaignId,
+          requestId: batch.requestId,
+          requestRevision: 1,
+          reason: 'Forged preliminary rejection after final decision',
+        },
+      });
+      expect(gm.sent[0]?.messageType).toBe('command.refusal');
+      expect(h.db.serialize().equals(beforeRecovery)).toBe(true);
+      await gm.send(rejecting);
+      expect(gm.sent[0]).toMatchObject({
+        messageType: 'command.replay',
+        receipt: 'receipt' in rejected ? rejected.receipt : null,
+      });
+      await gm.send(opening);
+      expect(gm.sent[0]).toMatchObject({
+        messageType: 'command.replay',
+        receipt: 'receipt' in originalReceipt ? originalReceipt.receipt : null,
+      });
+      expect(gm.sent[1]).toMatchObject({ presentation: { base: { formId: 'NET-017' } } });
+      expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
+        n: 0,
+      });
+    }, 30000);
+  });
   it('keeps the campaign birth immutable through queue ingress, safe return, replay and unauthorized requests', async () => {
     const h = await host(),
       gm = gmClient(h);

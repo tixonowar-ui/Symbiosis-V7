@@ -184,6 +184,18 @@ async function source(
   final = true,
   commandPrefix = 'candidate',
 ) {
+  return finishSource(
+    await prepareSource(race, mode, databasePath, commandPrefix),
+    final,
+    commandPrefix,
+  );
+}
+async function prepareSource(
+  race: 'FREE' | 'PURE' | 'UNITED',
+  mode: 'AUTO' | 'MANUAL',
+  databasePath: string,
+  commandPrefix: string,
+) {
   const p = await createCreationFinalizationSetup({
     prefix: `${commandPrefix}-${race}-${mode}`,
     raceChoice: race,
@@ -216,6 +228,13 @@ async function source(
       : {}),
   });
   databases.push(p.setup.database);
+  return p;
+}
+function finishSource(
+  p: Awaited<ReturnType<typeof prepareSource>>,
+  final: boolean,
+  commandPrefix: string,
+) {
   let current = commitCreationFinalization(
     p.setup.database,
     creationPropertySummaryRequest(p.current, `${commandPrefix}-summary`),
@@ -3213,12 +3232,16 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
       directories.push(directory);
       filename = join(directory, 'player.sqlite');
     });
-    for (const index of [1, 2, 3])
+    for (const index of [1, 2, 3]) {
+      let setup: Awaited<ReturnType<typeof prepareSource>>;
       beforeAll(async () => {
-        sources.push(
-          await source('PURE', 'AUTO', filename, true, `admission-batch-${String(index)}`),
-        );
+        setup = await prepareSource('PURE', 'AUTO', filename, `admission-batch-${String(index)}`);
       });
+      beforeAll(() => {
+        // Keep actual creation and FINAL commits, but budget these distinct fixture phases separately.
+        sources.push(finishSource(setup, true, `admission-batch-${String(index)}`));
+      });
+    }
     let publication: ReturnType<typeof publicationStoreFixture>;
     beforeEach(() => {
       publication = publicationStoreFixture(':memory:', { sources });

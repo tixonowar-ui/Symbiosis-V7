@@ -672,13 +672,24 @@ export function readAdmissionDecision(
   validate: CampaignPrivateOwnerValidator,
   rules: AdmissionPublicationRules,
 ): AdmissionDecisionRead {
+  return readAdmissionDecisionWithHistory(db, scope, batchId, validate, rules).current;
+}
+
+/** Current presentation and capacity/groups share one full fold of the same SQL snapshot. */
+export function readAdmissionDecisionWithHistory(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  batchId: string,
+  validate: CampaignPrivateOwnerValidator,
+  rules: AdmissionPublicationRules,
+): { readonly current: AdmissionDecisionRead; readonly history: AdmissionHistory } {
   return s.read(db, scope.ownerDeviceId, () => {
     const source = readGmRequestReviewSource(db, scope, validate);
-    const verified = verifyCampaignHistory(db, source, rules);
-    return (
-      verified.decisions.get(batchId) ??
-      readDecision(db, working.readInTransaction(db, source, batchId, rules), rules)
-    );
+    const history = verifyCampaignHistory(db, source, rules);
+    const current =
+      history.decisions.get(batchId) ??
+      readDecision(db, working.readInTransaction(db, source, batchId, rules), rules);
+    return { current, history };
   });
 }
 

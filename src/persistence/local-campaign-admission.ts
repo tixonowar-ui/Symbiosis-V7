@@ -722,10 +722,15 @@ function readInTransaction(
 ): LocalAdmissionRead | null {
   return readWithSource(db, scope, requestId)?.current ?? null;
 }
-function readWithSource(db: Database.Database, scope: LocalNetworkScope, requestId: string) {
+function readWithSource(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  requestId: string,
+  verifiedHistory?: ReturnType<typeof s.admissionHistory>,
+) {
   const current = readJournal(db, scope, requestId);
   if (current === null) return null;
-  const originalSource = source(db, current.record),
+  const originalSource = source(db, current.record, verifiedHistory),
     { history } = originalSource;
   const mirrorEvents = [null, ...current.events] as const,
     actualMirrors = history.events.filter(
@@ -811,7 +816,8 @@ export function readLocalAdmissionPresentation(db: Database.Database, scope: Loc
     const entry = tabs.entryAnchor(db, scope.ownerDeviceId, tab.entryCommandId) ?? s.fail();
     const extra = entry.request.admissionEntry;
     let rootScope = scope,
-      requestId: string | null;
+      requestId: string | null,
+      verifiedHistory: ReturnType<typeof s.admissionHistory> | undefined;
     if (extra !== undefined) {
       const row =
         s.at(db, 'local_admission_publication', 'request_id', extra.requestId) ?? s.fail();
@@ -821,13 +827,15 @@ export function readLocalAdmissionPresentation(db: Database.Database, scope: Loc
       requestId = extra.requestId;
     } else {
       const history = s.admissionHistory(db, scope);
+      verifiedHistory = history;
       const last = history.events.at(-1)?.input.mutation;
       requestId =
         history.current.requestOrNull?.requestId ??
         (last?.kind === 'ADMISSION_RETURN' ? last.requestId : null);
     }
     if (requestId === null) return null;
-    const loaded = readWithSource(db, rootScope, requestId);
+    // No await or write separates discovery from replay in this SQL snapshot.
+    const loaded = readWithSource(db, rootScope, requestId, verifiedHistory);
     if (loaded === null) {
       if (extra !== undefined) return s.fail();
       return null;
