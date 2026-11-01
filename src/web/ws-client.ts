@@ -5847,7 +5847,8 @@ function decodeFormActionSnapshot(
         ? previous.executableWorkflowCommandIds.filter(
             (id) =>
               id !== CAMPAIGN_CREATE_COMMAND_ID &&
-              !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id),
+              !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id) &&
+              !ADMISSION_GM_WORKFLOW_IDS.some((gmId) => gmId === id),
           )
         : previous.executableWorkflowCommandIds,
     );

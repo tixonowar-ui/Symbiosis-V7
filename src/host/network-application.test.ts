@@ -2101,7 +2101,7 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
   return { c, runtime, campaign, sent, scope, view, send, nav, select, resume };
 }
 
-describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
+describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT'] as const)(
   'actual final admission owner runtime %s',
   (scenario) => {
     let h: Awaited<ReturnType<typeof host>>,
@@ -2181,7 +2181,9 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
         massReview: {
           ...inputs.massReview,
           decision:
-            scenario === 'BLOCKED' ? ('PENDING_MASTER_APPROVAL' as const) : ('APPROVED' as const),
+            scenario === 'ACCEPT_WITH_BLOCKERS'
+              ? ('PENDING_MASTER_APPROVAL' as const)
+              : ('APPROVED' as const),
         },
         inventoryReview: {
           ...inputs.inventoryReview,
@@ -2393,7 +2395,11 @@ describe.each(['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const)(
       expect(owner['ownCampaignCopies']).toMatchObject([
         {
           lifecycleState:
-            scenario === 'DECLINE' ? 'DECLINED' : scenario === 'BLOCKED' ? 'PROPOSED' : 'ACTIVE',
+            scenario === 'DECLINE'
+              ? 'DECLINED'
+              : scenario === 'ACCEPT_WITH_BLOCKERS'
+                ? 'PROPOSED'
+                : 'ACTIVE',
           occupiesCampaignPlace: scenario !== 'DECLINE',
         },
       ]);

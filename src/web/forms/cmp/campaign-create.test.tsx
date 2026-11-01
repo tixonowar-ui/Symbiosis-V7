@@ -15,6 +15,7 @@ import type {
   CampaignDraftReplaceV3Message,
   CampaignDraftResultV3Message,
 } from '@shared/campaign-creation.js';
+import { ADMISSION_GM_WORKFLOW_IDS } from '@shared/campaign-admission-presentation.js';
 import { App } from '../../app.js';
 import {
   connectProjection,
@@ -47,6 +48,7 @@ const CAPABILITIES = [
   'UI-CMD-CAMPAIGN-CREATE',
   'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
   'UI-CMD-DEVICE-REQUEST-REJECT',
+  ...ADMISSION_GM_WORKFLOW_IDS,
 ] as const;
 const common = { gmLocalContextId: CONTEXT, hostDeviceId: DEVICE, masterAuthorityRevision: 0 };
 const draft = {
@@ -875,8 +877,12 @@ describe('campaign draft transport', () => {
       );
       expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBeNull();
       s = Socket.instances.at(-1)!;
-      s.open();
+      reconnect(s, 'APP-001', shell, { ...ZERO, stateRevision: 8, projectionRevision: 15 });
       expect(lastFrame<{ messageType: string }>(s).messageType).toBe('session.reconnect');
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { formId: 'APP-001', executableWorkflowCommandIds: [] },
+      });
     },
   );
 });

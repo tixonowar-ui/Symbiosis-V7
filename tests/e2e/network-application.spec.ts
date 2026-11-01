@@ -202,7 +202,7 @@ async function submitOwnFinal(page: Page, address: string, ownAddress: string) {
   await expect(form(page, 'NET-005')).toBeVisible();
 }
 
-for (const outcome of ['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const) {
+for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT'] as const) {
   test(`NET final admission ${outcome} preserves the source and restores the whole decision on both installations`, async ({
     browser,
   }, info) => {
@@ -241,7 +241,7 @@ for (const outcome of ['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const) {
         await action(masterPage, 'NET-018::CTA::002');
         await masterPage
           .getByLabel('Масса одобрена', { exact: true })
-          .setChecked(outcome !== 'BLOCKED');
+          .setChecked(outcome !== 'ACCEPT_WITH_BLOCKERS');
         await masterPage.getByLabel('Деньги определены', { exact: true }).check();
         await masterPage.getByLabel('Сумма стартовых денег', { exact: true }).fill('42');
         await masterPage.getByLabel('Состав имущества подтверждён', { exact: true }).check();
@@ -315,9 +315,13 @@ for (const outcome of ['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const) {
           timeout: player.operationTimeoutMs,
         });
         expect(gm.inspect().copies[0]!['lifecycle_state']).toBe(
-          outcome === 'DECLINE' ? 'DECLINED' : outcome === 'BLOCKED' ? 'PROPOSED' : 'ACTIVE',
+          outcome === 'DECLINE'
+            ? 'DECLINED'
+            : outcome === 'ACCEPT_WITH_BLOCKERS'
+              ? 'PROPOSED'
+              : 'ACTIVE',
         );
-        if (outcome === 'BLOCKED')
+        if (outcome === 'ACCEPT_WITH_BLOCKERS')
           await expect(
             playerPage.getByText('Остаётся в лобби до подтверждения блокирующих условий.', {
               exact: true,
