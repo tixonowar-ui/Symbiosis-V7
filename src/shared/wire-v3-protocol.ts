@@ -1,4 +1,8 @@
 import type { RevisionVector } from './wire-protocol.js';
+import type {
+  AdmissionGmClientV3Message,
+  AdmissionGmHostV3Message,
+} from './campaign-admission-review.js';
 import type { NetworkClientV3Message } from './device-admission.js';
 import type {
   NetworkHostV3Message,
@@ -119,12 +123,14 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
 }
 
 export type ClientToHostV3Message =
+  | AdmissionGmClientV3Message
   | IdentityDraftReplaceV3Message
   | NetworkClientV3Message
   | NetworkGmClientV3Message
   | CampaignDraftReplaceV3Message
   | CampaignLocalContextResumeV3Message;
 export type HostToClientV3Message =
+  | AdmissionGmHostV3Message
   | IdentityDraftRefusalV3Message
   | NetworkHostV3Message
   | NetworkGmHostV3Message

@@ -126,7 +126,7 @@ describe('durable private installation identity', () => {
     ensureDeviceInstallationIdentity(db, input, validateRealKeyPair);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
     const before = raw(db);
-    expect(applyMigrations(db)).toBe(11);
+    expect(applyMigrations(db)).toBe(12);
     expect(raw(db)).toEqual(before);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
   });
@@ -530,7 +530,7 @@ describe('durable private installation identity', () => {
     else if (kind === 'missing-review-table') db.exec('DROP TABLE gm_request_queue_event');
     else if (kind === 'older-schema')
       db.prepare('DELETE FROM schema_migration WHERE version>=8').run();
-    else db.prepare('UPDATE schema_migration SET version=12 WHERE version=11').run();
+    else db.prepare('UPDATE schema_migration SET version=13 WHERE version=12').run();
     const before = db.serialize();
     const validate = vi.fn(allow);
     expectCode(() => readDeviceInstallationIdentity(db, device), 'CORRUPT_STORAGE');
@@ -551,7 +551,7 @@ describe('durable private installation identity', () => {
     const oldRegistry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
     const local = db.prepare('SELECT * FROM local_character').all();
     const campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(11);
+    expect(applyMigrations(db)).toBe(12);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<8 ORDER BY version').all(),
     ).toEqual(oldRegistry);
@@ -561,7 +561,7 @@ describe('durable private installation identity', () => {
     for (const table of ['campaign_character_copy', 'campaign_checkpoint', 'local_gm_context'])
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const before = db.serialize();
-    expect(applyMigrations(db)).toBe(11);
+    expect(applyMigrations(db)).toBe(12);
     expect(db.serialize().equals(before)).toBe(true);
   });
 });

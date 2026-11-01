@@ -183,6 +183,35 @@ function encodeRpc(
   return text;
 }
 
+/**
+ * Preflight without consuming an RPC sequence or signing a response. Transcript fields
+ * have fixed ASCII widths (ADR0066: 32-byte nonces; RFC8032: 64-byte signatures).
+ * RESPONSE is the longer message/purpose and the maximum safe sequence has the most digits.
+ * encodeRpc measures the actual bodyJson escaping and UTF-8 bytes, including the envelope.
+ */
+export function assertCampaignPeerRpcBodyFits(bodyJson: string): void {
+  const sizeOnlyIdentity = '00000000-0000-4000-8000-000000000000',
+    sizeOnlyHash = '0'.repeat(64);
+  const signed: PeerSignedTranscript = {
+    transcript: validateCampaignPeerTranscript({
+      schemaVersion: 1,
+      purpose: 'RPC_RESPONSE',
+      hostDeviceId: sizeOnlyIdentity,
+      hostKeyFingerprintSha256: sizeOnlyHash,
+      campaignId: sizeOnlyIdentity,
+      deviceId: sizeOnlyIdentity,
+      deviceKeyFingerprintSha256: sizeOnlyHash,
+      deviceNonceBase64: Buffer.alloc(32).toString('base64'),
+      hostNonceBase64: Buffer.alloc(32, 1).toString('base64'),
+      sequenceNumber: Number.MAX_SAFE_INTEGER,
+      bodySha256: sizeOnlyHash,
+    }),
+    signatureBase64: Buffer.alloc(64).toString('base64'),
+  };
+  // This size-only envelope is never exposed, transmitted or treated as authenticated evidence.
+  encodeRpc('network.peer.rpc.response', canonicalBody(bodyJson), signed);
+}
+
 /** Owns message/error/close for the complete socket lifetime, including handshake handoff. */
 class FrameInbox {
   readonly #socket: WebSocket;

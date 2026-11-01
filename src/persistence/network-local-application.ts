@@ -11,12 +11,22 @@ import { loadDeviceId } from './device-identity.js';
 import {
   readOwnedLocalNetworkTabAnchor as readOwnedLocalNetworkTab,
   readLocalNetworkTabEntryByCommandId,
+  localAdmissionTabStorage,
   writeLocalNetworkTabApplicationState,
   type LocalNetworkTab,
 } from './network-local-tab.js';
 import { NETWORK_APPLICATION_TABLES } from './migrations/0010-network-application.js';
 import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
+import {
+  CAMPAIGN_ADMISSION_IDENTITIES,
+  CAMPAIGN_ADMISSION_TABLES,
+} from './migrations/0012-campaign-admission.js';
 import type { RevisionTriple } from './store.js';
+import {
+  assertLocalAdmissionTabMutable,
+  validateLocalAdmissionNetworkEvent,
+  createLocalAdmissionNetworkVerifier,
+} from './local-campaign-admission.js';
 
 export interface NetworkPublicIdentity {
   readonly schemaVersion: 1;
@@ -188,6 +198,19 @@ export interface LocalNetworkOutbox extends LocalNetworkScope {
   readonly acknowledgementOrNull: LocalNetworkAcknowledgement | null;
 }
 export type LocalNetworkMutation =
+  | {
+      readonly kind: 'ADMISSION_ADVANCE';
+      readonly requestId: string;
+      readonly ownerEventIdOrNull: string | null;
+      readonly ownerSha256: string;
+    }
+  | {
+      readonly kind: 'ADMISSION_RETURN';
+      readonly requestId: string;
+      readonly returnEventId: string;
+      readonly returnEventSha256: string;
+      readonly mode: 'RESELECT' | 'MENU';
+    }
   | { readonly kind: 'LANE_BIND_INTENT'; readonly outbox: LocalRequestLaneBindingOutbox }
   | {
       readonly kind: 'LANE_BIND_ACK';
@@ -704,9 +727,25 @@ function object(value: unknown, keys?: readonly string[]): Row {
     return fail();
   return value as Row;
 }
+// A synchronous store operation repeatedly serializes the same immutable witness strings.
+// Cache only primitive string encodings, never objects, validation or authority results.
+// The 16 MiB memory budget is per operation and is discarded before control returns to a caller.
+let canonicalStrings: { values: Map<string, string>; remaining: number } | null = null;
 function canonical(value: unknown): string {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean')
-    return JSON.stringify(value);
+  if (typeof value === 'string') {
+    const cache = canonicalStrings;
+    if (cache === null || value.length < 1024) return JSON.stringify(value);
+    const known = cache.values.get(value);
+    if (known !== undefined) return known;
+    const encoded = JSON.stringify(value);
+    const bytes = (value.length + encoded.length) * 2;
+    if (bytes <= cache.remaining) {
+      cache.values.set(value, encoded);
+      cache.remaining -= bytes;
+    }
+    return encoded;
+  }
+  if (value === null || typeof value === 'boolean') return JSON.stringify(value);
   if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
   if (Array.isArray(value)) {
     const descriptors = Object.getOwnPropertyDescriptors(value);
@@ -759,11 +798,15 @@ const zero = (): RevisionTriple => ({
 const increment = (value: number): number =>
   value < Number.MAX_SAFE_INTEGER ? value + 1 : fail('REVISION_OVERFLOW');
 function safe<T>(body: () => T): T {
+  const outer = canonicalStrings;
+  canonicalStrings ??= { values: new Map(), remaining: 16 * 1024 * 1024 };
   try {
     return body();
   } catch (error: unknown) {
     if (error instanceof NetworkApplicationStoreError) throw error;
     return fail();
+  } finally {
+    canonicalStrings = outer;
   }
 }
 function input<T>(body: () => T): T {
@@ -775,12 +818,22 @@ function input<T>(body: () => T): T {
 }
 function schema(db: Database.Database): void {
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 10 && row['version'] !== 11) return fail();
+  if (row['version'] !== 10 && row['version'] !== 11 && row['version'] !== 12) return fail();
   for (const table of NETWORK_APPLICATION_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 11)
+  if (row['version'] === 11 || row['version'] === 12)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (row['version'] === 12)
+    for (const table of CAMPAIGN_ADMISSION_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+}
+function hasRequestReviewSchema(db: Database.Database): boolean {
+  const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+    'version'
+  ];
+  if (version !== 10 && version !== 11 && version !== 12) return fail();
+  return version === 11 || version === 12;
 }
 function owner(db: Database.Database, id: string): void {
   uuid(id);
@@ -1240,6 +1293,25 @@ function acknowledgement(value: unknown): LocalNetworkAcknowledgement {
 function mutation(value: unknown, tabId: string): LocalNetworkMutation {
   const row = object(value);
   switch (row['kind']) {
+    case 'ADMISSION_ADVANCE':
+      object(row, ['kind', 'requestId', 'ownerEventIdOrNull', 'ownerSha256']);
+      return {
+        kind: 'ADMISSION_ADVANCE',
+        requestId: text(row['requestId']),
+        ownerEventIdOrNull:
+          row['ownerEventIdOrNull'] === null ? null : text(row['ownerEventIdOrNull']),
+        ownerSha256: hash(row['ownerSha256']),
+      };
+    case 'ADMISSION_RETURN':
+      object(row, ['kind', 'requestId', 'returnEventId', 'returnEventSha256', 'mode']);
+      if (row['mode'] !== 'RESELECT' && row['mode'] !== 'MENU') return fail();
+      return {
+        kind: 'ADMISSION_RETURN',
+        requestId: text(row['requestId']),
+        returnEventId: text(row['returnEventId']),
+        returnEventSha256: hash(row['returnEventSha256']),
+        mode: row['mode'],
+      };
     case 'LANE_BIND_INTENT':
       object(row, ['kind', 'outbox']);
       return { kind: 'LANE_BIND_INTENT', outbox: laneOutbox(row['outbox']) };
@@ -1644,13 +1716,37 @@ function reduce(
 ): LocalNetworkApplication {
   const next = { ...current };
   if (current.shellExitOrNull !== null && change.kind !== 'NAVIGATE') return fail('UNAVAILABLE');
-  let data = false,
+  let admissionAdvance = false,
+    data = false,
     draft = false;
   const idle = () => {
     if (current.pendingCommandIdOrNull !== null || lifecycle(current) === 'PROVISIONAL')
       return fail('UNAVAILABLE');
   };
   switch (change.kind) {
+    case 'ADMISSION_ADVANCE':
+      // The immutable owner event is a local state change even when legacy fields stay equal.
+      admissionAdvance = true;
+      data = true;
+      break;
+    case 'ADMISSION_RETURN':
+      if (
+        current.pendingCommandIdOrNull !== null ||
+        current.sessionOrNull === null ||
+        current.requestOrNull?.requestId !== change.requestId ||
+        current.requestReviewOrNull?.requestStatus !== 'IN_REVIEW'
+      )
+        return fail('UNAVAILABLE');
+      next.requestOrNull = null;
+      next.requestReviewOrNull = null;
+      next.selectedCandidates = [];
+      next.preparedBatchOrNull = null;
+      next.cancelReason = '';
+      next.diagnosticCodeOrNull = null;
+      next.formId = 'NET-003';
+      data = true;
+      draft = true;
+      break;
     case 'LANE_BIND_INTENT': {
       const o = change.outbox;
       if (
@@ -2043,7 +2139,7 @@ function reduce(
       }
       break;
   }
-  if (same(current, next)) return current;
+  if (same(current, next) && !admissionAdvance) return current;
   next.projectionRevision = increment(current.projectionRevision);
   if (data) next.stateRevision = increment(current.stateRevision);
   if (draft) next.draftRevision = increment(current.draftRevision);
@@ -2085,6 +2181,7 @@ function readHistory(
   const events: EventRecord[] = [];
   const attempts = new Set<string>();
   const review = emptyLocalReview();
+  const verifyAdmission = createLocalAdmissionNetworkVerifier(db);
   const rows = db
     .prepare(
       'SELECT * FROM local_network_application_event WHERE network_scope_id=? ORDER BY event_index',
@@ -2106,6 +2203,8 @@ function readHistory(
     )
       return fail();
     assertReviewPin(db, current, outboxes, i.mutation);
+    if (i.mutation.kind === 'ADMISSION_RETURN' || i.mutation.kind === 'ADMISSION_ADVANCE')
+      verifyAdmission(current, i);
     const origin = mutationOrigin(db, tab, events, i.mutation);
     const next = reduce(current, i.mutation, outboxes, review, origin, i.eventId),
       receipt = receiptFor(current, next, i);
@@ -2149,7 +2248,7 @@ function readHistory(
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version === 11) {
+  if (version === 11 || version === 12) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
       ['local_network_request_current', review.currents, 'request_id'],
@@ -2290,7 +2389,7 @@ export function validateNetworkTabApplicationState(
   db: Database.Database,
   tab: LocalNetworkTab,
 ): LocalNetworkApplication {
-  return safe(() => readHistory(db, tab).current);
+  return read(db, tab.ownerDeviceId, () => readHistory(db, tab).current);
 }
 export function assertNetworkTabApplicationCanClose(
   db: Database.Database,
@@ -2482,10 +2581,7 @@ function assertUnused(db: Database.Database, id: string): void {
   ] as const)
     for (const column of columns)
       if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
-  if (
-    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] ===
-    11
-  )
+  if (hasRequestReviewSchema(db))
     for (const [table, columns] of [
       ['hosted_device_request_decision', ['command_id', 'receipt_id']],
       ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -2494,6 +2590,16 @@ function assertUnused(db: Database.Database, id: string): void {
     ] as const)
       for (const column of columns)
         if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+  if (
+    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] ===
+    12
+  )
+    for (const [table, columns] of CAMPAIGN_ADMISSION_IDENTITIES)
+      for (const column of columns)
+        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+}
+function admissionMutationKind(value: unknown): unknown {
+  return input(() => object(object(value)['mutation'])['kind']);
 }
 export function commitLocalNetworkMutation(
   db: Database.Database,
@@ -2501,6 +2607,25 @@ export function commitLocalNetworkMutation(
   guard: NetworkStoreGuard<LocalNetworkApplication>,
 ): StoredLocalNetworkEvent {
   if (db.inTransaction) return fail('INVALID_INPUT');
+  const kind = admissionMutationKind(value);
+  if (kind === 'ADMISSION_RETURN' || kind === 'ADMISSION_ADVANCE') return fail('INVALID_INPUT');
+  return safe(() => db.transaction(() => writeLocalNetworkMutation(db, value, guard)).immediate());
+}
+/** Only the owning admission transaction may append its verified terminal return. */
+export function commitLocalAdmissionNetworkMutation(
+  db: Database.Database,
+  value: LocalNetworkMutationInput,
+): StoredLocalNetworkEvent {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const kind = admissionMutationKind(value);
+  if (kind !== 'ADMISSION_RETURN' && kind !== 'ADMISSION_ADVANCE') return fail('INVALID_INPUT');
+  return writeLocalNetworkMutation(db, value, () => undefined);
+}
+function writeLocalNetworkMutation(
+  db: Database.Database,
+  value: LocalNetworkMutationInput,
+  guard: NetworkStoreGuard<LocalNetworkApplication>,
+): StoredLocalNetworkEvent {
   return safe(() =>
     db
       .transaction(() => {
@@ -2518,6 +2643,9 @@ export function commitLocalNetworkMutation(
           owner(db, i.ownerDeviceId);
           return { input: known.input, receipt: known.receipt, current: h.current };
         }
+        if (i.mutation.kind === 'ADMISSION_RETURN' || i.mutation.kind === 'ADMISSION_ADVANCE')
+          validateLocalAdmissionNetworkEvent(db, h.current, i);
+        else assertLocalAdmissionTabMutable(db, tab);
         if (
           !same(i.expectedRevisions, vectorOf(h.current)) ||
           i.expectedDraftRevision !== h.current.draftRevision
@@ -2534,9 +2662,7 @@ export function commitLocalNetworkMutation(
           ['LANE_BIND_INTENT', 'LANE_BIND_ACK', 'REQUEST_ADVANCE', 'CANCEL_SETTLE'].includes(
             i.mutation.kind,
           ) &&
-          (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
-            'version'
-          ] !== 11
+          !hasRequestReviewSchema(db)
         )
           return fail('UNAVAILABLE');
         if (
@@ -2638,10 +2764,19 @@ export function commitLocalNetworkMutation(
             );
           }
         if (!same(vectorOf(tab), vectorOf(next)) || tab.lifecycleState !== lifecycle(next)) {
-          writeLocalNetworkTabApplicationState(db, tab, vectorOf(next), lifecycle(next), i.eventId);
+          const writeTab =
+            i.mutation.kind === 'ADMISSION_ADVANCE' || i.mutation.kind === 'ADMISSION_RETURN'
+              ? localAdmissionTabStorage.writeApplicationState
+              : writeLocalNetworkTabApplicationState;
+          writeTab(db, tab, vectorOf(next), lifecycle(next), i.eventId);
           expected++;
         }
         if (!db.inTransaction || changes(db) !== before + expected) return fail('SOURCE_CHANGED');
+        if (i.mutation.kind === 'ADMISSION_ADVANCE' || i.mutation.kind === 'ADMISSION_RETURN') {
+          // The owning owner-journal writer immediately verifies this complete history,
+          // every mirror and every tab claim before its final guard in the same transaction.
+          return { input: i, receipt, current: next };
+        }
         const verified = readLocalNetworkApplicationEvent(db, i, i.eventId) ?? fail();
         if (!same(verified, { input: i, receipt, current: next })) return fail('SOURCE_CHANGED');
         guarded(db, guard, h.current, 'APPLY');
@@ -2912,6 +3047,7 @@ function pinRecord(
   db: Database.Database,
   ownerId: string,
   campaignId: string,
+  application = true,
 ): LocalNetworkHostPin | null {
   const row = db
     .prepare('SELECT * FROM local_network_host_pin WHERE owner_device_id=? AND campaign_id=?')
@@ -2938,7 +3074,12 @@ function pinRecord(
     row['key_fingerprint'] !== pin.identity.keyFingerprintSha256
   )
     return fail();
-  if (readLocalNetworkTabEntryByCommandId(db, ownerId, pin.entryCommandId) === null) return fail();
+  if (
+    (application
+      ? readLocalNetworkTabEntryByCommandId(db, ownerId, pin.entryCommandId)
+      : localAdmissionTabStorage.entryAnchor(db, ownerId, pin.entryCommandId)) === null
+  )
+    return fail();
   return pin;
 }
 export function readLocalNetworkHostPin(
@@ -2947,6 +3088,14 @@ export function readLocalNetworkHostPin(
   campaignId: string,
 ): LocalNetworkHostPin | null {
   return read(db, ownerDeviceId, () => pinRecord(db, ownerDeviceId, uuid(campaignId)));
+}
+/** Admission verifies the original network history separately, avoiding an overlay read cycle. */
+export function readLocalNetworkHostPinAnchor(
+  db: Database.Database,
+  ownerDeviceId: string,
+  campaignId: string,
+): LocalNetworkHostPin | null {
+  return read(db, ownerDeviceId, () => pinRecord(db, ownerDeviceId, uuid(campaignId), false));
 }
 export function commitLocalNetworkHostPin(
   db: Database.Database,
@@ -3028,6 +3177,33 @@ export function commitLocalNetworkHostPin(
 
 /** Shared internal storage mechanics; the host supplies rules/crypto checks through guards. */
 export const networkApplicationStorage = {
+  deliverySnapshot: localDeliverySnapshot,
+  admissionHistory(
+    db: Database.Database,
+    scope: LocalNetworkScope,
+  ): ReturnType<typeof readHistory> {
+    return read(db, scope.ownerDeviceId, () =>
+      readHistory(
+        db,
+        localAdmissionTabStorage.historyAnchor(db, scope.ownerDeviceId, scope.networkScopeId),
+      ),
+    );
+  },
+  /** Internal admission composition: closed tabs keep their verified original request history. */
+  deliveryHistory(
+    db: Database.Database,
+    scope: LocalNetworkScope,
+    commandId: string,
+  ): LocalNetworkDeliverySnapshot {
+    return read(db, scope.ownerDeviceId, () => {
+      const tab = localAdmissionTabStorage.historyAnchor(
+        db,
+        scope.ownerDeviceId,
+        scope.networkScopeId,
+      );
+      return localDeliverySnapshot(readHistory(db, tab), commandId);
+    });
+  },
   fail,
   object,
   canonical,
@@ -3044,6 +3220,7 @@ export const networkApplicationStorage = {
   safe,
   input,
   schema,
+  hasRequestReviewSchema,
   owner,
   read,
   at,

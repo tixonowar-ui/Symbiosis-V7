@@ -103,6 +103,7 @@
 | [0069](0069-device-request-review-atlas-amendment.md)                | Предварительное рассмотрение заявки в Atlas        | принято; #177                               |
 | [0070](0070-network-request-source-contracts.md)                     | Отдельная библиотека сетевых контрактов заявки     | принято; #195                               |
 | [0071](0071-campaign-admission-source-closure.md)                    | Рабочие копии, финальный допуск и лобби в Atlas    | принято; #199                               |
+| [0072](0072-campaign-copy-admission-runtime.md)                      | Runtime рабочих копий и решения владельца          | принято                                     |
 
 ## Перенос решений аудита
 

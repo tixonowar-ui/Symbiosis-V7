@@ -9,6 +9,7 @@ import { NETWORK_INSTALLATION_IDENTITY_TABLES } from './migrations/0008-network-
 import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 import { NETWORK_APPLICATION_TABLES } from './migrations/0010-network-application.js';
 import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
+import { CAMPAIGN_ADMISSION_TABLES } from './migrations/0012-campaign-admission.js';
 import {
   loadLocalCharacterCheckpoint,
   loadCampaignCheckpoint,
@@ -506,7 +507,7 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     return fail('restore cursor retirement requires the checkpoint transaction');
   const schema = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
   const version = schema['version'];
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 11)
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 12)
     return fail('unknown schema version for restore cursor retirement');
   // Versions 1..5 predate this aggregate. A version-6 database must have its actual tables.
   if (version < 6) return;
@@ -525,8 +526,11 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
   if (version >= 10)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (version === 11)
+  if (version === 11 || version === 12)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (version === 12)
+    for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (
     db

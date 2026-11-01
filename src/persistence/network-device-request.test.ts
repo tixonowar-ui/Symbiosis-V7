@@ -50,6 +50,19 @@ import {
   type HostedCandidateBaselineGuard,
 } from './network-device-request.js';
 import type { NetworkPreparedBatch } from './network-local-application.js';
+import {
+  commitAdmissionReviewOpen,
+  commitAdmissionReviewEdit,
+  readAdmissionReview,
+  type AdmissionReviewOpenRequest,
+  type AdmissionReviewRules,
+} from './campaign-admission-review.js';
+import {
+  admissionReviewStateValue,
+  type AdmissionReviewIntent,
+  type AdmissionReviewMutation,
+  type AdmissionReviewState,
+} from '@shared/campaign-admission-review.js';
 
 const databases: Database.Database[] = [],
   directories: string[] = [];
@@ -292,12 +305,13 @@ function submission(
       byteLength: Buffer.byteLength(witness),
     };
   });
+  const schemaVersion = (
+    p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as {
+      version: number;
+    }
+  ).version;
   const batch = withBatchHash({
-    ...((
-      p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as {
-        version: number;
-      }
-    ).version === 11
+    ...(schemaVersion === 11 || schemaVersion === 12
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -395,6 +409,797 @@ function decisionInput(p: ReturnType<typeof setup>, requestId: string, reject = 
     : { ...common, workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW', payload };
   return { request, receiptId: randomUUID(), timestamp: '2026-10-30T12:00:00.000Z' };
 }
+
+/** Storage-only reducer fixture; real FINAL/mechanical replay is covered in host candidate tests. */
+const reviewStoreInputs = () => ({
+  statAdjustments: { S: 0, D: 0, M: 0, Z: 0, I: 0, W: 0, C: 0 },
+  startingSkills: { entries: [] },
+  massReview: { massKg: 75, decision: 'PENDING_MASTER_APPROVAL' as const },
+  inventoryReview: { status: 'PENDING' as const, entries: [], unresolvedSourceEntryIds: [] },
+  moneyReview: { status: 'PENDING' as const, amountOrNull: null },
+  weaponDecisionRefs: [],
+  groupAssignmentOrNull: null,
+  locationAssignmentOrNull: null,
+});
+const reviewStoreRules: AdmissionReviewRules = {
+  verifyInitial: (_request, state) => {
+    expect(state.reviewRevision).toBe(0);
+    expect(state.groupDraftIds).toEqual([]);
+    for (const copy of state.copies) {
+      expect(copy.inputs).toEqual(reviewStoreInputs());
+      expect(copy.weaponDecisions).toEqual([]);
+      expect(copy.reviewItemIdentities).toEqual([]);
+    }
+  },
+  reduce: (_request, before, mutation) => {
+    if (mutation.kind === 'WEAPON') throw new Error('weapon rules are outside the storage fixture');
+    return admissionReviewStateValue({
+      ...before,
+      reviewRevision: before.reviewRevision + 1,
+      groupDraftIds:
+        mutation.kind === 'ALLOCATE_GROUP'
+          ? [...before.groupDraftIds, mutation.groupDraftId]
+          : before.groupDraftIds,
+      copies: before.copies.map((copy) => {
+        if (mutation.kind === 'ALLOCATE_GROUP' || mutation.reviewCopyId !== copy.reviewCopyId)
+          return copy;
+        return mutation.kind === 'EDIT'
+          ? { ...copy, inputs: mutation.inputs }
+          : {
+              ...copy,
+              reviewItemIdentities: [
+                ...copy.reviewItemIdentities,
+                { reviewItemId: mutation.reviewItemId, sourceEntryIdOrNull: null },
+              ],
+            };
+      }),
+    });
+  },
+};
+const prepareReviewMutation = (intent: AdmissionReviewIntent): AdmissionReviewMutation =>
+  intent.kind === 'ALLOCATE_ITEM'
+    ? { ...intent, reviewItemId: randomUUID() }
+    : intent.kind === 'ALLOCATE_GROUP'
+      ? { ...intent, groupDraftId: randomUUID() }
+      : intent;
+function reviewStoreSetup(filename = ':memory:') {
+  const p = setup(filename),
+    submitted = submission(p, connect(p));
+  commitHostedNetworkCommand(p.db, p.principal, submitted, allow, allow);
+  enterQueue(p);
+  selectRequest(p, submitted.requestId);
+  commitGmDeviceRequestDecision(
+    p.db,
+    gmScope(p),
+    decisionInput(p, submitted.requestId),
+    allow,
+    allow,
+  );
+  const view = readGmRequestReviewView(p.db, gmScope(p), allow)!;
+  const request: AdmissionReviewOpenRequest = {
+    messageType: 'command.request',
+    protocolVersion: 1,
+    commandKind: 'workflow-command',
+    role: 'gm',
+    workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN',
+    commandId: randomUUID(),
+    expectedRevisions: vector(view),
+    payload: {
+      campaignId: p.principal.campaignId,
+      requestId: submitted.requestId,
+      requestRevision: 1,
+    },
+  };
+  const input = { request, receiptId: randomUUID(), timestamp: '2026-11-01T00:00:00.000Z' };
+  const seed = (q: Parameters<AdmissionReviewRules['verifyInitial']>[0]): AdmissionReviewState => ({
+    schemaVersion: 1,
+    admissionBatchId: randomUUID(),
+    requestId: q.submittedRequest.requestId,
+    reviewRevision: 0,
+    groupDraftIds: [],
+    copies: q.submittedRequest.batch.candidates.map((c) => ({
+      reviewCopyId: randomUUID(),
+      sourceUuid: c.descriptor.sourceUuid,
+      sourceSnapshotId: c.descriptor.sourceSnapshotId,
+      snapshotChecksum: c.descriptor.sourceChecksum,
+      reviewItemIdentities: [],
+      inputs: reviewStoreInputs(),
+      weaponDecisions: [],
+    })),
+  });
+  return { p, submitted, input, seed };
+}
+
+describe('NET-018 durable admission working copies', () => {
+  it('detaches OPEN and EDIT request identities before callbacks while retaining exact-replay metadata semantics', () => {
+    const f = reviewStoreSetup(),
+      { p } = f,
+      original = structuredClone(f.input);
+    const opened = commitAdmissionReviewOpen(
+      p.db,
+      gmScope(p),
+      f.input,
+      allow,
+      reviewStoreRules,
+      (q) => {
+        Reflect.set(f.input.request, 'commandId', randomUUID());
+        f.input.receiptId = randomUUID();
+        f.input.timestamp = 'changed';
+        return f.seed(q);
+      },
+      allow,
+    );
+    expect(opened.review.open.request).toEqual(original.request);
+    expect(opened.review.open.receipt.receiptId).toBe(original.receiptId);
+    expect(opened.review.open.receipt.timestamp).toBe(original.timestamp);
+    expect(
+      commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        {
+          ...original,
+          receiptId: '',
+          timestamp: '',
+        },
+        allow,
+        reviewStoreRules,
+        f.seed,
+        allow,
+      ).review.open.receipt,
+    ).toEqual(opened.review.open.receipt);
+    const change = {
+        request: {
+          commandId: randomUUID(),
+          admissionBatchId: opened.review.current.admissionBatchId,
+          expectedReviewRevision: 0,
+          intent: { kind: 'ALLOCATE_GROUP' as const },
+        },
+        receiptId: randomUUID(),
+        timestamp: original.timestamp,
+      },
+      initial = structuredClone(change);
+    const edited = commitAdmissionReviewEdit(
+      p.db,
+      gmScope(p),
+      change,
+      allow,
+      reviewStoreRules,
+      prepareReviewMutation,
+      () => {
+        change.request.commandId = randomUUID();
+        change.receiptId = randomUUID();
+        change.timestamp = 'changed';
+      },
+    );
+    expect(edited.event.request).toEqual(initial.request);
+    expect(edited.event.receiptId).toBe(initial.receiptId);
+    expect(edited.event.timestamp).toBe(initial.timestamp);
+    expect(
+      commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        {
+          ...initial,
+          receiptId: '',
+          timestamp: '',
+        },
+        allow,
+        reviewStoreRules,
+        prepareReviewMutation,
+        allow,
+      ).event,
+    ).toEqual(edited.event);
+  });
+  it.each(['object', 'array'] as const)(
+    'rejects nested EDIT %s accessors without invoking them or changing storage',
+    (kind) => {
+      const f = reviewStoreSetup(),
+        { p } = f,
+        getter = vi.fn(() => {
+          p.db.pragma('user_version = 19');
+          return 'EDIT';
+        }),
+        opened = commitAdmissionReviewOpen(
+          p.db,
+          gmScope(p),
+          f.input,
+          allow,
+          reviewStoreRules,
+          f.seed,
+          allow,
+        );
+      const intent = {
+        kind: 'EDIT' as const,
+        reviewCopyId: opened.review.current.copies[0]!.reviewCopyId,
+        inputs: reviewStoreInputs(),
+      };
+      Object.defineProperty(
+        kind === 'object' ? intent : intent.inputs.startingSkills.entries,
+        kind === 'object' ? 'kind' : '0',
+        { enumerable: true, get: getter },
+      );
+      const before = p.db.serialize();
+      expect(() =>
+        commitAdmissionReviewEdit(
+          p.db,
+          gmScope(p),
+          {
+            request: {
+              commandId: randomUUID(),
+              admissionBatchId: opened.review.current.admissionBatchId,
+              expectedReviewRevision: 0,
+              intent,
+            },
+            receiptId: randomUUID(),
+            timestamp: f.input.timestamp,
+          },
+          allow,
+          reviewStoreRules,
+          prepareReviewMutation,
+          allow,
+        ),
+      ).toThrow();
+      expect(getter).not.toHaveBeenCalled();
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+  it.each(['prepare', 'prepareMutation', 'reduce', 'historicalReduce'] as const)(
+    'rejects a self-replacing %s result accessor inside its callback guard',
+    (kind) => {
+      const f = reviewStoreSetup(),
+        { p } = f;
+      const getter = vi.fn();
+      const poison = <T extends object>(value: T, key: keyof T): T => {
+        const old = value[key];
+        Object.defineProperty(value, key, {
+          enumerable: true,
+          configurable: true,
+          get: () => {
+            getter();
+            Object.defineProperty(value, key, { value: old, enumerable: true, configurable: true });
+            p.db.pragma('user_version = 19');
+            return old;
+          },
+        });
+        return value;
+      };
+      let run: () => unknown;
+      if (kind === 'prepare')
+        run = () =>
+          commitAdmissionReviewOpen(
+            p.db,
+            gmScope(p),
+            f.input,
+            allow,
+            reviewStoreRules,
+            (q) => poison(f.seed(q), 'requestId'),
+            allow,
+          );
+      else {
+        const opened = commitAdmissionReviewOpen(
+            p.db,
+            gmScope(p),
+            f.input,
+            allow,
+            reviewStoreRules,
+            f.seed,
+            allow,
+          ),
+          change = {
+            request: {
+              commandId: randomUUID(),
+              admissionBatchId: opened.review.current.admissionBatchId,
+              expectedReviewRevision: 0,
+              intent: { kind: 'ALLOCATE_GROUP' as const },
+            },
+            receiptId: randomUUID(),
+            timestamp: f.input.timestamp,
+          },
+          rules: AdmissionReviewRules = {
+            ...reviewStoreRules,
+            reduce: (...args) => poison(reviewStoreRules.reduce(...args), 'requestId'),
+          };
+        if (kind === 'historicalReduce') {
+          commitAdmissionReviewEdit(
+            p.db,
+            gmScope(p),
+            change,
+            allow,
+            reviewStoreRules,
+            prepareReviewMutation,
+            allow,
+          );
+          run = () =>
+            readAdmissionReview(
+              p.db,
+              gmScope(p),
+              opened.review.current.admissionBatchId,
+              allow,
+              rules,
+            );
+        } else
+          run = () =>
+            commitAdmissionReviewEdit(
+              p.db,
+              gmScope(p),
+              change,
+              allow,
+              kind === 'reduce' ? rules : reviewStoreRules,
+              (intent) =>
+                kind === 'prepareMutation'
+                  ? poison(prepareReviewMutation(intent), 'kind')
+                  : prepareReviewMutation(intent),
+              allow,
+            );
+      }
+      const before = p.db.serialize();
+      expect(run).toThrow();
+      expect(getter).not.toHaveBeenCalled();
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+  it('opens once, replays the original receipt with newer review, and restores after SQLite reopen without campaign copies', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'admission-review-'));
+    directories.push(directory);
+    const filename = join(directory, 'db.sqlite'),
+      f = reviewStoreSetup(filename),
+      { p } = f;
+    const campaign = snapshot(p.db),
+      beforeSubmit = readHostedNetworkCommand(p.db, p.principal, f.submitted.commandId, allow);
+    const prepare = vi.fn(f.seed),
+      opened = commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        f.input,
+        allow,
+        reviewStoreRules,
+        prepare,
+        allow,
+      );
+    expect(opened.kind).toBe('CREATED');
+    expect(prepare).toHaveBeenCalledTimes(1);
+    const change = {
+      request: {
+        commandId: randomUUID(),
+        admissionBatchId: opened.review.current.admissionBatchId,
+        expectedReviewRevision: 0,
+        intent: {
+          kind: 'ALLOCATE_ITEM' as const,
+          reviewCopyId: opened.review.current.copies[0]!.reviewCopyId,
+        },
+      },
+      receiptId: randomUUID(),
+      timestamp: f.input.timestamp,
+    };
+    const allocate = vi.fn(prepareReviewMutation),
+      edited = commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        change,
+        allow,
+        reviewStoreRules,
+        allocate,
+        allow,
+      );
+    const before = p.db.serialize();
+    const replay = commitAdmissionReviewOpen(
+      p.db,
+      gmScope(p),
+      f.input,
+      allow,
+      reviewStoreRules,
+      prepare,
+      allow,
+    );
+    expect(replay.kind).toBe('REPLAYED');
+    expect(replay.review.open.receipt).toEqual(opened.review.open.receipt);
+    expect(replay.review.current).toEqual(edited.review.current);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(() =>
+      commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        { ...f.input, request: { ...f.input.request, commandId: randomUUID() } },
+        allow,
+        reviewStoreRules,
+        prepare,
+        allow,
+      ),
+    ).toThrow('STALE_REVISION');
+    const currentView = readGmRequestReviewView(p.db, gmScope(p), allow)!;
+    const recovered = commitAdmissionReviewOpen(
+      p.db,
+      gmScope(p),
+      {
+        ...f.input,
+        request: {
+          ...f.input.request,
+          commandId: randomUUID(),
+          expectedRevisions: {
+            stateRevision: currentView.stateRevision,
+            projectionRevision: currentView.projectionRevision,
+            actorVisibilityRevision: currentView.actorVisibilityRevision,
+          },
+        },
+      },
+      allow,
+      reviewStoreRules,
+      prepare,
+      allow,
+    );
+    expect(recovered.kind).toBe('RECOVERED');
+    expect(recovered.review.open.receipt).toEqual(opened.review.open.receipt);
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(
+      commitAdmissionReviewEdit(p.db, gmScope(p), change, allow, reviewStoreRules, allocate, allow)
+        .event,
+    ).toEqual(edited.event);
+    expect(allocate).toHaveBeenCalledTimes(1);
+    expect(p.db.serialize().equals(before)).toBe(true);
+    expect(() =>
+      commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        { ...f.input, request: { ...f.input.request, commandId: change.request.commandId } },
+        allow,
+        reviewStoreRules,
+        prepare,
+        allow,
+      ),
+    ).toThrow('IDEMPOTENCY_CONFLICT');
+    expect(p.db.serialize().equals(before)).toBe(true);
+    expect(snapshot(p.db)).toEqual(campaign);
+    expect(readHostedNetworkCommand(p.db, p.principal, f.submitted.commandId, allow)).toEqual(
+      beforeSubmit,
+    );
+    expect(p.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
+      n: 0,
+    });
+    expect(
+      readHostedDeviceRequestCurrent(p.db, p.principal, f.submitted.requestId, allow).requestStatus,
+    ).toBe('IN_REVIEW');
+    p.db.close();
+    const reopened = open(filename);
+    expect(
+      readAdmissionReview(
+        reopened,
+        gmScope(p),
+        opened.review.current.admissionBatchId,
+        allow,
+        reviewStoreRules,
+      ).current,
+    ).toEqual(edited.review.current);
+    expect(
+      commitAdmissionReviewEdit(
+        reopened,
+        gmScope(p),
+        change,
+        allow,
+        reviewStoreRules,
+        allocate,
+        allow,
+      ).event,
+    ).toEqual(edited.event);
+    expect(allocate).toHaveBeenCalledTimes(1);
+  });
+  it.each(['verifyInitial', 'prepare', 'reduce', 'prepareMutation'] as const)(
+    'refuses an actual async %s callback before invocation and preserves zero writes after microtasks',
+    async (kind) => {
+      const f = reviewStoreSetup(),
+        { p } = f;
+      const opened =
+        kind === 'reduce' || kind === 'prepareMutation'
+          ? commitAdmissionReviewOpen(
+              p.db,
+              gmScope(p),
+              f.input,
+              allow,
+              reviewStoreRules,
+              f.seed,
+              allow,
+            )
+          : null;
+      let called = 0;
+      const wrong = async () => {
+        called++;
+        await setImmediate();
+        p.db.pragma('user_version=77');
+        throw new Error('async callback must not run');
+      };
+      const before = p.db.serialize();
+      if (opened === null) {
+        const rules =
+          kind === 'verifyInitial'
+            ? { ...reviewStoreRules, verifyInitial: wrong }
+            : reviewStoreRules;
+        const prepare = kind === 'prepare' ? (wrong as unknown as typeof f.seed) : f.seed;
+        expect(() =>
+          commitAdmissionReviewOpen(p.db, gmScope(p), f.input, allow, rules, prepare, allow),
+        ).toThrow('INVALID_INPUT');
+      } else {
+        const rules =
+          kind === 'reduce'
+            ? { ...reviewStoreRules, reduce: wrong as unknown as AdmissionReviewRules['reduce'] }
+            : reviewStoreRules;
+        const prepare =
+          kind === 'prepareMutation'
+            ? (wrong as unknown as typeof prepareReviewMutation)
+            : prepareReviewMutation;
+        expect(() =>
+          commitAdmissionReviewEdit(
+            p.db,
+            gmScope(p),
+            {
+              request: {
+                commandId: randomUUID(),
+                admissionBatchId: opened.review.current.admissionBatchId,
+                expectedReviewRevision: 0,
+                intent: { kind: 'ALLOCATE_GROUP' },
+              },
+              receiptId: randomUUID(),
+              timestamp: f.input.timestamp,
+            },
+            allow,
+            rules,
+            prepare,
+            allow,
+          ),
+        ).toThrow('INVALID_INPUT');
+      }
+      await setImmediate();
+      expect(called).toBe(0);
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+  it('refuses and consumes a promise returned by a synchronous callback without committing its synchronous writes', async () => {
+    const f = reviewStoreSetup(),
+      { p } = f,
+      before = p.db.serialize();
+    expect(() =>
+      commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        f.input,
+        allow,
+        reviewStoreRules,
+        () => {
+          p.db.pragma('user_version=77');
+          return Promise.reject(
+            new Error('invalid asynchronous preparation'),
+          ) as unknown as AdmissionReviewState;
+        },
+        allow,
+      ),
+    ).toThrow();
+    await setImmediate();
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('rejects an arbitrary thenable without assimilating it or executing deferred writes', async () => {
+    const f = reviewStoreSetup(),
+      { p } = f,
+      before = p.db.serialize();
+    let called = 0;
+    const thenable = {
+      then: (resolve: () => void) => {
+        called++;
+        p.db.pragma('user_version=77');
+        resolve();
+      },
+    };
+    expect(() =>
+      commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        f.input,
+        allow,
+        reviewStoreRules,
+        () => thenable as unknown as AdmissionReviewState,
+        allow,
+      ),
+    ).toThrow('INVALID_INPUT');
+    await setImmediate();
+    expect(called).toBe(0);
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('rejects stale edits, changed/foreign replay and late encoding failure with zero writes, then revokes edits on preliminary rejection', () => {
+    const f = reviewStoreSetup(),
+      { p } = f,
+      opened = commitAdmissionReviewOpen(
+        p.db,
+        gmScope(p),
+        f.input,
+        allow,
+        reviewStoreRules,
+        f.seed,
+        allow,
+      );
+    const change = {
+      request: {
+        commandId: randomUUID(),
+        admissionBatchId: opened.review.current.admissionBatchId,
+        expectedReviewRevision: 0,
+        intent: { kind: 'ALLOCATE_GROUP' as const },
+      },
+      receiptId: randomUUID(),
+      timestamp: f.input.timestamp,
+    };
+    let before = p.db.serialize();
+    expect(() =>
+      commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        change,
+        allow,
+        reviewStoreRules,
+        prepareReviewMutation,
+        (r) => {
+          if (r.current.reviewRevision > 0) throw new Error('encoding rejected');
+        },
+      ),
+    ).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+    const edited = commitAdmissionReviewEdit(
+      p.db,
+      gmScope(p),
+      change,
+      allow,
+      reviewStoreRules,
+      prepareReviewMutation,
+      allow,
+    );
+    before = p.db.serialize();
+    expect(() =>
+      commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        { ...change, request: { ...change.request, commandId: randomUUID() } },
+        allow,
+        reviewStoreRules,
+        prepareReviewMutation,
+        allow,
+      ),
+    ).toThrow('STALE_REVISION');
+    expect(() =>
+      commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        { ...change, request: { ...change.request, expectedReviewRevision: 1 } },
+        allow,
+        reviewStoreRules,
+        prepareReviewMutation,
+        allow,
+      ),
+    ).toThrow('IDEMPOTENCY_CONFLICT');
+    expect(() =>
+      commitAdmissionReviewOpen(
+        p.db,
+        { ...gmScope(p), ownerDeviceId: randomUUID() },
+        f.input,
+        allow,
+        reviewStoreRules,
+        f.seed,
+        allow,
+      ),
+    ).toThrow('FOREIGN_OWNER');
+    expect(p.db.serialize().equals(before)).toBe(true);
+    selectRequest(p, f.submitted.requestId, 'Требуются исправления');
+    commitGmDeviceRequestDecision(
+      p.db,
+      gmScope(p),
+      decisionInput(p, f.submitted.requestId, true),
+      allow,
+      allow,
+    );
+    const revoked = readAdmissionReview(
+      p.db,
+      gmScope(p),
+      opened.review.current.admissionBatchId,
+      allow,
+      reviewStoreRules,
+    );
+    expect(revoked.editable).toBe(false);
+    before = p.db.serialize();
+    expect(() =>
+      commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        {
+          ...change,
+          request: {
+            ...change.request,
+            commandId: randomUUID(),
+            expectedReviewRevision: edited.review.current.reviewRevision,
+          },
+        },
+        allow,
+        reviewStoreRules,
+        prepareReviewMutation,
+        allow,
+      ),
+    ).toThrow('STALE_REVISION');
+    const replay = commitAdmissionReviewEdit(
+      p.db,
+      gmScope(p),
+      change,
+      allow,
+      reviewStoreRules,
+      prepareReviewMutation,
+      allow,
+    );
+    expect(replay.event).toEqual(edited.event);
+    expect(replay.review.editable).toBe(false);
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it.each(['head', 'event', 'identity', 'source', 'missing-history'] as const)(
+    'fails closed on %s corruption even when outer record hashes are recomputed',
+    (target) => {
+      const f = reviewStoreSetup(),
+        { p } = f,
+        opened = commitAdmissionReviewOpen(
+          p.db,
+          gmScope(p),
+          f.input,
+          allow,
+          reviewStoreRules,
+          f.seed,
+          allow,
+        ),
+        batchId = opened.review.current.admissionBatchId;
+      commitAdmissionReviewEdit(
+        p.db,
+        gmScope(p),
+        {
+          request: {
+            commandId: randomUUID(),
+            admissionBatchId: batchId,
+            expectedReviewRevision: 0,
+            intent: { kind: 'ALLOCATE_GROUP' },
+          },
+          receiptId: randomUUID(),
+          timestamp: f.input.timestamp,
+        },
+        allow,
+        reviewStoreRules,
+        prepareReviewMutation,
+        allow,
+      );
+      if (target === 'missing-history')
+        p.db
+          .prepare('DELETE FROM campaign_admission_event WHERE admission_batch_id=?')
+          .run(batchId);
+      else {
+        const table =
+          target === 'head'
+            ? 'campaign_admission_head'
+            : target === 'event'
+              ? 'campaign_admission_event'
+              : target === 'identity'
+                ? 'campaign_admission_identity'
+                : 'campaign_admission_batch';
+        const value = JSON.parse(
+          (
+            p.db
+              .prepare(`SELECT record_json FROM ${table} WHERE admission_batch_id=? LIMIT 1`)
+              .get(batchId) as { record_json: string }
+          ).record_json,
+        ) as Record<string, unknown>;
+        if (target === 'head') value['reviewRevision'] = 50;
+        else if (target === 'event') value['afterStateSha256'] = 'f'.repeat(64);
+        else if (target === 'identity') value['reviewCopyIdOrNull'] = randomUUID();
+        else value['submittedBatchSha256'] = 'f'.repeat(64);
+        const text = canonical(value);
+        p.db
+          .prepare(`UPDATE ${table} SET record_json=?,record_sha256=? WHERE admission_batch_id=?`)
+          .run(text, sha(text), batchId);
+      }
+      const before = p.db.serialize();
+      expect(() =>
+        readAdmissionReview(p.db, gmScope(p), batchId, allow, reviewStoreRules),
+      ).toThrow();
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+});
 describe('GM request review persistence', () => {
   it('reads the owned current from the fully verified queue and refuses another pinned owner', () => {
     const p = setup(),

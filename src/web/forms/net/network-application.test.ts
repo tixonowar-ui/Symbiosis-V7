@@ -58,6 +58,7 @@ const forecast = {
   campaignRevision: 0,
   activePlayerCapacity: 5,
   activePcCount: 3,
+  occupiedCampaignPlaceCount: 3,
   selectedCandidateCount: 1,
   fitsCurrentCapacity: true,
 };
@@ -290,7 +291,12 @@ describe('NET-001–005/011 and CHR-027 public application helpers', () => {
         'NET-003',
         {
           ...projections['NET-003'],
-          capacityForecast: { ...forecast, activePcCount: 5, fitsCurrentCapacity: false },
+          capacityForecast: {
+            ...forecast,
+            activePcCount: 5,
+            occupiedCampaignPlaceCount: 5,
+            fitsCurrentCapacity: false,
+          },
         },
         [],
       ),
@@ -309,7 +315,12 @@ describe('NET-001–005/011 and CHR-027 public application helpers', () => {
     expect(
       networkSubmitPayload('NET-004', {
         ...projections['NET-004'],
-        capacityForecast: { ...forecast, activePcCount: 5, fitsCurrentCapacity: false },
+        capacityForecast: {
+          ...forecast,
+          activePcCount: 5,
+          occupiedCampaignPlaceCount: 5,
+          fitsCurrentCapacity: false,
+        },
       }),
     ).toBeNull();
     expect(networkCancelPayload('NET-005', projections['NET-005'], ' \n ')).toBeNull();
@@ -484,6 +495,7 @@ describe('NET-017 preliminary GM payload previews', () => {
     requestQueueRevision: 3,
     selectedRequestIdOrNull: REQUEST,
     activePlayerCapacity: 1,
+    selectedAdmissionOrNull: null,
     occupiedActivePcCount: 1,
     decisionReason: '  Проверить происхождение  ',
     commandId: null,

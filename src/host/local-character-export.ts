@@ -97,6 +97,9 @@ function verifiedContext(baseline: LocalCharacterExportBaseline): VerifiedBaseli
   const proof = verifiedBaselineContexts.get(baseline);
   if (proof === undefined || proof.contextSeal !== contextSeal(baseline))
     return fail('baseline context is unverified or mutated');
+  // Current contexts have already passed this exact object seal in this call.
+  // Historical views still require a separate fresh check of the current source.
+  if (proof.current === baseline) return proof;
   const currentProof = verifiedBaselineContexts.get(proof.current);
   if (currentProof === undefined || currentProof.contextSeal !== contextSeal(proof.current))
     return fail('current baseline context is unverified or mutated');

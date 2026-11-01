@@ -202,6 +202,167 @@ async function submitOwnFinal(page: Page, address: string, ownAddress: string) {
   await expect(form(page, 'NET-005')).toBeVisible();
 }
 
+for (const outcome of ['ACCEPT', 'BLOCKED', 'DECLINE', 'REJECT'] as const) {
+  test(`NET final admission ${outcome} preserves the source and restores the whole decision on both installations`, async ({
+    browser,
+  }, info) => {
+    const scenario = await createNetworkBrowserScenario(browser, 1);
+    const { gm, player, masterPage, playerPage } = scenario;
+    const errors: string[] = [];
+    const frames: string[] = [];
+    let failure: unknown;
+    for (const page of [masterPage, playerPage]) {
+      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('websocket', (ws) => {
+        ws.on('framereceived', ({ payload }) =>
+          frames.push(`${page === playerPage ? 'player' : 'gm'} received ${String(payload)}`),
+        );
+        ws.on('framesent', ({ payload }) =>
+          frames.push(`${page === playerPage ? 'player' : 'gm'} sent ${String(payload)}`),
+        );
+      });
+    }
+    try {
+      await createCampaign(masterPage, gm.baseURL);
+      const sources = player.inspect().sources;
+      await action(masterPage, 'CMP-006::CTA::002');
+      await submitOwnFinal(playerPage, gm.baseURL, player.baseURL);
+      await masterPage.getByRole('radio').check();
+      await action(masterPage, 'NET-017::CTA::007');
+      await expect(
+        playerPage.getByText(
+          'Мастер принял заявку к рассмотрению. Персонажи ещё не допущены в кампанию.',
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await action(masterPage, 'NET-017::CTA::010');
+      await expect(form(masterPage, 'NET-018')).toBeVisible();
+      if (outcome !== 'REJECT') {
+        await action(masterPage, 'NET-018::CTA::002');
+        await masterPage
+          .getByLabel('Масса одобрена', { exact: true })
+          .setChecked(outcome !== 'BLOCKED');
+        await masterPage.getByLabel('Деньги определены', { exact: true }).check();
+        await masterPage.getByLabel('Сумма стартовых денег', { exact: true }).fill('42');
+        await masterPage.getByLabel('Состав имущества подтверждён', { exact: true }).check();
+        const unresolved = masterPage.getByRole('button', {
+          name: 'Исходные неопределённые позиции разобраны',
+          exact: true,
+        });
+        if (await unresolved.count()) await unresolved.click();
+        await masterPage
+          .getByRole('button', { name: 'Сохранить правки копии', exact: true })
+          .click();
+        await expect(
+          masterPage.getByRole('combobox', { name: 'Персонаж набора', exact: true }),
+        ).toBeEnabled();
+        while (await masterPage.locator('[data-atlas-action-key="NET-019::CTA::004"]').count()) {
+          await action(masterPage, 'NET-019::CTA::004');
+          const request = masterPage.getByRole('combobox', {
+            name: 'Исходная заявка',
+            exact: true,
+          });
+          await request.selectOption({ index: 1 });
+          await masterPage
+            .getByRole('button', { name: 'Проверить и сохранить решение по оружию', exact: true })
+            .click();
+          await action(masterPage, 'GM-019::CTA::005');
+          await expect(form(masterPage, 'NET-019')).toBeVisible();
+        }
+        await action(masterPage, 'NET-019::CTA::002');
+        await action(masterPage, 'NET-018::CTA::003');
+        const assignment = form(masterPage, 'NET-020');
+        await assignment
+          .getByRole('combobox', { name: 'Группа', exact: true })
+          .selectOption('START');
+        await assignment.getByLabel('Локация', { exact: true }).fill('Лагерь');
+        await assignment
+          .getByRole('button', { name: 'Сохранить правки копии', exact: true })
+          .click();
+        await expect(
+          assignment.getByRole('combobox', { name: 'Персонаж набора', exact: true }),
+        ).toBeEnabled();
+        await action(masterPage, 'NET-020::CTA::002');
+      }
+      await action(masterPage, 'NET-018::CTA::004');
+      if (outcome === 'REJECT') {
+        await action(masterPage, 'NET-021::CTA::002');
+        const rejection = form(masterPage, 'NET-022');
+        await rejection
+          .getByLabel('Причина окончательного отказа', { exact: true })
+          .fill('Нужно другое снаряжение');
+        await rejection.getByRole('button', { name: 'Сохранить причину', exact: true }).click();
+        await action(masterPage, 'NET-022::CTA::003');
+        await expect(form(playerPage, 'NET-007')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await expect(
+          playerPage.getByText('Причина: Нужно другое снаряжение', { exact: true }),
+        ).toBeVisible();
+        expect(gm.inspect().copies).toEqual([]);
+      } else {
+        await action(masterPage, 'NET-021::CTA::005');
+        await expect(form(playerPage, 'NET-027')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        expect(gm.inspect().copies).toHaveLength(1);
+        expect(gm.inspect().copies[0]!['lifecycle_state']).toBe('PROPOSED');
+        await expect(
+          playerPage.getByRole('region', { name: 'Согласование набора персонажей' }),
+        ).toBeVisible();
+        await action(playerPage, outcome === 'DECLINE' ? 'NET-027::CTA::004' : 'NET-027::CTA::003');
+        await expect(form(playerPage, outcome === 'DECLINE' ? 'NET-007' : 'NET-006')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        expect(gm.inspect().copies[0]!['lifecycle_state']).toBe(
+          outcome === 'DECLINE' ? 'DECLINED' : outcome === 'BLOCKED' ? 'PROPOSED' : 'ACTIVE',
+        );
+        if (outcome === 'BLOCKED')
+          await expect(
+            playerPage.getByText('Остаётся в лобби до подтверждения блокирующих условий.', {
+              exact: true,
+            }),
+          ).toBeVisible();
+      }
+      const copies = gm.inspect().copies;
+      expect(player.inspect().sources).toEqual(sources);
+      await gm.restart();
+      await player.restart();
+      await masterPage.reload();
+      await playerPage.reload();
+      await expect(
+        form(playerPage, outcome === 'REJECT' || outcome === 'DECLINE' ? 'NET-007' : 'NET-006'),
+      ).toBeVisible({ timeout: player.operationTimeoutMs });
+      await expect(form(masterPage, outcome === 'REJECT' ? 'NET-022' : 'NET-021')).toBeVisible();
+      expect(gm.inspect().copies).toEqual(copies);
+      expect(player.inspect().sources).toEqual(sources);
+      if (outcome === 'REJECT' || outcome === 'DECLINE') {
+        await action(playerPage, 'NET-007::CTA::003');
+        await expect(form(playerPage, 'APP-002')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+      }
+      expect(errors).toEqual([]);
+      expect(gm.errors).toEqual([]);
+      expect(player.errors).toEqual([]);
+    } catch (error) {
+      failure = error;
+      await info.attach('admission-wire', { body: frames.join('\n'), contentType: 'text/plain' });
+      await info.attach('admission-state', {
+        body: JSON.stringify({
+          gm: safeNetworkInspection(gm),
+          player: safeNetworkInspection(player),
+          errors,
+        }),
+        contentType: 'application/json',
+      });
+      throw error;
+    } finally {
+      await scenario.close(failure);
+    }
+  });
+}
+
 test('GM reviews an actual owner request, delivers live decisions and restores the same queue after both Node processes restart', async ({
   browser,
 }) => {

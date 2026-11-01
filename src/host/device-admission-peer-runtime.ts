@@ -70,10 +70,18 @@ import {
   type PeerRequestHeader,
 } from './device-admission-peer-response.js';
 import { validateFinalAdmissionCandidate } from './device-admission-candidate.js';
+import { createCampaignAdmissionPeerRuntime } from './campaign-admission-peer-runtime.js';
+import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import { readCampaignAdmissionAvailability } from '../persistence/campaign-admission-decision.js';
+import {
+  decodeAdmissionPeerCommand,
+  decodeAdmissionCapacityCommand,
+  encodeAdmissionCapacityResponse,
+  encodeAdmissionPeerResponse,
+} from './campaign-admission-peer-codec.js';
 import {
   canonicalPostSaveJson,
   postSaveSha256,
-  resolveStoredLocalCharacterExportBaseline,
   isStoredLocalCharacterExportBaselineCompatible,
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
@@ -233,19 +241,44 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
   const validateOwner = (owner: CampaignPrivateOwner): void => {
     validateMasterSecretVerifier(owner.verifier);
   };
+  const admissionLimits = {
+    maxPublicationBytes: limits.maxSubmitBodyBytes,
+    maxChunkBytes: limits.maxChunkBytes,
+    maxWitnessBytes: limits.maxWitnessBytes,
+    timeoutMs: limits.timeoutMs,
+  };
+  const admission = createCampaignAdmissionPeerRuntime({
+    database: d.database,
+    baseline: d.baseline,
+    executor: d.executor,
+    limits: admissionLimits,
+    validateOwner,
+    source,
+    principal: authenticatedPrincipal,
+    reserve: (bytes) => {
+      if (
+        activeTransfers >= limits.maxActiveTransfers ||
+        bytes > limits.maxStagedBytes - stagedBytes
+      )
+        return false;
+      activeTransfers++;
+      stagedBytes += bytes;
+      return true;
+    },
+    release: (bytes) => {
+      activeTransfers--;
+      stagedBytes -= bytes;
+    },
+  });
   function requireCompatibleBaseline(id: string): void {
     if (!isStoredLocalCharacterExportBaselineCompatible(d.baseline, id))
       return fail('INCOMPATIBLE_BASELINE');
-    resolveStoredLocalCharacterExportBaseline(d.baseline, id);
   }
   const validateCandidateBaseline: HostedCandidateBaselineGuard = (s) => {
     requireCompatibleBaseline(s.campaign.baselineVersion);
     requireCompatibleBaseline(s.candidateBaselineVersion);
   };
-  function source(c: Connection): {
-    principal: HostedNetworkPrincipal;
-    campaign: CurrentPausedCampaignHeader;
-  } {
+  function authenticatedPrincipal(c: Connection): HostedNetworkPrincipal {
     const material = loadNetworkInstallation(d.database),
       host = campaignPeerPublicIdentity(material);
     if (!same(host, c.channel.hostIdentity) || loadDeviceId(d.database) !== host.ownerDeviceId)
@@ -253,20 +286,20 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     const peer = validateCampaignPeerPublicIdentity(c.channel.deviceIdentity);
     // This installation's UUID/key is already known, unlike a foreign device's first pin.
     if (peer.ownerDeviceId === host.ownerDeviceId && !same(peer, host)) return fail('UNAVAILABLE');
-    const campaign = readHostedCurrentPausedCampaign(
-      d.database,
-      c.handle.campaignId,
-      validateOwner,
-    );
-    requireCompatibleBaseline(campaign.baselineVersion);
     return {
-      principal: {
-        hostOwnerDeviceId: host.ownerDeviceId,
-        campaignId: campaign.campaignId,
-        peerIdentity: peer,
-      },
-      campaign,
+      hostOwnerDeviceId: host.ownerDeviceId,
+      campaignId: c.handle.campaignId,
+      peerIdentity: peer,
     };
+  }
+  function source(c: Connection): {
+    principal: HostedNetworkPrincipal;
+    campaign: CurrentPausedCampaignHeader;
+  } {
+    const principal = authenticatedPrincipal(c),
+      campaign = readHostedCurrentPausedCampaign(d.database, principal.campaignId, validateOwner);
+    requireCompatibleBaseline(campaign.baselineVersion);
+    return { principal, campaign };
   }
   function requestCurrent(
     review: HostedRequestReviewCurrent,
@@ -279,6 +312,23 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     )
       return fail('UNAVAILABLE');
     return current;
+  }
+  function admissionAvailability(principal: HostedNetworkPrincipal) {
+    const origin = readHostedCampaignCreationOrigin(
+      d.database,
+      principal.campaignId,
+      validateOwner,
+    );
+    return readCampaignAdmissionAvailability(
+      d.database,
+      {
+        ownerDeviceId: principal.hostOwnerDeviceId,
+        campaignId: principal.campaignId,
+        gmLocalContextId: origin.command.request.payload.gmLocalContextId,
+      },
+      validateOwner,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+    );
   }
   function acknowledged(
     c: Connection,
@@ -457,6 +507,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         verified.response = response;
       }),
       validateCandidateBaseline,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
     );
     if (
       verified.response === undefined ||
@@ -494,6 +545,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         }
       }),
       validateCandidateBaseline,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
     );
     if (
       verified.response === undefined ||
@@ -735,7 +787,10 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     }
     if (command.campaignCheckpointSha256 !== campaign.checkpointSha256)
       return fail('STALE_REVISION');
-    if (command.candidates.length > campaign.activePlayerCapacity - campaign.activePcCount)
+    if (
+      command.candidates.length >
+      campaign.activePlayerCapacity - admissionAvailability(principal).occupiedCampaignPlaceCount
+    )
       return fail('CAPACITY_EXCEEDED');
     for (const candidate of command.candidates)
       requireCompatibleBaseline(candidate.descriptor.baselineVersion);
@@ -845,8 +900,6 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       }
       const { principal, campaign } = source(c);
       if (!same(batch.campaignProof, proof(campaign))) return fail('STALE_REVISION');
-      if (batch.candidates.length > campaign.activePlayerCapacity - campaign.activePcCount)
-        return fail('CAPACITY_EXCEEDED');
       const semanticBodyJson = deviceAdmissionSubmitSemanticBody(
         stage.begin.commandId,
         batch.batchSha256,
@@ -925,8 +978,6 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         (s) => {
           if (!same(s.campaign, campaign) || !same(proof(s.campaign), batch.campaignProof))
             return fail('STALE_REVISION');
-          if (batch.candidates.length > s.campaign.activePlayerCapacity - s.campaign.activePcCount)
-            return fail('CAPACITY_EXCEEDED');
         },
       );
     } finally {
@@ -1058,6 +1109,28 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         source(c);
         while (!closed && !channel.closed) {
           const request = await channel.receiveRequest();
+          const capacityCommand = decodeAdmissionCapacityCommand(request.bodyJson);
+          if (capacityCommand !== null) {
+            const result = await d.executor.run(handle, () =>
+              admission.capacity(c, capacityCommand),
+            );
+            await channel.respond(request.sequenceNumber, encodeAdmissionCapacityResponse(result));
+            continue;
+          }
+          const admissionCommand = decodeAdmissionPeerCommand(request.bodyJson);
+          if (admissionCommand !== null) {
+            const result = await d.executor.run(handle, () =>
+              admission.execute(c, admissionCommand),
+            );
+            await channel.respond(
+              request.sequenceNumber,
+              encodeAdmissionPeerResponse(result, {
+                maxPublicationBytes: admissionLimits.maxPublicationBytes,
+                maxChunkBytes: admissionLimits.maxChunkBytes,
+              }),
+            );
+            continue;
+          }
           const command = decodeDeviceAdmissionPeerCommand(request.bodyJson, commandLimits);
           const result = await d.executor.run(handle, () => execute(c, command, request.bodyJson));
           await channel.respond(request.sequenceNumber, encodeDeviceAdmissionPeerResponse(result));
@@ -1068,6 +1141,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
           throw new DeviceAdmissionPeerRuntimeError('CHANNEL_FAILED');
         }
       } finally {
+        admission.close(c);
         if (c.stage !== null) drop(c.stage);
         connections.delete(c);
         try {
@@ -1180,6 +1254,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     closed = true;
     const tasks: Promise<void>[] = [];
     for (const c of connections) {
+      admission.close(c);
       if (c.stage !== null) drop(c.stage);
       c.channel.close();
       if (c.task !== null) tasks.push(c.task);

@@ -6,12 +6,21 @@ import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js'
 import { NETWORK_APPLICATION_TABLES } from './migrations/0010-network-application.js';
 import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
 import {
+  CAMPAIGN_ADMISSION_IDENTITIES,
+  CAMPAIGN_ADMISSION_TABLES,
+} from './migrations/0012-campaign-admission.js';
+import {
   assertNetworkTabApplicationCanClose,
   networkApplicationStorage,
   NetworkApplicationStoreError,
   validateNetworkTabApplicationState,
 } from './network-local-application.js';
 import type { RevisionTriple } from './store.js';
+import {
+  validateLocalAdmissionTab,
+  assertLocalAdmissionTabMutable,
+  validateLocalAdmissionReleasedTab,
+} from './local-campaign-admission.js';
 
 export interface LocalNetworkTabEntryInput {
   readonly entryCommandId: string;
@@ -25,6 +34,15 @@ export interface LocalNetworkTabEntryInput {
     readonly schemaVersion: 1;
     readonly clientRequestJson: string;
     readonly sourceFinalUuidOrNull: string | null;
+  };
+  /** A real additional tab prepared by the owner, not an APP navigation or a second SUBMIT. */
+  readonly admissionEntry?: {
+    readonly schemaVersion: 1;
+    readonly preparationId: string;
+    readonly requestId: string;
+    readonly admissionBatchId: string;
+    readonly proposalChecksum: string;
+    readonly campaignCharacterId: string;
   };
 }
 export interface LocalNetworkTab extends RevisionTriple {
@@ -183,7 +201,11 @@ function input(value: unknown, code: LocalNetworkTabStoreCode): LocalNetworkTabE
   const candidate = object(value, undefined, code);
   const row = object(
     candidate,
-    [...inputKeys, ...('applicationEntry' in candidate ? ['applicationEntry'] : [])],
+    [
+      ...inputKeys,
+      ...('applicationEntry' in candidate ? ['applicationEntry'] : []),
+      ...('admissionEntry' in candidate ? ['admissionEntry'] : []),
+    ],
     code,
   );
   const result = {
@@ -197,7 +219,12 @@ function input(value: unknown, code: LocalNetworkTabStoreCode): LocalNetworkTabE
     ...('applicationEntry' in row
       ? { applicationEntry: applicationEntry(row['applicationEntry'], code) }
       : {}),
+    ...('admissionEntry' in row
+      ? { admissionEntry: admissionEntry(row['admissionEntry'], code) }
+      : {}),
   };
+  if (result.applicationEntry !== undefined && result.admissionEntry !== undefined)
+    return fail(code);
   if (result.applicationEntry !== undefined) {
     const nav = JSON.parse(result.applicationEntry.clientRequestJson) as Row;
     if (
@@ -218,6 +245,34 @@ function input(value: unknown, code: LocalNetworkTabStoreCode): LocalNetworkTabE
   )
     return fail(code);
   return result;
+}
+function admissionEntry(
+  value: unknown,
+  code: LocalNetworkTabStoreCode,
+): NonNullable<LocalNetworkTabEntryInput['admissionEntry']> {
+  const row = object(
+    value,
+    [
+      'schemaVersion',
+      'preparationId',
+      'requestId',
+      'admissionBatchId',
+      'proposalChecksum',
+      'campaignCharacterId',
+    ],
+    code,
+  );
+  if (row['schemaVersion'] !== 1) return fail(code);
+  const checksum = text(row['proposalChecksum'], code);
+  if (!/^[0-9a-f]{64}$/u.test(checksum)) return fail(code);
+  return {
+    schemaVersion: 1,
+    preparationId: uuid(row['preparationId'], code),
+    requestId: text(row['requestId'], code),
+    admissionBatchId: uuid(row['admissionBatchId'], code),
+    proposalChecksum: checksum,
+    campaignCharacterId: uuid(row['campaignCharacterId'], code),
+  };
 }
 function applicationEntry(
   value: unknown,
@@ -263,13 +318,17 @@ function requireSchema(db: Database.Database): void {
   const row = db
     .prepare<[], { version: unknown }>('SELECT MAX(version) AS version FROM schema_migration')
     .get();
-  if (row?.version !== 9 && row?.version !== 10 && row?.version !== 11) return fail();
+  if (row?.version !== 9 && row?.version !== 10 && row?.version !== 11 && row?.version !== 12)
+    return fail();
   for (const table of LOCAL_NETWORK_TAB_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 10 || row.version === 11)
+  if (row.version === 10 || row.version === 11 || row.version === 12)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 11)
+  if (row.version === 11 || row.version === 12)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (row.version === 12)
+    for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 function owner(db: Database.Database, device: string): void {
@@ -313,8 +372,14 @@ function journal(
     receiptJson = text(row['receipt_json']);
   const request = input(JSON.parse(requestJson) as unknown, 'CORRUPT_STORAGE');
   if (
+    request.admissionEntry !== undefined &&
+    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] !==
+      12
+  )
+    return fail();
+  if (
     request.applicationEntry !== undefined &&
-    !([10, 11] as readonly unknown[]).includes(
+    !([10, 11, 12] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )
@@ -493,7 +558,7 @@ function closeJournal(
   const request = closeInput(JSON.parse(requestJson) as unknown, 'CORRUPT_STORAGE');
   if (
     request.applicationExit !== undefined &&
-    !([10, 11] as readonly unknown[]).includes(
+    !([10, 11, 12] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )
@@ -538,8 +603,13 @@ function tabState(
     const version = (
       db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
     )['version'];
-    if ((version === 10 || version === 11) && validateApplication)
+    if ((version === 10 || version === 11 || version === 12) && validateApplication)
       validateNetworkTabApplicationState(db, record.tab);
+    if (version === 12 && validateApplication) {
+      const saved = journal(db, device, record.tab.entryCommandId) ?? fail();
+      if (saved.request.admissionEntry !== undefined)
+        validateLocalAdmissionTab(db, record.tab, saved.request);
+    }
     return { currentTab: record.tab, closureReceiptOrNull: null };
   }
   if (indexedClosure?.['close_command_id'] !== record.retirementCommandIdOrNull) return fail();
@@ -637,6 +707,13 @@ export function readActiveLocalNetworkTab(
   db: Database.Database,
   ownerDeviceId: string,
 ): LocalNetworkTab | null {
+  return readActiveTab(db, ownerDeviceId, true);
+}
+function readActiveTab(
+  db: Database.Database,
+  ownerDeviceId: string,
+  validateApplication: boolean,
+): LocalNetworkTab | null {
   return read(db, ownerDeviceId, () => {
     const row = at(db, 'local_network_active_tab', 'owner_device_id', ownerDeviceId);
     if (row === undefined) {
@@ -668,7 +745,8 @@ export function readActiveLocalNetworkTab(
     }
     if (record['kind'] !== 'TARGET' || record['closeCommandId'] !== null) return fail();
     const current =
-      tabState(db, ownerDeviceId, uuid(record['networkScopeId'])).currentTab ?? fail();
+      tabState(db, ownerDeviceId, uuid(record['networkScopeId']), validateApplication).currentTab ??
+      fail();
     if (current.tabId !== record['tabId']) return fail();
     return current;
   });
@@ -729,7 +807,7 @@ function assertUnused(db: Database.Database, id: string): void {
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version === 10 || version === 11)
+  if (version === 10 || version === 11 || version === 12)
     for (const [table, columns] of [
       ['local_network_application_event', ['event_id', 'receipt_id']],
       ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -737,13 +815,18 @@ function assertUnused(db: Database.Database, id: string): void {
       for (const column of columns)
         if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
           return fail('IDEMPOTENCY_CONFLICT');
-  if (version === 11)
+  if (version === 11 || version === 12)
     for (const [table, columns] of [
       ['gm_request_queue_event', ['event_id']],
       ['hosted_device_request_decision', ['command_id', 'receipt_id']],
       ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
       ['local_network_lane_binding', ['command_id']],
     ] as const)
+      for (const column of columns)
+        if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
+          return fail('IDEMPOTENCY_CONFLICT');
+  if (version === 12)
+    for (const [table, columns] of CAMPAIGN_ADMISSION_IDENTITIES)
       for (const column of columns)
         if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
           return fail('IDEMPOTENCY_CONFLICT');
@@ -756,6 +839,16 @@ export function writeLocalNetworkTabApplicationState(
   target: RevisionTriple,
   lifecycleState: LocalNetworkTab['lifecycleState'],
   eventId: string,
+): void {
+  writeApplicationState(db, previous, target, lifecycleState, eventId, false);
+}
+function writeApplicationState(
+  db: Database.Database,
+  previous: LocalNetworkTab,
+  target: RevisionTriple,
+  lifecycleState: LocalNetworkTab['lifecycleState'],
+  eventId: string,
+  admissionCompanion: boolean,
 ): void {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   requireSchema(db);
@@ -780,6 +873,23 @@ export function writeLocalNetworkTabApplicationState(
   )
     return fail();
   const next = object(networkApplicationStorage.checked(head));
+  if (admissionCompanion) {
+    const input = object(proof['input']),
+      mutation = object(input['mutation']);
+    if (
+      (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+        'version'
+      ] !== 12 ||
+      next['schemaVersion'] !== 2 ||
+      input['eventId'] !== eventId ||
+      input['ownerDeviceId'] !== previous.ownerDeviceId ||
+      input['networkScopeId'] !== previous.networkScopeId ||
+      (mutation['kind'] === 'ADMISSION_ADVANCE'
+        ? lifecycleState !== previous.lifecycleState
+        : mutation['kind'] !== 'ADMISSION_RETURN' || lifecycleState !== 'UNBOUND')
+    )
+      return fail('INVALID_INPUT');
+  }
   if (
     !same(Object.fromEntries(revisionKeys.map((key) => [key, next[key]])), target) ||
     target.actorVisibilityRevision !== previous.actorVisibilityRevision ||
@@ -788,7 +898,7 @@ export function writeLocalNetworkTabApplicationState(
     target.projectionRevision !== previous.projectionRevision + 1
   )
     return fail();
-  if (next['schemaVersion'] === 2) {
+  if (next['schemaVersion'] === 2 && !admissionCompanion) {
     // The legacy PENDING receipt is immutable. Replay its separate decision/lane journals
     // against the proposed anchor before accepting the new lifecycle, without rereading the tab.
     validateNetworkTabApplicationState(db, { ...previous, ...target, lifecycleState });
@@ -799,7 +909,7 @@ export function writeLocalNetworkTabApplicationState(
       (request !== null && request['closureOrNull'] === null ? 'PROVISIONAL' : 'UNBOUND')
     )
       return fail();
-  } else return fail();
+  } else if (!admissionCompanion) return fail();
   const anchor = { ...previous, ...target, lifecycleState, retirementCommandIdOrNull: null };
   const result = db
     .prepare(
@@ -848,12 +958,13 @@ export function commitLocalNetworkTabEntry(
   if (db.inTransaction) return fail('INVALID_INPUT');
   return safe(() => {
     const request = input(value, 'INVALID_INPUT');
+    if (request.admissionEntry !== undefined) return fail('INVALID_INPUT');
     return db
       .transaction(() => {
         requireSchema(db);
         if (
           request.applicationEntry !== undefined &&
-          !([10, 11] as readonly unknown[]).includes(
+          !([10, 11, 12] as readonly unknown[]).includes(
             (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
               'version'
             ],
@@ -961,11 +1072,17 @@ export function commitLocalNetworkTabClose(
         const schemaVersion = (
           db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
         )['version'];
-        if (request.applicationExit !== undefined && schemaVersion !== 10 && schemaVersion !== 11)
+        if (
+          request.applicationExit !== undefined &&
+          schemaVersion !== 10 &&
+          schemaVersion !== 11 &&
+          schemaVersion !== 12
+        )
           return fail('INVALID_INPUT');
-        if (schemaVersion === 10 || schemaVersion === 11) {
+        if (schemaVersion === 10 || schemaVersion === 11 || schemaVersion === 12) {
           try {
             assertNetworkTabApplicationCanClose(db, current);
+            assertLocalAdmissionTabMutable(db, current);
           } catch (error: unknown) {
             if (error instanceof NetworkApplicationStoreError && error.code === 'UNAVAILABLE')
               return fail('CLOSE_UNAVAILABLE');
@@ -1026,3 +1143,180 @@ export function commitLocalNetworkTabClose(
       .immediate();
   });
 }
+
+/** Internal companions for one owner admission transaction; they never select a new tab. */
+export const localAdmissionTabStorage = {
+  /** The owning journal immediately replays the completed history before its final guard. */
+  writeApplicationState(
+    this: void,
+    db: Database.Database,
+    previous: LocalNetworkTab,
+    target: RevisionTriple,
+    lifecycleState: LocalNetworkTab['lifecycleState'],
+    eventId: string,
+  ): void {
+    writeApplicationState(db, previous, target, lifecycleState, eventId, true);
+  },
+  parseClose: (value: unknown): LocalNetworkTabCloseInput => closeInput(value, 'CORRUPT_STORAGE'),
+  /** The terminal owner journal proves retirement; the original tab and pointer stay live. */
+  retirePrepared(db: Database.Database, value: LocalNetworkTabCloseInput): void {
+    if (!db.inTransaction) return fail('INVALID_INPUT');
+    const request = closeInput(value, 'INVALID_INPUT');
+    requireSchema(db);
+    owner(db, request.ownerDeviceId);
+    const current = tabState(db, request.ownerDeviceId, request.networkScopeId, false).currentTab;
+    if (
+      current === null ||
+      current.lifecycleState !== 'UNBOUND' ||
+      request.applicationExit !== undefined
+    )
+      return fail('CLOSE_UNAVAILABLE');
+    const entry = journal(db, request.ownerDeviceId, current.entryCommandId) ?? fail();
+    validateLocalAdmissionReleasedTab(db, entry.request, request);
+    assertNetworkTabApplicationCanClose(db, current);
+    if (readActiveTab(db, request.ownerDeviceId, false)?.networkScopeId === request.networkScopeId)
+      return fail('CLOSE_UNAVAILABLE');
+    if (!same(networkApplicationStorage.vectorOf(current), request.expectedRevisions))
+      return fail('STALE_REVISION');
+    assertUnused(db, request.closeCommandId);
+    assertUnused(db, request.closeReceiptId);
+    const receipt = closeReceiptFor(request, current.tabId, false),
+      record = {
+        ...current,
+        ...receipt.revisions,
+        retirementCommandIdOrNull: request.closeCommandId,
+      };
+    db.prepare('INSERT INTO local_network_tab_close VALUES (?,?,?,?,?,?,?,?)').run(
+      request.closeCommandId,
+      request.closeReceiptId,
+      request.ownerDeviceId,
+      request.networkScopeId,
+      current.tabId,
+      canonical(request),
+      canonical(receipt),
+      sha(canonical({ request, receipt })),
+    );
+    if (
+      db
+        .prepare(
+          'UPDATE local_network_tab SET retirement_command_id=?,record_json=?,record_sha256=? WHERE network_scope_id=? AND owner_device_id=? AND retirement_command_id IS NULL',
+        )
+        .run(
+          request.closeCommandId,
+          canonical(record),
+          sha(canonical(record)),
+          request.networkScopeId,
+          request.ownerDeviceId,
+        ).changes !== 1
+    )
+      return fail('SOURCE_CHANGED');
+  },
+  /** Historical application replay uses the proven pre-close vector, not a resurrected live tab. */
+  historyAnchor(db: Database.Database, device: string, scopeId: string): LocalNetworkTab {
+    return read(db, device, () => {
+      const record = tabRecord(db, device, scopeId) ?? fail('NOT_FOUND'),
+        state = tabState(db, device, scopeId, false);
+      if (state.currentTab !== null) return state.currentTab;
+      const closed = state.closureReceiptOrNull ?? fail();
+      return { ...record.tab, ...closed.sourceRevisions };
+    });
+  },
+  /** Caller has just replayed the original application in this same synchronous transaction. */
+  activeAnchor(db: Database.Database, device: string): LocalNetworkTab | null {
+    if (!db.inTransaction) return fail('INVALID_INPUT');
+    return readActiveTab(db, device, false);
+  },
+  parseEntry: (value: unknown): LocalNetworkTabEntryInput => input(value, 'CORRUPT_STORAGE'),
+  entryAnchor(
+    db: Database.Database,
+    device: string,
+    commandId: string,
+  ): StoredLocalNetworkTabEntry | null {
+    return read(db, device, () => {
+      const saved = journal(db, device, commandId);
+      return saved === null
+        ? null
+        : {
+            ...saved,
+            ...tabState(db, device, saved.request.networkScopeId, false),
+          };
+    });
+  },
+  assertRoom(
+    db: Database.Database,
+    device: string,
+    additional: number,
+    verifiedOriginal: LocalNetworkTab,
+  ): void {
+    if (!db.inTransaction || !Number.isSafeInteger(additional) || additional < 0)
+      return fail('INVALID_INPUT');
+    requireSchema(db);
+    owner(db, device);
+    if (!same(readActiveTab(db, device, false), verifiedOriginal)) return fail('SOURCE_CHANGED');
+    const live = ownedScopes(db, device).filter((scope) => {
+      const current = tabState(
+        db,
+        device,
+        scope,
+        scope !== verifiedOriginal.networkScopeId,
+      ).currentTab;
+      if (scope === verifiedOriginal.networkScopeId && !same(current, verifiedOriginal))
+        return fail('SOURCE_CHANGED');
+      return current !== null;
+    });
+    if (live.length + additional > MAX_LOCAL_PLAYER_TABS) return fail('TAB_LIMIT');
+  },
+  createInactive(db: Database.Database, value: LocalNetworkTabEntryInput): void {
+    if (!db.inTransaction) return fail('INVALID_INPUT');
+    const request = input(value, 'INVALID_INPUT');
+    if (request.admissionEntry === undefined) return fail('INVALID_INPUT');
+    requireSchema(db);
+    if (
+      (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
+        'version'
+      ] !== 12
+    )
+      return fail('INVALID_INPUT');
+    owner(db, request.ownerDeviceId);
+    for (const id of [
+      request.tabId,
+      request.networkScopeId,
+      request.entryCommandId,
+      request.entryReceiptId,
+    ])
+      assertUnused(db, id);
+    const currentTab: LocalNetworkTab = {
+      schemaVersion: 1,
+      ownerDeviceId: request.ownerDeviceId,
+      tabId: request.tabId,
+      networkScopeId: request.networkScopeId,
+      lifecycleState: 'UNBOUND',
+      entryCommandId: request.entryCommandId,
+      entryReceiptId: request.entryReceiptId,
+      ...zero(),
+    };
+    const receipt = receiptFor(request),
+      record = { ...currentTab, retirementCommandIdOrNull: null };
+    db.prepare('INSERT INTO local_network_tab VALUES (?,?,?,?,?,?,?,?,?)').run(
+      request.networkScopeId,
+      request.tabId,
+      request.ownerDeviceId,
+      'UNBOUND',
+      request.entryCommandId,
+      request.entryReceiptId,
+      null,
+      canonical(record),
+      sha(canonical(record)),
+    );
+    db.prepare('INSERT INTO local_network_tab_entry VALUES (?,?,?,?,?,?,?,?)').run(
+      request.entryCommandId,
+      request.entryReceiptId,
+      request.ownerDeviceId,
+      request.networkScopeId,
+      request.tabId,
+      canonical(request),
+      canonical(receipt),
+      sha(canonical({ request, receipt })),
+    );
+  },
+};

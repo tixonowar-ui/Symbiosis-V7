@@ -6,6 +6,7 @@ import { loadDeviceId } from './device-identity.js';
 import { LOCAL_NETWORK_TAB_TABLES } from './migrations/0009-device-admission.js';
 import { NETWORK_APPLICATION_TABLES } from './migrations/0010-network-application.js';
 import { DEVICE_REQUEST_REVIEW_TABLES } from './migrations/0011-device-request-review.js';
+import { CAMPAIGN_ADMISSION_TABLES } from './migrations/0012-campaign-admission.js';
 
 /** Private installation material; it is never a player projection or campaign role. */
 export interface DeviceInstallationIdentityMaterial extends JsonObject {
@@ -138,7 +139,13 @@ function requireSchema(db: Database.Database): void {
   const row = db
     .prepare<[], { version: unknown }>('SELECT MAX(version) AS version FROM schema_migration')
     .get();
-  if (row?.version !== 8 && row?.version !== 9 && row?.version !== 10 && row?.version !== 11)
+  if (
+    row?.version !== 8 &&
+    row?.version !== 9 &&
+    row?.version !== 10 &&
+    row?.version !== 11 &&
+    row?.version !== 12
+  )
     return fail('CORRUPT_STORAGE');
   if (row.version >= 9) {
     for (const table of LOCAL_NETWORK_TAB_TABLES)
@@ -147,8 +154,11 @@ function requireSchema(db: Database.Database): void {
   if (row.version >= 10)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 11)
+  if (row.version === 11 || row.version === 12)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (row.version === 12)
+    for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 function read(

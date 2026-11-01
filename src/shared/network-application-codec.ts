@@ -1,6 +1,11 @@
 import { redactProtocolInputRefusal, wireCodecPrimitives } from './wire-codec.js';
 import type { DecodeResult, EncodeResult } from './wire-protocol.js';
 import { encodeHostMessageV2 } from './wire-v2-codec.js';
+import {
+  admissionGmPresentationValue,
+  isAdmissionGmForm,
+} from './campaign-admission-presentation.js';
+import type { PresentedLayerForm } from './wire-v2-protocol.js';
 import type { PresentedBaseForm, WireV2Vocabulary } from './wire-v2-protocol.js';
 import { networkClientValue } from './device-admission.js';
 import type {
@@ -146,15 +151,22 @@ function candidates(
 function forecast(value: unknown, path: string, selectedCount: number): void {
   const r = exact(
     value,
-    'campaignRevision activePlayerCapacity activePcCount selectedCandidateCount fitsCurrentCapacity',
+    'campaignRevision activePlayerCapacity activePcCount occupiedCampaignPlaceCount selectedCandidateCount fitsCurrentCapacity',
     path,
   );
   revision(r['campaignRevision'], `${path}.campaignRevision`);
   const limit = capacity(r['activePlayerCapacity'], `${path}.activePlayerCapacity`);
   const active = revision(r['activePcCount'], `${path}.activePcCount`);
   if (active > limit) invalid(path, 'active PCs within capacity', null);
+  const occupied = revision(r['occupiedCampaignPlaceCount'], `${path}.occupiedCampaignPlaceCount`);
+  if (occupied < active || occupied > limit)
+    invalid(path, 'occupied places include active PCs within capacity', null);
   literal(r['selectedCandidateCount'], selectedCount, `${path}.selectedCandidateCount`);
-  literal(r['fitsCurrentCapacity'], active + selectedCount <= limit, `${path}.fitsCurrentCapacity`);
+  literal(
+    r['fitsCurrentCapacity'],
+    occupied + selectedCount <= limit,
+    `${path}.fitsCurrentCapacity`,
+  );
 }
 function ownCandidates(values: readonly PublicCandidateRef[], lane: unknown, path: string): void {
   if (values.some((v) => v.requestedControllerSeat !== lane)) invalid(path, 'own input lane', null);
@@ -630,9 +642,23 @@ export function networkGmRequestDraftValues(value: unknown): NetworkGmRequestDra
 export function networkGmRequestProjectionValue(value: unknown): Net017Projection {
   const row = exact(
     value,
-    'contextId campaignId stateRevision projectionRevision requestQueueRevision requests selectedRequestIdOrNull activePlayerCapacity occupiedActivePcCount decisionReason commandId returnContext',
+    'contextId campaignId stateRevision projectionRevision requestQueueRevision requests selectedRequestIdOrNull activePlayerCapacity occupiedActivePcCount decisionReason commandId returnContext selectedAdmissionOrNull',
   );
   uuid(row['contextId'], '$.contextId');
+  if (row['selectedAdmissionOrNull'] !== null) {
+    const admission = exact(
+      row['selectedAdmissionOrNull'],
+      'published hasProposed',
+      '$.selectedAdmissionOrNull',
+    );
+    if (
+      typeof admission['published'] !== 'boolean' ||
+      typeof admission['hasProposed'] !== 'boolean' ||
+      (admission['hasProposed'] && !admission['published']) ||
+      row['selectedRequestIdOrNull'] === null
+    )
+      invalid('$.selectedAdmissionOrNull', 'selected admission publication facts', null);
+  }
   const campaignId = uuid(row['campaignId'], '$.campaignId');
   for (const key of ['stateRevision', 'projectionRevision', 'requestQueueRevision'])
     revision(row[key], `$.${key}`);
@@ -860,15 +886,20 @@ export function networkGmRequestHostValue(
     currentQueue < appliedQueue ||
     current.projectionRevision < current.stateRevision ||
     applied.projectionRevision < applied.stateRevision ||
-    current.actorVisibilityRevision !== 0 ||
-    applied.actorVisibilityRevision !== 0
+    current.actorVisibilityRevision > current.stateRevision ||
+    applied.actorVisibilityRevision > applied.stateRevision
   )
     invalid('$.revisions', 'ordered GM queue revision owners', null);
   literal(row['projectionRole'], 'gm', '$.projectionRole');
   const presentation = exact(row['presentation'], 'base layers', '$.presentation');
-  if (list(presentation['layers'], '$.presentation.layers').length !== 0)
-    invalid('$.presentation.layers', 'empty GM queue layers', null);
+  const layers = list(
+    presentation['layers'],
+    '$.presentation.layers',
+  ) as readonly PresentedLayerForm[];
   const base = record(presentation['base'], '$.presentation.base');
+  const admission = typeof base['formId'] === 'string' && isAdmissionGmForm(base['formId']);
+  if (!admission && layers.length !== 0)
+    invalid('$.presentation.layers', 'empty GM queue layers', null);
   if (base['formId'] === 'NET-017') {
     const payload = networkGmRequestProjectionValue(base['roleFilteredPayload']);
     literal(
@@ -898,7 +929,12 @@ export function networkGmRequestHostValue(
     );
   } else if (base['formId'] === 'CMP-006')
     gmQueueCampaignPayload(base['roleFilteredPayload'], scope);
-  else return unrecognized('$.presentation.base.formId', null);
+  else if (admission) {
+    admissionGmPresentationValue(base as unknown as PresentedBaseForm, layers, current);
+    const payload = record(base['roleFilteredPayload'], '$.roleFilteredPayload');
+    literal(payload['contextId'], scope.gmLocalContextId, '$.contextId');
+    literal(payload['campaignId'], scope.campaignId, '$.campaignId');
+  } else return unrecognized('$.presentation.base.formId', null);
   const bindings = list(base['routeBindings'], '$.presentation.base.routeBindings');
   if (bindings.length !== 1)
     invalid('$.presentation.base.routeBindings', 'one campaign binding', null);
@@ -919,7 +955,7 @@ export function networkGmRequestHostValue(
       presentation: {
         assignment: { reason: 'RECONNECT', correlationId: id },
         base: base as unknown as PresentedBaseForm,
-        layers: [],
+        layers,
       },
     },
     vocabulary,

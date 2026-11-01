@@ -1,5 +1,34 @@
 # Передача контекста — 2026-11-01
 
+## #172 — runtime финального допуска
+
+Ветка `codex/172-campaign-copy-admission` от main `d87d02b` после merge
+source prerequisite #199 / PR #200. Предложение A и правило B владельцем
+согласованы. Поручение ограничено завершением #172 до merge и остановкой;
+Ready/Start и следующий backlog не входят в него.
+
+Добавлены отдельные review/proposal/copy/receipt journals, forward0012,
+source-backed пересчёт, GM review/edit/weapon/publish/reject, owner whole-batch
+ACCEPT/DECLINE, подготовка реальных вкладок и восстановление. Исходные FINAL,
+старые миграции, артефакты и конфигурация проверок не меняются.
+Сводка решений — [ADR 0072](../adr/0072-campaign-copy-admission-runtime.md).
+
+Независимое ревью нашло и помогло
+исправить публикацию после commit, MENU/receipt recovery, корреляцию draft,
+same-vector GM/owner изменения и отдельные revision guards. Production
+браузерный прогон выявил неверный OPEN revision delta, сравнение JSON по
+порядку полей и устаревшую live capacity после GM publication. Исправления
+проверяются теми же воспроизводителями. Отдельно прочитаны backend authority
+и storage, игровая механика и browser/host корреляция. Области чтения и
+окончательные результаты прогонов публикуются в PR. Прежние прогоны #199/#171
+не заменяют проверки runtime #172.
+
+Перед merge обязательны полный авторский verify/import:verify/fresh build/
+все E2E, независимое ревью с явными границами и отдельный полный прогон
+финального committed SHA, зелёный CI и совпадение дерева merge с проверенным.
+Размер всего diff, включая новые файлы, проверяется тем же классификатором
+CI. Исключение PR #185 на эту задачу не распространяется.
+
 ## #199 — source prerequisite финального допуска #172
 
 Текущая ветка `codex/199-admission-source-closure`, база main `10eb5b1` после

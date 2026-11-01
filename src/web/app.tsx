@@ -1,4 +1,9 @@
 import type { NetworkGmRequestDraftClientState } from './ws-client.js';
+import { AdmissionGmFields, AdmissionOwnerFields } from './forms/net/admission-fields.js';
+import {
+  isAdmissionGmForm,
+  isAdmissionOwnerForm,
+} from '@shared/campaign-admission-presentation.js';
 import { CreationValidationFields } from './forms/chr/creation-validation-fields.js';
 import {
   CampaignCreationFields,
@@ -234,6 +239,8 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
     snapshot.formId === 'NET-017' ||
+    isAdmissionGmForm(snapshot.formId) ||
+    isAdmissionOwnerForm(snapshot.formId) ||
     isNetworkApplicationForm(snapshot.formId) ||
     snapshot.formId === 'CHR-032' ||
     snapshot.formId === 'CHR-025' ||
@@ -2351,6 +2358,22 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive || layers.length > 0 || networkImageReadPending}>
             <legend>AtlasForm {snapshot.formId}</legend>
+            {isAdmissionOwnerForm(snapshot.formId) ? (
+              <AdmissionOwnerFields formId={snapshot.formId} projection={snapshot.projection} />
+            ) : null}
+            {isAdmissionGmForm(snapshot.formId) ? (
+              <AdmissionGmFields
+                key={`admission:${snapshot.formId}:${snapshot.projection['admissionBatchId'] as string}:${snapshot.projection['selectedReviewCopyId'] as string}:${snapshot.revisions.stateRevision}`}
+                formId={snapshot.formId}
+                projection={snapshot.projection}
+                onEdit={(edit) => {
+                  const result = connectionRef.current?.replaceAdmissionDraft(edit);
+                  setActionNotice(
+                    result?.ok ? null : 'Правки допуска не сохранены. Проверьте поля и соединение.',
+                  );
+                }}
+              />
+            ) : null}
             {snapshot.formId === 'NET-017' ? (
               <NetworkGmRequestFields
                 projection={snapshot.projection}
@@ -2835,6 +2858,8 @@ export function App(): ReactElement {
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
                 snapshot.formId === 'NET-017' ||
+                isAdmissionGmForm(snapshot.formId) ||
+                isAdmissionOwnerForm(snapshot.formId) ||
                 isNetworkApplicationForm(snapshot.formId)
               }
               availableActionKeys={
@@ -2890,13 +2915,32 @@ export function App(): ReactElement {
             />
           </fieldset>
           {layers.map((layer) => (
-            <fieldset key={layer.formId} disabled={!interactive} data-presentation-layer>
+            <fieldset
+              key={layer.formId}
+              disabled={!interactive || layer !== layers.at(-1)}
+              data-presentation-layer
+            >
               <legend>AtlasForm {layer.formId}</legend>
               <AtlasForm
+                playerContentOnly={isAdmissionGmForm(layer.formId)}
                 availableActionKeys={layer.availableActionKeys}
                 formId={layer.formId}
                 projectionContent={
-                  layer.formId === 'CHR-031' ? (
+                  isAdmissionGmForm(layer.formId) ? (
+                    <AdmissionGmFields
+                      key={`admission:${layer.formId}:${layer.projection['admissionBatchId'] as string}:${layer.projection['selectedReviewCopyId'] as string}:${snapshot.revisions.stateRevision}`}
+                      formId={layer.formId}
+                      projection={layer.projection}
+                      onEdit={(edit) => {
+                        const result = connectionRef.current?.replaceAdmissionDraft(edit);
+                        setActionNotice(
+                          result?.ok
+                            ? null
+                            : 'Правки допуска не сохранены. Проверьте поля и соединение.',
+                        );
+                      }}
+                    />
+                  ) : layer.formId === 'CHR-031' ? (
                     <InvalidWeaponProfileFields layer={layer} />
                   ) : (
                     <AbandonmentDialogFields layer={layer} />
