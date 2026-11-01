@@ -598,7 +598,7 @@
         "formIds": [
           "NET-006"
         ],
-        "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+        "guards": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
         "result": "The admitted device explicitly confirms or withdraws Ready for its exact included ACTIVE set. Blocked PROPOSED copies remain visibly outside that set; admission acceptance itself never confirms Ready or starts the campaign.",
         "state": "LOBBY_READY"
       }
@@ -698,7 +698,7 @@
           "GRP-001",
           "PLY-001"
         ],
-        "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "guards": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
         "result": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
         "state": "LOBBY_START"
       }

@@ -1,7 +1,7 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1697
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1698
  * transitions, 66 journeys, 91 requirements, 2448 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
@@ -38,8 +38,8 @@ const SCHEMA_VERSION = '1.2.0';
 const ATLAS_VERSION = '1.8';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.8 has 1,261 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_261;
+/** Atlas v1.8 has 1,262 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_262;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -1602,12 +1602,12 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_697);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_698);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_697,
+    1_698,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1816,12 +1816,12 @@ export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_697);
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_698);
   expectCount(
     WHERE,
     'ADR 0052 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_697,
+    1_698,
   );
 
   const advisor = adr0049Form(forms, 'CHR-041');
@@ -2818,6 +2818,7 @@ const ADR0069_CONTRACTS = [
           'Открыть «Настройки кампании»',
           'Открыть активную кампанию',
           'Вернуться на главный экран мастера',
+          'Подключение к кампании',
         ],
         executableOperationIds: [],
         workflowCommandIds: [],
@@ -3164,7 +3165,7 @@ const ADR0069_CONTRACTS = [
         state: 'LOBBY_READY',
         formIds: ['NET-006'],
         guards:
-          'Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.',
+          'UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.',
         result:
           'The admitted device explicitly confirms or withdraws Ready for its exact included ACTIVE set. Blocked PROPOSED copies remain visibly outside that set; admission acceptance itself never confirms Ready or starts the campaign.',
       },
@@ -4111,7 +4112,7 @@ export function assertAdr0069RequestReview(root: JsonObject): void {
   const counts = asObject(root['counts'], WHERE, 'counts');
   for (const [key, count] of Object.entries({
     forms: 376,
-    transitions: 1697,
+    transitions: 1698,
     workflowCommands: 111,
     qaScenarios: 2448,
   })) {

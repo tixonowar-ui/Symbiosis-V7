@@ -3259,6 +3259,7 @@ export type ActionKey =
   | "CMP-007::CTA::003"
   | "CMP-007::CTA::004"
   | "CMP-007::CTA::005"
+  | "CMP-007::CTA::006"
   | "CMP-008::CTA::001"
   | "CMP-008::CTA::002"
   | "CMP-008::CTA::003"

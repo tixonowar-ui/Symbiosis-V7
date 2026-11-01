@@ -2462,7 +2462,7 @@
           "formIds": [
             "NET-006"
           ],
-          "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+          "guards": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
           "result": "The admitted device explicitly confirms or withdraws Ready for its exact included ACTIVE set. Blocked PROPOSED copies remain visibly outside that set; admission acceptance itself never confirms Ready or starts the campaign."
         }
       ],
@@ -2580,7 +2580,7 @@
             "GRP-001",
             "PLY-001"
           ],
-          "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+          "guards": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "result": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene."
         }
       ],
@@ -13350,7 +13350,8 @@
             "Открыть «Лобби подключений и Start»",
             "Открыть «Настройки кампании»",
             "Открыть активную кампанию",
-            "Вернуться на главный экран мастера"
+            "Вернуться на главный экран мастера",
+            "Подключение к кампании"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -20947,7 +20948,8 @@
             "Открыть «Лобби подключений и Start»",
             "Открыть «Настройки кампании»",
             "Открыть активную кампанию",
-            "Вернуться на главный экран мастера"
+            "Вернуться на главный экран мастера",
+            "Подключение к кампании"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -38592,7 +38594,7 @@
           {
             "label": "Готов",
             "targetFormId": "NET-006",
-            "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+            "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
             "kind": "workflow-command",
             "actionKey": "NET-006::CTA::003",
             "availabilityInputs": [
@@ -38648,7 +38650,7 @@
           {
             "label": "Отменить готовность",
             "targetFormId": "NET-006",
-            "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+            "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
             "kind": "workflow-command",
             "actionKey": "NET-006::CTA::004",
             "availabilityInputs": [
@@ -38706,7 +38708,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CAMPAIGN-READY-SET",
-            "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+            "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -38782,13 +38784,13 @@
         {
           "from": "NET-006",
           "trigger": "Готов",
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
           "kind": "workflow-command"
         },
         {
           "from": "NET-006",
           "trigger": "Отменить готовность",
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
           "kind": "workflow-command"
         }
       ],
@@ -38808,13 +38810,13 @@
         {
           "to": "NET-006",
           "trigger": "Готов",
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
           "kind": "workflow-command"
         },
         {
           "to": "NET-006",
           "trigger": "Отменить готовность",
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
           "kind": "workflow-command"
         }
       ],
@@ -43406,7 +43408,7 @@
           {
             "label": "Начать кампанию",
             "targetFormId": "GM-001",
-            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+            "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
             "kind": "workflow-command",
             "actionKey": "NET-016::CTA::002",
             "availabilityInputs": [
@@ -43518,7 +43520,7 @@
           {
             "label": "Сохранить начальное время",
             "targetFormId": "NET-016",
-            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+            "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
             "kind": "workflow-command",
             "actionKey": "NET-016::CTA::004",
             "availabilityInputs": [
@@ -43576,7 +43578,7 @@
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-CAMPAIGN-START",
-            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+            "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -43618,7 +43620,7 @@
           },
           {
             "commandId": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
-            "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+            "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -43692,7 +43694,7 @@
         {
           "from": "NET-016",
           "trigger": "Сохранить начальное время",
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
           "kind": "workflow-command"
         }
       ],
@@ -43712,7 +43714,7 @@
         {
           "to": "GM-001",
           "trigger": "Начать кампанию",
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "kind": "workflow-command"
         },
         {
@@ -43724,7 +43726,7 @@
         {
           "to": "NET-016",
           "trigger": "Сохранить начальное время",
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
           "kind": "workflow-command"
         }
       ],
@@ -50907,6 +50909,12 @@
           "trigger": "Вернуться к созданной кампании",
           "guard": "projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; returnContext.originFormId=CMP-006; campaignId and creationReceiptId match initiating context; no mutation in flight; navigation only, no Start.",
           "kind": "safe-return"
+        },
+        {
+          "from": "CMP-007",
+          "trigger": "Подключение к кампании",
+          "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+          "kind": "safe-return"
         }
       ],
       "transitionsOut": [
@@ -51041,14 +51049,15 @@
           "Открыть «Лобби подключений и Start»",
           "Открыть «Настройки кампании»",
           "Открыть активную кампанию",
-          "Вернуться на главный экран мастера"
+          "Вернуться на главный экран мастера",
+          "Подключение к кампании"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Открыть «Лобби подключений и Start»; Открыть «Настройки кампании»; Открыть активную кампанию; Вернуться на главный экран мастера."
+          "Разрешённые видимые действия/CTA именно этой формы: Открыть «Лобби подключений и Start»; Открыть «Настройки кампании»; Открыть активную кампанию; Вернуться на главный экран мастера; Подключение к кампании."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -51367,6 +51376,60 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Подключение к кампании",
+            "targetFormId": "CMP-006",
+            "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+            "kind": "safe-return",
+            "actionKey": "CMP-007::CTA::006",
+            "availabilityInputs": [
+              "actorId",
+              "effectiveController",
+              "controllerSeat",
+              "projectionRole",
+              "scene",
+              "phase",
+              "turnOrReactionWindow",
+              "stateRevision",
+              "projectionRevision",
+              "actorVisibilityRevision",
+              "HP/OE/effects/position/range",
+              "inventory/equipment/ammo/cooldowns",
+              "consent/masterPredicate state",
+              "game time/local context"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "action budget",
+              "HP/OE/effects/death or incapacity",
+              "position/range/visibility",
+              "inventory/equipment/ammo/cooldown",
+              "symbiont composition or learned nodes",
+              "turn/phase/reaction window",
+              "controller/seat/handoff",
+              "consent/masterPredicate response",
+              "game time/campaign state",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
@@ -51458,6 +51521,12 @@
           "trigger": "Вернуться на главный экран мастера",
           "guard": "confirmed GM authority; campaign checkpoint current; no uncommitted campaign mutation",
           "kind": "safe-return"
+        },
+        {
+          "to": "CMP-006",
+          "trigger": "Подключение к кампании",
+          "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+          "kind": "safe-return"
         }
       ],
       "references": {
@@ -51516,6 +51585,7 @@
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight.",
         "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "PRE_START has a real read-only connection control returning to CMP-006 in the same GM context, including at zero PCs. Existing CMP-006 QR and CMP-006→NET-017→CMP-006 request-queue routes stay reachable; CMP-006→CMP-007 returns to this panel. Roundtrips preserve confirmed initial time and Ready proofs. No separate admin shell, queue authority or returnContext is introduced.",
         "Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
         "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
       ],
@@ -128610,7 +128680,7 @@
         {
           "from": "NET-016",
           "trigger": "Начать кампанию",
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "kind": "workflow-command"
         },
         {
@@ -223959,7 +224029,7 @@
       "from": "NET-016",
       "to": "GM-001",
       "trigger": "Начать кампанию",
-      "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+      "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
       "kind": "workflow-command"
     },
     {
@@ -229405,22 +229475,29 @@
       "from": "NET-006",
       "to": "NET-006",
       "trigger": "Готов",
-      "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+      "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
       "kind": "workflow-command"
     },
     {
       "from": "NET-006",
       "to": "NET-006",
       "trigger": "Отменить готовность",
-      "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+      "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
       "kind": "workflow-command"
     },
     {
       "from": "NET-016",
       "to": "NET-016",
       "trigger": "Сохранить начальное время",
-      "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+      "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
       "kind": "workflow-command"
+    },
+    {
+      "from": "CMP-007",
+      "to": "CMP-006",
+      "trigger": "Подключение к кампании",
+      "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+      "kind": "safe-return"
     }
   ],
   "qaScenarios": [
@@ -230207,7 +230284,7 @@
     {
       "qaId": "QA-FORM-CMP-007",
       "scope": "CMP-007",
-      "scenario": "Проверить буквальное назначение CMP-007: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight. Поля: contextId, campaignId, stateRevision, projectionRevision, panelVariant=PRE_START|STARTED_PEACE, campaignStatus, groups[], activePeaceSceneOrNull, lobbySummary, campaignArtChecksumOrNull. CTA: Открыть «Лобби подключений и Start», Открыть «Настройки кампании», Открыть активную кампанию, Вернуться на главный экран мастера. Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
+      "scenario": "Проверить буквальное назначение CMP-007: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight. Поля: contextId, campaignId, stateRevision, projectionRevision, panelVariant=PRE_START|STARTED_PEACE, campaignStatus, groups[], activePeaceSceneOrNull, lobbySummary, campaignArtChecksumOrNull. CTA: Открыть «Лобби подключений и Start», Открыть «Настройки кампании», Открыть активную кампанию, Вернуться на главный экран мастера, Подключение к кампании. Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -259934,7 +260011,7 @@
         "formIds": [
           "NET-016"
         ],
-        "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "guards": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
         "atomicity": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
         "reconnect": "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
         "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-START"
@@ -260769,7 +260846,7 @@
         "formIds": [
           "NET-006"
         ],
-        "guards": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+        "guards": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
         "atomicity": "Persist one owner-bound Ready decision for the exact ordered ACTIVE subset and lobbySnapshotRevision. Never mutate admission copies, capacity, group IDs or another device readiness. Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
         "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
         "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET"
@@ -260780,7 +260857,7 @@
         "formIds": [
           "NET-016"
         ],
-        "guards": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+        "guards": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
         "atomicity": "Persist one explicit initial time and receipt before Start; changed time advances lobbySnapshotRevision and invalidates Ready proofs. No scene or ticking clock is created. Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
         "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
         "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
@@ -277249,7 +277326,7 @@
     "forms": 376,
     "legacyFormsPreserved": 355,
     "newForms": 21,
-    "transitions": 1697,
+    "transitions": 1698,
     "journeys": 66,
     "requirements": 91,
     "qaScenarios": 2448,

@@ -26,7 +26,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-006',
-    sha256: '1b5a0bf1340a9cc7eb5235402f9646d9fbceacc6b0b4352a86f3e6dc7925b939',
+    sha256: '3cda0d6a4e536f146eb65f182bba2b4541f4f5fbbc05f5db9ccea8c50f128208',
   },
   {
     target: 'forms',
@@ -110,7 +110,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-JOIN-REVIEW',
-    sha256: 'a003a0ce46d4ad35594bf8e7a3ea85fb67baef51ba8ed4f0b5ac49e7e587cc8c',
+    sha256: '67a8c2f7e590c27abd1492f5c69272fb26a6d3f8794a6a3a626f8a7b6ddac77e',
   },
   {
     target: 'coverageRequirements',
@@ -248,11 +248,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '6a2a702f05d67702304a1406013121cc7a43377d86fc061a49002988f87860e3',
+    sha256: 'fe6e06c3698c1413714789a6d2c24220467c816897e37b7812713024f6b6c97e',
   },
   {
     key: 'transitions',
-    sha256: '251214fea1268480ad7f42cf6452d10390364a4c8737a0114b615a0434a35a4a',
+    sha256: 'baf51cb230695e0edd72e553ed2a1e67a8e0dfdd02c579a6bcefd250f2ba2bbd',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -270,7 +270,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-006 —',
-    sha256: 'c1dbb888574a721d3558ab00f54f14309337912905b78224495f80fafc304f1e',
+    sha256: '9a6451ee0457601034797f0225e61a526e0d0f0a5e4719002cfe4299e253cdd7',
   },
   {
     prefix: '### NET-007 —',
@@ -326,7 +326,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-JOIN-REVIEW —',
-    sha256: '40a8a8824dd7ff70993b07c495fad7c01e7cf84da24a34db872a3735916c8655',
+    sha256: '413aebb71d6652a693388b6d288e6afc6e399b5b58cbd5d266646defdf2b60d2',
   },
 ] as const;
 const MARKDOWN_LINES = [

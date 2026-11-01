@@ -74196,6 +74196,12 @@
         "guard": "projectionRole=gm; sole active GM authority for this campaign; status=PAUSED; returnContext.originFormId=CMP-006; campaignId and creationReceiptId match initiating context; no mutation in flight; navigation only, no Start.",
         "kind": "safe-return",
         "trigger": "Вернуться к созданной кампании"
+      },
+      {
+        "from": "CMP-007",
+        "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+        "kind": "safe-return",
+        "trigger": "Подключение к кампании"
       }
     ],
     "transitionsOut": [
@@ -74222,6 +74228,7 @@
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Сводка групп, игроков, Ready/blockers, времени, боёв, заявок и синхронизации; запуск при выполненном preflight.",
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "PRE_START has a real read-only connection control returning to CMP-006 in the same GM context, including at zero PCs. Existing CMP-006 QR and CMP-006→NET-017→CMP-006 request-queue routes stay reachable; CMP-006→CMP-007 returns to this panel. Roundtrips preserve confirmed initial time and Ready proofs. No separate admin shell, queue authority or returnContext is introduced.",
       "Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
       "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
     ],
@@ -74236,7 +74243,7 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Лобби подключений и Start»; Открыть «Настройки кампании»; Открыть активную кампанию; Вернуться на главный экран мастера."
+        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Лобби подключений и Start»; Открыть «Настройки кампании»; Открыть активную кампанию; Вернуться на главный экран мастера; Подключение к кампании."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -74548,6 +74555,60 @@
           ],
           "targetFormId": "GM-001",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "CMP-007::CTA::006",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "safe-return",
+          "label": "Подключение к кампании",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "CMP-006",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -74563,7 +74624,8 @@
         "Открыть «Лобби подключений и Start»",
         "Открыть «Настройки кампании»",
         "Открыть активную кампанию",
-        "Вернуться на главный экран мастера"
+        "Вернуться на главный экран мастера",
+        "Подключение к кампании"
       ],
       "workflowCommandAvailability": []
     },
@@ -74749,6 +74811,12 @@
         "kind": "safe-return",
         "to": "GM-001",
         "trigger": "Вернуться на главный экран мастера"
+      },
+      {
+        "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+        "kind": "safe-return",
+        "to": "CMP-006",
+        "trigger": "Подключение к кампании"
       }
     ],
     "type": "screen"
@@ -92729,7 +92797,7 @@
       },
       {
         "from": "NET-016",
-        "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
         "kind": "workflow-command",
         "trigger": "Начать кампанию"
       },
@@ -124847,7 +124915,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -124903,7 +124971,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -124976,7 +125044,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CAMPAIGN-READY-SET",
-          "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -125127,13 +125195,13 @@
       },
       {
         "from": "NET-006",
-        "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+        "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
         "kind": "workflow-command",
         "trigger": "Готов"
       },
       {
         "from": "NET-006",
-        "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+        "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
         "kind": "workflow-command",
         "trigger": "Отменить готовность"
       }
@@ -125152,13 +125220,13 @@
         "trigger": "Start подтверждён мастером"
       },
       {
-        "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+        "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
         "kind": "workflow-command",
         "to": "NET-006",
         "trigger": "Готов"
       },
       {
-        "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+        "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
         "kind": "workflow-command",
         "to": "NET-006",
         "trigger": "Отменить готовность"
@@ -129095,7 +129163,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -129207,7 +129275,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -129279,7 +129347,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CAMPAIGN-START",
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -129321,7 +129389,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
-          "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+          "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -129480,7 +129548,7 @@
       },
       {
         "from": "NET-016",
-        "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+        "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
         "kind": "workflow-command",
         "trigger": "Сохранить начальное время"
       }
@@ -129499,7 +129567,7 @@
         "trigger": "J-HOST-PUBLISH-SETTINGS::HOST_LOBBY::return"
       },
       {
-        "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
         "kind": "workflow-command",
         "to": "GM-001",
         "trigger": "Начать кампанию"
@@ -129511,7 +129579,7 @@
         "trigger": "Вернуться к панели кампании"
       },
       {
-        "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+        "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
         "kind": "workflow-command",
         "to": "NET-016",
         "trigger": "Сохранить начальное время"

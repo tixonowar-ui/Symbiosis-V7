@@ -8,19 +8,25 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-006',
-    sha256: '1b5a0bf1340a9cc7eb5235402f9646d9fbceacc6b0b4352a86f3e6dc7925b939',
+    sha256: '3cda0d6a4e536f146eb65f182bba2b4541f4f5fbbc05f5db9ccea8c50f128208',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-016',
-    sha256: '9e3a3e326232c43b8d98930907a341353219ddfdf8a2b940d0dd434028990e36',
+    sha256: '9bff79e1f862ba9adce745e95094d969266a22f24b4f28b18b7f04183010eb22',
+  },
+  {
+    target: 'forms',
+    key: 'id',
+    id: 'CMP-006',
+    sha256: 'a5d5520c38da3eba9dc9f19011abf466d17fe5de49c4067325997ccfaa9639d0',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'CMP-007',
-    sha256: '816d125b27a675119399a0656f9377ee406631618adb9745c4d3895b1a464ee4',
+    sha256: '9d3872aedf3adc1625c054f23b52d21eaa8477a2c14f94bdc8ac80f734336400',
   },
   {
     target: 'forms',
@@ -38,19 +44,19 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '111b79e4ea1068d8e0ca18bad797803a18923295eaaf2528a3e390807c82736b',
+    sha256: 'a0ef300a6b243d5a9fb03fed6f7efa184c3f38270963b33315dff8ef29c52376',
   },
   {
     target: 'journeys',
     key: 'id',
     id: 'J-JOIN-REVIEW',
-    sha256: 'a003a0ce46d4ad35594bf8e7a3ea85fb67baef51ba8ed4f0b5ac49e7e587cc8c',
+    sha256: '67a8c2f7e590c27abd1492f5c69272fb26a6d3f8794a6a3a626f8a7b6ddac77e',
   },
   {
     target: 'journeys',
     key: 'id',
     id: 'J-CAMPAIGN-CREATE',
-    sha256: 'ae992e5dff5091fbb60d055db4d7b9e3bda734d5e0b25a68c3bc059a48427115',
+    sha256: '9580c813049257fc11a6275eb55aea69584f458e5342e02ad5394b43d026c51a',
   },
   {
     target: 'journeys',
@@ -67,6 +73,12 @@ const OBJECT_SEALS = [
   {
     target: 'coverageRequirements',
     key: 'requirementId',
+    id: 'REQ-007',
+    sha256: '2f62bb81eec48b0a894a2fa347d0219b8a5338d7daad777180f54996c2915d2c',
+  },
+  {
+    target: 'coverageRequirements',
+    key: 'requirementId',
     id: 'REQ-009',
     sha256: '64a1b8f79c92a5b66f34ee164b7b36675ccdf5ed0832d75eb6025e2d22cad143',
   },
@@ -74,7 +86,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-055',
-    sha256: 'f12b53da4b98b8a2e0859bfce163da7bf985e468dfae8c7ad988ceb201aa9de2',
+    sha256: '0d50e1bc2e5b73b951490762838a25c66837b9252292da6bbeb0b6c2d77e0e6b',
   },
   {
     target: 'qaScenarios',
@@ -92,7 +104,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-CMP-007',
-    sha256: '16d36a75d4b51b6db1c969ee52b9c264370dde3a39562decd91fc1420e45b665',
+    sha256: '84c2beae810c803e6e3966d94cf69f0da7027de1f035bde2c98b1e219b47e747',
   },
   {
     target: 'qaScenarios',
@@ -146,43 +158,47 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-CAMPAIGN-START',
-    sha256: 'da38269aa41f26eed3e7a1736763fa5362b4b5f6f1d338a4960f62237babc7cd',
+    sha256: '4e9b1b502cea861c630031861ff0c46690ca3f13897b739b393129a10a770d38',
   },
   {
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-CAMPAIGN-READY-SET',
-    sha256: '8d9c7d00683f4f29915e4cd09fc43260116e8d7ad548b935434dfce6828900e5',
+    sha256: 'f5e4e77ad0e07cca5e4ebf7a50f118b4dbebc8e59e654d6bfdd39e9270962d4c',
   },
   {
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-    sha256: '7588e897957e22b6a2775e480d6380fdaaff2165eea2410a40aa1156b0f02974',
+    sha256: 'd53635ba70a91d4f6cfba6663479cb13617eed1cd7f56dc877f4a35e27c1bab0',
   },
 ] as const;
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '6a2a702f05d67702304a1406013121cc7a43377d86fc061a49002988f87860e3',
+    sha256: 'fe6e06c3698c1413714789a6d2c24220467c816897e37b7812713024f6b6c97e',
   },
   {
     key: 'transitions',
-    sha256: '251214fea1268480ad7f42cf6452d10390364a4c8737a0114b615a0434a35a4a',
+    sha256: 'baf51cb230695e0edd72e553ed2a1e67a8e0dfdd02c579a6bcefd250f2ba2bbd',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
   {
     prefix: '### NET-006 —',
-    sha256: 'c1dbb888574a721d3558ab00f54f14309337912905b78224495f80fafc304f1e',
+    sha256: '9a6451ee0457601034797f0225e61a526e0d0f0a5e4719002cfe4299e253cdd7',
   },
   {
     prefix: '### NET-016 —',
-    sha256: '594c5af2f66192dc785a0df62982a1142de7422b3bd1af749ffae45d99af36c5',
+    sha256: 'd5dcf25c260b57ac4c84e5b9afd4cf873b2f6ef957722372dfa88f252539f3c6',
+  },
+  {
+    prefix: '### CMP-006 —',
+    sha256: '885670269a42298d9ffa45a2bc3e1eabfd02a829aceaea38132ef6cc5a230f9c',
   },
   {
     prefix: '### CMP-007 —',
-    sha256: '22c9a3e3da89309601cbff3a1fd6ac42a86a659fa0076ea24cb73c408f711a4e',
+    sha256: '8664dd196c8a7ca9d6301bc579cfae8fffafeb16a25ad9ce825f1071c35e649b',
   },
   {
     prefix: '### PLY-001 —',
@@ -194,15 +210,15 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### GM-001 —',
-    sha256: 'fe1f060372f4043d3b9be05b170deb968da512e9ac01be457bec41e49413aa8a',
+    sha256: 'da0063f55f0a96514bbc2744e2a5884e0899098395d0f871c436cd3995eca574',
   },
   {
     prefix: '### J-JOIN-REVIEW —',
-    sha256: '40a8a8824dd7ff70993b07c495fad7c01e7cf84da24a34db872a3735916c8655',
+    sha256: '413aebb71d6652a693388b6d288e6afc6e399b5b58cbd5d266646defdf2b60d2',
   },
   {
     prefix: '### J-CAMPAIGN-CREATE —',
-    sha256: '5aa77d2a987f70971e558a65cc3632c074d2a278f53fd2e426aedcc71cf69c85',
+    sha256: 'd6d11a3b90fde3748163eac1957b92c2ed4fda03c9f6bd937a945c5b243f630f',
   },
   {
     prefix: '### J-HOST-PUBLISH-SETTINGS —',
@@ -215,6 +231,10 @@ const MARKDOWN_LINES = [
     sha256: 'd3ec96be40d1c9a7b60a6a22f68ae53878cf6ffed303dd323bae6342864a5eae',
   },
   {
+    prefix: '| REQ-007 | Создание/host/preflight/start кампании без выбора правил |',
+    sha256: 'ee99fec108d4bc4dab0e700773016b2e4eae94760bebf68b2ccffc57bd57ec3e',
+  },
+  {
     prefix:
       '| REQ-009 | 0–3 local players, вход из активной мирной/боевой сцены и отдельная GM-tab только на host |',
     sha256: 'ef40a043e091d8a9e6e0233a0f0573853e489e47e7403ce774083722c75f5eda',
@@ -222,7 +242,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| REQ-055 | Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client |',
-    sha256: 'ab00979636ad0921d5a9ddcc33be5abe6a4a71fe7c12d31d1cd59219b7cd332b',
+    sha256: 'c97d56f36f532d63debfd230aa87715d317c61393d7a4ae964dd6ceafd295780',
   },
   {
     prefix: '| QA-FORM-NET-006 | NET-006 |',
@@ -234,7 +254,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-CMP-007 | CMP-007 |',
-    sha256: 'dd5368da1d00d29c62fde4239e45518705f4058322d5e36c394d975c3eebe915',
+    sha256: '437b687445d3ed57a1959b43db484a54ee0c068743328719b15247dbfff7fa1f',
   },
   {
     prefix: '| QA-FORM-PLY-001 | PLY-001 |',
@@ -270,16 +290,16 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-CAMPAIGN-START | Запустить подготовленную кампанию |',
-    sha256: '090a01e9252a4703722acc298fbada37e265b53db6632e85c88fa65dc45ad3dc',
+    sha256: '5b9a3cd18a50f86ab8857a7cb9eebb421087d943f256bfc5c82ff8eceec17b5c',
   },
   {
     prefix:
       '| UI-CMD-CAMPAIGN-READY-SET | Подтвердить или отменить готовность своего ACTIVE-набора |',
-    sha256: '28244907f9be0bda3968b50271047ad1e78e5b2297001a32dbe9b12e9d86e805',
+    sha256: '5d0ac86fd5b1bcf8aea9445f135604c45a7032d44424014829f2437d010159b2',
   },
   {
     prefix: '| UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Сохранить начальное виртуальное время кампании |',
-    sha256: 'c8f60f06f00346234236b79961312ec0c8da80a13dae78bf42a1718e08c7da5b',
+    sha256: 'e8b38f0c0eae30bb0e24840d2406c2892413fdceb9030adccbb755c44db74ef4',
   },
 ] as const;
 const WHERE = 'atlas ADR 0073';

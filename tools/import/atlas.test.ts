@@ -193,7 +193,7 @@ describe('generated atlas spec', () => {
   });
 
   it('matches the counts the audit states about the atlas', () => {
-    expect(spec('transitions.json')).toHaveLength(1697);
+    expect(spec('transitions.json')).toHaveLength(1698);
     expect(spec('journeys.json')).toHaveLength(66);
     expect(spec('requirements.json')).toHaveLength(91);
     expect(spec('qa-scenarios.json')).toHaveLength(2448);
@@ -420,7 +420,7 @@ describe('generated atlas types', () => {
     const known: ActionKey = 'APP-002::CTA::007';
     // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
     const absent: ActionKey = 'APP-002::CTA::999';
-    expect(members).toHaveLength(1_261);
+    expect(members).toHaveLength(1_262);
     expect(members).toEqual(extractActionKeys(clonedForms()));
     expect(members).toContain(known);
     expect(members).not.toContain(absent);
@@ -439,8 +439,8 @@ describe('action key export guards', () => {
     [rows[0], rows[1]] = [rows[1]!, rows[0]!];
     const actionKeys = extractActionKeys(forms);
 
-    expect(actionKeys).toHaveLength(1_261);
-    expect(new Set(actionKeys).size).toBe(1_261);
+    expect(actionKeys).toHaveLength(1_262);
+    expect(new Set(actionKeys).size).toBe(1_262);
     expect(actionKeys.slice(0, 4)).toEqual([
       'APP-001::CTA::002',
       'APP-001::CTA::001',
@@ -488,7 +488,7 @@ describe('action key export guards', () => {
     const forms = clonedForms();
     firstFormActionRows(forms).pop();
 
-    expect(() => extractActionKeys(forms)).toThrow(/expected 1261 action keys, got 1260/u);
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1262 action keys, got 1261/u);
   });
 });
 

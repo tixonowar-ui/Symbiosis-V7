@@ -34,6 +34,19 @@ function mutatedRow(target: string, id: string): { root: JsonObject; row: JsonOb
 }
 
 describe('ADR 0073 approved lobby/Start source', () => {
+  it('keeps the zero-roster panel connected to the existing QR and request queue', () => {
+    const forms = source['forms'] as JsonObject[];
+    const panel = forms.find((f) => f['id'] === 'CMP-007')!;
+    const actions = record(panel['actions'])['ctaAvailabilityByAction'] as JsonObject[];
+    const back = actions.find((a) => a['actionKey'] === 'CMP-007::CTA::006')!;
+    expect(back['targetFormId']).toBe('CMP-006');
+    expect(back['guard']).toContain('PRE_START PAUSED');
+    expect(back['guard']).toContain('same GM context');
+    const { root, row } = mutatedRow('forms', 'CMP-007');
+    const changed = record(row['actions'])['ctaAvailabilityByAction'] as JsonObject[];
+    changed.find((a) => a['actionKey'] === 'CMP-007::CTA::006')!['targetFormId'] = 'GM-002';
+    expect(() => assertAdr0073LobbyStart(root)).toThrow('CMP-007');
+  });
   it('accepts the supplied JSON and independently checked Markdown', () => {
     expect(() => assertAdr0073LobbyStart(source)).not.toThrow();
     expect(() => assertAdr0073LobbyStartMarkdown(markdown)).not.toThrow();

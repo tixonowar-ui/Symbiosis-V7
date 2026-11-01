@@ -6413,7 +6413,7 @@
   },
   {
     "from": "NET-016",
-    "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+    "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
     "kind": "workflow-command",
     "to": "GM-001",
     "trigger": "Начать кампанию"
@@ -11859,23 +11859,30 @@
   },
   {
     "from": "NET-006",
-    "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
+    "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=true; current readiness is not READY.",
     "kind": "workflow-command",
     "to": "NET-006",
     "trigger": "Готов"
   },
   {
     "from": "NET-006",
-    "guard": "Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
+    "guard": "UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. ready=false; current readiness is READY.",
     "kind": "workflow-command",
     "to": "NET-006",
     "trigger": "Отменить готовность"
   },
   {
     "from": "NET-016",
-    "guard": "Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+    "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
     "kind": "workflow-command",
     "to": "NET-016",
     "trigger": "Сохранить начальное время"
+  },
+  {
+    "from": "CMP-007",
+    "guard": "Sole current campaign GM authority; PRE_START PAUSED; same GM context and campaignId; confirmed original creationReceipt; no mutation in flight. Read-only return to existing CMP-006 QR and request-queue ingress; no Start or new context.",
+    "kind": "safe-return",
+    "to": "CMP-006",
+    "trigger": "Подключение к кампании"
   }
 ]
