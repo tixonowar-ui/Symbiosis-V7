@@ -3,7 +3,10 @@ import type { PresentedBaseForm, PresentedLayerForm } from '../../shared/wire-v2
 import type { GmAdmissionView } from '../../persistence/campaign-creation.js';
 import type { AdmissionDecisionRead } from '../../persistence/campaign-admission-decision.js';
 import type { AdmissionHistory } from '../../persistence/campaign-admission-player.js';
-import type { createCampaignAdmissionRules } from '../campaign-admission-service.js';
+import {
+  admissionSelectedGroupLabels,
+  type createCampaignAdmissionRules,
+} from '../campaign-admission-service.js';
 import type { AdmissionGmViewFormId } from '../../shared/campaign-admission-review.js';
 import { isDeepStrictEqual } from 'node:util';
 import type {
@@ -269,6 +272,7 @@ export function projectGmAdmission(i: {
     selectedReviewCopyId: selected.reviewCopyId,
     viewValues: structuredClone(view.values),
     itemLabels: service.catalogs.items,
+    groupLabels: admissionSelectedGroupLabels(fullDiffs, [...history.groups.values()]),
     batchReviewCopies: review.copies.map((copy) => ({
       reviewCopyId: copy.reviewCopyId,
       sourceUuid: copy.sourceUuid,

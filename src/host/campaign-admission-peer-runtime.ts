@@ -16,7 +16,7 @@ import {
 } from '../persistence/network-device-request.js';
 import { type CurrentPausedCampaignHeader } from '../persistence/current-paused-campaign.js';
 import {
-  readAdmissionDecisionByRequest,
+  readAdmissionDecisionDeliveryByRequest,
   readCampaignAdmissionAvailability,
 } from '../persistence/campaign-admission-decision.js';
 import { commitAdmissionPlayerDecision } from '../persistence/campaign-admission-player.js';
@@ -30,7 +30,10 @@ import {
   type CampaignNetworkExecutionChannel,
   type CampaignNetworkExecutionLease,
 } from './campaign-network-executor.js';
-import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import {
+  createCampaignAdmissionRules,
+  admissionSelectedGroupLabels,
+} from './campaign-admission-service.js';
 import {
   AdmissionPeerCodecError,
   encodeAdmissionCapacityResponse,
@@ -149,20 +152,21 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
       gmLocalContextId: origin.command.request.payload.gmLocalContextId,
     };
     const { rules } = createCampaignAdmissionRules(d.baseline, d.limits.maxWitnessBytes);
-    const current = readAdmissionDecisionByRequest(
+    const delivery = readAdmissionDecisionDeliveryByRequest(
       d.database,
       scope,
       command.requestId,
       d.validateOwner,
       rules,
     );
+    const current = delivery?.current ?? null;
     if (
       current !== null &&
       current.review.request.submittedRequest.principal.peerIdentity.ownerDeviceId !==
         principal.peerIdentity.ownerDeviceId
     )
       return fail('FOREIGN_OWNER');
-    return { principal, campaign, scope, rules, current };
+    return { principal, campaign, scope, rules, current, groups: delivery?.groups ?? [] };
   }
   function leaseAt(connection: C, command: AdmissionPeerCommand) {
     const scope = { kind: 'SESSION' as const, id: command.technicalSessionId };
@@ -217,6 +221,10 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
       schemaVersion: 1 as const,
       gmDecision: admissionGmDecisionNotice(gm.receipt),
       proposalOrNull: gm.proposalOrNull,
+      groupLabels: admissionSelectedGroupLabels(
+        gm.proposalOrNull?.fullCampaignCopyDiffs ?? [],
+        state.groups,
+      ),
     };
     const publicationChecksum = postSaveSha256(canonicalPostSaveJson(body));
     const text = canonicalPostSaveJson({ ...body, publicationChecksum }),

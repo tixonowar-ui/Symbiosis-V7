@@ -36,6 +36,26 @@ import { projectAdmissionWeaponProfile } from './campaign-admission-mechanics.js
 import { recommendArmorQuality } from '../domain/rules/item-stage/armor-bundle.js';
 import { wireCodecPrimitives } from '../shared/wire-codec.js';
 import { admissionPendingReviewBlockers } from '../shared/campaign-admission-proposal.js';
+import {
+  admissionExistingGroupIds,
+  type AdmissionFullCopyDiff,
+  type AdmissionGroupLabel,
+} from '../shared/campaign-admission-proposal.js';
+import type { AdmissionGroup } from '../persistence/campaign-admission-player.js';
+
+/** Only assignments in the frozen sheets may disclose names from the verified campaign history. */
+export function admissionSelectedGroupLabels(
+  diffs: readonly AdmissionFullCopyDiff[],
+  groups: readonly AdmissionGroup[],
+): readonly AdmissionGroupLabel[] {
+  return admissionExistingGroupIds(diffs).map((groupId) => {
+    const group = groups.find((group) => group.groupId === groupId);
+    if (group === undefined) throw new Error('Selected admission group is missing');
+    if (group.origin !== 'START' && group.nameOrNull === null)
+      throw new Error('Admission group name is missing');
+    return { groupId, name: group.origin === 'START' ? 'Стартовая группа' : group.nameOrNull! };
+  });
+}
 
 /** Operation-local cache keyed by complete immutable source bytes; rules still check the current baseline. */
 export function createCampaignAdmissionRules(

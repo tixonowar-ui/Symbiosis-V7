@@ -8,10 +8,29 @@ import {
 } from './campaign-admission-codec.js';
 import {
   admissionPlayerDecisionRequestValue,
+  admissionGroupLabelsValue,
   type AdmissionPlayerDecisionRequest,
 } from './campaign-admission-proposal.js';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+it('requires exactly the selected group labels and refuses missing, foreign, duplicate or private data', () => {
+  const labels = [
+    { groupId: id(1), name: 'Разведчики' },
+    { groupId: id(2), name: 'Лекари' },
+  ];
+  expect(admissionGroupLabelsValue(labels, [id(1), id(2)])).toEqual(labels);
+  for (const invalid of [
+    [],
+    labels.slice(0, 1),
+    [...labels, { groupId: id(3), name: 'Чужая группа' }],
+    [...labels].reverse(),
+    [labels[0], labels[0]],
+    [{ ...labels[0], name: ' ' }, labels[1]],
+    [{ ...labels[0], privateField: 'secret' }, labels[1]],
+  ])
+    expect(() => admissionGroupLabelsValue(invalid, [id(1), id(2)])).toThrow();
+});
 describe('whole-batch player decision input', () => {
   const request = (): AdmissionPlayerDecisionRequest => ({
     commandId: id(1),

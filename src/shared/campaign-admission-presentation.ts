@@ -20,6 +20,8 @@ import { admissionFullCopyDiffValue } from './campaign-admission-proposal.js';
 import {
   admissionOwnerPublicationValue,
   admissionPlayerDecisionReceiptValue,
+  admissionGroupLabelsValue,
+  admissionExistingGroupIds,
 } from './campaign-admission-proposal.js';
 import type { WorkflowCommandRequestMessage } from './wire-protocol.js';
 import {
@@ -62,7 +64,7 @@ export const ADMISSION_GM_NAV_TARGETS = {
   'NET-017::CTA::004': 'NET-021',
 } as const;
 const COMMON =
-  'contextId campaignId admissionBatchId deviceRequestId requestIdOrNull reviewRevisionOrNull stateRevision projectionRevision actorVisibilityRevision editable reviewScope selectedReviewCopyId batchReviewCopies returnContext viewValues itemLabels';
+  'contextId campaignId admissionBatchId deviceRequestId requestIdOrNull reviewRevisionOrNull stateRevision projectionRevision actorVisibilityRevision editable reviewScope selectedReviewCopyId batchReviewCopies returnContext viewValues itemLabels groupLabels';
 const FIELDS: Readonly<Record<AdmissionGmViewFormId, string>> = {
   'NET-018': 'immutableSourceSnapshot sourceProvenanceAndNaturalRolls',
   'NET-019':
@@ -255,6 +257,15 @@ export function admissionGmProjectionValue(
     r.invalid('$.revisions', 'ordered admission revisions', null);
   bool(p['editable'], '$.editable');
   itemLabels(p['itemLabels'], '$.itemLabels');
+  const groupLabels = admissionGroupLabelsValue(p['groupLabels']);
+  const checkSheetGroup = (sheet: ReturnType<typeof admissionMechanicalSheetValue>) => {
+    const assignment = sheet.groupAssignmentOrNull;
+    if (
+      assignment?.kind === 'EXISTING' &&
+      !groupLabels.some((label) => label.groupId === assignment.groupId)
+    )
+      r.invalid('$.groupLabels', 'label for every displayed group assignment', null);
+  };
   const copies = r.list(p['batchReviewCopies'], '$.batchReviewCopies').map((v, index) => {
     const at = `$.batchReviewCopies[${index}]`,
       c = r.exact(v, 'reviewCopyId sourceUuid name', at);
@@ -300,11 +311,17 @@ export function admissionGmProjectionValue(
     '$.viewValues.selectedReviewCopyId',
   );
   for (const key of ['immutableSourceSnapshot', 'localSourceSnapshot'])
-    if (Object.hasOwn(p, key)) admissionMechanicalSheetValue(p[key], `$.${key}`);
+    if (Object.hasOwn(p, key)) checkSheetGroup(admissionMechanicalSheetValue(p[key], `$.${key}`));
   if (Object.hasOwn(p, 'afterCore')) admissionMechanicalCoreValue(p['afterCore']);
   if (Object.hasOwn(p, 'reviewDraft')) admissionReviewInputsValue(p['reviewDraft']);
   for (const key of ['campaignCopyDiff', 'diff'])
-    if (Object.hasOwn(p, key)) r.nullable(p[key], `$.${key}`, admissionFullCopyDiffValue);
+    if (Object.hasOwn(p, key))
+      r.nullable(p[key], `$.${key}`, (value) => {
+        const diff = admissionFullCopyDiffValue(value);
+        checkSheetGroup(diff.beforeSheet);
+        checkSheetGroup(diff.afterSheet);
+        return diff;
+      });
   if (Object.hasOwn(p, 'blockers')) blockers(p['blockers'], '$.blockers');
   if (Object.hasOwn(p, 'missingRequiredFields'))
     r.list(p['missingRequiredFields'], '$.missingRequiredFields').forEach((v) => {
@@ -438,6 +455,7 @@ export function admissionGmProjectionValue(
     const diffs = r
       .list(p['fullCampaignCopyDiffs'], '$.fullCampaignCopyDiffs')
       .map((v) => admissionFullCopyDiffValue(v));
+    admissionGroupLabelsValue(p['groupLabels'], admissionExistingGroupIds(diffs));
     bool(p['allRequiredFieldsValid'], '$.allRequiredFieldsValid');
     bool(p['published'], '$.published');
     r.nullable(p['proposalChecksum'], '$.proposalChecksum', hash);
@@ -460,7 +478,7 @@ export function admissionGmProjectionValue(
     incomplete.forEach((v, index) => {
       const row = r.exact(v, 'reviewCopyId beforeSheet afterCore inputs', '$.incompleteReview');
       equal(row['reviewCopyId'], copies[index], '$.incompleteReview.reviewCopyId');
-      admissionMechanicalSheetValue(row['beforeSheet']);
+      checkSheetGroup(admissionMechanicalSheetValue(row['beforeSheet']));
       admissionMechanicalCoreValue(row['afterCore']);
       admissionReviewInputsValue(row['inputs']);
     });

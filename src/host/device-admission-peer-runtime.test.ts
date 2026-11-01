@@ -835,6 +835,7 @@ describe('final admission over the actual authenticated peer channel', () => {
       const body = {
         schemaVersion: 1 as const,
         gmDecision: admissionGmDecisionNotice(published.gmDecisionOrNull!.receipt),
+        groupLabels: [],
         proposalOrNull: proposal,
       };
       publication = { ...body, publicationChecksum: postSaveSha256(canonicalPostSaveJson(body)) };

@@ -15,6 +15,8 @@ import {
 import {
   admissionFullCopyDiffValue,
   type AdmissionFullCopyDiff,
+  type AdmissionGroupLabel,
+  admissionGroupLabelsValue,
 } from '@shared/campaign-admission-proposal.js';
 import {
   admissionCodecReaders as r,
@@ -66,7 +68,25 @@ function itemName(
   return name;
 }
 const yes = (value: boolean) => (value ? 'да' : 'нет');
-function WeaponProfile({
+export function AdmissionGroupName({
+  assignment,
+  groups,
+}: {
+  readonly assignment: AdmissionMechanicalSheetV1['groupAssignmentOrNull'];
+  readonly groups: readonly AdmissionGroupLabel[];
+}): ReactElement {
+  let name: string;
+  if (assignment === null) name = 'Не назначена';
+  else if (assignment.kind === 'START') name = 'Стартовая группа';
+  else if (assignment.kind === 'NEW') name = assignment.name;
+  else {
+    const selected = groups.find((group) => group.groupId === assignment.groupId);
+    if (selected === undefined) throw new Error('Selected admission group label is missing');
+    name = selected.name;
+  }
+  return <p>{name}.</p>;
+}
+export function WeaponProfile({
   profile,
 }: {
   readonly profile: AdmissionPublicWeaponProfile;
@@ -104,9 +124,15 @@ function WeaponProfile({
             <dd>{String(value)}</dd>
           </div>
         ))}
-        <dt>Развитие от урона и пробития</dt>
+        <dt>Развитие от урона</dt>
         <dd>
           {profile.damageDefinition.progressionEligibility === 'NO_DIRECT_BUT_POOL'
+            ? 'Прямого развития нет; учитывается общий пул.'
+            : 'Развитие не начисляется.'}
+        </dd>
+        <dt>Развитие от пробития</dt>
+        <dd>
+          {profile.penetrationDefinition.progressionEligibility === 'NO_DIRECT_BUT_POOL'
             ? 'Прямого развития нет; учитывается общий пул.'
             : 'Развитие не начисляется.'}
         </dd>
@@ -280,9 +306,11 @@ function CoreSheet({ core }: { readonly core: AdmissionMechanicalCore }): ReactE
 export function AdmissionSheet({
   sheet,
   items,
+  groups,
 }: {
   readonly sheet: AdmissionMechanicalSheetV1;
   readonly items: readonly ItemLabel[];
+  readonly groups: readonly AdmissionGroupLabel[];
 }): ReactElement {
   const s = admissionMechanicalSheetValue(sheet);
   return (
@@ -325,16 +353,7 @@ export function AdmissionSheet({
         .
       </p>
       <h4>Группа</h4>
-      <p>
-        {s.groupAssignmentOrNull === null
-          ? 'Не назначена'
-          : s.groupAssignmentOrNull.kind === 'START'
-            ? 'Стартовая группа'
-            : s.groupAssignmentOrNull.kind === 'NEW'
-              ? s.groupAssignmentOrNull.name
-              : 'Существующая группа кампании'}
-        .
-      </p>
+      <AdmissionGroupName assignment={s.groupAssignmentOrNull} groups={groups} />
       <h4>Местоположение</h4>
       <p>
         {s.locationAssignmentOrNull === null
@@ -350,9 +369,11 @@ export function AdmissionSheet({
 export function AdmissionDiff({
   diff,
   items,
+  groups,
 }: {
   readonly diff: AdmissionFullCopyDiff;
   readonly items: readonly ItemLabel[];
+  readonly groups: readonly AdmissionGroupLabel[];
 }): ReactElement {
   const d = admissionFullCopyDiffValue(diff);
   return (
@@ -371,11 +392,11 @@ export function AdmissionDiff({
       </ul>
       <details>
         <summary>До — неизменяемый локальный лист</summary>
-        <AdmissionSheet sheet={d.beforeSheet} items={items} />
+        <AdmissionSheet sheet={d.beforeSheet} items={items} groups={groups} />
       </details>
       <details open>
         <summary>После — полный кампанийный лист</summary>
-        <AdmissionSheet sheet={d.afterSheet} items={items} />
+        <AdmissionSheet sheet={d.afterSheet} items={items} groups={groups} />
       </details>
     </section>
   );
@@ -400,7 +421,8 @@ export function AdmissionOwnerFields({
       p['receiptOrNull'] === null
         ? null
         : admissionPlayerDecisionReceiptValue(p['receiptOrNull'], publication),
-    items = labels(p['itemLabels']);
+    items = labels(p['itemLabels']),
+    groups = publication.groupLabels;
   return (
     <section aria-label="Согласование набора персонажей">
       <p>
@@ -426,7 +448,12 @@ export function AdmissionOwnerFields({
                 : 'От всего набора отказались.'}
           </p>
           {proposal?.fullCampaignCopyDiffs.map((diff) => (
-            <AdmissionDiff key={diff.campaignCharacterIdOrNull} diff={diff} items={items} />
+            <AdmissionDiff
+              key={diff.campaignCharacterIdOrNull}
+              diff={diff}
+              items={items}
+              groups={groups}
+            />
           ))}
           {p['capacityRecheck'] === null ? (
             <p>Актуальная вместимость ещё не подтверждена.</p>
@@ -478,7 +505,7 @@ export function AdmissionOwnerFields({
                 <p>Управление закреплено за вашим устройством. Место занято.</p>
                 <details>
                   <summary>Полный кампанийный лист</summary>
-                  <AdmissionSheet sheet={diff.afterSheet} items={items} />
+                  <AdmissionSheet sheet={diff.afterSheet} items={items} groups={groups} />
                 </details>
               </section>
             );
@@ -490,7 +517,8 @@ export function AdmissionOwnerFields({
 }
 export function AdmissionGmFields({ formId, projection, onEdit }: Props): ReactElement {
   const p = admissionGmProjectionValue(formId, projection),
-    items = labels(p['itemLabels']);
+    items = labels(p['itemLabels']),
+    groups = admissionGroupLabelsValue(p['groupLabels']);
   const [inputs, setInputs] = useState<AdmissionReviewInputs | null>(() =>
     p['reviewDraft'] === undefined
       ? null
@@ -580,6 +608,7 @@ export function AdmissionGmFields({ formId, projection, onEdit }: Props): ReactE
           <AdmissionSheet
             sheet={p['immutableSourceSnapshot'] as unknown as AdmissionMechanicalSheetV1}
             items={items}
+            groups={groups}
           />
           <details>
             <summary>Происхождение и натуральные броски</summary>
@@ -632,6 +661,7 @@ export function AdmissionGmFields({ formId, projection, onEdit }: Props): ReactE
             <AdmissionSheet
               sheet={p['localSourceSnapshot'] as unknown as AdmissionMechanicalSheetV1}
               items={items}
+              groups={groups}
             />
           </details>
           <details>
@@ -830,7 +860,12 @@ export function AdmissionGmFields({ formId, projection, onEdit }: Props): ReactE
           </p>
           {(p['fullCampaignCopyDiffs'] as unknown as readonly AdmissionFullCopyDiff[]).map(
             (diff) => (
-              <AdmissionDiff key={diff.reviewCopyIdOrNull} diff={diff} items={items} />
+              <AdmissionDiff
+                key={diff.reviewCopyIdOrNull}
+                diff={diff}
+                items={items}
+                groups={groups}
+              />
             ),
           )}
           {(
@@ -844,7 +879,7 @@ export function AdmissionGmFields({ formId, projection, onEdit }: Props): ReactE
               <h3>{copy.beforeSheet.identity.name}</h3>
               <details>
                 <summary>Исходный лист</summary>
-                <AdmissionSheet sheet={copy.beforeSheet} items={items} />
+                <AdmissionSheet sheet={copy.beforeSheet} items={items} groups={groups} />
               </details>
               <details open>
                 <summary>Текущий расчёт рабочей копии; обязательные поля ещё не завершены</summary>
@@ -892,6 +927,7 @@ export function AdmissionGmFields({ formId, projection, onEdit }: Props): ReactE
         <AdmissionDiff
           diff={p['campaignCopyDiff'] as unknown as AdmissionFullCopyDiff}
           items={items}
+          groups={groups}
         />
       ) : null}
       {p['blockers'] === undefined ? null : (

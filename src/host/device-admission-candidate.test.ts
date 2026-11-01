@@ -42,8 +42,12 @@ import {
   verifyAdmissionProposalSources,
   type AdmissionCopyPublicationInput,
 } from './campaign-admission-proposal.js';
-import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import {
+  createCampaignAdmissionRules,
+  admissionSelectedGroupLabels,
+} from './campaign-admission-service.js';
 import { projectGmAdmission } from './projections/net-application.js';
+import { admissionGmProjectionValue } from '@shared/campaign-admission-presentation.js';
 import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import {
   decodeAdmissionProposal,
@@ -93,6 +97,7 @@ import {
 import {
   commitAdmissionGmDecision,
   readAdmissionDecision,
+  readAdmissionDecisionDeliveryByRequest,
   readCampaignAdmissionAvailability,
   enterPublishedAdmissionView,
   admissionDecisionStorage,
@@ -480,6 +485,7 @@ function publicationStoreFixture(
     approve?: boolean;
     approveIndices?: readonly number[];
     legacy?: boolean;
+    existingGroupId?: string;
   } = {},
 ) {
   const originals = options.sources ?? [options.source ?? fixture()],
@@ -629,7 +635,10 @@ function publicationStoreFixture(
       reviewCopyId: first.reviewCopyId,
       inputs: {
         ...first.inputs,
-        groupAssignmentOrNull: { kind: 'START' },
+        groupAssignmentOrNull:
+          options.existingGroupId === undefined
+            ? { kind: 'START' }
+            : { kind: 'EXISTING', groupId: options.existingGroupId },
         locationAssignmentOrNull: { location: 'Город', subLocationOrNull: null },
       },
     });
@@ -2137,6 +2146,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
       const publicationBody = {
         schemaVersion: 1 as const,
         gmDecision: admissionGmDecisionNotice(published.gmDecisionOrNull!.receipt),
+        groupLabels: [],
         proposalOrNull: published.gmDecisionOrNull!.proposalOrNull,
       };
       receiveLocalAdmissionPublication(
@@ -2445,6 +2455,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         body = {
           schemaVersion: 1 as const,
           gmDecision: admissionGmDecisionNotice(gm.receipt),
+          groupLabels: [],
           proposalOrNull: gm.proposalOrNull,
         },
         publication = { ...body, publicationChecksum: postSaveSha256(canonicalPostSaveJson(body)) };
@@ -3231,6 +3242,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         body = {
           schemaVersion: 1 as const,
           gmDecision: admissionGmDecisionNotice(gm.receipt),
+          groupLabels: [],
           proposalOrNull: gm.proposalOrNull,
         };
       receiveLocalAdmissionPublication(
@@ -3498,6 +3510,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         body = {
           schemaVersion: 1 as const,
           gmDecision: admissionGmDecisionNotice(gm.receipt),
+          groupLabels: [],
           proposalOrNull: gm.proposalOrNull,
         };
       receiveLocalAdmissionPublication(
@@ -3557,6 +3570,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
       const body = {
         schemaVersion: 1 as const,
         gmDecision: admissionGmDecisionNotice(receipt),
+        groupLabels: [],
         proposalOrNull: gm.proposalOrNull,
       };
       const publication = {
@@ -3727,47 +3741,169 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
       ).toBeNull();
     });
   });
-  describe('a campaign with an admitted owner', () => {
-    let first: ReturnType<typeof playerDecisionFixture>,
-      second: ReturnType<typeof playerDecisionFixture>;
-    let accepted: NonNullable<
-      ReturnType<typeof commitAdmissionPlayerDecision>['current']['playerDecisionOrNull']
-    >;
-    beforeEach(() => {
-      first = playerDecisionFixture(
-        'ACCEPT',
-        publicationStoreFixture(':memory:', { approve: true }),
-      );
-    });
-    beforeEach(() => {
-      accepted = first.decide().current.playerDecisionOrNull!;
-    });
-    beforeEach(() => {
-      second = playerDecisionFixture(
-        'ACCEPT',
-        publicationStoreFixture(':memory:', {
-          context: first.context,
-          source: fixtures.get('PURE/AUTO')!,
-        }),
-      );
-    });
-    it('activates a fully approved copy and reuses the same campaign START group for a later owner', () => {
-      expect(accepted.receipt.copies[0]!.lifecycleState).toBe('ACTIVE');
-      const later = second.decide().current.playerDecisionOrNull!;
-      expect(later.receipt.capacityProofOrNull).toMatchObject({
-        occupiedCampaignPlaceCount: 1,
-        activePcCount: 1,
-        candidateCount: 1,
+  describe.each(['START', 'EXISTING'] as const)(
+    'a campaign with an admitted owner (%s assignment)',
+    (assignment) => {
+      let first: ReturnType<typeof playerDecisionFixture>,
+        second: ReturnType<typeof playerDecisionFixture>;
+      let accepted: NonNullable<
+        ReturnType<typeof commitAdmissionPlayerDecision>['current']['playerDecisionOrNull']
+      >;
+      beforeEach(() => {
+        first = playerDecisionFixture(
+          'ACCEPT',
+          publicationStoreFixture(':memory:', { approve: true }),
+        );
       });
-      expect(later.createdGroups).toEqual([]);
-      expect(later.receipt.copies[0]!.groupIdOrNull).toBe(
-        accepted.receipt.copies[0]!.groupIdOrNull,
-      );
-      expect(first.db.prepare('SELECT count(*) AS n FROM campaign_admission_group').get()).toEqual({
-        n: 1,
+      beforeEach(() => {
+        accepted = first.decide().current.playerDecisionOrNull!;
       });
-    });
-  });
+      beforeEach(() => {
+        second = playerDecisionFixture(
+          'ACCEPT',
+          publicationStoreFixture(':memory:', {
+            context: first.context,
+            source: fixtures.get('PURE/AUTO')!,
+            ...(assignment === 'EXISTING'
+              ? { existingGroupId: accepted.receipt.copies[0]!.groupIdOrNull! }
+              : {}),
+          }),
+        );
+      });
+      it('activates a fully approved copy and reuses the same campaign START group for a later owner', () => {
+        expect(accepted.receipt.copies[0]!.lifecycleState).toBe('ACTIVE');
+        const later = second.decide().current.playerDecisionOrNull!;
+        expect(later.receipt.capacityProofOrNull).toMatchObject({
+          occupiedCampaignPlaceCount: 1,
+          activePcCount: 1,
+          candidateCount: 1,
+        });
+        expect(later.createdGroups).toEqual([]);
+        expect(later.receipt.copies[0]!.groupIdOrNull).toBe(
+          accepted.receipt.copies[0]!.groupIdOrNull,
+        );
+        expect(
+          first.db.prepare('SELECT count(*) AS n FROM campaign_admission_group').get(),
+        ).toEqual({
+          n: 1,
+        });
+        const delivery = readAdmissionDecisionDeliveryByRequest(
+          second.db,
+          second.scope,
+          second.batch.requestId,
+          second.allow,
+          second.rules,
+        )!;
+        expect(delivery.current.playerDecisionOrNull).toEqual(later);
+        const gm = delivery.current.gmDecisionOrNull!;
+        const groupLabels = admissionSelectedGroupLabels(
+          gm.proposalOrNull!.fullCampaignCopyDiffs,
+          delivery.groups,
+        );
+        expect(groupLabels).toEqual(
+          assignment === 'EXISTING'
+            ? [{ groupId: accepted.receipt.copies[0]!.groupIdOrNull, name: 'Стартовая группа' }]
+            : [],
+        );
+        const body = {
+          schemaVersion: 1 as const,
+          gmDecision: admissionGmDecisionNotice(gm.receipt),
+          proposalOrNull: gm.proposalOrNull,
+          groupLabels,
+        };
+        expect(
+          admissionOwnerPublicationValue({
+            ...body,
+            publicationChecksum: postSaveSha256(canonicalPostSaveJson(body)),
+          }).groupLabels,
+        ).toEqual(groupLabels);
+        if (assignment === 'EXISTING') {
+          enterPublishedAdmissionView(
+            second.db,
+            second.scope,
+            {
+              messageType: 'navigation.form-action',
+              protocolVersion: 2,
+              navigationRequestId: randomUUID(),
+              sourceFormId: 'NET-017',
+              actionKey: 'NET-017::CTA::004',
+              expectedProjectionRevision: readGmRequestReviewView(
+                second.db,
+                second.scope,
+                second.allow,
+              )!.projectionRevision,
+            },
+            second.allow,
+            second.rules,
+            second.allow,
+          );
+          const projected = second.db
+            .transaction(() => {
+              const view = readGmAdmissionViewStateInTransaction(
+                second.db,
+                second.scope,
+              ).viewOrNull!;
+              const header = readHostedCurrentPausedCampaign(
+                second.db,
+                second.scope.campaignId,
+                second.allow,
+              );
+              return projectGmAdmission({
+                view,
+                current: readAdmissionDecision(
+                  second.db,
+                  second.scope,
+                  view.admissionBatchId,
+                  second.allow,
+                  second.rules,
+                ),
+                history: admissionDecisionStorage.readHistory(
+                  second.db,
+                  second.scope,
+                  second.allow,
+                  second.rules,
+                ),
+                service: createCampaignAdmissionRules(baseline, limits.maxWitnessBytes),
+                campaign: {
+                  ...header,
+                  activePlayerCapacity: header.activePlayerCapacity as 1 | 2 | 3 | 4 | 5,
+                  revisions: {
+                    stateRevision: header.stateRevision,
+                    projectionRevision: header.projectionRevision,
+                    actorVisibilityRevision: header.actorVisibilityRevision,
+                  },
+                },
+                supported: [],
+              });
+            })
+            .deferred();
+          const payload = projected.layers[0]!.roleFilteredPayload;
+          expect(admissionGmProjectionValue('NET-021', payload)['groupLabels']).toEqual(
+            groupLabels,
+          );
+          expect(() =>
+            admissionGmProjectionValue('NET-021', { ...payload, groupLabels: [] }),
+          ).toThrow();
+          expect(() =>
+            admissionGmProjectionValue('NET-021', {
+              ...payload,
+              groupLabels: [...groupLabels, { groupId: randomUUID(), name: 'Чужая группа' }],
+            }),
+          ).toThrow();
+          expect(() =>
+            admissionSelectedGroupLabels(gm.proposalOrNull!.fullCampaignCopyDiffs, []),
+          ).toThrow('group is missing');
+          expect(() =>
+            admissionOwnerPublicationValue({
+              ...body,
+              groupLabels: [],
+              publicationChecksum: '0'.repeat(64),
+            }),
+          ).toThrow();
+        }
+      });
+    },
+  );
   it('occupies a place for a blocked lobby copy and recovers the same group, controller and receipts', () => {
     const f = playerDecisionFixture(),
       sourceBefore = f.src.d.database.serialize(),

@@ -447,7 +447,52 @@ export interface AdmissionOwnerPublication {
   readonly schemaVersion: 1;
   readonly gmDecision: AdmissionGmDecisionNotice;
   readonly proposalOrNull: AdmissionProposal | null;
+  readonly groupLabels: readonly AdmissionGroupLabel[];
   readonly publicationChecksum: string;
+}
+export interface AdmissionGroupLabel {
+  readonly groupId: string;
+  readonly name: string;
+}
+export function admissionExistingGroupIds(
+  diffs: readonly AdmissionFullCopyDiff[],
+): readonly string[] {
+  return [
+    ...new Set(
+      diffs.flatMap((diff) =>
+        [diff.beforeSheet, diff.afterSheet].flatMap((sheet) =>
+          sheet.groupAssignmentOrNull?.kind === 'EXISTING'
+            ? [sheet.groupAssignmentOrNull.groupId]
+            : [],
+        ),
+      ),
+    ),
+  ];
+}
+export function admissionGroupLabelsValue(
+  value: unknown,
+  requiredIds?: readonly string[],
+  path = '$.groupLabels',
+): readonly AdmissionGroupLabel[] {
+  const rows = list(value, path).map((value, index) => {
+    const at = `${path}[${index}]`,
+      row = exact(value, 'groupId name', at);
+    uuid(row['groupId'], `${at}.groupId`);
+    if (text(row['name'], `${at}.name`).trim().length === 0)
+      invalid(`${at}.name`, 'actual group name', null);
+    return validated<AdmissionGroupLabel>(row);
+  });
+  unique(
+    rows.map((row) => row.groupId),
+    path,
+  );
+  if (
+    requiredIds !== undefined &&
+    (rows.length !== requiredIds.length ||
+      rows.some((row, index) => row.groupId !== requiredIds[index]))
+  )
+    invalid(path, 'exact ordered selected group labels', null);
+  return rows;
 }
 
 export function admissionGmDecisionNotice(
@@ -474,7 +519,11 @@ export function admissionOwnerPublicationValue(
   value: unknown,
   path = '$',
 ): AdmissionOwnerPublication {
-  const row = exact(value, 'schemaVersion gmDecision proposalOrNull publicationChecksum', path);
+  const row = exact(
+    value,
+    'schemaVersion gmDecision proposalOrNull groupLabels publicationChecksum',
+    path,
+  );
   if (row['schemaVersion'] !== 1) invalid(path, 'owner publication schema 1', null);
   checksum(row['publicationChecksum'], `${path}.publicationChecksum`);
   const p = `${path}.gmDecision`,
@@ -525,6 +574,15 @@ export function admissionOwnerPublicationValue(
     )
       invalid(p, 'complete published batch and matching original GM receipt', null);
   }
+  admissionGroupLabelsValue(
+    row['groupLabels'],
+    row['proposalOrNull'] === null
+      ? []
+      : admissionExistingGroupIds(
+          (row['proposalOrNull'] as AdmissionProposal).fullCampaignCopyDiffs,
+        ),
+    `${path}.groupLabels`,
+  );
   return validated(row);
 }
 

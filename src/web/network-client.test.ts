@@ -14,6 +14,7 @@ import type { NetworkApplicationFormId } from '@shared/network-application.js';
 import { NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS } from '@shared/device-admission.js';
 import {
   connectProjection,
+  gmDecisionDestination,
   LOCAL_ROLE_CHOICE_DETAIL,
   type ProjectionConnection,
   type NetworkGmRequestDraftClientState,
@@ -1344,6 +1345,94 @@ const gmBirth = (): JsonObject => ({
   creationReceiptId: 'original-create-receipt',
   creationCommandId: 'original-create-command',
   hostBindRecovery: { status: 'RESERVED', reasonCode: null },
+});
+
+describe('historical GM receipts after projection-only navigation', () => {
+  const applied = { stateRevision: 4, projectionRevision: 6, actorVisibilityRevision: 0 };
+  const before = { ...applied, stateRevision: 3, projectionRevision: 5 };
+  // The closed decoder precedes this correlation check; these isolate its scope/vector contract.
+  const snapshot = (formId: string, revisions: RevisionVector, projection: JsonObject) =>
+    ({ formId, revisions, projection, layers: [] }) as unknown as ConfirmedProjectionSnapshot;
+  const scope = { contextId: CONTEXT, campaignId: CAMPAIGN };
+  it.each(['ACCEPT', 'REJECT'] as const)(
+    'recovers GM %s after RETURN with unchanged S and higher P',
+    (decision) => {
+      const receipt = {
+        commandId: 'lost-gm-command',
+        receiptId: 'original-gm-receipt',
+        revisions: applied,
+        result: {
+          workflowCommandId: `UI-CMD-ADMISSION-GM-${decision}`,
+          admissionBatchId: SCOPE,
+          proposalChecksumOrNull: '1'.repeat(64),
+          campaignCharacterIds: [REF.sourceUuid],
+          reasonOrNull: 'Причина',
+        },
+      };
+      const source = snapshot('NET-021', before, scope);
+      const returned = snapshot('NET-017', { ...applied, projectionRevision: 7 }, gmQueue(applied));
+      expect(gmDecisionDestination(returned, source, receipt, true)).toBe(true);
+      expect(
+        gmDecisionDestination({ ...returned, revisions: applied }, source, receipt, true),
+      ).toBe(false);
+      for (const changed of [
+        { ...returned, revisions: { ...applied, stateRevision: 2, projectionRevision: 7 } },
+        { ...returned, projection: { ...returned.projection, contextId: NEXT_CONTEXT } },
+        { ...returned, projection: { ...returned.projection, campaignId: NEXT_CONTEXT } },
+      ])
+        expect(
+          gmDecisionDestination(
+            changed as unknown as ConfirmedProjectionSnapshot,
+            source,
+            receipt,
+            true,
+          ),
+        ).toBe(false);
+      const original = snapshot(decision === 'ACCEPT' ? 'NET-021' : 'NET-022', applied, {
+        ...scope,
+        admissionBatchId: SCOPE,
+        published: true,
+        editable: false,
+        proposalChecksum: '1'.repeat(64),
+        proposedCampaignCopies: [{ campaignCharacterIdOrNull: REF.sourceUuid }],
+        reason: 'Причина',
+      });
+      expect(gmDecisionDestination(original, source, receipt, true)).toBe(true);
+      expect(
+        gmDecisionDestination(
+          {
+            ...original,
+            projection: { ...original.projection, editable: true },
+          } as unknown as ConfirmedProjectionSnapshot,
+          source,
+          receipt,
+          true,
+        ),
+      ).toBe(false);
+    },
+  );
+  it('recovers preliminary ACCEPT after OPEN while still checking the exact applied vector', () => {
+    const receipt = {
+      commandId: 'lost-preliminary',
+      receiptId: 'original-preliminary',
+      revisions: applied,
+      result: { afterRequestStatus: 'IN_REVIEW' },
+    };
+    const source = snapshot('NET-017', before, gmQueue(before));
+    const opened = snapshot('NET-018', { ...applied, projectionRevision: 7 }, scope);
+    expect(gmDecisionDestination(opened, source, receipt, true)).toBe(true);
+    expect(gmDecisionDestination({ ...opened, revisions: applied }, source, receipt, true)).toBe(
+      false,
+    );
+    expect(
+      gmDecisionDestination(
+        opened,
+        source,
+        { ...receipt, result: { afterRequestStatus: 'REJECTED' } },
+        true,
+      ),
+    ).toBe(false);
+  });
 });
 function gmSnapshot(
   formId: 'NET-017' | 'CMP-006',

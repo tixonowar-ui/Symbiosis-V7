@@ -43,6 +43,7 @@ import {
 import {
   admissionPlayerStorage as player,
   type AdmissionHistory,
+  type AdmissionGroup,
   type StoredAdmissionPlayerDecision,
 } from './campaign-admission-player.js';
 import { CAMPAIGN_ADMISSION_TABLES } from './migrations/0012-campaign-admission.js';
@@ -689,6 +690,18 @@ export function readAdmissionDecisionByRequest(
   validate: CampaignPrivateOwnerValidator,
   rules: AdmissionPublicationRules,
 ): AdmissionDecisionRead | null {
+  return (
+    readAdmissionDecisionDeliveryByRequest(db, scope, requestId, validate, rules)?.current ?? null
+  );
+}
+/** Group display metadata and the original decision come from the same verified SQL snapshot. */
+export function readAdmissionDecisionDeliveryByRequest(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  requestId: string,
+  validate: CampaignPrivateOwnerValidator,
+  rules: AdmissionPublicationRules,
+): { readonly current: AdmissionDecisionRead; readonly groups: readonly AdmissionGroup[] } | null {
   return s.read(db, scope.ownerDeviceId, () => {
     const source = readGmRequestReviewSource(db, scope, validate),
       id = s.uuid(requestId);
@@ -725,7 +738,7 @@ export function readAdmissionDecisionByRequest(
         history.decisions.get(batchId) ??
         readDecision(db, working.readInTransaction(db, source, batchId, rules), rules);
     if (current.review.current.requestId !== id) return s.fail('FOREIGN_OWNER');
-    return current;
+    return { current, groups: [...history.groups.values()] };
   });
 }
 

@@ -8759,7 +8759,7 @@ function preliminaryGmDecisionReceipt(
     return unrecognized('$.receipt', null);
   return { ok: true, value: { ...value, result } };
 }
-function gmDecisionDestination(
+export function gmDecisionDestination(
   next: ConfirmedProjectionSnapshot,
   source: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt,
@@ -8780,7 +8780,7 @@ function gmDecisionDestination(
     )
   )
     return false;
-  if (next.revisions.stateRevision > receipt.revisions.stateRevision) return true;
+  if (!sameCampaignRevisions(next.revisions, receipt.revisions)) return true;
   const active = activePresentedForm(next),
     target =
       workflow === 'UI-CMD-ADMISSION-REVIEW-OPEN'
@@ -8838,16 +8838,15 @@ function preliminaryGmDecisionDestination(
     return false;
   const old = gmRequestProjection(source.projection);
   if (old === null) return false;
+  const later = !sameCampaignRevisions(next.revisions, receipt.revisions);
   if (next.formId === 'CMP-006')
     return (
+      later &&
       old.returnContext.originFormId === 'CMP-006' &&
       next.projection['creationReceiptId'] === old.returnContext.creationReceiptId
     );
   if (isAdmissionGmForm(next.formId))
-    return (
-      next.revisions.stateRevision > receipt.revisions.stateRevision &&
-      receipt.result.afterRequestStatus === 'IN_REVIEW'
-    );
+    return later && receipt.result.afterRequestStatus === 'IN_REVIEW';
   const p = gmRequestProjection(next.projection),
     row = p?.requests.find((r) => r.requestId === receipt.result.requestId);
   if (
