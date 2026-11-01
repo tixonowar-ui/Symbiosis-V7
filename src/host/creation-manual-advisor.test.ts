@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { openPersistenceDatabase } from '../persistence/index.js';
 import { loadCreationSkillCatalog, type CreationSkillCatalog } from './creation-skill-catalog.js';
@@ -115,15 +115,18 @@ function reopen(setup: ManualWizardSetup): DurableCreationWizardCheckpoint {
   );
 }
 
-describe('CHR-041 manual Advisor rolls and skills', () => {
-  it('commits two AUTO I/W receipts and exact skills with identity continuity and restart', () => {
-    const context = setupAdvisor(
+describe('CHR-041 AUTO Advisor rolls and skills', () => {
+  let context: ReturnType<typeof setupAdvisor>;
+  beforeEach(() => {
+    context = setupAdvisor(
       'advisor-auto',
       'AUTO',
       ['ADVISER', 'TAIPAN', 'OWL', 'EEL'],
       ['advisor-instance', 'pending-i', 'pending-w'],
       [7, 11],
     );
+  });
+  it('commits two AUTO I/W receipts and exact skills with identity continuity and restart', () => {
     const { dependencies, samples, setup } = context;
     let current = context.current;
     const request = manualAdvisorIwRequest(setup, current, 'auto-iw', null);
@@ -242,15 +245,20 @@ describe('CHR-041 manual Advisor rolls and skills', () => {
     expect(reopen(setup).manualCompositionStage).toEqual(current.manualCompositionStage);
     expect(samples).toEqual([7, 11]);
   });
+});
 
-  it('keeps roll-time B, teacher absorption and one identity across later replacement and re-addition', () => {
-    const context = setupAdvisor(
+describe('CHR-041 MANUAL Advisor floor and identity', () => {
+  let context: ReturnType<typeof setupAdvisor>;
+  beforeEach(() => {
+    context = setupAdvisor(
       'advisor-manual-floor',
       'MANUAL',
       ['TROGR', 'TEACHER', 'ADVISER', 'TAIPAN'],
       ['advisor-instance', 'pending-i', 'pending-w', 'pending-b'],
       [],
     );
+  });
+  it('keeps roll-time B, teacher absorption and one identity across later replacement and re-addition', () => {
     const { dependencies, samples, setup } = context;
     let current = context.current;
     expect(current.manualCompositionStage?.pendingSuppressionRollRequestIdOrNull).toBeNull();
@@ -342,7 +350,9 @@ describe('CHR-041 manual Advisor rolls and skills', () => {
     expect(reopen(setup).manualCompositionStage).toEqual(current.manualCompositionStage);
     expect(samples).toEqual([]);
   });
+});
 
+describe('CHR-041 manual Advisor rolls and skills', () => {
   it('starts suppression after I/W, rejects stale or early commands and never samples twice', () => {
     const context = setupAdvisor(
       'advisor-late-floor',

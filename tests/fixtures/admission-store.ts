@@ -84,12 +84,22 @@ export function createAdmissionOwnerFixture(
   proof: VerifiedRequestReviewProof,
   filename = ':memory:',
 ) {
+  return prepareAdmissionOwnerFixture(sourceDatabase, hosted, proof, filename).submit();
+}
+
+/** OPEN and SUBMIT are distinct fixture phases; both still use the actual durable writers. */
+export function prepareAdmissionOwnerFixture(
+  sourceDatabase: Database.Database,
+  hosted: ReturnType<typeof createAdmissionStoreFixture>,
+  proof: VerifiedRequestReviewProof,
+  filename = ':memory:',
+) {
   // A WAL-mode image needs an actual filename when reopened; its immutable bytes stay intact.
   const snapshot = sourceDatabase.serialize();
   if (filename !== ':memory:') writeFileSync(filename, snapshot);
   const db = filename === ':memory:' ? new Database(snapshot) : new Database(filename);
-  configurePersistenceDatabase(db);
   try {
+    configurePersistenceDatabase(db);
     const ownerDeviceId = hosted.principal.peerIdentity.ownerDeviceId,
       scope = { ownerDeviceId, networkScopeId: randomUUID() },
       tabId = hosted.localControllerSeatId,
@@ -170,69 +180,82 @@ export function createAdmissionOwnerFixture(
         verifiedReceipt: JSON.parse(s.canonical(opened.receipt)) as JsonObject,
       },
     });
-    mutate({
-      kind: 'SELECTION',
-      selectedCandidates: hosted.batch.candidates.map((candidate) => ({
-        sourceUuid: candidate.descriptor.sourceUuid,
-        finalSnapshotVersion: candidate.descriptor.finalSnapshotVersion,
-        metadataRevision: candidate.descriptor.metadataRevision,
-        candidateSnapshotChecksum: candidate.descriptor.sourceChecksum,
-        requestedControllerSeat: tabId,
-      })),
-    });
-    mutate({ kind: 'PREPARE_BATCH', batch: hosted.batch });
-    mutate({
-      kind: 'INTENT',
-      intent: {
-        operation: 'SUBMIT',
-        commandId: submitted.input.commandId,
-        requestId: hosted.batch.requestId,
-        clientRequestJson: s.canonical({ sourceFormId: 'NET-004' }),
-        batch: hosted.batch,
-        semanticBodyJson: submitted.input.semanticBodyJson,
-      },
-    });
-    mutate({
-      kind: 'ACKNOWLEDGE',
-      acknowledgement: {
-        operation: 'SUBMIT',
-        commandId: submitted.input.commandId,
-        semanticBodySha256: submitted.receipt.semanticBodySha256,
-        request: proof.submittedReceipt.request,
-        verifiedReceipt: JSON.parse(s.canonical(submitted.receipt)) as JsonObject,
-      },
-    });
-    const key = generateKeyPairSync('ed25519').publicKey.export({ format: 'der', type: 'spki' }),
-      hostIdentity: NetworkPublicIdentity = {
-        schemaVersion: 1,
-        algorithm: 'ED25519',
-        ownerDeviceId: hosted.scope.ownerDeviceId,
-        publicKeySpkiBase64: key.toString('base64'),
-        keyFingerprintSha256: createHash('sha256').update(key).digest('hex'),
-      };
-    commitLocalNetworkHostPin(
+    return {
       db,
-      scope,
-      {
-        ownerDeviceId,
-        campaignId: hosted.scope.campaignId,
-        identity: hostIdentity,
-        initialCanonicalOrigin: 'http://127.0.0.1:30111',
-        entryCommandId: entry.request.entryCommandId,
+      submit: () => {
+        try {
+          mutate({
+            kind: 'SELECTION',
+            selectedCandidates: hosted.batch.candidates.map((candidate) => ({
+              sourceUuid: candidate.descriptor.sourceUuid,
+              finalSnapshotVersion: candidate.descriptor.finalSnapshotVersion,
+              metadataRevision: candidate.descriptor.metadataRevision,
+              candidateSnapshotChecksum: candidate.descriptor.sourceChecksum,
+              requestedControllerSeat: tabId,
+            })),
+          });
+          mutate({ kind: 'PREPARE_BATCH', batch: hosted.batch });
+          mutate({
+            kind: 'INTENT',
+            intent: {
+              operation: 'SUBMIT',
+              commandId: submitted.input.commandId,
+              requestId: hosted.batch.requestId,
+              clientRequestJson: s.canonical({ sourceFormId: 'NET-004' }),
+              batch: hosted.batch,
+              semanticBodyJson: submitted.input.semanticBodyJson,
+            },
+          });
+          mutate({
+            kind: 'ACKNOWLEDGE',
+            acknowledgement: {
+              operation: 'SUBMIT',
+              commandId: submitted.input.commandId,
+              semanticBodySha256: submitted.receipt.semanticBodySha256,
+              request: proof.submittedReceipt.request,
+              verifiedReceipt: JSON.parse(s.canonical(submitted.receipt)) as JsonObject,
+            },
+          });
+          const key = generateKeyPairSync('ed25519').publicKey.export({
+              format: 'der',
+              type: 'spki',
+            }),
+            hostIdentity: NetworkPublicIdentity = {
+              schemaVersion: 1,
+              algorithm: 'ED25519',
+              ownerDeviceId: hosted.scope.ownerDeviceId,
+              publicKeySpkiBase64: key.toString('base64'),
+              keyFingerprintSha256: createHash('sha256').update(key).digest('hex'),
+            };
+          commitLocalNetworkHostPin(
+            db,
+            scope,
+            {
+              ownerDeviceId,
+              campaignId: hosted.scope.campaignId,
+              identity: hostIdentity,
+              initialCanonicalOrigin: 'http://127.0.0.1:30111',
+              entryCommandId: entry.request.entryCommandId,
+            },
+            hosted.allow,
+          );
+          commitLocalNetworkRequestAdvance(
+            db,
+            {
+              ...scope,
+              expectedRevisions: s.vectorOf(current),
+              expectedDraftRevision: current.draftRevision,
+            },
+            { eventId: randomUUID(), receiptId: randomUUID(), proof },
+            hosted.allow,
+          );
+          return { db, scope, hostIdentity, tabId };
+        } catch (error: unknown) {
+          db.close();
+          throw error;
+        }
       },
-      hosted.allow,
-    );
-    commitLocalNetworkRequestAdvance(
-      db,
-      {
-        ...scope,
-        expectedRevisions: s.vectorOf(current),
-        expectedDraftRevision: current.draftRevision,
-      },
-      { eventId: randomUUID(), receiptId: randomUUID(), proof },
-      hosted.allow,
-    );
-    return { db, scope, hostIdentity, tabId };
+    };
   } catch (error: unknown) {
     db.close();
     throw error;

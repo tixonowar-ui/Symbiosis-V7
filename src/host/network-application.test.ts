@@ -586,6 +586,16 @@ async function submittedPlayer(
   loseFirstBindingAck = false,
   beforeSubmit?: (p: Awaited<ReturnType<typeof client>>) => void,
 ) {
+  return submitConnectedPlayer(
+    await connectedPlayer(h),
+    h,
+    legacy,
+    loseFirstBindingAck,
+    beforeSubmit,
+  );
+}
+
+async function connectedPlayer(h: Awaited<ReturnType<typeof host>>) {
   const p = await client();
   await p.nav('APP-002::CTA::003', 'APP-002');
   await p.nav('NET-001::CTA::001');
@@ -597,6 +607,16 @@ async function submittedPlayer(
     addressOrQrPayload: p.state().addressOrQrPayload,
     selectedCampaignIdOrNull: null,
   });
+  return p;
+}
+
+async function submitConnectedPlayer(
+  p: Awaited<ReturnType<typeof client>>,
+  h: Awaited<ReturnType<typeof host>>,
+  legacy = false,
+  loseFirstBindingAck = false,
+  beforeSubmit?: (p: Awaited<ReturnType<typeof client>>) => void,
+) {
   const {
     name: _name,
     sourceSnapshotId: _snapshot,
@@ -2128,8 +2148,10 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT'] as const)(
       h = await host();
     });
     beforeEach(async () => {
-      const submitted = await submittedPlayer(h);
-      p = submitted.p;
+      p = await connectedPlayer(h);
+    });
+    beforeEach(async () => {
+      const submitted = await submitConnectedPlayer(p, h);
       requestId = submitted.batch.requestId;
       sourceRows = p.db.prepare('SELECT * FROM local_character').all();
     });

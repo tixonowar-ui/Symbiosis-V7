@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type Database from 'better-sqlite3';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openPersistenceDatabase } from './database.js';
 import { commitNewCampaignCheckpoint, type CampaignCheckpointCreator } from './index.js';
@@ -53,13 +53,16 @@ function expectParticipantsEmpty(database: Database.Database) {
   expect(database.prepare('SELECT * FROM test_campaign_cursor').all()).toEqual([]);
 }
 
-describe('first PAUSED campaign checkpoint', () => {
-  it('atomically creates one zero-copy baseline and related receipt/cursor, then reopens the exact full checkpoint', () => {
+describe('first PAUSED campaign checkpoint on disk', () => {
+  let database: Database.Database, path: string;
+  beforeEach(() => {
     const directory = mkdtempSync(join(tmpdir(), 'campaign-checkpoint-'));
     directories.push(directory);
-    const path = join(directory, 'campaign.sqlite');
-    const database = open(path);
+    path = join(directory, 'campaign.sqlite');
+    database = open(path);
     addTransactionParticipants(database);
+  });
+  it('atomically creates one zero-copy baseline and related receipt/cursor, then reopens the exact full checkpoint', () => {
     const payloadJson = '{ "title": "Zero players", "activePlayerCapacity": 5 }';
     const saved = commitNewCampaignCheckpoint(
       database,
@@ -106,7 +109,9 @@ describe('first PAUSED campaign checkpoint', () => {
       count: 1,
     });
   });
+});
 
+describe('first PAUSED campaign checkpoint', () => {
   it.each([false, true])(
     'rejects a pre-existing campaign before invoking the callback (checkpoint=%s)',
     (withCheckpoint) => {

@@ -68,6 +68,7 @@ import type { AdmissionReviewMutation } from '@shared/campaign-admission-review.
 import {
   createAdmissionStoreFixture,
   createAdmissionOwnerFixture,
+  prepareAdmissionOwnerFixture,
 } from '../../tests/fixtures/admission-store.js';
 import {
   receiveLocalAdmissionPublication,
@@ -3226,6 +3227,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
     const sources: Source[] = [];
     let filename: string,
       f: ReturnType<typeof playerDecisionFixture>,
+      ownerPreparation: ReturnType<typeof prepareAdmissionOwnerFixture>,
       owner: ReturnType<typeof createAdmissionOwnerFixture>;
     beforeAll(() => {
       const directory = mkdtempSync(join(tmpdir(), 'symbiosis-admission-batch-'));
@@ -3252,13 +3254,16 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
     beforeEach(() => {
       const directory = mkdtempSync(join(tmpdir(), 'symbiosis-admission-owner-'));
       directories.push(directory);
-      owner = createAdmissionOwnerFixture(
+      ownerPreparation = prepareAdmissionOwnerFixture(
         sources[0]!.d.database,
         f,
         f.published.review.request.proof,
         join(directory, 'owner.sqlite'),
       );
-      admissionDatabases.push(owner.db);
+      admissionDatabases.push(ownerPreparation.db);
+    });
+    beforeEach(() => {
+      owner = ownerPreparation.submit();
     });
     beforeEach(() => {
       const gm = f.published.gmDecisionOrNull!,
