@@ -19,6 +19,14 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '26669e296a3b1117925e7efce4704977b79e8d94d3693be234a1ba7cbb9c54e5',
   },
+  // ADR 0073 / #206: exact approved lobby/Start source delivery.
+  lobbyBaselineVersion: 'sha256:eff116587643326c61b73c9fb1c650aec1aca40bd755a68eb1cccc449a2462ac',
+  lobbyAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'cfa313d7f1755ccfad06fa09c5161f8a7cac3ea01df95e4418da2dca1c1c1ff7',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '22f048c80d11a947bb814a156a2d58b91c3cbd35f1ebe8b240191bac0c63b811',
+  },
   replayCatalogDigests: {
     'generated/spec/character/classes.json':
       '6bfdb854b7d3158c882017a2b89314795dd88f674b540a91e89fdea1db0c62e6',

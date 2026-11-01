@@ -1,5 +1,19 @@
 # Передача контекста — 2026-11-01
 
+## Source #206 — 2026-11-02
+
+Atlas 1.8 поставляет принятые Ready/Unready, явный ввод начального времени,
+Start один раз, owner-only PEACE_SNAPSHOT и общие CMP-007/GM-001/GRP-001
+варианты. Controls обязательны, готовность считается по полному ACTIVE-набору
+устройства; blocked PROPOSED остаются в лобби. Реальные groups/location labels
+переиспользуются, отсутствующие combat/marker поля не фабрикуются.
+
+[ADR 0073](../adr/0073-campaign-lobby-start-source.md) закрепляет source closure
+и точные B0/B1/B2→B3 пары. Новые object/Markdown seals и mutation tests
+сохраняют старые guards. Runtime #173 ещё не реализован; #174 следует после
+его полного merge. Результаты финальных SHA/review/clean-copy gates/CI
+фиксируются в PR поставки и не выводятся из наличия этих контрактов.
+
 ## #172 — runtime финального допуска
 
 Ветка `codex/172-campaign-copy-admission` от main `d87d02b` после merge

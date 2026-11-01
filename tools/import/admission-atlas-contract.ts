@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { fail } from './lib/fail.js';
 import { asArray, asObject, type JsonObject } from './lib/json.js';
 
-/** Exact reviewed Atlas 1.7 objects, authorized by #199 A/B and ADR 0071. */
+/** Exact admission objects from ADR 0071; overlapping lobby fields updated by #206 / ADR 0073. */
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -26,7 +26,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-006',
-    sha256: '571520de697c441cd6b67f0bf10d3a3ddbacf74a5f25c942462b7550a003b00d',
+    sha256: '3cda0d6a4e536f146eb65f182bba2b4541f4f5fbbc05f5db9ccea8c50f128208',
   },
   {
     target: 'forms',
@@ -80,7 +80,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-001',
-    sha256: '59ddbb89a8644fd4d958a0b085712a761fd521ac18557d648b1a780ad15e93cf',
+    sha256: '85ab67627d8b1e2f8da1dc1133337673e017e01deab5e70a6fce6578fcd0d412',
   },
   {
     target: 'forms',
@@ -110,7 +110,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-JOIN-REVIEW',
-    sha256: 'f91b1584e9b1204fdc52ec00e743082c7380448ab446c0c664464769f1930944',
+    sha256: '67a8c2f7e590c27abd1492f5c69272fb26a6d3f8794a6a3a626f8a7b6ddac77e',
   },
   {
     target: 'coverageRequirements',
@@ -140,7 +140,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-006',
-    sha256: '03501568540cb22ba190e116f0acc2ce8bd1207f60a90f2a9392e411afff076c',
+    sha256: 'ee0c9a9bab7fbddc766469825e6bd673c1f5c60b2c12dda91182cb17346fb102',
   },
   {
     target: 'qaScenarios',
@@ -248,11 +248,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: 'b64cc970402b70c5a806f9cd81baf8124faeefb39f6c782139e994d97f8f1627',
+    sha256: 'fe6e06c3698c1413714789a6d2c24220467c816897e37b7812713024f6b6c97e',
   },
   {
     key: 'transitions',
-    sha256: '808203cdc5ce2f2027a45a706c8ec597fae1fc4eeccf021d0fbdc102942a2a24',
+    sha256: 'baf51cb230695e0edd72e553ed2a1e67a8e0dfdd02c579a6bcefd250f2ba2bbd',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -270,7 +270,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-006 —',
-    sha256: '9e04c008765b03bbcc055f6fba77b8b8894c1244a3868d304a51a8227e226290',
+    sha256: '9a6451ee0457601034797f0225e61a526e0d0f0a5e4719002cfe4299e253cdd7',
   },
   {
     prefix: '### NET-007 —',
@@ -306,7 +306,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-001 —',
-    sha256: 'f16c00bd1d74890b9924ddbff34e798f3ad7358aaccbe1b582112470c09049ae',
+    sha256: '3875b197c9be67b0daafe1334fbdee24df5d07d598e7dd193e3b9ce1fe12ee21',
   },
   {
     prefix: '### PLY-030 —',
@@ -326,7 +326,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-JOIN-REVIEW —',
-    sha256: '6ad0345241bbd14ed6a72d63bf932a20e78f886ecd1dcec67aefb7aac7fa95e7',
+    sha256: '413aebb71d6652a693388b6d288e6afc6e399b5b58cbd5d266646defdf2b60d2',
   },
 ] as const;
 const MARKDOWN_LINES = [
@@ -348,7 +348,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NET-006 | NET-006 |',
-    sha256: '337414d6f54497ae7109c212279797b339f3c8a99537a70f0225968131c83bed',
+    sha256: 'a8e522c66e36c114061118d058a78432970bbc8f5201944963f720002b878b1c',
   },
   {
     prefix: '| QA-FORM-NET-007 | NET-007 |',

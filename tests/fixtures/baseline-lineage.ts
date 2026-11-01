@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { BASELINE_LINEAGE_SEALS } from '../../src/host/baseline-lineage-seals.js';
 
-export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2';
+export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2' | 'B3';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
+const lobbyPatchPath = fileURLToPath(new URL('./atlas-206-lineage.patch', import.meta.url));
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
 );
@@ -43,11 +44,13 @@ export const BASELINE_FIXTURE_IDS = {
   B0: BASELINE_LINEAGE_SEALS.historicalBaselineVersion,
   B1: BASELINE_LINEAGE_SEALS.successorBaselineVersion,
   B2: BASELINE_LINEAGE_SEALS.admissionBaselineVersion,
+  B3: BASELINE_LINEAGE_SEALS.lobbyBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
   B1: BASELINE_LINEAGE_SEALS.successorAtlas,
   B2: BASELINE_LINEAGE_SEALS.admissionAtlas,
+  B3: BASELINE_LINEAGE_SEALS.lobbyAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -69,12 +72,18 @@ export function applyBaselineFixtureRelease(
   release: BaselineFixtureRelease,
 ): void {
   const before = readAtlasBytes(projectRoot);
-  const releases = ['B0', 'B1', 'B2'] as const;
+  const releases = ['B0', 'B1', 'B2', 'B3'] as const;
   const actual =
     releases.find((candidate) => matchesAtlas(before, releaseAtlas[candidate])) ?? null;
   assert.notEqual(actual, null, 'fixture requires exact known Atlas bytes');
   const patchSeal = (): string =>
-    sha(Buffer.concat([readFileSync(patchPath), readFileSync(admissionPatchPath)]));
+    sha(
+      Buffer.concat([
+        readFileSync(patchPath),
+        readFileSync(admissionPatchPath),
+        readFileSync(lobbyPatchPath),
+      ]),
+    );
   const patchSha256 = patchSeal();
   const expected = releaseAtlas[release];
   const verified: Partial<Record<BaselineFixtureRelease, AtlasBytes>> = { [actual!]: before };
@@ -95,7 +104,7 @@ export function applyBaselineFixtureRelease(
             'apply',
             '--no-index',
             ...(reverse ? ['--reverse'] : []),
-            edge === 0 ? patchPath : admissionPatchPath,
+            edge === 0 ? patchPath : edge === 1 ? admissionPatchPath : lobbyPatchPath,
           ],
           { cwd: projectRoot, stdio: 'pipe' },
         );
@@ -128,7 +137,7 @@ export function applyBaselineFixtureRelease(
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0/B1/B2 sources are reconstructed through the two reviewed delivery patches. */
+/** Exact B0/B1/B2/B3 sources are reconstructed through the three reviewed delivery patches. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');
