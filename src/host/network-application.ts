@@ -866,8 +866,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         refusal: { code: 'GUARD_REJECTED' },
       });
   }
-  async function refreshOwnerLobby(c: LocalNetworkConnection): Promise<LocalAdmissionRead | null> {
-    let owned = readLocalAdmissionPresentation(db, scope(c));
+  async function refreshOwnerLobby(
+    c: LocalNetworkConnection,
+    verifiedOwned?: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
+  ): Promise<LocalAdmissionRead | null> {
+    // Private callers may reuse a complete read only before any intervening await or write.
+    let owned = verifiedOwned ?? readLocalAdmissionPresentation(db, scope(c));
     if (owned?.admission.receiptOrNull?.decision !== 'ACCEPT') return owned?.admission ?? null;
     const bound = scope(c),
       contextId = c.contextId,
@@ -2808,6 +2812,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           Number(a.publishedPendingCommandId !== null),
       );
       for (const [c, binding] of views) {
+        const interestedPending =
+          binding.publishedPendingCommandId !== null &&
+          binding.terminalCommandIds.has(binding.publishedPendingCommandId)
+            ? binding.publishedPendingCommandId
+            : null;
         const sendTerminal = (message: LocalNetworkHostMessage): void => {
           const id =
             message.messageType === 'command.replay'
@@ -2857,7 +2866,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
               publishReadyTerminal(
                 c,
                 refreshed.admission,
-                binding.publishedPendingCommandId,
+                interestedPending,
                 message.revisions,
                 sendTerminal,
               );
@@ -2905,8 +2914,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             const token = ownerViewToken(message.revisions, message.presentation.base);
             if (token === binding.publishedToken) return;
             const admission = presentation?.admission;
-            if (admission !== undefined && binding.publishedPendingCommandId !== null) {
-              const receipt = ownerDecisionReceipt(c, admission, binding.publishedPendingCommandId);
+            if (admission !== undefined && interestedPending !== null) {
+              const receipt = ownerDecisionReceipt(c, admission, interestedPending);
               // The closed lobby no longer embeds the admission receipt. Settle the original
               // browser command before publishing its newer authoritative destination.
               if (receipt !== null)
@@ -2920,7 +2929,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             publishReadyTerminal(
               c,
               admission ?? null,
-              binding.publishedPendingCommandId,
+              interestedPending,
               message.revisions,
               sendTerminal,
             );
@@ -2946,12 +2955,22 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
                   admission.pendingDecisionOrNull?.commandId ??
                   null);
           };
-          if (!refreshedScopes.has(binding.scopeId)) {
-            if (d.peer.current(binding.scopeId) === null) await reconnect(c, true);
+          if (refreshedScopes.has(binding.scopeId)) {
+            // This sibling's initial full read is already after the scope's refresh.
+            // Nothing has awaited or written since it; publication keeps its own token.
+            publish(owned?.application ?? observed.current, owned);
+            continue;
+          }
+          {
+            const livePeer = d.peer.current(binding.scopeId);
+            if (livePeer === null) await reconnect(c, true);
             // A verified final publication already proves the immutable preliminary review.
             // Reconnect still reconciles the authenticated session generation above.
             else if (owned === null) await refreshRequest(c, observed);
-            const admission = await refreshOwnerAdmission(c);
+            const admission =
+              livePeer !== null && owned?.admission.receiptOrNull?.decision === 'ACCEPT'
+                ? await refreshOwnerLobby(c, owned)
+                : await refreshOwnerAdmission(c);
             // GM publication advances campaign state even though PROPOSED occupies no place.
             // The first live proposal must not reuse the pre-publication capacity revision.
             if (admission !== null && admission.receiptOrNull?.decision !== 'ACCEPT') {
