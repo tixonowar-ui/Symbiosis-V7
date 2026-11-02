@@ -1284,5 +1284,16 @@
     "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
     "reconnect": "lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write.",
     "title": "Сохранить начальное виртуальное время кампании"
+  },
+  {
+    "atomicity": "Atomically append one settings revision, checkpoint and receipt. Metadata updates the current settings and display. Default roll mode applies only to new requests. Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.",
+    "commandId": "UI-CMD-CAMPAIGN-SETTINGS-SET",
+    "formIds": [
+      "CMP-008"
+    ],
+    "guards": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface.",
+    "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET",
+    "reconnect": "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
+    "title": "Сохранить безопасные настройки кампании"
   }
 ]

@@ -73892,7 +73892,8 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "The published hostAddress/hostPort/qrPayload describe the actual held campaign listener, never the saved next-launch configuration. If no listener is available, show that explicit failure instead of a stale or invented locator. Editing and comparing the current/next endpoint belong to CMP-008; returning here does not rebind or replace the current listener."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -74230,7 +74231,8 @@
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
       "PRE_START has a real read-only connection control returning to CMP-006 in the same GM context, including at zero PCs. Existing CMP-006 QR and CMP-006→NET-017→CMP-006 request-queue routes stay reachable; CMP-006→CMP-007 returns to this panel. Roundtrips preserve confirmed initial time and Ready proofs. No separate admin shell, queue authority or returnContext is introduced.",
       "Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.",
-      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
+      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+      "CMP-008 reuses this current campaign GM authority before and after Start, including PAUSED after Start. Returning from settings restores the existing scene and groups; neither navigation nor resume creates another shell or bypasses Ready/Start."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -74779,6 +74781,12 @@
         "guard": "confirmed GM authority; campaign active or paused; safe boundary; no incompatible pending operation",
         "kind": "normative",
         "trigger": "Кампания и настройки host"
+      },
+      {
+        "from": "CMP-008",
+        "guard": "Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context.",
+        "kind": "safe-return",
+        "trigger": "Отменить изменения"
       }
     ],
     "transitionsOut": [
@@ -74828,7 +74836,11 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Редактируемые метаданные, сеть, вместимость и режим только будущих roll requests.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Closed settings command payload: commandId, campaignId, expectedSettingsRevision, title, descriptionOrNull, defaultFutureRollMode=MANUAL|AUTO, network={hostAddress,hostPort,networkInterface}. GM identity is derived from the authenticated session, never supplied by the browser. Title/description/roll-mode validation reuses campaign creation; no new length limits or defaults. Art remains read-only by existing checksum or explicit absence. Capacity and password use their existing separate CMP-014/CMP-015 commands.",
+      "Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.",
+      "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
+      "CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -74841,7 +74853,8 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Клиенты и локальные места»; Открыть «Снимки и синхронизация кампании»; Открыть «Журнал мастерских операций»; Открыть «Пауза и возобновление кампании»; Открыть «Изменить вместимость кампании»; Открыть «Сменить пароль мастера»; Открыть «Отключить клиент»."
+        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Клиенты и локальные места»; Открыть «Снимки и синхронизация кампании»; Открыть «Журнал мастерских операций»; Открыть «Пауза и возобновление кампании»; Открыть «Изменить вместимость кампании»; Открыть «Сменить пароль мастера»; Открыть «Отключить клиент»; Сохранить настройки; Отменить изменения.",
+        "Разрешённые atlas workflow commands этой формы: UI-CMD-CAMPAIGN-SETTINGS-SET."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -74849,7 +74862,9 @@
           "operationIds": [],
           "ruleIds": [],
           "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
-          "workflowCommandIds": []
+          "workflowCommandIds": [
+            "UI-CMD-CAMPAIGN-SETTINGS-SET"
+          ]
         },
         "availabilityInputs": [
           "actorId",
@@ -75261,6 +75276,116 @@
           ],
           "targetFormId": "NET-023",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "CMP-008::CTA::008",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-CAMPAIGN-SETTINGS-SET"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Сохранить настройки",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "CMP-008",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "CMP-008::CTA::009",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "safe-return",
+          "label": "Отменить изменения",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "CMP-007",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -75279,9 +75404,54 @@
         "Открыть «Пауза и возобновление кампании»",
         "Открыть «Изменить вместимость кампании»",
         "Открыть «Сменить пароль мастера»",
-        "Открыть «Отключить клиент»"
+        "Открыть «Отключить клиент»",
+        "Сохранить настройки",
+        "Отменить изменения"
       ],
-      "workflowCommandAvailability": []
+      "workflowCommandAvailability": [
+        {
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-CAMPAIGN-SETTINGS-SET"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "commandId": "UI-CMD-CAMPAIGN-SETTINGS-SET",
+          "guard": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface.",
+          "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ]
+        }
+      ]
     },
     "auditAtomicity": {
       "audit": "Для изменения хранить actor/author, timestamp, before/after, reason/source и итоговую revision.",
@@ -75293,7 +75463,10 @@
       "Содержательная область: Редактируемые метаданные, сеть, вместимость и режим только будущих roll requests.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
-      "Индикатор связи и ревизии"
+      "Индикатор связи и ревизии",
+      "Название, описание и режим будущих бросков: ввод, ошибки и подтверждённая ревизия настроек.",
+      "Сеть следующего запуска: адрес, порт и интерфейс; действующий endpoint показан отдельно.",
+      "Сохранить настройки / отменить изменения; арт только для чтения."
     ],
     "contexts": [
       "campaign"
@@ -75324,7 +75497,8 @@
     },
     "purpose": "Редактируемые метаданные, сеть, вместимость и режим только будущих roll requests.",
     "qaScenarioIds": [
-      "QA-FORM-CMP-008"
+      "QA-FORM-CMP-008",
+      "QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET"
     ],
     "references": {
       "abilityIds": [],
@@ -75357,14 +75531,27 @@
         116,
         137
       ],
-      "workflowCommandIds": []
+      "workflowCommandIds": [
+        "UI-CMD-CAMPAIGN-SETTINGS-SET"
+      ]
     },
     "requiredFields": [
       "contextId",
       "stateRevision",
       "projectionRevision",
       "campaignId",
-      "campaignStatus"
+      "campaignStatus",
+      "settingsRevision",
+      "title",
+      "descriptionOrNull",
+      "defaultFutureRollMode=MANUAL|AUTO",
+      "networkForNextLaunch(hostAddress,hostPort,networkInterface)",
+      "activeListenerEndpointOrNull",
+      "availableNetworkInterfaces[]",
+      "campaignArtChecksumOrNull",
+      "safeBoundary",
+      "pendingOperationCount",
+      "commandId"
     ],
     "roles": [
       "gm"
@@ -75451,6 +75638,12 @@
         "guard": "campaign status unchanged",
         "kind": "normative",
         "trigger": "Отменить"
+      },
+      {
+        "from": "CMP-008",
+        "guard": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface.",
+        "kind": "workflow-command",
+        "trigger": "Сохранить настройки"
       }
     ],
     "transitionsOut": [
@@ -75495,6 +75688,18 @@
         "kind": "journey",
         "to": "NET-023",
         "trigger": "J-HOST-PUBLISH-SETTINGS::DISCONNECT_CLIENT"
+      },
+      {
+        "guard": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface.",
+        "kind": "workflow-command",
+        "to": "CMP-008",
+        "trigger": "Сохранить настройки"
+      },
+      {
+        "guard": "Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context.",
+        "kind": "safe-return",
+        "to": "CMP-007",
+        "trigger": "Отменить изменения"
       }
     ],
     "type": "screen"
@@ -126045,7 +126250,9 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Повторно аутентифицировать устройство/место или master authority и запросить server-authoritative snapshot; клиентский route не передаётся как источник resumeFormId.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.",
+      "The new pinnedCampaignPeerReconnectOrNull variant applies only to an existing authenticated campaign-peer binding. Its fields come from that saved pin and last authenticated endpoint; editable address/port are an explicit manual intent. A local GM or a legacy recovery context without a campaign-peer binding uses null and its existing recovery route, never a fabricated peer identity or endpoint."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -126235,7 +126442,8 @@
       "Seat or GM authority verification",
       "Snapshot request",
       "Attempt status",
-      "Cancel without campaign mutation"
+      "Cancel without campaign mutation",
+      "Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку."
     ],
     "contexts": [
       "network"
@@ -126316,7 +126524,8 @@
       "resumeContextHint(non-authoritative)",
       "pendingCommandIdOrNull",
       "pendingRequestIdOrNull",
-      "commandId"
+      "commandId",
+      "pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}"
     ],
     "roles": [
       "player",

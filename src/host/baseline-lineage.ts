@@ -16,6 +16,7 @@ const sha256 = (value: Uint8Array): string => createHash('sha256').update(value)
 const historicalManifestUrl = new URL('./baselines/atlas-v1.5.checksums.sha256', import.meta.url);
 const successorManifestUrl = new URL('./baselines/atlas-v1.6.checksums.sha256', import.meta.url);
 const admissionManifestUrl = new URL('./baselines/atlas-v1.7.checksums.sha256', import.meta.url);
+const lobbyManifestUrl = new URL('./baselines/atlas-v1.8.checksums.sha256', import.meta.url);
 const atlasPaths = new Set(Object.keys(BASELINE_LINEAGE_SEALS.successorAtlas));
 
 /** Explicit forward pairs only; no semantic-version comparison or inferred transitivity. */
@@ -25,12 +26,15 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
     successorBaselineVersion: b1,
     admissionBaselineVersion: b2,
     lobbyBaselineVersion: b3,
+    settingsBaselineVersion: b4,
   } = BASELINE_LINEAGE_SEALS;
   return (
-    (stored === b0 && (current === b0 || current === b1 || current === b2 || current === b3)) ||
-    (stored === b1 && (current === b1 || current === b2 || current === b3)) ||
-    (stored === b2 && (current === b2 || current === b3)) ||
-    (stored === b3 && current === b3)
+    (stored === b0 &&
+      (current === b0 || current === b1 || current === b2 || current === b3 || current === b4)) ||
+    (stored === b1 && (current === b1 || current === b2 || current === b3 || current === b4)) ||
+    (stored === b2 && (current === b2 || current === b3 || current === b4)) ||
+    (stored === b3 && (current === b3 || current === b4)) ||
+    (stored === b4 && current === b4)
   );
 }
 
@@ -105,7 +109,9 @@ export function verifyHistoricalBaselineLineage(
         ? readFileSync(successorManifestUrl)
         : storedBaselineVersion === BASELINE_LINEAGE_SEALS.admissionBaselineVersion
           ? readFileSync(admissionManifestUrl)
-          : currentManifest;
+          : storedBaselineVersion === BASELINE_LINEAGE_SEALS.lobbyBaselineVersion
+            ? readFileSync(lobbyManifestUrl)
+            : currentManifest;
   if (`sha256:${sha256(historicalBytes)}` !== storedBaselineVersion)
     fail('historical manifest seal differs');
   const historical = entries(historicalBytes);
@@ -124,6 +130,9 @@ export function verifyHistoricalBaselineLineage(
       if (current.get(path) !== digest) fail(`approved Atlas bytes differ: ${path}`);
   if (currentId === BASELINE_LINEAGE_SEALS.lobbyBaselineVersion)
     for (const [path, digest] of Object.entries(BASELINE_LINEAGE_SEALS.lobbyAtlas))
+      if (current.get(path) !== digest) fail(`approved Atlas bytes differ: ${path}`);
+  if (currentId === BASELINE_LINEAGE_SEALS.settingsBaselineVersion)
+    for (const [path, digest] of Object.entries(BASELINE_LINEAGE_SEALS.settingsAtlas))
       if (current.get(path) !== digest) fail(`approved Atlas bytes differ: ${path}`);
   const expected = BASELINE_LINEAGE_SEALS.replayCatalogDigests;
   if (

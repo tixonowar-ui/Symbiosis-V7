@@ -1,8 +1,8 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1698
- * transitions, 66 journeys, 91 requirements, 2448 QA scenarios. Nothing is
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1700
+ * transitions, 66 journeys, 91 requirements, 2449 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
  */
@@ -32,14 +32,19 @@ import {
   assertAdr0073LobbyStartMarkdown,
 } from './campaign-lobby-atlas-contract.js';
 
+import {
+  assertAdr0075CampaignSettings,
+  assertAdr0075CampaignSettingsMarkdown,
+} from './campaign-settings-atlas-contract.js';
+
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.8';
+const ATLAS_VERSION = '1.9';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.8 has 1,262 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_262;
+/** Atlas v1.9 has 1,264 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_264;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -1602,12 +1607,12 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_698);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_700);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_698,
+    1_700,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1809,19 +1814,19 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
 
 /** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
 export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.8');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.9');
   expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_698);
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_700);
   expectCount(
     WHERE,
     'ADR 0052 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_698,
+    1_700,
   );
 
   const advisor = adr0049Form(forms, 'CHR-041');
@@ -3224,6 +3229,7 @@ const ADR0069_CONTRACTS = [
       'UI-CMD-CAMPAIGN-PAUSE-SET',
       'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
       'UI-CMD-DEVICE-REQUEST-REJECT',
+      'UI-CMD-CAMPAIGN-SETTINGS-SET',
     ],
   },
   {
@@ -3273,7 +3279,7 @@ const ADR0069_CONTRACTS = [
       qaId: 'QA-FORM-CMP-006',
       scope: 'CMP-006',
       scenario:
-        'Проверить буквальное назначение CMP-006: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей. Поля: campaignId, status=PAUSED, createdAt, hostAddress, hostPort, qrPayload, activePlayerCapacity, creationReceiptId. CTA: Открыть панель созданной кампании, Открыть входящие запросы устройств.',
+        'Проверить буквальное назначение CMP-006: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей. Поля: campaignId, status=PAUSED, createdAt, hostAddress, hostPort, qrPayload, activePlayerCapacity, creationReceiptId. CTA: Открыть панель созданной кампании, Открыть входящие запросы устройств. The published hostAddress/hostPort/qrPayload describe the actual held campaign listener, never the saved next-launch configuration. If no listener is available, show that explicit failure instead of a stale or invented locator. Editing and comparing the current/next endpoint belong to CMP-008; returning here does not rebind or replace the current listener.',
       expected:
         'Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна.',
     },
@@ -3327,7 +3333,7 @@ const ADR0069_CONTRACTS = [
       scenario:
         'Требование «Создание/host/preflight/start кампании без выбора правил». Preconditions: Роль и authority соответствуют gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-CAMPAIGN-CREATE через формы CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CREATE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-001, CMP-002, CMP-003, CMP-004, CMP-005, CMP-006, CMP-007 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.',
       expected:
-        'Terminal states/deltas: {"terminalStatesByForm":{"CMP-001":["METADATA_INCOMPLETE","METADATA_VALID","DRAFT_CANCELLED"],"CMP-002":["HOST_CONFIG_INVALID","HOST_CONFIG_VALID","PORT_UNAVAILABLE"],"CMP-003":["PASSWORD_INCOMPLETE","PASSWORD_VALID","SECRET_HIDDEN"],"CMP-004":["MODE_UNSELECTED","MODE_VALID","OPEN_REQUESTS_UNCHANGED"],"CMP-005":["PREFLIGHT_BLOCKED","READY_TO_CREATE","CREATING","CREATED","IDEMPOTENT_REPLAY"],"CMP-006":["RECEIPT_READY","HOST_NOT_STARTED","OPENED_LOBBY","OPENED_REQUEST_QUEUE"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
+        'Terminal states/deltas: {"terminalStatesByForm":{"CMP-001":["METADATA_INCOMPLETE","METADATA_VALID","DRAFT_CANCELLED"],"CMP-002":["HOST_CONFIG_INVALID","HOST_CONFIG_VALID","PORT_UNAVAILABLE"],"CMP-003":["PASSWORD_INCOMPLETE","PASSWORD_VALID","SECRET_HIDDEN"],"CMP-004":["MODE_UNSELECTED","MODE_VALID","OPEN_REQUESTS_UNCHANGED"],"CMP-005":["PREFLIGHT_BLOCKED","READY_TO_CREATE","CREATING","CREATED","IDEMPOTENT_REPLAY"],"CMP-006":["RECEIPT_READY","HOST_NOT_STARTED","OPENED_LOBBY","OPENED_REQUEST_QUEUE"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
     },
   },
   {
@@ -3353,7 +3359,7 @@ const ADR0069_CONTRACTS = [
       scenario:
         'Требование «Waiting/connect/reconnect/connection-lost states». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.',
       expected:
-        'Terminal states/deltas: {"terminalStatesByForm":{"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"],"NET-011":["UNAVAILABLE","RETRY_READY","RETRYING","EXITED_TO_LOCAL"],"NET-012":["hidden","visible"],"NET-013":["hidden","visible"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
+        'Terminal states/deltas: {"terminalStatesByForm":{"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-005":["WAITING_GM","READY_TO_CANCEL","CANCELLED","DECISION_WON_RACE","IN_REVIEW","REJECTED"],"NET-011":["UNAVAILABLE","RETRY_READY","RETRYING","EXITED_TO_LOCAL"],"NET-012":["hidden","visible"],"NET-013":["hidden","visible"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.; CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
     },
   },
   {
@@ -4097,7 +4103,7 @@ function adr0069Row(root: JsonObject, target: string, id: string): JsonObject {
   );
 }
 export function assertAdr0069RequestReview(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.8');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.9');
   expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
   for (const expected of ADR0069_AUTHORITY_CONTRACTS) {
     const form = adr0069Row(root, 'forms', expected.id);
@@ -4112,9 +4118,9 @@ export function assertAdr0069RequestReview(root: JsonObject): void {
   const counts = asObject(root['counts'], WHERE, 'counts');
   for (const [key, count] of Object.entries({
     forms: 376,
-    transitions: 1698,
-    workflowCommands: 111,
-    qaScenarios: 2448,
+    transitions: 1700,
+    workflowCommands: 112,
+    qaScenarios: 2449,
   })) {
     adr0069Expect(counts[key], count, 'counts.' + key);
   }
@@ -4255,6 +4261,8 @@ export async function importAtlas(): Promise<AtlasImport> {
   assertAdr0052AdvisorIntelligenceFloor(root);
   assertAdr0069RequestReview(root);
   assertAdr0071Admission(root);
+  assertAdr0075CampaignSettings(root);
+  assertAdr0075CampaignSettingsMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0073LobbyStart(root);
   assertAdr0073LobbyStartMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0071AdmissionMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
