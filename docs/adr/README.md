@@ -106,6 +106,7 @@
 | [0072](0072-campaign-copy-admission-runtime.md)                      | Runtime рабочих копий и решения владельца                  | принято                                     |
 | [0073](0073-campaign-lobby-start-source.md)                          | Ready, начальное время и первая мирная проекция            | принято; #206                               |
 | [0074](0074-campaign-lobby-runtime.md)                               | Журнал Ready, атомарный Start и продолжение owner-проекций | реализация #173                             |
+| [0075](0075-campaign-settings-source.md)                             | Безопасные настройки и сеть следующего запуска listener    | принято; #208                               |
 
 ## Перенос решений аудита
 

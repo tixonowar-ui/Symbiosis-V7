@@ -9918,6 +9918,14 @@
         {
           "actionKey": "CMP-008::CTA::007",
           "label": "Открыть «Отключить клиент»"
+        },
+        {
+          "actionKey": "CMP-008::CTA::008",
+          "label": "Сохранить настройки"
+        },
+        {
+          "actionKey": "CMP-008::CTA::009",
+          "label": "Отменить изменения"
         }
       ]
     },
@@ -9926,7 +9934,10 @@
       "Содержательная область: Редактируемые метаданные, сеть, вместимость и режим только будущих roll requests.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
-      "Индикатор связи и ревизии"
+      "Индикатор связи и ревизии",
+      "Название, описание и режим будущих бросков: ввод, ошибки и подтверждённая ревизия настроек.",
+      "Сеть следующего запуска: адрес, порт и интерфейс; действующий endpoint показан отдельно.",
+      "Сохранить настройки / отменить изменения; арт только для чтения."
     ],
     "contexts": [
       "campaign"
@@ -9934,14 +9945,26 @@
     "domain": "Кампания",
     "id": "CMP-008",
     "qaScenarioIds": [
-      "QA-FORM-CMP-008"
+      "QA-FORM-CMP-008",
+      "QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET"
     ],
     "requiredFields": [
       "contextId",
       "stateRevision",
       "projectionRevision",
       "campaignId",
-      "campaignStatus"
+      "campaignStatus",
+      "settingsRevision",
+      "title",
+      "descriptionOrNull",
+      "defaultFutureRollMode=MANUAL|AUTO",
+      "networkForNextLaunch(hostAddress,hostPort,networkInterface)",
+      "activeListenerEndpointOrNull",
+      "availableNetworkInterfaces[]",
+      "campaignArtChecksumOrNull",
+      "safeBoundary",
+      "pendingOperationCount",
+      "commandId"
     ],
     "roles": [
       "gm"
@@ -16763,7 +16786,8 @@
       "Seat or GM authority verification",
       "Snapshot request",
       "Attempt status",
-      "Cancel without campaign mutation"
+      "Cancel without campaign mutation",
+      "Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку."
     ],
     "contexts": [
       "network"
@@ -16786,7 +16810,8 @@
       "resumeContextHint(non-authoritative)",
       "pendingCommandIdOrNull",
       "pendingRequestIdOrNull",
-      "commandId"
+      "commandId",
+      "pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}"
     ],
     "roles": [
       "player",

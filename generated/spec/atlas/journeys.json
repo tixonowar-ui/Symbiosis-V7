@@ -714,11 +714,15 @@
   {
     "alternatives": [
       "Вместимость CMP-014 меняется 1–5, не ниже текущего PC состава.",
-      "NET-023 отключает устройство без удаления персонажа."
+      "NET-023 отключает устройство без удаления персонажа.",
+      "Closed settings command payload: commandId, campaignId, expectedSettingsRevision, title, descriptionOrNull, defaultFutureRollMode=MANUAL|AUTO, network={hostAddress,hostPort,networkInterface}. GM identity is derived from the authenticated session, never supplied by the browser. Title/description/roll-mode validation reuses campaign creation; no new length limits or defaults. Art remains read-only by existing checksum or explicit absence. Capacity and password use their existing separate CMP-014/CMP-015 commands.",
+      "CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Checkpoint conflict отображается CMP-010; архив не открывает host и не мутируется."
+      "Checkpoint conflict отображается CMP-010; архив не открывает host и не мутируется.",
+      "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
+      "Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive."
     ],
     "formIds": [
       "CMP-008",
@@ -826,7 +830,8 @@
       "UI-CMD-CAMPAIGN-FINISH",
       "UI-CMD-CAMPAIGN-PAUSE-SET",
       "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-      "UI-CMD-DEVICE-REQUEST-REJECT"
+      "UI-CMD-DEVICE-REQUEST-REJECT",
+      "UI-CMD-CAMPAIGN-SETTINGS-SET"
     ]
   },
   {
@@ -4795,7 +4800,8 @@
   {
     "alternatives": [
       "Refresh/closed tab uses same path.",
-      "Host failover freezes campaign until single-master recovery."
+      "Host failover freezes campaign until single-master recovery.",
+      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
@@ -5082,11 +5088,15 @@
   {
     "alternatives": [
       "Player password is not invented; master password never enters player payload.",
-      "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME."
+      "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
+      "Closed settings command payload: commandId, campaignId, expectedSettingsRevision, title, descriptionOrNull, defaultFutureRollMode=MANUAL|AUTO, network={hostAddress,hostPort,networkInterface}. GM identity is derived from the authenticated session, never supplied by the browser. Title/description/roll-mode validation reuses campaign creation; no new length limits or defaults. Art remains read-only by existing checksum or explicit absence. Capacity and password use their existing separate CMP-014/CMP-015 commands.",
+      "CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Reconnect requires a new validated session and does not delete or duplicate characters."
+      "Reconnect requires a new validated session and does not delete or duplicate characters.",
+      "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
+      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable."
     ],
     "formIds": [
       "CMP-007",
@@ -5123,8 +5133,8 @@
           "CMP-014",
           "CMP-015"
         ],
-        "guards": "Only future-safe fields; capacity cannot evict admitted characters.",
-        "result": "New settings revision.",
+        "guards": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. Capacity/password retain their separate existing guards.",
+        "result": "Committed settings revision and immutable receipt; existing settings controls restore the committed values. Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.",
         "state": "EDIT_SAFE_SETTINGS"
       },
       {
@@ -5142,7 +5152,8 @@
       "UI-CMD-CAMPAIGN-START",
       "UI-CMD-CLIENT-DISCONNECT",
       "UI-CMD-MASTER-PASSWORD-CHANGE",
-      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
+      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+      "UI-CMD-CAMPAIGN-SETTINGS-SET"
     ]
   },
   {

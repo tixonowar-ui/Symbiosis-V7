@@ -27,6 +27,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '22f048c80d11a947bb814a156a2d58b91c3cbd35f1ebe8b240191bac0c63b811',
   },
+  // ADR 0075 / #208: exact approved safe-settings source delivery.
+  settingsBaselineVersion:
+    'sha256:a72bbea3faa6ba11e0eaac7f1ea5d7a2f7d2b0197c345c55f3ed360e1ab3f24b',
+  settingsAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'd354cce5f0e00d6554cafac000518cef2ff6bfecc1641f58647579b096c6e484',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '6a11ef9453cdd4fbe861a7c65b6c9227cc928b5c40aebaa784ead2eca7e41e89',
+  },
   replayCatalogDigests: {
     'generated/spec/character/classes.json':
       '6bfdb854b7d3158c882017a2b89314795dd88f674b540a91e89fdea1db0c62e6',

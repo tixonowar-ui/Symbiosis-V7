@@ -1722,9 +1722,13 @@
           "Открыть «Пауза и возобновление кампании»",
           "Открыть «Изменить вместимость кампании»",
           "Открыть «Сменить пароль мастера»",
-          "Открыть «Отключить клиент»"
+          "Открыть «Отключить клиент»",
+          "Сохранить настройки",
+          "Отменить изменения"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-SETTINGS-SET"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -1809,14 +1813,17 @@
       "CMP-013",
       "CMP-016"
     ],
-    "happyPath": "Выполнить J-CAMPAIGN-LIFECYCLE через формы CMP-008, CMP-010, CMP-011, CMP-012, CMP-013, CMP-016; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-CAMPAIGN-LIFECYCLE через формы CMP-008, CMP-010, CMP-011, CMP-012, CMP-013, CMP-016; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить сохранение настроек CMP-008 и отдельные действующий/следующий endpoint.",
     "journeyIds": [
       "J-CAMPAIGN-LIFECYCLE"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
+      "Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.",
+      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -1852,7 +1859,8 @@
     ],
     "workflowCommandIds": [
       "UI-CMD-CAMPAIGN-FINISH",
-      "UI-CMD-CAMPAIGN-PAUSE-SET"
+      "UI-CMD-CAMPAIGN-PAUSE-SET",
+      "UI-CMD-CAMPAIGN-SETTINGS-SET"
     ]
   },
   {
@@ -9246,9 +9254,13 @@
           "Открыть «Пауза и возобновление кампании»",
           "Открыть «Изменить вместимость кампании»",
           "Открыть «Сменить пароль мастера»",
-          "Открыть «Отключить клиент»"
+          "Открыть «Отключить клиент»",
+          "Сохранить настройки",
+          "Отменить изменения"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-SETTINGS-SET"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -9324,7 +9336,7 @@
       "CMP-015",
       "NET-023"
     ],
-    "happyPath": "Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-INITIAL-TIME-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults.",
+    "happyPath": "Выполнить J-HOST-PUBLISH-SETTINGS через формы CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Проверить UI-CMD-CAMPAIGN-INITIAL-TIME-SET через экранные controls, mixed ACTIVE/blocked состав, Ready отмену и initial time без defaults. Проверить сохранение настроек CMP-008 и отдельные действующий/следующий endpoint.",
     "journeyIds": [
       "J-HOST-PUBLISH-SETTINGS"
     ],
@@ -9332,7 +9344,10 @@
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
       "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
-      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
+      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+      "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
+      "Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.",
+      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -9355,7 +9370,8 @@
       "UI-CMD-CAMPAIGN-START",
       "UI-CMD-CLIENT-DISCONNECT",
       "UI-CMD-MASTER-PASSWORD-CHANGE",
-      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
+      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+      "UI-CMD-CAMPAIGN-SETTINGS-SET"
     ]
   },
   {

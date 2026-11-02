@@ -20,13 +20,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'CMP-006',
-    sha256: 'a5d5520c38da3eba9dc9f19011abf466d17fe5de49c4067325997ccfaa9639d0',
+    sha256: '35c4b902dc81530c480842beb94b976b6c3ba5bad406b55dba482dd40d084ea9',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'CMP-007',
-    sha256: '9d3872aedf3adc1625c054f23b52d21eaa8477a2c14f94bdc8ac80f734336400',
+    sha256: '2f50972c30ad61e2dbc5f2902588dda68b0376a37a1881afe52100ccf3a88e65',
   },
   {
     target: 'forms',
@@ -62,7 +62,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-HOST-PUBLISH-SETTINGS',
-    sha256: '9dbf5a84f29aab54de0f276202a8784136f8d28901b90c55f5de991d477e5a73',
+    sha256: 'c47e9023095feb62be359bf9aae0226e95da285c32fe376cb37731fd98b13352',
   },
   {
     target: 'coverageRequirements',
@@ -86,7 +86,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-055',
-    sha256: '0d50e1bc2e5b73b951490762838a25c66837b9252292da6bbeb0b6c2d77e0e6b',
+    sha256: '923f7b7d34c5127942e82e12ed6713c4bfef1fc13656c60976da4dd5eb0a5836',
   },
   {
     target: 'qaScenarios',
@@ -104,7 +104,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-CMP-007',
-    sha256: '84c2beae810c803e6e3966d94cf69f0da7027de1f035bde2c98b1e219b47e747',
+    sha256: '437288d5250f2dc355f8d344447c2572af310282e87cea113d7ce0bdb2c9163b',
   },
   {
     target: 'qaScenarios',
@@ -134,7 +134,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-055',
-    sha256: 'ea47883d0a3e7c68d468bbb28076a5365e6309a45512fbcfa983045637d29d91',
+    sha256: 'ff5764c6b7469c41fa29b56960ef3c3778b5ca945753a4b86a12c2dc8c7c469c',
   },
   {
     target: 'qaScenarios',
@@ -176,11 +176,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: 'fe6e06c3698c1413714789a6d2c24220467c816897e37b7812713024f6b6c97e',
+    sha256: '54b6e3b18dd158c04150627167fc92ebac52bc8d517bc657049eaf7883fc2fd8',
   },
   {
     key: 'transitions',
-    sha256: 'baf51cb230695e0edd72e553ed2a1e67a8e0dfdd02c579a6bcefd250f2ba2bbd',
+    sha256: '06f993f58a72306651ded752b876e63e97fc46a291df44524247d890af6c882f',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -194,11 +194,11 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### CMP-006 —',
-    sha256: '885670269a42298d9ffa45a2bc3e1eabfd02a829aceaea38132ef6cc5a230f9c',
+    sha256: '671a8c1f6d95d67effdf170f2656486bae95a4e040866302a549baa37306b0ba',
   },
   {
     prefix: '### CMP-007 —',
-    sha256: '8664dd196c8a7ca9d6301bc579cfae8fffafeb16a25ad9ce825f1071c35e649b',
+    sha256: '29714b94b83d539bf7d440d406aef54b61e657844f501bd7e4bb376128b49a61',
   },
   {
     prefix: '### PLY-001 —',
@@ -222,7 +222,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-HOST-PUBLISH-SETTINGS —',
-    sha256: 'efa13345d3715a690299a3a16bf4370016ce1838c9f58dd1c611e98c3e2f1b32',
+    sha256: '723d00bed95a1cb009cebb5b21453b097ed631d46bb88d045c31b658d0f2eab0',
   },
 ] as const;
 const MARKDOWN_LINES = [
@@ -242,7 +242,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| REQ-055 | Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client |',
-    sha256: 'c97d56f36f532d63debfd230aa87715d317c61393d7a4ae964dd6ceafd295780',
+    sha256: '099c49643e1659f103c03eda53be1cbdfa68a633868e54d485808b6caa95b19c',
   },
   {
     prefix: '| QA-FORM-NET-006 | NET-006 |',
@@ -254,7 +254,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-CMP-007 | CMP-007 |',
-    sha256: '437b687445d3ed57a1959b43db484a54ee0c068743328719b15247dbfff7fa1f',
+    sha256: '721cc837055c278590f6d6e051bba630fd3680cb3a5bb6133196d71d69c4383c',
   },
   {
     prefix: '| QA-FORM-PLY-001 | PLY-001 |',
@@ -274,7 +274,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-055 | REQ-055 |',
-    sha256: 'f6f4a9b67ea3cfde26f046dea7348fe399a926d6e3ca855a1c507d2d9ef5f4f4',
+    sha256: 'e0ed28975cc3f86fbcb3e91c3b6eda029009812a853a67af1758e685452bdf40',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-CAMPAIGN-START | UI-CMD-CAMPAIGN-START |',

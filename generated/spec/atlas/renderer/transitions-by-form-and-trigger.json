@@ -2302,6 +2302,22 @@
       "trigger": "Подключение к кампании"
     }
   },
+  "CMP-008": {
+    "Отменить изменения": {
+      "from": "CMP-008",
+      "guard": "Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context.",
+      "kind": "safe-return",
+      "to": "CMP-007",
+      "trigger": "Отменить изменения"
+    },
+    "Сохранить настройки": {
+      "from": "CMP-008",
+      "guard": "UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface.",
+      "kind": "workflow-command",
+      "to": "CMP-008",
+      "trigger": "Сохранить настройки"
+    }
+  },
   "CMP-009": {
     "Передать устройство локальному кандидату": {
       "from": "CMP-009",

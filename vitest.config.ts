@@ -4,6 +4,9 @@ import { defineConfig } from 'vitest/config';
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
+// Owner decision, 2026-11-02: docs/process/ci-checks.md. Inline projects do not inherit it.
+const DEFAULT_TEST_TIMEOUT_MS = 15_000;
+
 /**
  * tsconfig `paths` only affect type resolution. Without these aliases,
  * `@shared/…` and `@generated/…` type-check but fail to resolve when a test
@@ -24,6 +27,7 @@ const alias = {
  */
 export default defineConfig({
   test: {
+    testTimeout: DEFAULT_TEST_TIMEOUT_MS,
     // Seven concurrent suites caused native Atlas clone allocation failures on
     // Windows 8 CPU / 16 GiB. Four preserve the full suite with lower peak memory.
     // Measurements and limits of this budget: docs/status/vitest-atlas-memory.md.
@@ -32,6 +36,7 @@ export default defineConfig({
       {
         resolve: { alias },
         test: {
+          testTimeout: DEFAULT_TEST_TIMEOUT_MS,
           name: 'node',
           environment: 'node',
           include: [
@@ -47,6 +52,7 @@ export default defineConfig({
       {
         resolve: { alias },
         test: {
+          testTimeout: DEFAULT_TEST_TIMEOUT_MS,
           name: 'web',
           environment: 'jsdom',
           include: ['src/web/**/*.test.ts', 'src/web/**/*.test.tsx'],
