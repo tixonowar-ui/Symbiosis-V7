@@ -132,6 +132,7 @@ export const NET_CONNECT_FORM_CONTRACTS = [
       'pendingCommandIdOrNull',
       'pendingRequestIdOrNull',
       'commandId',
+      'pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}',
     ],
   },
   {
