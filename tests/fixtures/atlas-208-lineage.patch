@@ -685,9 +685,9 @@ index 5d3e2c3..5ca99fb 100644
 @@ -1,4 +1,4 @@
 -# Symbiosis V7 — Web UI Screen Atlas v1.8
 +# Symbiosis V7 — Web UI Screen Atlas v1.9
- 
+
  > Нормативный человекочитаемый атлас локального web-приложения. Поля `graphDigest` и `contentDigest` сохраняют идентичность author-supplied base-v1.2 по ADR 0037/0049: алгоритмы semantic digest не поставлены. Целостность текущих JSON/Markdown байтов проверяется по `artifacts/CHECKSUMS.sha256`. Старый PDF не нужен для реализации; его страницы приведены только для трассировки.
- 
+
 @@ -7,13 +7,13 @@
  | Поле | Значение |
  | --- | --- |
@@ -705,66 +705,66 @@ index 5d3e2c3..5ca99fb 100644
  | Requirements | 91 |
  | Graph SHA-256 | 693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df |
 @@ -635,7 +635,7 @@ stateDiagram-v2
- 
+
  | Роль | Формы | Rule refs | Operation refs | Workflow commands | Q&A refs | Статус |
  | --- | --- | --- | --- | --- | --- | --- |
 -| gm | CMP-008, CMP-009, CMP-010, CMP-011, CMP-016, GM-002, NET-017, NET-018, NET-019, NET-027, CMP-013, CMP-012 | AQ2-005, AQ2-006, AQ2-013, AQ2-019, AQ2-025, AQ2-033, AQA-017, AQA-029, CORE-190, CORE-234, SYM-055 | OP-REQ-GM, SET_GM_FORMAL_STATE | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CAMP-009, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-ENEMY-P17, Q-GM-007, Q-GM-026, Q-REST-008, Q-SYM-085 | COVERED |
 +| gm | CMP-008, CMP-009, CMP-010, CMP-011, CMP-016, GM-002, NET-017, NET-018, NET-019, NET-027, CMP-013, CMP-012 | AQ2-005, AQ2-006, AQ2-013, AQ2-019, AQ2-025, AQ2-033, AQA-017, AQA-029, CORE-190, CORE-234, SYM-055 | OP-REQ-GM, SET_GM_FORMAL_STATE | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CAMPAIGN-FINISH, UI-CMD-CAMPAIGN-PAUSE-SET, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-CAMPAIGN-SETTINGS-SET | Q-CAMP-001, Q-CAMP-002, Q-CAMP-004, Q-CAMP-005, Q-CAMP-007, Q-CAMP-009, Q-CHAR-001, Q-CHAR-010, Q-CHAR-011, Q-CHAR-012, Q-CHAR-013, Q-CHAR-014, Q-CHAR-016, Q-CHAR-018, Q-CORE-052, Q-ENEMY-P17, Q-GM-007, Q-GM-026, Q-REST-008, Q-SYM-085 | COVERED |
- 
+
  | Состояние | ScreenFormID | Guards | Результат |
  | --- | --- | --- | --- |
 @@ -648,10 +648,14 @@ stateDiagram-v2
- 
+
  - Вместимость CMP-014 меняется 1–5, не ниже текущего PC состава.
  - NET-023 отключает устройство без удаления персонажа.
 +- Closed settings command payload: commandId, campaignId, expectedSettingsRevision, title, descriptionOrNull, defaultFutureRollMode=MANUAL|AUTO, network={hostAddress,hostPort,networkInterface}. GM identity is derived from the authenticated session, never supplied by the browser. Title/description/roll-mode validation reuses campaign creation; no new length limits or defaults. Art remains read-only by existing checksum or explicit absence. Capacity and password use their existing separate CMP-014/CMP-015 commands.
 +- CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection.
- 
+
  **Error/offline/reconnect:**
- 
+
  - Checkpoint conflict отображается CMP-010; архив не открывает host и не мутируется.
 +- Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.
 +- Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.
- 
+
  ### J-LOCAL-SEATS — 0–3 локальных игрока и игрок на компьютере мастера
- 
+
 @@ -1068,6 +1072,7 @@ stateDiagram-v2
- 
+
  - Refresh/closed tab uses same path.
  - Host failover freezes campaign until single-master recovery.
 +- NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.
- 
+
  **Error/offline/reconnect:**
- 
+
 @@ -1151,22 +1156,26 @@ stateDiagram-v2
- 
+
  | Роль | Формы | Rule refs | Operation refs | Workflow commands | Q&A refs | Статус |
  | --- | --- | --- | --- | --- | --- | --- |
 -| gm | CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023 |  |  | UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE, UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Q-CAMP-001, Q-GM-030 | COVERED |
 +| gm | CMP-007, NET-016, CMP-008, CMP-014, CMP-015, NET-023 |  |  | UI-CMD-CAMPAIGN-CAPACITY-SET, UI-CMD-CAMPAIGN-START, UI-CMD-CLIENT-DISCONNECT, UI-CMD-MASTER-PASSWORD-CHANGE, UI-CMD-CAMPAIGN-INITIAL-TIME-SET, UI-CMD-CAMPAIGN-SETTINGS-SET | Q-CAMP-001, Q-GM-030 | COVERED |
- 
+
  | Состояние | ScreenFormID | Guards | Результат |
  | --- | --- | --- | --- |
  | HOST_LOBBY | CMP-007, NET-016 | Single master authority and host running. | Published address/port/QR and lobby state. |
 -| EDIT_SAFE_SETTINGS | CMP-008, CMP-014, CMP-015 | Only future-safe fields; capacity cannot evict admitted characters. | New settings revision. |
 +| EDIT_SAFE_SETTINGS | CMP-008, CMP-014, CMP-015 | UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL\|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. Capacity/password retain their separate existing guards. | Committed settings revision and immutable receipt; existing settings controls restore the committed values. Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive. |
  | DISCONNECT_CLIENT | NET-023 | Selected device, required reason and explicit confirmation. | Connection revoked; character copies preserved. |
- 
+
  **Нормативные альтернативы:**
- 
+
  - Player password is not invented; master password never enters player payload.
  - Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.
 +- Closed settings command payload: commandId, campaignId, expectedSettingsRevision, title, descriptionOrNull, defaultFutureRollMode=MANUAL|AUTO, network={hostAddress,hostPort,networkInterface}. GM identity is derived from the authenticated session, never supplied by the browser. Title/description/roll-mode validation reuses campaign creation; no new length limits or defaults. Art remains read-only by existing checksum or explicit absence. Capacity and password use their existing separate CMP-014/CMP-015 commands.
 +- CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection.
- 
+
  **Error/offline/reconnect:**
- 
+
  - Reconnect requires a new validated session and does not delete or duplicate characters.
 +- Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.
 +- NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.
- 
+
  ### J-CHECKPOINT-CONFLICT-AUDIT — Checkpoint, replica reconciliation и журнал мастерских операций
- 
+
 @@ -1883,7 +1892,7 @@ stateDiagram-v2
  | REQ-005 | GM review, campaign copy diff и атомарный AdmissionBatch | J-JOIN-REVIEW | NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, GM-019, GM-020 | AQ2-010, AQA-017, OP-REQ-GM | UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-ADMISSION-REVIEW-OPEN, UI-CMD-GM-WEAPON-REQUEST-RESOLVE | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {"executableOperationIds": [], "formId": "NET-017", "primaryActions": ["Открыть «Исходный локальный лист»", "Открыть «Финализация кампанийной копии»", "Открыть «Итог персонажа: группа и локация»", "Открыть «Принять запрос устройства»", "Вернуться к «Список персонажей кампании»", "Вернуться к «Клиенты и локальные места»", "Принять заявку к рассмотрению", "Отклонить заявку с причиной", "Вернуться к созданной кампании", "Начать рассмотрение кампанийных копий"], "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW", "UI-CMD-DEVICE-REQUEST-REJECT", "UI-CMD-ADMISSION-REVIEW-OPEN"]}, {"executableOperationIds": [], "formId": "NET-018", "primaryActions": ["Вернуться к «Входящие запросы устройств»", "Открыть «Финализация кампанийной копии»", "Открыть «Итог персонажа: группа и локация»", "Открыть «Принять запрос устройства»", "Вернуться к «Список персонажей кампании»"], "workflowCommandIds": []}, {"executableOperationIds": [], "formId": "NET-019", "primaryActions": ["Рассмотреть валидированную оружейную заявку", "Подготовить новое оружие из каталога"], "workflowCommandIds": []}, {"executableOperationIds": [], "formId": "NET-020", "primaryActions": ["Вернуться к «Входящие запросы устройств»", "Вернуться к «Исходный локальный лист»"], "workflowCommandIds": []}, {"executableOperationIds": [], "formId": "NET-021", "primaryActions": ["Принять весь AdmissionBatch атомарно", "Отменить до commit"], "workflowCommandIds": ["UI-CMD-ADMISSION-GM-ACCEPT"]}, {"executableOperationIds": [], "formId": "NET-022", "primaryActions": ["Отклонить весь AdmissionBatch с причиной", "Отменить"], "workflowCommandIds": ["UI-CMD-ADMISSION-GM-REJECT"]}, {"executableOperationIds": [], "formId": "NET-027", "primaryActions": ["Принять весь batch diff", "Отказаться от всего batch"], "workflowCommandIds": ["UI-CMD-ADMISSION-PLAYER-DECIDE"]}, {"executableOperationIds": ["OP-REQ-GM"], "formId": "GM-019", "primaryActions": ["Применить patch существующего оружия", "Утвердить или переопределить оружейную заявку", "Отменить", "Подтвердить профиль рабочей копии"], "workflowCommandIds": ["UI-CMD-GM-WEAPON-REQUEST-RESOLVE"]}, {"executableOperationIds": [], "formId": "GM-020", "primaryActions": ["Вернуться к review после проверки навыка"], "workflowCommandIds": []} | {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. UI-CMD-ADMISSION-REVIEW-OPEN creates only separate review workspace/receipt. Uncommitted typed draft is never source mutation or confirmed mechanics. GM-ACCEPT alone publishes final IDs/PROPOSED copies. Whole-batch player ACCEPT binds admission/controller and group assignment; PAUSED goes to NET-006, not active PLY-001.", "terminalStatesByForm": {"NET-017": ["QUEUE_EMPTY", "REQUEST_PENDING", "IN_REVIEW", "REQUEST_REJECTED", "STALE_REQUEST"], "NET-021": ["BLOCKED_INVALID_BATCH", "READY_ALL_OR_NONE", "PUBLISHED"], "NET-022": ["REASON_REQUIRED", "REJECTED"], "NET-027": ["DIFF_LOADING", "READY_FOR_WHOLE_BATCH_DECISION", "ACCEPTED", "DECLINED"]}} | Выполнить J-JOIN-REVIEW через формы NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, GM-019, GM-020; использовать только admission-ветви primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-GM-ACCEPT, UI-CMD-ADMISSION-GM-REJECT, UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-ADMISSION-REVIEW-OPEN, UI-CMD-GM-WEAPON-REQUEST-RESOLVE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. PATCH_EXISTING не относится к этому requirement. | Для NET-017, NET-018, NET-019, NET-020, NET-021, NET-022, NET-027, GM-019, GM-020 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request., Owner decision #199 B, 2026-11-01: PROPOSED copies reserve no capacity. Whole-batch player ACCEPT occupies one campaign place for every admitted copy, including lobby-only copies with pending mass/property blockers. Those blockers still prohibit active/Ready/scene. Capacity recheck counts all occupied admission places, not only currently active PCs. DECLINE activates no copy or place. Concurrent ACCEPT operations for the last place serialize in one host transaction; the losing batch remains unadmitted with no partial controller/group assignment. | QA-REQ-005 | COVERED |
  | REQ-006 | Master-import требует owner/device/seat link | J-GM-IMPORT-ADMISSION | CHR-043, CHR-045, NET-028, NET-017, NET-027 | AQA-017 | UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT | player, gm | Роль и authority соответствуют player/gm., Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм., Player/effective-controller projection содержит только CTA, для которых per-action guard=true. | {"executableOperationIds": [], "formId": "CHR-043", "primaryActions": ["Выбрать файл и перейти к обязательной проверке", "Отменить и вернуться в меню игрока", "Отменить и вернуться в библиотеку персонажей", "Отменить импорт-кандидата и вернуться к персонажам кампании"], "workflowCommandIds": []}, {"executableOperationIds": [], "formId": "CHR-045", "primaryActions": ["Подтвердить независимый импорт", "Закрыть результат и вернуться в меню игрока", "Закрыть результат и вернуться в библиотеку персонажей", "Закрыть результат и вернуться к персонажам кампании"], "workflowCommandIds": ["UI-CMD-CHAR-IMPORT-COMMIT"]}, {"executableOperationIds": [], "formId": "NET-028", "primaryActions": ["Подтвердить владение и local seat", "Отклонить claim"], "workflowCommandIds": ["UI-CMD-IMPORTED-OWNER-CLAIM"]}, {"executableOperationIds": [], "formId": "NET-017", "primaryActions": ["Открыть «Исходный локальный лист»", "Открыть «Финализация кампанийной копии»", "Открыть «Итог персонажа: группа и локация»", "Открыть «Принять запрос устройства»", "Вернуться к «Список персонажей кампании»", "Вернуться к «Клиенты и локальные места»", "Принять заявку к рассмотрению", "Отклонить заявку с причиной", "Вернуться к созданной кампании", "Начать рассмотрение кампанийных копий"], "workflowCommandIds": ["UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW", "UI-CMD-DEVICE-REQUEST-REJECT"]}, {"executableOperationIds": [], "formId": "NET-027", "primaryActions": ["Принять весь batch diff", "Отказаться от всего batch"], "workflowCommandIds": ["UI-CMD-ADMISSION-PLAYER-DECIDE"]} | {"audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.", "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.", "terminalStatesByForm": {"CHR-043": ["NO_FILE", "FILE_SELECTED", "PICKER_CANCELLED"], "CHR-045": ["IMPORTED_LOCAL_COPY", "PENDING_OWNER_LINK", "INCOMPATIBLE_REPORT", "NO_PARTIAL_COMMIT"], "NET-017": ["QUEUE_EMPTY", "REQUEST_PENDING", "IN_REVIEW", "REQUEST_REJECTED", "STALE_REQUEST"], "NET-027": ["DIFF_LOADING", "READY_FOR_WHOLE_BATCH_DECISION", "ACCEPTED", "DECLINED"], "NET-028": ["PENDING_OWNER_LINK", "CLAIM_ACCEPTED", "CLAIM_DECLINED", "ADMISSION_REQUIRED"]}} | Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. | Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. | Uncommitted local input may restore as draft but never as confirmed state., Committed command restores by commandId with the same receipt/random result and no duplicate side effect., Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache., Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation., CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. | QA-REQ-006 | COVERED |
@@ -788,15 +788,15 @@ index 5d3e2c3..5ca99fb 100644
  - Назначение реализовано буквально: Адрес и QR подключения, переход в лобби; подготовка разрешена при нуле персонажей.
  - Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.
 +- The published hostAddress/hostPort/qrPayload describe the actual held campaign listener, never the saved next-launch configuration. If no listener is available, show that explicit failure instead of a stale or invented locator. Editing and comparing the current/next endpoint belong to CMP-008; returning here does not rebind or replace the current listener.
- 
+
  **QA-сценарии:**
- 
+
 @@ -28026,6 +28036,7 @@ stateDiagram-v2
  | CMP-016 | Возобновить кампанию | UI-CMD-CAMPAIGN-PAUSE-SET decision=RESUME [workflow-command] |
  | NET-016 | Вернуться к панели кампании | campaign remains PAUSED [normative] |
  | GM-001 | Кампания и настройки host | confirmed GM authority; campaign active or paused; safe boundary; no incompatible pending operation [normative] |
 +| CMP-008 | Отменить изменения | Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context. [safe-return] |
- 
+
  | Выход в | Trigger | Guard |
  | --- | --- | --- |
 @@ -28080,6 +28091,7 @@ stateDiagram-v2
@@ -804,9 +804,9 @@ index 5d3e2c3..5ca99fb 100644
  - Closed PRE_START/STARTED_PEACE read-only panels reuse one campaign/GM authority and existing routes, including #187 shared ingress. PRE_START permits groups=[] and activePeaceSceneOrNull=null. Existing group rows use persisted groupId, nameOrNull, admitted member IDs/names/status and location labels; no invented selected group/location. STARTED_PEACE references the committed singleton scene and preserved groups. Map marker identity/revision/coordinates and unconfigured localLighting are ABSENT, not zero. campaignArtChecksumOrNull reuses campaign creation asset or explicit null; no file picker in read-only panels. No group/map mutation, NPC command or future capability is opened by these variants.
  - Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.
 +- CMP-008 reuses this current campaign GM authority before and after Start, including PAUSED after Start. Returning from settings restores the existing scene and groups; neither navigation nor resume creates another shell or bypasses Ready/Start.
- 
+
  **QA-сценарии:**
- 
+
 @@ -28125,6 +28137,17 @@ stateDiagram-v2
  - projectionRevision
  - campaignId
@@ -822,9 +822,9 @@ index 5d3e2c3..5ca99fb 100644
 +- safeBoundary
 +- pendingOperationCount
 +- commandId
- 
+
  **Компоненты:**
- 
+
 @@ -28133,6 +28156,9 @@ stateDiagram-v2
  - Основной CTA
  - Back/Cancel/Retry только на безопасной границе
@@ -832,16 +832,16 @@ index 5d3e2c3..5ca99fb 100644
 +- Название, описание и режим будущих бросков: ввод, ошибки и подтверждённая ревизия настроек.
 +- Сеть следующего запуска: адрес, порт и интерфейс; действующий endpoint показан отдельно.
 +- Сохранить настройки / отменить изменения; арт только для чтения.
- 
+
  **Основной словарь CTA (runtime-фильтрация обязательна):**
- 
+
 @@ -28143,6 +28169,8 @@ stateDiagram-v2
  - Открыть «Изменить вместимость кампании»
  - Открыть «Сменить пароль мастера»
  - Открыть «Отключить клиент»
 +- Сохранить настройки
 +- Отменить изменения
- 
+
  - **Доступность CTA:** CTA существует только при выполненных entry/guard conditions и актуальных revisions.
  - **Динамическая доступность:** Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.
 @@ -28151,7 +28179,7 @@ stateDiagram-v2
@@ -852,38 +852,38 @@ index 5d3e2c3..5ca99fb 100644
 +| authoritativeSource | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-CAMPAIGN-SETTINGS-SET"]} |
  | recomputeTriggers | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision |
  | closedDiagnostics | Failed reasons are available only in GM/QA actionAvailabilityTrace and never serialized to a player/effective-controller projection. |
- 
+
 @@ -28164,19 +28192,23 @@ stateDiagram-v2
  | CMP-008::CTA::005 | Открыть «Изменить вместимость кампании» | CMP-014 | Only future-safe fields; capacity cannot evict admitted characters. | subflow | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
  | CMP-008::CTA::006 | Открыть «Сменить пароль мастера» | CMP-015 | Only future-safe fields; capacity cannot evict admitted characters. | subflow | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
  | CMP-008::CTA::007 | Открыть «Отключить клиент» | NET-023 | Selected device, required reason and explicit confirmation. | journey | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
 +| CMP-008::CTA::008 | Сохранить настройки | CMP-008 | UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL\|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. | workflow-command | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-CAMPAIGN-SETTINGS-SET"]} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
 +| CMP-008::CTA::009 | Отменить изменения | CMP-007 | Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context. | safe-return | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
- 
+
  | Executable OperationID | Guard перед commit |
  | --- | --- |
- 
+
  | Executable workflow command | Guard перед commit | Inputs | Source | Recompute | Hidden reason |
  | --- | --- | --- | --- | --- | --- |
 +| UI-CMD-CAMPAIGN-SETTINGS-SET | UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL\|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": ["UI-CMD-CAMPAIGN-SETTINGS-SET"]} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | GM_QA_ONLY |
- 
+
  **Разрешённые операции:**
- 
+
  - Только операции, перечисленные в references.operationIds либо соответствующей journey.
  - Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.
  - Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.
 -- Разрешённые видимые действия/CTA именно этой формы: Открыть «Клиенты и локальные места»; Открыть «Снимки и синхронизация кампании»; Открыть «Журнал мастерских операций»; Открыть «Пауза и возобновление кампании»; Открыть «Изменить вместимость кампании»; Открыть «Сменить пароль мастера»; Открыть «Отключить клиент».
 +- Разрешённые видимые действия/CTA именно этой формы: Открыть «Клиенты и локальные места»; Открыть «Снимки и синхронизация кампании»; Открыть «Журнал мастерских операций»; Открыть «Пауза и возобновление кампании»; Открыть «Изменить вместимость кампании»; Открыть «Сменить пароль мастера»; Открыть «Отключить клиент»; Сохранить настройки; Отменить изменения.
 +- Разрешённые atlas workflow commands этой формы: UI-CMD-CAMPAIGN-SETTINGS-SET.
- 
+
  **Запрещённые операции:**
- 
+
 @@ -28212,6 +28244,7 @@ stateDiagram-v2
  | CMP-015 | Сменить пароль мастера | UI-CMD-MASTER-PASSWORD-CHANGE guards [workflow-command] |
  | CMP-015 | Отменить | secret unchanged [normative] |
  | CMP-016 | Отменить | campaign status unchanged [normative] |
 +| CMP-008 | Сохранить настройки | UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL\|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. [workflow-command] |
- 
+
  | Выход в | Trigger | Guard |
  | --- | --- | --- |
 @@ -28222,6 +28255,8 @@ stateDiagram-v2
@@ -892,7 +892,7 @@ index 5d3e2c3..5ca99fb 100644
  | NET-023 | J-HOST-PUBLISH-SETTINGS::DISCONNECT_CLIENT | Selected device, required reason and explicit confirmation. [journey] |
 +| CMP-008 | Сохранить настройки | UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL\|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. [workflow-command] |
 +| CMP-007 | Отменить изменения | Sole current campaign GM authority; no mutation in flight; discard only uncommitted settings inputs, preserving the same campaign context. [safe-return] |
- 
+
  | Reference kind | Значения |
  | --- | --- |
 @@ -28230,7 +28265,7 @@ stateDiagram-v2
@@ -912,49 +912,49 @@ index 5d3e2c3..5ca99fb 100644
 +- Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive.
 +- Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.
 +- CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection.
- 
+
  **QA-сценарии:**
- 
+
  - QA-FORM-CMP-008
 +- QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET
- 
+
  ### CMP-009 — Клиенты и локальные места
- 
+
 @@ -45722,6 +45762,7 @@ stateDiagram-v2
  - pendingCommandIdOrNull
  - pendingRequestIdOrNull
  - commandId
 +- pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}
- 
+
  **Компоненты:**
- 
+
 @@ -45730,6 +45771,7 @@ stateDiagram-v2
  - Snapshot request
  - Attempt status
  - Cancel without campaign mutation
 +- Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку.
- 
+
  **Основной словарь CTA (runtime-фильтрация обязательна):**
- 
+
 @@ -45749,6 +45791,7 @@ stateDiagram-v2
- 
+
  | ActionKey | CTA/переход | Target | Guard | Kind | Inputs | Source | Recompute | Unavailable | Hidden reason |
  | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 +
  | NET-009::CTA::001 | Открыть «Сверка состояния после переподключения» | NET-010 | Server is normative; local unconfirmed command reconciled by commandId. | journey | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
  | NET-009::CTA::002 | Получен snapshot | NET-010 | device identity accepted | normative | actorId, effectiveController, controllerSeat, projectionRole, scene, phase, turnOrReactionWindow, stateRevision, projectionRevision, actorVisibilityRevision, HP/OE/effects/position/range, inventory/equipment/ammo/cooldowns, consent/masterPredicate state, game time/local context | {"abilityIds": [], "operationIds": [], "ruleIds": [], "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR", "workflowCommandIds": []} | action budget, HP/OE/effects/death or incapacity, position/range/visibility, inventory/equipment/ammo/cooldown, symbiont composition or learned nodes, turn/phase/reaction window, controller/seat/handoff, consent/masterPredicate response, game time/campaign state, stateRevision/projectionRevision | OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE | {"audience": "GM_QA_ONLY", "channel": "actionAvailabilityTrace", "fields": ["actionKey", "failedPredicate", "sourceRuleOrGuard", "evaluatedRevision"], "playerProjection": "ABSENT"} |
- 
+
 @@ -45758,6 +45801,8 @@ stateDiagram-v2
  | Executable workflow command | Guard перед commit | Inputs | Source | Recompute | Hidden reason |
  | --- | --- | --- | --- | --- | --- |
- 
+
 +
 +
  **Разрешённые операции:**
- 
+
  - Только операции, перечисленные в references.operationIds либо соответствующей journey.
 @@ -45788,6 +45833,7 @@ stateDiagram-v2
- 
+
  | Вход из | Trigger | Guard |
  | --- | --- | --- |
 +
@@ -967,17 +967,17 @@ index 5d3e2c3..5ca99fb 100644
  - Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.
 +- NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.
 +- The new pinnedCampaignPeerReconnectOrNull variant applies only to an existing authenticated campaign-peer binding. Its fields come from that saved pin and last authenticated endpoint; editable address/port are an explicit manual intent. A local GM or a legacy recovery context without a campaign-peer binding uses null and its existing recovery route, never a fabricated peer identity or endpoint.
- 
+
  **QA-сценарии:**
- 
+
 @@ -69737,6 +69785,7 @@ stateDiagram-v2
  | UI-CMD-ADMISSION-REVIEW-OPEN | Открыть отдельные рабочие копии для рассмотрения допуска | NET-017 | Sole current GM; selected ordinary device request IN_REVIEW; immutable submitted 1..3 FINAL candidates verified; no published proposal; expected requestRevision current. Opening does not require a nonexistent reviewRevision. | Create or recover one admissionBatchId and stable reviewCopyIds in GM_REVIEW for this IN_REVIEW request; immutable source and separate draft; requestStatus remains IN_REVIEW. No campaignCharacterId, PROPOSED copy, seat, capacity reservation or player authority. | Exact command replay returns the original review-open receipt and IDs with a separate current review view. Changed payload, foreign owner or stale source fails without writes; an existing review is never replaced. | QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN |
  | UI-CMD-CAMPAIGN-READY-SET | Подтвердить или отменить готовность своего ACTIVE-набора | NET-006 | UI-CMD-CAMPAIGN-READY-SET guards: Authenticated admitted owner device; pre-Start PAUSED; expected lobbySnapshotRevision current; nonempty exact included ACTIVE copy set with valid mechanics and no blockers; no conflicting pending operation. | Persist one owner-bound Ready decision for the exact ordered ACTIVE subset and lobbySnapshotRevision. Never mutate admission copies, capacity, group IDs or another device readiness. Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy. | lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write. | QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET |
  | UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Сохранить начальное виртуальное время кампании | NET-016 | UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation. | Persist one explicit initial time and receipt before Start; changed time advances lobbySnapshotRevision and invalidates Ready proofs. No scene or ticking clock is created. Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME. | lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write. | QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET |
 +| UI-CMD-CAMPAIGN-SETTINGS-SET | Сохранить безопасные настройки кампании | CMP-008 | UI-CMD-CAMPAIGN-SETTINGS-SET guards: Sole current authenticated campaign GM authority; expectedSettingsRevision current; safe boundary and no pending operation; valid creation-derived metadata and MANUAL\|AUTO future roll mode; a changed next-listener network configuration requires PAUSED and a valid explicit hostAddress/hostPort/networkInterface. | Atomically append one settings revision, checkpoint and receipt. Metadata updates the current settings and display. Default roll mode applies only to new requests. Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive. | Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL. | QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET |
- 
+
  ### 444 строки Q&A
- 
+
 @@ -70537,7 +70586,7 @@ stateDiagram-v2
  | QA-FORM-NET-007 | NET-007 | Проверить буквальное назначение NET-007: Показать реальное отклонение всего AdmissionBatch мастером с причиной либо типизированный отказ игрока; безопасный новый выбор при действующей technical session, без изменения финальных локальных листов. Поля: contextId, campaignId, requestIdOrNull, admissionBatchId, result=GM_REJECTED\|PLAYER_DECLINED, gmReasonOrNull, decisionReceiptId, technicalSessionAvailable, stateRevision, projectionRevision, admissionOrigin=DEVICE_REQUEST\|MASTER_IMPORT, ownerProvenance, signedReturnContextOrNull. CTA: Вернуться к «Итог согласования персонажа», Выбрать персонажей заново, Вернуться в меню игрока, Вернуться через экран приватности. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |
  | QA-FORM-NET-008 | NET-008 | Проверить буквальное назначение NET-008: Блокирующее уведомление о потере связи для player и GM: показывает только последнюю подтверждённую observer-safe проекцию и не допускает общих mutation до нового server snapshot. Поля: deviceId, sessionId, activeRole=PLAYER\|GM, activeSeatOrGm, connectionState=LOST, lastConfirmedStateRevision, lastConfirmedProjectionRevision, resumeContext=PEACE\|COMBAT\|LOCAL_HANDOFF, pendingCommandIdOrNull, pendingRequestIdOrNull, combatPhaseOrNull, turnOrReactionWindowOrNull, observerVisibilityRevisionOrNull, controlLeaseIdOrNull, lastReceiptIds[]. CTA: Вернуться к «Соединение потеряно», Повторить подключение. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |
@@ -1035,9 +1035,9 @@ index 5d3e2c3..5ca99fb 100644
  | QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET | UI-CMD-CAMPAIGN-READY-SET | Через реальные controls NET-006 выполнить Подтвердить или отменить готовность своего ACTIVE-набора; проверить guards, foreign scope, stale revision, rollback, exact replay и restart, без подмены проекции. | Persist one owner-bound Ready decision for the exact ordered ACTIVE subset and lobbySnapshotRevision. Never mutate admission copies, capacity, group IDs or another device readiness. Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write. |
  | QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET | UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Через реальные controls NET-016 выполнить Сохранить начальное виртуальное время кампании; проверить guards, foreign scope, stale revision, rollback, exact replay и restart, без подмены проекции. | Persist one explicit initial time and receipt before Start; changed time advances lobbySnapshotRevision and invalidates Ready proofs. No scene or ticking clock is created. Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME. lobbySnapshotRevision changes when included composition, committed mechanics, assignments, controller bindings or confirmed initial time change. Such a change invalidates prior Ready proofs; another device Ready/Unready changes only readiness revision, not the snapshot revision. The host rechecks both the exact set and current snapshot atomically. After first Start, Ready and initial-time mutations are unavailable. Exact replay returns its original receipt separately from the current projection; stale, changed, foreign or invalid commands perform zero write. |
 +| QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET | UI-CMD-CAMPAIGN-SETTINGS-SET | Через CMP-008 сохранить metadata/mode, отменить draft, сохранить следующий endpoint в PAUSED; проверить occupied-port, restart, ручной reconnect NET-009 к прежней host identity, stale/foreign/changed command и exact replay. | Atomically append one settings revision, checkpoint and receipt. Metadata updates the current settings and display. Default roll mode applies only to new requests. Owner decision #208, 2026-11-02: hostAddress, hostPort and networkInterface configure the NEXT campaign listener launch only. Saving never rebinds the current listener or disconnects peers. Display the actual active endpoint separately from the saved next endpoint; if no listener is running, show that explicit absence. The next launch validates/binds the saved endpoint with the same campaignId and host identity. Occupied port or unavailable address/interface refuses launch explicitly, without fallback, replacement campaign or authority. Existing character/controller/reconnect bindings survive. Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL. |
- 
+
  ## Автоматическая валидация выпуска
- 
+
 @@ -72912,11 +72962,11 @@ stateDiagram-v2
  - PASS — Transition graph is referentially valid, digest-stable and all 376 forms are reachable from APP-001 without synthetic route-only edges.
  - PASS — All journeys and 91 coverage requirements reference existing forms and are marked covered.
@@ -1049,6 +1049,6 @@ index 5d3e2c3..5ca99fb 100644
  - PASS — Critical UI operations map to executable domain forms; player inventory treats GM operations as projection only.
  - PASS — All 167 abilities have unique animation keys, archetypes, five phases and ANI-004..ANI-007 coverage.
  - PASS — Definition of Done passed with no open UX questions.
- 
+
 -Итог: **376 форм, 1698 переходов, 66 journeys, 91 требований, 111 workflow-команд и 2448 QA-сценариев; открытых UX-вопросов нет.**
 +Итог: **376 форм, 1700 переходов, 66 journeys, 91 требований, 112 workflow-команд и 2449 QA-сценариев; открытых UX-вопросов нет.**
