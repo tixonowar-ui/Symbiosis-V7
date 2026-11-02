@@ -1,3 +1,6 @@
+import { CAMPAIGN_LOBBY_GM_NAV_TARGETS, type CampaignLobbyGmForm } from '@shared/campaign-lobby.js';
+import { readCampaignLobbyLedger } from './campaign-lobby.js';
+import { CAMPAIGN_LOBBY_IDENTITIES } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import type Database from 'better-sqlite3';
@@ -70,7 +73,11 @@ export type CampaignCreationCursor = {
   | { readonly kind: 'MENU'; readonly formId: 'APP-011'; readonly targetId: string }
   | { readonly kind: 'DRAFT'; readonly formId: CampaignDraftFormId; readonly targetId: string }
   | { readonly kind: 'CAMPAIGN'; readonly formId: 'CMP-006'; readonly targetId: string }
-  | { readonly kind: 'QUEUE'; readonly formId: 'NET-017' | 'CMP-006'; readonly targetId: string }
+  | {
+      readonly kind: 'QUEUE';
+      readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm;
+      readonly targetId: string;
+    }
   | {
       readonly kind: 'ADMISSION';
       readonly formId: AdmissionGmViewFormId;
@@ -561,7 +568,7 @@ function assertUnusedId(db: Database.Database, id: string): void {
   ];
   // An older campaign writer must not reuse identities already committed by a network family.
   const network =
-    version === 10 || version === 11 || version === 12
+    version === 10 || version === 11 || version === 12 || version === 13
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -573,7 +580,7 @@ function assertUnusedId(db: Database.Database, id: string): void {
         ] as const)
       : [];
   const review =
-    version === 11 || version === 12
+    version === 11 || version === 12 || version === 13
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -581,7 +588,11 @@ function assertUnusedId(db: Database.Database, id: string): void {
           ['gm_request_queue_event', ['event_id']],
         ] as const)
       : [];
-  const admission = version === 12 ? CAMPAIGN_ADMISSION_IDENTITIES : [];
+  const admission = version === 12 || version === 13 ? CAMPAIGN_ADMISSION_IDENTITIES : [];
+  if (version === 13)
+    for (const [table, columns] of CAMPAIGN_LOBBY_IDENTITIES)
+      for (const column of columns)
+        if (rowAt(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
   for (const [table, columns] of [...network, ...review, ...admission])
     for (const column of columns)
       if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
@@ -1779,7 +1790,7 @@ export interface GmRequestReviewDraftRequest {
 }
 export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTriple {
   readonly schemaVersion: 1;
-  readonly formId: 'NET-017' | 'CMP-006';
+  readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm;
   readonly requestQueueRevision: number;
   readonly values: NetworkGmRequestDraftValues;
   readonly returnContext: Extract<NetworkGmRequestReturnContext, { originFormId: 'CMP-006' }>;
@@ -1918,7 +1929,53 @@ function verifyAdmissionCause(
     checkpointRevisionOrNull,
   };
 }
+export interface GmLobbySourceCause {
+  readonly commandId: string;
+  readonly recordSha256: string;
+}
+function lobbyCause(value: unknown): GmLobbySourceCause {
+  const row = queueObject(value, ['commandId', 'recordSha256']);
+  return { commandId: text(row['commandId']), recordSha256: queueHash(row['recordSha256']) };
+}
+function lobbyCauseEventId(scope: GmRequestReviewScope, cause: GmLobbySourceCause): string {
+  return 'gm-lobby-source:' + campaignCreationHash({ scope, cause });
+}
+function verifyLobbyCause(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  cause: GmLobbySourceCause,
+) {
+  const event =
+    readCampaignLobbyLedger(db, scope.campaignId).find(
+      (e) => e.request.commandId === cause.commandId,
+    ) ?? fail();
+  if (campaignCreationHash(event) !== cause.recordSha256) return fail();
+  if (
+    event.authority.kind === 'GM' &&
+    (event.authority.ownerDeviceId !== scope.ownerDeviceId ||
+      event.authority.gmLocalContextId !== scope.gmLocalContextId)
+  )
+    return fail();
+  return {
+    actorVisibilityChanged: event.request.workflowCommandId === 'UI-CMD-CAMPAIGN-START',
+    client: null,
+  };
+}
+function queueNavigationTarget(request: FormActionIntentV2Message): GmRequestReviewView['formId'] {
+  if (request.actionKey === 'CMP-006::CTA::002' && request.sourceFormId === 'CMP-006')
+    return 'NET-017';
+  if (request.actionKey === 'NET-017::CTA::009' && request.sourceFormId === 'NET-017')
+    return 'CMP-006';
+  const key = request.actionKey as keyof typeof CAMPAIGN_LOBBY_GM_NAV_TARGETS;
+  if (
+    !Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, key) ||
+    key.split('::')[0] !== request.sourceFormId
+  )
+    return fail('INVALID_INPUT');
+  return CAMPAIGN_LOBBY_GM_NAV_TARGETS[key];
+}
 export type GmRequestReviewMutation =
+  | { readonly kind: 'LOBBY_SOURCE'; readonly cause: GmLobbySourceCause }
   | { readonly kind: 'SOURCE_ADVANCE'; readonly cause: GmAdmissionSourceCause }
   | {
       readonly kind: 'ADMISSION_RETURN';
@@ -2071,15 +2128,9 @@ function queueNav(value: unknown): FormActionIntentV2Message {
     'navigationRequestId',
     'sourceFormId',
   ]);
-  if (
-    row['messageType'] !== 'navigation.form-action' ||
-    row['protocolVersion'] !== 2 ||
-    !(
-      (row['sourceFormId'] === 'CMP-006' && row['actionKey'] === 'CMP-006::CTA::002') ||
-      (row['sourceFormId'] === 'NET-017' && row['actionKey'] === 'NET-017::CTA::009')
-    )
-  )
+  if (row['messageType'] !== 'navigation.form-action' || row['protocolVersion'] !== 2)
     return fail('INVALID_INPUT');
+  queueNavigationTarget(row as unknown as FormActionIntentV2Message);
   text(row['navigationRequestId']);
   count(row['expectedProjectionRevision']);
   return row as unknown as FormActionIntentV2Message;
@@ -2117,6 +2168,10 @@ function queueDraft(value: unknown): GmRequestReviewDraftRequest {
 }
 function queueMutation(value: unknown): GmRequestReviewMutation {
   const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'LOBBY_SOURCE') {
+    const row = queueObject(value, ['kind', 'cause']);
+    return { kind: 'LOBBY_SOURCE', cause: lobbyCause(row['cause']) };
+  }
   if (record['kind'] === 'SOURCE_ADVANCE') {
     const row = queueObject(value, ['kind', 'cause']);
     return { kind: 'SOURCE_ADVANCE', cause: admissionCause(row['cause']) };
@@ -2314,7 +2369,7 @@ function reduceQueue(
     const view = queueView(scope, {
       schemaVersion: 1,
       ...scope,
-      formId: 'NET-017',
+      formId: queueNavigationTarget(mutation.request),
       ...initial.cursor.revisions,
       projectionRevision: next(initial.cursor.revisions.projectionRevision),
       requestQueueRevision: queue.requestQueueRevision,
@@ -2331,7 +2386,18 @@ function reduceQueue(
   let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
   let document = queueViewDocument(old);
   let changed = true;
-  if (mutation.kind === 'SOURCE_ADVANCE') {
+  if (mutation.kind === 'LOBBY_SOURCE') {
+    const proof = verifyLobbyCause(db, scope, mutation.cause);
+    document = {
+      ...document,
+      formId: proof.actorVisibilityChanged ? 'GM-001' : old.formId,
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+      actorVisibilityRevision: proof.actorVisibilityChanged
+        ? next(old.actorVisibilityRevision)
+        : old.actorVisibilityRevision,
+    };
+  } else if (mutation.kind === 'SOURCE_ADVANCE') {
     const proof = verifyAdmissionCause(db, scope, mutation.cause);
     document = {
       ...document,
@@ -2359,9 +2425,17 @@ function reduceQueue(
       mutation.request.expectedProjectionRevision !== old.projectionRevision
     )
       return fail('STALE_REVISION');
+    const target = queueNavigationTarget(mutation.request);
+    const started = state.events.some(
+      (event) =>
+        event.mutation.kind === 'LOBBY_SOURCE' &&
+        verifyLobbyCause(db, scope, event.mutation.cause).actorVisibilityChanged,
+    );
+    if (started && (target === 'CMP-006' || target === 'NET-016' || target === 'NET-017'))
+      return fail('DRAFT_UNAVAILABLE');
     document = {
       ...document,
-      formId: old.formId === 'CMP-006' ? 'NET-017' : 'CMP-006',
+      formId: target,
       projectionRevision: next(old.projectionRevision),
     };
   } else if (mutation.kind === 'DRAFT') {
@@ -2421,10 +2495,10 @@ function reduceQueue(
 function queueSchema(db: Database.Database): void {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 11 && row['version'] !== 12) return fail();
+  if (row['version'] !== 11 && row['version'] !== 12 && row['version'] !== 13) return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 12)
+  if (row['version'] === 12 || row['version'] === 13)
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -2489,6 +2563,8 @@ export function readGmRequestReviewViewStateInTransaction(
       mutation.kind === 'SOURCE_ADVANCE' &&
       eventId !== admissionCauseEventId(scope, mutation.cause)
     )
+      return fail();
+    if (mutation.kind === 'LOBBY_SOURCE' && eventId !== lobbyCauseEventId(scope, mutation.cause))
       return fail();
     const reduced = reduceQueue(db, scope, initial, state, mutation);
     if (mutation.kind === 'ADMISSION_RETURN')
@@ -2617,6 +2693,19 @@ export function appendGmAdmissionSourceInTransaction(
   });
   verifyGmAdmissionSourceMirrorsInTransaction(db, scope);
 }
+/** Lobby facts advance the existing queue/admission presentation vector in the same transaction. */
+export function appendGmLobbySourceInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  value: GmLobbySourceCause,
+): void {
+  const cause = lobbyCause(value);
+  verifyLobbyCause(db, scope, cause);
+  appendGmRequestReviewEventInTransaction(db, scope, {
+    eventId: lobbyCauseEventId(scope, cause),
+    mutation: { kind: 'LOBBY_SOURCE', cause },
+  });
+}
 function queueCursor(view: GmRequestReviewView): CampaignCreationCursor {
   return {
     gmLocalContextId: view.gmLocalContextId,
@@ -2682,8 +2771,12 @@ export function appendGmRequestReviewEventInTransaction(
     eventId !== admissionCauseEventId(scope, mutation.cause)
   )
     return fail('INVALID_INPUT');
+  if (mutation.kind === 'LOBBY_SOURCE' && eventId !== lobbyCauseEventId(scope, mutation.cause))
+    return fail('INVALID_INPUT');
   const admissionBefore =
-    (mutation.kind === 'SOURCE_ADVANCE' || mutation.kind === 'REQUEST_REFRESH') &&
+    (mutation.kind === 'SOURCE_ADVANCE' ||
+      mutation.kind === 'REQUEST_REFRESH' ||
+      mutation.kind === 'LOBBY_SOURCE') &&
     db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined
       ? readGmAdmissionViewStateInTransaction(db, scope)
       : null;
@@ -3497,7 +3590,12 @@ function readAdmissionViewState(
       return fail();
     const advances = queueRows
       .slice(prefixIndex + 1)
-      .filter((row) => row['kind'] === 'SOURCE_ADVANCE' || row['kind'] === 'REQUEST_REFRESH');
+      .filter(
+        (row) =>
+          row['kind'] === 'SOURCE_ADVANCE' ||
+          row['kind'] === 'REQUEST_REFRESH' ||
+          row['kind'] === 'LOBBY_SOURCE',
+      );
     const mirrors = events.filter((event) => event.mutation.kind === 'SOURCE_ADVANCE');
     if (
       advances.length !== mirrors.length ||
@@ -3533,6 +3631,10 @@ function admissionQueueAdvance(
     row['kind'] !== mutation.kind
   )
     return fail();
+  if (mutation.kind === 'LOBBY_SOURCE') {
+    if (prefix.eventId !== lobbyCauseEventId(scope, mutation.cause)) return fail();
+    return verifyLobbyCause(db, scope, mutation.cause);
+  }
   if (mutation.kind === 'REQUEST_REFRESH') return { actorVisibilityChanged: false, client: null };
   if (
     mutation.kind !== 'SOURCE_ADVANCE' ||

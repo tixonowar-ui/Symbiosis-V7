@@ -1,3 +1,4 @@
+import { campaignLobbyCommandValue, type CampaignReadyCommand } from '@shared/campaign-lobby.js';
 import { Buffer } from 'node:buffer';
 import {
   admissionPlayerDecisionRequestValue,
@@ -37,6 +38,8 @@ export interface AdmissionPeerLimits {
   readonly maxChunkBytes: number;
 }
 export const ADMISSION_PEER_OPERATIONS = [
+  'ADMISSION_LOBBY_BEGIN',
+  'ADMISSION_LOBBY_READY',
   'ADMISSION_PUBLICATION_BEGIN',
   'ADMISSION_PUBLICATION_CHUNK',
   'ADMISSION_PLAYER_DECIDE',
@@ -44,6 +47,12 @@ export const ADMISSION_PEER_OPERATIONS = [
 ] as const;
 type Operation = (typeof ADMISSION_PEER_OPERATIONS)[number];
 export type AdmissionPeerCommand = AdmissionPeerScope & { readonly schemaVersion: 1 } & (
+    | { readonly operation: 'ADMISSION_LOBBY_BEGIN'; readonly admittedTabId: string }
+    | {
+        readonly operation: 'ADMISSION_LOBBY_READY';
+        readonly admittedTabId: string;
+        readonly command: CampaignReadyCommand;
+      }
     | { readonly operation: 'ADMISSION_PUBLICATION_BEGIN' }
     | {
         readonly operation: 'ADMISSION_PUBLICATION_CHUNK';
@@ -77,7 +86,7 @@ export type AdmissionPeerRefusal = (typeof ADMISSION_PEER_REFUSALS)[number];
 export type AdmissionPeerResponse = AdmissionPeerScope & { readonly schemaVersion: 1 } & (
     | { readonly operation: 'ADMISSION_PUBLICATION_BEGIN'; readonly outcome: 'NOT_READY' }
     | {
-        readonly operation: 'ADMISSION_PUBLICATION_BEGIN';
+        readonly operation: 'ADMISSION_PUBLICATION_BEGIN' | 'ADMISSION_LOBBY_BEGIN';
         readonly outcome: 'MANIFEST';
         readonly transferId: string;
         readonly publicationChecksum: string;
@@ -96,7 +105,8 @@ export type AdmissionPeerResponse = AdmissionPeerScope & { readonly schemaVersio
         readonly bytesBase64: string;
       }
     | {
-        readonly operation: 'ADMISSION_PLAYER_DECIDE' | 'ADMISSION_PLAYER_RECOVER';
+        readonly operation:
+          'ADMISSION_PLAYER_DECIDE' | 'ADMISSION_PLAYER_RECOVER' | 'ADMISSION_LOBBY_READY';
         readonly outcome: 'DECIDED';
         readonly receiptCanonicalJson: string;
         readonly receiptSha256: string;
@@ -105,6 +115,14 @@ export type AdmissionPeerResponse = AdmissionPeerScope & { readonly schemaVersio
         readonly operation: 'ADMISSION_PLAYER_RECOVER';
         readonly outcome: 'NOT_APPLIED';
         readonly proof: AdmissionPlayerAbsenceProof;
+      }
+    | {
+        readonly operation: 'ADMISSION_LOBBY_READY';
+        readonly outcome: 'READY_REFUSED';
+        readonly code: AdmissionPeerRefusal;
+        readonly semanticBodySha256: string;
+        readonly generation: number;
+        readonly fenced: true;
       }
     | {
         readonly operation: Operation;
@@ -282,6 +300,15 @@ function command(row: Row): AdmissionPeerCommand {
   const base = header(row),
     operation = base.operation;
   switch (operation) {
+    case 'ADMISSION_LOBBY_BEGIN':
+      object(row, [...scopeKeys, 'admittedTabId']);
+      return { ...base, operation, admittedTabId: uuid(row['admittedTabId']) };
+    case 'ADMISSION_LOBBY_READY': {
+      object(row, [...scopeKeys, 'admittedTabId', 'command']);
+      const request = campaignLobbyCommandValue(row['command']);
+      if (request.workflowCommandId !== 'UI-CMD-CAMPAIGN-READY-SET') return fail();
+      return { ...base, operation, admittedTabId: uuid(row['admittedTabId']), command: request };
+    }
     case 'ADMISSION_PUBLICATION_BEGIN':
       object(row, scopeKeys);
       return { ...base, operation };
@@ -332,7 +359,10 @@ function response(row: Row, limits: AdmissionPeerLimits): AdmissionPeerResponse 
     closed();
     return { ...base, operation, outcome };
   }
-  if (operation === 'ADMISSION_PUBLICATION_BEGIN' && outcome === 'MANIFEST') {
+  if (
+    (operation === 'ADMISSION_PUBLICATION_BEGIN' || operation === 'ADMISSION_LOBBY_BEGIN') &&
+    outcome === 'MANIFEST'
+  ) {
     closed(
       'transferId',
       'publicationChecksum',
@@ -386,7 +416,9 @@ function response(row: Row, limits: AdmissionPeerLimits): AdmissionPeerResponse 
     };
   }
   if (
-    (operation === 'ADMISSION_PLAYER_DECIDE' || operation === 'ADMISSION_PLAYER_RECOVER') &&
+    (operation === 'ADMISSION_PLAYER_DECIDE' ||
+      operation === 'ADMISSION_PLAYER_RECOVER' ||
+      operation === 'ADMISSION_LOBBY_READY') &&
     outcome === 'DECIDED'
   ) {
     closed('receiptCanonicalJson', 'receiptSha256');
@@ -396,6 +428,20 @@ function response(row: Row, limits: AdmissionPeerLimits): AdmissionPeerResponse 
     parsed(receiptCanonicalJson);
     if (postSaveSha256(receiptCanonicalJson) !== receiptSha256) return fail();
     return { ...base, operation, outcome, receiptCanonicalJson, receiptSha256 };
+  }
+  if (operation === 'ADMISSION_LOBBY_READY' && outcome === 'READY_REFUSED') {
+    closed('code', 'semanticBodySha256', 'generation', 'fenced');
+    if (row['fenced'] !== true || !ADMISSION_PEER_REFUSALS.some((code) => code === row['code']))
+      return fail();
+    return {
+      ...base,
+      operation,
+      outcome,
+      code: row['code'] as AdmissionPeerRefusal,
+      semanticBodySha256: hash(row['semanticBodySha256']),
+      generation: integer(row['generation']),
+      fenced: true,
+    };
   }
   if (operation === 'ADMISSION_PLAYER_RECOVER' && outcome === 'NOT_APPLIED') {
     closed('proof');

@@ -224,6 +224,7 @@ describe('whole-batch owner presentation actions', () => {
     expect(original.projection['contextId']).toBe(id(1));
   });
   const available = {
+    campaignStatus: 'PAUSED',
     technicalSessionAvailable: true,
     capacityRecheck: { fitsCurrentCapacity: true },
     pendingCommandIdOrNull: null,

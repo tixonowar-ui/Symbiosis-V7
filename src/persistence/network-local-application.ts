@@ -1,3 +1,7 @@
+import {
+  CAMPAIGN_LOBBY_IDENTITIES,
+  CAMPAIGN_LOBBY_TABLES,
+} from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import type Database from 'better-sqlite3';
@@ -713,24 +717,29 @@ function object(value: unknown, keys?: readonly string[]): Row {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return fail();
   const proto: unknown = Object.getPrototypeOf(value);
   if (proto !== null && proto !== Object.prototype) return fail();
-  const names = keys ?? Object.keys(value);
-  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const ownKeys = Reflect.ownKeys(value);
+  const names = keys ?? ownKeys;
   if (
-    Reflect.ownKeys(descriptors).length !== names.length ||
-    names.some(
-      (key) =>
-        !Object.hasOwn(descriptors, key) ||
-        !Object.hasOwn(descriptors[key]!, 'value') ||
-        !descriptors[key]!.enumerable,
-    )
+    ownKeys.length !== names.length ||
+    (keys !== undefined && keys.some((key) => !ownKeys.includes(key)))
   )
     return fail();
+  for (const key of names) {
+    if (typeof key !== 'string') return fail();
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
+      return fail();
+  }
   return value as Row;
 }
-// A synchronous store operation repeatedly serializes the same immutable witness strings.
-// Cache only primitive string encodings, never objects, validation or authority results.
-// The 16 MiB memory budget is per operation and is discarded before control returns to a caller.
-let canonicalStrings: { values: Map<string, string>; remaining: number } | null = null;
+// A synchronous store operation repeatedly encodes and hashes the same immutable strings.
+// Exact primitive keys reuse only these pure calculations, never objects or proof results.
+// Both maps share a 16 MiB string budget, discarded before control returns to a caller.
+let canonicalStrings: {
+  values: Map<string, string>;
+  hashes: Map<string, string>;
+  remaining: number;
+} | null = null;
 function canonical(value: unknown): string {
   if (typeof value === 'string') {
     const cache = canonicalStrings;
@@ -748,15 +757,17 @@ function canonical(value: unknown): string {
   if (value === null || typeof value === 'boolean') return JSON.stringify(value);
   if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
   if (Array.isArray(value)) {
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    if (
-      Reflect.ownKeys(descriptors).length !== value.length + 1 ||
-      Array.from({ length: value.length }, (_, i) => descriptors[String(i)]).some(
-        (d) => d === undefined || !Object.hasOwn(d, 'value') || !d.enumerable,
-      )
-    )
-      return fail();
-    return `[${Array.from({ length: value.length }, (_, i) => canonical(value[i])).join(',')}]`;
+    const length = value.length;
+    const ownKeys = new Set(Reflect.ownKeys(value));
+    if (ownKeys.size !== length + 1) return fail();
+    for (let i = 0; i < length; i++) {
+      const key = String(i);
+      if (!ownKeys.has(key)) return fail();
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
+        return fail();
+    }
+    return `[${Array.from({ length }, (_, i) => canonical(value[i])).join(',')}]`;
   }
   const row = object(value);
   return `{${Object.keys(row)
@@ -764,7 +775,20 @@ function canonical(value: unknown): string {
     .map((key) => `${JSON.stringify(key)}:${canonical(row[key])}`)
     .join(',')}}`;
 }
-const sha = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
+const sha = (value: string): string => {
+  const cache = canonicalStrings;
+  if (typeof value !== 'string' || cache === null || value.length < 1024)
+    return createHash('sha256').update(value, 'utf8').digest('hex');
+  const known = cache.hashes.get(value);
+  if (known !== undefined) return known;
+  const digest = createHash('sha256').update(value, 'utf8').digest('hex');
+  const bytes = (value.length + digest.length) * 2;
+  if (bytes <= cache.remaining) {
+    cache.hashes.set(value, digest);
+    cache.remaining -= bytes;
+  }
+  return digest;
+};
 const same = (left: unknown, right: unknown) => canonical(left) === canonical(right);
 const text = (value: unknown): string =>
   typeof value === 'string' && value.length > 0 ? value : fail();
@@ -799,7 +823,7 @@ const increment = (value: number): number =>
   value < Number.MAX_SAFE_INTEGER ? value + 1 : fail('REVISION_OVERFLOW');
 function safe<T>(body: () => T): T {
   const outer = canonicalStrings;
-  canonicalStrings ??= { values: new Map(), remaining: 16 * 1024 * 1024 };
+  canonicalStrings ??= { values: new Map(), hashes: new Map(), remaining: 16 * 1024 * 1024 };
   try {
     return body();
   } catch (error: unknown) {
@@ -818,13 +842,21 @@ function input<T>(body: () => T): T {
 }
 function schema(db: Database.Database): void {
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 10 && row['version'] !== 11 && row['version'] !== 12) return fail();
+  if (
+    row['version'] !== 10 &&
+    row['version'] !== 11 &&
+    row['version'] !== 12 &&
+    row['version'] !== 13
+  )
+    return fail();
+  if (row['version'] === 13)
+    for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   for (const table of NETWORK_APPLICATION_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 11 || row['version'] === 12)
+  if (row['version'] === 11 || row['version'] === 12 || row['version'] === 13)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 12)
+  if (row['version'] === 12 || row['version'] === 13)
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -832,8 +864,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version !== 10 && version !== 11 && version !== 12) return fail();
-  return version === 11 || version === 12;
+  if (version !== 10 && version !== 11 && version !== 12 && version !== 13) return fail();
+  return version === 11 || version === 12 || version === 13;
 }
 function owner(db: Database.Database, id: string): void {
   uuid(id);
@@ -2248,7 +2280,7 @@ function readHistory(
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version === 11 || version === 12) {
+  if (version === 11 || version === 12 || version === 13) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
       ['local_network_request_current', review.currents, 'request_id'],
@@ -2604,6 +2636,10 @@ function assertUnused(db: Database.Database, id: string): void {
   ] as const)
     for (const column of columns)
       if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=13').get() !== undefined)
+    for (const [table, columns] of CAMPAIGN_LOBBY_IDENTITIES)
+      for (const column of columns)
+        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
   if (hasRequestReviewSchema(db))
     for (const [table, columns] of [
       ['hosted_device_request_decision', ['command_id', 'receipt_id']],
@@ -2613,10 +2649,7 @@ function assertUnused(db: Database.Database, id: string): void {
     ] as const)
       for (const column of columns)
         if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
-  if (
-    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] ===
-    12
-  )
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined)
     for (const [table, columns] of CAMPAIGN_ADMISSION_IDENTITIES)
       for (const column of columns)
         if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
@@ -3249,6 +3282,7 @@ export const networkApplicationStorage = {
   read,
   at,
   checked,
+  checkedEqual,
   changes,
   guarded,
   identity,

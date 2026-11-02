@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { types } from 'node:util';
 import type { CommandReceipt, WorkflowCommandRequestMessage } from '@shared/wire-protocol.js';
 import type { FormActionIntentV2Message } from '@shared/wire-v2-protocol.js';
 import type {
@@ -261,7 +262,7 @@ function legacyReceipt(record: Omit<HostedNetworkCommand, 'current'>): LegacyReq
 function reviewSchema(db: Database.Database): void {
   s.schema(db);
   const r = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (r['version'] !== 11 && r['version'] !== 12) return s.fail();
+  if (r['version'] !== 11 && r['version'] !== 12 && r['version'] !== 13) return s.fail();
 }
 function rawDecision(
   db: Database.Database,
@@ -610,6 +611,35 @@ export function readGmRequestReviewSource(
   validate: CampaignPrivateOwnerValidator,
 ): GmRequestReviewSource {
   return s.read(db, scope.ownerDeviceId, () => gmSource(db, scope, validate));
+}
+/** Compose dependent reads while the fully verified source still owns the same SQL snapshot. */
+export function readGmRequestReviewSourceWith<T>(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  validate: CampaignPrivateOwnerValidator,
+  observe: (source: GmRequestReviewSource) => T,
+): { source: GmRequestReviewSource; observed: T } {
+  return s.read(db, scope.ownerDeviceId, () => {
+    const source = gmSource(db, scope, validate);
+    const stamp = () =>
+      [
+        s.changes(db),
+        db.pragma('schema_version', { simple: true }),
+        db.pragma('user_version', { simple: true }),
+      ].join('/');
+    const before = stamp(),
+      observed = observe(source);
+    if (types.isPromise(observed)) {
+      void Promise.prototype.then.call(
+        observed,
+        () => undefined,
+        () => undefined,
+      );
+      return s.fail('SOURCE_CHANGED');
+    }
+    if (!db.inTransaction || stamp() !== before) return s.fail('SOURCE_CHANGED');
+    return { source, observed };
+  });
 }
 export function readGmDeviceRequestQueue(
   db: Database.Database,
@@ -1306,7 +1336,7 @@ function readSession(
   if (
     expected.technicalSessionId !== id ||
     row['attempt_id'] !== expected.attemptId ||
-    !s.same(s.checked(row), expected) ||
+    !s.checkedEqual(row, expected) ||
     !s.same(command.receipt.session, expected)
   )
     return s.fail();
@@ -1342,7 +1372,9 @@ function readRequestRecord(
     expected.requestId !== id
   )
     return s.fail();
-  const value = s.object(s.checked(row));
+  // The stored closure is only a locator. The checked command rebuilds the value;
+  // final byte equality proves its hash and canonicality without serializing it twice.
+  const value = s.object(JSON.parse(s.text(row['record_json'])) as unknown);
   const close = value['closureOrNull'];
   if (close !== null) {
     const closure = s.object(close, ['commandId', 'receiptId', 'reason']);
@@ -1352,7 +1384,7 @@ function readRequestRecord(
     expected = cancelled(expected, cancellation.input);
     if (!s.same(cancellation.receipt.request, expected)) return s.fail();
   }
-  if (row['closed'] !== (close === null ? 0 : 1) || !s.same(value, expected)) return s.fail();
+  if (row['closed'] !== (close === null ? 0 : 1) || !s.checkedEqual(row, expected)) return s.fail();
   return { request: expected, submit };
 }
 function command(
@@ -1501,6 +1533,7 @@ export function commitHostedNetworkCommand(
           s.owner(db, p.hostOwnerDeviceId);
           return known;
         }
+        if (campaign.status !== 'PAUSED' && i.operation !== 'CANCEL') return s.fail('UNAVAILABLE');
         s.assertUnused(db, i.commandId);
         s.assertUnused(db, i.receiptId);
         let current: HostedTechnicalSession | HostedDeviceRequest;
@@ -1538,7 +1571,10 @@ export function commitHostedNetworkCommand(
             const schemaVersion = (
               db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
             )['version'];
-            if ((schemaVersion === 11 || schemaVersion === 12) && i.batch.schemaVersion !== 2)
+            if (
+              (schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13) &&
+              i.batch.schemaVersion !== 2
+            )
               return s.fail('INVALID_INPUT');
             if (sessionOrNull.connectionRevision !== i.expectedConnectionRevision)
               return s.fail('STALE_REVISION');
@@ -1552,7 +1588,7 @@ export function commitHostedNetworkCommand(
               return s.fail('INVALID_INPUT');
             let occupied = campaign.activePcCount;
             const released = new Set<string>();
-            if (schemaVersion === 12) {
+            if (schemaVersion === 12 || schemaVersion === 13) {
               if (admissionRules === undefined) assertNoCampaignAdmissionEvidence(db);
               else {
                 const origin = readHostedCampaignCreationOrigin(
@@ -1596,7 +1632,7 @@ export function commitHostedNetworkCommand(
             );
             if (
               currentRequests.some((r) =>
-                schemaVersion === 11 || schemaVersion === 12
+                schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13
                   ? !released.has(r.requestId) &&
                     ['PENDING', 'IN_REVIEW'].includes(
                       readCurrentRequest(db, p, r.requestId).requestStatus,
@@ -1773,7 +1809,7 @@ export function readHostedPausedCampaignIds(
         const root = s.at(db, 'campaign', 'campaign_id', id) ?? s.fail();
         const lifecycle = root['lifecycle_state'];
         if (!V1_LIFECYCLE_STATES.campaign.some((state) => state === lifecycle)) return s.fail();
-        if (lifecycle === 'PAUSED') {
+        if (lifecycle === 'PAUSED' || lifecycle === 'HOSTING') {
           readHostedCurrentPausedCampaign(db, id, validatePrivateOwner);
           result.push(id);
         } else loadCampaignCheckpoint(db, id);

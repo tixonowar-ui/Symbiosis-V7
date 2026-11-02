@@ -1,3 +1,4 @@
+import type { CampaignLobbyState } from './campaign-lobby-state.js';
 import type Database from 'better-sqlite3';
 import {
   admissionPlayerDecisionRequestValue,
@@ -39,6 +40,7 @@ export interface StoredAdmissionPlayerDecision {
 /** Reconstructed in event order inside one SQLite snapshot, never cached across commands. */
 export interface AdmissionHistory {
   checkpoint: CampaignCheckpoint;
+  lobbyOrNull: CampaignLobbyState | null;
   readonly decisions: Map<string, AdmissionDecisionRead>;
   readonly groups: Map<string, AdmissionGroup>;
   readonly controllers: Map<string, AdmissionControllerBinding>;
@@ -400,6 +402,8 @@ export function commitAdmissionPlayerDecision(
           timestamp = s.text(input['timestamp']);
         const history = publication.readHistory(db, scope, validate, rules),
           current = history.decisions.get(request.admissionBatchId) ?? s.fail('NOT_FOUND');
+        if (history.lobbyOrNull?.sceneOrNull !== null && history.lobbyOrNull !== null)
+          return s.fail('UNAVAILABLE');
         assertOwner(current);
         s.guarded(db, guard, current, 'APPLY');
         // Semantic refusals retain their code; only the external allocator is a callback.

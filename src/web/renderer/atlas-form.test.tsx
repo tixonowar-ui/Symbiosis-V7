@@ -23,6 +23,11 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Exact literals are intentional: applied traceability requires every implemented form in a test. */
 const TEST_IMPLEMENTED_FORM_IDS = [
+  'CMP-007',
+  'NET-016',
+  'GM-001',
+  'GRP-001',
+  'PLY-001',
   'NET-027',
   'NET-006',
   'NET-007',
@@ -240,8 +245,8 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // Atlas 1.7 adds seven admission screens and three GM admission dialogs.
-    expect(screens).toBe(64);
+    // Atlas 1.8 delivers five lobby/PEACE screens; existing dialogs are unchanged.
+    expect(screens).toBe(69);
     expect(dialogs).toBe(7);
   });
 

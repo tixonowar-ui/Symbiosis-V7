@@ -1,3 +1,4 @@
+import { hasCampaignLobbySchema, readCampaignStartHeaderCheckpoint } from './campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import {
@@ -18,7 +19,7 @@ export interface OwnedCampaignReadScope {
 export interface CurrentPausedCampaignHeader extends RevisionTriple {
   readonly campaignId: string;
   readonly title: string;
-  readonly status: 'PAUSED';
+  readonly status: 'PAUSED' | 'HOSTING';
   readonly activePlayerCapacity: number;
   readonly activePcCount: number;
   readonly checkpointSha256: string;
@@ -79,11 +80,24 @@ function header(
     'campaignCharacterCopies',
   ]);
   const campaign = object(snapshot['campaign'], ['campaignId', 'lifecycleState', 'payloadJson']);
-  if (campaign['campaignId'] !== campaignId || campaign['lifecycleState'] !== 'PAUSED')
+  const status = campaign['lifecycleState'];
+  if (campaign['campaignId'] !== campaignId || (status !== 'PAUSED' && status !== 'HOSTING'))
     return fail();
-  const currentPayload: unknown = JSON.parse(text(campaign['payloadJson']));
-  // #171 may observe a changed roster/vector, not unimplemented settings/history semantics.
-  if (campaignCreationHash(currentPayload) !== campaignCreationHash(origin.payload)) return fail();
+  const start = hasCampaignLobbySchema(db)
+    ? readCampaignStartHeaderCheckpoint(db, campaignId, origin.payload)
+    : null;
+  if (start === null) {
+    if (
+      status !== 'PAUSED' ||
+      campaignCreationHash(JSON.parse(text(campaign['payloadJson'])) as unknown) !==
+        campaignCreationHash(origin.payload)
+    )
+      return fail();
+  } else if (
+    status !== 'HOSTING' ||
+    campaignCreationHash(checkpoint) !== campaignCreationHash(start)
+  )
+    return fail();
   const copies = snapshot['campaignCharacterCopies'];
   if (!Array.isArray(copies)) return fail();
   let activePcCount = 0;
@@ -108,7 +122,7 @@ function header(
   return {
     campaignId,
     title: source.metadata.title,
-    status: 'PAUSED',
+    status,
     activePlayerCapacity: source.host.activePlayerCapacity,
     activePcCount,
     checkpointSha256: createHash('sha256').update(checkpoint.snapshotJson, 'utf8').digest('hex'),

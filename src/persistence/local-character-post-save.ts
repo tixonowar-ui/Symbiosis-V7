@@ -1,3 +1,4 @@
+import { CAMPAIGN_LOBBY_TABLES } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type Database from 'better-sqlite3';
@@ -507,7 +508,7 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     return fail('restore cursor retirement requires the checkpoint transaction');
   const schema = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
   const version = schema['version'];
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 12)
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 13)
     return fail('unknown schema version for restore cursor retirement');
   // Versions 1..5 predate this aggregate. A version-6 database must have its actual tables.
   if (version < 6) return;
@@ -526,12 +527,14 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
   if (version >= 10)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (version === 11 || version === 12)
+  if (version === 11 || version === 12 || version === 13)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (version === 12)
+  if (version === 12 || version === 13)
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (version === 13)
+    for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (
     db
       .prepare(

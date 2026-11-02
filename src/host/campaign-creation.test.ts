@@ -1,12 +1,13 @@
-import { copyFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir, type NetworkInterfaceInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import type * as Crypto from 'node:crypto';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  CampaignArtValue,
   CampaignCreateRequest,
   CampaignDraftReplaceV3Message,
 } from '../shared/campaign-creation.js';
@@ -297,13 +298,17 @@ async function setup(root = projectRoot, runtimeBaseline = baseline) {
   await h.nav('APP-011::CTA::006');
   return { ...h, path };
 }
-async function ready(h: ReturnType<typeof harness>, port: number) {
+async function ready(
+  h: ReturnType<typeof harness>,
+  port: number,
+  art: CampaignArtValue | null = null,
+) {
   expect(
     (
       await h.replace('METADATA', {
         title: 'Runtime campaign',
         description: 'Private game notes',
-        art: null,
+        art,
       })
     ).messages[0]?.messageType,
   ).toBe('campaign.draft.result');
@@ -679,6 +684,46 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
     expect(h.bind.describe(h.draft().campaignDraftId, h.draft().values.host).status).not.toBe(
       'PASS',
     );
+  });
+  it('#173 reads only the saved campaign art checksum for the owning GM context', async () => {
+    const h = await setup();
+    const directory = join(projectRoot, 'artifacts');
+    const media = readdirSync(directory, { recursive: true }).find(
+      (file) => typeof file === 'string' && file.endsWith('.png'),
+    );
+    if (typeof media !== 'string') throw Error('Missing supplied PNG fixture');
+    const bytes = readFileSync(join(directory, media));
+    const checksum = createHash('sha256').update(bytes).digest('hex');
+    expect(() => h.runtime.readCampaignArt(h.ctx(), checksum)).toThrow();
+    await ready(h, await freePort(), {
+      kind: 'local-file',
+      mediaType: 'image/png',
+      bytesBase64: bytes.toString('base64'),
+    });
+    expect((await h.send(h.createRequest()))[0]?.messageType).toBe('command.result');
+    const before = storageSnapshot(h.db);
+    const { bytes: actualBytes, ...metadata } = h.runtime.readCampaignArt(h.ctx(), checksum);
+    expect(metadata).toEqual({ mediaType: 'image/png' });
+    expect(Buffer.isBuffer(actualBytes)).toBe(true);
+    expect(actualBytes.equals(bytes)).toBe(true);
+    for (const [context, hash] of [
+      [randomUUID(), checksum],
+      [h.ctx(), '0'.repeat(64)],
+      [h.ctx(), 'invalid'],
+    ]) {
+      expect(() => h.runtime.readCampaignArt(context!, hash!)).toThrow();
+    }
+    expect(storageSnapshot(h.db)).toEqual(before);
+    await h.bind.close();
+    h.db.close();
+    const reopened = harness(open(h.path), projectRoot, h.ctx());
+    const { bytes: restoredBytes, ...restoredMetadata } = reopened.runtime.readCampaignArt(
+      h.ctx(),
+      checksum,
+    );
+    expect(restoredMetadata).toEqual({ mediaType: 'image/png' });
+    expect(Buffer.isBuffer(restoredBytes)).toBe(true);
+    expect(restoredBytes.equals(bytes)).toBe(true);
   });
   it('creates once and recovers a lost destination and exact receipt after restart without choosing another draft', async () => {
     const h = await setup();

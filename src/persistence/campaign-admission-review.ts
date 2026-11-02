@@ -1,3 +1,4 @@
+import { hasCampaignLobbySchema, readCampaignStartHeaderCheckpoint } from './campaign-lobby.js';
 import type Database from 'better-sqlite3';
 import { types } from 'node:util';
 import type { WorkflowCommandRequestMessage } from '@shared/wire-protocol.js';
@@ -122,8 +123,9 @@ function callSynchronous<Args extends readonly unknown[], Result>(
 function schema(db: Database.Database): void {
   s.schema(db);
   if (
-    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] !==
-    12
+    !([12, 13] as readonly unknown[]).includes(
+      (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
+    )
   )
     return s.fail();
   for (const table of CAMPAIGN_ADMISSION_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -505,6 +507,12 @@ function readInTransaction(
     events,
     current,
     editable:
+      (!hasCampaignLobbySchema(db) ||
+        readCampaignStartHeaderCheckpoint(
+          db,
+          source.scope.campaignId,
+          source.creationOrigin.payload,
+        ) === null) &&
       q.requestStatus === 'IN_REVIEW' &&
       q.requestRevision === request.payload.requestRevision &&
       terminal === undefined,
@@ -598,6 +606,12 @@ function openInTransaction(
       return { kind: 'REPLAYED' as const, review };
     }
     // A new OPEN may recover an existing workspace, but it cannot reuse another command's ID.
+    if (
+      hasCampaignLobbySchema(db) &&
+      readCampaignStartHeaderCheckpoint(db, scope.campaignId, source.creationOrigin.payload) !==
+        null
+    )
+      return s.fail('UNAVAILABLE');
     s.assertUnused(db, request.commandId);
     const view = source.viewOrNull,
       q = currentRequest(source, request.payload.requestId);

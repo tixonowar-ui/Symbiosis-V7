@@ -127,6 +127,9 @@ describe('persistence schema', () => {
       'campaign_draft',
       'campaign_draft_cancel',
       'campaign_draft_update',
+      'campaign_lobby_event',
+      'campaign_lobby_head',
+      'campaign_peace_scene',
       'campaign_private_owner',
       'device_identity',
       'device_installation_identity',
@@ -180,12 +183,12 @@ describe('persistence schema', () => {
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
 
     insertCampaign(database, 'preserved');
-    expect(applyMigrations(database)).toBe(12);
+    expect(applyMigrations(database)).toBe(13);
     expect(
       database.prepare('SELECT payload_json FROM campaign WHERE campaign_id = ?').get('preserved'),
     ).toEqual({ payload_json: '{}' });
     expect(database.prepare('SELECT count(*) AS count FROM schema_migration').get()).toEqual({
-      count: 12,
+      count: 13,
     });
 
     database

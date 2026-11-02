@@ -1,0 +1,3414 @@
+{
+  "admissionSource": {
+    "contextId": "d4c27d96-fef0-43a2-9370-d856f334ebe6",
+    "networkScopeId": "cade3daf-ff98-442e-a50e-a8994b520ac4",
+    "controllerSeat": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+    "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+    "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+    "requestIdOrNull": "e7396257-3014-4e95-a013-e14b67ecd283",
+    "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+    "stateRevision": 9,
+    "projectionRevision": 10,
+    "actorVisibilityRevision": 0,
+    "draftRevision": 2,
+    "publication": {
+      "gmDecision": {
+        "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+        "campaignCharacterIds": ["21f5ca20-2406-4814-82f7-430447b36e2d"],
+        "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+        "commandId": "fca1501b-3afd-4869-b669-2d710c71a972",
+        "decision": "ACCEPT",
+        "proposalChecksumOrNull": "d9dd4015f72ea72db3f82f2b4685009fd2af67ff5aa065443d3768e81d766404",
+        "proposalRevisionOrNull": 1,
+        "reasonOrNull": null,
+        "receiptId": "ee72b8a4-168b-4c2a-a2cb-b95c746ccd15",
+        "requestId": "e7396257-3014-4e95-a013-e14b67ecd283",
+        "requestOwnerDeviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+        "reviewRevision": 2,
+        "timestamp": "2026-11-02T00:43:23.907Z",
+        "workflowCommandId": "UI-CMD-ADMISSION-GM-ACCEPT"
+      },
+      "groupLabels": [],
+      "proposalOrNull": {
+        "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+        "admissionOrigin": "DEVICE_REQUEST",
+        "blockers": [],
+        "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+        "fullCampaignCopyDiffs": [
+          {
+            "afterSheet": {
+              "advisorOrNull": null,
+              "classOrNull": null,
+              "creationMode": "MANUAL",
+              "groupAssignmentOrNull": {
+                "kind": "START"
+              },
+              "identity": {
+                "age": 31,
+                "massKg": 75,
+                "name": "local-application-source",
+                "sex": "FEMALE"
+              },
+              "inventoryReview": {
+                "entries": [
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "ITM-ARM-005",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Исключительное",
+                    "quantity": 1,
+                    "reviewItemId": "44955983-8f51-422d-88d4-4f063e9238a0",
+                    "sourceEntryIdOrNull": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "ITM-WPN-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 1,
+                    "reviewItemId": "a1e73787-ac82-40ea-a049-cb84df346be9",
+                    "sourceEntryIdOrNull": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                    "weaponDecisionReceiptIdOrNull": "3e47e9fb-0596-4fbf-b067-da01ccf389f0",
+                    "weaponProfileOrNull": {
+                      "accuracyBonusOrNull": null,
+                      "damageDefinition": {
+                        "baseExpression": "item.instanceDamage",
+                        "conditionalOverrideOrNull": null,
+                        "damageModifierStat": "NONE",
+                        "dieType": "NONE",
+                        "effectiveTemplateExpression": "item.instanceDamage",
+                        "evaluationScope": "PROFILE_SNAPSHOT",
+                        "instanceSourceFieldOrNull": "instanceDamage",
+                        "progressionEligibility": "NEVER_PROGRESSION",
+                        "rawRollPersistence": "NOT_APPLICABLE",
+                        "resolvedResultField": "resolvedDamage",
+                        "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                        "rollKind": "DAMAGE",
+                        "sourceNotation": "Dm",
+                        "sourceScope": "WEAPON_PROFILE_VERSION",
+                        "valueMode": "INSTANCE_VALUE"
+                      },
+                      "instanceDamageOrNull": 3,
+                      "name": "Лёгкий арбалет",
+                      "penetrationDefinition": {
+                        "baseExpression": "ROLL(R12)",
+                        "conditionalOverrideOrNull": null,
+                        "damageModifierStat": "NONE",
+                        "dieType": "OTHER_DIE",
+                        "effectiveTemplateExpression": "ROLL(R12)",
+                        "evaluationScope": "EACH_RESOLVED_ATTACK",
+                        "instanceSourceFieldOrNull": null,
+                        "progressionEligibility": "NEVER_PROGRESSION",
+                        "rawRollPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                        "resolvedResultField": "resolvedPenetration",
+                        "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                        "rollKind": "PENETRATION",
+                        "sourceNotation": "R12",
+                        "sourceScope": "ITEM_TEMPLATE",
+                        "valueMode": "PER_ATTACK_ROLL"
+                      },
+                      "properties": {
+                        "Боеприпас": "Арбалетный болт",
+                        "Можно метать": false,
+                        "Навык/класс": "Стрельба или Сталкер/Солдат ПР",
+                        "Особое правило": "ёмкость не задана; боеприпас при объявлении расходуется.",
+                        "Перезарядка атомарна": false,
+                        "Перезарядка, действий": "1",
+                        "Руки": "2",
+                        "Стат точности": "D",
+                        "Штраф без навыка/класса": "−5"
+                      },
+                      "rangeMetersOrNull": 6,
+                      "statRequirements": {
+                        "D": 2,
+                        "S": 1
+                      },
+                      "statSource": "PLAYER_FORMULA_VALIDATED",
+                      "variantLabel": "Единственный/обычный вариант атаки",
+                      "weaponTypeId": "ITM-WPN-001",
+                      "weaponVariantId": "DEFAULT"
+                    }
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "RES-AMM-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 20,
+                    "reviewItemId": "066f7707-020b-4a0d-9459-4043050ee77c",
+                    "sourceEntryIdOrNull": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "RES-AMM-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 3,
+                    "reviewItemId": "bb884d00-6aa8-4e2a-8b65-13a84ada6437",
+                    "sourceEntryIdOrNull": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "ITM-PHA-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 2,
+                    "reviewItemId": "ab8b9ff5-3f34-408d-8b54-1defa2ff5035",
+                    "sourceEntryIdOrNull": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "RES-CON-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 1,
+                    "reviewItemId": "58d08ae3-e7d1-42f6-9930-40d98f2bd2d7",
+                    "sourceEntryIdOrNull": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "description": "Камень с вырезанным знаком",
+                      "kind": "CUSTOM_ITEM",
+                      "name": "Любой заявленный стартовый предмет",
+                      "statBonusOrNull": null
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 2,
+                    "reviewItemId": "572afeb2-aeeb-49eb-9d9e-f1ae20552da0",
+                    "sourceEntryIdOrNull": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  }
+                ],
+                "status": "FINAL",
+                "unresolvedSourceEntryIds": []
+              },
+              "locationAssignmentOrNull": {
+                "location": "Лагерь",
+                "subLocationOrNull": null
+              },
+              "massReview": {
+                "decision": "APPROVED",
+                "massKg": 75
+              },
+              "moneyReview": {
+                "amountOrNull": 42,
+                "status": "FINAL"
+              },
+              "permanentGrants": [],
+              "race": {
+                "code": "FREE",
+                "label": "Вольный"
+              },
+              "runtime": {
+                "alive": true,
+                "bleeding": [],
+                "bound": false,
+                "burning": false,
+                "chimeraDevouringHistory": [],
+                "chimeraExtraSlots": 0,
+                "combatSceneIdOrNull": null,
+                "combatUsageLimits": [],
+                "conscious": true,
+                "cooldowns": [],
+                "currentHp": 100,
+                "diseased": false,
+                "equippedItems": [],
+                "externalEntities": [],
+                "generatedObjects": [],
+                "initiativeOrNull": null,
+                "injuries": [],
+                "keeperInsideHost": false,
+                "mantisBladeStateOrNull": null,
+                "maxHp": 100,
+                "penguinMiMiMiActive": false,
+                "poisoned": false,
+                "preparations": [],
+                "ratInsideHost": false,
+                "statProgressionCounters": {
+                  "C": 0,
+                  "D": 0,
+                  "I": 0,
+                  "M": 0,
+                  "S": 0,
+                  "W": 0,
+                  "Z": 0
+                },
+                "stunned": false,
+                "symbiontXpProgressPoints": 0,
+                "taipanPoisonOrNull": null,
+                "temporaryEffects": [],
+                "unallocatedSymbiontXp": 0,
+                "wounds": []
+              },
+              "schemaVersion": 1,
+              "skills": {
+                "entries": [
+                  {
+                    "bonus": 5,
+                    "label": "Рукопашный бой",
+                    "skillKey": "UNARMED",
+                    "slotCost": 5,
+                    "source": "SELECTED"
+                  },
+                  {
+                    "bonus": 5,
+                    "label": "Борьба",
+                    "skillKey": "GRAPPLING",
+                    "slotCost": 5,
+                    "source": "SELECTED"
+                  }
+                ],
+                "maxSlots": 10,
+                "remainingSlots": 0,
+                "requirementsSatisfied": true,
+                "usedSlots": 10
+              },
+              "stats": {
+                "acceptedBase": {
+                  "C": 19,
+                  "D": 19,
+                  "I": 19,
+                  "M": 19,
+                  "S": 19,
+                  "W": 19,
+                  "Z": 19
+                },
+                "backpackItemAdjustments": {
+                  "C": 0,
+                  "D": 0,
+                  "I": 0,
+                  "M": 0,
+                  "S": 0,
+                  "W": 0,
+                  "Z": 0
+                },
+                "effectiveStats": {
+                  "C": 19,
+                  "D": 19,
+                  "I": 19,
+                  "M": 17,
+                  "S": 17,
+                  "W": 19,
+                  "Z": 17
+                },
+                "permanentGmAdjustments": {
+                  "C": 0,
+                  "D": 0,
+                  "I": 0,
+                  "M": 0,
+                  "S": 0,
+                  "W": 0,
+                  "Z": 0
+                },
+                "skillStageStats": {
+                  "C": 19,
+                  "D": 19,
+                  "I": 19,
+                  "M": 17,
+                  "S": 17,
+                  "W": 19,
+                  "Z": 17
+                },
+                "statProof": [
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 17,
+                    "effectiveValue": 17,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 17,
+                    "statCode": "S"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "D"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 17,
+                    "effectiveValue": 17,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 17,
+                    "statCode": "M"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 17,
+                    "effectiveValue": 17,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 17,
+                    "statCode": "Z"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "I"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "W"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "C"
+                  }
+                ]
+              },
+              "symbionts": [
+                {
+                  "acceptedIndex": 0,
+                  "binding": {
+                    "kind": "EEL_ARM",
+                    "side": "RIGHT"
+                  },
+                  "currentOe": 60,
+                  "effectsEnabled": true,
+                  "label": "Угорь",
+                  "learnedNodes": [
+                    {
+                      "label": "Контактный шокер",
+                      "level": 1
+                    }
+                  ],
+                  "level": 1,
+                  "maxOe": 60,
+                  "speciesKey": "EEL",
+                  "status": "ACTIVE",
+                  "xp": 0,
+                  "xpEligible": true
+                }
+              ],
+              "trainingSlotLedger": {
+                "everIssued": 9,
+                "maxPermanentWisdom": 19
+              }
+            },
+            "beforeSheet": {
+              "advisorOrNull": null,
+              "classOrNull": null,
+              "creationMode": "MANUAL",
+              "groupAssignmentOrNull": null,
+              "identity": {
+                "age": 31,
+                "massKg": 75,
+                "name": "local-application-source",
+                "sex": "FEMALE"
+              },
+              "inventoryReview": {
+                "entries": [
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "ITM-ARM-005",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Исключительное",
+                    "quantity": 1,
+                    "reviewItemId": "44955983-8f51-422d-88d4-4f063e9238a0",
+                    "sourceEntryIdOrNull": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "ITM-WPN-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 1,
+                    "reviewItemId": "a1e73787-ac82-40ea-a049-cb84df346be9",
+                    "sourceEntryIdOrNull": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": {
+                      "accuracyBonusOrNull": null,
+                      "damageDefinition": {
+                        "baseExpression": "item.instanceDamage",
+                        "conditionalOverrideOrNull": null,
+                        "damageModifierStat": "NONE",
+                        "dieType": "NONE",
+                        "effectiveTemplateExpression": "item.instanceDamage",
+                        "evaluationScope": "PROFILE_SNAPSHOT",
+                        "instanceSourceFieldOrNull": "instanceDamage",
+                        "progressionEligibility": "NEVER_PROGRESSION",
+                        "rawRollPersistence": "NOT_APPLICABLE",
+                        "resolvedResultField": "resolvedDamage",
+                        "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                        "rollKind": "DAMAGE",
+                        "sourceNotation": "Dm",
+                        "sourceScope": "WEAPON_PROFILE_VERSION",
+                        "valueMode": "INSTANCE_VALUE"
+                      },
+                      "instanceDamageOrNull": 3,
+                      "name": "Лёгкий арбалет",
+                      "penetrationDefinition": {
+                        "baseExpression": "ROLL(R12)",
+                        "conditionalOverrideOrNull": null,
+                        "damageModifierStat": "NONE",
+                        "dieType": "OTHER_DIE",
+                        "effectiveTemplateExpression": "ROLL(R12)",
+                        "evaluationScope": "EACH_RESOLVED_ATTACK",
+                        "instanceSourceFieldOrNull": null,
+                        "progressionEligibility": "NEVER_PROGRESSION",
+                        "rawRollPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                        "resolvedResultField": "resolvedPenetration",
+                        "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                        "rollKind": "PENETRATION",
+                        "sourceNotation": "R12",
+                        "sourceScope": "ITEM_TEMPLATE",
+                        "valueMode": "PER_ATTACK_ROLL"
+                      },
+                      "properties": {
+                        "Боеприпас": "Арбалетный болт",
+                        "Можно метать": false,
+                        "Навык/класс": "Стрельба или Сталкер/Солдат ПР",
+                        "Особое правило": "ёмкость не задана; боеприпас при объявлении расходуется.",
+                        "Перезарядка атомарна": false,
+                        "Перезарядка, действий": "1",
+                        "Руки": "2",
+                        "Стат точности": "D",
+                        "Штраф без навыка/класса": "−5"
+                      },
+                      "rangeMetersOrNull": 6,
+                      "statRequirements": {
+                        "D": 2,
+                        "S": 1
+                      },
+                      "statSource": "PLAYER_FORMULA_VALIDATED",
+                      "variantLabel": "Единственный/обычный вариант атаки",
+                      "weaponTypeId": "ITM-WPN-001",
+                      "weaponVariantId": "DEFAULT"
+                    }
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "RES-AMM-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 20,
+                    "reviewItemId": "066f7707-020b-4a0d-9459-4043050ee77c",
+                    "sourceEntryIdOrNull": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "RES-AMM-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 3,
+                    "reviewItemId": "bb884d00-6aa8-4e2a-8b65-13a84ada6437",
+                    "sourceEntryIdOrNull": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "ITM-PHA-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 2,
+                    "reviewItemId": "ab8b9ff5-3f34-408d-8b54-1defa2ff5035",
+                    "sourceEntryIdOrNull": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "itemTypeId": "RES-CON-001",
+                      "kind": "CATALOG"
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 1,
+                    "reviewItemId": "58d08ae3-e7d1-42f6-9930-40d98f2bd2d7",
+                    "sourceEntryIdOrNull": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  },
+                  {
+                    "equipmentState": "UNEQUIPPED",
+                    "item": {
+                      "description": "Камень с вырезанным знаком",
+                      "kind": "CUSTOM_ITEM",
+                      "name": "Любой заявленный стартовый предмет",
+                      "statBonusOrNull": null
+                    },
+                    "qualityLabel": "Отсутствует/непригоден",
+                    "quantity": 2,
+                    "reviewItemId": "572afeb2-aeeb-49eb-9d9e-f1ae20552da0",
+                    "sourceEntryIdOrNull": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+                    "weaponDecisionReceiptIdOrNull": null,
+                    "weaponProfileOrNull": null
+                  }
+                ],
+                "status": "PENDING",
+                "unresolvedSourceEntryIds": [
+                  "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                  "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                  "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                  "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                  "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                  "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                  "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c"
+                ]
+              },
+              "locationAssignmentOrNull": null,
+              "massReview": {
+                "decision": "PENDING_MASTER_APPROVAL",
+                "massKg": 75
+              },
+              "moneyReview": {
+                "amountOrNull": null,
+                "status": "PENDING"
+              },
+              "permanentGrants": [],
+              "race": {
+                "code": "FREE",
+                "label": "Вольный"
+              },
+              "runtime": {
+                "alive": true,
+                "bleeding": [],
+                "bound": false,
+                "burning": false,
+                "chimeraDevouringHistory": [],
+                "chimeraExtraSlots": 0,
+                "combatSceneIdOrNull": null,
+                "combatUsageLimits": [],
+                "conscious": true,
+                "cooldowns": [],
+                "currentHp": 100,
+                "diseased": false,
+                "equippedItems": [],
+                "externalEntities": [],
+                "generatedObjects": [],
+                "initiativeOrNull": null,
+                "injuries": [],
+                "keeperInsideHost": false,
+                "mantisBladeStateOrNull": null,
+                "maxHp": 100,
+                "penguinMiMiMiActive": false,
+                "poisoned": false,
+                "preparations": [],
+                "ratInsideHost": false,
+                "statProgressionCounters": {
+                  "C": 0,
+                  "D": 0,
+                  "I": 0,
+                  "M": 0,
+                  "S": 0,
+                  "W": 0,
+                  "Z": 0
+                },
+                "stunned": false,
+                "symbiontXpProgressPoints": 0,
+                "taipanPoisonOrNull": null,
+                "temporaryEffects": [],
+                "unallocatedSymbiontXp": 0,
+                "wounds": []
+              },
+              "schemaVersion": 1,
+              "skills": {
+                "entries": [
+                  {
+                    "bonus": 5,
+                    "label": "Рукопашный бой",
+                    "skillKey": "UNARMED",
+                    "slotCost": 5,
+                    "source": "SELECTED"
+                  },
+                  {
+                    "bonus": 5,
+                    "label": "Борьба",
+                    "skillKey": "GRAPPLING",
+                    "slotCost": 5,
+                    "source": "SELECTED"
+                  }
+                ],
+                "maxSlots": 10,
+                "remainingSlots": 0,
+                "requirementsSatisfied": true,
+                "usedSlots": 10
+              },
+              "stats": {
+                "acceptedBase": {
+                  "C": 19,
+                  "D": 19,
+                  "I": 19,
+                  "M": 19,
+                  "S": 19,
+                  "W": 19,
+                  "Z": 19
+                },
+                "backpackItemAdjustments": {
+                  "C": 0,
+                  "D": 0,
+                  "I": 0,
+                  "M": 0,
+                  "S": 0,
+                  "W": 0,
+                  "Z": 0
+                },
+                "effectiveStats": {
+                  "C": 19,
+                  "D": 19,
+                  "I": 19,
+                  "M": 17,
+                  "S": 17,
+                  "W": 19,
+                  "Z": 17
+                },
+                "permanentGmAdjustments": {
+                  "C": 0,
+                  "D": 0,
+                  "I": 0,
+                  "M": 0,
+                  "S": 0,
+                  "W": 0,
+                  "Z": 0
+                },
+                "skillStageStats": {
+                  "C": 19,
+                  "D": 19,
+                  "I": 19,
+                  "M": 17,
+                  "S": 17,
+                  "W": 19,
+                  "Z": 17
+                },
+                "statProof": [
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 17,
+                    "effectiveValue": 17,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 17,
+                    "statCode": "S"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "D"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 17,
+                    "effectiveValue": 17,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 17,
+                    "statCode": "M"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 17,
+                    "effectiveValue": 17,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 17,
+                    "statCode": "Z"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "I"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "W"
+                  },
+                  {
+                    "appliedNegativeDelta": 0,
+                    "beforeLimits": 19,
+                    "effectiveValue": 19,
+                    "maximumOrNull": null,
+                    "minimumOrNull": null,
+                    "negativeSymbiontDelta": 0,
+                    "positiveSymbiontDelta": 0,
+                    "skillStageValue": 19,
+                    "statCode": "C"
+                  }
+                ]
+              },
+              "symbionts": [
+                {
+                  "acceptedIndex": 0,
+                  "binding": {
+                    "kind": "EEL_ARM",
+                    "side": "RIGHT"
+                  },
+                  "currentOe": 60,
+                  "effectsEnabled": true,
+                  "label": "Угорь",
+                  "learnedNodes": [
+                    {
+                      "label": "Контактный шокер",
+                      "level": 1
+                    }
+                  ],
+                  "level": 1,
+                  "maxOe": 60,
+                  "speciesKey": "EEL",
+                  "status": "ACTIVE",
+                  "xp": 0,
+                  "xpEligible": true
+                }
+              ],
+              "trainingSlotLedger": {
+                "everIssued": 9,
+                "maxPermanentWisdom": 19
+              }
+            },
+            "blockers": [],
+            "campaignCharacterIdOrNull": "21f5ca20-2406-4814-82f7-430447b36e2d",
+            "changes": [
+              {
+                "afterValue": "APPROVED",
+                "beforeValue": "PENDING_MASTER_APPROVAL",
+                "fieldPath": "/massReview/decision",
+                "section": "MASS"
+              },
+              {
+                "afterValue": "3e47e9fb-0596-4fbf-b067-da01ccf389f0",
+                "beforeValue": null,
+                "fieldPath": "/inventoryReview/entries/1/weaponDecisionReceiptIdOrNull",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": "FINAL",
+                "beforeValue": "PENDING",
+                "fieldPath": "/inventoryReview/status",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/0",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/1",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/2",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/3",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/4",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/5",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": null,
+                "beforeValue": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+                "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/6",
+                "section": "INVENTORY"
+              },
+              {
+                "afterValue": 42,
+                "beforeValue": null,
+                "fieldPath": "/moneyReview/amountOrNull",
+                "section": "MONEY"
+              },
+              {
+                "afterValue": "FINAL",
+                "beforeValue": "PENDING",
+                "fieldPath": "/moneyReview/status",
+                "section": "MONEY"
+              },
+              {
+                "afterValue": {
+                  "kind": "START"
+                },
+                "beforeValue": null,
+                "fieldPath": "/groupAssignmentOrNull",
+                "section": "GROUP_LOCATION"
+              },
+              {
+                "afterValue": {
+                  "location": "Лагерь",
+                  "subLocationOrNull": null
+                },
+                "beforeValue": null,
+                "fieldPath": "/locationAssignmentOrNull",
+                "section": "GROUP_LOCATION"
+              }
+            ],
+            "characterName": "local-application-source",
+            "reviewCopyIdOrNull": "1900de2b-c89c-437c-a8e0-e735b374abd6",
+            "sourceSnapshotChecksum": "f629d24079860c0cdc286711036f60559953b2abf7470a78fc6230452f245011",
+            "sourceUuid": "local-application-source-character"
+          }
+        ],
+        "ownerProvenance": {
+          "kind": "DEVICE_REQUEST",
+          "requestId": "e7396257-3014-4e95-a013-e14b67ecd283",
+          "requestOwnerDeviceId": "001ccb96-d773-47fa-92bf-9039986830e9"
+        },
+        "proposalChecksum": "d9dd4015f72ea72db3f82f2b4685009fd2af67ff5aa065443d3768e81d766404",
+        "proposalRevision": 1,
+        "reviewRevision": 2
+      },
+      "publicationChecksum": "158749d3141cb55cde2caa479df6ab025df0dc11a183c6493701c66ce5dc6576",
+      "schemaVersion": 1
+    },
+    "receiptOrNull": null,
+    "pendingCommandIdOrNull": null,
+    "campaignRevisionOrNull": 1,
+    "technicalSessionAvailable": true,
+    "itemLabels": [
+      {
+        "itemTypeId": "ITM-WPN-001",
+        "name": "Лёгкий арбалет"
+      },
+      {
+        "itemTypeId": "ITM-WPN-002",
+        "name": "Тяжёлый арбалет"
+      },
+      {
+        "itemTypeId": "ITM-WPN-003",
+        "name": "Кенси"
+      },
+      {
+        "itemTypeId": "ITM-WPN-004",
+        "name": "Эривел"
+      },
+      {
+        "itemTypeId": "ITM-WPN-005",
+        "name": "Эстрефорд"
+      },
+      {
+        "itemTypeId": "ITM-WPN-006",
+        "name": "Айнцберн"
+      },
+      {
+        "itemTypeId": "ITM-WPN-007",
+        "name": "Лёгкий лук"
+      },
+      {
+        "itemTypeId": "ITM-WPN-008",
+        "name": "Тяжёлый лук"
+      },
+      {
+        "itemTypeId": "ITM-WPN-009",
+        "name": "Длинный лук"
+      },
+      {
+        "itemTypeId": "ITM-WPN-010",
+        "name": "Грубое оружие"
+      },
+      {
+        "itemTypeId": "ITM-WPN-011",
+        "name": "Одноручный меч"
+      },
+      {
+        "itemTypeId": "ITM-WPN-012",
+        "name": "Полуторный меч"
+      },
+      {
+        "itemTypeId": "ITM-WPN-013",
+        "name": "Двуручный меч"
+      },
+      {
+        "itemTypeId": "ITM-WPN-014",
+        "name": "Шпага"
+      },
+      {
+        "itemTypeId": "ITM-WPN-015",
+        "name": "Копьё"
+      },
+      {
+        "itemTypeId": "ITM-WPN-016",
+        "name": "Кинжал"
+      },
+      {
+        "itemTypeId": "ITM-WPN-017",
+        "name": "Мизерикордия"
+      },
+      {
+        "itemTypeId": "ITM-WPN-018",
+        "name": "Одноручный топор"
+      },
+      {
+        "itemTypeId": "ITM-WPN-019",
+        "name": "Клевец"
+      },
+      {
+        "itemTypeId": "ITM-WPN-020",
+        "name": "Двуручный топор"
+      },
+      {
+        "itemTypeId": "ITM-WPN-021",
+        "name": "Кастет"
+      },
+      {
+        "itemTypeId": "ITM-WPN-022",
+        "name": "Деревянный круглый щит"
+      },
+      {
+        "itemTypeId": "ITM-WPN-023",
+        "name": "Железный круглый щит"
+      },
+      {
+        "itemTypeId": "ITM-WPN-024",
+        "name": "Деревянный треугольный щит"
+      },
+      {
+        "itemTypeId": "ITM-WPN-025",
+        "name": "Железный треугольный щит"
+      },
+      {
+        "itemTypeId": "ITM-WPN-026",
+        "name": "Корнадора"
+      },
+      {
+        "itemTypeId": "ITM-WPN-027",
+        "name": "Бларадэ"
+      },
+      {
+        "itemTypeId": "ITM-ARM-001",
+        "name": "Кожаный доспех"
+      },
+      {
+        "itemTypeId": "ITM-ARM-002",
+        "name": "Бригантина"
+      },
+      {
+        "itemTypeId": "ITM-ARM-003",
+        "name": "Кольчуга"
+      },
+      {
+        "itemTypeId": "ITM-ARM-004",
+        "name": "Латы"
+      },
+      {
+        "itemTypeId": "ITM-ARM-005",
+        "name": "Нэйт"
+      },
+      {
+        "itemTypeId": "ITM-ARM-006",
+        "name": "Кастелькросс"
+      },
+      {
+        "itemTypeId": "ITM-ARM-007",
+        "name": "Цесмор"
+      },
+      {
+        "itemTypeId": "ITM-ARM-008",
+        "name": "Гленхейм"
+      },
+      {
+        "itemTypeId": "ITM-PHA-001",
+        "name": "Антисептик"
+      },
+      {
+        "itemTypeId": "ITM-PHA-002",
+        "name": "Отвар, приводящий в сознание"
+      },
+      {
+        "itemTypeId": "ITM-PHA-003",
+        "name": "Снотворное"
+      },
+      {
+        "itemTypeId": "ITM-PHA-004",
+        "name": "Отвар-паралитик"
+      },
+      {
+        "itemTypeId": "ITM-PHA-005",
+        "name": "Кровоостанавливающий отвар"
+      },
+      {
+        "itemTypeId": "ITM-PHA-006",
+        "name": "Восстанавливающий отвар"
+      },
+      {
+        "itemTypeId": "ITM-PHA-007",
+        "name": "Симбиотический отвар"
+      },
+      {
+        "itemTypeId": "ITM-PHA-008",
+        "name": "Таблетка ночного зрения"
+      },
+      {
+        "itemTypeId": "ITM-PHA-009",
+        "name": "Таблетка бритвенных рефлексов"
+      },
+      {
+        "itemTypeId": "ITM-PHA-010",
+        "name": "Таблетка ледяного спокойствия"
+      },
+      {
+        "itemTypeId": "ITM-PHA-011",
+        "name": "Таблетка взрывной мощи"
+      },
+      {
+        "itemTypeId": "ITM-PHA-012",
+        "name": "Таблетка куража"
+      },
+      {
+        "itemTypeId": "ITM-PHA-013",
+        "name": "Восстанавливающая таблетка"
+      },
+      {
+        "itemTypeId": "ITM-PHA-014",
+        "name": "Таблетка неудержимости"
+      },
+      {
+        "itemTypeId": "RES-AMM-001",
+        "name": "Арбалетный болт"
+      },
+      {
+        "itemTypeId": "RES-AMM-002",
+        "name": "Стрела"
+      },
+      {
+        "itemTypeId": "RES-EQP-001",
+        "name": "Одежда"
+      },
+      {
+        "itemTypeId": "RES-CON-001",
+        "name": "Рюкзак"
+      },
+      {
+        "itemTypeId": "RES-RES-001",
+        "name": "Железные кандалы"
+      },
+      {
+        "itemTypeId": "RES-KEY-001",
+        "name": "Ключ от замка кандалов"
+      },
+      {
+        "itemTypeId": "RES-CON-002",
+        "name": "Крепкий алкоголь, 100 мл"
+      },
+      {
+        "itemTypeId": "RES-CON-003",
+        "name": "Слабоалкогольный напиток, 1 л"
+      },
+      {
+        "itemTypeId": "RES-TOL-001",
+        "name": "Медицинское оборудование"
+      },
+      {
+        "itemTypeId": "RES-CUR-000",
+        "name": "Деньги"
+      },
+      {
+        "itemTypeId": "RES-CUR-001",
+        "name": "Медная монета"
+      },
+      {
+        "itemTypeId": "RES-CUR-002",
+        "name": "Серебряная монета"
+      },
+      {
+        "itemTypeId": "RES-CUR-003",
+        "name": "Золотая монета"
+      }
+    ],
+    "admissionOrigin": "DEVICE_REQUEST",
+    "ownerProvenance": {
+      "kind": "DEVICE_REQUEST",
+      "requestId": "e7396257-3014-4e95-a013-e14b67ecd283",
+      "requestOwnerDeviceId": "001ccb96-d773-47fa-92bf-9039986830e9"
+    },
+    "fullCampaignCopyDiffs": [
+      {
+        "afterSheet": {
+          "advisorOrNull": null,
+          "classOrNull": null,
+          "creationMode": "MANUAL",
+          "groupAssignmentOrNull": {
+            "kind": "START"
+          },
+          "identity": {
+            "age": 31,
+            "massKg": 75,
+            "name": "local-application-source",
+            "sex": "FEMALE"
+          },
+          "inventoryReview": {
+            "entries": [
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-ARM-005",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Исключительное",
+                "quantity": 1,
+                "reviewItemId": "44955983-8f51-422d-88d4-4f063e9238a0",
+                "sourceEntryIdOrNull": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-WPN-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 1,
+                "reviewItemId": "a1e73787-ac82-40ea-a049-cb84df346be9",
+                "sourceEntryIdOrNull": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                "weaponDecisionReceiptIdOrNull": "3e47e9fb-0596-4fbf-b067-da01ccf389f0",
+                "weaponProfileOrNull": {
+                  "accuracyBonusOrNull": null,
+                  "damageDefinition": {
+                    "baseExpression": "item.instanceDamage",
+                    "conditionalOverrideOrNull": null,
+                    "damageModifierStat": "NONE",
+                    "dieType": "NONE",
+                    "effectiveTemplateExpression": "item.instanceDamage",
+                    "evaluationScope": "PROFILE_SNAPSHOT",
+                    "instanceSourceFieldOrNull": "instanceDamage",
+                    "progressionEligibility": "NEVER_PROGRESSION",
+                    "rawRollPersistence": "NOT_APPLICABLE",
+                    "resolvedResultField": "resolvedDamage",
+                    "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "rollKind": "DAMAGE",
+                    "sourceNotation": "Dm",
+                    "sourceScope": "WEAPON_PROFILE_VERSION",
+                    "valueMode": "INSTANCE_VALUE"
+                  },
+                  "instanceDamageOrNull": 3,
+                  "name": "Лёгкий арбалет",
+                  "penetrationDefinition": {
+                    "baseExpression": "ROLL(R12)",
+                    "conditionalOverrideOrNull": null,
+                    "damageModifierStat": "NONE",
+                    "dieType": "OTHER_DIE",
+                    "effectiveTemplateExpression": "ROLL(R12)",
+                    "evaluationScope": "EACH_RESOLVED_ATTACK",
+                    "instanceSourceFieldOrNull": null,
+                    "progressionEligibility": "NEVER_PROGRESSION",
+                    "rawRollPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "resolvedResultField": "resolvedPenetration",
+                    "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "rollKind": "PENETRATION",
+                    "sourceNotation": "R12",
+                    "sourceScope": "ITEM_TEMPLATE",
+                    "valueMode": "PER_ATTACK_ROLL"
+                  },
+                  "properties": {
+                    "Боеприпас": "Арбалетный болт",
+                    "Можно метать": false,
+                    "Навык/класс": "Стрельба или Сталкер/Солдат ПР",
+                    "Особое правило": "ёмкость не задана; боеприпас при объявлении расходуется.",
+                    "Перезарядка атомарна": false,
+                    "Перезарядка, действий": "1",
+                    "Руки": "2",
+                    "Стат точности": "D",
+                    "Штраф без навыка/класса": "−5"
+                  },
+                  "rangeMetersOrNull": 6,
+                  "statRequirements": {
+                    "D": 2,
+                    "S": 1
+                  },
+                  "statSource": "PLAYER_FORMULA_VALIDATED",
+                  "variantLabel": "Единственный/обычный вариант атаки",
+                  "weaponTypeId": "ITM-WPN-001",
+                  "weaponVariantId": "DEFAULT"
+                }
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-AMM-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 20,
+                "reviewItemId": "066f7707-020b-4a0d-9459-4043050ee77c",
+                "sourceEntryIdOrNull": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-AMM-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 3,
+                "reviewItemId": "bb884d00-6aa8-4e2a-8b65-13a84ada6437",
+                "sourceEntryIdOrNull": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-PHA-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 2,
+                "reviewItemId": "ab8b9ff5-3f34-408d-8b54-1defa2ff5035",
+                "sourceEntryIdOrNull": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-CON-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 1,
+                "reviewItemId": "58d08ae3-e7d1-42f6-9930-40d98f2bd2d7",
+                "sourceEntryIdOrNull": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "description": "Камень с вырезанным знаком",
+                  "kind": "CUSTOM_ITEM",
+                  "name": "Любой заявленный стартовый предмет",
+                  "statBonusOrNull": null
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 2,
+                "reviewItemId": "572afeb2-aeeb-49eb-9d9e-f1ae20552da0",
+                "sourceEntryIdOrNull": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              }
+            ],
+            "status": "FINAL",
+            "unresolvedSourceEntryIds": []
+          },
+          "locationAssignmentOrNull": {
+            "location": "Лагерь",
+            "subLocationOrNull": null
+          },
+          "massReview": {
+            "decision": "APPROVED",
+            "massKg": 75
+          },
+          "moneyReview": {
+            "amountOrNull": 42,
+            "status": "FINAL"
+          },
+          "permanentGrants": [],
+          "race": {
+            "code": "FREE",
+            "label": "Вольный"
+          },
+          "runtime": {
+            "alive": true,
+            "bleeding": [],
+            "bound": false,
+            "burning": false,
+            "chimeraDevouringHistory": [],
+            "chimeraExtraSlots": 0,
+            "combatSceneIdOrNull": null,
+            "combatUsageLimits": [],
+            "conscious": true,
+            "cooldowns": [],
+            "currentHp": 100,
+            "diseased": false,
+            "equippedItems": [],
+            "externalEntities": [],
+            "generatedObjects": [],
+            "initiativeOrNull": null,
+            "injuries": [],
+            "keeperInsideHost": false,
+            "mantisBladeStateOrNull": null,
+            "maxHp": 100,
+            "penguinMiMiMiActive": false,
+            "poisoned": false,
+            "preparations": [],
+            "ratInsideHost": false,
+            "statProgressionCounters": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "stunned": false,
+            "symbiontXpProgressPoints": 0,
+            "taipanPoisonOrNull": null,
+            "temporaryEffects": [],
+            "unallocatedSymbiontXp": 0,
+            "wounds": []
+          },
+          "schemaVersion": 1,
+          "skills": {
+            "entries": [
+              {
+                "bonus": 5,
+                "label": "Рукопашный бой",
+                "skillKey": "UNARMED",
+                "slotCost": 5,
+                "source": "SELECTED"
+              },
+              {
+                "bonus": 5,
+                "label": "Борьба",
+                "skillKey": "GRAPPLING",
+                "slotCost": 5,
+                "source": "SELECTED"
+              }
+            ],
+            "maxSlots": 10,
+            "remainingSlots": 0,
+            "requirementsSatisfied": true,
+            "usedSlots": 10
+          },
+          "stats": {
+            "acceptedBase": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 19,
+              "S": 19,
+              "W": 19,
+              "Z": 19
+            },
+            "backpackItemAdjustments": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "effectiveStats": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 17,
+              "S": 17,
+              "W": 19,
+              "Z": 17
+            },
+            "permanentGmAdjustments": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "skillStageStats": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 17,
+              "S": 17,
+              "W": 19,
+              "Z": 17
+            },
+            "statProof": [
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "S"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "D"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "M"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "Z"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "I"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "W"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "C"
+              }
+            ]
+          },
+          "symbionts": [
+            {
+              "acceptedIndex": 0,
+              "binding": {
+                "kind": "EEL_ARM",
+                "side": "RIGHT"
+              },
+              "currentOe": 60,
+              "effectsEnabled": true,
+              "label": "Угорь",
+              "learnedNodes": [
+                {
+                  "label": "Контактный шокер",
+                  "level": 1
+                }
+              ],
+              "level": 1,
+              "maxOe": 60,
+              "speciesKey": "EEL",
+              "status": "ACTIVE",
+              "xp": 0,
+              "xpEligible": true
+            }
+          ],
+          "trainingSlotLedger": {
+            "everIssued": 9,
+            "maxPermanentWisdom": 19
+          }
+        },
+        "beforeSheet": {
+          "advisorOrNull": null,
+          "classOrNull": null,
+          "creationMode": "MANUAL",
+          "groupAssignmentOrNull": null,
+          "identity": {
+            "age": 31,
+            "massKg": 75,
+            "name": "local-application-source",
+            "sex": "FEMALE"
+          },
+          "inventoryReview": {
+            "entries": [
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-ARM-005",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Исключительное",
+                "quantity": 1,
+                "reviewItemId": "44955983-8f51-422d-88d4-4f063e9238a0",
+                "sourceEntryIdOrNull": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-WPN-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 1,
+                "reviewItemId": "a1e73787-ac82-40ea-a049-cb84df346be9",
+                "sourceEntryIdOrNull": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": {
+                  "accuracyBonusOrNull": null,
+                  "damageDefinition": {
+                    "baseExpression": "item.instanceDamage",
+                    "conditionalOverrideOrNull": null,
+                    "damageModifierStat": "NONE",
+                    "dieType": "NONE",
+                    "effectiveTemplateExpression": "item.instanceDamage",
+                    "evaluationScope": "PROFILE_SNAPSHOT",
+                    "instanceSourceFieldOrNull": "instanceDamage",
+                    "progressionEligibility": "NEVER_PROGRESSION",
+                    "rawRollPersistence": "NOT_APPLICABLE",
+                    "resolvedResultField": "resolvedDamage",
+                    "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "rollKind": "DAMAGE",
+                    "sourceNotation": "Dm",
+                    "sourceScope": "WEAPON_PROFILE_VERSION",
+                    "valueMode": "INSTANCE_VALUE"
+                  },
+                  "instanceDamageOrNull": 3,
+                  "name": "Лёгкий арбалет",
+                  "penetrationDefinition": {
+                    "baseExpression": "ROLL(R12)",
+                    "conditionalOverrideOrNull": null,
+                    "damageModifierStat": "NONE",
+                    "dieType": "OTHER_DIE",
+                    "effectiveTemplateExpression": "ROLL(R12)",
+                    "evaluationScope": "EACH_RESOLVED_ATTACK",
+                    "instanceSourceFieldOrNull": null,
+                    "progressionEligibility": "NEVER_PROGRESSION",
+                    "rawRollPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "resolvedResultField": "resolvedPenetration",
+                    "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "rollKind": "PENETRATION",
+                    "sourceNotation": "R12",
+                    "sourceScope": "ITEM_TEMPLATE",
+                    "valueMode": "PER_ATTACK_ROLL"
+                  },
+                  "properties": {
+                    "Боеприпас": "Арбалетный болт",
+                    "Можно метать": false,
+                    "Навык/класс": "Стрельба или Сталкер/Солдат ПР",
+                    "Особое правило": "ёмкость не задана; боеприпас при объявлении расходуется.",
+                    "Перезарядка атомарна": false,
+                    "Перезарядка, действий": "1",
+                    "Руки": "2",
+                    "Стат точности": "D",
+                    "Штраф без навыка/класса": "−5"
+                  },
+                  "rangeMetersOrNull": 6,
+                  "statRequirements": {
+                    "D": 2,
+                    "S": 1
+                  },
+                  "statSource": "PLAYER_FORMULA_VALIDATED",
+                  "variantLabel": "Единственный/обычный вариант атаки",
+                  "weaponTypeId": "ITM-WPN-001",
+                  "weaponVariantId": "DEFAULT"
+                }
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-AMM-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 20,
+                "reviewItemId": "066f7707-020b-4a0d-9459-4043050ee77c",
+                "sourceEntryIdOrNull": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-AMM-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 3,
+                "reviewItemId": "bb884d00-6aa8-4e2a-8b65-13a84ada6437",
+                "sourceEntryIdOrNull": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-PHA-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 2,
+                "reviewItemId": "ab8b9ff5-3f34-408d-8b54-1defa2ff5035",
+                "sourceEntryIdOrNull": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-CON-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 1,
+                "reviewItemId": "58d08ae3-e7d1-42f6-9930-40d98f2bd2d7",
+                "sourceEntryIdOrNull": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "description": "Камень с вырезанным знаком",
+                  "kind": "CUSTOM_ITEM",
+                  "name": "Любой заявленный стартовый предмет",
+                  "statBonusOrNull": null
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 2,
+                "reviewItemId": "572afeb2-aeeb-49eb-9d9e-f1ae20552da0",
+                "sourceEntryIdOrNull": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              }
+            ],
+            "status": "PENDING",
+            "unresolvedSourceEntryIds": [
+              "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+              "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+              "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+              "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+              "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+              "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+              "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c"
+            ]
+          },
+          "locationAssignmentOrNull": null,
+          "massReview": {
+            "decision": "PENDING_MASTER_APPROVAL",
+            "massKg": 75
+          },
+          "moneyReview": {
+            "amountOrNull": null,
+            "status": "PENDING"
+          },
+          "permanentGrants": [],
+          "race": {
+            "code": "FREE",
+            "label": "Вольный"
+          },
+          "runtime": {
+            "alive": true,
+            "bleeding": [],
+            "bound": false,
+            "burning": false,
+            "chimeraDevouringHistory": [],
+            "chimeraExtraSlots": 0,
+            "combatSceneIdOrNull": null,
+            "combatUsageLimits": [],
+            "conscious": true,
+            "cooldowns": [],
+            "currentHp": 100,
+            "diseased": false,
+            "equippedItems": [],
+            "externalEntities": [],
+            "generatedObjects": [],
+            "initiativeOrNull": null,
+            "injuries": [],
+            "keeperInsideHost": false,
+            "mantisBladeStateOrNull": null,
+            "maxHp": 100,
+            "penguinMiMiMiActive": false,
+            "poisoned": false,
+            "preparations": [],
+            "ratInsideHost": false,
+            "statProgressionCounters": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "stunned": false,
+            "symbiontXpProgressPoints": 0,
+            "taipanPoisonOrNull": null,
+            "temporaryEffects": [],
+            "unallocatedSymbiontXp": 0,
+            "wounds": []
+          },
+          "schemaVersion": 1,
+          "skills": {
+            "entries": [
+              {
+                "bonus": 5,
+                "label": "Рукопашный бой",
+                "skillKey": "UNARMED",
+                "slotCost": 5,
+                "source": "SELECTED"
+              },
+              {
+                "bonus": 5,
+                "label": "Борьба",
+                "skillKey": "GRAPPLING",
+                "slotCost": 5,
+                "source": "SELECTED"
+              }
+            ],
+            "maxSlots": 10,
+            "remainingSlots": 0,
+            "requirementsSatisfied": true,
+            "usedSlots": 10
+          },
+          "stats": {
+            "acceptedBase": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 19,
+              "S": 19,
+              "W": 19,
+              "Z": 19
+            },
+            "backpackItemAdjustments": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "effectiveStats": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 17,
+              "S": 17,
+              "W": 19,
+              "Z": 17
+            },
+            "permanentGmAdjustments": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "skillStageStats": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 17,
+              "S": 17,
+              "W": 19,
+              "Z": 17
+            },
+            "statProof": [
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "S"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "D"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "M"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "Z"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "I"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "W"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "C"
+              }
+            ]
+          },
+          "symbionts": [
+            {
+              "acceptedIndex": 0,
+              "binding": {
+                "kind": "EEL_ARM",
+                "side": "RIGHT"
+              },
+              "currentOe": 60,
+              "effectsEnabled": true,
+              "label": "Угорь",
+              "learnedNodes": [
+                {
+                  "label": "Контактный шокер",
+                  "level": 1
+                }
+              ],
+              "level": 1,
+              "maxOe": 60,
+              "speciesKey": "EEL",
+              "status": "ACTIVE",
+              "xp": 0,
+              "xpEligible": true
+            }
+          ],
+          "trainingSlotLedger": {
+            "everIssued": 9,
+            "maxPermanentWisdom": 19
+          }
+        },
+        "blockers": [],
+        "campaignCharacterIdOrNull": "21f5ca20-2406-4814-82f7-430447b36e2d",
+        "changes": [
+          {
+            "afterValue": "APPROVED",
+            "beforeValue": "PENDING_MASTER_APPROVAL",
+            "fieldPath": "/massReview/decision",
+            "section": "MASS"
+          },
+          {
+            "afterValue": "3e47e9fb-0596-4fbf-b067-da01ccf389f0",
+            "beforeValue": null,
+            "fieldPath": "/inventoryReview/entries/1/weaponDecisionReceiptIdOrNull",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": "FINAL",
+            "beforeValue": "PENDING",
+            "fieldPath": "/inventoryReview/status",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/0",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/1",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/2",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/3",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/4",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/5",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": null,
+            "beforeValue": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+            "fieldPath": "/inventoryReview/unresolvedSourceEntryIds/6",
+            "section": "INVENTORY"
+          },
+          {
+            "afterValue": 42,
+            "beforeValue": null,
+            "fieldPath": "/moneyReview/amountOrNull",
+            "section": "MONEY"
+          },
+          {
+            "afterValue": "FINAL",
+            "beforeValue": "PENDING",
+            "fieldPath": "/moneyReview/status",
+            "section": "MONEY"
+          },
+          {
+            "afterValue": {
+              "kind": "START"
+            },
+            "beforeValue": null,
+            "fieldPath": "/groupAssignmentOrNull",
+            "section": "GROUP_LOCATION"
+          },
+          {
+            "afterValue": {
+              "location": "Лагерь",
+              "subLocationOrNull": null
+            },
+            "beforeValue": null,
+            "fieldPath": "/locationAssignmentOrNull",
+            "section": "GROUP_LOCATION"
+          }
+        ],
+        "characterName": "local-application-source",
+        "reviewCopyIdOrNull": "1900de2b-c89c-437c-a8e0-e735b374abd6",
+        "sourceSnapshotChecksum": "f629d24079860c0cdc286711036f60559953b2abf7470a78fc6230452f245011",
+        "sourceUuid": "local-application-source-character"
+      }
+    ],
+    "blockers": [],
+    "proposalRevision": 1,
+    "proposalChecksum": "d9dd4015f72ea72db3f82f2b4685009fd2af67ff5aa065443d3768e81d766404",
+    "decision": null,
+    "commandId": null,
+    "capacityRecheck": {
+      "evaluatedCampaignRevision": 1,
+      "activePlayerCapacity": 3,
+      "occupiedCampaignPlaceCount": 0,
+      "activePcCount": 0,
+      "candidateCount": 1,
+      "fitsCurrentCapacity": true
+    },
+    "controllerDeviceRecheck": true,
+    "ownCampaignCopies": [],
+    "controllerBindings": [],
+    "campaignStatus": "PAUSED",
+    "readyStatus": "NOT_READY",
+    "startStatus": "NOT_STARTED",
+    "result": "AWAITING_PLAYER",
+    "gmReasonOrNull": null,
+    "decisionReceiptId": "ee72b8a4-168b-4c2a-a2cb-b95c746ccd15",
+    "signedReturnContextOrNull": null
+  },
+  "admissionReceipt": {
+    "messageType": "command.result",
+    "protocolVersion": 1,
+    "lifecycleState": "COMMITTED",
+    "receipt": {
+      "commandId": "cbdbe053-0da0-496f-a3fb-fa74e9842118",
+      "receiptId": "admission-event:68f74c93-1c3a-4136-9cc5-99de016f42c8:receipt",
+      "revisions": {
+        "stateRevision": 11,
+        "projectionRevision": 12,
+        "actorVisibilityRevision": 0
+      },
+      "result": {
+        "operation": "ADMISSION_PLAYER_DECIDE",
+        "networkScopeId": "cade3daf-ff98-442e-a50e-a8994b520ac4",
+        "remoteReceipt": {
+          "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+          "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+          "campaignRevision": 2,
+          "capacityProofOrNull": {
+            "activePcCount": 0,
+            "activePlayerCapacity": 3,
+            "candidateCount": 1,
+            "evaluatedCampaignRevision": 1,
+            "fitsCurrentCapacity": true,
+            "occupiedCampaignPlaceCount": 0
+          },
+          "commandId": "cbdbe053-0da0-496f-a3fb-fa74e9842118",
+          "controllerProofOrNull": {
+            "controllerBindings": [
+              {
+                "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+                "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+                "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+                "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+              }
+            ],
+            "evaluatedCampaignRevision": 1,
+            "ownerProvenance": {
+              "kind": "DEVICE_REQUEST",
+              "requestId": "e7396257-3014-4e95-a013-e14b67ecd283",
+              "requestOwnerDeviceId": "001ccb96-d773-47fa-92bf-9039986830e9"
+            },
+            "valid": true
+          },
+          "copies": [
+            {
+              "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+              "controllerBindingOrNull": {
+                "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+                "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+                "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+                "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+              },
+              "groupIdOrNull": "74ace3a4-40ac-49b1-a290-29dbced12284",
+              "lifecycleState": "ACTIVE",
+              "locationAssignmentOrNull": {
+                "location": "Лагерь",
+                "subLocationOrNull": null
+              },
+              "occupiesCampaignPlace": true
+            }
+          ],
+          "decision": "ACCEPT",
+          "proposalChecksum": "d9dd4015f72ea72db3f82f2b4685009fd2af67ff5aa065443d3768e81d766404",
+          "proposalRevision": 1,
+          "receiptId": "bdc8c290-390d-47cb-ab1e-d5d5812081af",
+          "requestId": "e7396257-3014-4e95-a013-e14b67ecd283",
+          "requestOwnerDeviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+          "timestamp": "2026-11-02T00:43:33.144Z",
+          "workflowCommandId": "UI-CMD-ADMISSION-PLAYER-DECIDE"
+        }
+      }
+    }
+  },
+  "lobbySource": {
+    "requestIdOrNull": "e7396257-3014-4e95-a013-e14b67ecd283",
+    "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+    "contextId": "d4c27d96-fef0-43a2-9370-d856f334ebe6",
+    "networkScopeId": "cade3daf-ff98-442e-a50e-a8994b520ac4",
+    "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+    "controllerSeat": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+    "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+    "stateRevision": 13,
+    "projectionRevision": 14,
+    "actorVisibilityRevision": 0,
+    "technicalSessionAvailable": true,
+    "pendingCommandIdOrNull": null,
+    "projectionVariant": "LOBBY_SNAPSHOT",
+    "ownCampaignCopies": [
+      {
+        "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+        "controllerBindingOrNull": {
+          "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+          "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+          "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+          "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+        },
+        "groupIdOrNull": "74ace3a4-40ac-49b1-a290-29dbced12284",
+        "lifecycleState": "ACTIVE",
+        "locationAssignmentOrNull": {
+          "location": "Лагерь",
+          "subLocationOrNull": null
+        },
+        "occupiesCampaignPlace": true
+      }
+    ],
+    "controllerBindings": [
+      {
+        "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+        "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+        "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+        "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+      }
+    ],
+    "blockers": [],
+    "campaignStatus": "PAUSED",
+    "readyStatus": "NOT_READY",
+    "startStatus": "NOT_STARTED",
+    "lobby": {
+      "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+      "campaignRevision": 2,
+      "campaignStarted": false,
+      "groupNameOrNull": null,
+      "includedCampaignCharacterIds": ["21f5ca20-2406-4814-82f7-430447b36e2d"],
+      "initialCampaignTimeOrNull": {
+        "campaignTimestamp": 2707,
+        "dayNumber": 2,
+        "hour": 21,
+        "minute": 7
+      },
+      "lobbyEventRevision": 1,
+      "lobbySnapshotRevision": "217e711873ca69594d41f46aaad176aeae1145cfe1401d425ac6761be684306d",
+      "ownCopies": [
+        {
+          "blockers": [],
+          "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+          "lifecycleState": "ACTIVE",
+          "name": "local-application-source"
+        }
+      ],
+      "ownerDeviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+      "peaceOrNull": null,
+      "readinessRevision": 1,
+      "ready": false,
+      "schemaVersion": 1,
+      "selectedCopy": {
+        "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+        "blockers": [],
+        "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+        "controller": {
+          "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+          "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+          "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+          "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+        },
+        "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+        "lifecycleState": "ACTIVE",
+        "location": {
+          "location": "Лагерь",
+          "subLocationOrNull": null
+        },
+        "name": "local-application-source",
+        "sheet": {
+          "advisorOrNull": null,
+          "classOrNull": null,
+          "creationMode": "MANUAL",
+          "groupAssignmentOrNull": {
+            "kind": "START"
+          },
+          "identity": {
+            "age": 31,
+            "massKg": 75,
+            "name": "local-application-source",
+            "sex": "FEMALE"
+          },
+          "inventoryReview": {
+            "entries": [
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-ARM-005",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Исключительное",
+                "quantity": 1,
+                "reviewItemId": "44955983-8f51-422d-88d4-4f063e9238a0",
+                "sourceEntryIdOrNull": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-WPN-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 1,
+                "reviewItemId": "a1e73787-ac82-40ea-a049-cb84df346be9",
+                "sourceEntryIdOrNull": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+                "weaponDecisionReceiptIdOrNull": "3e47e9fb-0596-4fbf-b067-da01ccf389f0",
+                "weaponProfileOrNull": {
+                  "accuracyBonusOrNull": null,
+                  "damageDefinition": {
+                    "baseExpression": "item.instanceDamage",
+                    "conditionalOverrideOrNull": null,
+                    "damageModifierStat": "NONE",
+                    "dieType": "NONE",
+                    "effectiveTemplateExpression": "item.instanceDamage",
+                    "evaluationScope": "PROFILE_SNAPSHOT",
+                    "instanceSourceFieldOrNull": "instanceDamage",
+                    "progressionEligibility": "NEVER_PROGRESSION",
+                    "rawRollPersistence": "NOT_APPLICABLE",
+                    "resolvedResultField": "resolvedDamage",
+                    "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "rollKind": "DAMAGE",
+                    "sourceNotation": "Dm",
+                    "sourceScope": "WEAPON_PROFILE_VERSION",
+                    "valueMode": "INSTANCE_VALUE"
+                  },
+                  "instanceDamageOrNull": 3,
+                  "name": "Лёгкий арбалет",
+                  "penetrationDefinition": {
+                    "baseExpression": "ROLL(R12)",
+                    "conditionalOverrideOrNull": null,
+                    "damageModifierStat": "NONE",
+                    "dieType": "OTHER_DIE",
+                    "effectiveTemplateExpression": "ROLL(R12)",
+                    "evaluationScope": "EACH_RESOLVED_ATTACK",
+                    "instanceSourceFieldOrNull": null,
+                    "progressionEligibility": "NEVER_PROGRESSION",
+                    "rawRollPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "resolvedResultField": "resolvedPenetration",
+                    "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                    "rollKind": "PENETRATION",
+                    "sourceNotation": "R12",
+                    "sourceScope": "ITEM_TEMPLATE",
+                    "valueMode": "PER_ATTACK_ROLL"
+                  },
+                  "properties": {
+                    "Боеприпас": "Арбалетный болт",
+                    "Можно метать": false,
+                    "Навык/класс": "Стрельба или Сталкер/Солдат ПР",
+                    "Особое правило": "ёмкость не задана; боеприпас при объявлении расходуется.",
+                    "Перезарядка атомарна": false,
+                    "Перезарядка, действий": "1",
+                    "Руки": "2",
+                    "Стат точности": "D",
+                    "Штраф без навыка/класса": "−5"
+                  },
+                  "rangeMetersOrNull": 6,
+                  "statRequirements": {
+                    "D": 2,
+                    "S": 1
+                  },
+                  "statSource": "PLAYER_FORMULA_VALIDATED",
+                  "variantLabel": "Единственный/обычный вариант атаки",
+                  "weaponTypeId": "ITM-WPN-001",
+                  "weaponVariantId": "DEFAULT"
+                }
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-AMM-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 20,
+                "reviewItemId": "066f7707-020b-4a0d-9459-4043050ee77c",
+                "sourceEntryIdOrNull": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-AMM-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 3,
+                "reviewItemId": "bb884d00-6aa8-4e2a-8b65-13a84ada6437",
+                "sourceEntryIdOrNull": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "ITM-PHA-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 2,
+                "reviewItemId": "ab8b9ff5-3f34-408d-8b54-1defa2ff5035",
+                "sourceEntryIdOrNull": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "itemTypeId": "RES-CON-001",
+                  "kind": "CATALOG"
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 1,
+                "reviewItemId": "58d08ae3-e7d1-42f6-9930-40d98f2bd2d7",
+                "sourceEntryIdOrNull": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              },
+              {
+                "equipmentState": "UNEQUIPPED",
+                "item": {
+                  "description": "Камень с вырезанным знаком",
+                  "kind": "CUSTOM_ITEM",
+                  "name": "Любой заявленный стартовый предмет",
+                  "statBonusOrNull": null
+                },
+                "qualityLabel": "Отсутствует/непригоден",
+                "quantity": 2,
+                "reviewItemId": "572afeb2-aeeb-49eb-9d9e-f1ae20552da0",
+                "sourceEntryIdOrNull": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+                "weaponDecisionReceiptIdOrNull": null,
+                "weaponProfileOrNull": null
+              }
+            ],
+            "status": "FINAL",
+            "unresolvedSourceEntryIds": []
+          },
+          "locationAssignmentOrNull": {
+            "location": "Лагерь",
+            "subLocationOrNull": null
+          },
+          "massReview": {
+            "decision": "APPROVED",
+            "massKg": 75
+          },
+          "moneyReview": {
+            "amountOrNull": 42,
+            "status": "FINAL"
+          },
+          "permanentGrants": [],
+          "race": {
+            "code": "FREE",
+            "label": "Вольный"
+          },
+          "runtime": {
+            "alive": true,
+            "bleeding": [],
+            "bound": false,
+            "burning": false,
+            "chimeraDevouringHistory": [],
+            "chimeraExtraSlots": 0,
+            "combatSceneIdOrNull": null,
+            "combatUsageLimits": [],
+            "conscious": true,
+            "cooldowns": [],
+            "currentHp": 100,
+            "diseased": false,
+            "equippedItems": [],
+            "externalEntities": [],
+            "generatedObjects": [],
+            "initiativeOrNull": null,
+            "injuries": [],
+            "keeperInsideHost": false,
+            "mantisBladeStateOrNull": null,
+            "maxHp": 100,
+            "penguinMiMiMiActive": false,
+            "poisoned": false,
+            "preparations": [],
+            "ratInsideHost": false,
+            "statProgressionCounters": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "stunned": false,
+            "symbiontXpProgressPoints": 0,
+            "taipanPoisonOrNull": null,
+            "temporaryEffects": [],
+            "unallocatedSymbiontXp": 0,
+            "wounds": []
+          },
+          "schemaVersion": 1,
+          "skills": {
+            "entries": [
+              {
+                "bonus": 5,
+                "label": "Рукопашный бой",
+                "skillKey": "UNARMED",
+                "slotCost": 5,
+                "source": "SELECTED"
+              },
+              {
+                "bonus": 5,
+                "label": "Борьба",
+                "skillKey": "GRAPPLING",
+                "slotCost": 5,
+                "source": "SELECTED"
+              }
+            ],
+            "maxSlots": 10,
+            "remainingSlots": 0,
+            "requirementsSatisfied": true,
+            "usedSlots": 10
+          },
+          "stats": {
+            "acceptedBase": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 19,
+              "S": 19,
+              "W": 19,
+              "Z": 19
+            },
+            "backpackItemAdjustments": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "effectiveStats": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 17,
+              "S": 17,
+              "W": 19,
+              "Z": 17
+            },
+            "permanentGmAdjustments": {
+              "C": 0,
+              "D": 0,
+              "I": 0,
+              "M": 0,
+              "S": 0,
+              "W": 0,
+              "Z": 0
+            },
+            "skillStageStats": {
+              "C": 19,
+              "D": 19,
+              "I": 19,
+              "M": 17,
+              "S": 17,
+              "W": 19,
+              "Z": 17
+            },
+            "statProof": [
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "S"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "D"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "M"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 17,
+                "effectiveValue": 17,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 17,
+                "statCode": "Z"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "I"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "W"
+              },
+              {
+                "appliedNegativeDelta": 0,
+                "beforeLimits": 19,
+                "effectiveValue": 19,
+                "maximumOrNull": null,
+                "minimumOrNull": null,
+                "negativeSymbiontDelta": 0,
+                "positiveSymbiontDelta": 0,
+                "skillStageValue": 19,
+                "statCode": "C"
+              }
+            ]
+          },
+          "symbionts": [
+            {
+              "acceptedIndex": 0,
+              "binding": {
+                "kind": "EEL_ARM",
+                "side": "RIGHT"
+              },
+              "currentOe": 60,
+              "effectsEnabled": true,
+              "label": "Угорь",
+              "learnedNodes": [
+                {
+                  "label": "Контактный шокер",
+                  "level": 1
+                }
+              ],
+              "level": 1,
+              "maxOe": 60,
+              "speciesKey": "EEL",
+              "status": "ACTIVE",
+              "xp": 0,
+              "xpEligible": true
+            }
+          ],
+          "trainingSlotLedger": {
+            "everIssued": 9,
+            "maxPermanentWisdom": 19
+          }
+        }
+      }
+    }
+  },
+  "peace": {
+    "requestIdOrNull": "e7396257-3014-4e95-a013-e14b67ecd283",
+    "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+    "contextId": "d4c27d96-fef0-43a2-9370-d856f334ebe6",
+    "networkScopeId": "cade3daf-ff98-442e-a50e-a8994b520ac4",
+    "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+    "controllerSeat": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+    "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+    "stateRevision": 17,
+    "projectionRevision": 18,
+    "actorVisibilityRevision": 0,
+    "technicalSessionAvailable": true,
+    "pendingCommandIdOrNull": null,
+    "projectionVariant": "PEACE_SNAPSHOT",
+    "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+    "sceneId": "c0c9e09d-8f90-4811-b4b6-d825bce489a5",
+    "mechanicalSheet": {
+      "advisorOrNull": null,
+      "classOrNull": null,
+      "creationMode": "MANUAL",
+      "groupAssignmentOrNull": {
+        "kind": "START"
+      },
+      "identity": {
+        "age": 31,
+        "massKg": 75,
+        "name": "local-application-source",
+        "sex": "FEMALE"
+      },
+      "inventoryReview": {
+        "entries": [
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "itemTypeId": "ITM-ARM-005",
+              "kind": "CATALOG"
+            },
+            "qualityLabel": "Исключительное",
+            "quantity": 1,
+            "reviewItemId": "44955983-8f51-422d-88d4-4f063e9238a0",
+            "sourceEntryIdOrNull": "40524a8df8b42db429d6e00ab93d167a05bf83a3ec835ec0de1ca74dc18a6cbe",
+            "weaponDecisionReceiptIdOrNull": null,
+            "weaponProfileOrNull": null
+          },
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "itemTypeId": "ITM-WPN-001",
+              "kind": "CATALOG"
+            },
+            "qualityLabel": "Отсутствует/непригоден",
+            "quantity": 1,
+            "reviewItemId": "a1e73787-ac82-40ea-a049-cb84df346be9",
+            "sourceEntryIdOrNull": "79d8ffb0f2c4b7f6ac9320e31ce534f6db286f4dd3fea677b2d3603d9f352c7d",
+            "weaponDecisionReceiptIdOrNull": "3e47e9fb-0596-4fbf-b067-da01ccf389f0",
+            "weaponProfileOrNull": {
+              "accuracyBonusOrNull": null,
+              "damageDefinition": {
+                "baseExpression": "item.instanceDamage",
+                "conditionalOverrideOrNull": null,
+                "damageModifierStat": "NONE",
+                "dieType": "NONE",
+                "effectiveTemplateExpression": "item.instanceDamage",
+                "evaluationScope": "PROFILE_SNAPSHOT",
+                "instanceSourceFieldOrNull": "instanceDamage",
+                "progressionEligibility": "NEVER_PROGRESSION",
+                "rawRollPersistence": "NOT_APPLICABLE",
+                "resolvedResultField": "resolvedDamage",
+                "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                "rollKind": "DAMAGE",
+                "sourceNotation": "Dm",
+                "sourceScope": "WEAPON_PROFILE_VERSION",
+                "valueMode": "INSTANCE_VALUE"
+              },
+              "instanceDamageOrNull": 3,
+              "name": "Лёгкий арбалет",
+              "penetrationDefinition": {
+                "baseExpression": "ROLL(R12)",
+                "conditionalOverrideOrNull": null,
+                "damageModifierStat": "NONE",
+                "dieType": "OTHER_DIE",
+                "effectiveTemplateExpression": "ROLL(R12)",
+                "evaluationScope": "EACH_RESOLVED_ATTACK",
+                "instanceSourceFieldOrNull": null,
+                "progressionEligibility": "NEVER_PROGRESSION",
+                "rawRollPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                "resolvedResultField": "resolvedPenetration",
+                "resolvedResultPersistence": "ATTACK_RESOLUTION_AND_COMBAT_LOG",
+                "rollKind": "PENETRATION",
+                "sourceNotation": "R12",
+                "sourceScope": "ITEM_TEMPLATE",
+                "valueMode": "PER_ATTACK_ROLL"
+              },
+              "properties": {
+                "Боеприпас": "Арбалетный болт",
+                "Можно метать": false,
+                "Навык/класс": "Стрельба или Сталкер/Солдат ПР",
+                "Особое правило": "ёмкость не задана; боеприпас при объявлении расходуется.",
+                "Перезарядка атомарна": false,
+                "Перезарядка, действий": "1",
+                "Руки": "2",
+                "Стат точности": "D",
+                "Штраф без навыка/класса": "−5"
+              },
+              "rangeMetersOrNull": 6,
+              "statRequirements": {
+                "D": 2,
+                "S": 1
+              },
+              "statSource": "PLAYER_FORMULA_VALIDATED",
+              "variantLabel": "Единственный/обычный вариант атаки",
+              "weaponTypeId": "ITM-WPN-001",
+              "weaponVariantId": "DEFAULT"
+            }
+          },
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "itemTypeId": "RES-AMM-001",
+              "kind": "CATALOG"
+            },
+            "qualityLabel": "Отсутствует/непригоден",
+            "quantity": 20,
+            "reviewItemId": "066f7707-020b-4a0d-9459-4043050ee77c",
+            "sourceEntryIdOrNull": "c0b9df6eb6241216bf6dce090c4a2c3b171064ad1088eee18f063de378cfee7f",
+            "weaponDecisionReceiptIdOrNull": null,
+            "weaponProfileOrNull": null
+          },
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "itemTypeId": "RES-AMM-001",
+              "kind": "CATALOG"
+            },
+            "qualityLabel": "Отсутствует/непригоден",
+            "quantity": 3,
+            "reviewItemId": "bb884d00-6aa8-4e2a-8b65-13a84ada6437",
+            "sourceEntryIdOrNull": "1a835d75c0d939971dfb57d0698a2fd588c1bea356402d8dab37125fae6c3518",
+            "weaponDecisionReceiptIdOrNull": null,
+            "weaponProfileOrNull": null
+          },
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "itemTypeId": "ITM-PHA-001",
+              "kind": "CATALOG"
+            },
+            "qualityLabel": "Отсутствует/непригоден",
+            "quantity": 2,
+            "reviewItemId": "ab8b9ff5-3f34-408d-8b54-1defa2ff5035",
+            "sourceEntryIdOrNull": "f9fe948fdc2d9f3b0a18e07c9c35d585f39a01b9e7f675356f6544d0ca0ac403",
+            "weaponDecisionReceiptIdOrNull": null,
+            "weaponProfileOrNull": null
+          },
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "itemTypeId": "RES-CON-001",
+              "kind": "CATALOG"
+            },
+            "qualityLabel": "Отсутствует/непригоден",
+            "quantity": 1,
+            "reviewItemId": "58d08ae3-e7d1-42f6-9930-40d98f2bd2d7",
+            "sourceEntryIdOrNull": "c6cd592f69f2d1f29be2d7c485740f4a8a8cf00ae3a50c2882769dc95b4752c7",
+            "weaponDecisionReceiptIdOrNull": null,
+            "weaponProfileOrNull": null
+          },
+          {
+            "equipmentState": "UNEQUIPPED",
+            "item": {
+              "description": "Камень с вырезанным знаком",
+              "kind": "CUSTOM_ITEM",
+              "name": "Любой заявленный стартовый предмет",
+              "statBonusOrNull": null
+            },
+            "qualityLabel": "Отсутствует/непригоден",
+            "quantity": 2,
+            "reviewItemId": "572afeb2-aeeb-49eb-9d9e-f1ae20552da0",
+            "sourceEntryIdOrNull": "3508f633770a516d50f51bded6d147060718bc3ff8ad11a542c817ba2433336c",
+            "weaponDecisionReceiptIdOrNull": null,
+            "weaponProfileOrNull": null
+          }
+        ],
+        "status": "FINAL",
+        "unresolvedSourceEntryIds": []
+      },
+      "locationAssignmentOrNull": {
+        "location": "Лагерь",
+        "subLocationOrNull": null
+      },
+      "massReview": {
+        "decision": "APPROVED",
+        "massKg": 75
+      },
+      "moneyReview": {
+        "amountOrNull": 42,
+        "status": "FINAL"
+      },
+      "permanentGrants": [],
+      "race": {
+        "code": "FREE",
+        "label": "Вольный"
+      },
+      "runtime": {
+        "alive": true,
+        "bleeding": [],
+        "bound": false,
+        "burning": false,
+        "chimeraDevouringHistory": [],
+        "chimeraExtraSlots": 0,
+        "combatSceneIdOrNull": null,
+        "combatUsageLimits": [],
+        "conscious": true,
+        "cooldowns": [],
+        "currentHp": 100,
+        "diseased": false,
+        "equippedItems": [],
+        "externalEntities": [],
+        "generatedObjects": [],
+        "initiativeOrNull": null,
+        "injuries": [],
+        "keeperInsideHost": false,
+        "mantisBladeStateOrNull": null,
+        "maxHp": 100,
+        "penguinMiMiMiActive": false,
+        "poisoned": false,
+        "preparations": [],
+        "ratInsideHost": false,
+        "statProgressionCounters": {
+          "C": 0,
+          "D": 0,
+          "I": 0,
+          "M": 0,
+          "S": 0,
+          "W": 0,
+          "Z": 0
+        },
+        "stunned": false,
+        "symbiontXpProgressPoints": 0,
+        "taipanPoisonOrNull": null,
+        "temporaryEffects": [],
+        "unallocatedSymbiontXp": 0,
+        "wounds": []
+      },
+      "schemaVersion": 1,
+      "skills": {
+        "entries": [
+          {
+            "bonus": 5,
+            "label": "Рукопашный бой",
+            "skillKey": "UNARMED",
+            "slotCost": 5,
+            "source": "SELECTED"
+          },
+          {
+            "bonus": 5,
+            "label": "Борьба",
+            "skillKey": "GRAPPLING",
+            "slotCost": 5,
+            "source": "SELECTED"
+          }
+        ],
+        "maxSlots": 10,
+        "remainingSlots": 0,
+        "requirementsSatisfied": true,
+        "usedSlots": 10
+      },
+      "stats": {
+        "acceptedBase": {
+          "C": 19,
+          "D": 19,
+          "I": 19,
+          "M": 19,
+          "S": 19,
+          "W": 19,
+          "Z": 19
+        },
+        "backpackItemAdjustments": {
+          "C": 0,
+          "D": 0,
+          "I": 0,
+          "M": 0,
+          "S": 0,
+          "W": 0,
+          "Z": 0
+        },
+        "effectiveStats": {
+          "C": 19,
+          "D": 19,
+          "I": 19,
+          "M": 17,
+          "S": 17,
+          "W": 19,
+          "Z": 17
+        },
+        "permanentGmAdjustments": {
+          "C": 0,
+          "D": 0,
+          "I": 0,
+          "M": 0,
+          "S": 0,
+          "W": 0,
+          "Z": 0
+        },
+        "skillStageStats": {
+          "C": 19,
+          "D": 19,
+          "I": 19,
+          "M": 17,
+          "S": 17,
+          "W": 19,
+          "Z": 17
+        },
+        "statProof": [
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 17,
+            "effectiveValue": 17,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 17,
+            "statCode": "S"
+          },
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 19,
+            "effectiveValue": 19,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 19,
+            "statCode": "D"
+          },
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 17,
+            "effectiveValue": 17,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 17,
+            "statCode": "M"
+          },
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 17,
+            "effectiveValue": 17,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 17,
+            "statCode": "Z"
+          },
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 19,
+            "effectiveValue": 19,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 19,
+            "statCode": "I"
+          },
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 19,
+            "effectiveValue": 19,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 19,
+            "statCode": "W"
+          },
+          {
+            "appliedNegativeDelta": 0,
+            "beforeLimits": 19,
+            "effectiveValue": 19,
+            "maximumOrNull": null,
+            "minimumOrNull": null,
+            "negativeSymbiontDelta": 0,
+            "positiveSymbiontDelta": 0,
+            "skillStageValue": 19,
+            "statCode": "C"
+          }
+        ]
+      },
+      "symbionts": [
+        {
+          "acceptedIndex": 0,
+          "binding": {
+            "kind": "EEL_ARM",
+            "side": "RIGHT"
+          },
+          "currentOe": 60,
+          "effectsEnabled": true,
+          "label": "Угорь",
+          "learnedNodes": [
+            {
+              "label": "Контактный шокер",
+              "level": 1
+            }
+          ],
+          "level": 1,
+          "maxOe": 60,
+          "speciesKey": "EEL",
+          "status": "ACTIVE",
+          "xp": 0,
+          "xpEligible": true
+        }
+      ],
+      "trainingSlotLedger": {
+        "everIssued": 9,
+        "maxPermanentWisdom": 19
+      }
+    },
+    "currentHP": 100,
+    "maxHP": 100,
+    "derivedCondition": {
+      "alive": true,
+      "conscious": true,
+      "stunned": false,
+      "bound": false,
+      "burning": false,
+      "poisoned": false,
+      "diseased": false,
+      "wounds": [],
+      "injuries": [],
+      "bleeding": []
+    },
+    "symbionts": [
+      {
+        "acceptedIndex": 0,
+        "binding": {
+          "kind": "EEL_ARM",
+          "side": "RIGHT"
+        },
+        "currentOe": 60,
+        "effectsEnabled": true,
+        "label": "Угорь",
+        "learnedNodes": [
+          {
+            "label": "Контактный шокер",
+            "level": 1
+          }
+        ],
+        "level": 1,
+        "maxOe": 60,
+        "speciesKey": "EEL",
+        "status": "ACTIVE",
+        "xp": 0,
+        "xpEligible": true
+      }
+    ],
+    "temporaryEffects": [],
+    "campaignTimestamp": 2707,
+    "clockMode": "STOPPED",
+    "dayPhase": "NIGHT",
+    "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+    "location": {
+      "location": "Лагерь",
+      "subLocationOrNull": null
+    },
+    "effectiveController": {
+      "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+      "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+      "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+      "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+    },
+    "ownMarkerVisibility": "UNKNOWN",
+    "markerReason": "NOT_SET",
+    "groupNameOrNull": null,
+    "itemLabels": [
+      {
+        "itemTypeId": "ITM-WPN-001",
+        "name": "Лёгкий арбалет"
+      },
+      {
+        "itemTypeId": "ITM-ARM-005",
+        "name": "Нэйт"
+      },
+      {
+        "itemTypeId": "ITM-PHA-001",
+        "name": "Антисептик"
+      },
+      {
+        "itemTypeId": "RES-AMM-001",
+        "name": "Арбалетный болт"
+      },
+      {
+        "itemTypeId": "RES-CON-001",
+        "name": "Рюкзак"
+      }
+    ],
+    "groupLabels": []
+  },
+  "gmBeforeStart": {
+    "contextId": "f1ee8bb9-8f52-4631-9147-b111f9fd3edd",
+    "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+    "stateRevision": 9,
+    "projectionRevision": 21,
+    "actorVisibilityRevision": 2,
+    "panelVariant": "PRE_START",
+    "campaignStatus": "PAUSED",
+    "title": "Actual peer campaign",
+    "descriptionOrNull": null,
+    "groups": [
+      {
+        "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+        "nameOrNull": null,
+        "members": [
+          {
+            "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+            "name": "local-application-source",
+            "lifecycleState": "ACTIVE",
+            "location": {
+              "location": "Лагерь",
+              "subLocationOrNull": null
+            }
+          }
+        ]
+      }
+    ],
+    "activePeaceSceneOrNull": null,
+    "campaignArtChecksumOrNull": null,
+    "lobbySummary": {
+      "activePcCount": 1,
+      "blockedPcCount": 0,
+      "readyDeviceCount": 1
+    },
+    "activePlayerCapacity": 3,
+    "admissionBatches": [
+      {
+        "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+        "campaignCharacterIds": ["21f5ca20-2406-4814-82f7-430447b36e2d"]
+      }
+    ],
+    "activeCampaignCharacters": [
+      {
+        "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+        "name": "local-application-source",
+        "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+        "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9"
+      }
+    ],
+    "controllingDevices": ["001ccb96-d773-47fa-92bf-9039986830e9"],
+    "readyByDevice": [
+      {
+        "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+        "includedCampaignCharacterIds": ["21f5ca20-2406-4814-82f7-430447b36e2d"],
+        "ready": true
+      }
+    ],
+    "requiredFieldBlockers": [],
+    "lobbySnapshotRevision": "217e711873ca69594d41f46aaad176aeae1145cfe1401d425ac6761be684306d",
+    "readinessRevision": 2,
+    "initialTimeInput": {
+      "dayNumber": null,
+      "hour": null,
+      "minute": null
+    },
+    "initialCampaignTimeOrNull": {
+      "dayNumber": 2,
+      "hour": 21,
+      "minute": 7,
+      "campaignTimestamp": 2707
+    },
+    "startPreflightStatus": "READY_TO_START",
+    "conflictingOperationPending": false,
+    "commandId": null
+  },
+  "gmStarted": {
+    "contextId": "f1ee8bb9-8f52-4631-9147-b111f9fd3edd",
+    "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+    "stateRevision": 10,
+    "projectionRevision": 22,
+    "actorVisibilityRevision": 3,
+    "panelVariant": "STARTED_PEACE",
+    "campaignStatus": "HOSTING",
+    "title": "Actual peer campaign",
+    "descriptionOrNull": null,
+    "groups": [
+      {
+        "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+        "nameOrNull": null,
+        "members": [
+          {
+            "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+            "name": "local-application-source",
+            "lifecycleState": "ACTIVE",
+            "location": {
+              "location": "Лагерь",
+              "subLocationOrNull": null
+            }
+          }
+        ]
+      }
+    ],
+    "activePeaceSceneOrNull": {
+      "schemaVersion": 1,
+      "sceneId": "c0c9e09d-8f90-4811-b4b6-d825bce489a5",
+      "checkpointId": "4bb22d2b-47d4-4fb8-9e44-c1b982ec81d6",
+      "campaignId": "f2aba63b-10c0-4626-aa52-155c6e225a1a",
+      "sceneContext": "PEACE",
+      "includedCopies": [
+        {
+          "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+          "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+          "location": {
+            "location": "Лагерь",
+            "subLocationOrNull": null
+          },
+          "controller": {
+            "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+            "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+            "inputLaneId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74",
+            "localControllerSeatId": "d5cc8bed-9ed0-44cc-af84-458435f5ca74"
+          }
+        }
+      ],
+      "campaignTimestamp": 2707,
+      "clockMode": "STOPPED",
+      "dayPhase": "NIGHT"
+    },
+    "campaignArtChecksumOrNull": null,
+    "lobbySummary": {
+      "activePcCount": 1,
+      "blockedPcCount": 0,
+      "readyDeviceCount": 1
+    },
+    "activePlayerCapacity": 3,
+    "admissionBatches": [
+      {
+        "admissionBatchId": "57ac1e8d-1184-4d8a-b503-53e02fa85aa2",
+        "campaignCharacterIds": ["21f5ca20-2406-4814-82f7-430447b36e2d"]
+      }
+    ],
+    "activeCampaignCharacters": [
+      {
+        "campaignCharacterId": "21f5ca20-2406-4814-82f7-430447b36e2d",
+        "name": "local-application-source",
+        "groupId": "74ace3a4-40ac-49b1-a290-29dbced12284",
+        "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9"
+      }
+    ],
+    "controllingDevices": ["001ccb96-d773-47fa-92bf-9039986830e9"],
+    "readyByDevice": [
+      {
+        "deviceId": "001ccb96-d773-47fa-92bf-9039986830e9",
+        "includedCampaignCharacterIds": ["21f5ca20-2406-4814-82f7-430447b36e2d"],
+        "ready": true
+      }
+    ],
+    "requiredFieldBlockers": [],
+    "lobbySnapshotRevision": "217e711873ca69594d41f46aaad176aeae1145cfe1401d425ac6761be684306d",
+    "readinessRevision": 2,
+    "initialTimeInput": {
+      "dayNumber": null,
+      "hour": null,
+      "minute": null
+    },
+    "initialCampaignTimeOrNull": {
+      "dayNumber": 2,
+      "hour": 21,
+      "minute": 7,
+      "campaignTimestamp": 2707
+    },
+    "startPreflightStatus": "STARTED",
+    "conflictingOperationPending": false,
+    "commandId": null
+  }
+}

@@ -123,6 +123,7 @@ const batch = (v = ZERO): JsonObject => ({
     },
   ],
   campaignId: CAMPAIGN,
+  campaignStatus: 'PAUSED',
   connectionRevision: 0,
   commandId: null,
   batchCharacterSummaries: [SUMMARY],
@@ -1288,6 +1289,8 @@ const GM_CAPS = [
   'UI-CMD-ADMISSION-GM-ACCEPT',
   'UI-CMD-ADMISSION-GM-REJECT',
   'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
+  'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+  'UI-CMD-CAMPAIGN-START',
 ] as const;
 const GM_ROW = {
   requestId: REQUEST,
@@ -1443,7 +1446,7 @@ function gmSnapshot(
 ): ProjectionSnapshotV2Message {
   const keys: ActionKey[] =
     formId === 'CMP-006'
-      ? ['CMP-006::CTA::002']
+      ? ['CMP-006::CTA::001', 'CMP-006::CTA::002']
       : p['commandId'] !== null
         ? []
         : [

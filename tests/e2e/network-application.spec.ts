@@ -202,12 +202,15 @@ async function submitOwnFinal(page: Page, address: string, ownAddress: string) {
   await expect(form(page, 'NET-005')).toBeVisible();
 }
 
-for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT'] as const) {
+for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'PEACE'] as const) {
   test(`NET final admission ${outcome} preserves the source and restores the whole decision on both installations`, async ({
     browser,
   }, info) => {
     const scenario = await createNetworkBrowserScenario(browser, 1);
     const { gm, player, masterPage, playerPage } = scenario;
+    // This new full path adds Ready/Unready/time/Start and PEACE recovery to admission.
+    // Existing admission cases retain their 120s limit and every assertion stays enabled.
+    if (outcome === 'PEACE') test.setTimeout(180_000);
     const errors: string[] = [];
     const frames: string[] = [];
     let failure: unknown;
@@ -323,10 +326,94 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT'] as
         );
         if (outcome === 'ACCEPT_WITH_BLOCKERS')
           await expect(
-            playerPage.getByText('Остаётся в лобби до подтверждения блокирующих условий.', {
-              exact: true,
-            }),
+            playerPage.getByText('не готов и не войдёт в сцену', { exact: false }),
           ).toBeVisible();
+      }
+      let firstPeace: Record<string, unknown> | null = null;
+      const lastPeace = () => {
+        const row = frames.findLast(
+          (frame) =>
+            frame.startsWith('player received ') &&
+            frame.includes('"projectionVariant":"PEACE_SNAPSHOT"'),
+        );
+        if (row === undefined) throw Error('Missing actual PEACE snapshot');
+        return (
+          JSON.parse(row.slice('player received '.length)) as {
+            presentation: { base: { roleFilteredPayload: Record<string, unknown> } };
+          }
+        ).presentation.base.roleFilteredPayload;
+      };
+      if (outcome === 'PEACE') {
+        // No reload or reconnect is allowed between fresh ACCEPT and this Ready button.
+        await action(playerPage, 'NET-006::CTA::003');
+        await expect(playerPage.getByText('Ваше устройство готово.', { exact: true })).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await action(playerPage, 'NET-006::CTA::004');
+        await expect(
+          playerPage.getByText('Ваше устройство не готово.', { exact: true }),
+        ).toBeVisible({ timeout: player.operationTimeoutMs });
+        await action(playerPage, 'NET-006::CTA::003');
+        await expect(playerPage.getByText('Ваше устройство готово.', { exact: true })).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await action(masterPage, 'NET-021::CTA::001');
+        await action(masterPage, 'NET-017::CTA::009');
+        await action(masterPage, 'CMP-006::CTA::001');
+        await expect(form(masterPage, 'CMP-007')).toBeVisible();
+        await expect(masterPage.locator('input[type="file"]')).toHaveCount(0);
+        await action(masterPage, 'CMP-007::CTA::001');
+        await expect(form(masterPage, 'NET-016')).toBeVisible();
+        for (const label of ['День календаря', 'Час', 'Минута'])
+          await expect(masterPage.getByLabel(label, { exact: true })).toHaveValue('');
+        await expect(masterPage.locator('[data-atlas-action-key="NET-016::CTA::002"]')).toHaveCount(
+          0,
+        );
+        await masterPage.getByLabel('День календаря', { exact: true }).fill('2');
+        await masterPage.getByLabel('Час', { exact: true }).fill('21');
+        await masterPage.getByLabel('Минута', { exact: true }).fill('7');
+        await action(masterPage, 'NET-016::CTA::004');
+        await expect(
+          playerPage.getByText('Ваше устройство не готово.', { exact: true }),
+        ).toBeVisible({ timeout: player.operationTimeoutMs });
+        await action(playerPage, 'NET-006::CTA::003');
+        await expect(masterPage.locator('[data-atlas-action-key="NET-016::CTA::002"]')).toBeVisible(
+          { timeout: player.operationTimeoutMs },
+        );
+        await action(masterPage, 'NET-016::CTA::002');
+        await expect(form(masterPage, 'GM-001')).toBeVisible();
+        await expect(form(playerPage, 'PLY-001')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await expect(
+          playerPage.getByRole('region', { name: 'Мирная сцена персонажа' }),
+        ).toContainText('День 2, 21:07 — ночь. Часы остановлены.');
+        await expect(
+          playerPage.getByRole('region', { name: 'Мирная сцена персонажа' }),
+        ).toContainText('Лагерь');
+        firstPeace = lastPeace();
+        expect(firstPeace).toMatchObject({
+          campaignTimestamp: 2707,
+          clockMode: 'STOPPED',
+          dayPhase: 'NIGHT',
+          ownMarkerVisibility: 'UNKNOWN',
+          markerReason: 'NOT_SET',
+        });
+        for (const key of [
+          'combatId',
+          'combatActor',
+          'turn',
+          'reactionWindow',
+          'markerRevision',
+          'coordinates',
+        ])
+          expect(Object.hasOwn(firstPeace, key)).toBe(false);
+        await action(masterPage, 'GM-001::CTA::006');
+        await expect(form(masterPage, 'GRP-001')).toBeVisible();
+        await expect(masterPage.getByRole('region', { name: 'Кампания и лобби' })).toContainText(
+          'Лагерь',
+        );
+        await action(masterPage, 'GRP-001::CTA::009');
       }
       const copies = gm.inspect().copies;
       expect(player.inspect().sources).toEqual(sources);
@@ -335,9 +422,36 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT'] as
       await masterPage.reload();
       await playerPage.reload();
       await expect(
-        form(playerPage, outcome === 'REJECT' || outcome === 'DECLINE' ? 'NET-007' : 'NET-006'),
+        form(
+          playerPage,
+          outcome === 'PEACE'
+            ? 'PLY-001'
+            : outcome === 'REJECT' || outcome === 'DECLINE'
+              ? 'NET-007'
+              : 'NET-006',
+        ),
       ).toBeVisible({ timeout: player.operationTimeoutMs });
-      await expect(form(masterPage, outcome === 'REJECT' ? 'NET-022' : 'NET-021')).toBeVisible();
+      await expect(
+        form(
+          masterPage,
+          outcome === 'PEACE' ? 'GM-001' : outcome === 'REJECT' ? 'NET-022' : 'NET-021',
+        ),
+      ).toBeVisible();
+      if (firstPeace !== null) {
+        const restored = lastPeace();
+        for (const key of [
+          'sceneId',
+          'campaignCharacterId',
+          'mechanicalSheet',
+          'groupId',
+          'location',
+          'effectiveController',
+          'campaignTimestamp',
+          'clockMode',
+          'dayPhase',
+        ])
+          expect(restored[key]).toEqual(firstPeace[key]);
+      }
       expect(gm.inspect().copies).toEqual(copies);
       expect(player.inspect().sources).toEqual(sources);
       if (outcome === 'REJECT' || outcome === 'DECLINE') {

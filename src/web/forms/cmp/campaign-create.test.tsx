@@ -390,6 +390,7 @@ describe('campaign projection contract', () => {
       'CMP-005::CTA::002',
     ]);
     expect(expectedCampaignActions('CMP-006', projections['CMP-006'], CAPABILITIES)).toEqual([
+      'CMP-006::CTA::001',
       'CMP-006::CTA::002',
     ]);
     expect(
@@ -993,9 +994,19 @@ describe('campaign creation receipt and UI', () => {
     );
     expect(h.states.at(-1)).toMatchObject({
       kind: 'ready',
-      snapshot: { formId: 'CMP-006', revisions: ZERO, availableActionKeys: ['CMP-006::CTA::002'] },
+      snapshot: {
+        formId: 'CMP-006',
+        revisions: ZERO,
+        availableActionKeys: ['CMP-006::CTA::001', 'CMP-006::CTA::002'],
+      },
     });
-    expect(h.connection.requestFormAction('CMP-006::CTA::001').ok).toBe(false);
+    expect(h.connection.requestFormAction('CMP-006::CTA::001')).toEqual({ ok: true });
+    expect(lastFrame(h.socket)).toMatchObject({
+      messageType: 'navigation.form-action',
+      sourceFormId: 'CMP-006',
+      actionKey: 'CMP-006::CTA::001',
+      expectedProjectionRevision: ZERO.projectionRevision,
+    });
   });
   it('renders local password controls and clears the DOM on acknowledged sequence change', () => {
     const container = document.createElement('div'),

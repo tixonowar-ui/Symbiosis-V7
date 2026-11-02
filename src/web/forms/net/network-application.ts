@@ -234,6 +234,7 @@ export function networkSubmitPayload(
   if (
     p.pendingCommandIdOrNull !== null ||
     p.connectionState !== 'CONNECTED_TECHNICAL' ||
+    p.campaignStatus !== 'PAUSED' ||
     !p.capacityForecast.fitsCurrentCapacity
   )
     return null;
@@ -306,6 +307,7 @@ export function expectedNetworkActions(
     case 'NET-003': {
       if (!connected) return [];
       if (p['ownRequestIdOrNull'] !== null) return ['NET-003::CTA::003'];
+      if (p['campaignStatus'] !== 'PAUSED') return [];
       const selected = p['selectedCandidates'] as readonly PublicCandidateRef[];
       const forecast = p['capacityForecast'] as JsonObject;
       return [

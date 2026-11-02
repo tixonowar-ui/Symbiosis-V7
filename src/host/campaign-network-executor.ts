@@ -398,6 +398,10 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
   }
   return Object.freeze({
     registerChannel,
+    hasPending(campaignId: string): boolean {
+      if (closed) return fail('CLOSED');
+      return queues.has(campaignId);
+    },
     run,
     bindScope: (channel: CampaignNetworkExecutionChannel, scope: CampaignNetworkExecutionScope) =>
       assign(channel, scope, false),

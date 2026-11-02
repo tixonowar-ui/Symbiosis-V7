@@ -1,3 +1,5 @@
+import { readOwnedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
+import { isCampaignLobbyGmForm } from '@shared/campaign-lobby.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -51,6 +53,7 @@ import {
   readCampaignCreationCommand,
   commitCampaignCreation,
   readCampaignPrivateOwner,
+  readCampaignCreationOrigin,
   CampaignCreationStoreError,
   type StoredCampaignDraft,
   type CampaignDraftUpdateInput,
@@ -347,17 +350,39 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       payload = menuPayload(ctx);
     } else if (
       cursor.kind === 'ADMISSION' ||
-      (cursor.kind === 'QUEUE' && cursor.formId === 'NET-017')
+      (cursor.kind === 'QUEUE' &&
+        (cursor.formId === 'NET-017' || isCampaignLobbyGmForm(cursor.formId)))
     ) {
       if (d.requestReview === undefined) return unavailable();
       return d.requestReview.project(c);
     } else if (cursor.kind === 'CAMPAIGN' || cursor.kind === 'QUEUE') {
-      validateMasterSecretVerifier(
-        readCampaignPrivateOwner(db, ctx.gmLocalContextId, cursor.targetId).verifier,
-      );
+      // The QR screen can be revisited after admission. Its metadata is immutable CREATE
+      // evidence, while its current checkpoint is no longer the zero-PC birth checkpoint.
+      const origin =
+        cursor.kind === 'QUEUE'
+          ? readCampaignCreationOrigin(db, ctx.gmLocalContextId, cursor.targetId, (owner) => {
+              validateMasterSecretVerifier(owner.verifier);
+            })
+          : null;
+      if (origin !== null) {
+        const header = readOwnedCurrentPausedCampaign(
+          db,
+          { gmLocalContextId: ctx.gmLocalContextId, campaignId: cursor.targetId },
+          (owner) => {
+            validateMasterSecretVerifier(owner.verifier);
+          },
+        );
+        if (header.status !== 'PAUSED') return unavailable();
+      } else
+        validateMasterSecretVerifier(
+          readCampaignPrivateOwner(db, ctx.gmLocalContextId, cursor.targetId).verifier,
+        );
       if (d.requestReview !== undefined && (c.executableReview?.length ?? 0) > 0)
-        available = ['CMP-006::CTA::002'];
-      const saved = readPausedCampaign(db, ctx.gmLocalContextId, cursor.targetId);
+        available = ['CMP-006::CTA::001', 'CMP-006::CTA::002'];
+      const saved =
+        origin === null
+          ? readPausedCampaign(db, ctx.gmLocalContextId, cursor.targetId)
+          : origin.payload;
       assertStoredBaseline(saved.baselineVersion);
       const recovery =
         d.publishCampaign === undefined
@@ -949,6 +974,25 @@ export function createCampaignCreationRuntime(d: Dependencies) {
   }
   const runtime = {
     currentVector,
+    readCampaignArt(this: void, gmLocalContextId: string, checksum: string) {
+      if (!/^[0-9a-f]{64}$/u.test(checksum)) unavailable();
+      const ctx = readLocalGmContext(db, gmLocalContextId),
+        cursor = readCampaignCreationCursor(db, gmLocalContextId);
+      if (
+        ctx.ownerDeviceId !== loadDeviceId(db) ||
+        !['CAMPAIGN', 'QUEUE', 'ADMISSION'].includes(cursor.kind)
+      )
+        unavailable();
+      const origin = readCampaignCreationOrigin(db, gmLocalContextId, cursor.targetId, (owner) => {
+        validateMasterSecretVerifier(owner.verifier);
+      });
+      assertStoredBaseline(origin.payload.baselineVersion);
+      const art = origin.payload.metadata.art;
+      if (art === null) return unavailable();
+      const bytes = Buffer.from(art.bytesBase64, 'base64');
+      if (hash(bytes) !== checksum) unavailable();
+      return { mediaType: art.mediaType, bytes };
+    },
     async handle(
       message: AnyClient,
       c: CampaignConnection,
@@ -990,7 +1034,9 @@ export function createCampaignCreationRuntime(d: Dependencies) {
                     id === 'UI-CMD-ADMISSION-REVIEW-OPEN' ||
                     id === 'UI-CMD-ADMISSION-GM-ACCEPT' ||
                     id === 'UI-CMD-ADMISSION-GM-REJECT' ||
-                    id === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
+                    id === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE' ||
+                    id === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' ||
+                    id === 'UI-CMD-CAMPAIGN-START',
                 );
           shell.enter();
           if (
@@ -1115,6 +1161,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
   let frames = Promise.resolve();
   return {
     currentVector,
+    readCampaignArt: runtime.readCampaignArt,
     project,
     handle(
       message: AnyClient,

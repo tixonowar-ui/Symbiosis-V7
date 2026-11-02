@@ -1,3 +1,4 @@
+import { hasCampaignLobbySchema, readCampaignLobbyContinuation } from './campaign-lobby.js';
 import type Database from 'better-sqlite3';
 import { admissionGmClientBindingValue } from '@shared/campaign-admission-review.js';
 import {
@@ -23,7 +24,11 @@ import {
 } from './campaign-creation.js';
 import type { FormActionIntentV2Message } from '../shared/wire-v2-protocol.js';
 import { readAppliedMigrationVersion } from './migrations/index.js';
-import { readGmRequestReviewSource, type GmRequestReviewSource } from './network-device-request.js';
+import {
+  readGmRequestReviewSource,
+  readGmRequestReviewSourceWith,
+  type GmRequestReviewSource,
+} from './network-device-request.js';
 import {
   admissionReviewStorage as working,
   type AdmissionReviewRead,
@@ -599,6 +604,7 @@ function verifyCampaignHistory(
     projectionRevision: 0,
     actorVisibilityRevision: 0,
   };
+  const admissionCheckpoints = new Map([[0, checkpoint]]);
   const events = db
     .prepare(
       'SELECT * FROM campaign_admission_checkpoint_event WHERE campaign_id=? ORDER BY state_revision',
@@ -615,6 +621,7 @@ function verifyCampaignHistory(
   if (events.length !== decisions.length + playerDecisions.length) return s.fail();
   const history: AdmissionHistory = {
     checkpoint,
+    lobbyOrNull: null,
     decisions: verified,
     groups: new Map(),
     controllers: new Map(),
@@ -659,6 +666,17 @@ function verifyCampaignHistory(
     if (!s.same(s.checked(row), event)) return s.fail();
     checkpoint = next;
     history.checkpoint = next;
+    admissionCheckpoints.set(next.stateRevision, next);
+  }
+  if (hasCampaignLobbySchema(db)) {
+    history.lobbyOrNull = readCampaignLobbyContinuation(
+      db,
+      source.scope,
+      history,
+      admissionCheckpoints,
+    );
+    checkpoint = history.lobbyOrNull.checkpoint;
+    history.checkpoint = checkpoint;
   }
   if (!s.same(checkpoint, loadCampaignCheckpoint(db, source.scope.campaignId))) return s.fail();
   player.verifyLedger(db, source.scope.campaignId, history);
@@ -712,7 +730,11 @@ export function readAdmissionDecisionDeliveryByRequest(
   requestId: string,
   validate: CampaignPrivateOwnerValidator,
   rules: AdmissionPublicationRules,
-): { readonly current: AdmissionDecisionRead; readonly groups: readonly AdmissionGroup[] } | null {
+): {
+  readonly current: AdmissionDecisionRead;
+  readonly groups: readonly AdmissionGroup[];
+  readonly lobbyOrNull: AdmissionHistory['lobbyOrNull'];
+} | null {
   return s.read(db, scope.ownerDeviceId, () => {
     const source = readGmRequestReviewSource(db, scope, validate),
       id = s.uuid(requestId);
@@ -749,7 +771,7 @@ export function readAdmissionDecisionDeliveryByRequest(
         history.decisions.get(batchId) ??
         readDecision(db, working.readInTransaction(db, source, batchId, rules), rules);
     if (current.review.current.requestId !== id) return s.fail('FOREIGN_OWNER');
-    return { current, groups: [...history.groups.values()] };
+    return { current, groups: [...history.groups.values()], lobbyOrNull: history.lobbyOrNull };
   });
 }
 
@@ -792,7 +814,7 @@ export function readCampaignAdmissionAvailability(
         importedSources: [] as { sourceUuid: string; ownerDeviceId: string }[],
       };
     }
-    if (version !== 12) return s.fail();
+    if (version !== 12 && version !== 13) return s.fail();
     const source = readGmRequestReviewSource(db, scope, validate),
       history = verifyCampaignHistory(db, source, rules),
       releasedRequestIds: string[] = [];
@@ -915,6 +937,8 @@ export function commitAdmissionGmDecision(
             rules,
           ),
         review = current.review;
+      if (history.lobbyOrNull?.sceneOrNull !== null && history.lobbyOrNull !== null)
+        return s.fail('UNAVAILABLE');
       if (
         !review.editable ||
         current.gmDecisionOrNull !== null ||
@@ -1089,6 +1113,18 @@ export function commitAdmissionGmDecision(
 
 /** Internal composition keeps every historical read in the caller's transaction. */
 export const admissionDecisionStorage = {
+  readSourceAndHistory(
+    db: Database.Database,
+    scope: GmRequestReviewScope,
+    validate: CampaignPrivateOwnerValidator,
+    rulesFor: (source: GmRequestReviewSource) => AdmissionPublicationRules | null,
+  ): { source: GmRequestReviewSource; historyOrNull: AdmissionHistory | null } {
+    const { source, observed } = readGmRequestReviewSourceWith(db, scope, validate, (current) => {
+      const rules = rulesFor(current);
+      return rules === null ? null : verifyCampaignHistory(db, current, rules);
+    });
+    return { source, historyOrNull: observed };
+  },
   readHistory(
     db: Database.Database,
     scope: GmRequestReviewScope,

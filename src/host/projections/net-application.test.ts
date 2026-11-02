@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { expectedNetworkActions } from '../../web/forms/net/network-application.js';
 import type { JsonObject, WorkflowCommandCapabilityId } from '../../shared/wire-protocol.js';
 import { isNetworkApplicationProjection } from '../../shared/network-application-codec.js';
 import {
@@ -471,6 +472,43 @@ describe('own local network public projection boundary', () => {
     },
   );
 
+  it('#173 shows HOSTING and hides fresh admission while retaining pending cancellation', () => {
+    for (const form of ['NET-003', 'NET-004', 'CHR-027'] as const) {
+      const i = input(form),
+        started = { ...i, campaign: { ...i.campaign!, status: 'HOSTING' as const } };
+      const p = payload(started);
+      expect(
+        expectedNetworkActions(form, p, [
+          'UI-CMD-CONNECTION-OPEN',
+          'UI-CMD-DEVICE-REQUEST-SUBMIT',
+          'UI-CMD-DEVICE-REQUEST-CANCEL',
+        ]),
+      ).toEqual(keys(started));
+      if (form === 'NET-003') expect(p['campaignStatus']).toBe('HOSTING');
+      for (const action of [
+        'NET-003::CTA::001',
+        'NET-003::CTA::002',
+        'NET-004::CTA::002',
+        'CHR-027::CTA::001',
+      ])
+        expect(keys(started)).not.toContain(action);
+    }
+    const pending = input('NET-005');
+    expect(keys({ ...pending, campaign: { ...pending.campaign!, status: 'HOSTING' } })).toContain(
+      'NET-005::CTA::001',
+    );
+    const discovery = input('NET-001');
+    const offer = discovery.discovery!.offers[0]!;
+    expect(
+      payload({
+        ...discovery,
+        discovery: {
+          ...discovery.discovery!,
+          offers: [{ ...offer, campaign: { ...offer.campaign, status: 'HOSTING' } }],
+        },
+      })['discoveredHosts'],
+    ).toMatchObject([{ campaignStatus: 'HOSTING' }]);
+  });
   it('never enables OPEN for empty, public or non-IP addresses', () => {
     for (const address of [
       '',

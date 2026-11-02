@@ -15,7 +15,7 @@ export const CAMPAIGN_PEER_HANDSHAKE_MAX_BYTES = 128 * 1024;
 export interface PeerCampaignHeader {
   readonly campaignId: string;
   readonly title: string;
-  readonly status: 'PAUSED';
+  readonly status: 'PAUSED' | 'HOSTING';
   readonly activePlayerCapacity: 1 | 2 | 3 | 4 | 5;
   readonly activePcCount: number;
   readonly checkpointSha256: string;
@@ -113,7 +113,7 @@ function campaignHeader(value: unknown): PeerCampaignHeader {
   ]);
   if (
     metadata.title === null ||
-    row['status'] !== 'PAUSED' ||
+    (row['status'] !== 'PAUSED' && row['status'] !== 'HOSTING') ||
     typeof capacity !== 'number' ||
     !Number.isInteger(capacity) ||
     capacity < 1 ||
@@ -126,7 +126,7 @@ function campaignHeader(value: unknown): PeerCampaignHeader {
   return Object.freeze({
     campaignId: identifier(row['campaignId']),
     title: metadata.title,
-    status: 'PAUSED',
+    status: row['status'],
     activePlayerCapacity: capacity as 1 | 2 | 3 | 4 | 5,
     activePcCount: count,
     checkpointSha256: digest(row['checkpointSha256']),

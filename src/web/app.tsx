@@ -1,5 +1,12 @@
+import { isCampaignOwnerProjection } from '@shared/campaign-lobby-presentation.js';
+import { isCampaignLobbyGmForm, type InitialCampaignTimeInput } from '@shared/campaign-lobby.js';
 import type { NetworkGmRequestDraftClientState } from './ws-client.js';
-import { AdmissionGmFields, AdmissionOwnerFields } from './forms/net/admission-fields.js';
+import {
+  CampaignLobbyFields,
+  CampaignOwnerFields,
+  AdmissionGmFields,
+  AdmissionOwnerFields,
+} from './forms/net/admission-fields.js';
 import {
   isAdmissionGmForm,
   isAdmissionOwnerForm,
@@ -20,7 +27,7 @@ import { PostSaveFields, downloadPostSaveFile } from './forms/chr/post-save-fiel
 import { isPostSaveForm } from './forms/chr/post-save.js';
 import { CreationCorrectionFields } from './forms/chr/creation-correction-fields.js';
 import { CORRECTION_COMMANDS } from './forms/chr/creation-correction.js';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
 import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-character-portraits.js';
@@ -239,6 +246,8 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
     snapshot.formId === 'NET-017' ||
+    isCampaignLobbyGmForm(snapshot.formId) ||
+    isCampaignOwnerProjection(snapshot.projection) ||
     isAdmissionGmForm(snapshot.formId) ||
     isAdmissionOwnerForm(snapshot.formId) ||
     isNetworkApplicationForm(snapshot.formId) ||
@@ -2329,6 +2338,10 @@ export function App(): ReactElement {
   const correctionCommandActions = new Set<string>(
     Object.values(CORRECTION_COMMANDS).map((v) => v[1]),
   );
+  const lobbyTimeRef = useRef<InitialCampaignTimeInput | null>(null);
+  const changeLobbyTime = useCallback((value: InitialCampaignTimeInput | null) => {
+    lobbyTimeRef.current = value;
+  }, []);
   const layers = snapshot?.layers ?? [];
   const activeCreationChoice =
     creationChoiceDraft?.formId === snapshot?.formId ? creationChoiceDraft : null;
@@ -2358,7 +2371,27 @@ export function App(): ReactElement {
           <HostProjection snapshot={snapshot} />
           <fieldset disabled={!interactive || layers.length > 0 || networkImageReadPending}>
             <legend>AtlasForm {snapshot.formId}</legend>
-            {isAdmissionOwnerForm(snapshot.formId) ? (
+            {isCampaignLobbyGmForm(snapshot.formId) ? (
+              <CampaignLobbyFields
+                key={
+                  snapshot.formId +
+                  ':' +
+                  (snapshot.projection['contextId'] as string) +
+                  ':' +
+                  String(
+                    snapshot.projection['initialCampaignTimeOrNull'] === null
+                      ? 'unset'
+                      : JSON.stringify(snapshot.projection['initialCampaignTimeOrNull']),
+                  )
+                }
+                formId={snapshot.formId}
+                projection={snapshot.projection}
+                onTimeChange={changeLobbyTime}
+              />
+            ) : null}
+            {isCampaignOwnerProjection(snapshot.projection) ? (
+              <CampaignOwnerFields formId={snapshot.formId} projection={snapshot.projection} />
+            ) : isAdmissionOwnerForm(snapshot.formId) ? (
               <AdmissionOwnerFields formId={snapshot.formId} projection={snapshot.projection} />
             ) : null}
             {isAdmissionGmForm(snapshot.formId) ? (
@@ -2385,37 +2418,44 @@ export function App(): ReactElement {
                 }}
               />
             ) : null}
-            <NetworkFields
-              key={`network:${snapshot.formId}:${typeof snapshot.projection['networkScopeId'] === 'string' ? snapshot.projection['networkScopeId'] : ''}`}
-              formId={snapshot.formId}
-              projection={snapshot.projection}
-              state={networkDraft}
-              onChange={(edit) => {
-                const result = connectionRef.current?.replaceNetworkDraft(edit);
-                setActionNotice(result?.ok ? null : 'Выбор не сохранён: соединение не готово.');
-              }}
-              cancelReason={
-                networkDraft?.values?.variant === 'CANCEL_REASON'
-                  ? networkDraft.values.values.cancelReason
-                  : snapshot.formId === 'NET-005'
-                    ? (snapshot.projection['cancelReason'] as string)
-                    : ''
-              }
-              onCancelReasonChange={(cancelReason) => {
-                const result = connectionRef.current?.replaceNetworkDraft({
-                  variant: 'CANCEL_REASON',
-                  values: { cancelReason },
-                });
-                setActionNotice(
-                  result?.ok ? null : 'Причина отмены не сохранена: соединение не готово.',
-                );
-              }}
-              onBusy={(pending) => {
-                setNetworkImageReadPending(pending);
-                connectionRef.current?.setNetworkInputPending(pending);
-              }}
-              qrScanSequence={networkQrScanSequence}
-            />
+            {(snapshot.formId === 'NET-003' || snapshot.formId === 'NET-004') &&
+            snapshot.projection['campaignStatus'] === 'HOSTING' ? (
+              <p role="status">
+                Кампания уже началась. Новые заявки на персонажей сейчас недоступны.
+              </p>
+            ) : (
+              <NetworkFields
+                key={`network:${snapshot.formId}:${typeof snapshot.projection['networkScopeId'] === 'string' ? snapshot.projection['networkScopeId'] : ''}`}
+                formId={snapshot.formId}
+                projection={snapshot.projection}
+                state={networkDraft}
+                onChange={(edit) => {
+                  const result = connectionRef.current?.replaceNetworkDraft(edit);
+                  setActionNotice(result?.ok ? null : 'Выбор не сохранён: соединение не готово.');
+                }}
+                cancelReason={
+                  networkDraft?.values?.variant === 'CANCEL_REASON'
+                    ? networkDraft.values.values.cancelReason
+                    : snapshot.formId === 'NET-005'
+                      ? (snapshot.projection['cancelReason'] as string)
+                      : ''
+                }
+                onCancelReasonChange={(cancelReason) => {
+                  const result = connectionRef.current?.replaceNetworkDraft({
+                    variant: 'CANCEL_REASON',
+                    values: { cancelReason },
+                  });
+                  setActionNotice(
+                    result?.ok ? null : 'Причина отмены не сохранена: соединение не готово.',
+                  );
+                }}
+                onBusy={(pending) => {
+                  setNetworkImageReadPending(pending);
+                  connectionRef.current?.setNetworkInputPending(pending);
+                }}
+                qrScanSequence={networkQrScanSequence}
+              />
+            )}
             <CampaignCreationFields
               key={`campaign:${snapshot.formId}:${typeof snapshot.projection['campaignDraftId'] === 'string' ? snapshot.projection['campaignDraftId'] : ''}`}
               formId={snapshot.formId}
@@ -2858,6 +2898,8 @@ export function App(): ReactElement {
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
                 snapshot.formId === 'NET-017' ||
+                isCampaignLobbyGmForm(snapshot.formId) ||
+                isCampaignOwnerProjection(snapshot.projection) ||
                 isAdmissionGmForm(snapshot.formId) ||
                 isAdmissionOwnerForm(snapshot.formId) ||
                 isNetworkApplicationForm(snapshot.formId)
@@ -2909,6 +2951,7 @@ export function App(): ReactElement {
                       ? intelligenceFloorManualFaceRef.current.face
                       : null
                     : undefined,
+                  selection.actionKey === 'NET-016::CTA::004' ? lobbyTimeRef.current : null,
                 );
                 setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
               }}

@@ -55,7 +55,7 @@ const FIELDS: Readonly<Record<NetworkApplicationFormId, string>> = {
   'NET-003':
     'ownRequestIdOrNull campaignId campaignStatus sessionId connectionRevision eligibleFinalCandidates selectedCandidates capacityForecast',
   'NET-004':
-    'sessionId requestId selectedLocalCharacterUuids snapshotChecksums campaignId connectionRevision commandId batchCharacterSummaries capacityForecast',
+    'sessionId requestId selectedLocalCharacterUuids snapshotChecksums campaignId campaignStatus connectionRevision commandId batchCharacterSummaries capacityForecast',
   'NET-005':
     'sessionId requestId requestOwnerDeviceId batchCharacterSummaries requestStatus gmMessage requestRevision cancelReason commandId',
   'NET-011':
@@ -225,7 +225,7 @@ function projectionValue(
       const id = uuid(item['campaignId'], `${path}.campaignId`);
       text(item['title'], `${path}.title`);
       locator(item['locator'], `${path}.locator`);
-      literal(item['campaignStatus'], 'PAUSED', `${path}.campaignStatus`);
+      oneOf(item['campaignStatus'], ['PAUSED', 'HOSTING'], `${path}.campaignStatus`);
       const maximum = capacity(item['activePlayerCapacity'], `${path}.activePlayerCapacity`);
       if (revision(item['activePcCount'], `${path}.activePcCount`) > maximum)
         invalid(path, 'active PCs within capacity', null);
@@ -257,7 +257,7 @@ function projectionValue(
     nullableUuid(r['ownRequestIdOrNull'], '$.ownRequestIdOrNull');
     if (campaignId === null) invalid('$.campaignIdOrNull', 'confirmed campaign', null);
     literal(r['campaignId'], campaignId, '$.campaignId');
-    literal(r['campaignStatus'], 'PAUSED', '$.campaignStatus');
+    oneOf(r['campaignStatus'], ['PAUSED', 'HOSTING'], '$.campaignStatus');
     uuid(r['sessionId'], '$.sessionId');
     revision(r['connectionRevision'], '$.connectionRevision');
     const eligible = candidates(
@@ -280,6 +280,7 @@ function projectionValue(
     const batch = candidates(r['batchCharacterSummaries'], '$.batchCharacterSummaries', true, 1);
     ownCandidates(batch, r['controllerSeat'], '$.batchCharacterSummaries');
     if (formId === 'NET-004') {
+      oneOf(r['campaignStatus'], ['PAUSED', 'HOSTING'], '$.campaignStatus');
       literal(r['campaignId'], campaignId, '$.campaignId');
       revision(r['connectionRevision'], '$.connectionRevision');
       const ids = list(r['selectedLocalCharacterUuids'], '$.selectedLocalCharacterUuids');

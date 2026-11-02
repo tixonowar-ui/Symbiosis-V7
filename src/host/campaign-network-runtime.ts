@@ -277,6 +277,9 @@ export function createCampaignNetworkRuntime(d: {
     publishCampaign,
     start,
     discover,
+    conflictingOperationPending(campaignId: string): boolean {
+      return executor.hasPending(campaignId) || receiver.hasStagedUpload(campaignId);
+    },
     requestConnectionFacts: receiver.requestConnectionFacts,
     requestConnectionFactsFromSource: receiver.requestConnectionFactsFromSource,
     close,

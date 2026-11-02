@@ -93,6 +93,31 @@ export function applyBaselineFixtureRelease(
     if (cached === undefined) {
       let position = releases.indexOf(actual!);
       const target = releases.indexOf(release);
+      const lower = Math.min(position, target),
+        upper = Math.max(position, target);
+      let intermediate: AtlasBytes | undefined;
+      // Cached bytes were already sealed under these exact patches.
+      // Reuse the closest one instead of spawning git again for that same prefix.
+      for (let candidate = lower + 1; candidate < upper; candidate += 1) {
+        const bytes =
+          atlasByteCache?.patchSha256 === patchSha256
+            ? atlasByteCache.releases[releases[candidate]!]
+            : undefined;
+        if (bytes !== undefined && Math.abs(candidate - target) < Math.abs(position - target)) {
+          position = candidate;
+          intermediate = bytes;
+        }
+      }
+      if (intermediate !== undefined) {
+        const seal = releaseAtlas[releases[position]!];
+        assert.ok(
+          matchesAtlas(intermediate, seal),
+          'cached intermediate Atlas differs from its seal',
+        );
+        for (const path of atlasPaths)
+          writeFileSync(join(projectRoot, 'artifacts', path), intermediate[path]);
+        assert.ok(matchesAtlas(readAtlasBytes(projectRoot), seal));
+      }
       while (position !== target) {
         const reverse = position > target;
         const edge = reverse ? position - 1 : position;

@@ -1,3 +1,14 @@
+import {
+  campaignLobbyCommandValue,
+  campaignReadyReceiptValue,
+  type CampaignReadyCommand,
+  type CampaignReadyReceipt,
+} from '@shared/campaign-lobby.js';
+import {
+  campaignLobbyOwnerObservationValue,
+  campaignReadyBrowserRequestValue,
+  type CampaignLobbyOwnerObservation,
+} from '@shared/campaign-lobby-presentation.js';
 import type Database from 'better-sqlite3';
 import {
   admissionControllerPreparationValue,
@@ -61,6 +72,7 @@ export interface AdmissionPlayerAbsenceProof {
     'NOT_APPLIED' | 'STALE_REVISION' | 'CAPACITY_EXCEEDED' | 'FOREIGN_OWNER' | 'INVALID_INPUT';
 }
 export type LocalAdmissionEventPayload =
+  | LocalLobbyEventPayload
   | {
       readonly kind: 'INTENT';
       readonly request: AdmissionPlayerDecisionRequest;
@@ -240,6 +252,11 @@ function payloadValue(
 ): LocalAdmissionEventPayload {
   const row = s.object(value);
   switch (row['kind']) {
+    case 'LOBBY_OBSERVATION':
+    case 'READY_INTENT':
+    case 'READY_ACK':
+    case 'READY_REFUSED':
+      return localLobbyPayload(row);
     case 'INTENT': {
       s.object(row, ['kind', 'request', 'additionalTabs', 'clientRequestJsonOrNull']);
       if (!Array.isArray(row['additionalTabs'])) return s.fail();
@@ -375,10 +392,12 @@ function reduce(current: LocalAdmissionRead, event: LocalAdmissionEvent): LocalA
     publication = record.publication,
     payload = event.payload;
   if (current.returnedOrNull !== null) return s.fail('UNAVAILABLE');
+  if (isLocalLobbyEvent(payload)) return reduceLocalLobby(current, event, payload);
   if (payload.kind === 'VIEW') {
     const nav = viewNavigation(payload);
     if (
       pending !== null ||
+      localLobbyState(current).pendingOrNull !== null ||
       nav.eventId !== event.eventId ||
       nav.sourceFormId !== localAdmissionForm(current) ||
       publication.proposalOrNull === null ||
@@ -619,9 +638,11 @@ function mirrorInput(
       returned?.clientRequestJson ??
       (event?.payload.kind === 'VIEW'
         ? event.payload.clientRequestJson
-        : event?.payload.kind === 'INTENT'
-          ? event.payload.clientRequestJsonOrNull
-          : null),
+        : event?.payload.kind === 'READY_INTENT'
+          ? event.payload.clientRequestJson
+          : event?.payload.kind === 'INTENT'
+            ? event.payload.clientRequestJsonOrNull
+            : null),
     mutation:
       returned === null
         ? {
@@ -702,6 +723,11 @@ export function createLocalAdmissionNetworkVerifier(db: Database.Database) {
     )
       return s.fail('STALE_REVISION');
     if (event?.payload.kind === 'VIEW' && !s.same(event.payload.sourceRevisions, s.vectorOf(base)))
+      return s.fail('STALE_REVISION');
+    if (
+      event?.payload.kind === 'READY_INTENT' &&
+      !s.same(event.payload.sourceRevisions, s.vectorOf(base))
+    )
       return s.fail('STALE_REVISION');
     if (
       event?.payload.kind === 'INTENT' &&
@@ -1313,7 +1339,7 @@ export function assertLocalAdmissionTabMutable(db: Database.Database, tab: Local
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version !== 12) return;
+  if (version !== 12 && version !== 13) return;
   const entry = tabs.entryAnchor(db, tab.ownerDeviceId, tab.entryCommandId) ?? s.fail();
   if (entry.request.admissionEntry !== undefined) return s.fail('UNAVAILABLE');
   const rows = db
@@ -1457,6 +1483,365 @@ export function returnFromLocalAdmission(
         const saved = readInTransaction(db, scope, input.requestId) ?? s.fail();
         if (tabs.activeAnchor(db, scope.ownerDeviceId)?.tabId !== original.tabId)
           return s.fail('SOURCE_CHANGED');
+        s.guarded(db, guard, saved, 'APPLY');
+        return saved;
+      })
+      .immediate(),
+  );
+}
+
+export type LocalLobbyEventPayload =
+  | { readonly kind: 'LOBBY_OBSERVATION'; readonly observation: CampaignLobbyOwnerObservation }
+  | {
+      readonly kind: 'READY_INTENT';
+      readonly admittedTabId: string;
+      readonly sourceNetworkScopeId: string;
+      readonly sourceRevisions: RevisionTriple;
+      readonly request: CampaignReadyCommand;
+      readonly clientRequestJson: string;
+    }
+  | { readonly kind: 'READY_ACK'; readonly receipt: CampaignReadyReceipt }
+  | {
+      readonly kind: 'READY_REFUSED';
+      readonly proof: {
+        readonly commandId: string;
+        readonly semanticBodySha256: string;
+        readonly generation: number;
+        readonly fenced: true;
+        readonly code: string;
+      };
+    };
+const isLocalLobbyEvent = (value: LocalAdmissionEventPayload): value is LocalLobbyEventPayload =>
+  ['LOBBY_OBSERVATION', 'READY_INTENT', 'READY_ACK', 'READY_REFUSED'].includes(value.kind);
+function localLobbyPayload(value: unknown): LocalLobbyEventPayload {
+  const row = s.object(value);
+  if (row['kind'] === 'LOBBY_OBSERVATION') {
+    s.object(row, ['kind', 'observation']);
+    return {
+      kind: 'LOBBY_OBSERVATION',
+      observation: campaignLobbyOwnerObservationValue(row['observation']),
+    };
+  }
+  if (row['kind'] === 'READY_INTENT') {
+    s.object(row, [
+      'kind',
+      'admittedTabId',
+      'sourceNetworkScopeId',
+      'sourceRevisions',
+      'request',
+      'clientRequestJson',
+    ]);
+    const request = campaignLobbyCommandValue(row['request']);
+    if (request.workflowCommandId !== 'UI-CMD-CAMPAIGN-READY-SET') return s.fail();
+    const clientRequestJson = s.text(row['clientRequestJson']),
+      browser = campaignReadyBrowserRequestValue(JSON.parse(clientRequestJson));
+    if (
+      s.canonical(browser) !== clientRequestJson ||
+      !s.same(browser.expectedRevisions, row['sourceRevisions']) ||
+      !s.same(
+        {
+          ...browser.payload,
+          commandId: browser.commandId,
+          workflowCommandId: browser.workflowCommandId,
+        },
+        request,
+      )
+    )
+      return s.fail();
+    return {
+      kind: 'READY_INTENT',
+      admittedTabId: s.uuid(row['admittedTabId']),
+      sourceNetworkScopeId: s.uuid(row['sourceNetworkScopeId']),
+      sourceRevisions: s.vector(row['sourceRevisions']),
+      request,
+      clientRequestJson,
+    };
+  }
+  if (row['kind'] === 'READY_ACK') {
+    s.object(row, ['kind', 'receipt']);
+    return { kind: 'READY_ACK', receipt: campaignReadyReceiptValue(row['receipt']) };
+  }
+  s.object(row, ['kind', 'proof']);
+  if (row['kind'] !== 'READY_REFUSED') return s.fail();
+  const p = s.object(row['proof'], [
+    'commandId',
+    'semanticBodySha256',
+    'generation',
+    'fenced',
+    'code',
+  ]);
+  if (
+    p['fenced'] !== true ||
+    ![
+      'UNAVAILABLE',
+      'IDEMPOTENCY_CONFLICT',
+      'STALE_REVISION',
+      'FOREIGN_OWNER',
+      'INVALID_INPUT',
+    ].includes(s.text(p['code']))
+  )
+    return s.fail();
+  return {
+    kind: 'READY_REFUSED',
+    proof: {
+      commandId: s.uuid(p['commandId']),
+      semanticBodySha256: s.hash(p['semanticBodySha256']),
+      generation: s.integer(p['generation']),
+      fenced: true,
+      code: s.text(p['code']),
+    },
+  };
+}
+/** Derived from the existing immutable owner journal; no second local cursor or state store. */
+export function localLobbyState(state: LocalAdmissionRead) {
+  const observations: CampaignLobbyOwnerObservation[] = [];
+  let pendingOrNull: Extract<LocalLobbyEventPayload, { kind: 'READY_INTENT' }> | null = null;
+  let lastRefusalOrNull:
+    Extract<LocalLobbyEventPayload, { kind: 'READY_REFUSED' }>['proof'] | null = null;
+  for (const event of state.events) {
+    const p = event.payload;
+    if (p.kind === 'LOBBY_OBSERVATION') {
+      const index = observations.findIndex(
+        (v) =>
+          v.selectedCopy.controller.localControllerSeatId ===
+          p.observation.selectedCopy.controller.localControllerSeatId,
+      );
+      if (index < 0) observations.push(p.observation);
+      else observations[index] = p.observation;
+    } else if (p.kind === 'READY_INTENT') {
+      pendingOrNull = p;
+      lastRefusalOrNull = null;
+    } else if (p.kind === 'READY_ACK') {
+      pendingOrNull = null;
+      lastRefusalOrNull = null;
+    } else if (p.kind === 'READY_REFUSED') {
+      pendingOrNull = null;
+      lastRefusalOrNull = p.proof;
+    }
+  }
+  const latestAck = state.events.findLast((event) => event.payload.kind === 'READY_ACK');
+  const acknowledgedOrNull =
+    latestAck?.payload.kind === 'READY_ACK' ? latestAck.payload.receipt : null;
+  return { observations, pendingOrNull, lastRefusalOrNull, acknowledgedOrNull };
+}
+/** A durable ACK alone cannot turn an older observation into a confirmed destination. */
+export function localLobbyPendingCommandId(
+  state: LocalAdmissionRead,
+  tabId: string,
+): string | null {
+  const local = localLobbyState(state);
+  if (local.pendingOrNull !== null) return local.pendingOrNull.request.commandId;
+  const ack = local.acknowledgedOrNull;
+  if (ack === null) return null;
+  const observation = local.observations.find(
+    (v) => v.selectedCopy.controller.localControllerSeatId === tabId,
+  );
+  return observation === undefined || observation.readinessRevision < ack.readinessRevision
+    ? ack.commandId
+    : null;
+}
+function reduceLocalLobby(
+  current: LocalAdmissionRead,
+  event: LocalAdmissionEvent,
+  payload: LocalLobbyEventPayload,
+): LocalAdmissionRead {
+  const receipt = current.receiptOrNull,
+    proposal = current.record.publication.proposalOrNull;
+  if (receipt?.decision !== 'ACCEPT' || proposal === null || current.pendingDecisionOrNull !== null)
+    return s.fail('UNAVAILABLE');
+  const before = localLobbyState(current),
+    owner = current.record.scope.ownerDeviceId;
+  if (payload.kind === 'LOBBY_OBSERVATION') {
+    const v = payload.observation,
+      selected = v.selectedCopy,
+      copy = receipt.copies.find(
+        (copy) => copy.campaignCharacterId === selected.campaignCharacterId,
+      ),
+      diff = proposal.fullCampaignCopyDiffs.find(
+        (copy) => copy.campaignCharacterIdOrNull === selected.campaignCharacterId,
+      );
+    if (
+      v.ownerDeviceId !== owner ||
+      v.campaignId !== receipt.campaignId ||
+      v.campaignRevision < receipt.campaignRevision ||
+      copy === undefined ||
+      diff === undefined ||
+      selected.admissionBatchId !== receipt.admissionBatchId ||
+      !s.same(selected.controller, copy.controllerBindingOrNull) ||
+      !s.same(selected.sheet, diff.afterSheet) ||
+      !s.same(selected.location, copy.locationAssignmentOrNull) ||
+      selected.groupId !== copy.groupIdOrNull ||
+      selected.lifecycleState !== copy.lifecycleState ||
+      selected.name !== diff.characterName ||
+      !s.same(selected.blockers, diff.blockers)
+    )
+      return s.fail('FOREIGN_OWNER');
+    for (const admitted of receipt.copies) {
+      const summary = v.ownCopies.find(
+          (copy) => copy.campaignCharacterId === admitted.campaignCharacterId,
+        ),
+        source = proposal.fullCampaignCopyDiffs.find(
+          (copy) => copy.campaignCharacterIdOrNull === admitted.campaignCharacterId,
+        )!;
+      if (
+        summary === undefined ||
+        summary.lifecycleState !== admitted.lifecycleState ||
+        summary.name !== source.characterName ||
+        !s.same(summary.blockers, source.blockers)
+      )
+        return s.fail();
+    }
+    for (const old of before.observations) {
+      if (
+        v.campaignRevision < old.campaignRevision ||
+        v.lobbyEventRevision < old.lobbyEventRevision ||
+        v.readinessRevision < old.readinessRevision ||
+        (old.campaignStarted && !v.campaignStarted)
+      )
+        return s.fail('STALE_REVISION');
+      if (
+        v.campaignRevision === old.campaignRevision &&
+        v.lobbyEventRevision === old.lobbyEventRevision
+      ) {
+        const {
+          selectedCopy: _oldCopy,
+          groupNameOrNull: _oldGroup,
+          peaceOrNull: _oldPeace,
+          ...oldDevice
+        } = old;
+        const { selectedCopy: _copy, groupNameOrNull: _group, peaceOrNull: _peace, ...device } = v;
+        if (!s.same(device, oldDevice)) return s.fail();
+        if (
+          old.selectedCopy.controller.localControllerSeatId ===
+            selected.controller.localControllerSeatId &&
+          !s.same(old, v)
+        )
+          return s.fail();
+      }
+    }
+  } else if (payload.kind === 'READY_INTENT') {
+    const v = before.observations.find(
+      (v) => v.selectedCopy.controller.localControllerSeatId === payload.admittedTabId,
+    );
+    const localScope =
+      payload.admittedTabId === current.record.originalTabId
+        ? current.record.scope.networkScopeId
+        : current.additionalTabs.find((tab) => tab.tabId === payload.admittedTabId)?.networkScopeId;
+    if (
+      before.pendingOrNull !== null ||
+      localAdmissionForm(current) !== 'NET-006' ||
+      localScope !== payload.sourceNetworkScopeId ||
+      v === undefined ||
+      v.campaignStarted ||
+      v.includedCampaignCharacterIds.length === 0 ||
+      v.ready === payload.request.ready ||
+      payload.request.commandId !== event.eventId ||
+      payload.request.campaignId !== receipt.campaignId ||
+      payload.request.expectedLobbySnapshotRevision !== v.lobbySnapshotRevision
+    )
+      return s.fail('UNAVAILABLE');
+  } else {
+    const pending = before.pendingOrNull;
+    if (pending === null) return s.fail();
+    if (payload.kind === 'READY_ACK') {
+      const intentIndex = current.events.findIndex(
+        (event) =>
+          event.payload.kind === 'READY_INTENT' &&
+          event.payload.request.commandId === pending.request.commandId,
+      );
+      if (intentIndex < 0) return s.fail();
+      const source = localLobbyState({ ...current, events: current.events.slice(0, intentIndex) });
+      const ack = payload.receipt,
+        v = source.observations.find(
+          (v) => v.selectedCopy.controller.localControllerSeatId === pending.admittedTabId,
+        )!;
+      if (
+        ack.commandId !== pending.request.commandId ||
+        ack.campaignId !== receipt.campaignId ||
+        ack.ownerDeviceId !== owner ||
+        ack.ready !== pending.request.ready ||
+        ack.lobbySnapshotRevision !== pending.request.expectedLobbySnapshotRevision ||
+        !s.same(ack.includedCampaignCharacterIds, v.includedCampaignCharacterIds) ||
+        ack.readinessRevision <= v.readinessRevision
+      )
+        return s.fail();
+    } else if (
+      payload.proof.commandId !== pending.request.commandId ||
+      payload.proof.semanticBodySha256 !== digest(pending.request)
+    )
+      return s.fail();
+  }
+  return { ...current, events: [...current.events, event] };
+}
+/** Every continuation has the same original admission anchor, host pin and network revision mirror. */
+export function commitLocalLobbyEvent(
+  db: Database.Database,
+  callerScope: LocalNetworkScope,
+  eventId: string,
+  authenticatedHostOrNull: NetworkPublicIdentity | null,
+  value: LocalLobbyEventPayload,
+  guard: NetworkStoreGuard<LocalAdmissionRead>,
+): LocalAdmissionRead {
+  if (db.inTransaction) return s.fail('INVALID_INPUT');
+  const payload = s.input(() => localLobbyPayload(JSON.parse(s.canonical(value))));
+  return s.safe(() =>
+    db
+      .transaction(() => {
+        s.schema(db);
+        s.owner(db, callerScope.ownerDeviceId);
+        const presentation =
+            readLocalAdmissionPresentation(db, callerScope) ?? s.fail('UNAVAILABLE'),
+          current = presentation.admission,
+          scope = current.record.scope,
+          requestId = current.record.publication.gmDecision.requestId;
+        // The presentation already replayed this source in the same SQL snapshot.
+        if (payload.kind === 'READY_INTENT') {
+          if (
+            authenticatedHostOrNull !== null ||
+            presentation.tab.tabId !== payload.admittedTabId ||
+            callerScope.networkScopeId !== payload.sourceNetworkScopeId
+          )
+            return s.fail('FOREIGN_OWNER');
+        } else if (
+          authenticatedHostOrNull === null ||
+          !s.same(s.identity(authenticatedHostOrNull), current.record.hostIdentity)
+        )
+          return s.fail('FOREIGN_OWNER');
+        if (
+          payload.kind === 'LOBBY_OBSERVATION' &&
+          payload.observation.selectedCopy.controller.localControllerSeatId !==
+            presentation.tab.tabId
+        )
+          return s.fail('FOREIGN_OWNER');
+        const known = current.events.find((event) => event.eventId === eventId);
+        if (known !== undefined) {
+          if (!s.same(known.payload, payload)) return s.fail('IDEMPOTENCY_CONFLICT');
+          s.guarded(db, guard, current, 'REPLAY');
+          return current;
+        }
+        if (
+          payload.kind === 'LOBBY_OBSERVATION' &&
+          localLobbyState(current).observations.some((v) => s.same(v, payload.observation))
+        ) {
+          s.guarded(db, guard, current, 'REPLAY');
+          return current;
+        }
+        if (
+          payload.kind === 'READY_INTENT' &&
+          !s.same(payload.sourceRevisions, s.vectorOf(presentation.application))
+        )
+          return s.fail('STALE_REVISION');
+        s.guarded(db, guard, current, 'APPLY');
+        const changes = s.changes(db);
+        append(db, current, s.text(eventId), payload);
+        if (s.changes(db) !== changes + 2) return s.fail('SOURCE_CHANGED');
+        mirror(
+          db,
+          readJournal(db, scope, requestId) ?? s.fail(),
+          eventId,
+          presentation.application,
+        );
+        const saved = readInTransaction(db, scope, requestId) ?? s.fail();
         s.guarded(db, guard, saved, 'APPLY');
         return saved;
       })

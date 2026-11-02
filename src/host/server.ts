@@ -7081,6 +7081,35 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     reply.hijack();
     campaignNetwork.servePublicLocator(request.raw, reply.raw);
   });
+  app.get<{ Params: { contextId: string; checksum: string } }>(
+    '/campaign-art/:contextId/:checksum',
+    async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+      reply.header('X-Content-Type-Options', 'nosniff');
+      if (
+        request.raw.socket.destroyed ||
+        !isTrustedLocalHttpAppConnection({
+          remoteAddress: request.raw.socket.remoteAddress,
+          localAddress: request.raw.socket.localAddress,
+          origin: request.headers.origin,
+          listener: readShellListener(),
+        })
+      ) {
+        await reply.code(403).send({ error: 'LOCAL_APP_ONLY' });
+        return;
+      }
+      try {
+        const art = campaignCreation.readCampaignArt(
+          request.params.contextId,
+          request.params.checksum,
+        );
+        await reply.type(art.mediaType).send(art.bytes);
+      } catch {
+        await reply.code(404).send({ error: 'CAMPAIGN_ART_UNAVAILABLE' });
+      }
+    },
+  );
   app.get('/device-identity', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     if (

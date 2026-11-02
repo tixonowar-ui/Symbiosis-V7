@@ -37,6 +37,8 @@ import {
   readHostedPausedCampaignIds,
   readHostedDeviceRequestCurrent,
   readGmDeviceRequestQueue,
+  readGmRequestReviewSource,
+  readGmRequestReviewSourceWith,
   readGmRequestReviewView,
   commitGmRequestReviewNavigation,
   commitGmRequestReviewDraft,
@@ -311,7 +313,7 @@ function submission(
     }
   ).version;
   const batch = withBatchHash({
-    ...(schemaVersion === 11 || schemaVersion === 12
+    ...(schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -509,6 +511,60 @@ function reviewStoreSetup(filename = ':memory:') {
   });
   return { p, submitted, input, seed };
 }
+
+describe('synchronous GM source composition', () => {
+  it('observes the complete verified source in its read transaction without writes', () => {
+    const p = setup(),
+      scope = gmScope(p),
+      expected = readGmRequestReviewSource(p.db, scope, allow);
+    const before = p.db.serialize();
+    const result = readGmRequestReviewSourceWith(p.db, scope, allow, (source) => {
+      expect(p.db.inTransaction).toBe(true);
+      expect(source).toEqual(expected);
+      return source.queue.requests.length;
+    });
+    expect(result).toEqual({ source: expected, observed: expected.queue.requests.length });
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it.each(['DML', 'DDL', 'PRAGMA', 'PROMISE'] as const)(
+    'refuses and rolls back a %s observer',
+    (kind) => {
+      const p = setup(),
+        before = p.db.serialize();
+      expect(() =>
+        readGmRequestReviewSourceWith(p.db, gmScope(p), allow, () => {
+          if (kind === 'DML') p.db.exec('UPDATE campaign SET lifecycle_state=lifecycle_state');
+          else if (kind === 'DDL') p.db.exec('CREATE TABLE forbidden_observer_write(id INTEGER)');
+          else if (kind === 'PRAGMA') p.db.pragma('user_version=73');
+          else return Promise.resolve('not synchronous');
+          return null;
+        }),
+      ).toThrow(/SOURCE_CHANGED/);
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+  it('refuses foreign or corrupted source before invoking its observer', () => {
+    const p = setup(),
+      observe = vi.fn(() => null),
+      scope = gmScope(p);
+    const before = p.db.serialize();
+    expect(() =>
+      readGmRequestReviewSourceWith(
+        p.db,
+        { ...scope, ownerDeviceId: randomUUID() },
+        allow,
+        observe,
+      ),
+    ).toThrow();
+    expect(observe).not.toHaveBeenCalled();
+    expect(p.db.serialize().equals(before)).toBe(true);
+    p.db.prepare('UPDATE campaign SET payload_json=?').run('{}');
+    const corrupt = p.db.serialize();
+    expect(() => readGmRequestReviewSourceWith(p.db, scope, allow, observe)).toThrow();
+    expect(observe).not.toHaveBeenCalled();
+    expect(p.db.serialize().equals(corrupt)).toBe(true);
+  });
+});
 
 describe('NET-018 durable admission working copies', () => {
   it('detaches OPEN and EDIT request identities before callbacks while retaining exact-replay metadata semantics', () => {
@@ -1949,6 +2005,10 @@ describe('hosted network session and addressed request journal', () => {
         p.db.exec(
           "CREATE TRIGGER prevent_network AFTER INSERT ON hosted_device_request BEGIN SELECT RAISE(ABORT,'private'); END",
         );
+      // SQLite does not journal freelist leaf bytes (atomiccommit.html §7.3).
+      // Compact only the fixture, before the fault and byte-exact rollback snapshot.
+      p.db.exec('VACUUM');
+      expect(p.db.pragma('freelist_count', { simple: true })).toBe(0);
       const before = p.db.serialize();
       expect(() =>
         // Deliberately violate the trusted synchronous-callback contract at the JS boundary.
@@ -1965,6 +2025,62 @@ describe('hosted network session and addressed request journal', () => {
       expect(p.db.serialize().equals(before)).toBe(true);
     },
   );
+  it.each(['hosted_technical_session', 'hosted_device_request'] as const)(
+    'refuses noncanonical checksum-valid %s bytes without repairing them',
+    (table) => {
+      const p = setup(),
+        opening = connect(p),
+        input = submission(p, opening);
+      commitHostedNetworkCommand(p.db, p.principal, input, allow, allow);
+      const column = table === 'hosted_technical_session' ? 'technical_session_id' : 'request_id';
+      const id = table === 'hosted_technical_session' ? input.technicalSessionId : input.requestId;
+      const row = p.db
+        .prepare('SELECT record_json FROM ' + table + ' WHERE ' + column + '=?')
+        .get(id) as {
+        record_json: string;
+      };
+      const value = JSON.parse(row.record_json) as Record<string, unknown>;
+      for (const json of [
+        ' ' + row.record_json,
+        JSON.stringify(Object.fromEntries(Object.entries(value).reverse())),
+        '{"schemaVersion":1,' + row.record_json.slice(1),
+      ]) {
+        expect(json).not.toBe(row.record_json);
+        p.db
+          .prepare('UPDATE ' + table + ' SET record_json=?,record_sha256=? WHERE ' + column + '=?')
+          .run(json, sha(json), id);
+        const before = p.db.serialize();
+        expect(() => readHostedNetworkCommand(p.db, p.principal, input.commandId, allow)).toThrow();
+        expect(p.db.serialize().equals(before)).toBe(true);
+      }
+    },
+  );
+  it('refuses a checksum-valid closure without its original cancellation command', () => {
+    const p = setup(),
+      opening = connect(p),
+      input = submission(p, opening);
+    commitHostedNetworkCommand(p.db, p.principal, input, allow, allow);
+    const row = p.db
+      .prepare('SELECT record_json FROM hosted_device_request WHERE request_id=?')
+      .get(input.requestId) as {
+      record_json: string;
+    };
+    const value = JSON.parse(row.record_json) as Record<string, unknown>;
+    value['closureOrNull'] = {
+      commandId: randomUUID(),
+      receiptId: randomUUID(),
+      reason: 'Unrecorded',
+    };
+    const json = canonical(value);
+    p.db
+      .prepare(
+        'UPDATE hosted_device_request SET closed=1,record_json=?,record_sha256=? WHERE request_id=?',
+      )
+      .run(json, sha(json), input.requestId);
+    const before = p.db.serialize();
+    expect(() => readHostedNetworkCommand(p.db, p.principal, input.commandId, allow)).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
   it.each(['request', 'receipt', 'peer-index'] as const)(
     'refuses checksum-valid %s corruption without repairing it',
     (kind) => {
