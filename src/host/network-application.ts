@@ -475,7 +475,14 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       exact(recovered.receipt.session, s.sessionOrNull);
       exact(recovered.current.session, s.sessionOrNull);
     } else verify();
-    if (current(c).sessionOrNull !== null) await refreshCapacity(c);
+    const { delivery, presentation } = readLocalAdmissionDelivery(db, scope(c));
+    // ACCEPT already owns its places; lobby observations carry its current status.
+    // Keep the capacity RPC for admission decisions and the historical DECLINE return.
+    if (
+      delivery.current.sessionOrNull !== null &&
+      presentation?.admission.receiptOrNull?.decision !== 'ACCEPT'
+    )
+      await refreshCapacity(c);
   }
   function requestProof(
     c: LocalNetworkConnection,
@@ -2528,21 +2535,28 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           diagnostic(c, 'PEER_UNAVAILABLE');
       }
     s = planRetry(c);
-    let lobbyRefreshed = false;
+    let lobbyAttempted = false;
     if (
       s.requestReviewOrNull?.requestStatus === 'IN_REVIEW' &&
       d.peer.current(s.networkScopeId) !== null
     ) {
       try {
-        const restoredOwner = await refreshOwnerAdmission(c);
-        lobbyRefreshed = restoredOwner?.receiptOrNull?.decision === 'ACCEPT';
+        if (ownerView?.admission.receiptOrNull?.decision === 'ACCEPT') {
+          // The old receipt selects the path, but the refresh reads the current proof again.
+          // Uncertainty leaves recovery to the timer instead of immediately repeating it.
+          lobbyAttempted = true;
+          await refreshOwnerLobby(c);
+        } else {
+          const restoredOwner = await refreshOwnerAdmission(c);
+          lobbyAttempted = restoredOwner?.receiptOrNull?.decision === 'ACCEPT';
+        }
       } catch {
         /* Pending decisions remain durable until authenticated recovery. */
       }
       s = current(c);
     }
     try {
-      if (!lobbyRefreshed) await refreshOwnerLobby(c);
+      if (!lobbyAttempted) await refreshOwnerLobby(c);
     } catch {
       /* Own committed data remains available while its peer is unavailable. */
     }

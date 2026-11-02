@@ -702,7 +702,10 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
     });
     expect((await h.send(h.createRequest()))[0]?.messageType).toBe('command.result');
     const before = storageSnapshot(h.db);
-    expect(h.runtime.readCampaignArt(h.ctx(), checksum)).toEqual({ mediaType: 'image/png', bytes });
+    const { bytes: actualBytes, ...metadata } = h.runtime.readCampaignArt(h.ctx(), checksum);
+    expect(metadata).toEqual({ mediaType: 'image/png' });
+    expect(Buffer.isBuffer(actualBytes)).toBe(true);
+    expect(actualBytes.equals(bytes)).toBe(true);
     for (const [context, hash] of [
       [randomUUID(), checksum],
       [h.ctx(), '0'.repeat(64)],
@@ -714,10 +717,13 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
     await h.bind.close();
     h.db.close();
     const reopened = harness(open(h.path), projectRoot, h.ctx());
-    expect(reopened.runtime.readCampaignArt(h.ctx(), checksum)).toEqual({
-      mediaType: 'image/png',
-      bytes,
-    });
+    const { bytes: restoredBytes, ...restoredMetadata } = reopened.runtime.readCampaignArt(
+      h.ctx(),
+      checksum,
+    );
+    expect(restoredMetadata).toEqual({ mediaType: 'image/png' });
+    expect(Buffer.isBuffer(restoredBytes)).toBe(true);
+    expect(restoredBytes.equals(bytes)).toBe(true);
   });
   it('creates once and recovers a lost destination and exact receipt after restart without choosing another draft', async () => {
     const h = await setup();
