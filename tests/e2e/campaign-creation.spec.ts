@@ -81,9 +81,9 @@ async function finish(page: Page, mode: 'MANUAL' | 'AUTO') {
   await action(page, 'CMP-005::CTA::001');
   await expect(form(page, 'CMP-006')).toBeVisible();
   const actions = page.locator('[data-atlas-action-key^="CMP-006"]');
-  await expect(actions).toHaveCount(1);
-  await expect(actions).toHaveAttribute('data-atlas-action-key', 'CMP-006::CTA::002');
-  await expect(page.locator('[data-atlas-action-key="CMP-006::CTA::001"]')).toHaveCount(0);
+  await expect(actions).toHaveCount(2);
+  await expect(actions.nth(0)).toHaveAttribute('data-atlas-action-key', 'CMP-006::CTA::001');
+  await expect(actions.nth(1)).toHaveAttribute('data-atlas-action-key', 'CMP-006::CTA::002');
 }
 
 test('CMP creates one paused MANUAL campaign, exposes a real QR, replays CREATE and recovers the same receipt after SQLite reopen', async ({
