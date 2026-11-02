@@ -3262,6 +3262,7 @@ export const networkApplicationStorage = {
   read,
   at,
   checked,
+  checkedEqual,
   changes,
   guarded,
   identity,

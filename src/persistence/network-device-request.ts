@@ -1306,7 +1306,7 @@ function readSession(
   if (
     expected.technicalSessionId !== id ||
     row['attempt_id'] !== expected.attemptId ||
-    !s.same(s.checked(row), expected) ||
+    !s.checkedEqual(row, expected) ||
     !s.same(command.receipt.session, expected)
   )
     return s.fail();
@@ -1342,7 +1342,9 @@ function readRequestRecord(
     expected.requestId !== id
   )
     return s.fail();
-  const value = s.object(s.checked(row));
+  // The stored closure is only a locator. The checked command rebuilds the value;
+  // final byte equality proves its hash and canonicality without serializing it twice.
+  const value = s.object(JSON.parse(s.text(row['record_json'])) as unknown);
   const close = value['closureOrNull'];
   if (close !== null) {
     const closure = s.object(close, ['commandId', 'receiptId', 'reason']);
@@ -1352,7 +1354,7 @@ function readRequestRecord(
     expected = cancelled(expected, cancellation.input);
     if (!s.same(cancellation.receipt.request, expected)) return s.fail();
   }
-  if (row['closed'] !== (close === null ? 0 : 1) || !s.same(value, expected)) return s.fail();
+  if (row['closed'] !== (close === null ? 0 : 1) || !s.checkedEqual(row, expected)) return s.fail();
   return { request: expected, submit };
 }
 function command(

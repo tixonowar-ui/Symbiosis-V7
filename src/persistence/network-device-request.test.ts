@@ -1969,6 +1969,62 @@ describe('hosted network session and addressed request journal', () => {
       expect(p.db.serialize().equals(before)).toBe(true);
     },
   );
+  it.each(['hosted_technical_session', 'hosted_device_request'] as const)(
+    'refuses noncanonical checksum-valid %s bytes without repairing them',
+    (table) => {
+      const p = setup(),
+        opening = connect(p),
+        input = submission(p, opening);
+      commitHostedNetworkCommand(p.db, p.principal, input, allow, allow);
+      const column = table === 'hosted_technical_session' ? 'technical_session_id' : 'request_id';
+      const id = table === 'hosted_technical_session' ? input.technicalSessionId : input.requestId;
+      const row = p.db
+        .prepare('SELECT record_json FROM ' + table + ' WHERE ' + column + '=?')
+        .get(id) as {
+        record_json: string;
+      };
+      const value = JSON.parse(row.record_json) as Record<string, unknown>;
+      for (const json of [
+        ' ' + row.record_json,
+        JSON.stringify(Object.fromEntries(Object.entries(value).reverse())),
+        '{"schemaVersion":1,' + row.record_json.slice(1),
+      ]) {
+        expect(json).not.toBe(row.record_json);
+        p.db
+          .prepare('UPDATE ' + table + ' SET record_json=?,record_sha256=? WHERE ' + column + '=?')
+          .run(json, sha(json), id);
+        const before = p.db.serialize();
+        expect(() => readHostedNetworkCommand(p.db, p.principal, input.commandId, allow)).toThrow();
+        expect(p.db.serialize().equals(before)).toBe(true);
+      }
+    },
+  );
+  it('refuses a checksum-valid closure without its original cancellation command', () => {
+    const p = setup(),
+      opening = connect(p),
+      input = submission(p, opening);
+    commitHostedNetworkCommand(p.db, p.principal, input, allow, allow);
+    const row = p.db
+      .prepare('SELECT record_json FROM hosted_device_request WHERE request_id=?')
+      .get(input.requestId) as {
+      record_json: string;
+    };
+    const value = JSON.parse(row.record_json) as Record<string, unknown>;
+    value['closureOrNull'] = {
+      commandId: randomUUID(),
+      receiptId: randomUUID(),
+      reason: 'Unrecorded',
+    };
+    const json = canonical(value);
+    p.db
+      .prepare(
+        'UPDATE hosted_device_request SET closed=1,record_json=?,record_sha256=? WHERE request_id=?',
+      )
+      .run(json, sha(json), input.requestId);
+    const before = p.db.serialize();
+    expect(() => readHostedNetworkCommand(p.db, p.principal, input.commandId, allow)).toThrow();
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
   it.each(['request', 'receipt', 'peer-index'] as const)(
     'refuses checksum-valid %s corruption without repairing it',
     (kind) => {
