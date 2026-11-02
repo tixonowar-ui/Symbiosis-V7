@@ -1,8 +1,15 @@
-import type { ActionKey } from '@generated/types/atlas.js';
-import type {
-  CommandReceipt,
-  JsonObject,
-  WorkflowCommandRequestMessage,
+import {
+  isCampaignOwnerProjection,
+  type CampaignReadyBrowserRequest,
+  campaignLobbyPlayerProjectionValue,
+  campaignPeaceProjectionValue,
+  campaignReadyBrowserRequestValue,
+} from '@shared/campaign-lobby-presentation.js';
+import { type ActionKey } from '@generated/types/atlas.js';
+import {
+  type CommandReceipt,
+  type JsonObject,
+  type WorkflowCommandRequestMessage,
 } from '@shared/wire-protocol.js';
 import {
   admissionCodecReaders as r,
@@ -21,6 +28,7 @@ import {
 import {
   admissionOwnerPublicationValue,
   admissionPlayerDecisionReceiptValue,
+  type AdmissionPlayerCopyResult,
 } from '@shared/campaign-admission-proposal.js';
 import {
   admissionGmClientBindingValue,
@@ -30,8 +38,10 @@ import {
   type AdmissionReviewIntent,
 } from '@shared/campaign-admission-review.js';
 import { networkGmRequestProjectionValue } from '@shared/network-application-codec.js';
-import type { ConfirmedProjectionSnapshot } from '../../ws-client.js';
+import { type ConfirmedProjectionSnapshot } from '../../ws-client.js';
+import { campaignReadyReceiptValue } from '@shared/campaign-lobby.js';
 
+export type OwnerBrowserCommand = AdmissionOwnerCommand | CampaignReadyBrowserRequest;
 export type AdmissionBrowserRequest = WorkflowCommandRequestMessage<
   (typeof ADMISSION_GM_WORKFLOW_IDS)[number]
 >;
@@ -79,6 +89,8 @@ export function admissionOwnerMonotonic(
   previous: ConfirmedProjectionSnapshot,
   reconnecting = false,
 ): boolean {
+  if (isCampaignOwnerProjection(next.projection) || isCampaignOwnerProjection(previous.projection))
+    return campaignOwnerMonotonic(next, previous, reconnecting);
   if (
     !isAdmissionOwnerForm(next.formId) ||
     (!isAdmissionOwnerForm(previous.formId) && previous.formId !== 'NET-005')
@@ -101,6 +113,7 @@ export function admissionOwnerMonotonic(
       (p['requestStatus'] === 'IN_REVIEW' || p['requestStatus'] === 'PENDING') &&
       next.revisions.stateRevision > previous.revisions.stateRevision
     );
+  if (p['campaignStatus'] === 'HOSTING' && n['campaignStatus'] !== 'HOSTING') return false;
   if (!admissionJsonEqual(p['publication'], n['publication'])) return false;
   if (p['receiptOrNull'] !== null && !admissionJsonEqual(p['receiptOrNull'], n['receiptOrNull']))
     return false;
@@ -120,6 +133,8 @@ export function admissionOwnerMonotonic(
               'capacityRecheck',
               'controllerDeviceRecheck',
               'campaignRevisionOrNull',
+              'campaignStatus',
+              'startStatus',
             ].includes(key),
         ),
       );
@@ -134,9 +149,11 @@ export function admissionOwnerMonotonic(
 }
 export function admissionOwnerBrowserReceipt(
   receipt: CommandReceipt,
-  request: AdmissionOwnerCommand,
+  request: OwnerBrowserCommand,
   source: ConfirmedProjectionSnapshot,
 ): CommandReceipt {
+  if (request.workflowCommandId === 'UI-CMD-CAMPAIGN-READY-SET')
+    return lobbyReadyBrowserReceipt(receipt, request, source);
   const result = r.exact(
     receipt.result,
     'operation networkScopeId remoteReceipt',
@@ -164,12 +181,48 @@ export function admissionOwnerBrowserReceipt(
 }
 export function admissionOwnerDecisionDestination(
   next: ConfirmedProjectionSnapshot,
-  request: AdmissionOwnerCommand,
+  request: OwnerBrowserCommand,
   source: ConfirmedProjectionSnapshot,
   confirmedReceipt: CommandReceipt | null = null,
   reconnecting = false,
   currentContextId: string = source.projection['contextId'] as string,
 ): boolean {
+  if (request.workflowCommandId === 'UI-CMD-CAMPAIGN-READY-SET')
+    return lobbyReadyDestination(
+      next,
+      request,
+      source,
+      confirmedReceipt,
+      reconnecting,
+      currentContextId,
+    );
+  if (isCampaignOwnerProjection(next.projection)) {
+    if (
+      (!reconnecting && next.projection['contextId'] !== currentContextId) ||
+      !campaignOwnerContinuesAdmission(next, source) ||
+      !campaignOwnerMonotonic(next, source, true) ||
+      request.payload['decision'] !== 'ACCEPT'
+    )
+      return false;
+    if (confirmedReceipt !== null) {
+      admissionOwnerBrowserReceipt(confirmedReceipt, request, source);
+      const remote = admissionPlayerDecisionReceiptValue(
+        confirmedReceipt.result['remoteReceipt'],
+        admissionOwnerPublicationValue(source.projection['publication']),
+      );
+      const copy = remote.copies.find(
+        (copy) =>
+          copy.controllerBindingOrNull?.localControllerSeatId === next.projection['controllerSeat'],
+      );
+      return (
+        copy !== undefined &&
+        campaignOwnerMatchesCopy(next, copy) &&
+        next.revisions.stateRevision >= confirmedReceipt.revisions.stateRevision &&
+        next.revisions.projectionRevision >= confirmedReceipt.revisions.projectionRevision
+      );
+    }
+    return next.revisions.stateRevision > source.revisions.stateRevision;
+  }
   if (!reconnecting && next.projection['contextId'] !== currentContextId) return false;
   if (confirmedReceipt !== null) {
     admissionOwnerBrowserReceipt(confirmedReceipt, request, source);
@@ -296,13 +349,16 @@ export function admissionOwnerActions(
   if (form === 'NET-007')
     return [
       ...(p['proposalChecksum'] !== null ? ['NET-007::CTA::001' as const] : []),
-      ...(p['technicalSessionAvailable'] === true ? ['NET-007::CTA::002' as const] : []),
+      ...(p['technicalSessionAvailable'] === true && p['campaignStatus'] === 'PAUSED'
+        ? ['NET-007::CTA::002' as const]
+        : []),
       'NET-007::CTA::003',
     ];
   if (p['decision'] === 'ACCEPT') return ['NET-027::CTA::001'];
   if (p['decision'] === 'DECLINE') return ['NET-027::CTA::002'];
   if (
     p['technicalSessionAvailable'] !== true ||
+    p['campaignStatus'] !== 'PAUSED' ||
     p['capacityRecheck'] === null ||
     p['pendingCommandIdOrNull'] !== null ||
     !supported.includes('UI-CMD-ADMISSION-PLAYER-DECIDE')
@@ -513,4 +569,269 @@ export function admissionBrowserReceipt(
     r.text(result['authoritativeGmActorId'], '$.authoritativeGmActorId');
   }
   return value;
+}
+
+const lobbyJsonEqual = admissionJsonEqual;
+export const isCampaignOwnerForm = (form: string): boolean =>
+  isAdmissionOwnerForm(form) || form === 'PLY-001';
+export function campaignOwnerMonotonic(
+  next: ConfirmedProjectionSnapshot,
+  previous: ConfirmedProjectionSnapshot,
+  reconnecting = false,
+): boolean {
+  if (previous.formId === 'NET-005' && isCampaignOwnerProjection(next.projection)) {
+    const p = previous.projection,
+      n = next.projection;
+    return (
+      ['deviceId', 'networkScopeId', 'controllerSeat'].every((key) => n[key] === p[key]) &&
+      (reconnecting || n['contextId'] === p['contextId']) &&
+      n['requestIdOrNull'] === p['requestId'] &&
+      n['campaignId'] === p['campaignIdOrNull'] &&
+      (p['requestStatus'] === 'IN_REVIEW' || p['requestStatus'] === 'PENDING') &&
+      next.revisions.stateRevision > previous.revisions.stateRevision &&
+      next.revisions.projectionRevision > previous.revisions.projectionRevision &&
+      next.revisions.actorVisibilityRevision === previous.revisions.actorVisibilityRevision
+    );
+  }
+  if (
+    !isCampaignOwnerForm(next.formId) ||
+    !isCampaignOwnerForm(previous.formId) ||
+    (!isCampaignOwnerProjection(next.projection) && !isCampaignOwnerProjection(previous.projection))
+  )
+    return false;
+  const n = next.projection,
+    p = previous.projection;
+  if (
+    [
+      'requestIdOrNull',
+      'admissionBatchId',
+      'campaignId',
+      'deviceId',
+      'networkScopeId',
+      'controllerSeat',
+    ].some((key) => n[key] !== p[key]) ||
+    (!reconnecting && n['contextId'] !== p['contextId']) ||
+    next.revisions.stateRevision < previous.revisions.stateRevision ||
+    next.revisions.projectionRevision < previous.revisions.projectionRevision ||
+    next.revisions.actorVisibilityRevision !== previous.revisions.actorVisibilityRevision
+  )
+    return false;
+  if (previous.formId === 'PLY-001' && next.formId !== 'PLY-001') return false;
+  if (next.formId === 'PLY-001' && previous.formId === 'PLY-001') {
+    const fixed = (v: JsonObject) =>
+      Object.fromEntries(
+        Object.entries(v).filter(
+          ([key]) =>
+            ![
+              'contextId',
+              'stateRevision',
+              'projectionRevision',
+              'actorVisibilityRevision',
+              'technicalSessionAvailable',
+              'pendingCommandIdOrNull',
+            ].includes(key),
+        ),
+      );
+    if (!lobbyJsonEqual(fixed(n), fixed(p))) return false;
+  }
+  if (
+    next.revisions.stateRevision === previous.revisions.stateRevision ||
+    next.revisions.projectionRevision === previous.revisions.projectionRevision
+  ) {
+    const durable = (v: JsonObject) =>
+      Object.fromEntries(
+        Object.entries(v).filter(
+          ([key]) => !['contextId', 'technicalSessionAvailable'].includes(key),
+        ),
+      );
+    if (next.formId !== previous.formId || !lobbyJsonEqual(durable(n), durable(p))) return false;
+  }
+  if (isCampaignOwnerProjection(n) && !isCampaignOwnerProjection(p))
+    return campaignOwnerContinuesAdmission(next, previous);
+  if (!isCampaignOwnerProjection(n) && isCampaignOwnerProjection(p))
+    return campaignOwnerContinuesAdmission(previous, next);
+  if (n['projectionVariant'] === 'PEACE_SNAPSHOT' && p['projectionVariant'] === 'LOBBY_SNAPSHOT') {
+    const next = campaignPeaceProjectionValue(n),
+      before = campaignLobbyPlayerProjectionValue(p).lobby.selectedCopy;
+    if (
+      before.lifecycleState !== 'ACTIVE' ||
+      next.campaignCharacterId !== before.campaignCharacterId ||
+      next.groupId !== before.groupId ||
+      !lobbyJsonEqual(next.location, before.location) ||
+      !lobbyJsonEqual(next.mechanicalSheet, before.sheet) ||
+      !lobbyJsonEqual(next.effectiveController, before.controller)
+    )
+      return false;
+  }
+  if (n['projectionVariant'] === 'LOBBY_SNAPSHOT' && p['projectionVariant'] === 'LOBBY_SNAPSHOT') {
+    const a = campaignLobbyPlayerProjectionValue(n),
+      b = campaignLobbyPlayerProjectionValue(p);
+    if (
+      a.lobby.campaignRevision < b.lobby.campaignRevision ||
+      a.lobby.lobbyEventRevision < b.lobby.lobbyEventRevision ||
+      a.lobby.readinessRevision < b.lobby.readinessRevision ||
+      (b.lobby.campaignStarted && !a.lobby.campaignStarted) ||
+      !lobbyJsonEqual(a.lobby.selectedCopy, b.lobby.selectedCopy)
+    )
+      return false;
+  }
+  return true;
+}
+export function campaignOwnerContinuesAdmission(
+  current: ConfirmedProjectionSnapshot,
+  admission: ConfirmedProjectionSnapshot,
+): boolean {
+  if (!isCampaignOwnerProjection(current.projection) || !isAdmissionOwnerForm(admission.formId))
+    return false;
+  const old = admissionOwnerProjectionValue(admission.formId, admission.projection),
+    publication = old['publication'] as JsonObject,
+    proposal = publication['proposalOrNull'] as JsonObject | null;
+  if (proposal === null) return false;
+  const n = current.projection,
+    id =
+      n['projectionVariant'] === 'PEACE_SNAPSHOT'
+        ? n['campaignCharacterId']
+        : (n['lobby'] as unknown as { selectedCopy: { campaignCharacterId: string } }).selectedCopy
+            .campaignCharacterId;
+  const diff = (proposal['fullCampaignCopyDiffs'] as JsonObject[]).find(
+    (copy) => copy['campaignCharacterIdOrNull'] === id,
+  );
+  const sheet =
+    n['projectionVariant'] === 'PEACE_SNAPSHOT'
+      ? n['mechanicalSheet']
+      : (n['lobby'] as unknown as { selectedCopy: { sheet: unknown } }).selectedCopy.sheet;
+  if (
+    diff === undefined ||
+    !lobbyJsonEqual(diff['afterSheet'], sheet) ||
+    !['campaignId', 'deviceId', 'networkScopeId', 'controllerSeat'].every(
+      (key) => n[key] === old[key],
+    )
+  )
+    return false;
+  const receipt = old['receiptOrNull'] as JsonObject | null;
+  if (receipt !== null) {
+    const copy = (receipt['copies'] as unknown as AdmissionPlayerCopyResult[]).find(
+      (copy) => copy.controllerBindingOrNull?.localControllerSeatId === old['controllerSeat'],
+    );
+    return copy !== undefined && campaignOwnerMatchesCopy(current, copy);
+  }
+  // Prepared tabs exist only after ACCEPT. Before it the original tab owns the first copy.
+  if (
+    n['projectionVariant'] === 'PEACE_SNAPSHOT' &&
+    (diff['blockers'] as readonly JsonObject[]).length > 0
+  )
+    return false;
+  return (
+    (proposal['fullCampaignCopyDiffs'] as JsonObject[])[0]?.['campaignCharacterIdOrNull'] === id
+  );
+}
+export function campaignOwnerMatchesCopy(
+  current: ConfirmedProjectionSnapshot,
+  copy: AdmissionPlayerCopyResult,
+): boolean {
+  if (!isCampaignOwnerProjection(current.projection)) return false;
+  const p = current.projection,
+    peace = p['projectionVariant'] === 'PEACE_SNAPSHOT';
+  const selected = peace
+    ? campaignPeaceProjectionValue(p)
+    : campaignLobbyPlayerProjectionValue(p).lobby.selectedCopy;
+  const controller = peace
+    ? (selected as ReturnType<typeof campaignPeaceProjectionValue>).effectiveController
+    : (selected as ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby']['selectedCopy'])
+        .controller;
+  return (
+    (peace ? copy.lifecycleState === 'ACTIVE' : copy.lifecycleState !== 'DECLINED') &&
+    selected.campaignCharacterId === copy.campaignCharacterId &&
+    selected.groupId === copy.groupIdOrNull &&
+    lobbyJsonEqual(selected.location, copy.locationAssignmentOrNull) &&
+    lobbyJsonEqual(controller, copy.controllerBindingOrNull)
+  );
+}
+export function lobbyReadyBrowserCommand(
+  source: ConfirmedProjectionSnapshot,
+  action: ActionKey,
+  commandId: string,
+): CampaignReadyBrowserRequest {
+  if (
+    source.formId !== 'NET-006' ||
+    !source.availableActionKeys.includes(action) ||
+    !['NET-006::CTA::003', 'NET-006::CTA::004'].includes(action) ||
+    !source.executableWorkflowCommandIds.includes('UI-CMD-CAMPAIGN-READY-SET')
+  )
+    throw Error('Ready is unavailable');
+  const p = campaignLobbyPlayerProjectionValue(source.projection);
+  return campaignReadyBrowserRequestValue({
+    messageType: 'command.request',
+    protocolVersion: 1,
+    commandKind: 'workflow-command',
+    role: 'player',
+    workflowCommandId: 'UI-CMD-CAMPAIGN-READY-SET',
+    commandId,
+    expectedRevisions: source.revisions,
+    payload: {
+      campaignId: p.campaignId,
+      expectedLobbySnapshotRevision: p.lobby.lobbySnapshotRevision,
+      ready: action === 'NET-006::CTA::003',
+    },
+  });
+}
+export function lobbyReadyBrowserReceipt(
+  receipt: CommandReceipt,
+  request: CampaignReadyBrowserRequest,
+  source: ConfirmedProjectionSnapshot,
+): CommandReceipt {
+  const p = campaignLobbyPlayerProjectionValue(source.projection),
+    result = r.exact(receipt.result, 'operation networkScopeId remoteReceipt', '$.receipt.result'),
+    remote = campaignReadyReceiptValue(result['remoteReceipt']);
+  if (
+    result['operation'] !== 'CAMPAIGN_READY_SET' ||
+    result['networkScopeId'] !== p.networkScopeId ||
+    receipt.commandId !== request.commandId ||
+    remote.commandId !== request.commandId ||
+    remote.campaignId !== p.campaignId ||
+    remote.ownerDeviceId !== p.deviceId ||
+    remote.ready !== request.payload['ready'] ||
+    remote.lobbySnapshotRevision !== request.payload['expectedLobbySnapshotRevision'] ||
+    !lobbyJsonEqual(remote.includedCampaignCharacterIds, p.lobby.includedCampaignCharacterIds) ||
+    receipt.revisions.stateRevision < source.revisions.stateRevision + 2 ||
+    receipt.revisions.projectionRevision < source.revisions.projectionRevision + 2 ||
+    receipt.revisions.actorVisibilityRevision !== source.revisions.actorVisibilityRevision
+  )
+    throw Error('Ready receipt does not match the original source');
+  return receipt;
+}
+export function lobbyReadyDestination(
+  next: ConfirmedProjectionSnapshot,
+  request: CampaignReadyBrowserRequest,
+  source: ConfirmedProjectionSnapshot,
+  receipt: CommandReceipt | null,
+  reconnecting: boolean,
+  contextId: string,
+): boolean {
+  if (!reconnecting && next.projection['contextId'] !== contextId) return false;
+  if (!campaignOwnerMonotonic(next, source, true)) return false;
+  if (receipt !== null) {
+    lobbyReadyBrowserReceipt(receipt, request, source);
+    const remote = campaignReadyReceiptValue(receipt.result['remoteReceipt']);
+    return (
+      next.projection['pendingCommandIdOrNull'] === null &&
+      (next.formId === 'PLY-001' ||
+        (next.formId === 'NET-027' &&
+          admissionOwnerProjectionValue('NET-027', next.projection)['receiptOrNull'] !== null) ||
+        campaignLobbyPlayerProjectionValue(next.projection).lobby.readinessRevision >=
+          remote.readinessRevision) &&
+      (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
+        (key) => next.revisions[key] >= receipt.revisions[key],
+      )
+    );
+  }
+  return (
+    isCampaignOwnerProjection(next.projection) &&
+    next.revisions.stateRevision > source.revisions.stateRevision
+  );
+}
+export function campaignOwnerSnapshotValue(form: string, projection: JsonObject) {
+  if (form === 'PLY-001') return campaignPeaceProjectionValue(projection);
+  if (form === 'NET-006') return campaignLobbyPlayerProjectionValue(projection);
+  throw Error('Unknown campaign owner form');
 }

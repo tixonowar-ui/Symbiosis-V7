@@ -1,3 +1,4 @@
+import { isCampaignLobbyGmForm } from '../shared/campaign-lobby.js';
 import { join } from 'node:path';
 
 import { FORM_IDS, type ActionKey, type FormId } from '@generated/types/atlas.js';
@@ -24,6 +25,11 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'CMP-007',
+  'NET-016',
+  'GM-001',
+  'GRP-001',
+  'PLY-001',
   'NET-018',
   'NET-019',
   'NET-020',
@@ -323,6 +329,16 @@ export async function loadProtocolVocabulary(
           bindings[0].value.length > 0
         );
       }
+      if (isCampaignLobbyGmForm(formId) || formId === 'PLY-001')
+        return (
+          bindings.length === (formId === 'PLY-001' ? 2 : 1) &&
+          bindings.every(
+            (b, i) =>
+              b.parameterIndex === i &&
+              b.source === 'inherited' &&
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(b.value),
+          )
+        );
       if (/^CMP-00[1-6]$/u.test(formId) || formId === 'NET-017') {
         const binding = bindings[0];
         return (

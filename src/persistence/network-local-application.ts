@@ -1,3 +1,7 @@
+import {
+  CAMPAIGN_LOBBY_IDENTITIES,
+  CAMPAIGN_LOBBY_TABLES,
+} from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
 import type Database from 'better-sqlite3';
@@ -818,13 +822,21 @@ function input<T>(body: () => T): T {
 }
 function schema(db: Database.Database): void {
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 10 && row['version'] !== 11 && row['version'] !== 12) return fail();
+  if (
+    row['version'] !== 10 &&
+    row['version'] !== 11 &&
+    row['version'] !== 12 &&
+    row['version'] !== 13
+  )
+    return fail();
+  if (row['version'] === 13)
+    for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   for (const table of NETWORK_APPLICATION_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 11 || row['version'] === 12)
+  if (row['version'] === 11 || row['version'] === 12 || row['version'] === 13)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 12)
+  if (row['version'] === 12 || row['version'] === 13)
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -832,8 +844,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version !== 10 && version !== 11 && version !== 12) return fail();
-  return version === 11 || version === 12;
+  if (version !== 10 && version !== 11 && version !== 12 && version !== 13) return fail();
+  return version === 11 || version === 12 || version === 13;
 }
 function owner(db: Database.Database, id: string): void {
   uuid(id);
@@ -2248,7 +2260,7 @@ function readHistory(
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version === 11 || version === 12) {
+  if (version === 11 || version === 12 || version === 13) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
       ['local_network_request_current', review.currents, 'request_id'],
@@ -2604,6 +2616,10 @@ function assertUnused(db: Database.Database, id: string): void {
   ] as const)
     for (const column of columns)
       if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=13').get() !== undefined)
+    for (const [table, columns] of CAMPAIGN_LOBBY_IDENTITIES)
+      for (const column of columns)
+        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
   if (hasRequestReviewSchema(db))
     for (const [table, columns] of [
       ['hosted_device_request_decision', ['command_id', 'receipt_id']],
@@ -2613,10 +2629,7 @@ function assertUnused(db: Database.Database, id: string): void {
     ] as const)
       for (const column of columns)
         if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
-  if (
-    (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'] ===
-    12
-  )
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined)
     for (const [table, columns] of CAMPAIGN_ADMISSION_IDENTITIES)
       for (const column of columns)
         if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');

@@ -1262,5 +1262,21 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     closePromise = Promise.allSettled(tasks).then(() => undefined);
     return closePromise;
   }
-  return Object.freeze({ run, close, requestConnectionFacts, requestConnectionFactsFromSource });
+  return Object.freeze({
+    run,
+    close,
+    requestConnectionFacts,
+    requestConnectionFactsFromSource,
+    conflictingOperationPending(campaignId: string): boolean {
+      if (closed) throw new DeviceAdmissionPeerRuntimeError('CLOSED');
+      return (
+        d.executor.hasPending(campaignId) ||
+        [...connections].some((c) => c.handle.campaignId === campaignId && c.stage !== null)
+      );
+    },
+    hasStagedUpload(campaignId: string): boolean {
+      if (closed) throw new DeviceAdmissionPeerRuntimeError('CLOSED');
+      return [...connections].some((c) => c.handle.campaignId === campaignId && c.stage !== null);
+    },
+  });
 }

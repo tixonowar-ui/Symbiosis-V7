@@ -9,6 +9,15 @@
 
 ### Добавлено
 
+- **2026-11-02, issue #173:** Ready/Unready в NET-006, явные поля начального
+  времени и Start в NET-016. Первый Start сохраняет одну PEACE-сцену с
+  остановленными часами, существующими группами, локациями и controllers.
+  Игрок получает собственный committed лист в PLY-001; blocked герои остаются
+  в лобби. CMP-007/GM-001/GRP-001 используют прежний GM context, включая
+  вход до admission. Журналы Ready и owner observations восстанавливают
+  потерянные ответы без подмены FINAL, старых receipts или текущего snapshot.
+  [ADR 0074](docs/adr/0074-campaign-lobby-runtime.md).
+
 - **2026-11-02, issue #206:** санкционированная поставка Atlas 1.8: реальные
   controls Ready/Unready и начального времени, singleton Start, owner-only
   PEACE_SNAPSHOT и единые PRE_START/STARTED_PEACE панели. Сохранены

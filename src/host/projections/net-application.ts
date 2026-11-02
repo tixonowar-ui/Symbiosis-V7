@@ -1,44 +1,66 @@
-import type { ActionKey } from '@generated/types/atlas.js';
-import type { PresentedBaseForm, PresentedLayerForm } from '../../shared/wire-v2-protocol.js';
-import type { GmAdmissionView } from '../../persistence/campaign-creation.js';
-import type { AdmissionDecisionRead } from '../../persistence/campaign-admission-decision.js';
-import type { AdmissionHistory } from '../../persistence/campaign-admission-player.js';
+import { type ActionKey } from '@generated/types/atlas.js';
+import { type PresentedBaseForm, type PresentedLayerForm } from '../../shared/wire-v2-protocol.js';
+import {
+  type GmAdmissionView,
+  type CampaignCreationOrigin,
+  type GmRequestReviewView,
+} from '../../persistence/campaign-creation.js';
+import { type AdmissionDecisionRead } from '../../persistence/campaign-admission-decision.js';
+import { type AdmissionHistory } from '../../persistence/campaign-admission-player.js';
 import {
   admissionSelectedGroupLabels,
   type createCampaignAdmissionRules,
 } from '../campaign-admission-service.js';
-import type { AdmissionGmViewFormId } from '../../shared/campaign-admission-review.js';
+import { type AdmissionGmViewFormId } from '../../shared/campaign-admission-review.js';
 import { isDeepStrictEqual } from 'node:util';
-import type {
-  WorkflowCommandCapabilityId,
-  JsonObject,
-  JsonValue,
+import {
+  type WorkflowCommandCapabilityId,
+  type JsonObject,
+  type JsonValue,
+  type RevisionVector,
 } from '../../shared/wire-protocol.js';
-import type {
-  PublicFinalCandidateSummary,
-  CapacityForecast,
+import {
+  type PublicFinalCandidateSummary,
+  type CapacityForecast,
 } from '../../shared/device-admission.js';
-import type {
-  NetworkApplicationProjection,
-  NetworkPublicErrorCode,
-  NetworkPublicProvenance,
-  NetworkDiscoveredHost,
+import {
+  type NetworkApplicationProjection,
+  type NetworkPublicErrorCode,
+  type NetworkPublicProvenance,
+  type NetworkDiscoveredHost,
 } from '../../shared/network-application.js';
-import type {
-  LocalNetworkApplication,
-  NetworkPreparedCandidate,
+import {
+  type LocalNetworkApplication,
+  type NetworkPreparedCandidate,
 } from '../../persistence/network-local-application.js';
-import type { PeerCampaignHeader } from '../campaign-peer-handshake.js';
-import type { CampaignDiscoveryScan } from '../campaign-discovery.js';
+import { type PeerCampaignHeader } from '../campaign-peer-handshake.js';
+import { type CampaignDiscoveryScan } from '../campaign-discovery.js';
 import { parseCampaignLanAddress } from '../campaign-lan-address.js';
 import { isNetworkApplicationProjection } from '../../shared/network-application-codec.js';
-import { admissionGmProjectionValue } from '../../shared/campaign-admission-presentation.js';
-import { admissionOwnerProjectionValue } from '../../shared/campaign-admission-presentation.js';
+import {
+  admissionGmProjectionValue,
+  admissionOwnerProjectionValue,
+} from '../../shared/campaign-admission-presentation.js';
 import {
   localAdmissionForm,
+  localLobbyState,
   type LocalAdmissionRead,
+  localLobbyPendingCommandId,
 } from '../../persistence/local-campaign-admission.js';
-import type { AdmissionCapacityResponse } from '../campaign-admission-peer-codec.js';
+import { type AdmissionCapacityResponse } from '../campaign-admission-peer-codec.js';
+import {
+  campaignLobbyPlayerActions,
+  campaignLobbyPlayerProjectionValue,
+  type CampaignLobbyPlayerProjection,
+  campaignLobbyGmActions,
+  campaignLobbyGmProjectionValue,
+  campaignPeaceProjectionValue,
+  peaceCondition,
+  type CampaignLobbyGmProjection,
+  type CampaignPeaceProjection,
+} from '@shared/campaign-lobby-presentation.js';
+import { createHash } from 'node:crypto';
+import { isCampaignLobbyGmForm, type CampaignLobbyGmForm } from '@shared/campaign-lobby.js';
 
 export function projectOwnerAdmission(i: {
   admission: LocalAdmissionRead;
@@ -82,12 +104,16 @@ export function projectOwnerAdmission(i: {
               i.capacity.occupiedCampaignPlaceCount +
               (receipt?.decision === 'ACCEPT' ? receipt.copies.length : 0),
         };
+  const campaignStatus = localLobbyState(state).observations.some((o) => o.campaignStarted)
+    ? 'HOSTING'
+    : (i.capacity?.campaign.status ?? 'PAUSED');
   const actions: ActionKey[] = [];
   if (formId === 'NET-027') {
     if (receipt?.decision === 'ACCEPT') actions.push('NET-027::CTA::001');
     else if (receipt?.decision === 'DECLINE') actions.push('NET-027::CTA::002');
     else if (
       i.connected &&
+      campaignStatus === 'PAUSED' &&
       capacity !== null &&
       state.pendingDecisionOrNull === null &&
       i.controllerSeat === state.record.originalTabId &&
@@ -99,7 +125,7 @@ export function projectOwnerAdmission(i: {
   } else if (formId === 'NET-006') actions.push('NET-006::CTA::001');
   else {
     if (proposal !== null) actions.push('NET-007::CTA::001');
-    if (i.connected) actions.push('NET-007::CTA::002');
+    if (i.connected && campaignStatus === 'PAUSED') actions.push('NET-007::CTA::002');
     actions.push('NET-007::CTA::003');
   }
   const payload = {
@@ -137,9 +163,9 @@ export function projectOwnerAdmission(i: {
       i.connected && state.record.scope.ownerDeviceId === notice.requestOwnerDeviceId,
     ownCampaignCopies: receipt?.copies ?? [],
     controllerBindings: receipt?.controllerProofOrNull?.controllerBindings ?? [],
-    campaignStatus: 'PAUSED',
+    campaignStatus,
     readyStatus: 'NOT_READY',
-    startStatus: 'NOT_STARTED',
+    startStatus: campaignStatus === 'HOSTING' ? 'STARTED' : 'NOT_STARTED',
     result:
       notice.decision === 'REJECT'
         ? 'GM_REJECTED'
@@ -622,9 +648,9 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
     session = s.sessionOrNull,
     pending = s.pendingCommandIdOrNull !== null;
   const status = s.schemaVersion === 2 ? s.requestReviewOrNull?.requestStatus : undefined;
-  const selectionEligible = s.selectedCandidates.every(
-    (ref) => !i.alreadyImportedSourceUuids.includes(ref.sourceUuid),
-  );
+  const selectionEligible =
+    i.campaign?.status === 'PAUSED' &&
+    s.selectedCandidates.every((ref) => !i.alreadyImportedSourceUuids.includes(ref.sourceUuid));
   const activeRequest =
     s.requestOrNull !== null &&
     s.requestOrNull.closureOrNull === null &&
@@ -696,7 +722,7 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
               hostPort: a.port,
               campaignHintOrNull: o.campaign.campaignId,
             },
-            campaignStatus: 'PAUSED',
+            campaignStatus: o.campaign.status,
             activePlayerCapacity: o.campaign.activePlayerCapacity,
             activePcCount: o.campaign.activePcCount,
             compatibility:
@@ -752,7 +778,7 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
         ...common,
         ownRequestIdOrNull: activeRequest ? s.requestOrNull.requestId : null,
         campaignId: session.campaignProof.campaignId,
-        campaignStatus: 'PAUSED',
+        campaignStatus: i.campaign.status,
         sessionId: session.technicalSessionId,
         connectionRevision: session.connectionRevision,
         eligibleFinalCandidates: summaries(i.candidates),
@@ -796,6 +822,7 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
           candidateSnapshotChecksum: c.descriptor.sourceChecksum,
         })),
         campaignId: b.campaignProof.campaignId,
+        campaignStatus: i.campaign.status,
         connectionRevision: b.connectionRevision,
         commandId: s.pendingCommandIdOrNull,
         batchCharacterSummaries: summaries(b.candidates),
@@ -963,7 +990,6 @@ export function projectNetworkApplication(i: NetworkProjectionInput): PresentedB
     ],
   };
 }
-import type { GmRequestReviewView } from '../../persistence/campaign-creation.js';
 import type { VerifiedGmRequestQueue } from '../../persistence/network-device-request.js';
 import type { CurrentPausedCampaignHeader } from '../../persistence/current-paused-campaign.js';
 import type {
@@ -1079,5 +1105,232 @@ export function projectGmRequestQueue(i: {
     routeBindings: [{ parameterIndex: 0, source: 'inherited', value: view.campaignId }],
     availableActionKeys: actions,
     roleFilteredPayload: payload,
+  };
+}
+
+const routes: Readonly<Record<CampaignLobbyGmForm, string>> = {
+  'CMP-007': '/master/campaigns/:campaignId/campaign/cmp-007',
+  'NET-016': '/master/campaigns/:campaignId/network/net-016',
+  'GM-001': '/master/campaigns/:campaignId',
+  'GRP-001': '/master/campaigns/:campaignId/groups/grp-001',
+};
+/** The existing GM view owns navigation/revisions; these panels add no context or authority. */
+export function projectGmCampaignLobby(input: {
+  readonly view: GmRequestReviewView;
+  readonly history: AdmissionHistory;
+  readonly origin: CampaignCreationOrigin;
+  readonly conflictingOperationPending: boolean;
+  readonly supported: readonly WorkflowCommandCapabilityId[];
+}): { readonly base: PresentedBaseForm; readonly revisions: RevisionVector } {
+  const { view, history, origin } = input,
+    state = history.lobbyOrNull;
+  if (
+    state === null ||
+    !isCampaignLobbyGmForm(view.formId) ||
+    view.campaignId !== history.checkpoint.campaignId ||
+    view.campaignId !== origin.payload.campaignId
+  )
+    throw new Error('campaign lobby source mismatch');
+  const scene = state.sceneOrNull;
+  if (view.formId === 'NET-016' && scene !== null)
+    throw new Error('pre-Start lobby has already started');
+  const groups = [...history.groups.values()]
+    .sort((a, b) => a.groupId.localeCompare(b.groupId))
+    .map((group) => ({
+      groupId: group.groupId,
+      nameOrNull: group.nameOrNull,
+      members: state.copies
+        .filter((copy) => copy.groupId === group.groupId)
+        .map((copy) => ({
+          campaignCharacterId: copy.campaignCharacterId,
+          name: copy.name,
+          lifecycleState: copy.lifecycleState,
+          location: copy.location,
+        })),
+    }));
+  const art = origin.payload.metadata.art;
+  const payload: CampaignLobbyGmProjection = {
+    contextId: view.gmLocalContextId,
+    campaignId: view.campaignId,
+    stateRevision: view.stateRevision,
+    projectionRevision: view.projectionRevision,
+    actorVisibilityRevision: view.actorVisibilityRevision,
+    panelVariant: scene === null ? 'PRE_START' : 'STARTED_PEACE',
+    campaignStatus: scene === null ? 'PAUSED' : 'HOSTING',
+    title: origin.payload.metadata.title,
+    descriptionOrNull: origin.payload.metadata.description,
+    groups,
+    activePeaceSceneOrNull: scene,
+    campaignArtChecksumOrNull:
+      art === null
+        ? null
+        : createHash('sha256').update(Buffer.from(art.bytesBase64, 'base64')).digest('hex'),
+    lobbySummary: {
+      activePcCount: state.includedCopies.length,
+      blockedPcCount: state.copies.length - state.includedCopies.length,
+      readyDeviceCount: state.readyByDevice.filter((device) => device.ready).length,
+    },
+    activePlayerCapacity: origin.payload.host.activePlayerCapacity,
+    admissionBatches: [...new Set(state.copies.map((copy) => copy.admissionBatchId))]
+      .sort()
+      .map((admissionBatchId) => ({
+        admissionBatchId,
+        campaignCharacterIds: state.copies
+          .filter((copy) => copy.admissionBatchId === admissionBatchId)
+          .map((copy) => copy.campaignCharacterId),
+      })),
+    activeCampaignCharacters: state.includedCopies.map((copy) => ({
+      campaignCharacterId: copy.campaignCharacterId,
+      name: copy.name,
+      groupId: copy.groupId,
+      deviceId: copy.controller.deviceId,
+    })),
+    controllingDevices: state.includedDevices,
+    readyByDevice: state.readyByDevice,
+    requiredFieldBlockers: state.copies
+      .filter((copy) => copy.blockers.length > 0)
+      .map((copy) => ({ campaignCharacterId: copy.campaignCharacterId, blockers: copy.blockers })),
+    lobbySnapshotRevision: state.lobbySnapshotRevision,
+    readinessRevision: state.readinessRevision,
+    initialTimeInput: { dayNumber: null, hour: null, minute: null },
+    initialCampaignTimeOrNull: state.initialCampaignTimeOrNull,
+    startPreflightStatus: state.preflight,
+    conflictingOperationPending: input.conflictingOperationPending,
+    commandId: null,
+  };
+  campaignLobbyGmProjectionValue(payload);
+  const actions = campaignLobbyGmActions(view.formId, payload, input.supported);
+  return {
+    base: {
+      formId: view.formId,
+      formType: 'screen',
+      routeTemplate: routes[view.formId],
+      routeBindings: [{ parameterIndex: 0, source: 'inherited', value: view.campaignId }],
+      availableActionKeys: actions,
+      roleFilteredPayload: payload as unknown as JsonObject,
+    },
+    revisions: {
+      stateRevision: view.stateRevision,
+      projectionRevision: view.projectionRevision,
+      actorVisibilityRevision: view.actorVisibilityRevision,
+    },
+  };
+}
+
+/** Current presentation is a continuation of the original admitted tab and journal. */
+export function projectLocalCampaignLobby(input: {
+  readonly admission: LocalAdmissionRead;
+  readonly application: LocalNetworkApplication;
+  readonly contextId: string;
+  readonly networkScopeId: string;
+  readonly controllerSeat: string;
+  readonly connected: boolean;
+  readonly supported: readonly WorkflowCommandCapabilityId[];
+  readonly itemLabels: readonly { itemTypeId: string; name: string }[];
+}): PresentedBaseForm | null {
+  const local = localLobbyState(input.admission),
+    observation = local.observations.find(
+      (v) => v.selectedCopy.controller.localControllerSeatId === input.controllerSeat,
+    );
+  if (observation === undefined) return null;
+  const state = input.admission,
+    receipt = state.receiptOrNull,
+    copy = observation.selectedCopy;
+  if (
+    receipt?.decision !== 'ACCEPT' ||
+    state.returnedOrNull !== null ||
+    input.application.ownerDeviceId !== observation.ownerDeviceId ||
+    input.application.networkScopeId !== state.record.scope.networkScopeId ||
+    input.controllerSeat !== copy.controller.localControllerSeatId ||
+    (input.controllerSeat !== state.record.originalTabId &&
+      !state.additionalTabs.some(
+        (tab) => tab.tabId === input.controllerSeat && tab.networkScopeId === input.networkScopeId,
+      ))
+  )
+    throw new Error('owner lobby binding mismatch');
+  const common = {
+    requestIdOrNull: receipt.requestId,
+    admissionBatchId: receipt.admissionBatchId,
+    contextId: input.contextId,
+    networkScopeId: input.networkScopeId,
+    deviceId: observation.ownerDeviceId,
+    controllerSeat: input.controllerSeat,
+    campaignId: observation.campaignId,
+    stateRevision: input.application.stateRevision,
+    projectionRevision: input.application.projectionRevision,
+    actorVisibilityRevision: input.application.actorVisibilityRevision,
+    technicalSessionAvailable: input.connected,
+    pendingCommandIdOrNull: localLobbyPendingCommandId(input.admission, input.controllerSeat),
+  };
+  const scene = observation.peaceOrNull;
+  if (scene !== null) {
+    const sheet = copy.sheet,
+      assignment = sheet.groupAssignmentOrNull;
+    const itemIds = new Set(
+      sheet.inventoryReview.entries.flatMap((entry) =>
+        entry.item.kind === 'CATALOG' ? [entry.item.itemTypeId] : [],
+      ),
+    );
+    const payload: CampaignPeaceProjection = {
+      ...common,
+      projectionVariant: 'PEACE_SNAPSHOT',
+      campaignCharacterId: copy.campaignCharacterId,
+      sceneId: scene.sceneId,
+      mechanicalSheet: sheet,
+      currentHP: sheet.runtime.currentHp,
+      maxHP: sheet.runtime.maxHp,
+      derivedCondition: peaceCondition(sheet.runtime),
+      symbionts: sheet.symbionts,
+      temporaryEffects: sheet.runtime.temporaryEffects,
+      campaignTimestamp: scene.campaignTimestamp,
+      clockMode: scene.clockMode,
+      dayPhase: scene.dayPhase,
+      groupId: copy.groupId,
+      location: copy.location,
+      effectiveController: copy.controller,
+      ownMarkerVisibility: 'UNKNOWN',
+      markerReason: 'NOT_SET',
+      groupNameOrNull: observation.groupNameOrNull,
+      itemLabels: input.itemLabels.filter((item) => itemIds.has(item.itemTypeId)),
+      groupLabels:
+        assignment?.kind === 'EXISTING'
+          ? state.record.publication.groupLabels.filter(
+              (group) => group.groupId === assignment.groupId,
+            )
+          : [],
+    };
+    campaignPeaceProjectionValue(payload);
+    return {
+      formId: 'PLY-001',
+      formType: 'screen',
+      routeTemplate: '/campaigns/:campaignId/player/:campaignCharacterId',
+      routeBindings: [
+        { parameterIndex: 0, source: 'inherited', value: observation.campaignId },
+        { parameterIndex: 1, source: 'inherited', value: copy.campaignCharacterId },
+      ],
+      availableActionKeys: [],
+      roleFilteredPayload: payload as unknown as JsonObject,
+    };
+  }
+  if (localAdmissionForm(state) !== 'NET-006') return null;
+  const payload: CampaignLobbyPlayerProjection = {
+    ...common,
+    projectionVariant: 'LOBBY_SNAPSHOT',
+    ownCampaignCopies: receipt.copies,
+    controllerBindings: receipt.controllerProofOrNull!.controllerBindings,
+    blockers: state.record.publication.proposalOrNull!.blockers,
+    campaignStatus: observation.campaignStarted ? 'HOSTING' : 'PAUSED',
+    readyStatus: observation.ready ? 'READY' : 'NOT_READY',
+    startStatus: observation.campaignStarted ? 'STARTED' : 'NOT_STARTED',
+    lobby: observation,
+  };
+  campaignLobbyPlayerProjectionValue(payload);
+  return {
+    formId: 'NET-006',
+    formType: 'screen',
+    routeTemplate: '/player/campaigns/:campaignId/network/net-006',
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: observation.campaignId }],
+    availableActionKeys: campaignLobbyPlayerActions(payload, input.supported),
+    roleFilteredPayload: payload as unknown as JsonObject,
   };
 }

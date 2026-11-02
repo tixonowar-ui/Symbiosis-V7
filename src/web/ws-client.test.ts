@@ -3475,7 +3475,13 @@ describe('CHR-010 web protocol vocabulary', () => {
       true,
     );
     expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-CREATE')).toBe(true);
-    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-START')).toBe(false);
+    for (const workflow of [
+      'UI-CMD-CAMPAIGN-READY-SET',
+      'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+      'UI-CMD-CAMPAIGN-START',
+    ])
+      expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId(workflow)).toBe(true);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-PAUSE-SET')).toBe(false);
   });
 });
 

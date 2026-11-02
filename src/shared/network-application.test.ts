@@ -113,6 +113,7 @@ const fixtures: Readonly<Record<NetworkApplicationFormId, JsonObject>> = {
     selectedLocalCharacterUuids: [ref.sourceUuid],
     snapshotChecksums: [{ localCharacterUuid: ref.sourceUuid, candidateSnapshotChecksum: hash }],
     campaignId: id(5),
+    campaignStatus: 'PAUSED',
     connectionRevision: 0,
     commandId: null,
     batchCharacterSummaries: [summary],

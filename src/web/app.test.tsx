@@ -2297,6 +2297,7 @@ describe('APP-001 web entry', () => {
         'UI-CMD-DEVICE-REQUEST-SUBMIT',
         'UI-CMD-DEVICE-REQUEST-CANCEL',
         'UI-CMD-ADMISSION-PLAYER-DECIDE',
+        'UI-CMD-CAMPAIGN-READY-SET',
       ],
       unacknowledgedCommandIds: [],
     });

@@ -724,9 +724,13 @@ export function admissionOwnerProjectionValue(
   );
   r.nullable(row['capacityRecheck'], '$.capacityRecheck', capacity);
   bool(row['controllerDeviceRecheck'], '$.controllerDeviceRecheck');
-  w.literal(row['campaignStatus'], 'PAUSED', '$.campaignStatus');
+  r.oneOf(row['campaignStatus'], ['PAUSED', 'HOSTING'], '$.campaignStatus');
   w.literal(row['readyStatus'], 'NOT_READY', '$.readyStatus');
-  w.literal(row['startStatus'], 'NOT_STARTED', '$.startStatus');
+  w.literal(
+    row['startStatus'],
+    row['campaignStatus'] === 'HOSTING' ? 'STARTED' : 'NOT_STARTED',
+    '$.startStatus',
+  );
   const outcome =
     publication.gmDecision.decision === 'REJECT'
       ? 'GM_REJECTED'

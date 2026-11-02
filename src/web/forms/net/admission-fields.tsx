@@ -1,4 +1,10 @@
-import { useState, type ReactElement } from 'react';
+import {
+  campaignLobbyPlayerProjectionValue,
+  campaignPeaceProjectionValue,
+} from '@shared/campaign-lobby-presentation.js';
+import { initialCampaignTimeValue, type InitialCampaignTimeInput } from '@shared/campaign-lobby.js';
+import { campaignLobbyGmProjectionValue } from '@shared/campaign-lobby-presentation.js';
+import { useEffect, useState, type ReactElement } from 'react';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import type {
   AdmissionMechanicalSheetV1,
@@ -1716,6 +1722,273 @@ function ProfileEditor({
             />
           </label>
         ),
+      )}
+    </section>
+  );
+}
+
+export function CampaignLobbyFields({
+  formId,
+  projection,
+  onTimeChange,
+}: {
+  readonly formId: string;
+  readonly projection: JsonObject;
+  readonly onTimeChange: (value: InitialCampaignTimeInput | null) => void;
+}): ReactElement {
+  const p = campaignLobbyGmProjectionValue(projection);
+  const [time, setTime] = useState({ dayNumber: '', hour: '', minute: '' });
+  useEffect(() => {
+    onTimeChange(null);
+  }, [onTimeChange]);
+  const change = (key: keyof typeof time, value: string) => {
+    const next = { ...time, [key]: value };
+    setTime(next);
+    try {
+      if (Object.values(next).some((value) => !/^\d+$/u.test(value)))
+        throw Error('incomplete time');
+      const parsed = initialCampaignTimeValue({
+        dayNumber: Number(next.dayNumber),
+        hour: Number(next.hour),
+        minute: Number(next.minute),
+      });
+      onTimeChange({ dayNumber: parsed.dayNumber, hour: parsed.hour, minute: parsed.minute });
+    } catch {
+      onTimeChange(null);
+    }
+  };
+  return (
+    <section aria-label="Кампания и лобби">
+      <h2>{p.title}</h2>
+      {p.descriptionOrNull === null ? null : <p>{p.descriptionOrNull}</p>}
+      {p.campaignArtChecksumOrNull === null ? (
+        <p>Арт кампании отсутствует.</p>
+      ) : (
+        <img
+          alt="Арт кампании"
+          src={'/campaign-art/' + p.contextId + '/' + p.campaignArtChecksumOrNull}
+          style={{ maxWidth: '100%', maxHeight: 360 }}
+        />
+      )}
+      <p>
+        {p.panelVariant === 'PRE_START'
+          ? 'До первого старта. Активная сцена отсутствует.'
+          : 'Мирная сцена началась.'}
+      </p>
+      <p>
+        Войдут в сцену: {p.lobbySummary.activePcCount}. Останутся в лобби с препятствиями:{' '}
+        {p.lobbySummary.blockedPcCount}. Готовы устройств: {p.lobbySummary.readyDeviceCount} из{' '}
+        {p.controllingDevices.length}.
+      </p>
+      <ul>
+        {p.readyByDevice.map((device) => (
+          <li key={device.deviceId}>
+            Устройство {device.deviceId}: {device.ready ? 'готово' : 'не готово'}. Герои:{' '}
+            {p.activeCampaignCharacters
+              .filter((copy) => copy.deviceId === device.deviceId)
+              .map((copy) => copy.name)
+              .join(', ')}
+            .
+          </li>
+        ))}
+      </ul>
+      {p.requiredFieldBlockers.map((copy) => (
+        <section key={copy.campaignCharacterId} aria-label="Герой с препятствиями">
+          <p>
+            Герой{' '}
+            {
+              p.groups
+                .flatMap((group) => group.members)
+                .find((member) => member.campaignCharacterId === copy.campaignCharacterId)?.name
+            }
+            : не готов и не войдёт в сцену.
+          </p>
+          <ul>
+            {copy.blockers.map((blocker, i) => (
+              <li key={i}>{blocker.message}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
+      <h3>Группы и местоположения</h3>
+      {p.groups.length === 0 ? (
+        <p>Группы ещё не созданы при допуске.</p>
+      ) : (
+        p.groups.map((group) => (
+          <section key={group.groupId}>
+            <h4>{group.nameOrNull === null ? 'Название группы отсутствует' : group.nameOrNull}</h4>
+            <ul>
+              {group.members.map((member) => (
+                <li key={member.campaignCharacterId}>
+                  {member.name} — {member.location.location}
+                  {member.location.subLocationOrNull === null
+                    ? ''
+                    : ' / ' + member.location.subLocationOrNull}
+                  ;{' '}
+                  {member.lifecycleState === 'ACTIVE'
+                    ? 'активный'
+                    : 'ожидает устранения препятствий'}
+                  .
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      )}
+      <h3>Начальное время</h3>
+      {p.initialCampaignTimeOrNull === null ? (
+        <p>Мастер ещё не подтвердил начальное время. Start заблокирован.</p>
+      ) : (
+        <p>
+          День {p.initialCampaignTimeOrNull.dayNumber},{' '}
+          {String(p.initialCampaignTimeOrNull.hour).padStart(2, '0')}:
+          {String(p.initialCampaignTimeOrNull.minute).padStart(2, '0')}. После Start часы
+          остановлены.
+        </p>
+      )}
+      {formId === 'NET-016' ? (
+        <fieldset>
+          <legend>Явный ввод начального времени</legend>
+          <p>
+            Заполните все поля. Изменение сохранённого времени отменяет прежние подтверждения
+            готовности.
+          </p>
+          {(['dayNumber', 'hour', 'minute'] as const).map((key) => (
+            <label key={key}>
+              {{ dayNumber: 'День календаря', hour: 'Час', minute: 'Минута' }[key]}
+              <input
+                type="number"
+                step="1"
+                min={key === 'dayNumber' ? 1 : 0}
+                max={key === 'hour' ? 23 : key === 'minute' ? 59 : undefined}
+                value={time[key]}
+                onChange={(event) => change(key, event.currentTarget.value)}
+              />
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+      {p.conflictingOperationPending ? (
+        <p role="status">Операция подключения или допуска ещё выполняется.</p>
+      ) : null}
+      {formId === 'NET-016' ? (
+        <p role="status">
+          {p.startPreflightStatus === 'READY_TO_START'
+            ? 'Все условия Start выполнены.'
+            : p.startPreflightStatus === 'ZERO_ACTIVE_PLAYERS'
+              ? 'Для Start нужен хотя бы один активный персонаж.'
+              : 'Start ожидает подтверждённое время и готовность всех включённых устройств.'}
+        </p>
+      ) : null}
+      {p.activePeaceSceneOrNull === null ? null : (
+        <p>
+          Мирная сцена. День {Math.floor(p.activePeaceSceneOrNull.campaignTimestamp / 1440) + 1},{' '}
+          {String(Math.floor((p.activePeaceSceneOrNull.campaignTimestamp % 1440) / 60)).padStart(
+            2,
+            '0',
+          )}
+          :{String(p.activePeaceSceneOrNull.campaignTimestamp % 60).padStart(2, '0')},{' '}
+          {p.activePeaceSceneOrNull.dayPhase === 'DAY' ? 'день' : 'ночь'}. Часы остановлены.
+        </p>
+      )}
+    </section>
+  );
+}
+
+export function CampaignOwnerFields({
+  formId,
+  projection,
+}: {
+  readonly formId: string;
+  readonly projection: JsonObject;
+}): ReactElement {
+  if (formId === 'PLY-001') {
+    const p = campaignPeaceProjectionValue(projection),
+      day = Math.floor(p.campaignTimestamp / 1440) + 1,
+      minute = p.campaignTimestamp % 1440;
+    return (
+      <section aria-label="Мирная сцена персонажа">
+        <h2>Мирная сцена</h2>
+        <p>
+          HP: {p.currentHP} / {p.maxHP}. День {day},{' '}
+          {String(Math.floor(minute / 60)).padStart(2, '0')}:{String(minute % 60).padStart(2, '0')}{' '}
+          — {p.dayPhase === 'DAY' ? 'день' : 'ночь'}. Часы остановлены.
+        </p>
+        <p>
+          Группа: {p.groupNameOrNull === null ? 'название отсутствует' : p.groupNameOrNull}.
+          Местоположение: {p.location.location}
+          {p.location.subLocationOrNull === null ? '' : ' / ' + p.location.subLocationOrNull}.
+        </p>
+        <p>Маркер на карте не задан. Боевой контекст отсутствует.</p>
+        {p.technicalSessionAvailable ? null : (
+          <p role="status">Связь с мастером потеряна. Показан последний подтверждённый снимок.</p>
+        )}
+        {p.pendingCommandIdOrNull === null ? null : (
+          <p role="status">Восстанавливается результат отправленной команды готовности.</p>
+        )}
+        <AdmissionSheet sheet={p.mechanicalSheet} items={p.itemLabels} groups={p.groupLabels} />
+        <h3>Временные эффекты</h3>
+        <p>Временных эффектов нет.</p>
+      </section>
+    );
+  }
+  const p = campaignLobbyPlayerProjectionValue(projection),
+    v = p.lobby;
+  return (
+    <section aria-label="Готовность к началу кампании">
+      <h2>Лобби игрока</h2>
+      <p>
+        {v.campaignStarted
+          ? 'Мастер начал сцену. Герои с препятствиями остаются в лобби.'
+          : 'Start выполняет мастер после подтверждения готовности включённых устройств.'}
+      </p>
+      <p>
+        {v.includedCampaignCharacterIds.length === 0
+          ? 'Нет активных героев для подтверждения Ready.'
+          : v.ready
+            ? 'Ваше устройство готово.'
+            : 'Ваше устройство не готово.'}
+      </p>
+      <h3>Герои этого устройства</h3>
+      <ul>
+        {v.ownCopies.map((copy) => (
+          <li key={copy.campaignCharacterId}>
+            <strong>{copy.name}</strong>:{' '}
+            {copy.lifecycleState === 'ACTIVE'
+              ? 'включён в подтверждение готовности'
+              : 'не готов и не войдёт в сцену'}
+            {copy.blockers.length === 0 ? null : (
+              <ul>
+                {copy.blockers.map((blocker, i) => (
+                  <li key={i}>{blocker.message}</li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p>
+        «Готов» подтверждает весь перечисленный активный состав устройства. Изменение состава,
+        механики, назначений или начального времени отменяет прежнее подтверждение.
+      </p>
+      {v.initialCampaignTimeOrNull === null ? (
+        <p>
+          Начальное время ещё не подтверждено мастером. После его ввода готовность потребуется
+          подтвердить заново.
+        </p>
+      ) : (
+        <p>
+          Начало: день {v.initialCampaignTimeOrNull.dayNumber},{' '}
+          {String(v.initialCampaignTimeOrNull.hour).padStart(2, '0')}:
+          {String(v.initialCampaignTimeOrNull.minute).padStart(2, '0')}. Часы после Start
+          остановлены.
+        </p>
+      )}
+      {p.pendingCommandIdOrNull === null ? null : (
+        <p role="status">Ожидается подтверждение команды готовности от мастера.</p>
+      )}
+      {p.technicalSessionAvailable ? null : (
+        <p role="status">Связь с мастером потеряна. Готовность изменить нельзя.</p>
       )}
     </section>
   );

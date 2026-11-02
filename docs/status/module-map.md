@@ -3,6 +3,28 @@
 Честная карта: где готовый код, который трогать не надо, а где дыра.
 Обновляется в каждом PR, меняющем состояние модуля.
 
+## Runtime #173 — 2026-11-02
+
+NET-006 предоставляет Ready/Unready для точного ACTIVE-набора устройства;
+blocked PROPOSED явно остаются вне сцены. NET-016 требует три введённых GM
+значения времени и Ready всех включённых устройств. Start атомарно сохраняет
+один PEACE context, receipt и checkpoint; повтор и restart сохраняют их ID
+и timestamp. Начальные часы STOPPED, DAY/NIGHT следуют источнику.
+
+CMP-007/GM-001/GRP-001 продолжают существующие GM authority, cursor и queue.
+Панель работает при нуле PC; показывает реальные группы/локации и существующий
+арт без picker. Owner-only PLY-001 выводит committed admission sheet,
+initialRuntime, действующий controller и явное отсутствие маркера/боя.
+Исторические FINAL, receipts и snapshots не переписываются.
+
+Миграция 0013 и новые события прежнего local admission journal описаны в
+[ADR 0074](../adr/0074-campaign-lobby-runtime.md). Authenticated peer transport
+и executor общие; lost Ready ACK и lost observation восстанавливаются
+раздельно, до свежего observation controls сохраняют ожидание. Возможности
+NPC / mutations групп и карты относятся к #187 и последующим срезам.
+Pause/resume, безопасные настройки и disconnect относятся к следующей #174.
+Окончательные SHA, независимое ревью, clean-copy прогон и CI фиксируются в PR.
+
 ## Source #206 — 2026-11-02
 
 Atlas 1.8 поставляет принятые Ready/Unready, явный ввод начального времени,

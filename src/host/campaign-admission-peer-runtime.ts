@@ -1,3 +1,8 @@
+import { commitCampaignLobbyCommand } from '../persistence/campaign-lobby.js';
+import {
+  campaignLobbyOwnerObservationValue,
+  type CampaignLobbyOwnerObservation,
+} from '@shared/campaign-lobby-presentation.js';
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
@@ -166,7 +171,15 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
         principal.peerIdentity.ownerDeviceId
     )
       return fail('FOREIGN_OWNER');
-    return { principal, campaign, scope, rules, current, groups: delivery?.groups ?? [] };
+    return {
+      principal,
+      campaign,
+      scope,
+      rules,
+      current,
+      groups: delivery?.groups ?? [],
+      lobbyOrNull: delivery?.lobbyOrNull ?? null,
+    };
   }
   function leaseAt(connection: C, command: AdmissionPeerCommand) {
     const scope = { kind: 'SESSION' as const, id: command.technicalSessionId };
@@ -204,30 +217,40 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
   }
   function begin(
     connection: C,
-    command: Extract<AdmissionPeerCommand, { operation: 'ADMISSION_PUBLICATION_BEGIN' }>,
+    command: Extract<
+      AdmissionPeerCommand,
+      { operation: 'ADMISSION_PUBLICATION_BEGIN' | 'ADMISSION_LOBBY_BEGIN' }
+    >,
   ): AdmissionPeerResponse {
     const state = authoritative(connection, command),
       lease = leaseAt(connection, command);
     close(connection);
     const gm = state.current?.gmDecisionOrNull;
-    if (gm === undefined || gm === null)
+    if (command.operation === 'ADMISSION_LOBBY_BEGIN' && (gm === undefined || gm === null))
+      return fail('UNAVAILABLE');
+    if (command.operation === 'ADMISSION_PUBLICATION_BEGIN' && (gm === undefined || gm === null))
       return {
         schemaVersion: 1,
         operation: command.operation,
         ...scopeOf(command),
         outcome: 'NOT_READY',
       };
-    const body = {
-      schemaVersion: 1 as const,
-      gmDecision: admissionGmDecisionNotice(gm.receipt),
-      proposalOrNull: gm.proposalOrNull,
-      groupLabels: admissionSelectedGroupLabels(
-        gm.proposalOrNull?.fullCampaignCopyDiffs ?? [],
-        state.groups,
-      ),
-    };
+    const body =
+      command.operation === 'ADMISSION_LOBBY_BEGIN'
+        ? ownerLobby(state, command.admittedTabId)
+        : {
+            schemaVersion: 1 as const,
+            gmDecision: admissionGmDecisionNotice(gm!.receipt),
+            proposalOrNull: gm!.proposalOrNull,
+            groupLabels: admissionSelectedGroupLabels(
+              gm!.proposalOrNull?.fullCampaignCopyDiffs ?? [],
+              state.groups,
+            ),
+          };
     const publicationChecksum = postSaveSha256(canonicalPostSaveJson(body));
-    const text = canonicalPostSaveJson({ ...body, publicationChecksum }),
+    const text = canonicalPostSaveJson(
+        command.operation === 'ADMISSION_LOBBY_BEGIN' ? body : { ...body, publicationChecksum },
+      ),
       byteLength = Buffer.byteLength(text, 'utf8');
     if (byteLength > d.limits.maxPublicationBytes) return fail('TRANSFER_LIMIT');
     const transferId = randomUUID(),
@@ -404,9 +427,130 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
       return fail('UNAVAILABLE');
     return response;
   }
+  function ownerLobby(
+    state: ReturnType<typeof authoritative>,
+    tabId: string,
+  ): CampaignLobbyOwnerObservation {
+    // authoritative() proved the complete fold synchronously; no await or write separates it.
+    const lobby = state.lobbyOrNull ?? fail('UNAVAILABLE');
+    const accepted = state.current?.playerDecisionOrNull;
+    if (accepted?.request.decision !== 'ACCEPT') return fail('UNAVAILABLE');
+    const device = state.principal.peerIdentity.ownerDeviceId;
+    const selected = lobby.copies.find(
+      (copy) =>
+        copy.controller.deviceId === device &&
+        copy.controller.localControllerSeatId === tabId &&
+        copy.admissionBatchId === state.current!.review.current.admissionBatchId,
+    );
+    if (selected === undefined) return fail('FOREIGN_OWNER');
+    const group = state.groups.find((group) => group.groupId === selected.groupId);
+    if (group === undefined) return fail('UNAVAILABLE');
+    const scene = lobby.sceneOrNull,
+      own = lobby.copies.filter((copy) => copy.controller.deviceId === device),
+      member = scene?.includedCopies.find(
+        (copy) => copy.campaignCharacterId === selected.campaignCharacterId,
+      );
+    return campaignLobbyOwnerObservationValue({
+      schemaVersion: 1,
+      campaignId: state.scope.campaignId,
+      ownerDeviceId: device,
+      campaignRevision: lobby.checkpoint.stateRevision,
+      lobbyEventRevision: lobby.eventRevision,
+      lobbySnapshotRevision: lobby.lobbySnapshotRevision,
+      readinessRevision: lobby.readinessRevision,
+      initialCampaignTimeOrNull: lobby.initialCampaignTimeOrNull,
+      campaignStarted: scene !== null,
+      ownCopies: own.map((copy) => ({
+        campaignCharacterId: copy.campaignCharacterId,
+        name: copy.name,
+        lifecycleState: copy.lifecycleState,
+        blockers: copy.blockers,
+      })),
+      includedCampaignCharacterIds: own
+        .filter((copy) => copy.lifecycleState === 'ACTIVE')
+        .map((copy) => copy.campaignCharacterId),
+      ready: lobby.readyByDevice.find((proof) => proof.deviceId === device)?.ready ?? false,
+      selectedCopy: selected,
+      groupNameOrNull: group.nameOrNull,
+      peaceOrNull:
+        scene !== null && member !== undefined
+          ? {
+              sceneId: scene.sceneId,
+              campaignTimestamp: scene.campaignTimestamp,
+              clockMode: scene.clockMode,
+              dayPhase: scene.dayPhase,
+            }
+          : null,
+    });
+  }
+  function ready(
+    connection: C,
+    command: Extract<AdmissionPeerCommand, { operation: 'ADMISSION_LOBBY_READY' }>,
+  ): AdmissionPeerResponse {
+    const state = authoritative(connection, command),
+      observed = ownerLobby(state, command.admittedTabId);
+    const lease = d.executor.recoverScope(connection.handle, {
+      kind: 'SESSION',
+      id: command.technicalSessionId,
+    });
+    let committed = false;
+    try {
+      const saved = commitCampaignLobbyCommand(
+        d.database,
+        state.scope,
+        { kind: 'PLAYER', binding: observed.selectedCopy.controller },
+        command.command,
+        {
+          receiptId: randomUUID(),
+          committedAt: new Date().toISOString(),
+          sceneIdOrNull: null,
+          checkpointIdOrNull: null,
+        },
+        d.validateOwner,
+        state.rules,
+        () => {
+          d.executor.assertCurrent(lease);
+          if (!same(d.principal(connection), state.principal)) return fail('FOREIGN_OWNER');
+        },
+      );
+      committed = true;
+      const receiptCanonicalJson = canonicalPostSaveJson(saved.receipt);
+      return bounded({
+        schemaVersion: 1,
+        operation: command.operation,
+        ...scopeOf(command),
+        outcome: 'DECIDED',
+        receiptCanonicalJson,
+        receiptSha256: postSaveSha256(receiptCanonicalJson),
+      });
+    } catch (error) {
+      if (committed) throw error;
+      d.executor.assertCurrent(lease);
+      const code =
+        error instanceof NetworkApplicationStoreError &&
+        ['IDEMPOTENCY_CONFLICT', 'STALE_REVISION', 'FOREIGN_OWNER', 'INVALID_INPUT'].includes(
+          error.code,
+        )
+          ? (error.code as AdmissionPeerRefusal)
+          : 'UNAVAILABLE';
+      return bounded({
+        schemaVersion: 1,
+        operation: command.operation,
+        ...scopeOf(command),
+        outcome: 'READY_REFUSED',
+        code,
+        semanticBodySha256: postSaveSha256(canonicalPostSaveJson(command.command)),
+        generation: lease.generation,
+        fenced: true,
+      });
+    }
+  }
   function execute(connection: C, command: AdmissionPeerCommand): AdmissionPeerResponse {
     try {
       switch (command.operation) {
+        case 'ADMISSION_LOBBY_READY':
+          return bounded(ready(connection, command));
+        case 'ADMISSION_LOBBY_BEGIN':
         case 'ADMISSION_PUBLICATION_BEGIN':
           return bounded(begin(connection, command));
         case 'ADMISSION_PUBLICATION_CHUNK':

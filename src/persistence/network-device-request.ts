@@ -261,7 +261,7 @@ function legacyReceipt(record: Omit<HostedNetworkCommand, 'current'>): LegacyReq
 function reviewSchema(db: Database.Database): void {
   s.schema(db);
   const r = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (r['version'] !== 11 && r['version'] !== 12) return s.fail();
+  if (r['version'] !== 11 && r['version'] !== 12 && r['version'] !== 13) return s.fail();
 }
 function rawDecision(
   db: Database.Database,
@@ -1501,6 +1501,7 @@ export function commitHostedNetworkCommand(
           s.owner(db, p.hostOwnerDeviceId);
           return known;
         }
+        if (campaign.status !== 'PAUSED' && i.operation !== 'CANCEL') return s.fail('UNAVAILABLE');
         s.assertUnused(db, i.commandId);
         s.assertUnused(db, i.receiptId);
         let current: HostedTechnicalSession | HostedDeviceRequest;
@@ -1538,7 +1539,10 @@ export function commitHostedNetworkCommand(
             const schemaVersion = (
               db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
             )['version'];
-            if ((schemaVersion === 11 || schemaVersion === 12) && i.batch.schemaVersion !== 2)
+            if (
+              (schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13) &&
+              i.batch.schemaVersion !== 2
+            )
               return s.fail('INVALID_INPUT');
             if (sessionOrNull.connectionRevision !== i.expectedConnectionRevision)
               return s.fail('STALE_REVISION');
@@ -1552,7 +1556,7 @@ export function commitHostedNetworkCommand(
               return s.fail('INVALID_INPUT');
             let occupied = campaign.activePcCount;
             const released = new Set<string>();
-            if (schemaVersion === 12) {
+            if (schemaVersion === 12 || schemaVersion === 13) {
               if (admissionRules === undefined) assertNoCampaignAdmissionEvidence(db);
               else {
                 const origin = readHostedCampaignCreationOrigin(
@@ -1596,7 +1600,7 @@ export function commitHostedNetworkCommand(
             );
             if (
               currentRequests.some((r) =>
-                schemaVersion === 11 || schemaVersion === 12
+                schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13
                   ? !released.has(r.requestId) &&
                     ['PENDING', 'IN_REVIEW'].includes(
                       readCurrentRequest(db, p, r.requestId).requestStatus,
@@ -1773,7 +1777,7 @@ export function readHostedPausedCampaignIds(
         const root = s.at(db, 'campaign', 'campaign_id', id) ?? s.fail();
         const lifecycle = root['lifecycle_state'];
         if (!V1_LIFECYCLE_STATES.campaign.some((state) => state === lifecycle)) return s.fail();
-        if (lifecycle === 'PAUSED') {
+        if (lifecycle === 'PAUSED' || lifecycle === 'HOSTING') {
           readHostedCurrentPausedCampaign(db, id, validatePrivateOwner);
           result.push(id);
         } else loadCampaignCheckpoint(db, id);

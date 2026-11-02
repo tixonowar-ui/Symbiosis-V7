@@ -41,7 +41,7 @@ export interface NetworkDiscoveredHost extends JsonObject {
   readonly campaignId: string;
   readonly title: string;
   readonly locator: NetworkHostLocator;
-  readonly campaignStatus: 'PAUSED';
+  readonly campaignStatus: 'PAUSED' | 'HOSTING';
   readonly activePlayerCapacity: 1 | 2 | 3 | 4 | 5;
   readonly activePcCount: number;
   readonly compatibility: 'COMPATIBLE' | 'INCOMPATIBLE';
@@ -84,7 +84,7 @@ export interface Net002Projection extends NetworkReadCommon {
 export interface Net003Projection extends NetworkReadCommon {
   readonly ownRequestIdOrNull: string | null;
   readonly campaignId: string;
-  readonly campaignStatus: 'PAUSED';
+  readonly campaignStatus: 'PAUSED' | 'HOSTING';
   readonly sessionId: string;
   readonly connectionRevision: number;
   readonly eligibleFinalCandidates: readonly PublicFinalCandidateSummary[];
@@ -96,6 +96,7 @@ export interface NetworkSnapshotChecksum extends JsonObject {
   readonly candidateSnapshotChecksum: string;
 }
 export interface Net004Projection extends NetworkReadCommon {
+  readonly campaignStatus: 'PAUSED' | 'HOSTING';
   readonly sessionId: string;
   readonly requestId: string;
   readonly selectedLocalCharacterUuids: readonly string[];

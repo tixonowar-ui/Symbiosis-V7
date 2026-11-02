@@ -1,3 +1,5 @@
+import { campaignLobbyOwnerObservationValue } from '@shared/campaign-lobby-presentation.js';
+import type { CampaignReadyCommand } from '@shared/campaign-lobby.js';
 import type Database from 'better-sqlite3';
 import type {
   LocalNetworkScope,
@@ -324,7 +326,7 @@ export function createLocalNetworkPeer(d: {
         ? saved.value
         : null;
     },
-    async fetchAdmission(scope: LocalNetworkScope) {
+    async fetchAdmission(scope: LocalNetworkScope, admittedTabIdOrNull: string | null = null) {
       if (
         downloading.has(scope.networkScopeId) ||
         downloading.size >= d.config.transfer.maxActiveTransfers
@@ -349,7 +351,9 @@ export function createLocalNetworkPeer(d: {
         };
         const manifest = await admissionCall(scope, {
           schemaVersion: 1,
-          operation: 'ADMISSION_PUBLICATION_BEGIN',
+          ...(admittedTabIdOrNull === null
+            ? { operation: 'ADMISSION_PUBLICATION_BEGIN' as const }
+            : { operation: 'ADMISSION_LOBBY_BEGIN' as const, admittedTabId: admittedTabIdOrNull }),
           ...binding,
         });
         if (manifest.outcome === 'REFUSED' || manifest.outcome === 'NOT_READY') return manifest;
@@ -388,6 +392,19 @@ export function createLocalNetworkPeer(d: {
           if (postSaveSha256(bytes) !== manifest.bodySha256) return fail('UNCONFIRMED_OUTCOME');
           const text = bytes.toString('utf8');
           if (!Buffer.from(text, 'utf8').equals(bytes)) return fail('UNCONFIRMED_OUTCOME');
+          if (admittedTabIdOrNull !== null) {
+            const observation = campaignLobbyOwnerObservationValue(JSON.parse(text));
+            if (
+              canonicalPostSaveJson(observation) !== text ||
+              manifest.publicationChecksum !== manifest.bodySha256 ||
+              observation.campaignId !== channel.campaign.campaignId ||
+              observation.ownerDeviceId !== scope.ownerDeviceId ||
+              observation.selectedCopy.controller.localControllerSeatId !== admittedTabIdOrNull ||
+              live(scope) !== channel
+            )
+              return fail('UNCONFIRMED_OUTCOME');
+            return { outcome: 'LOBBY' as const, observation, hostIdentity: channel.hostIdentity };
+          }
           const publication = validateAdmissionOwnerPublication(JSON.parse(text) as unknown);
           if (
             canonicalPostSaveJson(publication) !== text ||
@@ -414,6 +431,38 @@ export function createLocalNetworkPeer(d: {
       } finally {
         downloading.delete(scope.networkScopeId);
       }
+    },
+    async deliverLobbyReady(
+      scope: LocalNetworkScope,
+      requestId: string,
+      admittedTabId: string,
+      command: CampaignReadyCommand,
+    ) {
+      const saved = readLocalAdmission(d.database, scope, requestId),
+        channel = live(scope);
+      if (
+        saved?.receiptOrNull?.decision !== 'ACCEPT' ||
+        canonicalPostSaveJson(saved.record.hostIdentity) !==
+          canonicalPostSaveJson(channel.hostIdentity) ||
+        command.campaignId !== channel.campaign.campaignId ||
+        !saved.receiptOrNull.controllerProofOrNull?.controllerBindings.some(
+          (binding) =>
+            binding.localControllerSeatId === admittedTabId &&
+            binding.deviceId === scope.ownerDeviceId,
+        )
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+      const response = await admissionCall(scope, {
+        schemaVersion: 1,
+        operation: 'ADMISSION_LOBBY_READY',
+        requestId,
+        technicalSessionId: saved.record.technicalSessionId,
+        submitCommandId: saved.record.submitCommandId,
+        admittedTabId,
+        command,
+      });
+      if (live(scope) !== channel) return fail('UNCONFIRMED_OUTCOME');
+      return { response, hostIdentity: channel.hostIdentity };
     },
     async deliverAdmissionDecision(scope: LocalNetworkScope, requestId: string, recovery: boolean) {
       const saved = readLocalAdmission(d.database, scope, requestId),

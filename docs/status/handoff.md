@@ -1,4 +1,45 @@
-# Передача контекста — 2026-11-01
+# Передача контекста — 2026-11-02
+
+## Runtime #173 — кандидат на проверку
+
+Ветка `codex/173-campaign-lobby-start` от `92c65a0`: поставка #206
+объединена через PR #207, issue #206 фактически закрыта. Проверенное дерево
+поставки и main совпали: `cfcde09d631cc133da1e8eeb8c0c03a098c88544`.
+
+Реализованы экранные Ready/Unready, пустые поля начального календаря и
+отдельное подтверждение времени, атомарный первый Start и owner-only PLY-001.
+Существующий GM context обслуживает CMP-007/NET-016/GM-001/GRP-001; группы,
+локации, механика и controllers берутся из admission journals. Нового NPC,
+group/map editing, clock advancement или боевого контекста нет. #187 продолжает
+эту оболочку. Техническая запись — [ADR 0074](../adr/0074-campaign-lobby-runtime.md).
+
+Независимое чтение и focused проверки выявили и помогли исправить потерянный
+Ready ACK/observation, lineage и selected-copy guards браузера, UUID новых
+кнопок, повторный CMP-006 после admission, проверку владельца арта и устаревший
+PAUSED после Start. Поздний PENDING CANCEL остаётся разрешён, но перед новой
+публикацией перечитывается текущий статус; fresh admission закрыт.
+
+Отказы сохранены в `reports/173-*.log` и каталогах
+`reports/173-peace-e2e-attempt-*`. В новом полном E2E путь admission дополнен
+Ready/Unready, вводом времени, Start, GRP-001 и восстановлением обеих установок;
+его собственный бюджет 180 секунд. Старые admission cases сохраняют 120 секунд,
+сетевые ожидания используют существующий transfer+RPC бюджет. Assertions,
+общие конфигурации проверок и CI не ослабляются.
+
+Первый полный авторский прогон сохранён в `reports/173-author-01`: 4647
+passed / 18 failed. Точные ожидания capabilities/CTA/миграции обновлены;
+исправлен потерянный ACCEPT ACK перед новой закрытой проекцией и доставка
+terminal пассивным вкладкам. Отдельный разбор rollback доказал изменение
+только SQLite freelist leaf pages 115/116 при неизменных 62 таблицах.
+Fixture уплотняется до fault и исходного полного byte comparison; сам
+assert сохранён, подход независимо проверен. Подтверждение —
+`reports/173-rollback-leaf-proof-*.json` и [SQLite §7.3](https://www.sqlite.org/atomiccommit.html#_do_not_journal_freelist_pages).
+
+Этот снимок не утверждает завершение gates или merge runtime. Окончательный
+committed SHA, независимое заключение с границами чтения, отдельный чистый
+`npm ci → import → verify → import:verify → test:e2e`, точный зелёный CI,
+squash tree и закрытие #173 фиксируются в PR. После #173 следующий и последний
+разрешённый срез — #174; после его merge и проверки закрытия работа останавливается.
 
 ## Source #206 — 2026-11-02
 
@@ -10,7 +51,7 @@ Start один раз, owner-only PEACE_SNAPSHOT и общие CMP-007/GM-001/GR
 
 [ADR 0073](../adr/0073-campaign-lobby-start-source.md) закрепляет source closure
 и точные B0/B1/B2→B3 пары. Новые object/Markdown seals и mutation tests
-сохраняют старые guards. Runtime #173 ещё не реализован; #174 следует после
+сохраняют старые guards. На момент source-поставки runtime #173 ещё не был реализован; #174 следует после
 его полного merge. Результаты финальных SHA/review/clean-copy gates/CI
 фиксируются в PR поставки и не выводятся из наличия этих контрактов.
 

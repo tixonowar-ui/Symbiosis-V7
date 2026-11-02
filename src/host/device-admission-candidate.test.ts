@@ -1,3 +1,7 @@
+import { readCampaignLobby, commitCampaignLobbyCommand } from '../persistence/campaign-lobby.js';
+import type { LobbyAuthority } from '../persistence/campaign-lobby-state.js';
+import type { CampaignLobbyCommand } from '@shared/campaign-lobby.js';
+import { commitGmRequestReviewNavigation } from '../persistence/network-device-request.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -2213,6 +2217,121 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         randomUUID,
         f.allow,
       ).current;
+    });
+    describe('#173 mixed ACTIVE and blocked PROPOSED device', () => {
+      const read = () => readCampaignLobby(f.db, f.scope, f.allow, f.rules);
+      const commit = (
+        request: CampaignLobbyCommand,
+        authority: LobbyAuthority = {
+          kind: 'GM',
+          ownerDeviceId: f.scope.ownerDeviceId,
+          gmLocalContextId: f.scope.gmLocalContextId,
+        },
+      ) =>
+        commitCampaignLobbyCommand(
+          f.db,
+          f.scope,
+          authority,
+          request,
+          {
+            receiptId: randomUUID(),
+            committedAt: '2026-11-02T00:00:00.000Z',
+            sceneIdOrNull:
+              request.workflowCommandId === 'UI-CMD-CAMPAIGN-START' ? randomUUID() : null,
+            checkpointIdOrNull:
+              request.workflowCommandId === 'UI-CMD-CAMPAIGN-START' ? randomUUID() : null,
+          },
+          f.allow,
+          f.rules,
+          f.allow,
+        );
+      beforeEach(() => {
+        for (const actionKey of [
+          'NET-017::CTA::009',
+          'CMP-006::CTA::001',
+          'CMP-007::CTA::001',
+        ] as const) {
+          const view = readGmRequestReviewView(f.db, f.scope, f.allow)!;
+          commitGmRequestReviewNavigation(
+            f.db,
+            f.scope,
+            {
+              messageType: 'navigation.form-action',
+              protocolVersion: 2,
+              navigationRequestId: randomUUID(),
+              sourceFormId: view.formId,
+              actionKey,
+              expectedProjectionRevision: view.projectionRevision,
+            },
+            f.allow,
+            f.allow,
+          );
+        }
+        commit({
+          workflowCommandId: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+          commandId: randomUUID(),
+          campaignId: f.scope.campaignId,
+          expectedLobbySnapshotRevision: read().lobbySnapshotRevision,
+          dayNumber: 3,
+          hour: 6,
+          minute: 0,
+        });
+      });
+      beforeEach(() => {
+        // The prepared tab for a blocked hero still acts for this authenticated device.
+        const blocked = accepted.playerDecisionOrNull!.receipt.copies[1]!;
+        expect(blocked.lifecycleState).toBe('PROPOSED');
+        const result = commit(
+          {
+            workflowCommandId: 'UI-CMD-CAMPAIGN-READY-SET',
+            commandId: randomUUID(),
+            campaignId: f.scope.campaignId,
+            expectedLobbySnapshotRevision: read().lobbySnapshotRevision,
+            ready: true,
+          },
+          { kind: 'PLAYER', binding: blocked.controllerBindingOrNull! },
+        );
+        expect(result.receipt).toMatchObject({
+          includedCampaignCharacterIds: [
+            accepted.playerDecisionOrNull!.receipt.copies[0]!.campaignCharacterId,
+          ],
+          ready: true,
+        });
+      });
+      it('starts only the ACTIVE copy while preserving both admitted controllers and the blocked lobby copy', () => {
+        const before = read(),
+          copies = accepted.playerDecisionOrNull!.receipt.copies;
+        expect(before.copies).toHaveLength(2);
+        expect(before.includedDevices).toHaveLength(1);
+        expect(before.readyByDevice).toMatchObject([
+          { ready: true, includedCampaignCharacterIds: [copies[0]!.campaignCharacterId] },
+        ]);
+        const saved = commit({
+          workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+          commandId: randomUUID(),
+          campaignId: f.scope.campaignId,
+          expectedLobbySnapshotRevision: before.lobbySnapshotRevision,
+          expectedReadinessRevision: before.readinessRevision,
+        });
+        if (saved.receipt.workflowCommandId !== 'UI-CMD-CAMPAIGN-START')
+          throw Error('Expected Start receipt');
+        expect(saved.receipt.scene.includedCopies).toEqual([
+          {
+            campaignCharacterId: copies[0]!.campaignCharacterId,
+            groupId: copies[0]!.groupIdOrNull,
+            location: copies[0]!.locationAssignmentOrNull,
+            controller: copies[0]!.controllerBindingOrNull,
+          },
+        ]);
+        const after = read();
+        expect(after.copies).toEqual(before.copies);
+        expect(
+          after.copies.find((copy) => copy.campaignCharacterId === copies[1]!.campaignCharacterId),
+        ).toMatchObject({
+          lifecycleState: 'PROPOSED',
+          controller: copies[1]!.controllerBindingOrNull,
+        });
+      });
     });
     it('selects the first actual PROPOSED copy and preserves the original whole-batch order', () => {
       expect(
@@ -5868,5 +5987,305 @@ describe('private FINAL admission candidate evidence', () => {
     expect(getter).not.toHaveBeenCalled();
     expect(JSON.stringify(receive(c))).not.toContain('payloadJson');
     expect(JSON.stringify(receive(c))).not.toContain('canonicalWitnessText');
+  });
+});
+
+describe('#173 lobby and atomic PEACE Start from committed admission', () => {
+  function lobbyFixture(approve = true, secondDevice = false) {
+    const f = playerDecisionFixture('ACCEPT', publicationStoreFixture(':memory:', { approve }));
+    const accepted = f.decide().current.playerDecisionOrNull!;
+    const second = secondDevice
+      ? playerDecisionFixture(
+          'ACCEPT',
+          publicationStoreFixture(':memory:', {
+            context: f.context,
+            source: fixtures.get('PURE/AUTO')!,
+            approve: true,
+          }),
+        ).decide().current.playerDecisionOrNull!
+      : null;
+    const binding = accepted.receipt.copies[0]!.controllerBindingOrNull!;
+    const gm = {
+      kind: 'GM' as const,
+      ownerDeviceId: f.scope.ownerDeviceId,
+      gmLocalContextId: f.scope.gmLocalContextId,
+    };
+    const player = { kind: 'PLAYER' as const, binding };
+    const read = () => readCampaignLobby(f.db, f.scope, f.allow, f.rules);
+    const navigate = (actionKey: FormActionIntentV2Message['actionKey']) => {
+      const view = readGmRequestReviewView(f.db, f.scope, f.allow)!;
+      return commitGmRequestReviewNavigation(
+        f.db,
+        f.scope,
+        {
+          messageType: 'navigation.form-action',
+          protocolVersion: 2,
+          navigationRequestId: randomUUID(),
+          sourceFormId: view.formId,
+          actionKey,
+          expectedProjectionRevision: view.projectionRevision,
+        },
+        f.allow,
+        f.allow,
+      );
+    };
+    navigate('NET-017::CTA::009');
+    navigate('CMP-006::CTA::001');
+    navigate('CMP-007::CTA::001');
+    const commit = (
+      request: CampaignLobbyCommand,
+      authority: LobbyAuthority = gm,
+      guard = f.allow,
+    ) =>
+      commitCampaignLobbyCommand(
+        f.db,
+        f.scope,
+        authority,
+        request,
+        {
+          receiptId: randomUUID(),
+          committedAt: '2026-11-02T00:00:00.000Z',
+          sceneIdOrNull:
+            request.workflowCommandId === 'UI-CMD-CAMPAIGN-START' ? randomUUID() : null,
+          checkpointIdOrNull:
+            request.workflowCommandId === 'UI-CMD-CAMPAIGN-START' ? randomUUID() : null,
+        },
+        f.allow,
+        f.rules,
+        guard,
+      );
+    const time = (hour = 6) =>
+      commit({
+        workflowCommandId: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+        commandId: randomUUID(),
+        campaignId: f.scope.campaignId,
+        expectedLobbySnapshotRevision: read().lobbySnapshotRevision,
+        dayNumber: 2,
+        hour,
+        minute: 0,
+      });
+    const readyRequest = (ready = true): CampaignLobbyCommand => ({
+      workflowCommandId: 'UI-CMD-CAMPAIGN-READY-SET',
+      commandId: randomUUID(),
+      campaignId: f.scope.campaignId,
+      expectedLobbySnapshotRevision: read().lobbySnapshotRevision,
+      ready,
+    });
+    const startRequest = (): CampaignLobbyCommand => {
+      const state = read();
+      return {
+        workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+        commandId: randomUUID(),
+        campaignId: f.scope.campaignId,
+        expectedLobbySnapshotRevision: state.lobbySnapshotRevision,
+        expectedReadinessRevision: state.readinessRevision,
+      };
+    };
+    return {
+      ...f,
+      accepted,
+      second,
+      binding,
+      gm,
+      player,
+      read,
+      navigate,
+      commit,
+      time,
+      readyRequest,
+      startRequest,
+    };
+  }
+  const databaseStamp = (f: ReturnType<typeof lobbyFixture>) => f.db.serialize();
+
+  describe('two independently owned ACTIVE devices', () => {
+    let f: ReturnType<typeof lobbyFixture>;
+    // This scenario admits two real FINALs through complete journals before testing Ready.
+    beforeEach(() => {
+      f = lobbyFixture(true, true);
+    }, 30000);
+    it('keeps another device Ready unchanged and starts only after both current proofs', () => {
+      f.time();
+      const snapshot = f.read().lobbySnapshotRevision;
+      const firstRequest = f.readyRequest(),
+        first = f.commit(firstRequest, f.player);
+      expect(f.read().preflight).toBe('NOT_READY');
+      const secondBinding = f.second!.receipt.copies[0]!.controllerBindingOrNull!;
+      expect(secondBinding.deviceId).not.toBe(f.binding.deviceId);
+      const secondAuthority = { kind: 'PLAYER' as const, binding: secondBinding };
+      f.commit(f.readyRequest(), secondAuthority);
+      expect(f.read().lobbySnapshotRevision).toBe(snapshot);
+      expect(f.read().preflight).toBe('READY_TO_START');
+      expect(f.read().readyByDevice.find((p) => p.deviceId === f.binding.deviceId)).toMatchObject({
+        ready: true,
+        includedCampaignCharacterIds: [f.binding.campaignCharacterId],
+      });
+      f.commit(f.readyRequest(false), secondAuthority);
+      expect(f.read().readyByDevice.find((p) => p.deviceId === f.binding.deviceId)?.ready).toBe(
+        true,
+      );
+      expect(f.read().preflight).toBe('NOT_READY');
+      f.commit(f.readyRequest(), secondAuthority);
+      const result = f.commit(f.startRequest());
+      if (result.receipt.workflowCommandId !== 'UI-CMD-CAMPAIGN-START')
+        throw Error('Expected Start');
+      expect(result.receipt.scene.includedCopies).toHaveLength(2);
+      expect(f.commit(firstRequest, f.player).receipt).toEqual(first.receipt);
+    }, 30000);
+  });
+  describe('with a real blocked PROPOSED copy', () => {
+    let f: ReturnType<typeof lobbyFixture>;
+    beforeEach(() => {
+      f = lobbyFixture(false);
+    });
+    it('keeps blocked PROPOSED copies in the lobby and refuses Ready and Start without writes', () => {
+      f.time();
+      const before = databaseStamp(f);
+      expect(f.read().copies).toHaveLength(1);
+      expect(f.read().copies[0]!.blockers.length).toBeGreaterThan(0);
+      expect(f.read().includedCopies).toHaveLength(0);
+      expect(() => f.commit(f.readyRequest(), f.player)).toThrow();
+      expect(() => f.commit(f.startRequest())).toThrow();
+      expect(databaseStamp(f).equals(before)).toBe(true);
+    });
+  });
+  describe('with a real accepted ACTIVE copy', () => {
+    let f: ReturnType<typeof lobbyFixture>;
+    beforeEach(() => {
+      f = lobbyFixture();
+    });
+    it('requires explicit time and exact Ready before creating one stopped scene using existing assignments', () => {
+      const initial = f.read(),
+        birth = f.db.prepare('SELECT * FROM campaign_creation_command').all();
+      expect(initial.sceneOrNull).toBeNull();
+      expect(initial.initialCampaignTimeOrNull).toBeNull();
+      expect(initial.includedCopies).toHaveLength(1);
+      expect(() => f.commit(f.startRequest())).toThrow();
+      f.time();
+      expect(f.read().preflight).toBe('NOT_READY');
+      f.commit(f.readyRequest(), f.player);
+      expect(f.read().preflight).toBe('READY_TO_START');
+      const result = f.commit(f.startRequest());
+      expect(result.replayed).toBe(false);
+      const state = f.read();
+      expect(state.sceneOrNull).toMatchObject({
+        sceneContext: 'PEACE',
+        campaignTimestamp: 1800,
+        clockMode: 'STOPPED',
+        dayPhase: 'DAY',
+        includedCopies: [
+          {
+            campaignCharacterId: f.binding.campaignCharacterId,
+            groupId: f.accepted.receipt.copies[0]!.groupIdOrNull,
+            location: f.accepted.receipt.copies[0]!.locationAssignmentOrNull,
+            controller: f.binding,
+          },
+        ],
+      });
+      expect(state.checkpoint.stateRevision).toBe(initial.checkpoint.stateRevision + 1);
+      expect(readCampaignCreationCursor(f.db, f.scope.gmLocalContextId)).toMatchObject({
+        kind: 'QUEUE',
+        formId: 'GM-001',
+      });
+      expect(readHostedCurrentPausedCampaign(f.db, f.scope.campaignId, f.allow).status).toBe(
+        'HOSTING',
+      );
+      expect(f.db.prepare('SELECT * FROM campaign_creation_command').all()).toEqual(birth);
+      for (const key of [
+        'combatId',
+        'combatActor',
+        'phase',
+        'turnOrReactionWindow',
+        'markerId',
+        'markerRevision',
+        'coordinates',
+      ])
+        expect(state.sceneOrNull).not.toHaveProperty(key);
+      expect(f.db.prepare('SELECT COUNT(*) AS n FROM campaign_admission_group').get()).toEqual({
+        n: 1,
+      });
+    });
+
+    it('invalidates Ready on a changed time while an identical explicit save retains the snapshot', () => {
+      f.time();
+      f.commit(f.readyRequest(), f.player);
+      const ready = f.read();
+      f.time();
+      expect(f.read().lobbySnapshotRevision).toBe(ready.lobbySnapshotRevision);
+      expect(f.read().preflight).toBe('READY_TO_START');
+      f.time(21);
+      expect(f.read().lobbySnapshotRevision).not.toBe(ready.lobbySnapshotRevision);
+      expect(f.read().readyByDevice[0]!.ready).toBe(false);
+      expect(() =>
+        f.commit({
+          ...f.startRequest(),
+          expectedLobbySnapshotRevision: ready.lobbySnapshotRevision,
+        }),
+      ).toThrow();
+      f.commit(f.readyRequest(), f.player);
+      expect(f.commit(f.startRequest()).receipt).toMatchObject({
+        scene: { dayPhase: 'NIGHT', campaignTimestamp: 2700 },
+      });
+    });
+
+    it('replays original receipts after Start and refuses foreign, changed, stale and new post-Start intents', () => {
+      f.time();
+      const ready = f.readyRequest(),
+        readyReceipt = f.commit(ready, f.player).receipt;
+      const start = f.startRequest(),
+        startReceipt = f.commit(start).receipt;
+      const before = databaseStamp(f);
+      expect(f.commit(ready, f.player)).toEqual({ receipt: readyReceipt, replayed: true });
+      expect(f.commit(start)).toEqual({ receipt: startReceipt, replayed: true });
+      expect(() =>
+        f.commit({ ...ready, ready: false } as CampaignLobbyCommand, f.player),
+      ).toThrow();
+      expect(() =>
+        f.commit(ready, { kind: 'PLAYER', binding: { ...f.binding, deviceId: randomUUID() } }),
+      ).toThrow();
+      expect(() => f.commit(f.readyRequest(false), f.player)).toThrow();
+      expect(() => f.commit(f.startRequest())).toThrow();
+      expect(databaseStamp(f).equals(before)).toBe(true);
+      expect(f.db.prepare('SELECT COUNT(*) AS n FROM campaign_peace_scene').get()).toEqual({
+        n: 1,
+      });
+    });
+
+    it('rolls back scene, clock checkpoint, receipt and GM navigation if the final synchronous guard fails', () => {
+      f.time();
+      f.commit(f.readyRequest(), f.player);
+      const rows = () =>
+        f.db
+          .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
+          .all()
+          .map((row) => {
+            const name = (row as { name: string }).name;
+            return [name, f.db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all()];
+          });
+      const before = rows();
+      let calls = 0;
+      expect(() =>
+        f.commit(f.startRequest(), f.gm, () => {
+          if (++calls === 2) throw new Error('conflicting operation');
+        }),
+      ).toThrow();
+      expect(calls).toBe(2);
+      expect(rows()).toEqual(before);
+      expect(f.read().preflight).toBe('READY_TO_START');
+    });
+
+    it.each(['head', 'scene', 'mirror'] as const)(
+      'refuses a missing %s instead of manufacturing a replacement',
+      (part) => {
+        f.time();
+        f.commit(f.readyRequest(), f.player);
+        f.commit(f.startRequest());
+        if (part === 'head') f.db.prepare('DELETE FROM campaign_lobby_head').run();
+        if (part === 'scene') f.db.prepare('DELETE FROM campaign_peace_scene').run();
+        if (part === 'mirror')
+          f.db.prepare("DELETE FROM gm_request_queue_event WHERE kind='LOBBY_SOURCE'").run();
+        expect(() => f.read()).toThrow();
+      },
+    );
   });
 });

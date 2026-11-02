@@ -311,7 +311,7 @@ function submission(
     }
   ).version;
   const batch = withBatchHash({
-    ...(schemaVersion === 11 || schemaVersion === 12
+    ...(schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -1949,6 +1949,10 @@ describe('hosted network session and addressed request journal', () => {
         p.db.exec(
           "CREATE TRIGGER prevent_network AFTER INSERT ON hosted_device_request BEGIN SELECT RAISE(ABORT,'private'); END",
         );
+      // SQLite does not journal freelist leaf bytes (atomiccommit.html §7.3).
+      // Compact only the fixture, before the fault and byte-exact rollback snapshot.
+      p.db.exec('VACUUM');
+      expect(p.db.pragma('freelist_count', { simple: true })).toBe(0);
       const before = p.db.serialize();
       expect(() =>
         // Deliberately violate the trusted synchronous-callback contract at the JS boundary.

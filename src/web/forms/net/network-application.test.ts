@@ -114,6 +114,7 @@ const projections: Record<NetworkApplicationFormId, JsonObject> = {
     selectedLocalCharacterUuids: [source],
     snapshotChecksums: [{ localCharacterUuid: source, candidateSnapshotChecksum: CHECKSUM }],
     campaignId: CAMPAIGN,
+    campaignStatus: 'PAUSED',
     connectionRevision: 0,
     commandId: null,
     batchCharacterSummaries: [summary],
