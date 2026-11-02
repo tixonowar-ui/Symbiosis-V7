@@ -1002,15 +1002,22 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         guard(c),
       );
     }
+    const settledReceipt =
+      known === undefined ? null : ownerReadyReceipt(c, owned.admission, request.commandId);
     const verify = guard(c);
-    try {
-      await refreshOwnerLobby(c);
-    } catch {
-      /* The journal retains uncertain delivery until authenticated recovery. */
+    // A fully proved terminal is immutable; replay must not depend on another LAN roundtrip.
+    // An ACK without its matching observation remains uncertain and still needs recovery.
+    if (settledReceipt === null) {
+      try {
+        await refreshOwnerLobby(c);
+      } catch {
+        /* The journal retains uncertain delivery until authenticated recovery. */
+      }
+      verify();
+      owned = readLocalAdmissionPresentation(db, bound)!;
     }
     verify();
-    owned = readLocalAdmissionPresentation(db, bound)!;
-    const receipt = ownerReadyReceipt(c, owned.admission, request.commandId),
+    const receipt = settledReceipt ?? ownerReadyReceipt(c, owned.admission, request.commandId),
       pending = localLobbyPendingCommandId(owned.admission, owned.tab.tabId);
     const destination = snapshot(
       c,

@@ -203,6 +203,7 @@ function client(twoSources = false) {
       loseReadyResponse = false,
       holdReadyRecoveryAfterLoss = false,
       holdReadyRecovery = false,
+      blockReconnect = false,
       holdDecisionRecovery = false,
       loseLobbyObservation = false,
       loseAdmissionDelivery = false,
@@ -380,6 +381,7 @@ function client(twoSources = false) {
           },
           async reconnect(...args) {
             reconnectCount++;
+            if (blockReconnect) throw Error('Simulated offline peer');
             return peer.reconnect(...args);
           },
           async deliver(scope, out) {
@@ -512,6 +514,10 @@ function client(twoSources = false) {
       peerErrors,
       reconnectCount: () => reconnectCount,
       dropPeer: () => dropPeer(),
+      goOffline() {
+        blockReconnect = true;
+        dropPeer();
+      },
       beforeNextDeliver(value: () => void | Promise<void>) {
         beforeDeliver = value;
       },
@@ -2896,9 +2902,20 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
             await ready(true);
             expect(p.sent[0]?.messageType).toBe('command.result');
             expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(true);
-            await ready(false);
-            expect(p.sent[0]?.messageType).toBe('command.result');
+            const unready = await ready(false),
+              original = p.sent[0];
+            expect(original?.messageType).toBe('command.result');
             expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
+            p.goOffline();
+            await p.send(unready);
+            expect(p.sent[0]).toEqual({
+              ...original,
+              messageType: 'command.replay',
+              lifecycleState: 'IDEMPOTENT_REPLAY',
+            });
+            expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
+            expect(p.payload()['pendingCommandIdOrNull']).toBeNull();
+            expect(p.payload()['technicalSessionAvailable']).toBe(false);
           }, 30000);
           describe('confirmed initial time', () => {
             let source: ReturnType<

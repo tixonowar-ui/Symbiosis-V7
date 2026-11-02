@@ -35,8 +35,8 @@ Start один раз, owner-only PEACE_SNAPSHOT и общие CMP-007/GM-001/GR
 
 [ADR 0073](../adr/0073-campaign-lobby-start-source.md) закрепляет source closure
 и точные B0/B1/B2→B3 пары. Новые object/Markdown seals и mutation tests
-сохраняют старые guards. Runtime #173 ещё не реализован; #174 следует после
-его полного merge. Результаты финальных SHA/review/clean-copy gates/CI
+сохраняют старые guards. На момент source-поставки runtime #173 ещё не был
+реализован; #174 следует после его полного merge. Результаты финальных SHA/review/clean-copy gates/CI
 фиксируются в PR поставки и не выводятся из наличия этих контрактов.
 
 ## Runtime #172 — 2026-11-01
