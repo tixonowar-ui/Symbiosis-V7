@@ -831,6 +831,69 @@ describe('owner request review enrichment and delivery', () => {
 });
 
 describe('local network application/outbox aggregate', () => {
+  it('does not reuse a digest for a mutable non-string native crypto input', () => {
+    const s = networkApplicationStorage;
+    const bytes = Buffer.alloc(2048, 1);
+    s.safe(() => {
+      const before = s.sha(bytes as unknown as string);
+      bytes[0] = 2;
+      const after = s.sha(bytes as unknown as string);
+      expect(after).not.toBe(before);
+      expect(after).toBe(createHash('sha256').update(bytes).digest('hex'));
+    });
+  });
+  it('checks every own descriptor without evaluating accessors during canonicalization', () => {
+    const s = networkApplicationStorage;
+    const getter = vi.fn(() => 'untrusted');
+    const hidden = Object.defineProperty({ visible: 1 }, 'hidden', { value: 2 });
+    const symbol = { visible: 1, [Symbol('hidden')]: 2 };
+    const accessor = Object.defineProperty([1, 2], '1', { get: getter, enumerable: true });
+    const hiddenIndex = Object.defineProperty([1, 2], '1', { value: 2, enumerable: false });
+    const extended = Object.assign([1, 2], { extra: 3 });
+    for (const value of [hidden, symbol, accessor, hiddenIndex, extended])
+      expect(() => s.canonical(value)).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+    const dictionary: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+    dictionary['__proto__'] = { '2': -0, '10': ['text', true, null] };
+    // Canonical order is lexical even where JSON.stringify sorts integer-like keys numerically.
+    expect(s.canonical(dictionary)).toBe('{"__proto__":{"10":["text",true,null],"2":0}}');
+    const disguisedObject = new Proxy({ a: 1, b: 2 }, { ownKeys: () => ['b'] });
+    expect(() => s.object(disguisedObject, ['a'])).toThrow();
+    const disguisedArray = new Proxy([1], { ownKeys: () => ['length', 'extra'] });
+    expect(() => s.canonical(disguisedArray)).toThrow();
+    const reorderedArray = new Proxy([1, 2], { ownKeys: () => ['1', 'length', '0'] });
+    expect(s.canonical(reorderedArray)).toBe('[1,2]');
+    let lengthReads = 0;
+    const changingLength = new Proxy(accessor, {
+      get(target, key, receiver) {
+        if (key === 'length') return ++lengthReads === 3 ? 1 : 2;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    expect(() => s.canonical(changingLength)).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+  });
+  it('rechecks stored hashes and canonical bytes after repeated immutable digest inputs', () => {
+    const s = networkApplicationStorage;
+    const witness = 'текст "quoted" \u0000 \ud800 \n'.repeat(300);
+    const original = canonical({ a: witness, z: [witness, -0] });
+    s.safe(() => {
+      for (const value of [original, original, original + ' ', witness, witness + 'changed'])
+        expect(s.sha(value)).toBe(sha(value));
+      const row = { record_json: original, record_sha256: sha(original) };
+      expect(s.checked(row)).toEqual(JSON.parse(original));
+      s.safe(() => expect(s.checked(row)).toEqual(JSON.parse(original)));
+      row.record_sha256 = sha(original + ' ');
+      expect(() => s.checked(row)).toThrow();
+      row.record_json += ' ';
+      expect(() => s.checked(row)).toThrow();
+      row.record_json = original;
+      row.record_sha256 = sha(original);
+      expect(s.checkedEqual(row, { a: witness + 'changed', z: [witness, -0] })).toBe(false);
+      expect(s.checked(row)).toEqual(JSON.parse(original));
+    });
+    expect(s.sha(original)).toBe(sha(original));
+  });
   it('preserves canonical bytes and rejects changed object descriptors while reusing immutable strings', () => {
     const s = networkApplicationStorage;
     const witness = 'текст "quoted" \\ newline\n'.repeat(300);
