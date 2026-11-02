@@ -1794,7 +1794,7 @@ export function commitLocalLobbyEvent(
           current = presentation.admission,
           scope = current.record.scope,
           requestId = current.record.publication.gmDecision.requestId;
-        const loaded = readWithSource(db, scope, requestId) ?? s.fail();
+        // The presentation already replayed this source in the same SQL snapshot.
         if (payload.kind === 'READY_INTENT') {
           if (
             authenticatedHostOrNull !== null ||
@@ -1828,7 +1828,7 @@ export function commitLocalLobbyEvent(
         }
         if (
           payload.kind === 'READY_INTENT' &&
-          !s.same(payload.sourceRevisions, s.vectorOf(loaded.source.history.current))
+          !s.same(payload.sourceRevisions, s.vectorOf(presentation.application))
         )
           return s.fail('STALE_REVISION');
         s.guarded(db, guard, current, 'APPLY');
@@ -1839,7 +1839,7 @@ export function commitLocalLobbyEvent(
           db,
           readJournal(db, scope, requestId) ?? s.fail(),
           eventId,
-          loaded.source.history.current,
+          presentation.application,
         );
         const saved = readInTransaction(db, scope, requestId) ?? s.fail();
         s.guarded(db, guard, saved, 'APPLY');
