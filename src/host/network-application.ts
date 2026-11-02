@@ -1678,8 +1678,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           )
             diagnostic(c, 'UNCONFIRMED_OUTCOME');
         }
-      const delivery = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
-      publishTerminal(c, delivery, true, send);
+      publishTerminal(c, m.commandId, true, send);
       return;
     }
     const failed = readLocalNetworkApplicationEvent(db, scope(c), m.commandId);
@@ -1702,13 +1701,13 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       send(snapshot(c, m.commandId, 'COMMAND_DESTINATION'));
       return;
     }
-    const s = fresh(c, p.contextId, m.expectedRevisions, p.expectedDraftRevision);
+    let s = fresh(c, p.contextId, m.expectedRevisions, p.expectedDraftRevision);
     if (
       m.workflowCommandId !== 'UI-CMD-CONNECTION-OPEN' &&
       d.peer.current(s.networkScopeId) === null
     ) {
       await reconnect(c);
-      fresh(c, p.contextId, m.expectedRevisions, p.expectedDraftRevision);
+      s = fresh(c, p.contextId, m.expectedRevisions, p.expectedDraftRevision);
     }
     const base = project(c, s);
     const action =
@@ -1893,6 +1892,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         },
         m.commandId,
         wire,
+        s,
       );
     } else unavailable();
     const initial = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
@@ -1929,17 +1929,18 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       if (latest.outbox?.acknowledgementOrNull === null && latest.cancelSettlementOrNull === null)
         diagnostic(c, 'UNCONFIRMED_OUTCOME');
     }
-    const delivery = readLocalNetworkDeliverySnapshot(db, scope(c), m.commandId);
-    publishTerminal(c, delivery, false, send);
+    publishTerminal(c, m.commandId, false, send);
   }
   function publishTerminal(
     c: LocalNetworkConnection,
-    delivery: LocalNetworkDeliverySnapshot,
+    commandId: string,
     replay: boolean,
     send: (m: LocalNetworkHostMessage) => void,
   ) {
-    const out = delivery.outbox ?? unavailable();
     try {
+      // An overlay proof failure must not contradict an already durable acknowledgement.
+      const { delivery, presentation } = readLocalAdmissionDelivery(db, scope(c), commandId);
+      const out = delivery.outbox ?? unavailable();
       const messages: LocalNetworkHostMessage[] = [];
       terminal(c, out, replay, (message) => messages.push(message), delivery);
       const destination = snapshot(
@@ -1947,6 +1948,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         out.intent.commandId,
         'COMMAND_DESTINATION',
         delivery.current,
+        presentation,
       );
       for (const message of messages) send(message);
       send(destination);
@@ -2463,8 +2465,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         closed.request.closeCommandId,
       );
     }
-    const resumed = readLocalNetworkApplication(db, own);
-    const ownerView = readLocalAdmissionPresentation(db, own);
+    // Current state and owner overlay share one complete read before any recovery await.
+    const { delivery: resumedDelivery, presentation: ownerView } = readLocalAdmissionDelivery(
+      db,
+      own,
+    );
+    const resumed = resumedDelivery.current;
     if (ownerView?.admission.returnedOrNull?.mode === 'MENU') {
       const json = ownerView.admission.returnedOrNull.clientRequestJson;
       const nav = JSON.parse(json) as FormActionIntentV2Message;
@@ -3269,7 +3275,11 @@ export function createGmNetworkRuntime(d: {
         });
       })
       .deferred();
-  const lobbyPresentation = (c: CampaignConnection, source = verifiedSource(c)): GmPresentation =>
+  const lobbyPresentation = (
+    c: CampaignConnection,
+    source: GmRequestReviewSource,
+    history: ReturnType<typeof admissionDecisionStorage.readHistory>,
+  ): GmPresentation =>
     db
       .transaction(() => {
         const view = source.viewOrNull;
@@ -3277,12 +3287,7 @@ export function createGmNetworkRuntime(d: {
         return projectGmCampaignLobby({
           view,
           origin: source.creationOrigin,
-          history: admissionDecisionStorage.readHistory(
-            db,
-            source.scope,
-            validateOwner,
-            admissionService().rules,
-          ),
+          history,
           conflictingOperationPending: d.campaignNetwork.conflictingOperationPending(
             source.scope.campaignId,
           ),
@@ -3373,6 +3378,15 @@ export function createGmNetworkRuntime(d: {
     verifiedQueue(source.queue);
     return source;
   };
+  const sourceForPresentation = (c: CampaignConnection, includeHistory = true) =>
+    admissionDecisionStorage.readSourceAndHistory(db, scope(c), validateOwner, (source) => {
+      verifiedQueue(source.queue);
+      return includeHistory &&
+        source.viewOrNull !== null &&
+        isCampaignLobbyGmForm(source.viewOrNull.formId)
+        ? admissionService().rules
+        : null;
+    });
   const guard = (
     c: CampaignConnection,
     connections?: ReturnType<typeof d.campaignNetwork.requestConnectionFacts>,
@@ -3556,9 +3570,9 @@ export function createGmNetworkRuntime(d: {
   }
   const project = async (c: CampaignConnection): Promise<GmPresentation> => {
     if (inAdmission(c)) return admissionPresentation(c);
-    const source = verifiedSource(c);
+    const { source, historyOrNull } = sourceForPresentation(c);
     if (source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId))
-      return lobbyPresentation(c, source);
+      return lobbyPresentation(c, source, historyOrNull ?? unavailable());
     return source.viewOrNull?.formId === 'NET-017'
       ? queuePresentation(c, source)
       : d.campaignPresentation(c);
@@ -3612,8 +3626,9 @@ export function createGmNetworkRuntime(d: {
         revisions: message.revisions,
       });
   }
-  function connectionSource(c: CampaignConnection) {
-    let source = verifiedSource(c);
+  function connectionSource(c: CampaignConnection, includeHistory = true) {
+    let paired = sourceForPresentation(c, includeHistory);
+    let source = paired.source;
     if (source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId)) {
       const own = source.scope;
       const facts = () => ({
@@ -3645,11 +3660,13 @@ export function createGmNetworkRuntime(d: {
             exact(facts(), currentFacts);
           },
         );
-        source = verifiedSource(c);
+        paired = sourceForPresentation(c, includeHistory);
+        source = paired.source;
       }
-      return { source, facts: null };
+      return { source, facts: null, historyOrNull: paired.historyOrNull };
     }
-    if (source.viewOrNull?.formId !== 'NET-017') return { source, facts: null };
+    if (source.viewOrNull?.formId !== 'NET-017')
+      return { source, facts: null, historyOrNull: paired.historyOrNull };
     const own = source.scope,
       view = source.viewOrNull;
     const facts = d.campaignNetwork.requestConnectionFactsFromSource(source);
@@ -3669,31 +3686,32 @@ export function createGmNetworkRuntime(d: {
           exact(currentFacts, facts);
         },
       );
-      source = verifiedSource(c);
+      paired = sourceForPresentation(c, includeHistory);
+      source = paired.source;
     }
-    return { source, facts };
+    return { source, facts, historyOrNull: paired.historyOrNull };
   }
   // A publication may discover a real channel change while no browser watcher existed.
   // Seal that technical P-only event explicitly; the public project() reader stays read-only.
   function refreshConnectionPresentation(c: CampaignConnection): void {
-    connectionSource(c);
+    connectionSource(c, false);
   }
   const publication = async (c: CampaignConnection): Promise<GmPresentation> => {
-    const { source, facts } = connectionSource(c);
+    const { source, facts, historyOrNull } = connectionSource(c);
     if (inAdmission(c)) return admissionPresentation(c);
     if (source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId))
-      return lobbyPresentation(c, source);
+      return lobbyPresentation(c, source, historyOrNull ?? unavailable());
     return facts === null ? d.campaignPresentation(c) : queuePresentation(c, source, facts);
   };
   async function refresh(
     c: CampaignConnection,
     send: (m: LocalNetworkHostMessage) => void,
   ): Promise<void> {
-    const { source, facts } = connectionSource(c);
+    const { source, facts, historyOrNull } = connectionSource(c);
     const lobby = source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId);
     if (facts === null && !lobby) return;
     const p = lobby
-        ? lobbyPresentation(c, source)
+        ? lobbyPresentation(c, source, historyOrNull ?? unavailable())
         : inAdmission(c)
           ? admissionPresentation(c)
           : queuePresentation(c, source, facts ?? undefined),

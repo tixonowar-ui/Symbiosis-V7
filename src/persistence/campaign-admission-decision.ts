@@ -24,7 +24,11 @@ import {
 } from './campaign-creation.js';
 import type { FormActionIntentV2Message } from '../shared/wire-v2-protocol.js';
 import { readAppliedMigrationVersion } from './migrations/index.js';
-import { readGmRequestReviewSource, type GmRequestReviewSource } from './network-device-request.js';
+import {
+  readGmRequestReviewSource,
+  readGmRequestReviewSourceWith,
+  type GmRequestReviewSource,
+} from './network-device-request.js';
 import {
   admissionReviewStorage as working,
   type AdmissionReviewRead,
@@ -1109,6 +1113,18 @@ export function commitAdmissionGmDecision(
 
 /** Internal composition keeps every historical read in the caller's transaction. */
 export const admissionDecisionStorage = {
+  readSourceAndHistory(
+    db: Database.Database,
+    scope: GmRequestReviewScope,
+    validate: CampaignPrivateOwnerValidator,
+    rulesFor: (source: GmRequestReviewSource) => AdmissionPublicationRules | null,
+  ): { source: GmRequestReviewSource; historyOrNull: AdmissionHistory | null } {
+    const { source, observed } = readGmRequestReviewSourceWith(db, scope, validate, (current) => {
+      const rules = rulesFor(current);
+      return rules === null ? null : verifyCampaignHistory(db, current, rules);
+    });
+    return { source, historyOrNull: observed };
+  },
   readHistory(
     db: Database.Database,
     scope: GmRequestReviewScope,

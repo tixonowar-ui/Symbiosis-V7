@@ -1,3 +1,5 @@
+import type { NetworkWorkflowRequest } from '../shared/network-application.js';
+import * as localAdmissionStore from '../persistence/local-campaign-admission.js';
 import {
   campaignLobbyPlayerProjectionValue,
   campaignPeaceProjectionValue,
@@ -1038,6 +1040,47 @@ describe('local network application with durable SQLite and real Node peers', ()
     },
     30000,
   );
+  it('closes a failed committed replay proof without a false refusal and retains the original receipt', async () => {
+    const h = await host(),
+      { p } = await submittedPlayer(h);
+    const commandId = p.state().requestOrNull!.submitCommandId,
+      original = readLocalNetworkOutbox(p.db, p.scope(), commandId)!;
+    const command = JSON.parse(original.intent.clientRequestJson) as NetworkWorkflowRequest;
+    const acknowledgement = readLocalNetworkDeliverySnapshot(
+      p.db,
+      p.scope(),
+      commandId,
+    ).acknowledgementEvent!;
+    expect(original.acknowledgementOrNull?.operation).toBe('SUBMIT');
+    const read = localAdmissionStore.readLocalAdmissionDelivery;
+    const fault = vi
+      .spyOn(localAdmissionStore, 'readLocalAdmissionDelivery')
+      .mockImplementation((...args) => {
+        if (args[2] === commandId)
+          throw new Error('Simulated committed replay projection proof failure');
+        return read(...args);
+      });
+    try {
+      await expect(p.send(command)).rejects.toThrow(
+        'Network publication failed after durable acknowledgement',
+      );
+      expect(p.sent).toEqual([]);
+    } finally {
+      fault.mockRestore();
+    }
+    expect(readLocalNetworkOutbox(p.db, p.scope(), commandId)).toEqual(original);
+    await p.send(command);
+    expect(p.sent[0]).toMatchObject({
+      messageType: 'command.replay',
+      receipt: { commandId, receiptId: acknowledgement.receipt.receiptId },
+    });
+    expect(p.sent[1]).toMatchObject({
+      messageType: 'projection.snapshot',
+      presentation: { base: { formId: 'NET-005' } },
+    });
+    expect(p.sent.some((message) => message.messageType === 'command.refusal')).toBe(false);
+    expect(readLocalNetworkOutbox(p.db, p.scope(), commandId)).toEqual(original);
+  }, 30000);
   it('does not transfer a published owner subscription into a failed resume context', async () => {
     const h = await host(),
       { p } = await submittedPlayer(h),

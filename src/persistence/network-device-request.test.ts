@@ -37,6 +37,8 @@ import {
   readHostedPausedCampaignIds,
   readHostedDeviceRequestCurrent,
   readGmDeviceRequestQueue,
+  readGmRequestReviewSource,
+  readGmRequestReviewSourceWith,
   readGmRequestReviewView,
   commitGmRequestReviewNavigation,
   commitGmRequestReviewDraft,
@@ -509,6 +511,60 @@ function reviewStoreSetup(filename = ':memory:') {
   });
   return { p, submitted, input, seed };
 }
+
+describe('synchronous GM source composition', () => {
+  it('observes the complete verified source in its read transaction without writes', () => {
+    const p = setup(),
+      scope = gmScope(p),
+      expected = readGmRequestReviewSource(p.db, scope, allow);
+    const before = p.db.serialize();
+    const result = readGmRequestReviewSourceWith(p.db, scope, allow, (source) => {
+      expect(p.db.inTransaction).toBe(true);
+      expect(source).toEqual(expected);
+      return source.queue.requests.length;
+    });
+    expect(result).toEqual({ source: expected, observed: expected.queue.requests.length });
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it.each(['DML', 'DDL', 'PRAGMA', 'PROMISE'] as const)(
+    'refuses and rolls back a %s observer',
+    (kind) => {
+      const p = setup(),
+        before = p.db.serialize();
+      expect(() =>
+        readGmRequestReviewSourceWith(p.db, gmScope(p), allow, () => {
+          if (kind === 'DML') p.db.exec('UPDATE campaign SET lifecycle_state=lifecycle_state');
+          else if (kind === 'DDL') p.db.exec('CREATE TABLE forbidden_observer_write(id INTEGER)');
+          else if (kind === 'PRAGMA') p.db.pragma('user_version=73');
+          else return Promise.resolve('not synchronous');
+          return null;
+        }),
+      ).toThrow(/SOURCE_CHANGED/);
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
+  it('refuses foreign or corrupted source before invoking its observer', () => {
+    const p = setup(),
+      observe = vi.fn(() => null),
+      scope = gmScope(p);
+    const before = p.db.serialize();
+    expect(() =>
+      readGmRequestReviewSourceWith(
+        p.db,
+        { ...scope, ownerDeviceId: randomUUID() },
+        allow,
+        observe,
+      ),
+    ).toThrow();
+    expect(observe).not.toHaveBeenCalled();
+    expect(p.db.serialize().equals(before)).toBe(true);
+    p.db.prepare('UPDATE campaign SET payload_json=?').run('{}');
+    const corrupt = p.db.serialize();
+    expect(() => readGmRequestReviewSourceWith(p.db, scope, allow, observe)).toThrow();
+    expect(observe).not.toHaveBeenCalled();
+    expect(p.db.serialize().equals(corrupt)).toBe(true);
+  });
+});
 
 describe('NET-018 durable admission working copies', () => {
   it('detaches OPEN and EDIT request identities before callbacks while retaining exact-replay metadata semantics', () => {

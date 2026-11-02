@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { types } from 'node:util';
 import type { CommandReceipt, WorkflowCommandRequestMessage } from '@shared/wire-protocol.js';
 import type { FormActionIntentV2Message } from '@shared/wire-v2-protocol.js';
 import type {
@@ -610,6 +611,35 @@ export function readGmRequestReviewSource(
   validate: CampaignPrivateOwnerValidator,
 ): GmRequestReviewSource {
   return s.read(db, scope.ownerDeviceId, () => gmSource(db, scope, validate));
+}
+/** Compose dependent reads while the fully verified source still owns the same SQL snapshot. */
+export function readGmRequestReviewSourceWith<T>(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  validate: CampaignPrivateOwnerValidator,
+  observe: (source: GmRequestReviewSource) => T,
+): { source: GmRequestReviewSource; observed: T } {
+  return s.read(db, scope.ownerDeviceId, () => {
+    const source = gmSource(db, scope, validate);
+    const stamp = () =>
+      [
+        s.changes(db),
+        db.pragma('schema_version', { simple: true }),
+        db.pragma('user_version', { simple: true }),
+      ].join('/');
+    const before = stamp(),
+      observed = observe(source);
+    if (types.isPromise(observed)) {
+      void Promise.prototype.then.call(
+        observed,
+        () => undefined,
+        () => undefined,
+      );
+      return s.fail('SOURCE_CHANGED');
+    }
+    if (!db.inTransaction || stamp() !== before) return s.fail('SOURCE_CHANGED');
+    return { source, observed };
+  });
 }
 export function readGmDeviceRequestQueue(
   db: Database.Database,
