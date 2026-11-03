@@ -1,3 +1,7 @@
+import { readHostedCampaignCreationOrigin } from '../persistence/campaign-creation.js';
+import { commitCampaignLifecycleCommand } from '../persistence/campaign-lifecycle.js';
+import { campaignLifecycleReplayRules } from './campaign-admission-service.js';
+import type { StoredCampaignLifecycleCommand } from '../shared/campaign-lifecycle.js';
 import { readCampaignLobby, commitCampaignLobbyCommand } from '../persistence/campaign-lobby.js';
 import type { LobbyAuthority } from '../persistence/campaign-lobby-state.js';
 import type { CampaignLobbyCommand } from '@shared/campaign-lobby.js';
@@ -580,6 +584,7 @@ function publicationStoreFixture(
     return selected;
   };
   const rules: AdmissionPublicationRules = {
+    lifecycle: campaignLifecycleReplayRules,
     verifyInitial: (request, state) => {
       const selected = forRequest(request.submittedRequest.requestId);
       expect(request.submittedRequest.batch.candidates).toEqual(selected.map((s) => s.candidate));
@@ -6097,6 +6102,249 @@ describe('#173 lobby and atomic PEACE Start from committed admission', () => {
     };
   }
   const databaseStamp = (f: ReturnType<typeof lobbyFixture>) => f.db.serialize();
+  describe('#174 lifecycle continuation', () => {
+    let f: ReturnType<typeof lobbyFixture>;
+    beforeEach(() => {
+      f = lobbyFixture();
+    });
+    it.each(['write', 'schema', 'mutate-input', 'promise'] as const)(
+      'rolls back a lifecycle validator that attempts %s',
+      (mode) => {
+        f.navigate('NET-016::CTA::001');
+        f.navigate('CMP-007::CTA::003');
+        const creation = readHostedCampaignCreationOrigin(f.db, f.scope.campaignId, f.allow);
+        const request: StoredCampaignLifecycleCommand = {
+          workflowCommandId: 'UI-CMD-CAMPAIGN-SETTINGS-SET',
+          commandId: randomUUID(),
+          campaignId: f.scope.campaignId,
+          expectedSettingsRevision: 0,
+          title: 'Guarded settings',
+          descriptionOrNull: null,
+          defaultFutureRollMode: 'MANUAL',
+          network: {
+            hostAddress: creation.payload.host.hostAddress,
+            hostPort: creation.payload.host.hostPort,
+            networkInterface: creation.payload.host.networkInterface,
+          },
+        };
+        // SQLite does not journal freelist leaf bytes. Remove recycled pages in this
+        // DDL-rollback fixture so the existing full-file equality assertion remains exact.
+        // https://www.sqlite.org/atomiccommit.html#_do_not_journal_freelist_pages
+        if (mode === 'schema') {
+          f.db.exec('VACUUM');
+          expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
+        }
+        const before = databaseStamp(f);
+        const lifecycle = {
+          ...campaignLifecycleReplayRules,
+          validateSettings: (settings: { readonly title: string }) => {
+            if (mode === 'write')
+              f.db
+                .prepare('UPDATE campaign SET payload_json=payload_json WHERE campaign_id=?')
+                .run(f.scope.campaignId);
+            if (mode === 'schema')
+              f.db.exec('CREATE TABLE forbidden_lifecycle_callback(value TEXT)');
+            if (mode === 'mutate-input') Object.assign(settings, { title: 'tampered by callback' });
+            if (mode === 'promise') return Promise.resolve();
+            return undefined;
+          },
+        };
+        expect(() =>
+          commitCampaignLifecycleCommand(
+            f.db,
+            f.scope,
+            request,
+            {
+              receiptId: randomUUID(),
+              checkpointId: randomUUID(),
+              committedAt: '2026-11-02T13:00:00.000Z',
+            },
+            null,
+            f.allow,
+            { ...f.rules, lifecycle },
+            f.allow,
+          ),
+        ).toThrow();
+        expect(databaseStamp(f).equals(before)).toBe(true);
+      },
+    );
+    it.each(['READ', 'REPLAY'] as const)(
+      'rejects writes from historical validators during %s',
+      (mode) => {
+        f.navigate('NET-016::CTA::001');
+        f.navigate('CMP-007::CTA::003');
+        const creation = readHostedCampaignCreationOrigin(f.db, f.scope.campaignId, f.allow);
+        const request: StoredCampaignLifecycleCommand = {
+          workflowCommandId: 'UI-CMD-CAMPAIGN-SETTINGS-SET',
+          commandId: randomUUID(),
+          campaignId: f.scope.campaignId,
+          expectedSettingsRevision: 0,
+          title: 'Committed settings',
+          descriptionOrNull: null,
+          defaultFutureRollMode: 'AUTO',
+          network: {
+            hostAddress: creation.payload.host.hostAddress,
+            hostPort: creation.payload.host.hostPort,
+            networkInterface: creation.payload.host.networkInterface,
+          },
+        };
+        const ids = {
+          receiptId: randomUUID(),
+          checkpointId: randomUUID(),
+          committedAt: '2026-11-02T13:00:00.000Z',
+        };
+        commitCampaignLifecycleCommand(
+          f.db,
+          f.scope,
+          request,
+          ids,
+          null,
+          f.allow,
+          f.rules,
+          f.allow,
+        );
+        const before = databaseStamp(f);
+        const rules = {
+          ...f.rules,
+          lifecycle: {
+            ...campaignLifecycleReplayRules,
+            validateSettings: () => {
+              f.db
+                .prepare('UPDATE campaign SET payload_json=payload_json WHERE campaign_id=?')
+                .run(f.scope.campaignId);
+            },
+          },
+        };
+        expect(() =>
+          mode === 'READ'
+            ? readCampaignLobby(f.db, f.scope, f.allow, rules)
+            : commitCampaignLifecycleCommand(
+                f.db,
+                f.scope,
+                request,
+                ids,
+                null,
+                f.allow,
+                rules,
+                f.allow,
+              ),
+        ).toThrow();
+        expect(databaseStamp(f).equals(before)).toBe(true);
+      },
+    );
+    it('keeps pre-Start settings, original Ready receipts and one scene through Pause/Resume', () => {
+      const clients = new Map<string, string>();
+      const apply = (request: StoredCampaignLifecycleCommand) => {
+        let client = clients.get(request.commandId);
+        if (client === undefined) {
+          const view = readGmRequestReviewView(f.db, f.scope, f.allow)!;
+          const { commandId, workflowCommandId, ...payload } = request;
+          client = canonicalPostSaveJson({
+            contextId: f.scope.gmLocalContextId,
+            request: {
+              messageType: 'command.request',
+              protocolVersion: 1,
+              role: 'gm',
+              commandKind: 'workflow-command',
+              commandId,
+              workflowCommandId,
+              payload,
+              expectedRevisions: {
+                stateRevision: view.stateRevision,
+                projectionRevision: view.projectionRevision,
+                actorVisibilityRevision: view.actorVisibilityRevision,
+              },
+            },
+          });
+          clients.set(request.commandId, client);
+        }
+        return commitCampaignLifecycleCommand(
+          f.db,
+          f.scope,
+          request,
+          {
+            receiptId: randomUUID(),
+            checkpointId: randomUUID(),
+            committedAt: '2026-11-02T13:00:00.000Z',
+          },
+          null,
+          f.allow,
+          f.rules,
+          f.allow,
+          client,
+        );
+      };
+      const creation = readHostedCampaignCreationOrigin(f.db, f.scope.campaignId, f.allow);
+      f.time();
+      const readyRequest = f.readyRequest();
+      const ready = f.commit(readyRequest, f.player);
+      f.navigate('NET-016::CTA::001');
+      f.navigate('CMP-007::CTA::003');
+      const settings: StoredCampaignLifecycleCommand = {
+        workflowCommandId: 'UI-CMD-CAMPAIGN-SETTINGS-SET',
+        commandId: randomUUID(),
+        campaignId: f.scope.campaignId,
+        expectedSettingsRevision: 0,
+        title: 'Настройки до Start',
+        descriptionOrNull: 'Сохранённое описание',
+        defaultFutureRollMode: 'AUTO',
+        network: {
+          hostAddress: creation.payload.host.hostAddress,
+          hostPort: creation.payload.host.hostPort,
+          networkInterface: creation.payload.host.networkInterface,
+        },
+      };
+      const saved = apply(settings);
+      expect(readHostedCurrentPausedCampaign(f.db, f.scope.campaignId, f.allow)).toMatchObject({
+        title: settings.title,
+        firstStartCompleted: false,
+      });
+      expect(readHostedCampaignCreationOrigin(f.db, f.scope.campaignId, f.allow)).toEqual(creation);
+      expect(f.read().preflight).toBe('READY_TO_START');
+      f.navigate('CMP-008::CTA::009');
+      f.navigate('CMP-007::CTA::001');
+      const startRequest = f.startRequest();
+      const started = f.commit(startRequest);
+      const scene = f.read().sceneOrNull;
+      const snapshot = loadCampaignCheckpoint(f.db, f.scope.campaignId);
+      f.navigate('GM-001::CTA::013');
+      f.navigate('CMP-007::CTA::003');
+      f.navigate('CMP-008::CTA::004');
+      const pause: StoredCampaignLifecycleCommand = {
+        workflowCommandId: 'UI-CMD-CAMPAIGN-PAUSE-SET',
+        commandId: randomUUID(),
+        campaignId: f.scope.campaignId,
+        expectedCampaignRevision: snapshot.stateRevision,
+        decision: 'PAUSE',
+        reason: 'Перерыв',
+      };
+      const paused = apply(pause);
+      expect(readHostedCurrentPausedCampaign(f.db, f.scope.campaignId, f.allow)).toMatchObject({
+        status: 'PAUSED',
+        firstStartCompleted: true,
+      });
+      expect(f.read().sceneOrNull).toEqual(scene);
+      f.navigate('CMP-007::CTA::003');
+      f.navigate('CMP-008::CTA::004');
+      apply({
+        ...pause,
+        commandId: randomUUID(),
+        expectedCampaignRevision: paused.receipt.campaignRevision,
+        decision: 'RESUME',
+        reason: 'Продолжаем',
+      });
+      expect(f.read().sceneOrNull).toEqual(scene);
+      expect(readHostedCurrentPausedCampaign(f.db, f.scope.campaignId, f.allow)).toMatchObject({
+        status: 'HOSTING',
+        firstStartCompleted: true,
+      });
+      expect(f.commit(startRequest)).toEqual({ ...started, replayed: true });
+      expect(f.commit(readyRequest, f.player)).toEqual({ ...ready, replayed: true });
+      expect(apply(settings)).toEqual({ ...saved, replayed: true });
+      expect(apply(pause)).toEqual({ ...paused, replayed: true });
+      expect(readHostedCampaignCreationOrigin(f.db, f.scope.campaignId, f.allow)).toEqual(creation);
+    });
+  });
 
   describe('two independently owned ACTIVE devices', () => {
     let f: ReturnType<typeof lobbyFixture>;

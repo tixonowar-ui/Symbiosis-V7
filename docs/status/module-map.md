@@ -1,5 +1,27 @@
 # Состояние модулей
 
+## Runtime #174 — кандидат, 2026-11-03
+
+В существующий GM context встроены CMP-008/014/015/016 и NET-023. Атомарный
+lifecycle journal сохраняет status/settings, checkpoint и receipt; exact
+replay отделён от текущего состояния. Capacity меняется до Start без вытеснения
+PC; пароль проверяется приватно и очищается из DOM перед отправкой.
+
+Технические NET-008/009/010 используют прежние admission/controller bindings,
+последний опубликованный own snapshot и отдельный durable reconnect intent.
+Новый endpoint проверяется против прежней host identity. Поздний ответ и старый
+retry receipt не снимают более поздний disconnect. NET-010 требует успешно
+опубликованный paired RECONNECT, охватывающий settlement.
+
+Сеть следующего запуска и действующий listener показаны раздельно. Clock
+остаётся STOPPED; готовые sheets, группы, FINAL и исторические snapshots
+не переписываются. Новые игровые shared mutations не добавлены.
+[ADR 0076](../adr/0076-campaign-lifecycle-runtime.md).
+
+Исходная поставка #208 объединена PR #216; runtime #174 ещё проходит приёмку.
+Окончательные независимое ревью, clean-copy пять этапов, exact-SHA CI,
+совпадение дерева main и закрытие #174/#208 фиксируются в runtime PR.
+
 ## Source #208 — 2026-11-02
 
 Atlas 1.9 закрывает принятый пробел CMP-008: команда безопасных настроек,

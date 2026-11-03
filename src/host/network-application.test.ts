@@ -1,3 +1,41 @@
+import { encodeDeviceAdmissionPeerCommand } from './device-admission-peer-commands.js';
+import { decodeDeviceAdmissionPeerResponse } from './device-admission-peer-response.js';
+import {
+  encodeCampaignLobbyCheckCommand,
+  decodeCampaignLobbyCheckResponse,
+} from './campaign-connection-peer.js';
+import * as peerChannelModule from './campaign-peer-channel.js';
+import {
+  campaignPeerStateValue,
+  type CampaignPeerControlV3Message,
+} from '@shared/campaign-lifecycle.js';
+import * as localConnectionStore from '../persistence/local-campaign-connection.js';
+import {
+  readLocalCampaignConnection,
+  observeLocalCampaignConnection,
+  prepareLocalCampaignReconnect,
+  settleLocalCampaignReconnect,
+  replaceLocalCampaignReconnectLocator,
+} from '../persistence/local-campaign-connection.js';
+import {
+  encodeCampaignConnectionPeerCommand,
+  decodeCampaignConnectionPeerResponse,
+} from './campaign-connection-peer.js';
+import {
+  encodeAdmissionCapacityCommand,
+  encodeAdmissionPeerCommand,
+  decodeAdmissionPeerResponse,
+  type AdmissionPeerResponse,
+} from './campaign-admission-peer-codec.js';
+import { campaignLifecycleGmAnchorValue } from '@shared/campaign-lifecycle.js';
+import * as campaignSecretModule from './campaign-secret.js';
+import {
+  CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+  campaignLifecycleGmProjectionValue,
+  campaignLifecycleGmRequest,
+} from '@shared/campaign-lifecycle.js';
+import { createCampaignGmScheduler } from './campaign-network-executor.js';
+import { readCampaignCreationCursor } from '../persistence/campaign-creation.js';
 import type { NetworkWorkflowRequest } from '../shared/network-application.js';
 import * as localAdmissionStore from '../persistence/local-campaign-admission.js';
 import {
@@ -220,6 +258,7 @@ function client(twoSources = false) {
     const responses: DeviceAdmissionPeerResponse[] = [];
     let reconnectCount = 0;
     let dropPeer = () => {};
+    let inspectionPeer!: ReturnType<typeof createLocalNetworkPeer>;
     const peerErrors: string[] = [];
     let beforeDeliver: (() => void | Promise<void>) | null = null;
     let afterReadyResponse: (() => void) | null = null;
@@ -296,6 +335,7 @@ function client(twoSources = false) {
     function start() {
       const catalog = player.setup.catalog;
       const peer = createLocalNetworkPeer({ database: db, baseline, config });
+      inspectionPeer = peer;
       dropPeer = () => peer.current(c.networkScopeId!)?.close();
       runtime = createLocalNetworkRuntime({
         database: db,
@@ -381,10 +421,35 @@ function client(twoSources = false) {
             hideCapacity = false;
             return response;
           },
+          async checkLobbyObservation(...args) {
+            return peer.checkLobbyObservation(...args);
+          },
+          async retryConnection(...args) {
+            return peer.retryConnection(...args);
+          },
+          async readConnection(...args) {
+            try {
+              return await peer.readConnection(...args);
+            } catch (error) {
+              peerErrors.push(
+                error instanceof Error
+                  ? (error.stack ?? error.message)
+                  : 'unknown connection error',
+              );
+              throw error;
+            }
+          },
           async reconnect(...args) {
             reconnectCount++;
             if (blockReconnect) throw Error('Simulated offline peer');
-            return peer.reconnect(...args);
+            try {
+              return await peer.reconnect(...args);
+            } catch (error) {
+              peerErrors.push(
+                error instanceof Error ? (error.stack ?? error.message) : 'unknown reconnect error',
+              );
+              throw error;
+            }
           },
           async deliver(scope, out) {
             const before = beforeDeliver;
@@ -514,6 +579,9 @@ function client(twoSources = false) {
       sent,
       responses,
       peerErrors,
+      get peerForTest() {
+        return inspectionPeer;
+      },
       reconnectCount: () => reconnectCount,
       dropPeer: () => dropPeer(),
       goOffline() {
@@ -798,7 +866,7 @@ async function submitConnectedPlayer(
         h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(commandId),
       ).toEqual(originalHostedSubmit);
       expect(h.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-        version: 13,
+        version: 14,
       });
     });
   if (loseFirstBindingAck)
@@ -2123,7 +2191,31 @@ async function host(
     header,
     principal,
     validate,
-    runtime,
+    runtime: {
+      ...runtime,
+      trackedTransferCount: ex.trackedTransferCount,
+      availableNetworkInterfaces: () => bind.interfaces(),
+      heldNetworkConfiguration: (id: string) => {
+        const live = bind.configurationForCampaign(id);
+        return live === null
+          ? null
+          : {
+              hostAddress: live.hostAddress,
+              hostPort: live.hostPort,
+              networkInterface: live.networkInterface,
+            };
+      },
+      operationCounts: (id: string, device: string | null = null) => {
+        const commands = ex.pendingCounts(id, device),
+          stagedTransferCount = ex.pendingTransferCount(id, device);
+        return {
+          ...commands,
+          stagedTransferCount,
+          pendingOperationCount:
+            commands.queuedCommandCount + commands.executingCommandCount + stagedTransferCount,
+        };
+      },
+    },
     connect,
     close,
     errors,
@@ -2136,6 +2228,27 @@ import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS } from '../shared/device-admission.js';
 import { readGmDeviceRequestQueue } from '../persistence/network-device-request.js';
 
+function lifecycleProjection(view: {
+  base: { roleFilteredPayload: JsonObject };
+  layers?: readonly { roleFilteredPayload: JsonObject }[];
+}) {
+  const { currentCampaignLifecycle, ...base } = view.base.roleFilteredPayload;
+  const marker = campaignLifecycleGmAnchorValue(currentCampaignLifecycle);
+  const p = campaignLifecycleGmProjectionValue(view.layers?.at(-1)?.roleFilteredPayload ?? base);
+  expect(marker).toMatchObject({
+    contextId: p.contextId,
+    campaignId: p.campaignId,
+    campaignRevision: p.campaignRevision,
+    settingsRevision: p.settingsRevision,
+    stateRevision: p.stateRevision,
+    projectionRevision: p.projectionRevision,
+    actorVisibilityRevision: p.actorVisibilityRevision,
+    campaignStatus: p.campaignStatus,
+    pauseReasonOrNull: p.pauseReasonOrNull,
+    firstStartCompleted: p.firstStartCompleted,
+  });
+  return p;
+}
 function gmClient(h: Awaited<ReturnType<typeof host>>) {
   const c: CampaignConnection = {
     gmLocalContextId: h.gmLocalContextId,
@@ -2143,22 +2256,26 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
     executableReview: NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
     trusted: () => h.db.open,
   };
-  let gmFrames = Promise.resolve();
-  const schedule = <T>(run: () => Promise<T>): Promise<T> => {
-    const next = gmFrames.then(run);
-    gmFrames = next.then(
-      () => {},
-      () => {},
-    );
-    return next;
-  };
+  const gmScheduler = createCampaignGmScheduler((connection) => {
+    if (!connection.trusted() || connection.gmLocalContextId === null) return null;
+    try {
+      const cursor = readCampaignCreationCursor(h.db, connection.gmLocalContextId);
+      return cursor.kind === 'CAMPAIGN' || cursor.kind === 'QUEUE' || cursor.kind === 'ADMISSION'
+        ? { gmLocalContextId: cursor.gmLocalContextId, campaignId: cursor.targetId }
+        : null;
+    } catch {
+      // Match production: the normal handler owns the closed authority refusal.
+      return null;
+    }
+  });
   const campaign = createCampaignCreationRuntime({
-    schedule,
+    gmScheduler,
     database: h.db,
     projectRoot: process.cwd(),
     baseline,
     bind: h.bind,
     requestReview: {
+      withLifecycle: (connection, view) => runtime.withLifecycle(connection, view),
       project: (connection) => runtime.project(connection),
       refreshConnectionPresentation: (connection) =>
         runtime.refreshConnectionPresentation(connection),
@@ -2166,7 +2283,7 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
     },
   });
   const runtime = createGmNetworkRuntime({
-    schedule,
+    gmScheduler,
     config,
     database: h.db,
     baseline,
@@ -2176,6 +2293,7 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
   });
   cleaners.push(() => {
     runtime.close();
+    gmScheduler.close();
     return Promise.resolve();
   });
   const sent: LocalNetworkHostMessage[] = [];
@@ -2250,7 +2368,7 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
       ),
     ).toBe(true);
   };
-  return { c, runtime, campaign, sent, scope, view, send, nav, select, resume };
+  return { c, runtime, campaign, sent, scope, view, send, nav, select, resume, gmScheduler };
 }
 
 describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] as const)(
@@ -2849,6 +2967,169 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
             expect(h.db.serialize().equals(before)).toBe(true);
           });
         if (scenario === 'ACCEPT') {
+          async function isolatedLobbyPeer() {
+            // Direct protocol assertions must not race the runtime's serialized owner poll.
+            // Recovery still uses the real authenticated channel and existing request binding.
+            p.disconnect();
+            const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+            cleaners.push(async () => peer.close());
+            const root = p.scope(),
+              request = p.state().requestOrNull!;
+            await peer.reconnect(root, p.state().addressOrQrPayload, h.campaignId);
+            const recovered = await peer.call(root, {
+              schemaVersion: 1,
+              operation: 'DEVICE_REQUEST_RECOVER',
+              requestId: request.requestId,
+              technicalSessionId: request.technicalSessionId,
+              submitCommandId: request.submitCommandId,
+            });
+            expect(recovered.outcome).toBe('ACK');
+            return peer;
+          }
+          it('checks an unchanged complete lobby digest without SQL writes or a staged transfer', async () => {
+            const observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+            const peer = await isolatedLobbyPeer();
+            const localBefore = p.db.serialize(),
+              hostBefore = h.db.serialize();
+            expect(
+              await peer.checkLobbyObservation(p.scope(), p.state().tabId, observation),
+            ).toEqual({ outcome: 'UNCHANGED' });
+            expect(p.db.serialize().equals(localBefore)).toBe(true);
+            expect(h.db.serialize().equals(hostBefore)).toBe(true);
+            expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+            expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+          });
+          describe('freshness after Ready changes only the lobby journal', () => {
+            let observation: ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby'];
+            beforeEach(async () => {
+              observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+              await ready(true);
+              expect(p.sent[0]?.messageType).toBe('command.result');
+            }, 30000);
+            it('revokes a changed CHECK publication before any chunk when its channel closes', async () => {
+              const peer = await isolatedLobbyPeer();
+              const root = p.scope(),
+                request = p.state().requestOrNull!;
+              const channel = peer.current(root.networkScopeId)!;
+              const limits = {
+                maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
+                maxChunkBytes: config.transfer.maxChunkBytes,
+              };
+              const query = {
+                schemaVersion: 1 as const,
+                operation: 'CAMPAIGN_LOBBY_CHECK' as const,
+                requestId: request.requestId,
+                technicalSessionId: request.technicalSessionId,
+                submitCommandId: request.submitCommandId,
+                admittedTabId: p.state().tabId,
+                knownObservationSha256: postSaveSha256(canonicalPostSaveJson(observation)),
+              };
+              const changed = decodeCampaignLobbyCheckResponse(
+                await channel.call(encodeCampaignLobbyCheckCommand(query)),
+                limits,
+              );
+              expect(changed.outcome).toBe('CHANGED');
+              if (changed.outcome !== 'CHANGED') throw Error('Expected changed CHECK publication');
+              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+              expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+              const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+              channel.close();
+              await peer.reconnect(
+                root,
+                parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin,
+                h.campaignId,
+              );
+              const replacement = peer.current(root.networkScopeId)!;
+              expect(replacement).not.toBe(channel);
+              const reply = decodeAdmissionPeerResponse(
+                await replacement.call(
+                  encodeAdmissionPeerCommand({
+                    schemaVersion: 1,
+                    operation: 'ADMISSION_PUBLICATION_CHUNK',
+                    requestId: query.requestId,
+                    technicalSessionId: query.technicalSessionId,
+                    submitCommandId: query.submitCommandId,
+                    transferId: changed.manifest.transferId,
+                    publicationChecksum: changed.manifest.publicationChecksum,
+                    chunkIndex: 0,
+                  }),
+                ),
+                limits,
+              );
+              expect(reply).toMatchObject({ outcome: 'REFUSED', code: 'TRANSFER_UNAVAILABLE' });
+              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+              expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
+              expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
+            });
+            it('detects the complete changed observation and rejects a foreign admitted tab', async () => {
+              const updated = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+              expect(updated.campaignRevision).toBe(observation.campaignRevision);
+              expect(updated.lobbySnapshotRevision).toBe(observation.lobbySnapshotRevision);
+              const peer = await isolatedLobbyPeer();
+              const request = p.state().requestOrNull!,
+                root = p.scope();
+              const query = {
+                schemaVersion: 1 as const,
+                operation: 'CAMPAIGN_LOBBY_CHECK' as const,
+                requestId: request.requestId,
+                technicalSessionId: request.technicalSessionId,
+                submitCommandId: request.submitCommandId,
+                admittedTabId: p.state().tabId,
+                knownObservationSha256: postSaveSha256(canonicalPostSaveJson(observation)),
+              };
+              const channel = peer.current(root.networkScopeId)!;
+              const limits = {
+                maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
+                maxChunkBytes: config.transfer.maxChunkBytes,
+              };
+              const changed = decodeCampaignLobbyCheckResponse(
+                await channel.call(encodeCampaignLobbyCheckCommand(query)),
+                limits,
+              );
+              expect(changed).toMatchObject({
+                outcome: 'CHANGED',
+                observationSha256: postSaveSha256(canonicalPostSaveJson(updated)),
+              });
+              const refused = decodeCampaignLobbyCheckResponse(
+                await channel.call(
+                  encodeCampaignLobbyCheckCommand({ ...query, admittedTabId: randomUUID() }),
+                ),
+                limits,
+              );
+              expect(refused).toMatchObject({ outcome: 'REFUSED' });
+              if (changed.outcome !== 'CHANGED') throw Error('Expected changed lobby manifest');
+              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+              expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+              const parts: Buffer[] = [];
+              for (let index = 0; index < changed.manifest.chunkCount; index++) {
+                const chunk = decodeAdmissionPeerResponse(
+                  await channel.call(
+                    encodeAdmissionPeerCommand({
+                      schemaVersion: 1,
+                      operation: 'ADMISSION_PUBLICATION_CHUNK',
+                      requestId: query.requestId,
+                      technicalSessionId: query.technicalSessionId,
+                      submitCommandId: query.submitCommandId,
+                      transferId: changed.manifest.transferId,
+                      publicationChecksum: changed.manifest.publicationChecksum,
+                      chunkIndex: index,
+                    }),
+                  ),
+                  limits,
+                );
+                expect(chunk.outcome).toBe('CHUNK');
+                if (chunk.outcome !== 'CHUNK') throw Error('Expected immutable lobby chunk');
+                parts.push(Buffer.from(chunk.bytesBase64, 'base64'));
+              }
+              const bytes = Buffer.concat(parts);
+              expect(postSaveSha256(bytes)).toBe(changed.observationSha256);
+              expect(JSON.parse(bytes.toString('utf8'))).toEqual(updated);
+              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+              await expect(
+                peer.checkLobbyObservation(root, p.state().tabId, observation),
+              ).rejects.toThrow();
+            });
+          });
           it.each(['lost ACK', 'lost observation'] as const)(
             'recovers %s through the background channel without manual reconnect',
             async (fault) => {
@@ -3008,6 +3289,179 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
               await ready(true);
               expect(p.sent[0]?.messageType).toBe('command.result');
             }, 30000);
+            describe('immutable outgoing downloads across lifecycle mutations', () => {
+              let channel: Awaited<ReturnType<typeof h.connect>>;
+              let manifest: Extract<AdmissionPeerResponse, { outcome: 'MANIFEST' }>;
+              let observation: ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby'];
+              let binding: {
+                requestId: string;
+                technicalSessionId: string;
+                submitCommandId: string;
+              };
+              const rpc = async (command: Parameters<typeof encodeAdmissionPeerCommand>[0]) =>
+                decodeAdmissionPeerResponse(
+                  await channel.call(encodeAdmissionPeerCommand(command)),
+                  {
+                    maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
+                    maxChunkBytes: config.transfer.maxChunkBytes,
+                  },
+                );
+              // The real browser polls while GM works; keep this raw test client alive too.
+              const observeStatus = async () => {
+                const response = decodeCampaignConnectionPeerResponse(
+                  await channel.call(
+                    encodeCampaignConnectionPeerCommand({
+                      schemaVersion: 1,
+                      operation: 'CAMPAIGN_CONNECTION_READ',
+                    }),
+                  ),
+                );
+                expect(response.outcome).toBe('STATUS');
+              };
+              const beginDownload = async () => {
+                const response = await rpc({
+                  schemaVersion: 1,
+                  operation: 'ADMISSION_LOBBY_BEGIN',
+                  ...binding,
+                  admittedTabId: p.state().tabId,
+                });
+                expect(response.outcome, JSON.stringify(response)).toBe('MANIFEST');
+                if (response.outcome !== 'MANIFEST') throw Error('Expected own snapshot');
+                return response;
+              };
+              const download = async (saved: typeof manifest) => {
+                const chunks: Buffer[] = [];
+                for (let chunkIndex = 0; chunkIndex < saved.chunkCount; chunkIndex++) {
+                  const response = await rpc({
+                    schemaVersion: 1,
+                    operation: 'ADMISSION_PUBLICATION_CHUNK',
+                    ...binding,
+                    transferId: saved.transferId,
+                    publicationChecksum: saved.publicationChecksum,
+                    chunkIndex,
+                  });
+                  if (response.outcome !== 'CHUNK') throw Error(JSON.stringify(response));
+                  chunks.push(Buffer.from(response.bytesBase64, 'base64'));
+                }
+                const bytes = Buffer.concat(chunks);
+                expect(bytes.length).toBe(saved.byteLength);
+                expect(postSaveSha256(bytes)).toBe(saved.bodySha256);
+                return bytes.toString('utf8');
+              };
+              beforeEach(async () => {
+                observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+                const request = p.state().requestOrNull!;
+                binding = {
+                  requestId: request.requestId,
+                  technicalSessionId: request.technicalSessionId,
+                  submitCommandId: request.submitCommandId,
+                };
+                p.disconnect();
+                channel = await h.connect(loadNetworkInstallation(p.db));
+                const recovered = decodeDeviceAdmissionPeerResponse(
+                  await channel.call(
+                    encodeDeviceAdmissionPeerCommand(
+                      {
+                        schemaVersion: 1,
+                        operation: 'DEVICE_REQUEST_RECOVER',
+                        ...binding,
+                      },
+                      {
+                        maxSubmitBodyBytes: config.transfer.maxSubmitBodyBytes,
+                        maxWitnessBytes: config.transfer.maxWitnessBytes,
+                        maxChunkBytes: config.transfer.maxChunkBytes,
+                      },
+                    ),
+                  ),
+                );
+                expect(recovered.outcome).toBe('ACK');
+                manifest = await beginDownload();
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+                expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+              }, 30000);
+              beforeEach(async () => {
+                const view = await gm.runtime.project(gm.c);
+                await gm.send({
+                  messageType: 'command.request',
+                  protocolVersion: 1,
+                  commandKind: 'workflow-command',
+                  role: 'gm',
+                  commandId: randomUUID(),
+                  workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+                  expectedRevisions: view.revisions,
+                  payload: {
+                    campaignId: h.campaignId,
+                    expectedLobbySnapshotRevision:
+                      view.base.roleFilteredPayload['lobbySnapshotRevision']!,
+                    expectedReadinessRevision: view.base.roleFilteredPayload['readinessRevision']!,
+                  },
+                });
+                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                  messageType: 'command.result',
+                });
+                await observeStatus();
+                gm.c.executableReview = [
+                  ...(gm.c.executableReview ?? []),
+                  ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+                ];
+                await gmNav('GM-001', 'GM-001::CTA::013');
+                await observeStatus();
+                await gmNav('CMP-007', 'CMP-007::CTA::003');
+                await observeStatus();
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+              }, 30000);
+              it('starts and pauses while retaining old snapshot bytes and publishes a newer current snapshot', async () => {
+                await gmNav('CMP-008', 'CMP-008::CTA::004');
+                await observeStatus();
+                const current = lifecycleProjection(await gm.runtime.project(gm.c));
+                expect(current.safeBoundary).toBe(true);
+                await gm.send(
+                  campaignLifecycleGmRequest(current, 'CMP-016::CTA::002', randomUUID(), {
+                    reason: 'Пауза во время скачивания',
+                  }),
+                );
+                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                  messageType: 'command.result',
+                });
+                await observeStatus();
+                expect(await download(manifest)).toBe(canonicalPostSaveJson(observation));
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+                const fresh = await beginDownload();
+                expect(fresh.campaignRevision).toBeGreaterThan(manifest.campaignRevision);
+                expect(fresh.bodySha256).not.toBe(manifest.bodySha256);
+                expect(JSON.parse(await download(fresh))).toMatchObject({
+                  campaignStarted: true,
+                  campaignRevision: fresh.campaignRevision,
+                });
+              });
+              it('disconnects an unfinished outgoing download, retains copies and bindings, and fences the old channel', async () => {
+                await gmNav('CMP-008', 'CMP-008::CTA::007');
+                const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                const accepted = h.db
+                  .prepare('SELECT * FROM campaign_admission_player_decision')
+                  .all();
+                const current = lifecycleProjection(await gm.runtime.project(gm.c));
+                await gm.send(
+                  campaignLifecycleGmRequest(current, 'NET-023::CTA::002', randomUUID(), {
+                    deviceId: loadNetworkInstallation(p.db).ownerDeviceId,
+                    selectedControllerSeatOrNull: null,
+                    reason: 'Отключение во время скачивания',
+                  }),
+                );
+                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                  messageType: 'command.result',
+                });
+                await expect.poll(() => channel.closed).toBe(true);
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+                expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
+                expect(
+                  h.db.prepare('SELECT * FROM campaign_admission_player_decision').all(),
+                ).toEqual(accepted);
+                await expect(download(manifest)).rejects.toThrow();
+                channel = await h.connect(loadNetworkInstallation(p.db));
+                await expect(beginDownload()).rejects.toThrow();
+              });
+            });
             describe('late pending request after Start', () => {
               let waiting: Awaited<ReturnType<typeof client>>;
               beforeEach(async () => {
@@ -3077,6 +3531,197 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                   h.db.prepare('SELECT count(*) AS n FROM campaign_peace_scene').get(),
                 ).toEqual({ n: 1 });
               }, 30000);
+            });
+            describe('#174 real started campaign', () => {
+              beforeEach(async () => {
+                const view = await gm.runtime.project(gm.c);
+                await gm.send({
+                  messageType: 'command.request',
+                  protocolVersion: 1,
+                  commandKind: 'workflow-command',
+                  role: 'gm',
+                  commandId: randomUUID(),
+                  workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+                  expectedRevisions: view.revisions,
+                  payload: {
+                    campaignId: h.campaignId,
+                    expectedLobbySnapshotRevision:
+                      view.base.roleFilteredPayload['lobbySnapshotRevision']!,
+                    expectedReadinessRevision: view.base.roleFilteredPayload['readinessRevision']!,
+                  },
+                });
+                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                  messageType: 'command.result',
+                });
+                gm.c.executableReview = [
+                  ...(gm.c.executableReview ?? []),
+                  ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+                ];
+                await gmNav('GM-001', 'GM-001::CTA::013');
+                await gmNav('CMP-007', 'CMP-007::CTA::003');
+                await gmNav('CMP-008', 'CMP-008::CTA::004');
+              });
+              describe('confirmed disconnect in PEACE', () => {
+                const watch = (): CampaignPeerControlV3Message => ({
+                  messageType: 'network.peer-control',
+                  protocolVersion: 3,
+                  requestId: randomUUID(),
+                  contextId: p.c.contextId!,
+                  networkScopeId: p.scope().networkScopeId,
+                  expectedRevisions: vector(p.state()),
+                  operation: 'WATCH',
+                  expectedConnectionRevision: null,
+                  commandIdOrNull: null,
+                  endpointOrNull: null,
+                });
+                beforeEach(async () => {
+                  let peaceArrived!: () => void, disconnected!: () => void;
+                  const peace = new Promise<void>((resolve) => {
+                    peaceArrived = resolve;
+                  });
+                  const closed = new Promise<void>((resolve) => {
+                    disconnected = resolve;
+                  });
+                  const push = p.sent.push.bind(p.sent);
+                  const publication = vi.spyOn(p.sent, 'push').mockImplementation((...messages) => {
+                    const size = push(...messages);
+                    if (
+                      messages.some(
+                        (message) =>
+                          message.messageType === 'projection.snapshot' &&
+                          message.protocolVersion === 2 &&
+                          message.presentation.base.roleFilteredPayload['projectionVariant'] ===
+                            'PEACE_SNAPSHOT',
+                      )
+                    )
+                      peaceArrived();
+                    if (
+                      messages.some(
+                        (message) =>
+                          message.messageType === 'network.peer-state' &&
+                          message.connectionState === 'DISCONNECTED' &&
+                          message.statusOrNull?.disconnectOrNull?.retryReceiptOrNull === null,
+                      )
+                    )
+                      disconnected();
+                    return size;
+                  });
+                  try {
+                    // Observe the real publication under the existing hook deadline.
+                    if (p.payload()['projectionVariant'] !== 'PEACE_SNAPSHOT') await peace;
+
+                    await p.send(watch());
+
+                    await gmNav('CMP-016', 'CMP-016::CTA::004');
+                    await gmNav('CMP-008', 'CMP-008::CTA::007');
+                    await gm.send(
+                      campaignLifecycleGmRequest(
+                        lifecycleProjection(await gm.runtime.project(gm.c)),
+                        'NET-023::CTA::002',
+                        randomUUID(),
+                        {
+                          deviceId: p.scope().ownerDeviceId,
+                          selectedControllerSeatOrNull: null,
+                          reason: 'Только подтверждённый лист до повтора',
+                        },
+                      ),
+                    );
+                    expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+
+                    await closed;
+                  } finally {
+                    publication.mockRestore();
+                  }
+                }, 30000);
+                it('keeps PEACE content unchanged and polls status without gated lobby downloads', async () => {
+                  const peer = p.peerForTest,
+                    read = peer.readConnection.bind(peer);
+                  const admission = readLocalAdmission(p.db, p.scope(), requestId),
+                    copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                  let observed!: () => void;
+                  const nextStatus = new Promise<void>((resolve) => {
+                    observed = resolve;
+                  });
+                  const reads = vi
+                    .spyOn(peer, 'readConnection')
+                    .mockImplementation(async (...args) => {
+                      const status = await read(...args);
+                      if (status.disconnectOrNull?.retryReceiptOrNull === null) observed();
+                      return status;
+                    });
+                  const checks = vi.spyOn(peer, 'checkLobbyObservation'),
+                    downloads = vi.spyOn(peer, 'fetchAdmission'),
+                    recovery = vi.spyOn(peer, 'recover');
+                  try {
+                    await nextStatus;
+                    await p.send(watch());
+                    expect(checks).not.toHaveBeenCalled();
+                    expect(downloads).not.toHaveBeenCalled();
+                    expect(recovery).not.toHaveBeenCalled();
+                    expect(readLocalAdmission(p.db, p.scope(), requestId)).toEqual(admission);
+                    expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+                      copies,
+                    );
+                    expect(
+                      h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get(),
+                    ).toEqual({ n: 0 });
+                  } finally {
+                    reads.mockRestore();
+                    checks.mockRestore();
+                    downloads.mockRestore();
+                    recovery.mockRestore();
+                  }
+                });
+              });
+              it('pauses and resumes the same PEACE scene through CMP-016 and replays Pause after Resume', async () => {
+                const view = await gm.runtime.project(gm.c),
+                  p = lifecycleProjection(view),
+                  scene = h.db.prepare('SELECT * FROM campaign_peace_scene').all(),
+                  copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                const pause = campaignLifecycleGmRequest(p, 'CMP-016::CTA::002', randomUUID(), {
+                  reason: 'Перерыв за столом',
+                });
+                await gm.send(pause);
+                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                  messageType: 'command.result',
+                });
+                const original = structuredClone(gm.sent[0]);
+                expect(h.header().status).toBe('PAUSED');
+                expect((await gm.runtime.project(gm.c)).base).toMatchObject({
+                  formId: 'CMP-007',
+                  roleFilteredPayload: { campaignStatus: 'PAUSED', panelVariant: 'STARTED_PEACE' },
+                });
+                await gmNav('CMP-007', 'CMP-007::CTA::003');
+                expect((await gm.runtime.project(gm.c)).base.availableActionKeys).not.toContain(
+                  'CMP-008::CTA::005',
+                );
+                await gmNav('CMP-008', 'CMP-008::CTA::004');
+                const paused = lifecycleProjection(await gm.runtime.project(gm.c));
+                expect(paused).toMatchObject({
+                  campaignStatus: 'PAUSED',
+                  pauseReasonOrNull: 'Перерыв за столом',
+                  clockMode: 'STOPPED',
+                });
+                await gm.send(
+                  campaignLifecycleGmRequest(paused, 'CMP-016::CTA::003', randomUUID(), {
+                    reason: 'Продолжаем сессию',
+                  }),
+                );
+                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                  messageType: 'command.result',
+                });
+                expect(h.header().status).toBe('HOSTING');
+                const after = h.db.serialize();
+                await gm.send(pause);
+                expect(gm.sent[0]).toEqual({
+                  ...original,
+                  messageType: 'command.replay',
+                  lifecycleState: 'IDEMPOTENT_REPLAY',
+                });
+                expect(h.db.serialize().equals(after)).toBe(true);
+                expect(h.db.prepare('SELECT * FROM campaign_peace_scene').all()).toEqual(scene);
+                expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
+              });
             });
             it('enters one stopped PEACE scene and resumes the same owner sheet', async () => {
               const view = await gm.runtime.project(gm.c);
@@ -3515,6 +4160,7 @@ describe('actual GM request review orchestration', () => {
       gm = gmClient(h);
       gm.c.executableReview = [
         ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+        ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
         'UI-CMD-ADMISSION-REVIEW-OPEN',
         'UI-CMD-ADMISSION-GM-ACCEPT',
         'UI-CMD-ADMISSION-GM-REJECT',
@@ -3534,8 +4180,45 @@ describe('actual GM request review orchestration', () => {
         expectedRequestQueueRevision: gm.view().requestQueueRevision,
         values: { selectedRequestIdOrNull: batch.requestId, decisionReason: '' },
       } as const;
+      const revokeAfterCommit = async (
+        message: LocalNetworkClientMessage,
+        table: 'gm_request_queue_event' | 'gm_admission_view_event',
+        id: string,
+      ) => {
+        let revoked = false;
+        const trust = vi.spyOn(gm.c, 'trusted').mockImplementation(() => {
+          if (h.db.prepare('SELECT 1 FROM ' + table + ' WHERE event_id=?').get(id) !== undefined)
+            queueMicrotask(() => {
+              revoked = true;
+            });
+          return !revoked;
+        });
+        try {
+          await expect(gm.send(message)).rejects.toThrow();
+          expect(revoked).toBe(true);
+          expect(gm.sent).toEqual([]);
+          expect(
+            h.db.prepare('SELECT COUNT(*) AS n FROM ' + table + ' WHERE event_id=?').get(id),
+          ).toEqual({ n: 1 });
+        } finally {
+          trust.mockRestore();
+        }
+      };
+      await revokeAfterCommit(selection, 'gm_request_queue_event', selection.draftUpdateId);
       await gm.send(selection);
       const selectedResult = structuredClone(gm.sent[0]!);
+      expect(selectedResult.messageType).toBe('network.gm-request-draft.result');
+      if (selectedResult.protocolVersion !== 3) throw Error('Missing GM draft result');
+      expect(encodeHostMessageV3(selectedResult, vocabulary).ok).toBe(true);
+      expect(selectedResult).toMatchObject({
+        presentation: {
+          base: {
+            roleFilteredPayload: {
+              currentCampaignLifecycle: { campaignId: h.campaignId, contextId: h.gmLocalContextId },
+            },
+          },
+        },
+      });
       await gm.send({
         messageType: 'command.request',
         protocolVersion: 1,
@@ -3617,6 +4300,7 @@ describe('actual GM request review orchestration', () => {
           weaponDraftOrNull: null,
         },
       };
+      await revokeAfterCommit(update, 'gm_admission_view_event', update.draftUpdateId);
       await gm.send(update);
       expect(gm.sent[0]).toMatchObject({ messageType: 'network.admission-draft.result' });
       const after = await gm.runtime.project(gm.c),
@@ -4080,5 +4764,1226 @@ describe('NET-016 and shared CMP-007/GM-001/GRP-001 campaign lobby', () => {
       expect(gm.sent[0]?.messageType).toBe('command.refusal');
       expect(h.db.serialize().equals(before)).toBe(true);
     });
+  });
+});
+
+describe('#174 actual GM lifecycle handlers', () => {
+  let h: Awaited<ReturnType<typeof host>>, gm: ReturnType<typeof gmClient>;
+  const current = async () => {
+    const view = await gm.runtime.project(gm.c);
+    return lifecycleProjection(view);
+  };
+  const nav = async (
+    sourceFormId: FormActionIntentV2Message['sourceFormId'],
+    actionKey: FormActionIntentV2Message['actionKey'],
+  ) => {
+    const view = await gm.campaign.project(gm.c);
+    await gm.send({
+      messageType: 'navigation.form-action',
+      protocolVersion: 2,
+      navigationRequestId: randomUUID(),
+      sourceFormId,
+      actionKey,
+      expectedProjectionRevision: view.revisions.projectionRevision,
+    });
+    expect(gm.sent[0]?.messageType, JSON.stringify(gm.sent)).toBe('projection.snapshot');
+  };
+  beforeEach(async () => {
+    h = await host();
+    gm = gmClient(h);
+    gm.c.executableReview = [
+      ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+      ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+    ];
+    await nav('CMP-006', 'CMP-006::CTA::001');
+    await nav('CMP-007', 'CMP-007::CTA::003');
+  });
+  it('keeps read-only navigation usable while a real staged transfer blocks lifecycle writes', async () => {
+    const { p, batch, submit } = await submittedPlayer(h);
+    p.disconnect();
+    const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+    try {
+      await peer.reconnect(p.scope(), p.state().addressOrQrPayload, h.campaignId);
+      expect(
+        await peer.call(p.scope(), {
+          schemaVersion: 1,
+          operation: 'DEVICE_REQUEST_RECOVER',
+          requestId: batch.requestId,
+          technicalSessionId: batch.technicalSessionId,
+          submitCommandId: submit.commandId,
+        }),
+      ).toMatchObject({ outcome: 'ACK' });
+      const body = canonicalPostSaveJson(batch);
+      const begun = await peer.call(p.scope(), {
+        schemaVersion: 1,
+        operation: 'DEVICE_REQUEST_BEGIN',
+        commandId: randomUUID(),
+        requestId: batch.requestId,
+        technicalSessionId: batch.technicalSessionId,
+        connectionRevision: batch.connectionRevision,
+        campaignCheckpointSha256: batch.campaignProof.checkpointSha256,
+        candidates: batch.candidates.map((c) => ({
+          descriptor: c.descriptor,
+          witnessSha256: c.witnessSha256,
+          witnessByteLength: c.byteLength,
+        })),
+        submitBodySha256: postSaveSha256(body),
+        submitBodyByteLength: Buffer.byteLength(body),
+      });
+      expect(begun).toMatchObject({ outcome: 'TRANSFER_READY' });
+      expect(h.runtime.operationCounts(h.campaignId).stagedTransferCount).toBe(1);
+      await nav('CMP-008', 'CMP-008::CTA::005');
+      const busy = await current();
+      expect(busy).toMatchObject({ safeBoundary: false, pendingOperationCount: 1 });
+      const refused = campaignLifecycleGmRequest(busy, 'CMP-014::CTA::002', randomUUID(), {
+        newCapacity: 2,
+      });
+      const bytes = h.db.serialize();
+      await gm.send(refused);
+      expect(gm.sent[0]).toMatchObject({ messageType: 'command.refusal' });
+      expect(h.db.serialize().equals(bytes)).toBe(true);
+      await nav('CMP-014', 'CMP-014::CTA::003');
+      await nav('CMP-008', 'CMP-008::CTA::007');
+      const devices = await current();
+      expect(devices.devices).toContainEqual(
+        expect.objectContaining({ deviceId: p.scope().ownerDeviceId, pendingOwnedCommandCount: 1 }),
+      );
+      const disconnect = campaignLifecycleGmRequest(devices, 'NET-023::CTA::002', randomUUID(), {
+        deviceId: p.scope().ownerDeviceId,
+        selectedControllerSeatOrNull: null,
+        reason: 'Still uploading',
+      });
+      const beforeDisconnect = h.db.serialize();
+      await gm.send(disconnect);
+      expect(gm.sent[0]).toMatchObject({ messageType: 'command.refusal' });
+      expect(h.db.serialize().equals(beforeDisconnect)).toBe(true);
+      peer.close();
+      await expect
+        .poll(() => h.runtime.operationCounts(h.campaignId).pendingOperationCount)
+        .toBe(0);
+    } finally {
+      peer.close();
+    }
+  });
+  it('ignores a delayed authenticated reply from the previous reconnect locator without a write', async () => {
+    const { p } = await submittedPlayer(h);
+    p.disconnect();
+    const scope = p.scope(),
+      address = parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin;
+    let received!: () => void,
+      release!: () => void,
+      delayNext = false;
+    const arrived = new Promise<void>((resolve) => {
+      received = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const connect = peerChannelModule.connectCampaignPeerChannel;
+    const spy = vi
+      .spyOn(peerChannelModule, 'connectCampaignPeerChannel')
+      .mockImplementationOnce(async (...args) => {
+        const channel = await connect(...args);
+        return {
+          ...channel,
+          get closed() {
+            return channel.closed;
+          },
+          get needsHostPin() {
+            return channel.needsHostPin;
+          },
+          confirmHostPin: channel.confirmHostPin.bind(channel),
+          close: channel.close.bind(channel),
+          async call(...input) {
+            const response = await channel.call(...input);
+            if (delayNext) {
+              delayNext = false;
+              received();
+              await gate;
+            }
+            return response;
+          },
+        };
+      });
+    const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+    try {
+      await peer.reconnect(scope, address, h.campaignId);
+      await peer.readConnection(scope, () => {});
+      const intent = {
+        commandId: randomUUID(),
+        expectedConnectionRevision: readLocalCampaignConnection(p.db, scope).revision,
+        canonicalOrigin: address,
+        disconnectCommandIdOrNull: null,
+      };
+      prepareLocalCampaignReconnect(p.db, scope, intent, () => {});
+      delayNext = true;
+      const delayed = peer
+        .readConnection(scope, () => {})
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      await arrived;
+      replaceLocalCampaignReconnectLocator(
+        p.db,
+        scope,
+        randomUUID(),
+        {
+          commandId: intent.commandId,
+          expectedConnectionRevision: readLocalCampaignConnection(p.db, scope).revision,
+          canonicalOrigin: 'http://127.0.0.1:1',
+        },
+        () => {},
+      );
+      const bytes = p.db.serialize();
+      release();
+      expect(await delayed).toBeInstanceOf(Error);
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      expect(readLocalCampaignConnection(p.db, scope).pendingOrNull?.commandId).toBe(
+        intent.commandId,
+      );
+    } finally {
+      release();
+      spy.mockRestore();
+      peer.close();
+    }
+  });
+  it('commits settings to the existing campaign, keeps the held endpoint/birth, and replays the same receipt', async () => {
+    const p = await current(),
+      birth = readHostedCampaignCreationOrigin(h.db, h.campaignId, h.validate);
+    const request = campaignLifecycleGmRequest(p, 'CMP-008::CTA::008', randomUUID(), {
+      title: 'Изменённое название',
+      descriptionOrNull: 'Настройки будущих бросков',
+      defaultFutureRollMode: 'MANUAL',
+      network: p.networkForNextLaunch,
+    });
+    await gm.send(request);
+    expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({ messageType: 'command.result' });
+    const receipt = structuredClone(gm.sent[0]);
+    expect(await current()).toMatchObject({
+      title: 'Изменённое название',
+      settingsRevision: 1,
+      campaignStatus: 'PAUSED',
+      firstStartCompleted: false,
+      defaultFutureRollMode: 'MANUAL',
+      activeListenerEndpointOrNull: p.activeListenerEndpointOrNull,
+      clockMode: null,
+    });
+    expect(readHostedCampaignCreationOrigin(h.db, h.campaignId, h.validate)).toEqual(birth);
+    const bytes = h.db.serialize();
+    await gm.send(request);
+    expect(gm.sent[0]).toEqual({
+      ...receipt,
+      messageType: 'command.replay',
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+    });
+    expect(h.db.serialize().equals(bytes)).toBe(true);
+    await nav('CMP-008', 'CMP-008::CTA::009');
+    expect((await gm.runtime.project(gm.c)).base.roleFilteredPayload).toMatchObject({
+      title: 'Изменённое название',
+      descriptionOrNull: 'Настройки будущих бросков',
+      groups: [],
+      activePeaceSceneOrNull: null,
+    });
+  });
+  describe('explicit browser peer continuation', () => {
+    let p: Awaited<ReturnType<typeof client>>;
+    const state = () => {
+      const message = p.sent.findLast((m) => m.messageType === 'network.peer-state');
+      if (message === undefined) throw Error('Missing peer state: ' + JSON.stringify(p.sent));
+      expect(encodeHostMessageV3(message, vocabulary).ok).toBe(true);
+      return campaignPeerStateValue(message);
+    };
+    const watch = (): CampaignPeerControlV3Message => ({
+      messageType: 'network.peer-control',
+      protocolVersion: 3,
+      requestId: randomUUID(),
+      contextId: p.c.contextId!,
+      networkScopeId: p.scope().networkScopeId,
+      expectedRevisions: vector(p.state()),
+      operation: 'WATCH',
+      expectedConnectionRevision: null,
+      commandIdOrNull: null,
+      endpointOrNull: null,
+    });
+    beforeEach(async () => {
+      ({ p } = await submittedPlayer(h));
+      expect(p.sent.some((m) => m.messageType === 'network.peer-state')).toBe(false);
+      await p.send(watch());
+      expect(state()).toMatchObject({
+        connectionState: 'CONNECTED',
+        formOrNull: null,
+        statusOrNull: {
+          campaignStatus: 'PAUSED',
+          firstStartCompleted: false,
+          disconnectOrNull: null,
+        },
+      });
+    });
+    it('rejects a foreign context without a write or own continuation disclosure', async () => {
+      const bytes = p.db.serialize();
+      await p.send({ ...watch(), contextId: randomUUID() });
+      expect(p.sent).toEqual([expect.objectContaining({ messageType: 'protocol.refusal' })]);
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+    });
+    it('retires the peer watch when real CANCEL returns to NET003', async () => {
+      await p.replace('CANCEL_REASON', { cancelReason: 'Отменить ожидание' });
+      const request = p.state().requestOrNull!;
+      await p.command('UI-CMD-DEVICE-REQUEST-CANCEL', {
+        requestId: request.requestId,
+        technicalSessionId: request.technicalSessionId,
+        requestRevision: request.requestRevision,
+        reason: 'Отменить ожидание',
+      });
+      expect(p.state().formId).toBe('NET-003');
+      p.sent.length = 0;
+      // A full real poll interval must not republish the retired subscription.
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      expect(p.sent.some((m) => m.messageType === 'network.peer-state')).toBe(false);
+    });
+    describe('after the actual GM disconnect', () => {
+      let original: ReturnType<typeof p.state>;
+      let request: NonNullable<ReturnType<typeof p.state>['requestOrNull']>;
+      let initialCopies: unknown[];
+      let attempt: string;
+      let retry: CampaignPeerControlV3Message;
+      beforeEach(async () => {
+        original = p.state();
+        request = original.requestOrNull!;
+        initialCopies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+        await nav('CMP-008', 'CMP-008::CTA::007');
+        const disconnect = campaignLifecycleGmRequest(
+          await current(),
+          'NET-023::CTA::002',
+          randomUUID(),
+          {
+            deviceId: p.scope().ownerDeviceId,
+            selectedControllerSeatOrNull: null,
+            reason: 'Повторите подключение вручную',
+          },
+        );
+        let acknowledge!: () => void;
+        const disconnected = new Promise<void>((resolve) => {
+          acknowledge = resolve;
+        });
+        const push = p.sent.push.bind(p.sent);
+        const publication = vi.spyOn(p.sent, 'push').mockImplementation((...messages) => {
+          const size = push(...messages);
+          if (
+            messages.some(
+              (message) =>
+                message.messageType === 'network.peer-state' &&
+                message.connectionState === 'DISCONNECTED',
+            )
+          )
+            acknowledge();
+          return size;
+        });
+        try {
+          await gm.send(disconnect);
+          expect(gm.sent[0]?.messageType).toBe('command.result');
+          // Await the actual authenticated publication under the unchanged test deadline.
+          await disconnected;
+        } finally {
+          publication.mockRestore();
+        }
+        const blocked = state();
+        expect(blocked.formOrNull).toMatchObject({
+          formId: 'NET-009',
+          availableActionKeys: ['NET-009::CTA::001'],
+          fields: { resumeContextHint: 'NET-005' },
+        });
+        expect(blocked.statusOrNull?.disconnectOrNull?.reason).toBe(
+          'Повторите подключение вручную',
+        );
+        attempt = blocked.formOrNull!.fields['commandId'] as string;
+        retry = {
+          ...watch(),
+          operation: 'RETRY',
+          expectedConnectionRevision: blocked.connectionRevision,
+          commandIdOrNull: attempt,
+          endpointOrNull: { hostAddress: '127.0.0.1', hostPort: h.port },
+        };
+      });
+      it('polls authenticated status without admission recovery while the disconnect gate stays closed', async () => {
+        const peer = p.peerForTest,
+          read = peer.readConnection.bind(peer);
+        let observed!: () => void;
+        const nextStatus = new Promise<void>((resolve) => {
+          observed = resolve;
+        });
+        const reads = vi.spyOn(peer, 'readConnection').mockImplementation(async (...args) => {
+          const status = await read(...args);
+          if (status.disconnectOrNull?.retryReceiptOrNull === null) observed();
+          return status;
+        });
+        const recovery = vi.spyOn(peer, 'recover');
+        try {
+          await nextStatus;
+          // The control queues behind the whole actual polling tick, including owner refresh.
+          await p.send(watch());
+          expect(recovery).not.toHaveBeenCalled();
+          expect(state().statusOrNull?.disconnectOrNull?.retryReceiptOrNull).toBeNull();
+          expect(p.state().requestOrNull).toEqual(request);
+          expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual(
+            { n: 0 },
+          );
+          expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+            initialCopies,
+          );
+        } finally {
+          reads.mockRestore();
+          recovery.mockRestore();
+        }
+      });
+      it('uses real NET009 controls for a pinned pre-Start retry', async () => {
+        await p.send(retry);
+        expect(state()).toMatchObject({
+          retryOutcome: 'CONFIRMED',
+          connectionState: 'RECONNECTING',
+          statusOrNull: { disconnectOrNull: { retryReceiptOrNull: { commandId: attempt } } },
+        });
+        expect(p.state().requestOrNull).toEqual(request);
+        expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(initialCopies);
+      });
+      it('keeps a durable retry confirmed after the post-settlement recovery proof read fails', async () => {
+        // Stop the unrelated GM display observer: its connection refresh is a legitimate write.
+        // The real peer server, player runtime, storage guards and byte-exact replay checks stay live.
+        gm.runtime.close();
+        const peer = p.peerForTest,
+          execute = peer.retryConnection.bind(peer);
+        const read = localConnectionStore.readLocalCampaignReconnectSettlement;
+        let committed = false,
+          proofFailed = false;
+        const dispatch = vi
+          .spyOn(peer, 'retryConnection')
+          .mockImplementationOnce(async (...args) => {
+            await execute(...args);
+            committed = true;
+            throw Error('Lost completion after durable settlement');
+          });
+        const proof = vi
+          .spyOn(localConnectionStore, 'readLocalCampaignReconnectSettlement')
+          .mockImplementation((...args) => {
+            if (committed && !proofFailed) {
+              proofFailed = true;
+              throw Error('One failed recovery proof read');
+            }
+            return read(...args);
+          });
+        try {
+          await expect(p.send(retry)).rejects.toThrow(
+            'Network publication failed after durable acknowledgement',
+          );
+        } finally {
+          dispatch.mockRestore();
+          proof.mockRestore();
+        }
+        expect(committed).toBe(true);
+        expect(proofFailed).toBe(true);
+        expect(
+          p.sent.some(
+            (m) => m.messageType === 'network.peer-state' && m.retryOutcome === 'REFUSED',
+          ),
+        ).toBe(false);
+        const hostBytes = h.db.serialize(),
+          localBytes = p.db.serialize();
+        const tableDigests = () =>
+          Object.fromEntries(
+            (
+              h.db
+                .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
+                .all() as { name: string }[]
+            ).map(({ name }) => [
+              name,
+              postSaveSha256(
+                canonicalPostSaveJson(
+                  h.db.prepare('SELECT * FROM "' + name.replaceAll('"', '""') + '"').all(),
+                ),
+              ),
+            ]),
+          );
+        const beforeTables = tableDigests();
+        const receipt = read(p.db, p.scope(), attempt);
+        expect(receipt?.outcome).toBe('CONFIRMED');
+        await p.send(retry);
+        expect(state().retryOutcome).toBe('CONFIRMED');
+        const afterTables = tableDigests();
+        expect(
+          h.db.serialize().equals(hostBytes),
+          'Changed host tables: ' +
+            Object.keys(beforeTables)
+              .filter((key) => beforeTables[key] !== afterTables[key])
+              .join(', '),
+        ).toBe(true);
+        expect(p.db.serialize().equals(localBytes)).toBe(true);
+        expect(read(p.db, p.scope(), attempt)).toEqual(receipt);
+        expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual({
+          n: 1,
+        });
+      });
+      it('keeps NONE nonterminal: exact proof replay writes nothing and a new CAS request corrects the locator', async () => {
+        const unavailable = {
+          ...retry,
+          endpointOrNull: {
+            hostAddress: '127.0.0.1',
+            hostPort: h.port === 65535 ? 65534 : h.port + 1,
+          },
+        };
+        const connect = vi
+          .spyOn(p.peerForTest, 'reconnect')
+          .mockRejectedValueOnce(Error('Offline before remote dispatch'));
+        try {
+          await p.send(unavailable);
+        } finally {
+          connect.mockRestore();
+        }
+        expect(state().retryOutcome).toBe('NONE');
+        const hostBytes = h.db.serialize(),
+          localBytes = p.db.serialize();
+        const proof = vi
+          .spyOn(localConnectionStore, 'readLocalCampaignReconnectSettlement')
+          .mockImplementationOnce(() => {
+            throw Error('Unresolved replay proof unavailable');
+          });
+        try {
+          await expect(p.send(unavailable)).rejects.toThrow(
+            'Network publication failed after durable acknowledgement',
+          );
+        } finally {
+          proof.mockRestore();
+        }
+        expect(
+          p.sent.some(
+            (m) => m.messageType === 'network.peer-state' && m.retryOutcome === 'REFUSED',
+          ),
+        ).toBe(false);
+        await p.send(unavailable);
+        expect(state().retryOutcome).toBe('NONE');
+        expect(h.db.serialize().equals(hostBytes)).toBe(true);
+        expect(p.db.serialize().equals(localBytes)).toBe(true);
+        const corrected = {
+          ...retry,
+          requestId: randomUUID(),
+          expectedConnectionRevision: state().connectionRevision,
+          expectedRevisions: vector(p.state()),
+        };
+        await p.send(corrected);
+        expect(state().retryOutcome).toBe('CONFIRMED');
+        expect(
+          localConnectionStore.readLocalCampaignReconnectSettlement(p.db, p.scope(), attempt)
+            ?.outcome,
+        ).toBe('CONFIRMED');
+        expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual({
+          n: 1,
+        });
+      });
+      it('preserves committed retry across a publication failure and exact replay', async () => {
+        const fail = vi.spyOn(p.sent, 'push').mockImplementationOnce(() => {
+          throw Error('Lost confirmed retry publication');
+        });
+        await expect(p.send(retry)).rejects.toThrow();
+        fail.mockRestore();
+        expect(
+          p.sent.some(
+            (m) => m.messageType === 'network.peer-state' && m.retryOutcome === 'REFUSED',
+          ),
+        ).toBe(false);
+        const before = h.db.serialize();
+        await p.send(retry);
+        expect(state().retryOutcome).toBe('CONFIRMED');
+        expect(h.db.serialize().equals(before)).toBe(true);
+        expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual({
+          n: 1,
+        });
+      });
+      describe('after a lost committed retry publication', () => {
+        beforeEach(async () => {
+          const failure = vi.spyOn(p.sent, 'push').mockImplementationOnce(() => {
+            throw Error('Lost R1 publication');
+          });
+          try {
+            await expect(p.send(retry)).rejects.toThrow();
+          } finally {
+            failure.mockRestore();
+          }
+        });
+        it('replays the old confirmed settlement while a later real disconnect remains blocked', async () => {
+          const again = campaignLifecycleGmRequest(
+            await current(),
+            'NET-023::CTA::002',
+            randomUUID(),
+            {
+              deviceId: p.scope().ownerDeviceId,
+              selectedControllerSeatOrNull: null,
+              reason: 'Новое отключение после R1',
+            },
+          );
+          await gm.send(again);
+          expect(gm.sent[0]?.messageType).toBe('command.result');
+          const sibling = createLocalNetworkPeer({ database: p.db, baseline, config });
+          cleaners.push(() => {
+            sibling.close();
+            return Promise.resolve();
+          });
+          await sibling.reconnect(
+            p.scope(),
+            parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin,
+            h.campaignId,
+          );
+          await sibling.readConnection(p.scope(), () => {});
+          const hostBefore = h.db.serialize(),
+            ownBefore = p.db.serialize();
+          await p.send(retry);
+          expect(state()).toMatchObject({
+            retryOutcome: 'CONFIRMED',
+            connectionState: 'RECONNECTING',
+            statusOrNull: {
+              disconnectOrNull: { disconnectCommandId: again.commandId, retryReceiptOrNull: null },
+            },
+            formOrNull: { formId: 'NET-009' },
+          });
+          expect(h.db.serialize().equals(hostBefore)).toBe(true);
+          expect(p.db.serialize().equals(ownBefore)).toBe(true);
+          expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual(
+            { n: 1 },
+          );
+        });
+      });
+      describe('after the confirmed explicit retry', () => {
+        beforeEach(async () => {
+          await p.send(retry);
+          expect(state().retryOutcome).toBe('CONFIRMED');
+        });
+        it('does not turn a failed pre-cache source read on exact confirmed replay into refusal', async () => {
+          const hostBytes = h.db.serialize(),
+            localBytes = p.db.serialize();
+          const source = vi
+            .spyOn(localAdmissionStore, 'readLocalAdmissionPresentation')
+            .mockImplementationOnce(() => {
+              throw Error('Owner proof temporarily unavailable');
+            });
+          try {
+            await expect(p.send(retry)).rejects.toThrow(
+              'Network publication failed after durable acknowledgement',
+            );
+          } finally {
+            source.mockRestore();
+          }
+          expect(
+            p.sent.some(
+              (m) => m.messageType === 'network.peer-state' && m.retryOutcome === 'REFUSED',
+            ),
+          ).toBe(false);
+          await p.send(retry);
+          expect(state().retryOutcome).toBe('CONFIRMED');
+          expect(h.db.serialize().equals(hostBytes)).toBe(true);
+          expect(p.db.serialize().equals(localBytes)).toBe(true);
+          expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual(
+            { n: 1 },
+          );
+        });
+        it('refuses a settlement WATCH until a new paired reconnect covers that settlement', async () => {
+          const before = p.db.serialize();
+          await p.send({ ...watch(), commandIdOrNull: attempt });
+          expect(state()).toMatchObject({
+            retryOutcome: 'REFUSED',
+            diagnosticOrNull: 'REQUEST_REFUSED',
+            formOrNull: { formId: 'NET-009' },
+          });
+          expect(p.db.serialize().equals(before)).toBe(true);
+        });
+        it('performs paired reconnect without inventing pre-Start NET010 PEACE', async () => {
+          const reconnectId = randomUUID();
+          await p.send({
+            messageType: 'network.local-context.resume',
+            protocolVersion: 3,
+            networkScopeId: p.scope().networkScopeId,
+            reconnectRequestId: reconnectId,
+            knownRevisions: vector(p.state()),
+            supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+            unacknowledgedCommandIds: [],
+          });
+          expect(
+            p.sent.find((m) => m.messageType === 'session.reconnect.capabilities'),
+          ).toMatchObject({
+            reconnectRequestId: reconnectId,
+          });
+          expect(p.sent.find((m) => m.messageType === 'projection.snapshot')).toMatchObject({
+            presentation: {
+              assignment: { reason: 'RECONNECT', correlationId: reconnectId },
+              base: { formId: 'NET-005' },
+            },
+          });
+          await p.send({ ...watch(), commandIdOrNull: attempt });
+          expect(state()).toMatchObject({ connectionState: 'CONNECTED', formOrNull: null });
+          expect(p.state().requestOrNull).toEqual(request);
+          expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+            initialCopies,
+          );
+          expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual(
+            {
+              n: 1,
+            },
+          );
+        });
+      });
+    });
+  });
+  it('retains pinned endpoint and explicit reconnect intent across lost acknowledgement and local reopen', async () => {
+    const { p } = await submittedPlayer(h);
+    p.disconnect();
+    const scope = p.scope(),
+      address = parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin;
+    let peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+    cleaners.push(() => {
+      peer.close();
+      return Promise.resolve();
+    });
+    await peer.reconnect(scope, address, h.campaignId);
+    const first = await peer.readConnection(scope, () => {});
+    const stable = p.db.serialize();
+    await peer.readConnection(scope, () => {});
+    expect(p.db.serialize().equals(stable)).toBe(true);
+    await nav('CMP-008', 'CMP-008::CTA::007');
+    const disconnect = campaignLifecycleGmRequest(
+      await current(),
+      'NET-023::CTA::002',
+      randomUUID(),
+      {
+        deviceId: scope.ownerDeviceId,
+        selectedControllerSeatOrNull: null,
+        reason: 'Ручной повтор после отключения',
+      },
+    );
+    await gm.send(disconnect);
+    expect(gm.sent[0]?.messageType).toBe('command.result');
+    await peer.reconnect(scope, address, h.campaignId);
+    const blocked = await peer.readConnection(scope, () => {});
+    expect(blocked.campaignRevision).toBeGreaterThan(first.campaignRevision);
+    const state = readLocalCampaignConnection(p.db, scope);
+    const intent = {
+      commandId: randomUUID(),
+      expectedConnectionRevision: state.revision,
+      canonicalOrigin: address,
+      disconnectCommandIdOrNull: disconnect.commandId,
+    };
+    prepareLocalCampaignReconnect(p.db, scope, intent, () => {});
+    const pendingBytes = p.db.serialize();
+    prepareLocalCampaignReconnect(p.db, scope, intent, () => {});
+    expect(p.db.serialize().equals(pendingBytes)).toBe(true);
+    expect(() =>
+      prepareLocalCampaignReconnect(
+        p.db,
+        scope,
+        { ...intent, canonicalOrigin: 'http://127.0.0.1:1' },
+        () => {},
+      ),
+    ).toThrow();
+    expect(p.db.serialize().equals(pendingBytes)).toBe(true);
+    const lostAcknowledgement = vi
+      .spyOn(localConnectionStore, 'observeLocalCampaignConnection')
+      .mockImplementationOnce(() => {
+        throw Error('Lost committed reconnect ACK before local persistence');
+      });
+    await expect(peer.retryConnection(scope, intent, () => {})).rejects.toThrow();
+    lostAcknowledgement.mockRestore();
+    expect(readLocalCampaignConnection(p.db, scope).pendingOrNull).toEqual(intent);
+    const hostBytes = h.db.serialize();
+    peer.close();
+    const reopened = openPersistenceDatabase(p.path);
+    peer = createLocalNetworkPeer({ database: reopened, baseline, config });
+    try {
+      expect(readLocalCampaignConnection(reopened, scope).pendingOrNull).toEqual(intent);
+      await peer.reconnect(scope, address, h.campaignId);
+      const result = await peer.retryConnection(scope, intent, () => {});
+      expect(result).toMatchObject({
+        lastAuthenticatedEndpoint: address,
+        pendingOrNull: null,
+        statusOrNull: { disconnectOrNull: { retryReceiptOrNull: { commandId: intent.commandId } } },
+      });
+      expect(h.db.serialize().equals(hostBytes)).toBe(true);
+      const bytes = reopened.serialize();
+      expect(prepareLocalCampaignReconnect(reopened, scope, intent, () => {})).toEqual(result);
+      expect(reopened.serialize().equals(bytes)).toBe(true);
+    } finally {
+      peer.close();
+      reopened.close();
+    }
+  });
+  it('rejects local reconnect settlement without a fresh authenticated endpoint and rolls back hostile guards', async () => {
+    const { p } = await submittedPlayer(h);
+    p.disconnect();
+    const scope = p.scope(),
+      address = parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin;
+    const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+    try {
+      const channel = await peer.reconnect(scope, address, h.campaignId);
+      await peer.readConnection(scope, () => {});
+      const state = readLocalCampaignConnection(p.db, scope);
+      const intent = {
+        commandId: randomUUID(),
+        expectedConnectionRevision: state.revision,
+        canonicalOrigin: 'http://127.0.0.1:1',
+        disconnectCommandIdOrNull: null,
+      };
+      prepareLocalCampaignReconnect(p.db, scope, intent, () => {});
+      const settle = () =>
+        settleLocalCampaignReconnect(
+          p.db,
+          scope,
+          randomUUID(),
+          { commandId: intent.commandId, outcome: 'CONFIRMED', receiptOrNull: null },
+          () => {},
+        );
+      let bytes = p.db.serialize();
+      expect(settle).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      // A new observation of A still cannot acknowledge the explicitly requested endpoint B.
+      await peer.readConnection(scope, () => {});
+      bytes = p.db.serialize();
+      expect(settle).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      const locatorEventId = randomUUID(),
+        locatorSource = readLocalCampaignConnection(p.db, scope);
+      const locator = {
+        commandId: intent.commandId,
+        expectedConnectionRevision: locatorSource.revision,
+        canonicalOrigin: address,
+      };
+      const corrected = replaceLocalCampaignReconnectLocator(
+        p.db,
+        scope,
+        locatorEventId,
+        locator,
+        () => {},
+      );
+      expect(corrected.pendingOrNull).toEqual({ ...intent, canonicalOrigin: address });
+      bytes = p.db.serialize();
+      expect(settle).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      await peer.readConnection(scope, () => {});
+      const newerLocator = {
+        ...locator,
+        expectedConnectionRevision: readLocalCampaignConnection(p.db, scope).revision,
+        canonicalOrigin: intent.canonicalOrigin,
+      };
+      replaceLocalCampaignReconnectLocator(p.db, scope, randomUUID(), newerLocator, () => {});
+      bytes = p.db.serialize();
+      expect(
+        replaceLocalCampaignReconnectLocator(p.db, scope, locatorEventId, locator, () => {})
+          .pendingOrNull?.canonicalOrigin,
+      ).toBe(intent.canonicalOrigin);
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      expect(settle).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      const observation = {
+        identity: channel.hostIdentity,
+        canonicalOrigin: intent.canonicalOrigin,
+        status: state.statusOrNull!,
+      };
+      expect(() =>
+        observeLocalCampaignConnection(p.db, scope, randomUUID(), observation, () => {
+          p.db.exec('CREATE TABLE forbidden_connection_guard (x INTEGER)');
+        }),
+      ).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      expect(() =>
+        observeLocalCampaignConnection(
+          p.db,
+          scope,
+          randomUUID(),
+          { ...observation, identity: { ...observation.identity, ownerDeviceId: randomUUID() } },
+          () => {},
+        ),
+      ).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      // Storage accepts only the host-supplied authenticated observation; this fixture tests its fold.
+      observeLocalCampaignConnection(p.db, scope, randomUUID(), observation, () => {});
+      expect(settle()).toMatchObject({
+        pendingOrNull: null,
+        lastAuthenticatedEndpoint: intent.canonicalOrigin,
+      });
+      const status = state.statusOrNull!;
+      observeLocalCampaignConnection(
+        p.db,
+        scope,
+        randomUUID(),
+        { ...observation, status: { ...status, campaignRevision: 10 } },
+        () => {},
+      );
+      bytes = p.db.serialize();
+      expect(() =>
+        observeLocalCampaignConnection(
+          p.db,
+          scope,
+          randomUUID(),
+          {
+            ...observation,
+            status: {
+              ...status,
+              campaignRevision: 11,
+              disconnectOrNull: {
+                disconnectCommandId: randomUUID(),
+                campaignRevision: 9,
+                reason: 'Impossible historical disconnect',
+                retryReceiptOrNull: null,
+              },
+            },
+          },
+          () => {},
+        ),
+      ).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+      const d1 = {
+        disconnectCommandId: randomUUID(),
+        campaignRevision: 11,
+        reason: 'First',
+        retryReceiptOrNull: null,
+      };
+      observeLocalCampaignConnection(
+        p.db,
+        scope,
+        randomUUID(),
+        { ...observation, status: { ...status, campaignRevision: 11, disconnectOrNull: d1 } },
+        () => {},
+      );
+      const d2 = {
+        ...d1,
+        disconnectCommandId: randomUUID(),
+        campaignRevision: 12,
+        reason: 'Second',
+      };
+      observeLocalCampaignConnection(
+        p.db,
+        scope,
+        randomUUID(),
+        { ...observation, status: { ...status, campaignRevision: 12, disconnectOrNull: d2 } },
+        () => {},
+      );
+      bytes = p.db.serialize();
+      expect(() =>
+        observeLocalCampaignConnection(
+          p.db,
+          scope,
+          randomUUID(),
+          {
+            ...observation,
+            status: {
+              ...status,
+              campaignRevision: 13,
+              disconnectOrNull: { ...d1, campaignRevision: 13 },
+            },
+          },
+          () => {},
+        ),
+      ).toThrow();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+    } finally {
+      peer.close();
+    }
+  });
+  it('disconnects only captured channels, requires an explicit own retry, and never re-disconnects on replay', async () => {
+    const { p } = await submittedPlayer(h);
+    const material = loadNetworkInstallation(p.db),
+      session = p.state().sessionOrNull!;
+    p.disconnect();
+    const old = await h.connect(material);
+    expect(
+      decodeCampaignConnectionPeerResponse(
+        await old.call(
+          encodeCampaignConnectionPeerCommand({
+            schemaVersion: 1,
+            operation: 'CAMPAIGN_CONNECTION_READ',
+          }),
+        ),
+      ),
+    ).toMatchObject({ outcome: 'STATUS' });
+    await nav('CMP-008', 'CMP-008::CTA::007');
+    const before = await current();
+    expect(before.devices).toContainEqual(
+      expect.objectContaining({ deviceId: material.ownerDeviceId, connected: true }),
+    );
+    const request = campaignLifecycleGmRequest(before, 'NET-023::CTA::002', randomUUID(), {
+      deviceId: material.ownerDeviceId,
+      selectedControllerSeatOrNull: null,
+      reason: 'Перерыв для устройства',
+    });
+    const origin = readHostedCampaignCreationOrigin(h.db, h.campaignId, h.validate);
+    const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+    await gm.send(request);
+    expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({ messageType: 'command.result' });
+    const committed = structuredClone(gm.sent[0]);
+    await expect.poll(() => old.closed).toBe(true);
+    expect(readHostedCampaignCreationOrigin(h.db, h.campaignId, h.validate)).toEqual(origin);
+    expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
+    const blocked = await h.connect(material);
+    const status = decodeCampaignConnectionPeerResponse(
+      await blocked.call(
+        encodeCampaignConnectionPeerCommand({
+          schemaVersion: 1,
+          operation: 'CAMPAIGN_CONNECTION_READ',
+        }),
+      ),
+    );
+    expect(status).toMatchObject({
+      outcome: 'STATUS',
+      status: {
+        deviceId: material.ownerDeviceId,
+        disconnectOrNull: {
+          disconnectCommandId: request.commandId,
+          reason: 'Перерыв для устройства',
+          retryReceiptOrNull: null,
+        },
+      },
+    });
+    await expect(
+      blocked.call(
+        encodeAdmissionCapacityCommand({
+          schemaVersion: 1,
+          operation: 'ADMISSION_CAPACITY_READ',
+          technicalSessionId: session.technicalSessionId,
+        }),
+      ),
+    ).rejects.toThrow();
+    const quarantined = await h.connect(material);
+    expect(
+      decodeCampaignConnectionPeerResponse(
+        await quarantined.call(
+          encodeCampaignConnectionPeerCommand({
+            schemaVersion: 1,
+            operation: 'CAMPAIGN_CONNECTION_READ',
+          }),
+        ),
+      ),
+    ).toMatchObject({
+      outcome: 'STATUS',
+      status: { disconnectOrNull: { retryReceiptOrNull: null } },
+    });
+    const fresh = await h.connect(material),
+      retry = {
+        schemaVersion: 1 as const,
+        operation: 'CAMPAIGN_CONNECTION_RETRY' as const,
+        commandId: randomUUID(),
+        disconnectCommandId: request.commandId,
+      };
+    const checkpointCount = () =>
+      h.db.prepare('SELECT COUNT(*) AS n FROM campaign_checkpoint').get();
+    const checkpoints = checkpointCount();
+    const retried = decodeCampaignConnectionPeerResponse(
+      await fresh.call(encodeCampaignConnectionPeerCommand(retry)),
+    );
+    expect(retried).toMatchObject({
+      outcome: 'RETRIED',
+      receipt: { commandId: retry.commandId },
+      status: { disconnectOrNull: { retryReceiptOrNull: { commandId: retry.commandId } } },
+    });
+    const retryBytes = h.db.serialize();
+    expect(
+      decodeCampaignConnectionPeerResponse(
+        await fresh.call(encodeCampaignConnectionPeerCommand(retry)),
+      ),
+    ).toEqual(retried);
+    expect(h.db.serialize().equals(retryBytes)).toBe(true);
+    expect(checkpointCount()).toEqual(checkpoints);
+    await gm.send(request);
+    expect(gm.sent[0]).toEqual({
+      ...committed,
+      messageType: 'command.replay',
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+    });
+    expect(fresh.closed).toBe(false);
+    expect(
+      decodeCampaignConnectionPeerResponse(
+        await fresh.call(
+          encodeCampaignConnectionPeerCommand({
+            schemaVersion: 1,
+            operation: 'CAMPAIGN_CONNECTION_READ',
+          }),
+        ),
+      ),
+    ).toMatchObject({ outcome: 'STATUS' });
+    expect(checkpointCount()).toEqual(checkpoints);
+    const again = campaignLifecycleGmRequest(await current(), 'NET-023::CTA::002', randomUUID(), {
+      deviceId: material.ownerDeviceId,
+      selectedControllerSeatOrNull: null,
+      reason: 'Второе отключение',
+    });
+    await gm.send(again);
+    expect(gm.sent[0]?.messageType).toBe('command.result');
+    await expect.poll(() => quarantined.closed).toBe(true);
+    const last = await h.connect(material);
+    const oldRetry = decodeCampaignConnectionPeerResponse(
+      await last.call(encodeCampaignConnectionPeerCommand(retry)),
+    );
+    expect(oldRetry).toMatchObject({
+      outcome: 'RETRIED',
+      receipt: { commandId: retry.commandId },
+      status: {
+        disconnectOrNull: { disconnectCommandId: again.commandId, retryReceiptOrNull: null },
+      },
+    });
+    await expect(
+      last.call(
+        encodeAdmissionCapacityCommand({
+          schemaVersion: 1,
+          operation: 'ADMISSION_CAPACITY_READ',
+          technicalSessionId: session.technicalSessionId,
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get()).toEqual({
+      n: 1,
+    });
+  });
+  it('changes pre-Start capacity through CMP-014 without creating or evicting characters', async () => {
+    await nav('CMP-008', 'CMP-008::CTA::005');
+    const p = await current(),
+      request = campaignLifecycleGmRequest(p, 'CMP-014::CTA::002', randomUUID(), {
+        newCapacity: 1,
+      });
+    expect((await gm.runtime.project(gm.c)).layers?.[0]?.formId).toBe('CMP-014');
+    await gm.send(request);
+    expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({ messageType: 'command.result' });
+    expect(await current()).toMatchObject({
+      currentCapacity: 1,
+      activePlayerCount: 0,
+      settingsRevision: 1,
+    });
+    expect(h.db.prepare('SELECT COUNT(*) AS n FROM campaign_character_copy').get()).toEqual({
+      n: 0,
+    });
+    expect((await gm.runtime.project(gm.c)).layers).toEqual([]);
+  });
+  it('rejects stale, foreign, invalid fields and forged raw secret fields with byte-identical storage', async () => {
+    const p = await current(),
+      request = campaignLifecycleGmRequest(p, 'CMP-008::CTA::008', randomUUID(), {
+        title: 'Не должно записаться',
+        descriptionOrNull: null,
+        defaultFutureRollMode: 'MANUAL',
+        network: p.networkForNextLaunch,
+      });
+    for (const bad of [
+      {
+        ...request,
+        expectedRevisions: {
+          ...request.expectedRevisions,
+          stateRevision: request.expectedRevisions.stateRevision + 1,
+        },
+      },
+      { ...request, payload: { ...request.payload, campaignId: randomUUID() } },
+      {
+        ...request,
+        payload: {
+          ...request.payload,
+          network: { ...p.networkForNextLaunch, networkInterface: 'absent-interface' },
+        },
+      },
+      { ...request, payload: { ...request.payload, currentMasterPassword: 'must never persist' } },
+      { ...request, payload: { ...request.payload, title: '' } },
+    ]) {
+      const before = h.db.serialize();
+      await gm.send(bad);
+      expect(gm.sent).toHaveLength(1);
+      expect(gm.sent[0]).toMatchObject({ messageType: 'command.refusal' });
+      expect(h.db.serialize().equals(before)).toBe(true);
+    }
+  });
+  it.each(['queued GM tab', 'lost trust'] as const)(
+    'rechecks %s after real password verification yields',
+    async (change) => {
+      await nav('CMP-008', 'CMP-008::CTA::006');
+      let started!: () => void, release!: () => void;
+      const entered = new Promise<void>((resolve) => {
+          started = resolve;
+        }),
+        gate = new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+        realVerify = campaignSecretModule.verifyMasterSecret;
+      const spy = vi
+        .spyOn(campaignSecretModule, 'verifyMasterSecret')
+        .mockImplementationOnce(async (...args) => {
+          const result = await realVerify(...args);
+          started();
+          await gate;
+          return result;
+        });
+      const request = campaignLifecycleGmRequest(
+          await current(),
+          'CMP-015::CTA::003',
+          randomUUID(),
+          {
+            currentMasterPassword: 'Valid fixture secret',
+            newMasterPassword: 'New valid fixture secret',
+            newMasterPasswordConfirmation: 'New valid fixture secret',
+          },
+        ),
+        before = h.db.serialize();
+      const command = gm.send(request);
+      await entered;
+      const queued =
+        change === 'queued GM tab'
+          ? gm.gmScheduler.wire({ ...gm.c }, () => Promise.resolve())
+          : Promise.resolve();
+      const trustSpy =
+        change === 'lost trust' ? vi.spyOn(gm.c, 'trusted').mockReturnValue(false) : null;
+      try {
+        release();
+        await command;
+        await queued;
+        expect(gm.sent).toHaveLength(1);
+        expect(gm.sent[0]).toMatchObject({ messageType: 'command.refusal' });
+        expect(h.db.serialize().equals(before)).toBe(true);
+      } finally {
+        release();
+        spy.mockRestore();
+        trustSpy?.mockRestore();
+      }
+    },
+  );
+  it('checks private password proofs, persists no raw secret, and replays A-to-B after B-to-C', async () => {
+    await nav('CMP-008', 'CMP-008::CTA::006');
+    const a = 'Valid fixture secret',
+      b = 'Changed fixture secret B',
+      c = 'Changed fixture secret C';
+    const first = campaignLifecycleGmRequest(await current(), 'CMP-015::CTA::003', randomUUID(), {
+      currentMasterPassword: a,
+      newMasterPassword: b,
+      newMasterPasswordConfirmation: b,
+    });
+    const before = h.db.serialize();
+    await gm.send({
+      ...first,
+      payload: { ...first.payload, currentMasterPassword: 'Incorrect existing secret' },
+    });
+    expect(gm.sent[0]).toMatchObject({ messageType: 'command.refusal' });
+    expect(h.db.serialize().equals(before)).toBe(true);
+    await gm.send(first);
+    expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({ messageType: 'command.result' });
+    const original = structuredClone(gm.sent[0]);
+    await nav('CMP-008', 'CMP-008::CTA::006');
+    const second = campaignLifecycleGmRequest(await current(), 'CMP-015::CTA::003', randomUUID(), {
+      currentMasterPassword: b,
+      newMasterPassword: c,
+      newMasterPasswordConfirmation: c,
+    });
+    await gm.send(second);
+    expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({ messageType: 'command.result' });
+    const after = h.db.serialize();
+    await gm.send(first);
+    expect(gm.sent[0]).toEqual({
+      ...original,
+      messageType: 'command.replay',
+      lifecycleState: 'IDEMPOTENT_REPLAY',
+    });
+    expect(h.db.serialize().equals(after)).toBe(true);
+    for (const secret of [a, b, c]) {
+      expect(h.db.serialize().includes(Buffer.from(secret))).toBe(false);
+      expect(JSON.stringify(gm.sent)).not.toContain(secret);
+    }
+    expect(JSON.stringify(gm.sent)).not.toMatch(
+      /saltBase64|verifierBase64|beforeVerifier|afterVerifier/,
+    );
   });
 });

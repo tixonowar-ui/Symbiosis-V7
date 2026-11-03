@@ -1,3 +1,11 @@
+import { commitCampaignLifecycleCommand } from '../persistence/campaign-lifecycle.js';
+import { commitGmRequestReviewNavigation } from '../persistence/network-device-request.js';
+import {
+  readCampaignCreationCursor,
+  readHostedCampaignCreationOrigin,
+} from '../persistence/campaign-creation.js';
+import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import type { ActionKey } from '@generated/types/atlas.js';
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { createSocket } from 'node:dgram';
@@ -460,6 +468,131 @@ describe('actual saved-campaign network coordinator', () => {
       saved.campaignId,
     );
   });
+
+  it.each([false, true])(
+    'keeps the held listener until restart and applies the saved endpoint (occupied=%s)',
+    async (occupied) => {
+      const directory = mkdtempSync(join(tmpdir(), 'coordinator-settings-'));
+      directories.push(directory);
+      const path = join(directory, 'host.sqlite'),
+        first = await host({ path }),
+        saved = await first.save('OWNED_RESERVATION');
+      await first.runtime.start();
+      const peer = await first.connect(saved.campaignId, saved.port);
+      const ownerDeviceId = loadDeviceId(first.db),
+        scope = {
+          ownerDeviceId,
+          gmLocalContextId: saved.gmLocalContextId,
+          campaignId: saved.campaignId,
+        };
+      const validate = (owner: {
+        readonly verifier: Parameters<typeof validateMasterSecretVerifier>[0];
+      }) => {
+        validateMasterSecretVerifier(owner.verifier);
+      };
+      const original = readHostedCampaignCreationOrigin(first.db, saved.campaignId, validate),
+        identity = loadNetworkInstallation(first.db);
+      const guard = () => {
+        expect(loadDeviceId(first.db)).toBe(ownerDeviceId);
+      };
+      for (const actionKey of [
+        'CMP-006::CTA::001',
+        'CMP-007::CTA::003',
+      ] as const satisfies readonly ActionKey[]) {
+        const cursor = readCampaignCreationCursor(first.db, scope.gmLocalContextId);
+        commitGmRequestReviewNavigation(
+          first.db,
+          scope,
+          {
+            messageType: 'navigation.form-action',
+            protocolVersion: 2,
+            navigationRequestId: randomUUID(),
+            sourceFormId: cursor.formId,
+            actionKey,
+            expectedProjectionRevision: cursor.revisions.projectionRevision,
+          },
+          validate,
+          guard,
+        );
+      }
+      const nextPort = await freeTcpPort(),
+        next = {
+          hostAddress: '127.0.0.1',
+          hostPort: nextPort,
+          networkInterface: original.payload.host.networkInterface,
+        };
+      const receipt = commitCampaignLifecycleCommand(
+        first.db,
+        scope,
+        {
+          workflowCommandId: 'UI-CMD-CAMPAIGN-SETTINGS-SET',
+          commandId: randomUUID(),
+          campaignId: saved.campaignId,
+          expectedSettingsRevision: 0,
+          title: 'Saved next listener',
+          descriptionOrNull: original.payload.metadata.description,
+          defaultFutureRollMode: 'MANUAL',
+          network: next,
+        },
+        {
+          receiptId: randomUUID(),
+          checkpointId: randomUUID(),
+          committedAt: '2026-11-02T13:00:00.000Z',
+        },
+        null,
+        validate,
+        createCampaignAdmissionRules(baseline, config.transfer.maxWitnessBytes).rules,
+        guard,
+      );
+      expect(receipt.receipt.settingsRevision).toBe(1);
+      expect(first.header(saved.campaignId).bindConfiguration).toEqual(next);
+      expect(first.runtime.heldNetworkConfiguration(saved.campaignId)).toEqual({
+        ...next,
+        hostPort: saved.port,
+      });
+      expect(await first.runtime.publishCampaign(saved.campaignId)).toEqual({
+        status: 'RESERVED',
+        reasonCode: null,
+      });
+      expect(peer.closed).toBe(false);
+      expect((await locator(saved.port)).status).toBe(200);
+      expect(await portOccupied(nextPort)).toBe(false);
+      expect(readHostedCampaignCreationOrigin(first.db, saved.campaignId, validate)).toEqual(
+        original,
+      );
+      const checkpoint = loadCampaignCheckpoint(first.db, saved.campaignId),
+        shellPort = first.shellPort;
+      await first.close();
+      if (occupied) {
+        const blocker = createNetServer((socket) => socket.destroy());
+        await new Promise<void>((resolve) => blocker.listen(nextPort, '127.0.0.1', resolve));
+        cleaners.push(async () => {
+          if (blocker.listening)
+            await new Promise<void>((resolve) => blocker.close(() => resolve()));
+        });
+      }
+      const fresh = await host({ path, shellPort }),
+        before = fresh.db.serialize();
+      await fresh.runtime.start();
+      expect(fresh.db.serialize().equals(before)).toBe(true);
+      expect(loadCampaignCheckpoint(fresh.db, saved.campaignId)).toEqual(checkpoint);
+      expect(loadNetworkInstallation(fresh.db)).toEqual(identity);
+      expect(await portOccupied(saved.port)).toBe(false);
+      if (occupied) {
+        expect(fresh.runtime.heldNetworkConfiguration(saved.campaignId)).toBeNull();
+        expect(fresh.runtime.diagnostics()).toContain('PUBLICATION_UNAVAILABLE');
+      } else {
+        expect(fresh.runtime.heldNetworkConfiguration(saved.campaignId)).toEqual(next);
+        expect((await locator(nextPort)).status).toBe(200);
+        expect((await fresh.connect(saved.campaignId, nextPort)).campaign.campaignId).toBe(
+          saved.campaignId,
+        );
+      }
+      expect(readHostedCampaignCreationOrigin(fresh.db, saved.campaignId, validate)).toEqual(
+        original,
+      );
+    },
+  );
 
   it('recovers exact saved borrowed and owned endpoints after a complete listener/SQLite restart without new IDs or source writes', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'coordinator-restart-'));

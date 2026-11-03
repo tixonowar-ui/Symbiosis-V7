@@ -129,11 +129,8 @@ export function campaignLobbyGmProjectionValue(value: unknown): CampaignLobbyGmP
     ['PRE_START', 'STARTED_PEACE'] as const,
     '$.panelVariant',
   );
-  w.literal(
-    row['campaignStatus'],
-    variant === 'PRE_START' ? 'PAUSED' : 'HOSTING',
-    '$.campaignStatus',
-  );
+  if (variant === 'PRE_START') w.literal(row['campaignStatus'], 'PAUSED', '$.campaignStatus');
+  else r.oneOf(row['campaignStatus'], ['HOSTING', 'PAUSED'] as const, '$.campaignStatus');
   r.text(row['title'], '$.title');
   if (row['descriptionOrNull'] !== null && typeof row['descriptionOrNull'] !== 'string')
     r.invalid('$.descriptionOrNull', 'text or null', null);
@@ -210,7 +207,8 @@ export function campaignLobbyGmProjectionValue(value: unknown): CampaignLobbyGmP
       .sort(),
     '$.activeCampaignCharacters',
   );
-  if (memberIds.length > capacity) r.invalid('$.activeCampaignCharacters', 'within capacity', null);
+  if (activeIds.length > capacity)
+    r.invalid('$.activeCampaignCharacters', 'ACTIVE PCs within capacity', null);
   const devices = ids(row['controllingDevices'], '$.controllingDevices');
   equal(devices, [...new Set(activeDevices)].sort(), '$.controllingDevices');
   const ready = r.list(row['readyByDevice'], '$.readyByDevice');
@@ -480,8 +478,20 @@ export function campaignLobbyGmActions(
   if (p.conflictingOperationPending) return [];
   if (form === 'CMP-007')
     return p.panelVariant === 'PRE_START'
-      ? ['CMP-007::CTA::001', 'CMP-007::CTA::006', 'CMP-007::CTA::004']
-      : ['CMP-007::CTA::004'];
+      ? [
+          'CMP-007::CTA::001',
+          'CMP-007::CTA::006',
+          ...(supported.includes('UI-CMD-CAMPAIGN-SETTINGS-SET')
+            ? ['CMP-007::CTA::003' as const]
+            : []),
+          'CMP-007::CTA::004',
+        ]
+      : [
+          ...(supported.includes('UI-CMD-CAMPAIGN-SETTINGS-SET')
+            ? ['CMP-007::CTA::003' as const]
+            : []),
+          'CMP-007::CTA::004',
+        ];
   if (form === 'GM-001') return ['GM-001::CTA::006', 'GM-001::CTA::013'];
   if (form === 'GRP-001') return ['GRP-001::CTA::009'];
   if (p.panelVariant !== 'PRE_START') r.invalid('$.formId', 'pre-Start NET-016', null);

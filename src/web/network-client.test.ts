@@ -1,3 +1,8 @@
+import { CampaignPeerConnection } from './forms/net/campaign-peer-connection.js';
+import {
+  campaignPeerStateValue,
+  type CampaignPeerStateV3Message,
+} from '@shared/campaign-lifecycle.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { act, createElement } from 'react';
@@ -301,6 +306,7 @@ async function start(
   p: JsonObject,
   options: {
     ticket?: boolean;
+    peer?: boolean;
     keys?: readonly ActionKey[];
     capabilities?: readonly WorkflowCommandId[];
     revisions?: RevisionVector;
@@ -314,6 +320,7 @@ async function start(
       Promise.resolve(new Response(JSON.stringify({ deviceId: DEVICE }), { status: 200 })),
     ),
   );
+  const peers: (CampaignPeerStateV3Message | null)[] = [];
   const states: WebClientState[] = [],
     drafts: (NetworkDraftClientState | null)[] = [];
   const connection = connectProjection(
@@ -333,6 +340,8 @@ async function start(
     undefined,
     undefined,
     (value) => drafts.push(value),
+    undefined,
+    options.peer ? (value) => peers.push(value) : undefined,
   );
   connections.push(connection);
   await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
@@ -340,7 +349,7 @@ async function start(
   socket.open();
   ready(socket, form, p, options.revisions ?? ZERO, options.keys, options.capabilities);
   expect(states.at(-1)?.kind).toBe('ready');
-  return { connection, socket, states, drafts };
+  return { connection, socket, states, drafts, peers };
 }
 function receipt(
   command: Record<string, unknown>,
@@ -1641,7 +1650,15 @@ describe('NET-017 actual GM client transport family', () => {
     expect(sent(f.socket)).toMatchObject({
       messageType: 'campaign.local-context.resume',
       gmLocalContextId: CONTEXT,
-      supportedWorkflowCommandIds: GM_CAPS,
+      supportedWorkflowCommandIds: [
+        ...GM_CAPS.slice(0, 7),
+        'UI-CMD-CAMPAIGN-SETTINGS-SET',
+        'UI-CMD-CAMPAIGN-CAPACITY-SET',
+        'UI-CMD-MASTER-PASSWORD-CHANGE',
+        'UI-CMD-CAMPAIGN-PAUSE-SET',
+        'UI-CMD-CLIENT-DISCONNECT',
+        ...GM_CAPS.slice(7),
+      ],
     });
     expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBe(CONTEXT);
     expect(window.sessionStorage.getItem(NETWORK_CONTEXT_STORAGE_KEY)).toBeNull();
@@ -2103,6 +2120,9 @@ describe('NET-017 actual GM client transport family', () => {
         },
       }),
     );
+    const watch = sent(socket);
+    expect(watch['operation']).toBe('WATCH');
+    act(() => socket.message(connectedPeer(watch, v)));
     expect(container.textContent).toContain('Уточните заявку');
     const back = container.querySelector<HTMLButtonElement>(
       '[data-atlas-action-key="NET-005::CTA::003"]',
@@ -2123,6 +2143,8 @@ describe('NET-017 actual GM client transport family', () => {
         ),
       ),
     );
+    // The frame was queued for the retired NET005 watch before the navigation.
+    act(() => socket.message(connectedPeer(watch, v, 2)));
     expect(container.querySelector('[data-atlas-form-id="NET-003"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-action-key="NET-003::CTA::001"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-action-key="NET-003::CTA::003"]')).toBeNull();
@@ -2221,3 +2243,252 @@ describe('NET-017 actual GM client transport family', () => {
     expect(second['draftUpdateId']).not.toBe(first['draftUpdateId']);
   });
 });
+
+describe('#174 opt-in browser peer continuation', () => {
+  it('keeps NET004 submission usable before there is any peer subscription', async () => {
+    window.sessionStorage.setItem(NETWORK_CONTEXT_STORAGE_KEY, SCOPE);
+    vi.stubGlobal('WebSocket', Socket);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify({ deviceId: DEVICE }), { status: 200 })),
+      ),
+    );
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push({ root, container });
+    act(() => root.render(createElement(App)));
+    await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
+    const socket = Socket.instances[0]!;
+    act(() => {
+      socket.open();
+      ready(socket, 'NET-004', batch());
+    });
+    expect(socket.sent.some((raw) => raw.includes('network.peer-control'))).toBe(false);
+    const submit = container.querySelector<HTMLButtonElement>(
+      '[data-atlas-action-key="NET-004::CTA::002"]',
+    );
+    expect(submit).not.toBeNull();
+    expect(submit!.closest('fieldset')!.disabled).toBe(false);
+    act(() => submit!.click());
+    expect(sent(socket)).toMatchObject({
+      messageType: 'command.request',
+      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-SUBMIT',
+    });
+  });
+  function status(watch: Record<string, unknown>, sequence = 1): CampaignPeerStateV3Message {
+    return campaignPeerStateValue({
+      messageType: 'network.peer-state',
+      protocolVersion: 3,
+      subscriptionId: watch['requestId'],
+      requestId: watch['requestId'],
+      contextId: CONTEXT,
+      networkScopeId: SCOPE,
+      campaignId: CAMPAIGN,
+      deviceId: DEVICE,
+      controllerSeat: SEAT,
+      sequence,
+      revisions: ZERO,
+      connectionRevision: 1,
+      connectionState: 'CONNECTED',
+      statusOrNull: {
+        campaignId: CAMPAIGN,
+        deviceId: DEVICE,
+        campaignRevision: 0,
+        campaignStatus: 'PAUSED',
+        firstStartCompleted: false,
+        pauseReasonOrNull: null,
+        disconnectOrNull: null,
+      },
+      formOrNull: null,
+      retryOutcome: 'NONE',
+      diagnosticOrNull: null,
+    });
+  }
+  function lost(watch: Record<string, unknown>): CampaignPeerStateV3Message {
+    return campaignPeerStateValue({
+      ...status(watch),
+      connectionState: 'LOST',
+      diagnosticOrNull: 'PEER_UNAVAILABLE',
+      formOrNull: {
+        formId: 'NET-009',
+        availableActionKeys: ['NET-009::CTA::001'],
+        fields: {
+          deviceId: DEVICE,
+          sessionId: SESSION,
+          activeRole: 'PLAYER',
+          requestedSeatOrGm: SEAT,
+          reconnectAttemptId: ATTEMPT,
+          commandId: ATTEMPT,
+          deviceBindingProof: {
+            campaignId: CAMPAIGN,
+            deviceId: DEVICE,
+            requestId: REQUEST,
+            submitCommandId: NEXT_CONTEXT,
+            technicalSessionId: SESSION,
+            controllerSeat: SEAT,
+          },
+          lastConfirmedStateRevision: 0,
+          lastConfirmedProjectionRevision: 0,
+          resumeContextHint: 'NET-005',
+          pendingCommandIdOrNull: null,
+          pendingRequestIdOrNull: REQUEST,
+          pinnedCampaignPeerReconnectOrNull: {
+            reconnectHostAddress: '127.0.0.1',
+            reconnectHostPort: 31770,
+            previouslyPinnedHostIdentity: {
+              ownerDeviceId: NEXT_CONTEXT,
+              keyFingerprintSha256: 'a'.repeat(64),
+            },
+            lastAuthenticatedEndpoint: 'http://127.0.0.1:31770',
+          },
+        },
+      },
+    });
+  }
+
+  it('initializes the visible NET009 endpoint after a live disconnect and sends edited controls once', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push({ root, container });
+    const onAction = vi.fn(() => ({ ok: true as const }));
+    const watch = { requestId: ATTEMPT };
+    const render = (state: CampaignPeerStateV3Message) =>
+      act(() =>
+        root.render(createElement(CampaignPeerConnection, { state, enabled: true, onAction })),
+      );
+    render(status(watch));
+    expect(container.querySelector('input')).toBeNull();
+    render(lost(watch));
+    const address = container.querySelector<HTMLInputElement>('[name="reconnectHostAddress"]')!;
+    const port = container.querySelector<HTMLInputElement>('[name="reconnectHostPort"]')!;
+    expect([address.value, port.value]).toEqual(['127.0.0.1', '31770']);
+    const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!;
+    act(() => {
+      valueDescriptor.set!.call(address, '127.0.0.2');
+      address.dispatchEvent(new Event('input', { bubbles: true }));
+      valueDescriptor.set!.call(port, '31771');
+      port.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const button = container.querySelector<HTMLButtonElement>('button')!;
+    act(() => button.click());
+    expect(onAction).toHaveBeenCalledExactlyOnceWith('NET-009::CTA::001', {
+      hostAddress: '127.0.0.2',
+      hostPort: 31771,
+    });
+    act(() => button.click());
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('fieldset')!.disabled).toBe(true);
+    render({ ...lost(watch), sequence: 2 });
+    expect(container.querySelector('fieldset')!.disabled).toBe(false);
+    expect(container.querySelector<HTMLInputElement>('[name="reconnectHostAddress"]')!.value).toBe(
+      '127.0.0.2',
+    );
+    expect(container.querySelector<HTMLInputElement>('[name="reconnectHostPort"]')!.value).toBe(
+      '31771',
+    );
+    expect(container.textContent).toContain('http://127.0.0.1:31770');
+  });
+  it('opts in after the paired snapshot and sends the actual NET009 endpoint control', async () => {
+    const flow = await start('NET-005', waiting(ZERO), { peer: true });
+    const watch = sent(flow.socket);
+    expect(watch).toMatchObject({
+      messageType: 'network.peer-control',
+      operation: 'WATCH',
+      expectedRevisions: ZERO,
+    });
+    flow.socket.message(lost(watch));
+    expect(flow.peers.at(-1)?.formOrNull?.formId).toBe('NET-009');
+    expect(
+      flow.connection.requestCampaignPeerAction('NET-009::CTA::001', {
+        hostAddress: '127.0.0.2',
+        hostPort: 31771,
+      }),
+    ).toEqual({ ok: true });
+    const retry = sent(flow.socket);
+    expect(retry).toMatchObject({
+      operation: 'RETRY',
+      expectedConnectionRevision: 1,
+      commandIdOrNull: ATTEMPT,
+      endpointOrNull: { hostAddress: '127.0.0.2', hostPort: 31771 },
+    });
+    flow.socket.message({
+      ...status(watch, 2),
+      requestId: retry['requestId'],
+      connectionState: 'RECONNECTING',
+      retryOutcome: 'CONFIRMED',
+    });
+    expect(Socket.instances).toHaveLength(2);
+    const next = Socket.instances[1]!;
+    next.open();
+    expect(sent(next)['messageType']).toBe('network.local-context.resume');
+    ready(next, 'NET-005', waiting(ZERO));
+    expect(sent(next)).toMatchObject({
+      messageType: 'network.peer-control',
+      operation: 'WATCH',
+      commandIdOrNull: ATTEMPT,
+    });
+  });
+  it.each([
+    'foreign-vector',
+    'foreign-request',
+    'foreign-seat',
+    'foreign-session',
+    'unsolicited-confirmation',
+  ] as const)('rejects %s before applying peer state', async (change) => {
+    const flow = await start('NET-005', waiting(ZERO), { peer: true });
+    const message = structuredClone(lost(sent(flow.socket))) as unknown as Record<string, unknown>;
+    const form = message['formOrNull'] as { fields: Record<string, unknown> };
+    if (change === 'foreign-vector') message['revisions'] = { ...ZERO, projectionRevision: 1 };
+    if (change === 'foreign-request') {
+      form.fields['pendingRequestIdOrNull'] = NEXT_CONTEXT;
+      (form.fields['deviceBindingProof'] as Record<string, unknown>)['requestId'] = NEXT_CONTEXT;
+    }
+    if (change === 'foreign-seat') message['controllerSeat'] = NEXT_CONTEXT;
+    if (change === 'foreign-session') {
+      form.fields['sessionId'] = NEXT_CONTEXT;
+      (form.fields['deviceBindingProof'] as Record<string, unknown>)['technicalSessionId'] =
+        NEXT_CONTEXT;
+    }
+    if (change === 'unsolicited-confirmation') message['retryOutcome'] = 'CONFIRMED';
+    flow.socket.message(message);
+    expect(flow.peers.filter((p) => p !== null)).toEqual([]);
+    expect(flow.states.at(-1)?.kind).toBe('protocol-error');
+  });
+});
+
+function connectedPeer(
+  watch: Record<string, unknown>,
+  revisions: RevisionVector,
+  sequence = 1,
+): CampaignPeerStateV3Message {
+  return campaignPeerStateValue({
+    messageType: 'network.peer-state',
+    protocolVersion: 3,
+    subscriptionId: watch['requestId'],
+    requestId: watch['requestId'],
+    contextId: CONTEXT,
+    networkScopeId: SCOPE,
+    campaignId: CAMPAIGN,
+    deviceId: DEVICE,
+    controllerSeat: SEAT,
+    sequence,
+    revisions,
+    connectionRevision: 1,
+    connectionState: 'CONNECTED',
+    statusOrNull: {
+      campaignId: CAMPAIGN,
+      deviceId: DEVICE,
+      campaignRevision: 0,
+      campaignStatus: 'PAUSED',
+      firstStartCompleted: false,
+      pauseReasonOrNull: null,
+      disconnectOrNull: null,
+    },
+    formOrNull: null,
+    retryOutcome: 'NONE',
+    diagnosticOrNull: null,
+  });
+}

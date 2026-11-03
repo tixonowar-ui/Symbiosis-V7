@@ -169,6 +169,7 @@ export interface VerifiedGmRequestQueue {
   readonly requests: readonly HostedRequestReviewCurrent[];
 }
 export interface GmRequestReviewSource {
+  readonly currentCampaign: CurrentPausedCampaignHeader;
   readonly scope: GmRequestReviewScope;
   readonly context: ReturnType<typeof readLocalGmContext>;
   readonly privateOwner: ReturnType<typeof readCampaignOwnerBinding>;
@@ -262,7 +263,8 @@ function legacyReceipt(record: Omit<HostedNetworkCommand, 'current'>): LegacyReq
 function reviewSchema(db: Database.Database): void {
   s.schema(db);
   const r = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (r['version'] !== 11 && r['version'] !== 12 && r['version'] !== 13) return s.fail();
+  if (r['version'] !== 11 && r['version'] !== 12 && r['version'] !== 13 && r['version'] !== 14)
+    return s.fail();
 }
 function rawDecision(
   db: Database.Database,
@@ -535,7 +537,7 @@ function gmSource(
     return s.fail('FOREIGN_OWNER');
   const creationOrigin = readHostedCampaignCreationOrigin(db, scope.campaignId, validate);
   // Current foundation supports PAUSED campaigns; birth0 remains a separate immutable anchor.
-  readHostedCurrentPausedCampaign(db, scope.campaignId, validate);
+  const currentCampaign = readHostedCurrentPausedCampaign(db, scope.campaignId, validate);
   const state = readGmRequestReviewViewStateInTransaction(db, scope),
     queue = queueInTransaction(db, scope);
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined) {
@@ -598,6 +600,7 @@ function gmSource(
     context,
     privateOwner,
     creationOrigin,
+    currentCampaign,
     cursor: readCampaignCreationCursor(db, scope.gmLocalContextId),
     viewOrNull: state.viewOrNull,
     connectionFactsSha256OrNull: state.connectionFactsSha256OrNull,
@@ -1533,7 +1536,11 @@ export function commitHostedNetworkCommand(
           s.owner(db, p.hostOwnerDeviceId);
           return known;
         }
-        if (campaign.status !== 'PAUSED' && i.operation !== 'CANCEL') return s.fail('UNAVAILABLE');
+        if (
+          (campaign.status !== 'PAUSED' || campaign.firstStartCompleted) &&
+          i.operation !== 'CANCEL'
+        )
+          return s.fail('UNAVAILABLE');
         s.assertUnused(db, i.commandId);
         s.assertUnused(db, i.receiptId);
         let current: HostedTechnicalSession | HostedDeviceRequest;
@@ -1572,7 +1579,10 @@ export function commitHostedNetworkCommand(
               db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row
             )['version'];
             if (
-              (schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13) &&
+              (schemaVersion === 11 ||
+                schemaVersion === 12 ||
+                schemaVersion === 13 ||
+                schemaVersion === 14) &&
               i.batch.schemaVersion !== 2
             )
               return s.fail('INVALID_INPUT');
@@ -1588,7 +1598,7 @@ export function commitHostedNetworkCommand(
               return s.fail('INVALID_INPUT');
             let occupied = campaign.activePcCount;
             const released = new Set<string>();
-            if (schemaVersion === 12 || schemaVersion === 13) {
+            if (schemaVersion === 12 || schemaVersion === 13 || schemaVersion === 14) {
               if (admissionRules === undefined) assertNoCampaignAdmissionEvidence(db);
               else {
                 const origin = readHostedCampaignCreationOrigin(
@@ -1632,7 +1642,10 @@ export function commitHostedNetworkCommand(
             );
             if (
               currentRequests.some((r) =>
-                schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13
+                schemaVersion === 11 ||
+                schemaVersion === 12 ||
+                schemaVersion === 13 ||
+                schemaVersion === 14
                   ? !released.has(r.requestId) &&
                     ['PENDING', 'IN_REVIEW'].includes(
                       readCurrentRequest(db, p, r.requestId).requestStatus,

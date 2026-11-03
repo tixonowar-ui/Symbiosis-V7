@@ -313,7 +313,7 @@ function submission(
     }
   ).version;
   const batch = withBatchHash({
-    ...(schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13
+    ...(schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13 || schemaVersion === 14
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -1916,6 +1916,48 @@ describe('hosted network session and addressed request journal', () => {
         allow,
       ),
     ).toThrow('STALE_REVISION');
+  });
+  it('rejects a v1 batch on schema 14 without writes', () => {
+    const p = setup(),
+      opening = connect(p),
+      request = submission(p, opening);
+    expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+      version: 14,
+    });
+    const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
+    const before = p.db.serialize();
+    expect(() =>
+      commitHostedNetworkCommand(
+        p.db,
+        p.principal,
+        { ...request, batch: withBatchHash(legacy) },
+        allow,
+        allow,
+      ),
+    ).toThrow('INVALID_INPUT');
+    expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('allows a replacement submission after a reviewed rejection on schema 14', () => {
+    const p = setup(),
+      opening = connect(p),
+      original = submission(p, opening);
+    commitHostedNetworkCommand(p.db, p.principal, original, allow, allow);
+    enterQueue(p);
+    selectRequest(p, original.requestId, 'Исправить заявку');
+    commitGmDeviceRequestDecision(
+      p.db,
+      gmScope(p),
+      decisionInput(p, original.requestId, true),
+      allow,
+      allow,
+    );
+    const replacement = submission(p, opening);
+    expect(
+      commitHostedNetworkCommand(p.db, p.principal, replacement, allow, allow).receipt.operation,
+    ).toBe('SUBMIT');
+    expect(
+      readHostedDeviceRequestCurrent(p.db, p.principal, original.requestId, allow).requestStatus,
+    ).toBe('REJECTED');
   });
   it('does not reserve capacity for two separate pending batches that each fit the same ACTIVE forecast', () => {
     const p = setup(),

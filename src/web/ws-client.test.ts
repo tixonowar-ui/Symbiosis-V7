@@ -3481,7 +3481,16 @@ describe('CHR-010 web protocol vocabulary', () => {
       'UI-CMD-CAMPAIGN-START',
     ])
       expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId(workflow)).toBe(true);
-    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-PAUSE-SET')).toBe(false);
+    for (const workflow of [
+      'UI-CMD-CAMPAIGN-SETTINGS-SET',
+      'UI-CMD-CAMPAIGN-CAPACITY-SET',
+      'UI-CMD-MASTER-PASSWORD-CHANGE',
+      'UI-CMD-CAMPAIGN-PAUSE-SET',
+      'UI-CMD-CLIENT-DISCONNECT',
+    ])
+      expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId(workflow), workflow).toBe(true);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-FINISH')).toBe(false);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-UNKNOWN')).toBe(false);
   });
 });
 

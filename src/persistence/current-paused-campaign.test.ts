@@ -228,6 +228,7 @@ describe('owned current PAUSED campaign source', () => {
       campaignId: 'campaign',
       title: 'Exact published campaign',
       status: 'PAUSED',
+      firstStartCompleted: false,
       activePlayerCapacity: 5,
       activePcCount: 2,
       checkpointSha256: createHash('sha256').update(checkpoint.snapshotJson).digest('hex'),

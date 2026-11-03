@@ -850,6 +850,37 @@ describe('final admission over the actual authenticated peer channel', () => {
         controllerPreparationOrNull: null,
       };
     });
+    // Storage guards must precede candidate validation. The existing admission journal is real;
+    // candidate validation is a boundary spy for new submissions only.
+    const newSubmission = (candidates: NetworkPreparedBatch['candidates']) => {
+      const current = p.header(),
+        requestId = randomUUID(),
+        commandId = randomUUID();
+      const next = withBatchHash({
+        ...prepared,
+        requestId,
+        candidates,
+        campaignProof: {
+          campaignId: p.campaignId,
+          revisions: vector(current),
+          checkpointSha256: current.checkpointSha256,
+        },
+      });
+      return {
+        operation: 'SUBMIT' as const,
+        commandId,
+        receiptId: randomUUID(),
+        requestId,
+        technicalSessionId: prepared.technicalSessionId,
+        expectedConnectionRevision: prepared.connectionRevision,
+        batch: next,
+        semanticBodyJson: deviceAdmissionSubmitSemanticBody(commandId, next.batchSha256),
+      };
+    };
+    const distinctCandidate = () => ({
+      ...candidate,
+      descriptor: { ...candidate.descriptor, sourceUuid: randomUUID() },
+    });
     const recover = (): AdmissionPeerCommand => ({
       schemaVersion: 1,
       operation: 'ADMISSION_PLAYER_RECOVER',
@@ -955,6 +986,43 @@ describe('final admission over the actual authenticated peer channel', () => {
       ).toMatchObject({ outcome: 'REFUSED', code: 'IDEMPOTENCY_CONFLICT' });
       expect(p.header().activePcCount).toBe(0);
     });
+    it('keeps a declined source single-use and releases its request for a different submission on schema 14', async () => {
+      const declined = await admissionCall(connection.peer, {
+        schemaVersion: 1,
+        operation: 'ADMISSION_PLAYER_DECIDE',
+        ...binding(),
+        decision,
+      });
+      expect(declined.outcome, JSON.stringify(declined)).toBe('DECIDED');
+      const validateCandidate = vi.fn(),
+        before = p.db.serialize();
+      expect(() =>
+        commitHostedNetworkCommand(
+          p.db,
+          p.principal,
+          newSubmission([candidate]),
+          p.validate,
+          allow,
+          validateCandidate,
+          rules().rules,
+        ),
+      ).toThrow('IDEMPOTENCY_CONFLICT');
+      expect(validateCandidate).not.toHaveBeenCalled();
+      expect(p.db.serialize().equals(before)).toBe(true);
+      const replacement = newSubmission([distinctCandidate()]);
+      expect(
+        commitHostedNetworkCommand(
+          p.db,
+          p.principal,
+          replacement,
+          p.validate,
+          allow,
+          validateCandidate,
+          rules().rules,
+        ).receipt.operation,
+      ).toBe('SUBMIT');
+      expect(validateCandidate).toHaveBeenCalled();
+    });
     it('fences late decisions before proving absence and releases the previous download', async () => {
       const first = await admissionCall(connection.peer, {
         schemaVersion: 1,
@@ -1040,6 +1108,21 @@ describe('final admission over the actual authenticated peer channel', () => {
         alreadyImportedSourceUuids: [candidate.descriptor.sourceUuid],
       });
       if (after.outcome !== 'CAPACITY') throw new Error('Expected capacity');
+      const beforeSubmission = p.db.serialize(),
+        validateCandidate = vi.fn();
+      expect(() =>
+        commitHostedNetworkCommand(
+          p.db,
+          p.principal,
+          newSubmission(Array.from({ length: 3 }, distinctCandidate)),
+          p.validate,
+          allow,
+          validateCandidate,
+          rules().rules,
+        ),
+      ).toThrow('CAPACITY_EXCEEDED');
+      expect(validateCandidate).not.toHaveBeenCalled();
+      expect(p.db.serialize().equals(beforeSubmission)).toBe(true);
       expect(after.campaign.checkpointSha256).toBe(p.header().checkpointSha256);
       expect(after.campaign.revisions.stateRevision).toBeGreaterThan(
         connection.peer.campaign.revisions.stateRevision,

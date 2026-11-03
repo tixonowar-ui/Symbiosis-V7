@@ -374,6 +374,10 @@ export function createCampaignBindManager(options: CampaignBindOptions) {
   return {
     interfaces,
     describe,
+    configurationForCampaign: (campaignId: string) => {
+      const lease = campaignLease(campaignId);
+      return lease === null ? null : { ...lease.config };
+    },
     endpointForCampaign: (campaignId: string): CampaignNetworkEndpoint | null => {
       const lease = campaignLease(campaignId);
       return lease === null ? null : endpoint(lease);

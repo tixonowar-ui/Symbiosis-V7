@@ -1,3 +1,4 @@
+import { campaignPeerControlValue, campaignPeerStateValue } from './campaign-lifecycle.js';
 import { wireCodecPrimitives } from './wire-codec.js';
 import { admissionGmClientValue, admissionGmHostValue } from './campaign-admission-review.js';
 import { redactProtocolInputRefusal } from './wire-codec.js';
@@ -422,6 +423,7 @@ const identityDraftRefusalMessage = (value: unknown): IdentityDraftRefusalV3Mess
 
 const clientValue = (value: unknown): ClientToHostV3Message => {
   const object = base(value);
+  if (object['messageType'] === 'network.peer-control') return campaignPeerControlValue(value);
   if (
     object['messageType'] === 'network.admission-review.edit' ||
     object['messageType'] === 'network.admission-view.replace'
@@ -441,6 +443,7 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
 
 const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3Message => {
   const object = base(value);
+  if (object['messageType'] === 'network.peer-state') return campaignPeerStateValue(value);
   if (
     object['messageType'] === 'network.admission-draft.result' ||
     object['messageType'] === 'network.admission-draft.refusal'

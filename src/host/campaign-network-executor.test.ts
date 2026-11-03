@@ -1,3 +1,10 @@
+import {
+  encodeCampaignLobbyCheckCommand,
+  decodeCampaignLobbyCheckCommand,
+  encodeCampaignLobbyCheckResponse,
+  decodeCampaignLobbyCheckResponse,
+} from './campaign-connection-peer.js';
+import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
@@ -259,9 +266,29 @@ describe('campaign application queue and RAM transport generations', () => {
       order.push('other');
     });
     expect(order).toEqual(['one:start', 'other']);
+    expect(ex.pendingCounts(one.campaignId)).toEqual({
+      queuedCommandCount: 1,
+      executingCommandCount: 1,
+    });
+    expect(ex.pendingCounts(one.campaignId, one.peerDeviceId)).toEqual({
+      queuedCommandCount: 1,
+      executingCommandCount: 1,
+    });
+    expect(ex.pendingCounts(one.campaignId, randomUUID())).toEqual({
+      queuedCommandCount: 0,
+      executingCommandCount: 0,
+    });
+    expect(ex.pendingCounts(three.campaignId)).toEqual({
+      queuedCommandCount: 0,
+      executingCommandCount: 0,
+    });
     gate.resolve();
     await Promise.all([first, second]);
     expect(order).toEqual(['one:start', 'other', 'one:end', 'two']);
+    expect(ex.pendingCounts(one.campaignId)).toEqual({
+      queuedCommandCount: 0,
+      executingCommandCount: 0,
+    });
   });
 
   it('a failed operation does not poison the campaign queue or leak its private exception', async () => {
@@ -449,13 +476,18 @@ describe('campaign application queue and RAM transport generations', () => {
       old = ex.bindScope(one, scope);
     const revoke = vi.fn();
     const stale = ex.trackTransfer(old, TRANSFER, revoke);
+    expect(ex.trackedTransferCount(old.campaignId)).toBe(1);
+    expect(ex.trackedTransferCount(old.campaignId, old.peerDeviceId)).toBe(1);
+    expect(ex.trackedTransferCount(old.campaignId, randomUUID())).toBe(0);
     expect(() => ex.trackTransfer(old, TRANSFER, revoke)).toThrow(CampaignNetworkExecutorError);
     stale();
+    expect(ex.trackedTransferCount(old.campaignId)).toBe(0);
     ex.trackTransfer(old, TRANSFER, revoke);
     stale();
     ex.recoverScope(two, scope);
     expect(revoke).toHaveBeenCalledTimes(1);
     expect(() => ex.trackTransfer(old, 'another', revoke)).toThrow(CampaignNetworkExecutorError);
+    expect(ex.trackedTransferCount(old.campaignId)).toBe(0);
   });
 
   it('does not interpret an ordinary synchronous cleanup return as a failure status', async () => {
@@ -502,6 +534,61 @@ describe('campaign application queue and RAM transport generations', () => {
       expect(() => ex.assertCurrent(old)).toThrow(CampaignNetworkExecutorError);
     },
   );
+
+  it('counts immutable publications in RAM ownership but only command transfers as pending mutations', async () => {
+    const transport = await actualChannels(),
+      a = await transport.connect(),
+      ex = executor();
+    const channel = ex.registerChannel(a.server),
+      lease = ex.bindScope(channel, scope);
+    const publicationRevoked = vi.fn(),
+      commandRevoked = vi.fn();
+    ex.trackTransfer(lease, TRANSFER, publicationRevoked, 'PUBLICATION');
+    expect(ex.trackedTransferCount(channel.campaignId, channel.peerDeviceId)).toBe(1);
+    expect(ex.pendingTransferCount(channel.campaignId, channel.peerDeviceId)).toBe(0);
+    ex.trackTransfer(lease, 'incoming-command', commandRevoked);
+    expect(ex.trackedTransferCount(channel.campaignId)).toBe(2);
+    expect(ex.pendingTransferCount(channel.campaignId)).toBe(1);
+    expect(() => ex.trackTransfer(lease, 'unknown', vi.fn(), 'READ' as 'COMMAND')).toThrow(
+      'INVALID_TRANSFER',
+    );
+    ex.closeChannel(channel);
+    expect(publicationRevoked).toHaveBeenCalledTimes(1);
+    expect(commandRevoked).toHaveBeenCalledTimes(1);
+    expect(ex.trackedTransferCount(channel.campaignId)).toBe(0);
+    expect(ex.pendingTransferCount(channel.campaignId)).toBe(0);
+    expect(() => ex.assertCurrent(lease)).toThrow();
+  });
+
+  it('fences synchronous readers without pending work, even when physical channel close fails', async () => {
+    const transport = await actualChannels();
+    const a = await transport.connect();
+    const ex = executor();
+    const channel = new Proxy(a.server, {
+      get(target, key) {
+        if (key === 'close')
+          return () => {
+            throw Error('Physical close failed');
+          };
+        const value: unknown = Reflect.get(target, key, target);
+        return typeof value === 'function'
+          ? (value as (...args: unknown[]) => unknown).bind(target)
+          : value;
+      },
+    });
+    const handle = ex.registerChannel(channel);
+    ex.assertChannel(handle);
+    expect(ex.pendingCounts(handle.campaignId)).toEqual({
+      queuedCommandCount: 0,
+      executingCommandCount: 0,
+    });
+    expect(() => ex.assertChannel({ ...handle })).toThrow(CampaignNetworkExecutorError);
+    expect(() => ex.closeChannel(handle)).toThrow('REVOCATION_FAILED');
+    expect(a.server.closed).toBe(false);
+    expect(() => ex.assertChannel(handle)).toThrow('INVALID_CHANNEL');
+    ex.close();
+    expect(() => ex.assertChannel(handle)).toThrow('CLOSED');
+  });
 
   it('rejects thenable execution results without executing getters or reflecting input', async () => {
     const transport = await actualChannels();
@@ -584,5 +671,125 @@ describe('campaign application queue and RAM transport generations', () => {
       );
     a.server.close();
     expect(() => ex.registerChannel(a.server)).toThrow(CampaignNetworkExecutorError);
+  });
+});
+
+describe('closed read-only lobby freshness codec', () => {
+  const limits = {
+    maxPublicationBytes: CAMPAIGN_PEER_CHANNEL_MAX_BYTES,
+    maxChunkBytes: CAMPAIGN_PEER_CHANNEL_MAX_BYTES,
+  };
+  const query = {
+    schemaVersion: 1 as const,
+    operation: 'CAMPAIGN_LOBBY_CHECK' as const,
+    requestId: HOST,
+    technicalSessionId: SESSION,
+    submitCommandId: DEVICE,
+    admittedTabId: OTHER,
+    knownObservationSha256: 'a'.repeat(64),
+  };
+  it('accepts only an exact known hash equality and closed authenticated scope', () => {
+    expect(decodeCampaignLobbyCheckCommand(encodeCampaignLobbyCheckCommand(query))).toEqual(query);
+    const unchanged = {
+      ...query,
+      outcome: 'UNCHANGED' as const,
+      observationSha256: query.knownObservationSha256,
+    };
+    expect(
+      decodeCampaignLobbyCheckResponse(encodeCampaignLobbyCheckResponse(unchanged, limits), limits),
+    ).toEqual(unchanged);
+    expect(() =>
+      encodeCampaignLobbyCheckResponse({ ...unchanged, observationSha256: 'b'.repeat(64) }, limits),
+    ).toThrow();
+    expect(() =>
+      decodeCampaignLobbyCheckCommand(canonicalPostSaveJson({ ...query, authority: 'gm' })),
+    ).toThrow();
+    expect(() =>
+      decodeCampaignLobbyCheckCommand(
+        canonicalPostSaveJson({ ...query, knownObservationSha256: 'bad' }),
+      ),
+    ).toThrow();
+  });
+  it('binds the changed manifest to its exact scope, digest and configured byte limits', () => {
+    const manifest = {
+      schemaVersion: 1 as const,
+      operation: 'ADMISSION_LOBBY_BEGIN' as const,
+      requestId: query.requestId,
+      technicalSessionId: query.technicalSessionId,
+      submitCommandId: query.submitCommandId,
+      outcome: 'MANIFEST' as const,
+      transferId: CAMPAIGN,
+      publicationChecksum: 'b'.repeat(64),
+      bodySha256: 'b'.repeat(64),
+      byteLength: 4,
+      chunkBytes: 4,
+      chunkCount: 1,
+      campaignRevision: 1,
+    };
+    const changed = {
+      ...query,
+      outcome: 'CHANGED' as const,
+      observationSha256: 'b'.repeat(64),
+      manifest,
+    };
+    expect(
+      decodeCampaignLobbyCheckResponse(encodeCampaignLobbyCheckResponse(changed, limits), limits),
+    ).toEqual(changed);
+    for (const patch of [
+      { requestId: OTHER },
+      { technicalSessionId: OTHER },
+      { submitCommandId: OTHER },
+      { operation: 'ADMISSION_PUBLICATION_BEGIN' },
+      { publicationChecksum: 'c'.repeat(64) },
+      { bodySha256: 'c'.repeat(64) },
+      {
+        byteLength: limits.maxPublicationBytes + 1,
+        chunkCount: Math.ceil((limits.maxPublicationBytes + 1) / manifest.chunkBytes),
+      },
+      { chunkBytes: limits.maxChunkBytes + 1 },
+      { chunkCount: 2 },
+      { foreignMetadata: 'hidden' },
+    ]) {
+      expect(() =>
+        decodeCampaignLobbyCheckResponse(
+          canonicalPostSaveJson({ ...changed, manifest: { ...manifest, ...patch } }),
+          limits,
+        ),
+      ).toThrow();
+    }
+    expect(() =>
+      decodeCampaignLobbyCheckResponse(
+        canonicalPostSaveJson({
+          ...changed,
+          outcome: 'UNCHANGED',
+          observationSha256: query.knownObservationSha256,
+        }),
+        limits,
+      ),
+    ).toThrow();
+    const getter = vi.fn(() => manifest.transferId);
+    const accessor = Object.defineProperty({ ...manifest }, 'transferId', {
+      enumerable: true,
+      get: getter,
+    });
+    expect(() =>
+      encodeCampaignLobbyCheckResponse({ ...changed, manifest: accessor }, limits),
+    ).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+  });
+  it('refuses an outcome accessor without running it', () => {
+    const getter = vi.fn(() => 'UNCHANGED');
+    const input = Object.defineProperty(
+      { ...query, observationSha256: query.knownObservationSha256 },
+      'outcome',
+      { enumerable: true, get: getter },
+    );
+    expect(() =>
+      encodeCampaignLobbyCheckResponse(
+        input as Parameters<typeof encodeCampaignLobbyCheckResponse>[0],
+        limits,
+      ),
+    ).toThrow();
+    expect(getter).not.toHaveBeenCalled();
   });
 });

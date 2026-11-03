@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { encodeHostMessageV2 } from '@shared/wire-v2-codec.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import {
   CHR_002_SET_DECIDE_ACTION_KEYS,
@@ -28,6 +29,44 @@ describe('host protocol vocabulary implemented presentation support', () => {
     }
   });
 
+  it.each(['NET-008', 'NET-009', 'NET-010'] as const)(
+    'keeps published V3 peer form %s outside the generic V2 boundary',
+    (formId) => {
+      const routeTemplate = '/player/campaigns/:campaignId/network/' + formId.toLowerCase();
+      expect(vocabulary.isPresentedForm(formId, 'screen', routeTemplate, [])).toBe(false);
+      expect(
+        vocabulary.isPresentedForm(formId, 'screen', routeTemplate, [
+          { parameterIndex: 0, source: 'inherited', value: '00000000-0000-4000-8000-000000000001' },
+        ]),
+      ).toBe(false);
+      expect(
+        encodeHostMessageV2(
+          {
+            messageType: 'projection.snapshot',
+            protocolVersion: 2,
+            projectionRole: 'player',
+            revisions: { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 },
+            presentation: {
+              assignment: {
+                reason: 'RECONNECT',
+                correlationId: '00000000-0000-4000-8000-000000000001',
+              },
+              base: {
+                formId,
+                formType: 'screen',
+                routeTemplate,
+                routeBindings: [],
+                availableActionKeys: [],
+                roleFilteredPayload: {},
+              },
+              layers: [],
+            },
+          },
+          vocabulary,
+        ).ok,
+      ).toBe(false);
+    },
+  );
   it('keeps unsupported presentation variants fail-closed', () => {
     expect(vocabulary.isPresentedForm('APP-004', 'screen', '/player', [])).toBe(false);
     expect(

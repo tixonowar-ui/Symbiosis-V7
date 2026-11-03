@@ -1,3 +1,8 @@
+import {
+  encodeCampaignLobbyCheckResponse,
+  type CampaignLobbyCheckCommand,
+  type CampaignLobbyCheckResponse,
+} from './campaign-connection-peer.js';
 import { commitCampaignLobbyCommand } from '../persistence/campaign-lobby.js';
 import {
   campaignLobbyOwnerObservationValue,
@@ -249,9 +254,31 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
           };
     const publicationChecksum = postSaveSha256(canonicalPostSaveJson(body));
     const text = canonicalPostSaveJson(
-        command.operation === 'ADMISSION_LOBBY_BEGIN' ? body : { ...body, publicationChecksum },
-      ),
-      byteLength = Buffer.byteLength(text, 'utf8');
+      command.operation === 'ADMISSION_LOBBY_BEGIN' ? body : { ...body, publicationChecksum },
+    );
+    return materializePublication(
+      connection,
+      command,
+      lease,
+      text,
+      publicationChecksum,
+      state.campaign.stateRevision,
+    );
+  }
+  // Both entry points already verified the complete source and lease in this synchronous turn.
+  function materializePublication(
+    connection: C,
+    command: Extract<
+      AdmissionPeerCommand,
+      { operation: 'ADMISSION_PUBLICATION_BEGIN' | 'ADMISSION_LOBBY_BEGIN' }
+    >,
+    lease: CampaignNetworkExecutionLease,
+    text: string,
+    publicationChecksum: string,
+    campaignRevision: number,
+    checkCommand?: CampaignLobbyCheckCommand,
+  ): Manifest {
+    const byteLength = Buffer.byteLength(text, 'utf8');
     if (byteLength > d.limits.maxPublicationBytes) return fail('TRANSFER_LIMIT');
     const transferId = randomUUID(),
       size = chunkBytes(command, transferId, publicationChecksum);
@@ -266,9 +293,14 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
       byteLength,
       chunkBytes: size,
       chunkCount: Math.ceil(byteLength / size),
-      campaignRevision: state.campaign.stateRevision,
+      campaignRevision,
     };
     bounded(manifest);
+    if (checkCommand !== undefined)
+      encodeCampaignLobbyCheckResponse(
+        { ...checkCommand, outcome: 'CHANGED', observationSha256: publicationChecksum, manifest },
+        codecLimits,
+      );
     d.executor.assertCurrent(lease);
     const reserved = byteLength * 2;
     if (!d.reserve(reserved)) return fail('TRANSFER_LIMIT');
@@ -286,7 +318,7 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
         next: 0,
       };
       const owned = stage;
-      stage.untrack = d.executor.trackTransfer(lease, transferId, () => drop(owned));
+      stage.untrack = d.executor.trackTransfer(lease, transferId, () => drop(owned), 'PUBLICATION');
       stage.timer = setTimeout(() => drop(owned), d.limits.timeoutMs);
       stage.timer.unref();
       stages.set(connection, stage);
@@ -650,5 +682,41 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
       };
     }
   }
-  return { execute, capacity, close };
+  function checkLobby(
+    connection: C,
+    command: CampaignLobbyCheckCommand,
+  ): CampaignLobbyCheckResponse {
+    try {
+      const query = {
+        schemaVersion: 1 as const,
+        operation: 'ADMISSION_LOBBY_BEGIN' as const,
+        ...scopeOf(command),
+        admittedTabId: command.admittedTabId,
+      };
+      const state = authoritative(connection, query),
+        lease = leaseAt(connection, query);
+      if (state.current?.gmDecisionOrNull == null) return fail('UNAVAILABLE');
+      const text = canonicalPostSaveJson(ownerLobby(state, query.admittedTabId));
+      if (Buffer.byteLength(text, 'utf8') > d.limits.maxPublicationBytes)
+        return fail('TRANSFER_LIMIT');
+      const observationSha256 = postSaveSha256(text);
+      d.executor.assertCurrent(lease);
+      if (observationSha256 === command.knownObservationSha256)
+        return { ...command, observationSha256, outcome: 'UNCHANGED' };
+      close(connection);
+      const manifest = materializePublication(
+        connection,
+        query,
+        lease,
+        text,
+        observationSha256,
+        state.campaign.stateRevision,
+        command,
+      );
+      return { ...command, observationSha256, outcome: 'CHANGED', manifest };
+    } catch {
+      return { ...command, outcome: 'REFUSED', code: 'UNAVAILABLE' };
+    }
+  }
+  return { execute, capacity, close, checkLobby };
 }

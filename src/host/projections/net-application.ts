@@ -1,3 +1,10 @@
+import {
+  campaignLifecycleGmProjectionValue,
+  campaignLifecycleGmActions,
+  isCampaignLifecycleForm,
+  type CampaignLifecycleGmProjection,
+} from '@shared/campaign-lifecycle.js';
+import type { GmRequestReviewSource } from '../../persistence/network-device-request.js';
 import { type ActionKey } from '@generated/types/atlas.js';
 import { type PresentedBaseForm, type PresentedLayerForm } from '../../shared/wire-v2-protocol.js';
 import {
@@ -1116,6 +1123,7 @@ const routes: Readonly<Record<CampaignLobbyGmForm, string>> = {
 };
 /** The existing GM view owns navigation/revisions; these panels add no context or authority. */
 export function projectGmCampaignLobby(input: {
+  readonly currentCampaign: CurrentPausedCampaignHeader;
   readonly view: GmRequestReviewView;
   readonly history: AdmissionHistory;
   readonly origin: CampaignCreationOrigin;
@@ -1123,9 +1131,15 @@ export function projectGmCampaignLobby(input: {
   readonly supported: readonly WorkflowCommandCapabilityId[];
 }): { readonly base: PresentedBaseForm; readonly revisions: RevisionVector } {
   const { view, history, origin } = input,
-    state = history.lobbyOrNull;
+    state = history.lobbyOrNull,
+    lifecycle = history.lifecycleOrNull;
   if (
     state === null ||
+    lifecycle === null ||
+    lifecycle === undefined ||
+    input.currentCampaign.campaignId !== view.campaignId ||
+    input.currentCampaign.stateRevision !== history.checkpoint.stateRevision ||
+    input.currentCampaign.firstStartCompleted !== (state.sceneOrNull !== null) ||
     !isCampaignLobbyGmForm(view.formId) ||
     view.campaignId !== history.checkpoint.campaignId ||
     view.campaignId !== origin.payload.campaignId
@@ -1156,9 +1170,9 @@ export function projectGmCampaignLobby(input: {
     projectionRevision: view.projectionRevision,
     actorVisibilityRevision: view.actorVisibilityRevision,
     panelVariant: scene === null ? 'PRE_START' : 'STARTED_PEACE',
-    campaignStatus: scene === null ? 'PAUSED' : 'HOSTING',
-    title: origin.payload.metadata.title,
-    descriptionOrNull: origin.payload.metadata.description,
+    campaignStatus: input.currentCampaign.status,
+    title: input.currentCampaign.title,
+    descriptionOrNull: lifecycle.settings.descriptionOrNull,
     groups,
     activePeaceSceneOrNull: scene,
     campaignArtChecksumOrNull:
@@ -1170,7 +1184,7 @@ export function projectGmCampaignLobby(input: {
       blockedPcCount: state.copies.length - state.includedCopies.length,
       readyDeviceCount: state.readyByDevice.filter((device) => device.ready).length,
     },
-    activePlayerCapacity: origin.payload.host.activePlayerCapacity,
+    activePlayerCapacity: input.currentCampaign.activePlayerCapacity,
     admissionBatches: [...new Set(state.copies.map((copy) => copy.admissionBatchId))]
       .sort()
       .map((admissionBatchId) => ({
@@ -1332,5 +1346,101 @@ export function projectLocalCampaignLobby(input: {
     routeBindings: [{ parameterIndex: 0, source: 'inherited', value: observation.campaignId }],
     availableActionKeys: campaignLobbyPlayerActions(payload, input.supported),
     roleFilteredPayload: payload as unknown as JsonObject,
+  };
+}
+
+/** Five forms share the existing queue cursor, authority and revision vector. */
+export function projectGmCampaignLifecycle(input: {
+  readonly source: GmRequestReviewSource;
+  readonly history: AdmissionHistory;
+  readonly activeListenerEndpointOrNull: CampaignLifecycleGmProjection['activeListenerEndpointOrNull'];
+  readonly availableNetworkInterfaces: CampaignLifecycleGmProjection['availableNetworkInterfaces'];
+  readonly devices: CampaignLifecycleGmProjection['devices'];
+  readonly pendingOperationCount: number;
+  readonly supported: readonly WorkflowCommandCapabilityId[];
+}): {
+  readonly base: PresentedBaseForm;
+  readonly layers: readonly PresentedLayerForm[];
+  readonly revisions: RevisionVector;
+} {
+  const { source, history } = input,
+    view = source.viewOrNull,
+    lifecycle = history.lifecycleOrNull,
+    scene = history.lobbyOrNull?.sceneOrNull ?? null;
+  if (
+    view === null ||
+    !isCampaignLifecycleForm(view.formId) ||
+    lifecycle === null ||
+    lifecycle === undefined ||
+    source.currentCampaign.stateRevision !== history.checkpoint.stateRevision ||
+    source.scope.campaignId !== history.checkpoint.campaignId ||
+    source.currentCampaign.firstStartCompleted !== (scene !== null)
+  )
+    throw new Error('campaign lifecycle presentation source mismatch');
+  const art = source.creationOrigin.payload.metadata.art;
+  const p: CampaignLifecycleGmProjection = {
+    contextId: source.scope.gmLocalContextId,
+    campaignId: source.scope.campaignId,
+    stateRevision: view.stateRevision,
+    projectionRevision: view.projectionRevision,
+    actorVisibilityRevision: view.actorVisibilityRevision,
+    campaignRevision: history.checkpoint.stateRevision,
+    settingsRevision: lifecycle.settingsRevision,
+    campaignStatus: source.currentCampaign.status,
+    pauseReasonOrNull: lifecycle.pauseReasonOrNull,
+    firstStartCompleted: source.currentCampaign.firstStartCompleted,
+    title: lifecycle.settings.title,
+    descriptionOrNull: lifecycle.settings.descriptionOrNull,
+    defaultFutureRollMode: lifecycle.settings.defaultFutureRollMode,
+    networkForNextLaunch: lifecycle.settings.network,
+    activeListenerEndpointOrNull: input.activeListenerEndpointOrNull,
+    availableNetworkInterfaces: input.availableNetworkInterfaces,
+    campaignArtChecksumOrNull:
+      art === null
+        ? null
+        : createHash('sha256').update(Buffer.from(art.bytesBase64, 'base64')).digest('hex'),
+    currentCapacity: lifecycle.activePlayerCapacity,
+    activePlayerCount: source.currentCampaign.activePcCount,
+    safeBoundary: input.pendingOperationCount === 0,
+    pendingOperationCount: input.pendingOperationCount,
+    clockMode: scene?.clockMode ?? null,
+    checkpointPreview: {
+      campaignRevision: history.checkpoint.stateRevision,
+      checkpointSha256: source.currentCampaign.checkpointSha256,
+    },
+    devices: input.devices,
+    commandId: null,
+  };
+  campaignLifecycleGmProjectionValue(p);
+  const revisions = {
+    stateRevision: view.stateRevision,
+    projectionRevision: view.projectionRevision,
+    actorVisibilityRevision: view.actorVisibilityRevision,
+  };
+  const actions = campaignLifecycleGmActions(view.formId, p, input.supported),
+    payload = p as unknown as JsonObject;
+  const screen = (id: 'CMP-008' | 'CMP-016', enabled: boolean): PresentedBaseForm => ({
+    formId: id,
+    formType: 'screen',
+    routeTemplate: '/master/campaigns/:campaignId/campaign/' + id.toLowerCase(),
+    routeBindings: [{ parameterIndex: 0, source: 'inherited', value: source.scope.campaignId }],
+    availableActionKeys: enabled ? actions : [],
+    roleFilteredPayload: payload,
+  });
+  if (view.formId === 'CMP-008' || view.formId === 'CMP-016')
+    return { base: screen(view.formId, true), layers: [], revisions };
+  return {
+    base: screen('CMP-008', false),
+    layers: [
+      {
+        formId: view.formId,
+        formType: 'dialog',
+        routeTemplate: '@dialog/' + view.formId.toLowerCase(),
+        routeBindings: [],
+        availableActionKeys: actions,
+        roleFilteredPayload: payload,
+      },
+    ],
+    revisions,
   };
 }

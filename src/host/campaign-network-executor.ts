@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { CampaignConnection } from './campaign-creation.js';
 import { Buffer } from 'node:buffer';
 import { types } from 'node:util';
 import type { CampaignPeerServerChannel } from './campaign-peer-channel.js';
@@ -56,7 +58,10 @@ interface LeaseRecord {
   readonly value: CampaignNetworkExecutionLease;
   readonly owner: ChannelRecord;
   readonly scope: ScopeRecord;
-  readonly transfers: Map<string, { readonly onRevoke: () => void }>;
+  readonly transfers: Map<
+    string,
+    { readonly onRevoke: () => void; readonly purpose: 'COMMAND' | 'PUBLICATION' }
+  >;
   revoked: boolean;
 }
 const fail = (code: CampaignNetworkExecutorErrorCode): never => {
@@ -133,6 +138,10 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
   const leases = new WeakMap<CampaignNetworkExecutionLease, LeaseRecord>();
   const scopes = new Map<string, ScopeRecord>();
   const queues = new Map<string, Promise<void>>();
+  const operations = new Set<{
+    channel: CampaignNetworkExecutionChannel;
+    phase: 'QUEUED' | 'EXECUTING';
+  }>();
   let closed = false;
   let channelOrdinal = 0;
   let scopeBytes = 0;
@@ -298,13 +307,19 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
     value: CampaignNetworkExecutionLease,
     transferId: string,
     onRevoke: () => void,
+    purpose: 'COMMAND' | 'PUBLICATION' = 'COMMAND',
   ): () => void {
     assertCurrent(value);
-    if (typeof transferId !== 'string' || transferId.length === 0 || typeof onRevoke !== 'function')
+    if (
+      typeof transferId !== 'string' ||
+      transferId.length === 0 ||
+      typeof onRevoke !== 'function' ||
+      (purpose !== 'COMMAND' && purpose !== 'PUBLICATION')
+    )
       return fail('INVALID_TRANSFER');
     const lease = leases.get(value)!;
     if (lease.transfers.has(transferId)) return fail('INVALID_TRANSFER');
-    const registration = { onRevoke };
+    const registration = { onRevoke, purpose };
     lease.transfers.set(transferId, registration);
     return () => {
       if (lease.transfers.get(transferId) === registration) lease.transfers.delete(transferId);
@@ -352,8 +367,11 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
         new CampaignNetworkExecutorError(closed ? 'CLOSED' : 'INVALID_CHANNEL'),
       );
     }
+    const operation = { channel: value, phase: 'QUEUED' as 'QUEUED' | 'EXECUTING' };
+    operations.add(operation);
     const prior = queues.get(value.campaignId) ?? Promise.resolve();
     const pending = prior.then(async () => {
+      operation.phase = 'EXECUTING';
       live(owner);
       try {
         const result = execute();
@@ -371,10 +389,10 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
         return fail('EXECUTION_FAILED');
       }
     });
-    const tail = pending.then(
-      () => undefined,
-      () => undefined,
-    );
+    const settled = () => {
+      operations.delete(operation);
+    };
+    const tail = pending.then(settled, settled);
     queues.set(value.campaignId, tail);
     void tail.then(() => {
       if (queues.get(value.campaignId) === tail) queues.delete(value.campaignId);
@@ -394,10 +412,55 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
     scopes.clear();
     scopeBytes = 0;
     queues.clear();
+    operations.clear();
     if (failed) return fail('REVOCATION_FAILED');
+  }
+  function transferCount(
+    campaignId: string,
+    deviceIdOrNull: string | null,
+    pendingOnly: boolean,
+  ): number {
+    if (closed) return fail('CLOSED');
+    let count = 0;
+    for (const channel of registered) {
+      if (
+        channel.value.campaignId !== campaignId ||
+        (deviceIdOrNull !== null && channel.value.peerDeviceId !== deviceIdOrNull)
+      )
+        continue;
+      for (const lease of channel.leases)
+        for (const transfer of lease.transfers.values())
+          if (!pendingOnly || transfer.purpose === 'COMMAND') count++;
+    }
+    return count;
   }
   return Object.freeze({
     registerChannel,
+    assertChannel(value: CampaignNetworkExecutionChannel): void {
+      channelAt(value);
+    },
+    trackedTransferCount(campaignId: string, deviceIdOrNull: string | null = null): number {
+      return transferCount(campaignId, deviceIdOrNull, false);
+    },
+    /** Immutable outgoing snapshots hold RAM, but contain no pending campaign mutation. */
+    pendingTransferCount(campaignId: string, deviceIdOrNull: string | null = null): number {
+      return transferCount(campaignId, deviceIdOrNull, true);
+    },
+    pendingCounts(campaignId: string, deviceIdOrNull: string | null = null) {
+      if (closed) return fail('CLOSED');
+      let queuedCommandCount = 0,
+        executingCommandCount = 0;
+      for (const operation of operations) {
+        if (
+          operation.channel.campaignId !== campaignId ||
+          (deviceIdOrNull !== null && operation.channel.peerDeviceId !== deviceIdOrNull)
+        )
+          continue;
+        if (operation.phase === 'QUEUED') queuedCommandCount++;
+        else executingCommandCount++;
+      }
+      return { queuedCommandCount, executingCommandCount };
+    },
     hasPending(campaignId: string): boolean {
       if (closed) return fail('CLOSED');
       return queues.has(campaignId);
@@ -415,3 +478,91 @@ export function createCampaignNetworkExecutor(options: CampaignNetworkExecutorOp
     close,
   });
 }
+
+export interface CampaignGmWorkScope {
+  readonly gmLocalContextId: string;
+  readonly campaignId: string;
+}
+declare const tokenBrand: unique symbol;
+export interface CampaignGmWorkToken {
+  readonly [tokenBrand]: true;
+}
+interface Work {
+  readonly token: CampaignGmWorkToken;
+  readonly scope: CampaignGmWorkScope | null;
+  phase: 'QUEUED' | 'EXECUTING';
+}
+/** Tracks accepted GM calls, not undecoded socket frames. Polling and nested projection are not calls. */
+export function createCampaignGmScheduler(
+  readScope: (connection: CampaignConnection) => CampaignGmWorkScope | null,
+) {
+  let tail = Promise.resolve(),
+    closed = false;
+  const active = new AsyncLocalStorage<CampaignGmWorkToken | null>(),
+    work = new Map<CampaignGmWorkToken, Work>();
+  const fail = (): never => {
+    throw new Error('campaign GM work unavailable');
+  };
+  function enqueue<T>(run: () => Promise<T>, record: Work | null): Promise<T> {
+    if (closed) return Promise.reject(new Error('campaign GM work closed'));
+    if (record !== null) work.set(record.token, record);
+    const next = tail.then(async () => {
+      try {
+        if (closed) return fail();
+        if (record === null) return await active.run(null, run);
+        record.phase = 'EXECUTING';
+        return await active.run(record.token, run);
+      } finally {
+        if (record !== null) work.delete(record.token);
+      }
+    });
+    tail = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+  return {
+    wire<T>(connection: CampaignConnection, run: () => Promise<T>): Promise<T> {
+      if (closed) return Promise.reject(new Error('campaign GM work closed'));
+      const scope = readScope(connection);
+      const token = Object.freeze({}) as CampaignGmWorkToken;
+      return enqueue(run, { token, scope: scope === null ? null : { ...scope }, phase: 'QUEUED' });
+    },
+    poll<T>(run: () => Promise<T>): Promise<T> {
+      return enqueue(run, null);
+    },
+    currentToken(campaignId?: string): CampaignGmWorkToken | null {
+      const token = active.getStore() ?? null;
+      return token === null ||
+        (campaignId !== undefined && work.get(token)?.scope?.campaignId !== campaignId)
+        ? null
+        : token;
+    },
+    pendingCounts(campaignId: string, except: CampaignGmWorkToken | null = null) {
+      if (closed) return fail();
+      if (except !== null) {
+        const own = work.get(except);
+        if (
+          own === undefined ||
+          own.phase !== 'EXECUTING' ||
+          active.getStore() !== except ||
+          own.scope?.campaignId !== campaignId
+        )
+          return fail();
+      }
+      let queuedCommandCount = 0,
+        executingCommandCount = 0;
+      for (const entry of work.values()) {
+        if (entry.token === except || entry.scope?.campaignId !== campaignId) continue;
+        if (entry.phase === 'QUEUED') queuedCommandCount++;
+        else executingCommandCount++;
+      }
+      return { queuedCommandCount, executingCommandCount };
+    },
+    close(): void {
+      closed = true;
+    },
+  };
+}
+export type CampaignGmScheduler = ReturnType<typeof createCampaignGmScheduler>;

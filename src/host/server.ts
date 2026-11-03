@@ -1,3 +1,5 @@
+import { createCampaignGmScheduler } from './campaign-network-executor.js';
+import { readCampaignCreationCursor } from '../persistence/campaign-creation.js';
 import {
   commitCreationFinalization,
   preflightCreationFinalization,
@@ -6938,36 +6940,40 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   // Private upgrades must be closed before HTTP close waits for its upgraded sockets.
   app.addHook('preClose', async () => {
     gmNetwork.close();
+    gmScheduler.close();
     localNetwork.close();
     localPeer.close();
     await campaignNetwork.close();
     await campaignBind.close();
     NETWORK_HOST_LIFECYCLE.delete(app);
   });
-  let gmFrames = Promise.resolve();
-  const scheduleGm = <T>(run: () => Promise<T>): Promise<T> => {
-    const next = gmFrames.then(run);
-    gmFrames = next.then(
-      () => {},
-      () => {},
-    );
-    return next;
-  };
+  const gmScheduler = createCampaignGmScheduler((c) => {
+    if (!c.trusted() || c.gmLocalContextId === null) return null;
+    try {
+      const cursor = readCampaignCreationCursor(config.database, c.gmLocalContextId);
+      return cursor.kind === 'CAMPAIGN' || cursor.kind === 'QUEUE' || cursor.kind === 'ADMISSION'
+        ? { gmLocalContextId: cursor.gmLocalContextId, campaignId: cursor.targetId }
+        : null;
+    } catch {
+      return null;
+    } // The normal handler produces the existing closed authority refusal.
+  });
   const campaignCreation = createCampaignCreationRuntime({
-    schedule: scheduleGm,
+    gmScheduler,
     database: config.database,
     projectRoot,
     baseline: localCharacterExportBaseline,
     bind: campaignBind,
     publishCampaign: campaignNetwork.publishCampaign,
     requestReview: {
+      withLifecycle: (c, view) => gmNetwork.withLifecycle(c, view),
       project: (c) => gmNetwork.project(c),
       refreshConnectionPresentation: (c) => gmNetwork.refreshConnectionPresentation(c),
       receipt: (c, id) => gmNetwork.receipt(c, id),
     },
   });
   const gmNetwork = createGmNetworkRuntime({
-    schedule: scheduleGm,
+    gmScheduler,
     config: networkConfig,
     database: config.database,
     baseline: localCharacterExportBaseline,
