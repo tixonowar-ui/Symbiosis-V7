@@ -669,7 +669,10 @@ function client(twoSources = false) {
         lastExit = null;
         start();
       },
-      async additionalOwnerView(networkScopeId = scope().networkScopeId) {
+      async additionalOwnerView(
+        networkScopeId = scope().networkScopeId,
+        onPublished?: (message: LocalNetworkHostMessage) => void,
+      ) {
         const connection: LocalNetworkConnection = { ...c, contextId: null, networkScopeId: null };
         const messages: LocalNetworkHostMessage[] = [];
         let failNextPush = false,
@@ -698,6 +701,7 @@ function client(twoSources = false) {
               throw new Error('Simulated transient owner publication failure');
             }
             messages.push(message);
+            onPublished?.(message);
           },
         );
         return {
@@ -4801,6 +4805,147 @@ describe('#174 actual GM lifecycle handlers', () => {
     await nav('CMP-006', 'CMP-006::CTA::001');
     await nav('CMP-007', 'CMP-007::CTA::003');
   });
+  it.each(['REVOKED', 'CORRUPT_EVENT'] as const)(
+    'fences lifecycle navigation publication after commit when %s',
+    async (fault) => {
+      const view = await gm.runtime.project(gm.c);
+      const request: FormActionIntentV2Message = {
+        messageType: 'navigation.form-action',
+        protocolVersion: 2,
+        navigationRequestId: randomUUID(),
+        sourceFormId: 'CMP-008',
+        actionKey: 'CMP-008::CTA::007',
+        expectedProjectionRevision: view.revisions.projectionRevision,
+      };
+      let queued = false,
+        injected = false,
+        revoked = false,
+        insideTransaction = true;
+      let changedRows = 0,
+        faultBytes: Buffer | null = null;
+      const originalTrust = gm.c.trusted;
+      const trust = vi.spyOn(gm.c, 'trusted').mockImplementation(() => {
+        if (
+          !queued &&
+          h.db
+            .prepare('SELECT 1 FROM gm_request_queue_event WHERE event_id=?')
+            .get(request.navigationRequestId) !== undefined
+        ) {
+          queued = true;
+          queueMicrotask(() => {
+            insideTransaction = h.db.inTransaction;
+            if (fault === 'REVOKED') revoked = true;
+            else
+              changedRows = h.db
+                .prepare('UPDATE gm_request_queue_event SET record_sha256=? WHERE event_id=?')
+                .run('0'.repeat(64), request.navigationRequestId).changes;
+            injected = true;
+            faultBytes = h.db.serialize();
+          });
+        }
+        return originalTrust() && !revoked;
+      });
+      try {
+        await expect(gm.send(request)).rejects.toThrow(
+          'Network publication failed after durable acknowledgement',
+        );
+        expect(injected).toBe(true);
+        expect(insideTransaction).toBe(false);
+        expect(changedRows).toBe(fault === 'CORRUPT_EVENT' ? 1 : 0);
+        expect(gm.sent).toEqual([]);
+        expect(
+          h.db
+            .prepare('SELECT COUNT(*) AS n FROM gm_request_queue_event WHERE event_id=?')
+            .get(request.navigationRequestId),
+        ).toEqual({ n: 1 });
+        expect(faultBytes).not.toBeNull();
+        expect(h.db.serialize().equals(faultBytes!)).toBe(true);
+      } finally {
+        trust.mockRestore();
+      }
+    },
+  );
+  it('binds a committed navigation to its original scope when another valid GM context becomes current', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'network-nav-scope-'));
+    dirs.push(dir);
+    const path = join(dir, 'host.sqlite');
+    const first = await host({ path }),
+      second = await host({ path });
+    const client = gmClient(first);
+    client.c.executableReview = [
+      ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+      ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+    ];
+    for (const [sourceFormId, actionKey] of [
+      ['CMP-006', 'CMP-006::CTA::001'],
+      ['CMP-007', 'CMP-007::CTA::003'],
+    ] as const) {
+      const p = await client.campaign.project(client.c);
+      await client.send({
+        messageType: 'navigation.form-action',
+        protocolVersion: 2,
+        navigationRequestId: randomUUID(),
+        sourceFormId,
+        actionKey,
+        expectedProjectionRevision: p.revisions.projectionRevision,
+      });
+      expect(client.sent[0]?.messageType).toBe('projection.snapshot');
+    }
+    client.c.gmLocalContextId = second.gmLocalContextId;
+    const foreign = await client.runtime.project(client.c);
+    expect(foreign.base.formId).toBe('CMP-006');
+    expect(foreign.base.roleFilteredPayload).toMatchObject({
+      gmLocalContextId: second.gmLocalContextId,
+      campaignId: second.campaignId,
+    });
+    client.c.gmLocalContextId = first.gmLocalContextId;
+    const view = await client.runtime.project(client.c);
+    const request: FormActionIntentV2Message = {
+      messageType: 'navigation.form-action',
+      protocolVersion: 2,
+      navigationRequestId: randomUUID(),
+      sourceFormId: 'CMP-008',
+      actionKey: 'CMP-008::CTA::007',
+      expectedProjectionRevision: view.revisions.projectionRevision,
+    };
+    let queued = false,
+      switched = false,
+      committedBytes: Buffer | null = null;
+    const originalTrust = client.c.trusted;
+    const trust = vi.spyOn(client.c, 'trusted').mockImplementation(() => {
+      if (
+        !queued &&
+        first.db
+          .prepare('SELECT 1 FROM gm_request_queue_event WHERE event_id=?')
+          .get(request.navigationRequestId) !== undefined
+      ) {
+        queued = true;
+        queueMicrotask(() => {
+          client.c.gmLocalContextId = second.gmLocalContextId;
+          switched = true;
+          committedBytes = first.db.serialize();
+        });
+      }
+      return originalTrust();
+    });
+    try {
+      await expect(client.send(request)).rejects.toThrow(
+        'Network publication failed after durable acknowledgement',
+      );
+      expect(switched).toBe(true);
+      expect(client.sent).toEqual([]);
+      expect(
+        first.db
+          .prepare('SELECT COUNT(*) AS n FROM gm_request_queue_event WHERE event_id=?')
+          .get(request.navigationRequestId),
+      ).toEqual({ n: 1 });
+      expect(committedBytes).not.toBeNull();
+      expect(first.db.serialize().equals(committedBytes!)).toBe(true);
+    } finally {
+      trust.mockRestore();
+      client.c.gmLocalContextId = first.gmLocalContextId;
+    }
+  });
   it('keeps read-only navigation usable while a real staged transfer blocks lifecycle writes', async () => {
     const { p, batch, submit } = await submittedPlayer(h);
     p.disconnect();
@@ -5442,6 +5587,73 @@ describe('#174 actual GM lifecycle handlers', () => {
         beforeEach(async () => {
           await p.send(retry);
           expect(state().retryOutcome).toBe('CONFIRMED');
+        });
+        it('coalesces an older passive poll after a new connection publishes its paired reconnect', async () => {
+          const peer = p.peerForTest,
+            reconnect = peer.reconnect.bind(peer);
+          let arrived!: () => void, release!: () => void;
+          const connected = new Promise<void>((resolve) => {
+            arrived = resolve;
+          });
+          const gate = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          const recovery = vi.spyOn(peer, 'recover');
+          const delay = vi.spyOn(peer, 'reconnect').mockImplementationOnce(async (...args) => {
+            const result = await reconnect(...args);
+            arrived();
+            await gate;
+            return result;
+          });
+          let publishedRecoveryCount: number | null = null;
+          const resumed = p.additionalOwnerView(undefined, (message) => {
+            if (
+              message.messageType === 'projection.snapshot' &&
+              message.protocolVersion === 2 &&
+              message.presentation.assignment.reason === 'RECONNECT'
+            )
+              publishedRecoveryCount = recovery.mock.calls.length;
+          });
+          let oldTrust: { mockRestore(): void } | undefined;
+          try {
+            await connected;
+            // The production browser opens a new /state connection and retires its previous socket.
+            oldTrust = vi.spyOn(p.c, 'trusted').mockReturnValue(false);
+            // Queue a real poll behind the held resume; no source, transport or timer is mocked.
+            await new Promise((resolve) => setTimeout(resolve, 1100));
+            release();
+            const fresh = await resumed;
+            expect(fresh.connection).not.toBe(p.c);
+            expect(fresh.connection.contextId).not.toBe(p.c.contextId);
+            expect(publishedRecoveryCount).not.toBeNull();
+            await fresh.send({
+              ...watch(),
+              contextId: fresh.connection.contextId!,
+              networkScopeId: fresh.connection.networkScopeId!,
+              commandIdOrNull: attempt,
+            });
+            expect(
+              fresh.messages.findLast((message) => message.messageType === 'network.peer-state'),
+            ).toMatchObject({ connectionState: 'CONNECTED', formOrNull: null });
+            expect(recovery.mock.calls.length).toBe(publishedRecoveryCount);
+            // Coalescing one superseded poll must not starve the unchanged binding's next refresh.
+            await expect
+              .poll(() => recovery.mock.calls.length)
+              .toBeGreaterThan(publishedRecoveryCount!);
+            expect(p.state().requestOrNull).toEqual(request);
+            expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+              initialCopies,
+            );
+            expect(
+              h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get(),
+            ).toEqual({ n: 1 });
+          } finally {
+            release();
+            await resumed.catch(() => {});
+            oldTrust?.mockRestore();
+            delay.mockRestore();
+            recovery.mockRestore();
+          }
         });
         it('does not turn a failed pre-cache source read on exact confirmed replay into refusal', async () => {
           const hostBytes = h.db.serialize(),

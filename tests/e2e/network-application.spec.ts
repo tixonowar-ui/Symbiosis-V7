@@ -578,9 +578,12 @@ for (const outcome of [
           .getByLabel('Причина отключения', { exact: true })
           .fill('Явный ручной повтор');
         await action(masterPage, 'NET-023::CTA::002');
-        await expect(form(playerPage, 'NET-008')).toBeVisible({
-          timeout: player.operationTimeoutMs,
-        });
+        // NET-008 also reports transport loss before the authenticated disconnect arrives.
+        await expect(
+          playerPage.locator(
+            '[data-campaign-peer-state="DISCONNECTED"] [data-atlas-form-id="NET-008"]',
+          ),
+        ).toBeVisible({ timeout: player.operationTimeoutMs });
         await expect(
           playerPage.getByText('Мастер отключил устройство: Явный ручной повтор', { exact: true }),
         ).toBeVisible();

@@ -3422,6 +3422,16 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   const ownerTimer = setInterval(() => {
     if (closed || polling || (ownerViews.size === 0 && peerViews.size === 0)) return;
     polling = true;
+    const queuedViews = new Map(
+      [...ownerViews].map(([c, view]) => [
+        c,
+        {
+          contextId: view.contextId,
+          scopeId: view.scopeId,
+          publishedToken: view.publishedToken,
+        },
+      ]),
+    );
     const tick = frames.then(async () => {
       for (const [c, view] of peerViews) {
         if (!c.trusted() || c.contextId !== view.contextId || c.networkScopeId !== view.scopeId) {
@@ -3450,13 +3460,23 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           Number(a.publishedPendingCommandId !== null),
       );
       for (const [c, binding] of views) {
-        // The browser must finish the paired reconnect before ordinary request refresh resumes.
-        if (peerViews.get(c)?.wantsReconciliation) continue;
         const interestedPending =
           binding.publishedPendingCommandId !== null &&
           binding.terminalCommandIds.has(binding.publishedPendingCommandId)
             ? binding.publishedPendingCommandId
             : null;
+        const queued = queuedViews.get(c);
+        // A newer published view supersedes this queued passive poll; the next tick reads it afresh.
+        if (
+          interestedPending === null &&
+          (queued === undefined ||
+            queued.contextId !== binding.contextId ||
+            queued.scopeId !== binding.scopeId ||
+            queued.publishedToken !== binding.publishedToken)
+        )
+          continue;
+        // The browser must finish the paired reconnect before ordinary request refresh resumes.
+        if (peerViews.get(c)?.wantsReconciliation) continue;
         const sendTerminal = (message: LocalNetworkHostMessage): void => {
           const id =
             message.messageType === 'command.replay'
@@ -4515,7 +4535,7 @@ export function createGmNetworkRuntime(d: {
   function refreshConnectionPresentation(c: CampaignConnection): void {
     connectionSource(c, false);
   }
-  const publication = async (c: CampaignConnection): Promise<GmPresentation> => {
+  const publication = (c: CampaignConnection): GmPresentation | Promise<GmPresentation> => {
     const { source, facts, historyOrNull } = connectionSource(c);
     if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
     if (source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId))
@@ -4527,11 +4547,28 @@ export function createGmNetworkRuntime(d: {
           history: historyOrNull ?? unavailable(),
         },
       );
-    return withLifecycle(
-      c,
-      facts === null ? await d.campaignPresentation(c) : queuePresentation(c, source, facts),
-    );
+    return facts === null
+      ? d.campaignPresentation(c).then((value) => withLifecycle(c, value))
+      : withLifecycle(c, queuePresentation(c, source, facts));
   };
+  async function sendNavigationSnapshot(
+    c: CampaignConnection,
+    own: GmRequestReviewScope,
+    send: (message: LocalNetworkHostMessage) => void,
+    requestId: string,
+  ): Promise<void> {
+    // Preserve the post-commit boundary, then read, encode and send the synchronous path together.
+    await Promise.resolve();
+    exact(scope(c), own);
+    const value = publication(c);
+    let current: GmPresentation;
+    if (value instanceof Promise) {
+      const resolved = await value;
+      exact(scope(c), own);
+      current = withLifecycle(c, resolved);
+    } else current = value;
+    sendSnapshot(c, send, encodeSnapshot(current, requestId, 'FORM_ACTION'));
+  }
   function refresh(
     c: CampaignConnection,
     send: (m: LocalNetworkHostMessage) => void,
@@ -5194,7 +5231,7 @@ export function createGmNetworkRuntime(d: {
         }
         commitGmRequestReviewNavigation(db, own, m, validateOwner, guard(c));
         committed = true;
-        sendSnapshot(c, send, await snapshot(c, m.navigationRequestId, 'FORM_ACTION'));
+        await sendNavigationSnapshot(c, own, send, m.navigationRequestId);
       } else if (draft) {
         const result = commitGmRequestReviewDraft(db, own, m, validateOwner, guard(c));
         committed = true;
