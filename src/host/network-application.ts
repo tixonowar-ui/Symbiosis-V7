@@ -5384,10 +5384,19 @@ export function createGmNetworkRuntime(d: {
     return true;
   }
   // Technical polling observes persisted requests and authenticated channels; it cannot allocate gameplay state.
-  let polling = false;
-  const timer = setInterval(() => {
-    if (closed || polling || watchers.size === 0) return;
-    polling = true;
+  let gmTimer: ReturnType<typeof setTimeout>;
+  function scheduleGmPoll(): void {
+    if (closed) return;
+    // Leave incoming work a full interval after a slow projection, as the owner poll does.
+    gmTimer = setTimeout(pollGm, 1000);
+    gmTimer.unref();
+  }
+  function pollGm(): void {
+    if (closed) return;
+    if (watchers.size === 0) {
+      scheduleGmPoll();
+      return;
+    }
     const next = schedule(async () => {
       for (const [c, w] of watchers) {
         if (!c.trusted() || c.gmLocalContextId === null) {
@@ -5401,13 +5410,9 @@ export function createGmNetworkRuntime(d: {
         }
       }
     });
-    void next
-      .catch(() => {})
-      .finally(() => {
-        polling = false;
-      });
-  }, 1000);
-  timer.unref();
+    void next.then(scheduleGmPoll, scheduleGmPoll);
+  }
+  scheduleGmPoll();
   return {
     project,
     withLifecycle: (c: CampaignConnection, value: GmPresentation) => withLifecycle(c, value),
@@ -5445,7 +5450,7 @@ export function createGmNetworkRuntime(d: {
     },
     close() {
       closed = true;
-      clearInterval(timer);
+      clearTimeout(gmTimer);
       watchers.clear();
       if (d.gmScheduler === undefined) gmScheduler.close();
     },

@@ -4805,6 +4805,93 @@ describe('#174 actual GM lifecycle handlers', () => {
     await nav('CMP-006', 'CMP-006::CTA::001');
     await nav('CMP-007', 'CMP-007::CTA::003');
   });
+  it.each(['RESOLVED', 'REJECTED'] as const)(
+    'leaves a full GM polling interval after slow %s work and stops scheduling after close',
+    async (outcome) => {
+      gm.runtime.close();
+      vi.useFakeTimers({
+        toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+      });
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let began!: () => void;
+      const firstPoll = new Promise<void>((resolve) => {
+        began = resolve;
+      });
+      let releaseClosed!: () => void;
+      const heldAcrossClose = new Promise<void>((resolve) => {
+        releaseClosed = resolve;
+      });
+      let secondRefreshCompleted = false;
+      const active: { poll: Promise<unknown> | null } = { poll: null };
+      let pollSpy: { mockRestore(): void; mock: { calls: unknown[][] } } | undefined;
+      try {
+        gm = gmClient(h);
+        const poll = gm.gmScheduler.poll.bind(gm.gmScheduler);
+        let first = true;
+        pollSpy = vi.spyOn(gm.gmScheduler, 'poll').mockImplementation(function <T>(
+          run: () => Promise<T>,
+        ): Promise<T> {
+          const hold = first;
+          first = false;
+          const result = poll(async () => {
+            // Keep the real GM projection, SQLite reads and serialized scheduler.
+            const value = await run();
+            if (hold) {
+              began();
+              await held;
+            } else {
+              secondRefreshCompleted = true;
+              await heldAcrossClose;
+            }
+            if (outcome === 'REJECTED') throw Error('Simulated failed GM poll settlement');
+            return value;
+          });
+          active.poll = result;
+          return result;
+        });
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(pollSpy.mock.calls).toHaveLength(0);
+        gm.runtime.watch(gm.c, (message) => gm.sent.push(message));
+        await vi.advanceTimersByTimeAsync(1000);
+        await firstPoll;
+        expect(gm.sent).toContainEqual(
+          expect.objectContaining({ messageType: 'projection.snapshot', projectionRole: 'gm' }),
+        );
+        await vi.advanceTimersByTimeAsync(3500);
+        expect(pollSpy.mock.calls).toHaveLength(1);
+        release();
+        await active.poll?.catch(() => {});
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(999);
+        expect(pollSpy.mock.calls).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(pollSpy.mock.calls).toHaveLength(2);
+        expect(secondRefreshCompleted).toBe(true);
+        // Settle the real second refresh only after close, covering its late rearm branch.
+        gm.runtime.close();
+        releaseClosed();
+        if (outcome === 'REJECTED')
+          await expect(active.poll).rejects.toThrow('Simulated failed GM poll settlement');
+        else await active.poll;
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(pollSpy.mock.calls).toHaveLength(2);
+        // Runtime close does not own the supplied command scheduler.
+        await expect(gm.gmScheduler.wire(gm.c, () => Promise.resolve('available'))).resolves.toBe(
+          'available',
+        );
+      } finally {
+        release();
+        releaseClosed();
+        await active.poll?.catch(() => {});
+        gm.runtime.close();
+        pollSpy?.mockRestore();
+        vi.useRealTimers();
+      }
+    },
+  );
   it.each(['REVOKED', 'CORRUPT_EVENT'] as const)(
     'fences lifecycle navigation publication after commit when %s',
     async (fault) => {
@@ -5862,6 +5949,8 @@ describe('#174 actual GM lifecycle handlers', () => {
     await expect(peer.retryConnection(scope, intent, () => {})).rejects.toThrow();
     lostAcknowledgement.mockRestore();
     expect(readLocalCampaignConnection(p.db, scope).pendingOrNull).toEqual(intent);
+    // Channel observation writes its own GM projection events; isolate peer replay's no-write proof.
+    gm.runtime.close();
     const hostBytes = h.db.serialize();
     peer.close();
     const reopened = openPersistenceDatabase(p.path);
