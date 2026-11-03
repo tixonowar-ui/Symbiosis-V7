@@ -2972,7 +2972,10 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
             // Recovery still uses the real authenticated channel and existing request binding.
             p.disconnect();
             const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
-            cleaners.push(async () => peer.close());
+            cleaners.push(() => {
+              peer.close();
+              return Promise.resolve();
+            });
             const root = p.scope(),
               request = p.state().requestOrNull!;
             await peer.reconnect(root, p.state().addressOrQrPayload, h.campaignId);
