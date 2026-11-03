@@ -16,6 +16,7 @@ import type {
   CampaignDraftResultV3Message,
 } from '@shared/campaign-creation.js';
 import { ADMISSION_GM_WORKFLOW_IDS } from '@shared/campaign-admission-presentation.js';
+import { CAMPAIGN_LIFECYCLE_WORKFLOW_IDS } from '@shared/campaign-lifecycle.js';
 import { App } from '../../app.js';
 import {
   connectProjection,
@@ -299,13 +300,14 @@ function reconnect(
   formId: CampaignCreationFormId | 'APP-001',
   p: JsonObject,
   revisions = ZERO,
+  capabilities: readonly string[] = formId === 'APP-001' ? [] : CAPABILITIES,
 ) {
   socket.open();
   const request = lastFrame<{ reconnectRequestId: string }>(socket);
   socket.message({
     messageType: 'session.reconnect.capabilities',
     protocolVersion: 2,
-    executableWorkflowCommandIds: formId === 'APP-001' ? [] : CAPABILITIES,
+    executableWorkflowCommandIds: capabilities,
     revisions,
     reconnectRequestId: request.reconnectRequestId,
   });
@@ -453,7 +455,7 @@ describe('campaign projection contract', () => {
 });
 
 describe('campaign draft transport', () => {
-  it.each(CAPABILITIES)(
+  it.each([...CAPABILITIES, ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS])(
     'refuses GM capability %s on an ordinary shell snapshot',
     async (capability) => {
       const h = await harness('APP-001');
@@ -827,9 +829,14 @@ describe('campaign draft transport', () => {
     expect(resumed.sent).toHaveLength(1);
     expect(resumed.sent.join('')).not.toContain(secret);
   });
-  it.each([0, 5])(
-    'negotiates GM capabilities from persisted menu P=%i and keeps menu/shell vectors independent',
-    async (menuProjectionRevision) => {
+  it.each([
+    [0, false],
+    [5, false],
+    [0, true],
+    [5, true],
+  ] as const)(
+    'negotiates GM capabilities from persisted menu P=%i with lifecycle=%s and keeps menu/shell vectors independent',
+    async (menuProjectionRevision, withLifecycle) => {
       const h = await harness('APP-001', shell, {
         ...ZERO,
         stateRevision: 8,
@@ -843,7 +850,14 @@ describe('campaign draft transport', () => {
       );
       let s = Socket.instances.at(-1)!;
       expect(s).not.toBe(h.socket);
-      reconnect(s, 'APP-011', menu, menuRevisions);
+      const capabilities = withLifecycle
+        ? [...CAPABILITIES, ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS]
+        : CAPABILITIES;
+      reconnect(s, 'APP-011', menu, menuRevisions, capabilities);
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { executableWorkflowCommandIds: capabilities },
+      });
       expect(lastFrame<{ messageType: string }>(s).messageType).toBe(
         'campaign.local-context.resume',
       );

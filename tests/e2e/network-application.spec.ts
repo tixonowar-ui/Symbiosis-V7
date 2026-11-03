@@ -1,5 +1,6 @@
 import { createServer } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
+import { networkFramesForPrivateDataCheck } from '../fixtures/network-browser-privacy.js';
 import {
   createNetworkBrowserScenario,
   safeNetworkInspection,
@@ -149,7 +150,7 @@ test('NET connects two real Node installations by manual address, submits own FI
     expect(player.inspect().sources).toEqual(originalSources);
     expect(
       /Network-test-master-secret|privateKey|keyFingerprint|originalCheckpoint|canonicalWitnessText|witnessSha256|hosted_network_peer|CORE-\d/u.test(
-        received.join('\n'),
+        networkFramesForPrivateDataCheck(received, gm.publicHostIdentity()),
       ),
       'Only the public projection and receipt allowlist reaches the player browser',
     ).toBe(false);
@@ -789,7 +790,7 @@ test('GM reviews an actual owner request, delivers live decisions and restores t
     expect(gm.inspect().copies).toEqual([]);
     expect(gm.inspect().checkpoints).toEqual(birth);
     expect(player.inspect().sources).toEqual(sources);
-    expect(frames.join('\n')).not.toMatch(
+    expect(networkFramesForPrivateDataCheck(frames, gm.publicHostIdentity())).not.toMatch(
       /canonicalWitnessText|privateKeyPkcs8|keyFingerprintSha256|preparedVerifier|CORE-\d/u,
     );
     expect(errors).toEqual([]);

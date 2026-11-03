@@ -13,6 +13,7 @@ import {
 } from './creation-finalization-stage.js';
 import { commitCreationFinalization } from '../../src/host/creation-finalization.js';
 import { loadNetworkApplicationConfig } from '../../src/host/network-application-config.js';
+import { loadNetworkInstallation } from '../../src/host/network-installation.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 interface Ready {
@@ -159,6 +160,15 @@ export async function createNetworkBrowserProcess(finalCount: number) {
       },
       get pid() {
         return ready!.pid;
+      },
+      publicHostIdentity() {
+        const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          const { ownerDeviceId, keyFingerprintSha256 } = loadNetworkInstallation(db);
+          return { ownerDeviceId, keyFingerprintSha256 };
+        } finally {
+          db.close();
+        }
       },
       inspect() {
         const db = new Database(databasePath, { readonly: true, fileMustExist: true });
