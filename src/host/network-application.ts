@@ -3037,9 +3037,14 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     )
       unavailable();
   }
-  async function refreshPeerConnection(c: LocalNetworkConnection, view: PeerView): Promise<void> {
+  async function refreshPeerConnection(
+    c: LocalNetworkConnection,
+    view: PeerView,
+    verifiedSource?: ReturnType<typeof peerRoot>,
+  ): Promise<void> {
     peerCurrent(c, view);
-    const { root, connection } = peerRoot(c),
+    // WATCH may pass its full read only before its first await or SQL write.
+    const { root, connection } = verifiedSource ?? peerRoot(c),
       check = guard(connection);
     try {
       if (d.peer.current(root.networkScopeId) === null) await reconnect(connection, true);
@@ -3287,7 +3292,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         send,
       };
       peerViews.set(c, view);
-      await refreshPeerConnection(c, view);
+      await refreshPeerConnection(c, view, source);
       publishPeerState(c, view, m.requestId, 'NONE', true);
       return;
     }

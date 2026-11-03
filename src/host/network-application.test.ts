@@ -4989,6 +4989,91 @@ describe('#174 actual GM lifecycle handlers', () => {
       activePeaceSceneOrNull: null,
     });
   });
+  it.each(['REVOKED', 'CORRUPT_HEAD', 'CORRUPT_APPLICATION'] as const)(
+    'fences WATCH publication after a real status response when %s',
+    async (fault) => {
+      const { p } = await submittedPlayer(h);
+      expect(p.sent.some((m) => m.messageType === 'network.peer-state')).toBe(false);
+      const message: CampaignPeerControlV3Message = {
+        messageType: 'network.peer-control',
+        protocolVersion: 3,
+        requestId: randomUUID(),
+        contextId: p.c.contextId!,
+        networkScopeId: p.scope().networkScopeId,
+        expectedRevisions: vector(p.state()),
+        operation: 'WATCH',
+        expectedConnectionRevision: null,
+        commandIdOrNull: null,
+        endpointOrNull: null,
+      };
+      const peer = p.peerForTest,
+        read = peer.readConnection.bind(peer);
+      let injected = false,
+        faultBytes: Buffer | null = null;
+      const spy = vi.spyOn(peer, 'readConnection').mockImplementationOnce(async (...args) => {
+        const result = await read(...args);
+        expect(result).toBeDefined();
+        if (fault === 'REVOKED') p.revoke();
+        else {
+          const sql =
+            fault === 'CORRUPT_HEAD'
+              ? 'UPDATE local_campaign_connection_head SET record_sha256=? WHERE network_scope_id=?'
+              : 'UPDATE local_network_application SET record_sha256=? WHERE network_scope_id=?';
+          expect(p.db.prepare(sql).run('0'.repeat(64), p.scope().networkScopeId).changes).toBe(1);
+        }
+        faultBytes = p.db.serialize();
+        injected = true;
+        return result;
+      });
+      try {
+        if (fault === 'REVOKED') {
+          await p.send(message);
+          expect(p.sent).toEqual([expect.objectContaining({ messageType: 'protocol.refusal' })]);
+        } else {
+          await expect(p.send(message)).rejects.toThrow();
+          expect(p.sent).toEqual([]);
+        }
+        expect(injected).toBe(true);
+        expect(faultBytes).not.toBeNull();
+        expect(p.db.serialize().equals(faultBytes!)).toBe(true);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+  it('preserves guard rejection before async entry and rolls back hostile observation callbacks', async () => {
+    const { p } = await submittedPlayer(h);
+    p.disconnect();
+    const scope = p.scope(),
+      address = parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin;
+    const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+    try {
+      await peer.reconnect(scope, address, h.campaignId);
+      await peer.readConnection(scope, () => {});
+      let entered = false;
+      const guards: ((state: localConnectionStore.LocalCampaignConnection) => void)[] = [
+        async () => {
+          entered = true;
+          await Promise.resolve();
+        },
+        () => Promise.resolve(),
+        (state) => {
+          Object.assign(state, { revision: state.revision + 1 });
+        },
+        () => {
+          p.db.exec('CREATE TABLE forbidden_peer_guard (x INTEGER)');
+        },
+      ];
+      const bytes = p.db.serialize();
+      for (const guard of guards) {
+        await expect(peer.readConnection(scope, guard)).rejects.toThrow();
+        expect(p.db.serialize().equals(bytes)).toBe(true);
+      }
+      expect(entered).toBe(false);
+    } finally {
+      peer.close();
+    }
+  });
   describe('explicit browser peer continuation', () => {
     let p: Awaited<ReturnType<typeof client>>;
     const state = () => {

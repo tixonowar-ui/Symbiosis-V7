@@ -316,13 +316,18 @@ export function createLocalNetworkPeer(d: {
     owned(scope);
     if (live(scope) !== channel || response.operation !== command.operation)
       return fail('UNCONFIRMED_OUTCOME');
-    const after = readLocalCampaignConnection(d.database, scope);
-    if (
-      canonicalPostSaveJson(before.pendingOrNull) !== canonicalPostSaveJson(after.pendingOrNull) ||
-      before.pendingObservationAfterRevisionOrNull !== after.pendingObservationAfterRevisionOrNull
-    )
-      return fail('UNCONFIRMED_OUTCOME');
-    if (response.outcome === 'REFUSED') return response;
+    const pendingUnchanged = (after: LocalCampaignConnection): void => {
+      if (
+        canonicalPostSaveJson(before.pendingOrNull) !==
+          canonicalPostSaveJson(after.pendingOrNull) ||
+        before.pendingObservationAfterRevisionOrNull !== after.pendingObservationAfterRevisionOrNull
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+    };
+    if (response.outcome === 'REFUSED') {
+      pendingUnchanged(readLocalCampaignConnection(d.database, scope));
+      return response;
+    }
     if (
       response.outcome === 'RETRIED' &&
       (command.operation !== 'CAMPAIGN_CONNECTION_RETRY' ||
@@ -344,7 +349,18 @@ export function createLocalNetworkPeer(d: {
         canonicalOrigin: target.canonicalOrigin,
         status: response.status,
       },
-      guard,
+      (state, phase) => {
+        // The writer checks a fresh full history before and after the observation.
+        // Observations preserve pending facts, so the late-reply fence fits both guards.
+        pendingUnchanged(state);
+        // Keep the storage guard's rejection before an async callback can start.
+        if (
+          typeof guard !== 'function' ||
+          Object.prototype.toString.call(guard) === '[object AsyncFunction]'
+        )
+          return fail('UNCONFIRMED_OUTCOME');
+        return guard(state, phase);
+      },
     );
     return response;
   }
