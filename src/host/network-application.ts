@@ -3418,10 +3418,19 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     }
   }
 
-  let polling = false;
-  const ownerTimer = setInterval(() => {
-    if (closed || polling || (ownerViews.size === 0 && peerViews.size === 0)) return;
-    polling = true;
+  let ownerTimer: ReturnType<typeof setTimeout>;
+  function scheduleOwnerPoll(): void {
+    if (closed) return;
+    // A slow refresh must leave an interval for incoming frames instead of running overdue ticks.
+    ownerTimer = setTimeout(pollOwners, 1000);
+    ownerTimer.unref();
+  }
+  function pollOwners(): void {
+    if (closed) return;
+    if (ownerViews.size === 0 && peerViews.size === 0) {
+      scheduleOwnerPoll();
+      return;
+    }
     const queuedViews = new Map(
       [...ownerViews].map(([c, view]) => [
         c,
@@ -3670,16 +3679,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         }
       }
     });
-    frames = tick.then(
-      () => {
-        polling = false;
-      },
-      () => {
-        polling = false;
-      },
-    );
-  }, 1000);
-  ownerTimer.unref();
+    frames = tick.then(scheduleOwnerPoll, scheduleOwnerPoll);
+  }
+  scheduleOwnerPoll();
   return {
     currentVector,
     handle(
@@ -3770,7 +3772,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     },
     close() {
       closed = true;
-      clearInterval(ownerTimer);
+      clearTimeout(ownerTimer);
       ownerViews.clear();
       peerViews.clear();
       d.peer.close();

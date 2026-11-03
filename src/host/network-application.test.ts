@@ -5588,6 +5588,70 @@ describe('#174 actual GM lifecycle handlers', () => {
           await p.send(retry);
           expect(state().retryOutcome).toBe('CONFIRMED');
         });
+        it('leaves a full polling interval after a slow refresh and stops refreshing after close', async () => {
+          // Only timer delivery is virtual: reconnect, WATCH, peer RPC and SQLite remain real.
+          p.disconnect();
+          vi.useFakeTimers({
+            toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+          });
+          let release!: () => void;
+          const held = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          let began!: () => void;
+          const firstPoll = new Promise<void>((resolve) => {
+            began = resolve;
+          });
+          let nextBegan!: () => void;
+          const nextPoll = new Promise<void>((resolve) => {
+            nextBegan = resolve;
+          });
+          let observeNext = false;
+          let readSpy: { mockRestore(): void; mock: { calls: unknown[][] } } | undefined;
+          try {
+            await p.restart();
+            await p.send(watch());
+            const peer = p.peerForTest,
+              read = peer.readConnection.bind(peer);
+            let first = true;
+            readSpy = vi.spyOn(peer, 'readConnection').mockImplementation(async (...args) => {
+              const hold = first;
+              first = false;
+              if (hold) began();
+              else if (observeNext) nextBegan();
+              const result = await read(...args);
+              if (hold) await held;
+              return result;
+            });
+            await vi.advanceTimersByTimeAsync(1000);
+            await firstPoll;
+            // Cross several nominal ticks while the first refresh is still in flight.
+            await vi.advanceTimersByTimeAsync(3500);
+            release();
+            // A real WATCH queued after the refresh is a barrier for its completion.
+            await p.send(watch());
+            const completedReads = readSpy.mock.calls.length;
+            observeNext = true;
+            await vi.advanceTimersByTimeAsync(999);
+            expect(readSpy.mock.calls.length).toBe(completedReads);
+            await vi.advanceTimersByTimeAsync(1);
+            await nextPoll;
+            expect(readSpy.mock.calls.length).toBe(completedReads + 1);
+            // Closing with this final refresh in flight must prevent further refresh calls.
+            p.disconnect();
+            const closedReads = readSpy.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(5000);
+            expect(readSpy.mock.calls.length).toBe(closedReads);
+            expect(
+              h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get(),
+            ).toEqual({ n: 1 });
+          } finally {
+            release();
+            p.disconnect();
+            readSpy?.mockRestore();
+            vi.useRealTimers();
+          }
+        });
         it('coalesces an older passive poll after a new connection publishes its paired reconnect', async () => {
           const peer = p.peerForTest,
             reconnect = peer.reconnect.bind(peer);
@@ -5598,7 +5662,16 @@ describe('#174 actual GM lifecycle handlers', () => {
           const gate = new Promise<void>((resolve) => {
             release = resolve;
           });
-          const recovery = vi.spyOn(peer, 'recover');
+          let nextRecovery!: () => void;
+          const recoveredAgain = new Promise<void>((resolve) => {
+            nextRecovery = resolve;
+          });
+          let observeRecovery = false;
+          const recover = peer.recover.bind(peer);
+          const recovery = vi.spyOn(peer, 'recover').mockImplementation((...args) => {
+            if (observeRecovery) nextRecovery();
+            return recover(...args);
+          });
           const delay = vi.spyOn(peer, 'reconnect').mockImplementationOnce(async (...args) => {
             const result = await reconnect(...args);
             arrived();
@@ -5637,9 +5710,9 @@ describe('#174 actual GM lifecycle handlers', () => {
             ).toMatchObject({ connectionState: 'CONNECTED', formOrNull: null });
             expect(recovery.mock.calls.length).toBe(publishedRecoveryCount);
             // Coalescing one superseded poll must not starve the unchanged binding's next refresh.
-            await expect
-              .poll(() => recovery.mock.calls.length)
-              .toBeGreaterThan(publishedRecoveryCount!);
+            observeRecovery = true;
+            await recoveredAgain;
+            expect(recovery.mock.calls.length).toBeGreaterThan(publishedRecoveryCount!);
             expect(p.state().requestOrNull).toEqual(request);
             expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
               initialCopies,
