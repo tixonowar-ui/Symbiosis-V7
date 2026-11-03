@@ -3490,7 +3490,7 @@ describe('CHR-010 web protocol vocabulary', () => {
     ])
       expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId(workflow), workflow).toBe(true);
     expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-CAMPAIGN-FINISH')).toBe(false);
-    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('UI-CMD-UNKNOWN')).toBe(false);
+    expect(WEB_PROTOCOL_VOCABULARY.isWorkflowCommandId('unknown_command')).toBe(false);
   });
 });
 
