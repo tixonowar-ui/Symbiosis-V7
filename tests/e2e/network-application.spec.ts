@@ -621,8 +621,42 @@ for (const outcome of [
         await expect(form(playerPage, 'NET-009')).toHaveCount(0);
         expect(lastPeace()['sceneId']).toBe(firstPeace!['sceneId']);
         expect(gm.inspect().copies).toEqual(boundCopies);
+        const returnFromDisconnectFrame = frames.length;
         await action(masterPage, 'NET-023::CTA::001');
-        await expect(form(masterPage, 'GM-001')).toBeVisible();
+        await expect(form(masterPage, 'GM-001')).toBeVisible({ timeout: 15_000 });
+        const navigationFrames = frames.slice(returnFromDisconnectFrame);
+        const requestFrame = navigationFrames.find(
+          (frame) =>
+            frame.startsWith('gm sent ') &&
+            frame.includes('"messageType":"navigation.form-action"') &&
+            frame.includes('"actionKey":"NET-023::CTA::001"'),
+        );
+        expect(requestFrame).toBeDefined();
+        const navigation = JSON.parse(requestFrame!.slice('gm sent '.length)) as {
+          navigationRequestId: string;
+        };
+        expect(
+          navigationFrames.some((frame) => {
+            if (
+              !frame.startsWith('gm received ') ||
+              !frame.includes('"messageType":"projection.snapshot"')
+            )
+              return false;
+            const response = JSON.parse(frame.slice('gm received '.length)) as {
+              presentation: {
+                base: { formId: string };
+                layers: unknown[];
+                assignment: { reason: string; correlationId: string };
+              };
+            };
+            return (
+              response.presentation.assignment.reason === 'FORM_ACTION' &&
+              response.presentation.assignment.correlationId === navigation.navigationRequestId &&
+              response.presentation.base.formId === 'GM-001' &&
+              response.presentation.layers.length === 0
+            );
+          }),
+        ).toBe(true);
       }
       const copies = gm.inspect().copies;
       expect(player.inspect().sources).toEqual(sources);
