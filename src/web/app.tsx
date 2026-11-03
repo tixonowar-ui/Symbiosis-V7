@@ -1,3 +1,11 @@
+import { isCampaignOwnerForm } from './forms/net/admission-client.js';
+import { CampaignPeerConnection } from './forms/net/campaign-peer-connection.js';
+import type { CampaignPeerStateV3Message } from '@shared/campaign-lifecycle.js';
+import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
+import {
+  CampaignLifecycleFields,
+  type CampaignLifecycleEditor,
+} from './forms/cmp/campaign-lifecycle-fields.js';
 import { isCampaignOwnerProjection } from '@shared/campaign-lobby-presentation.js';
 import { isCampaignLobbyGmForm, type InitialCampaignTimeInput } from '@shared/campaign-lobby.js';
 import type { NetworkGmRequestDraftClientState } from './ws-client.js';
@@ -247,6 +255,7 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     isCampaignCreationForm(snapshot.formId) ||
     snapshot.formId === 'NET-017' ||
     isCampaignLobbyGmForm(snapshot.formId) ||
+    isCampaignLifecycleForm(snapshot.formId) ||
     isCampaignOwnerProjection(snapshot.projection) ||
     isAdmissionGmForm(snapshot.formId) ||
     isAdmissionOwnerForm(snapshot.formId) ||
@@ -2229,6 +2238,9 @@ export function App(): ReactElement {
   const [gmRequestDraft, setGmRequestDraft] = useState<NetworkGmRequestDraftClientState | null>(
     null,
   );
+  const [campaignPeerState, setCampaignPeerState] = useState<CampaignPeerStateV3Message | null>(
+    null,
+  );
   const [networkQrScanSequence, setNetworkQrScanSequence] = useState(0);
   const [networkImageReadPending, setNetworkImageReadPending] = useState(false);
   const [creationChoiceDraft, setCreationChoiceDraft] =
@@ -2289,6 +2301,7 @@ export function App(): ReactElement {
       setCampaignDraft,
       setNetworkDraft,
       setGmRequestDraft,
+      setCampaignPeerState,
     );
     connectionRef.current = connection;
     return () => {
@@ -2298,6 +2311,17 @@ export function App(): ReactElement {
   }, []);
 
   const snapshot = confirmedSnapshot(state);
+  const peerApplicable =
+    snapshot !== null &&
+    (snapshot.formId === 'NET-005' || isCampaignOwnerForm(snapshot.formId)) &&
+    typeof snapshot.projection['networkScopeId'] === 'string' &&
+    (typeof snapshot.projection['requestId'] === 'string' ||
+      typeof snapshot.projection['requestIdOrNull'] === 'string');
+  const peerBlocked =
+    peerApplicable &&
+    (campaignPeerState === null ||
+      campaignPeerState.connectionState !== 'CONNECTED' ||
+      campaignPeerState.formOrNull !== null);
   const intelligenceFloorRollScope =
     snapshot?.formId === 'CHR-041' &&
     'compositionDraftRevision' in snapshot.projection &&
@@ -2338,6 +2362,19 @@ export function App(): ReactElement {
   const correctionCommandActions = new Set<string>(
     Object.values(CORRECTION_COMMANDS).map((v) => v[1]),
   );
+  const lifecycleEditorRef = useRef<CampaignLifecycleEditor | null>(null);
+  const setLifecycleEditor = useCallback((editor: CampaignLifecycleEditor | null) => {
+    lifecycleEditorRef.current = editor;
+  }, []);
+  const takeLifecycleInputs = () => {
+    const editor = lifecycleEditorRef.current;
+    if (editor === null) return {};
+    try {
+      return editor.readInputs();
+    } finally {
+      editor.clearSecrets();
+    }
+  };
   const lobbyTimeRef = useRef<InitialCampaignTimeInput | null>(null);
   const changeLobbyTime = useCallback((value: InitialCampaignTimeInput | null) => {
     lobbyTimeRef.current = value;
@@ -2369,8 +2406,36 @@ export function App(): ReactElement {
       ) : (
         <>
           <HostProjection snapshot={snapshot} />
-          <fieldset disabled={!interactive || layers.length > 0 || networkImageReadPending}>
+          {campaignPeerState === null ? null : (
+            <CampaignPeerConnection
+              state={campaignPeerState}
+              enabled={interactive}
+              onAction={(key, endpoint) =>
+                connectionRef.current?.requestCampaignPeerAction(key, endpoint) ?? {
+                  ok: false,
+                  detail: 'connection unavailable',
+                }
+              }
+            />
+          )}
+          <fieldset
+            disabled={!interactive || peerBlocked || layers.length > 0 || networkImageReadPending}
+          >
             <legend>AtlasForm {snapshot.formId}</legend>
+            {isCampaignLifecycleForm(snapshot.formId) ? (
+              <CampaignLifecycleFields
+                key={
+                  snapshot.formId +
+                  ':' +
+                  (snapshot.projection['contextId'] as string) +
+                  ':' +
+                  snapshot.revisions.stateRevision
+                }
+                formId={snapshot.formId}
+                projection={snapshot.projection}
+                {...(layers.length === 0 ? { onEditor: setLifecycleEditor } : {})}
+              />
+            ) : null}
             {isCampaignLobbyGmForm(snapshot.formId) ? (
               <CampaignLobbyFields
                 key={
@@ -2899,26 +2964,29 @@ export function App(): ReactElement {
                 isCampaignCreationForm(snapshot.formId) ||
                 snapshot.formId === 'NET-017' ||
                 isCampaignLobbyGmForm(snapshot.formId) ||
+                isCampaignLifecycleForm(snapshot.formId) ||
                 isCampaignOwnerProjection(snapshot.projection) ||
                 isAdmissionGmForm(snapshot.formId) ||
                 isAdmissionOwnerForm(snapshot.formId) ||
                 isNetworkApplicationForm(snapshot.formId)
               }
               availableActionKeys={
-                correction
-                  ? snapshot.availableActionKeys.filter(
-                      (key) =>
-                        !correctionCommandActions.has(key) &&
-                        ![
-                          'CHR-010::CTA::002',
-                          'CHR-015::CTA::003',
-                          'CHR-018::CTA::003',
-                          'CHR-020::CTA::003',
-                          'CHR-041::CTA::002',
-                          'CHR-017::CTA::001',
-                        ].includes(key),
-                    )
-                  : (availableActionKeys ?? [])
+                peerBlocked
+                  ? []
+                  : correction
+                    ? snapshot.availableActionKeys.filter(
+                        (key) =>
+                          !correctionCommandActions.has(key) &&
+                          ![
+                            'CHR-010::CTA::002',
+                            'CHR-015::CTA::003',
+                            'CHR-018::CTA::003',
+                            'CHR-020::CTA::003',
+                            'CHR-041::CTA::002',
+                            'CHR-017::CTA::001',
+                          ].includes(key),
+                      )
+                    : (availableActionKeys ?? [])
               }
               formId={snapshot.formId}
               onAction={(selection) => {
@@ -2952,6 +3020,7 @@ export function App(): ReactElement {
                       : null
                     : undefined,
                   selection.actionKey === 'NET-016::CTA::004' ? lobbyTimeRef.current : null,
+                  isCampaignLifecycleForm(snapshot.formId) ? takeLifecycleInputs() : undefined,
                 );
                 setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
               }}
@@ -2965,11 +3034,26 @@ export function App(): ReactElement {
             >
               <legend>AtlasForm {layer.formId}</legend>
               <AtlasForm
-                playerContentOnly={isAdmissionGmForm(layer.formId)}
+                playerContentOnly={
+                  isAdmissionGmForm(layer.formId) || isCampaignLifecycleForm(layer.formId)
+                }
                 availableActionKeys={layer.availableActionKeys}
                 formId={layer.formId}
                 projectionContent={
-                  isAdmissionGmForm(layer.formId) ? (
+                  isCampaignLifecycleForm(layer.formId) ? (
+                    <CampaignLifecycleFields
+                      key={
+                        layer.formId +
+                        ':' +
+                        (layer.projection['contextId'] as string) +
+                        ':' +
+                        snapshot.revisions.stateRevision
+                      }
+                      formId={layer.formId}
+                      projection={layer.projection}
+                      onEditor={setLifecycleEditor}
+                    />
+                  ) : isAdmissionGmForm(layer.formId) ? (
                     <AdmissionGmFields
                       key={`admission:${layer.formId}:${layer.projection['admissionBatchId'] as string}:${layer.projection['selectedReviewCopyId'] as string}:${snapshot.revisions.stateRevision}`}
                       formId={layer.formId}
@@ -2995,7 +3079,12 @@ export function App(): ReactElement {
                     setActionNotice('Переход не отправлен: соединение ещё не готово.');
                     return;
                   }
-                  const result = connection.requestFormAction(selection.actionKey);
+                  const result = connection.requestFormAction(
+                    selection.actionKey,
+                    undefined,
+                    null,
+                    isCampaignLifecycleForm(layer.formId) ? takeLifecycleInputs() : undefined,
+                  );
                   setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
                 }}
               />

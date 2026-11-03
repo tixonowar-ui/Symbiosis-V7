@@ -1,3 +1,7 @@
+import type {
+  CampaignPeerControlV3Message,
+  CampaignPeerStateV3Message,
+} from './campaign-lifecycle.js';
 import type { RevisionVector } from './wire-protocol.js';
 import type {
   AdmissionGmClientV3Message,
@@ -123,6 +127,7 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
 }
 
 export type ClientToHostV3Message =
+  | CampaignPeerControlV3Message
   | AdmissionGmClientV3Message
   | IdentityDraftReplaceV3Message
   | NetworkClientV3Message
@@ -130,6 +135,7 @@ export type ClientToHostV3Message =
   | CampaignDraftReplaceV3Message
   | CampaignLocalContextResumeV3Message;
 export type HostToClientV3Message =
+  | CampaignPeerStateV3Message
   | AdmissionGmHostV3Message
   | IdentityDraftRefusalV3Message
   | NetworkHostV3Message

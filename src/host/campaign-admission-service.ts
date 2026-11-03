@@ -1,3 +1,8 @@
+import { isIP } from 'node:net';
+import { campaignSettingsValue } from '../shared/campaign-lifecycle.js';
+import { validateCampaignMetadata, validateCampaignMode } from './campaign-draft-validation.js';
+import { validateMasterSecretVerifier } from './campaign-secret.js';
+import type { CampaignLifecycleRules } from '../persistence/campaign-lifecycle-state.js';
 import type { HostedRequestReviewCurrent } from '../persistence/network-device-request.js';
 import type { AdmissionPublicationRules } from '../persistence/campaign-admission-decision.js';
 import type { AdmissionReviewRead } from '../persistence/campaign-admission-review.js';
@@ -57,6 +62,23 @@ export function admissionSelectedGroupLabels(
   });
 }
 
+/** Saved settings use historical input rules; live NIC/bind availability is checked only on apply. */
+export const campaignLifecycleReplayRules: CampaignLifecycleRules = {
+  validateSettings: (value) => {
+    const settings = campaignSettingsValue(value);
+    validateCampaignMetadata({
+      title: settings.title,
+      description: settings.descriptionOrNull,
+      art: null,
+    });
+    validateCampaignMode({ defaultFutureRollMode: settings.defaultFutureRollMode });
+    if (isIP(settings.network.hostAddress) === 0)
+      throw new Error('Invalid saved campaign host address');
+  },
+  validateVerifier: (value) => {
+    validateMasterSecretVerifier(value);
+  },
+};
 /** Operation-local cache keyed by complete immutable source bytes; rules still check the current baseline. */
 export function createCampaignAdmissionRules(
   baseline: LocalCharacterExportBaseline,
@@ -91,6 +113,7 @@ export function createCampaignAdmissionRules(
     return result;
   };
   const rules: AdmissionPublicationRules = {
+    lifecycle: campaignLifecycleReplayRules,
     verifyInitial: (request, state) => verifyInitialAdmissionReviewState(state, sources(request)),
     reduce: (request, before, mutation, receiptId) =>
       applyAdmissionReviewMutation(before, sources(request), mutation, receiptId, catalogs),

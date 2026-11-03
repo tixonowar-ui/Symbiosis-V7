@@ -1,3 +1,23 @@
+import {
+  encodeCampaignLobbyCheckCommand,
+  decodeCampaignLobbyCheckResponse,
+} from './campaign-connection-peer.js';
+import { localLobbyState } from '../persistence/local-campaign-admission.js';
+import type { CampaignLobbyOwnerObservation } from '@shared/campaign-lobby-presentation.js';
+import { randomUUID } from 'node:crypto';
+import { campaignConnectionGate } from '@shared/campaign-lifecycle.js';
+import {
+  readLocalCampaignConnection,
+  observeLocalCampaignConnection,
+  settleLocalCampaignReconnect,
+  type LocalCampaignConnection,
+  type LocalCampaignReconnectIntent,
+} from '../persistence/local-campaign-connection.js';
+import {
+  encodeCampaignConnectionPeerCommand,
+  decodeCampaignConnectionPeerResponse,
+  type CampaignConnectionPeerCommand,
+} from './campaign-connection-peer.js';
 import { campaignLobbyOwnerObservationValue } from '@shared/campaign-lobby-presentation.js';
 import type { CampaignReadyCommand } from '@shared/campaign-lobby.js';
 import type Database from 'better-sqlite3';
@@ -43,6 +63,7 @@ import type { NetworkApplicationConfig } from './network-application-config.js';
 import type { NetworkPublicErrorCode } from '../shared/network-application.js';
 import {
   readLocalAdmission,
+  readLocalAdmissionPresentation,
   validateAdmissionOwnerPublication,
 } from '../persistence/local-campaign-admission.js';
 import {
@@ -281,7 +302,258 @@ export function createLocalNetworkPeer(d: {
       return fail('UNCONFIRMED_OUTCOME');
     }
   }
+  async function connectionCall(
+    scope: LocalNetworkScope,
+    command: CampaignConnectionPeerCommand,
+    guard: NetworkStoreGuard<LocalCampaignConnection>,
+  ) {
+    const channel = live(scope),
+      target = channels.get(scope.networkScopeId)!.target,
+      before = readLocalCampaignConnection(d.database, scope);
+    const response = decodeCampaignConnectionPeerResponse(
+      await channel.call(encodeCampaignConnectionPeerCommand(command)),
+    );
+    owned(scope);
+    if (live(scope) !== channel || response.operation !== command.operation)
+      return fail('UNCONFIRMED_OUTCOME');
+    const pendingUnchanged = (after: LocalCampaignConnection): void => {
+      if (
+        canonicalPostSaveJson(before.pendingOrNull) !==
+          canonicalPostSaveJson(after.pendingOrNull) ||
+        before.pendingObservationAfterRevisionOrNull !== after.pendingObservationAfterRevisionOrNull
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+    };
+    if (response.outcome === 'REFUSED') {
+      pendingUnchanged(readLocalCampaignConnection(d.database, scope));
+      return response;
+    }
+    if (
+      response.outcome === 'RETRIED' &&
+      (command.operation !== 'CAMPAIGN_CONNECTION_RETRY' ||
+        response.receipt.commandId !== command.commandId ||
+        response.receipt.disconnectCommandId !== command.disconnectCommandId)
+    )
+      return fail('UNCONFIRMED_OUTCOME');
+    if (
+      response.status.campaignId !== channel.campaign.campaignId ||
+      response.status.deviceId !== scope.ownerDeviceId
+    )
+      return fail('UNCONFIRMED_OUTCOME');
+    observeLocalCampaignConnection(
+      d.database,
+      scope,
+      randomUUID(),
+      {
+        identity: channel.hostIdentity,
+        canonicalOrigin: target.canonicalOrigin,
+        status: response.status,
+      },
+      (state, phase) => {
+        // The writer checks a fresh full history before and after the observation.
+        // Observations preserve pending facts, so the late-reply fence fits both guards.
+        pendingUnchanged(state);
+        // Keep the storage guard's rejection before an async callback can start.
+        if (
+          typeof guard !== 'function' ||
+          Object.prototype.toString.call(guard) === '[object AsyncFunction]'
+        )
+          return fail('UNCONFIRMED_OUTCOME');
+        return guard(state, phase);
+      },
+    );
+    return response;
+  }
+  async function withDownload<T>(scope: LocalNetworkScope, read: () => Promise<T>): Promise<T> {
+    if (
+      downloading.has(scope.networkScopeId) ||
+      downloading.size >= d.config.transfer.maxActiveTransfers
+    )
+      return fail('UNCONFIRMED_OUTCOME');
+    downloading.add(scope.networkScopeId);
+    try {
+      return await read();
+    } finally {
+      downloading.delete(scope.networkScopeId);
+    }
+  }
+  async function downloadAdmission(
+    scope: LocalNetworkScope,
+    admittedTabIdOrNull: string | null,
+    channel: ReturnType<typeof live>,
+    suppliedManifest?: Extract<AdmissionPeerResponse, { outcome: 'MANIFEST' }>,
+    verifiedApplication?: LocalNetworkApplication,
+  ) {
+    // Only CHECK supplies this immediately after its complete post-RPC read, before any await/write.
+    const current = verifiedApplication ?? readLocalNetworkApplication(d.database, scope),
+      request = current.requestOrNull;
+    if (live(scope) !== channel) return fail('UNCONFIRMED_OUTCOME');
+    if (
+      request === null ||
+      current.requestReviewOrNull?.requestStatus !== 'IN_REVIEW' ||
+      current.sessionOrNull?.technicalSessionId !== request.technicalSessionId ||
+      current.sessionOrNull.campaignProof.campaignId !== channel.campaign.campaignId
+    )
+      return fail('UNCONFIRMED_OUTCOME');
+    const binding = {
+      requestId: request.requestId,
+      technicalSessionId: request.technicalSessionId,
+      submitCommandId: request.submitCommandId,
+    };
+    const manifest =
+      suppliedManifest ??
+      (await admissionCall(scope, {
+        schemaVersion: 1,
+        ...(admittedTabIdOrNull === null
+          ? { operation: 'ADMISSION_PUBLICATION_BEGIN' as const }
+          : { operation: 'ADMISSION_LOBBY_BEGIN' as const, admittedTabId: admittedTabIdOrNull }),
+        ...binding,
+      }));
+    if (manifest.outcome === 'REFUSED' || manifest.outcome === 'NOT_READY') return manifest;
+    if (manifest.outcome !== 'MANIFEST') return fail('UNCONFIRMED_OUTCOME');
+    if (
+      manifest.requestId !== binding.requestId ||
+      manifest.technicalSessionId !== binding.technicalSessionId ||
+      manifest.submitCommandId !== binding.submitCommandId ||
+      manifest.operation !==
+        (admittedTabIdOrNull === null ? 'ADMISSION_PUBLICATION_BEGIN' : 'ADMISSION_LOBBY_BEGIN')
+    )
+      return fail('UNCONFIRMED_OUTCOME');
+    const reservation = manifest.byteLength * 2;
+    if (reservation > d.config.transfer.maxStagedBytes - receivingBytes)
+      return fail('UNCONFIRMED_OUTCOME');
+    const bytes = Buffer.alloc(manifest.byteLength);
+    receivingBytes += reservation;
+    try {
+      for (let index = 0; index < manifest.chunkCount; index++) {
+        const response = await admissionCall(scope, {
+          schemaVersion: 1,
+          operation: 'ADMISSION_PUBLICATION_CHUNK',
+          ...binding,
+          transferId: manifest.transferId,
+          publicationChecksum: manifest.publicationChecksum,
+          chunkIndex: index,
+        });
+        if (response.outcome === 'REFUSED') return response;
+        if (
+          response.outcome !== 'CHUNK' ||
+          response.transferId !== manifest.transferId ||
+          response.publicationChecksum !== manifest.publicationChecksum ||
+          response.chunkIndex !== index ||
+          live(scope) !== channel
+        )
+          return fail('UNCONFIRMED_OUTCOME');
+        const part = Buffer.from(response.bytesBase64, 'base64'),
+          offset = index * manifest.chunkBytes;
+        if (part.length !== Math.min(manifest.chunkBytes, bytes.length - offset))
+          return fail('UNCONFIRMED_OUTCOME');
+        part.copy(bytes, offset);
+        part.fill(0);
+      }
+      if (postSaveSha256(bytes) !== manifest.bodySha256) return fail('UNCONFIRMED_OUTCOME');
+      const text = bytes.toString('utf8');
+      if (!Buffer.from(text, 'utf8').equals(bytes)) return fail('UNCONFIRMED_OUTCOME');
+      if (admittedTabIdOrNull !== null) {
+        const observation = campaignLobbyOwnerObservationValue(JSON.parse(text));
+        if (
+          canonicalPostSaveJson(observation) !== text ||
+          manifest.publicationChecksum !== manifest.bodySha256 ||
+          observation.campaignId !== channel.campaign.campaignId ||
+          observation.ownerDeviceId !== scope.ownerDeviceId ||
+          observation.selectedCopy.controller.localControllerSeatId !== admittedTabIdOrNull ||
+          live(scope) !== channel
+        )
+          return fail('UNCONFIRMED_OUTCOME');
+        return { outcome: 'LOBBY' as const, observation, hostIdentity: channel.hostIdentity };
+      }
+      const publication = validateAdmissionOwnerPublication(JSON.parse(text) as unknown);
+      if (
+        canonicalPostSaveJson(publication) !== text ||
+        publication.publicationChecksum !== manifest.publicationChecksum ||
+        publication.gmDecision.campaignId !== channel.campaign.campaignId ||
+        publication.gmDecision.requestId !== request.requestId ||
+        publication.gmDecision.requestOwnerDeviceId !== scope.ownerDeviceId ||
+        live(scope) !== channel
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+      return {
+        outcome: 'PUBLICATION' as const,
+        publication,
+        campaignRevision: manifest.campaignRevision,
+        hostIdentity: channel.hostIdentity,
+      };
+    } catch (error: unknown) {
+      if (error instanceof LocalNetworkPeerError) throw error;
+      return fail('UNCONFIRMED_OUTCOME');
+    } finally {
+      bytes.fill(0);
+      receivingBytes -= reservation;
+    }
+  }
+  async function readConnection(
+    scope: LocalNetworkScope,
+    guard: NetworkStoreGuard<LocalCampaignConnection>,
+  ) {
+    const response = await connectionCall(
+      scope,
+      { schemaVersion: 1, operation: 'CAMPAIGN_CONNECTION_READ' },
+      guard,
+    );
+    if (response.outcome !== 'STATUS') return fail('UNCONFIRMED_OUTCOME');
+    return response.status;
+  }
   return {
+    readConnection,
+    async retryConnection(
+      scope: LocalNetworkScope,
+      intent: LocalCampaignReconnectIntent,
+      guard: NetworkStoreGuard<LocalCampaignConnection>,
+    ) {
+      const saved = readLocalCampaignConnection(d.database, scope);
+      if (
+        canonicalPostSaveJson(saved.pendingOrNull) !== canonicalPostSaveJson(intent) ||
+        channels.get(scope.networkScopeId)?.target.canonicalOrigin !== intent.canonicalOrigin
+      )
+        return fail('UNCONFIRMED_OUTCOME');
+      let outcome: 'CONFIRMED' | 'REFUSED',
+        receiptOrNull = null;
+      if (intent.disconnectCommandIdOrNull === null) {
+        const status = await readConnection(scope, guard);
+        outcome = campaignConnectionGate(status) === null ? 'REFUSED' : 'CONFIRMED';
+      } else {
+        const response = await connectionCall(
+          scope,
+          {
+            schemaVersion: 1,
+            operation: 'CAMPAIGN_CONNECTION_RETRY',
+            commandId: intent.commandId,
+            disconnectCommandId: intent.disconnectCommandIdOrNull,
+          },
+          guard,
+        );
+        if (response.outcome === 'REFUSED') {
+          if (response.code === 'UNAVAILABLE') return fail('UNCONFIRMED_OUTCOME');
+          await readConnection(scope, guard);
+          outcome = 'REFUSED';
+        } else {
+          if (
+            response.outcome !== 'RETRIED' ||
+            response.receipt.commandId !== intent.commandId ||
+            response.receipt.disconnectCommandId !== intent.disconnectCommandIdOrNull
+          )
+            return fail('UNCONFIRMED_OUTCOME');
+          receiptOrNull = response.receipt;
+          outcome = 'CONFIRMED';
+        }
+      }
+      return settleLocalCampaignReconnect(
+        d.database,
+        scope,
+        randomUUID(),
+        { commandId: intent.commandId, outcome, receiptOrNull },
+        guard,
+      );
+    },
     async refreshAdmissionCapacity(scope: LocalNetworkScope) {
       const current = readLocalNetworkApplication(d.database, scope),
         session = current.sessionOrNull,
@@ -326,111 +598,91 @@ export function createLocalNetworkPeer(d: {
         ? saved.value
         : null;
     },
-    async fetchAdmission(scope: LocalNetworkScope, admittedTabIdOrNull: string | null = null) {
-      if (
-        downloading.has(scope.networkScopeId) ||
-        downloading.size >= d.config.transfer.maxActiveTransfers
-      )
-        return fail('UNCONFIRMED_OUTCOME');
-      downloading.add(scope.networkScopeId);
-      try {
-        const current = readLocalNetworkApplication(d.database, scope),
-          request = current.requestOrNull,
-          channel = live(scope);
-        if (
-          request === null ||
-          current.requestReviewOrNull?.requestStatus !== 'IN_REVIEW' ||
-          current.sessionOrNull?.technicalSessionId !== request.technicalSessionId ||
-          current.sessionOrNull.campaignProof.campaignId !== channel.campaign.campaignId
-        )
-          return fail('UNCONFIRMED_OUTCOME');
-        const binding = {
-          requestId: request.requestId,
-          technicalSessionId: request.technicalSessionId,
-          submitCommandId: request.submitCommandId,
-        };
-        const manifest = await admissionCall(scope, {
-          schemaVersion: 1,
-          ...(admittedTabIdOrNull === null
-            ? { operation: 'ADMISSION_PUBLICATION_BEGIN' as const }
-            : { operation: 'ADMISSION_LOBBY_BEGIN' as const, admittedTabId: admittedTabIdOrNull }),
-          ...binding,
-        });
-        if (manifest.outcome === 'REFUSED' || manifest.outcome === 'NOT_READY') return manifest;
-        if (manifest.outcome !== 'MANIFEST') return fail('UNCONFIRMED_OUTCOME');
-        const reservation = manifest.byteLength * 2;
-        if (reservation > d.config.transfer.maxStagedBytes - receivingBytes)
-          return fail('UNCONFIRMED_OUTCOME');
-        const bytes = Buffer.alloc(manifest.byteLength);
-        receivingBytes += reservation;
-        try {
-          for (let index = 0; index < manifest.chunkCount; index++) {
-            const response = await admissionCall(scope, {
-              schemaVersion: 1,
-              operation: 'ADMISSION_PUBLICATION_CHUNK',
-              ...binding,
-              transferId: manifest.transferId,
-              publicationChecksum: manifest.publicationChecksum,
-              chunkIndex: index,
-            });
-            if (response.outcome === 'REFUSED') return response;
-            if (
-              response.outcome !== 'CHUNK' ||
-              response.transferId !== manifest.transferId ||
-              response.publicationChecksum !== manifest.publicationChecksum ||
-              response.chunkIndex !== index ||
-              live(scope) !== channel
-            )
-              return fail('UNCONFIRMED_OUTCOME');
-            const part = Buffer.from(response.bytesBase64, 'base64'),
-              offset = index * manifest.chunkBytes;
-            if (part.length !== Math.min(manifest.chunkBytes, bytes.length - offset))
-              return fail('UNCONFIRMED_OUTCOME');
-            part.copy(bytes, offset);
-            part.fill(0);
-          }
-          if (postSaveSha256(bytes) !== manifest.bodySha256) return fail('UNCONFIRMED_OUTCOME');
-          const text = bytes.toString('utf8');
-          if (!Buffer.from(text, 'utf8').equals(bytes)) return fail('UNCONFIRMED_OUTCOME');
-          if (admittedTabIdOrNull !== null) {
-            const observation = campaignLobbyOwnerObservationValue(JSON.parse(text));
-            if (
-              canonicalPostSaveJson(observation) !== text ||
-              manifest.publicationChecksum !== manifest.bodySha256 ||
-              observation.campaignId !== channel.campaign.campaignId ||
-              observation.ownerDeviceId !== scope.ownerDeviceId ||
-              observation.selectedCopy.controller.localControllerSeatId !== admittedTabIdOrNull ||
-              live(scope) !== channel
-            )
-              return fail('UNCONFIRMED_OUTCOME');
-            return { outcome: 'LOBBY' as const, observation, hostIdentity: channel.hostIdentity };
-          }
-          const publication = validateAdmissionOwnerPublication(JSON.parse(text) as unknown);
+    async checkLobbyObservation(
+      scope: LocalNetworkScope,
+      admittedTabId: string,
+      observation: CampaignLobbyOwnerObservation,
+    ) {
+      // CHECK may allocate a PUBLICATION, so the same scope lock covers it and all chunks.
+      return withDownload(scope, async () => {
+        const channel = live(scope);
+        const observedText = canonicalPostSaveJson(campaignLobbyOwnerObservationValue(observation));
+        const read = () => {
+          owned(scope);
+          const presentation = readLocalAdmissionPresentation(d.database, scope);
           if (
-            canonicalPostSaveJson(publication) !== text ||
-            publication.publicationChecksum !== manifest.publicationChecksum ||
-            publication.gmDecision.campaignId !== channel.campaign.campaignId ||
-            publication.gmDecision.requestId !== request.requestId ||
-            publication.gmDecision.requestOwnerDeviceId !== scope.ownerDeviceId ||
-            live(scope) !== channel
+            presentation === null ||
+            presentation.admission.record.scope.ownerDeviceId !== scope.ownerDeviceId ||
+            presentation.admission.record.scope.networkScopeId !== scope.networkScopeId
+          )
+            return fail('UNCONFIRMED_OUTCOME');
+          const app = presentation.application,
+            request = app.requestOrNull;
+          if (
+            request === null ||
+            app.ownerDeviceId !== scope.ownerDeviceId ||
+            app.networkScopeId !== scope.networkScopeId ||
+            app.sessionOrNull?.technicalSessionId !== request.technicalSessionId ||
+            app.sessionOrNull.campaignProof.campaignId !== channel.campaign.campaignId
+          )
+            return fail('UNCONFIRMED_OUTCOME');
+          const state = presentation.admission;
+          if (state.record.publication.gmDecision.requestId !== request.requestId)
+            return fail('UNCONFIRMED_OUTCOME');
+          if (
+            state?.receiptOrNull?.decision !== 'ACCEPT' ||
+            !localLobbyState(state).observations.some(
+              (v) =>
+                v.selectedCopy.controller.localControllerSeatId === admittedTabId &&
+                canonicalPostSaveJson(v) === observedText,
+            )
           )
             return fail('UNCONFIRMED_OUTCOME');
           return {
-            outcome: 'PUBLICATION' as const,
-            publication,
-            campaignRevision: manifest.campaignRevision,
-            hostIdentity: channel.hostIdentity,
+            app,
+            request: {
+              schemaVersion: 1 as const,
+              operation: 'CAMPAIGN_LOBBY_CHECK' as const,
+              requestId: request.requestId,
+              technicalSessionId: request.technicalSessionId,
+              submitCommandId: request.submitCommandId,
+              admittedTabId,
+              knownObservationSha256: postSaveSha256(observedText),
+            },
           };
-        } catch (error: unknown) {
-          if (error instanceof LocalNetworkPeerError) throw error;
+        };
+        const { request } = read();
+        const response = decodeCampaignLobbyCheckResponse(
+          await channel.call(encodeCampaignLobbyCheckCommand(request)),
+          admissionLimits,
+        );
+        const fresh = read();
+        if (
+          live(scope) !== channel ||
+          canonicalPostSaveJson(fresh.request) !== canonicalPostSaveJson(request)
+        )
           return fail('UNCONFIRMED_OUTCOME');
-        } finally {
-          bytes.fill(0);
-          receivingBytes -= reservation;
-        }
-      } finally {
-        downloading.delete(scope.networkScopeId);
-      }
+        if (response.outcome === 'REFUSED') return fail('UNCONFIRMED_OUTCOME');
+        for (const key of Object.keys(request) as (keyof typeof request)[])
+          if (response[key] !== request[key]) return fail('UNCONFIRMED_OUTCOME');
+        if (response.outcome === 'UNCHANGED') return { outcome: 'UNCHANGED' as const };
+        const delivered = await downloadAdmission(
+          scope,
+          admittedTabId,
+          channel,
+          response.manifest,
+          fresh.app,
+        );
+        if (delivered.outcome !== 'LOBBY') return fail('UNCONFIRMED_OUTCOME');
+        return {
+          outcome: 'CHANGED' as const,
+          observation: delivered.observation,
+          hostIdentity: delivered.hostIdentity,
+        };
+      });
+    },
+    async fetchAdmission(scope: LocalNetworkScope, admittedTabIdOrNull: string | null = null) {
+      return withDownload(scope, () => downloadAdmission(scope, admittedTabIdOrNull, live(scope)));
     },
     async deliverLobbyReady(
       scope: LocalNetworkScope,

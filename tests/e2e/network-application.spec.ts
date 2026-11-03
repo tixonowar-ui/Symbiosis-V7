@@ -1,4 +1,6 @@
+import { createServer } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
+import { networkFramesForPrivateDataCheck } from '../fixtures/network-browser-privacy.js';
 import {
   createNetworkBrowserScenario,
   safeNetworkInspection,
@@ -148,7 +150,7 @@ test('NET connects two real Node installations by manual address, submits own FI
     expect(player.inspect().sources).toEqual(originalSources);
     expect(
       /Network-test-master-secret|privateKey|keyFingerprint|originalCheckpoint|canonicalWitnessText|witnessSha256|hosted_network_peer|CORE-\d/u.test(
-        received.join('\n'),
+        networkFramesForPrivateDataCheck(received, gm.publicHostIdentity()),
       ),
       'Only the public projection and receipt allowlist reaches the player browser',
     ).toBe(false);
@@ -202,7 +204,14 @@ async function submitOwnFinal(page: Page, address: string, ownAddress: string) {
   await expect(form(page, 'NET-005')).toBeVisible();
 }
 
-for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'PEACE'] as const) {
+for (const outcome of [
+  'ACCEPT',
+  'ACCEPT_WITH_BLOCKERS',
+  'DECLINE',
+  'REJECT',
+  'PEACE',
+  'LIFECYCLE',
+] as const) {
   test(`NET final admission ${outcome} preserves the source and restores the whole decision on both installations`, async ({
     browser,
   }, info) => {
@@ -211,8 +220,43 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'P
     // This new full path adds Ready/Unready/time/Start and PEACE recovery to admission.
     // Existing admission cases retain their 120s limit and every assertion stays enabled.
     if (outcome === 'PEACE') test.setTimeout(180_000);
+    // A separate new scenario includes lifecycle and both physical process restarts.
+    if (outcome === 'LIFECYCLE') test.setTimeout(360_000);
+    const peaceful = outcome === 'PEACE' || outcome === 'LIFECYCLE';
     const errors: string[] = [];
     const frames: string[] = [];
+    const expectRetryConfirmed = async (fromFrame: number) => {
+      await expect
+        .poll(
+          () => {
+            const current = frames.slice(fromFrame);
+            const sent = current.find(
+              (frame) =>
+                frame.startsWith('player sent ') &&
+                frame.includes('"messageType":"network.peer-control"') &&
+                frame.includes('"operation":"RETRY"'),
+            );
+            if (sent === undefined) return false;
+            const request = JSON.parse(sent.slice('player sent '.length)) as { requestId: string };
+            return current.some((frame) => {
+              if (
+                !frame.startsWith('player received ') ||
+                !frame.includes('"messageType":"network.peer-state"')
+              )
+                return false;
+              const response = JSON.parse(frame.slice('player received '.length)) as {
+                requestId: string;
+                retryOutcome: string;
+              };
+              return (
+                response.requestId === request.requestId && response.retryOutcome === 'CONFIRMED'
+              );
+            });
+          },
+          { timeout: player.operationTimeoutMs },
+        )
+        .toBe(true);
+    };
     let failure: unknown;
     for (const page of [masterPage, playerPage]) {
       page.on('pageerror', (error) => errors.push(error.message));
@@ -330,6 +374,26 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'P
           ).toBeVisible();
       }
       let firstPeace: Record<string, unknown> | null = null;
+      let nextCampaignPort: number | null = null;
+      let firstPeerPin: unknown = null;
+      const lastPeerFields = () => {
+        const row = frames.findLast(
+          (frame) =>
+            frame.startsWith('player received ') &&
+            frame.includes('"messageType":"network.peer-state"') &&
+            frame.includes('"formId":"NET-009"'),
+        );
+        if (row === undefined) throw Error('Missing actual NET009 state');
+        return (
+          JSON.parse(row.slice('player received '.length)) as {
+            formOrNull: {
+              fields: {
+                pinnedCampaignPeerReconnectOrNull: { previouslyPinnedHostIdentity: unknown };
+              };
+            };
+          }
+        ).formOrNull.fields;
+      };
       const lastPeace = () => {
         const row = frames.findLast(
           (frame) =>
@@ -343,7 +407,7 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'P
           }
         ).presentation.base.roleFilteredPayload;
       };
-      if (outcome === 'PEACE') {
+      if (peaceful) {
         // No reload or reconnect is allowed between fresh ACCEPT and this Ready button.
         await action(playerPage, 'NET-006::CTA::003');
         await expect(playerPage.getByText('Ваше устройство готово.', { exact: true })).toBeVisible({
@@ -415,16 +479,215 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'P
         );
         await action(masterPage, 'GRP-001::CTA::009');
       }
+      if (outcome === 'LIFECYCLE') {
+        const boundCopies = gm.inspect().copies;
+        await action(masterPage, 'GM-001::CTA::013');
+        await action(masterPage, 'CMP-007::CTA::003');
+        await action(masterPage, 'CMP-008::CTA::004');
+        await expect(form(masterPage, 'CMP-016')).toBeVisible();
+        await masterPage.getByLabel('Причина паузы', { exact: true }).fill('Перерыв за столом');
+        await action(masterPage, 'CMP-016::CTA::002');
+        await expect(playerPage.getByText('Кампания на паузе.', { exact: true })).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await expect(
+          playerPage.getByText('Причина паузы: Перерыв за столом', { exact: true }),
+        ).toBeVisible();
+        await expect(
+          playerPage.getByRole('region', { name: 'Мирная сцена персонажа' }),
+        ).toContainText('Часы остановлены.');
+        await expect(playerPage.locator('[data-atlas-action-key="NET-006::CTA::003"]')).toHaveCount(
+          0,
+        );
+        expect(lastPeace()['sceneId']).toBe(firstPeace!['sceneId']);
+        await expect(form(masterPage, 'CMP-007')).toBeVisible();
+        await action(masterPage, 'CMP-007::CTA::003');
+        // The current listener stays live; only the next launch uses this saved endpoint.
+        const reserved = createServer();
+        await new Promise<void>((resolve) => reserved.listen(0, '127.0.0.1', resolve));
+        const endpoint = reserved.address();
+        if (endpoint === null || typeof endpoint === 'string') throw Error('Missing reserved port');
+        nextCampaignPort = endpoint.port;
+        await new Promise<void>((resolve, reject) =>
+          reserved.close((error) => (error === undefined ? resolve() : reject(error))),
+        );
+        await masterPage.getByLabel('Порт хоста', { exact: true }).fill(String(nextCampaignPort));
+        await action(masterPage, 'CMP-008::CTA::008');
+        await expect(
+          masterPage.getByText('Сохранённый адрес следующего запуска:', { exact: false }),
+        ).toContainText('127.0.0.1:' + nextCampaignPort);
+        await expect(masterPage.getByText('Действующий адрес:', { exact: false })).toContainText(
+          '127.0.0.1:' + new URL(gm.baseURL).port,
+        );
+        // Started scene capacity mutation stays unavailable; no character can be displaced.
+        await expect(masterPage.locator('[data-atlas-action-key="CMP-008::CTA::005"]')).toHaveCount(
+          0,
+        );
+        await action(masterPage, 'CMP-008::CTA::004');
+        await masterPage
+          .getByLabel('Причина возобновления', { exact: true })
+          .fill('Продолжаем с той же сцены');
+        await action(masterPage, 'CMP-016::CTA::003');
+        await expect(playerPage.getByText('Кампания продолжена.', { exact: true })).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await expect(form(masterPage, 'CMP-007')).toBeVisible();
+        await action(masterPage, 'CMP-007::CTA::003');
+        await masterPage
+          .getByLabel('Название кампании', { exact: true })
+          .fill('Сохранённая сессия');
+        await masterPage
+          .getByLabel('Описание кампании', { exact: true })
+          .fill('Без изменения готовых персонажей');
+        await masterPage
+          .getByRole('combobox', { name: 'Режим будущих бросков', exact: true })
+          .selectOption('AUTO');
+        await action(masterPage, 'CMP-008::CTA::008');
+        await expect(masterPage.getByLabel('Название кампании', { exact: true })).toHaveValue(
+          'Сохранённая сессия',
+        );
+        await expect
+          .poll(
+            () => {
+              const row = frames.findLast(
+                (frame) =>
+                  frame.startsWith('gm received ') &&
+                  frame.includes('"messageType":"projection.snapshot"') &&
+                  frame.includes('"formId":"CMP-008"'),
+              );
+              if (row === undefined) return null;
+              return (
+                JSON.parse(row.slice('gm received '.length)) as {
+                  presentation: { base: { roleFilteredPayload: Record<string, unknown> } };
+                }
+              ).presentation.base.roleFilteredPayload;
+            },
+            { timeout: gm.operationTimeoutMs },
+          )
+          .toMatchObject({
+            title: 'Сохранённая сессия',
+            descriptionOrNull: 'Без изменения готовых персонажей',
+            defaultFutureRollMode: 'AUTO',
+          });
+        expect(gm.inspect().copies).toEqual(boundCopies);
+        await action(masterPage, 'CMP-008::CTA::007');
+        await masterPage
+          .getByRole('combobox', { name: 'Устройство для отключения', exact: true })
+          .selectOption(player.deviceId);
+        await masterPage
+          .getByLabel('Причина отключения', { exact: true })
+          .fill('Явный ручной повтор');
+        await action(masterPage, 'NET-023::CTA::002');
+        // NET-008 also reports transport loss before the authenticated disconnect arrives.
+        await expect(
+          playerPage.locator(
+            '[data-campaign-peer-state="DISCONNECTED"] [data-atlas-form-id="NET-008"]',
+          ),
+        ).toBeVisible({ timeout: player.operationTimeoutMs });
+        await expect(
+          playerPage.getByText('Мастер отключил устройство: Явный ручной повтор', { exact: true }),
+        ).toBeVisible();
+        expect(gm.inspect().copies).toEqual(boundCopies);
+        await action(playerPage, 'NET-008::CTA::002');
+        await expect(form(playerPage, 'NET-009')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        firstPeerPin =
+          lastPeerFields().pinnedCampaignPeerReconnectOrNull.previouslyPinnedHostIdentity;
+        await expect(playerPage.getByLabel('Адрес мастера', { exact: true })).toHaveValue(
+          '127.0.0.1',
+        );
+        await expect(playerPage.getByLabel('Порт мастера', { exact: true })).toHaveValue(
+          new URL(gm.baseURL).port,
+        );
+        const firstRetryFrame = frames.length;
+        await action(playerPage, 'NET-009::CTA::001');
+        await expectRetryConfirmed(firstRetryFrame);
+        await expect
+          .poll(
+            () =>
+              frames.some(
+                (frame) =>
+                  frame.startsWith('player received ') &&
+                  frame.includes('"messageType":"network.peer-state"') &&
+                  frame.includes('"formId":"NET-010"'),
+              ),
+            { timeout: player.operationTimeoutMs },
+          )
+          .toBe(true);
+        await expect(playerPage.locator('[data-campaign-peer-state="CONNECTED"]')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await expect(form(playerPage, 'NET-009')).toHaveCount(0);
+        expect(lastPeace()['sceneId']).toBe(firstPeace!['sceneId']);
+        expect(gm.inspect().copies).toEqual(boundCopies);
+        const returnFromDisconnectFrame = frames.length;
+        await action(masterPage, 'NET-023::CTA::001');
+        await expect(form(masterPage, 'GM-001')).toBeVisible({ timeout: 15_000 });
+        const navigationFrames = frames.slice(returnFromDisconnectFrame);
+        const requestFrame = navigationFrames.find(
+          (frame) =>
+            frame.startsWith('gm sent ') &&
+            frame.includes('"messageType":"navigation.form-action"') &&
+            frame.includes('"actionKey":"NET-023::CTA::001"'),
+        );
+        expect(requestFrame).toBeDefined();
+        const navigation = JSON.parse(requestFrame!.slice('gm sent '.length)) as {
+          navigationRequestId: string;
+        };
+        expect(
+          navigationFrames.some((frame) => {
+            if (
+              !frame.startsWith('gm received ') ||
+              !frame.includes('"messageType":"projection.snapshot"')
+            )
+              return false;
+            const response = JSON.parse(frame.slice('gm received '.length)) as {
+              presentation: {
+                base: { formId: string };
+                layers: unknown[];
+                assignment: { reason: string; correlationId: string };
+              };
+            };
+            return (
+              response.presentation.assignment.reason === 'FORM_ACTION' &&
+              response.presentation.assignment.correlationId === navigation.navigationRequestId &&
+              response.presentation.base.formId === 'GM-001' &&
+              response.presentation.layers.length === 0
+            );
+          }),
+        ).toBe(true);
+      }
       const copies = gm.inspect().copies;
       expect(player.inspect().sources).toEqual(sources);
       await gm.restart();
       await player.restart();
       await masterPage.reload();
       await playerPage.reload();
+      if (outcome === 'LIFECYCLE') {
+        await expect(form(playerPage, 'NET-008')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await action(playerPage, 'NET-008::CTA::002');
+        await expect(form(playerPage, 'NET-009')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        expect(
+          lastPeerFields().pinnedCampaignPeerReconnectOrNull.previouslyPinnedHostIdentity,
+        ).toEqual(firstPeerPin);
+        await playerPage.getByLabel('Порт мастера', { exact: true }).fill(String(nextCampaignPort));
+        const restartedRetryFrame = frames.length;
+        await action(playerPage, 'NET-009::CTA::001');
+        await expectRetryConfirmed(restartedRetryFrame);
+        await expect(playerPage.locator('[data-campaign-peer-state="CONNECTED"]')).toBeVisible({
+          timeout: player.operationTimeoutMs,
+        });
+        await expect(form(playerPage, 'NET-009')).toHaveCount(0);
+      }
       await expect(
         form(
           playerPage,
-          outcome === 'PEACE'
+          peaceful
             ? 'PLY-001'
             : outcome === 'REJECT' || outcome === 'DECLINE'
               ? 'NET-007'
@@ -432,10 +695,7 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'P
         ),
       ).toBeVisible({ timeout: player.operationTimeoutMs });
       await expect(
-        form(
-          masterPage,
-          outcome === 'PEACE' ? 'GM-001' : outcome === 'REJECT' ? 'NET-022' : 'NET-021',
-        ),
+        form(masterPage, peaceful ? 'GM-001' : outcome === 'REJECT' ? 'NET-022' : 'NET-021'),
       ).toBeVisible();
       if (firstPeace !== null) {
         const restored = lastPeace();
@@ -454,6 +714,18 @@ for (const outcome of ['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'P
       }
       expect(gm.inspect().copies).toEqual(copies);
       expect(player.inspect().sources).toEqual(sources);
+      if (outcome === 'LIFECYCLE') {
+        const ownerWire = frames.filter((frame) => frame.startsWith('player received ')).join('\n');
+        for (const field of [
+          'networkForNextLaunch',
+          'availableNetworkInterfaces',
+          'currentCampaignLifecycle',
+          'beforeVerifier',
+          'afterVerifier',
+          'newMasterPassword',
+        ])
+          expect(ownerWire).not.toContain('"' + field + '"');
+      }
       if (outcome === 'REJECT' || outcome === 'DECLINE') {
         await action(playerPage, 'NET-007::CTA::003');
         await expect(form(playerPage, 'APP-002')).toBeVisible({
@@ -555,7 +827,7 @@ test('GM reviews an actual owner request, delivers live decisions and restores t
     expect(gm.inspect().copies).toEqual([]);
     expect(gm.inspect().checkpoints).toEqual(birth);
     expect(player.inspect().sources).toEqual(sources);
-    expect(frames.join('\n')).not.toMatch(
+    expect(networkFramesForPrivateDataCheck(frames, gm.publicHostIdentity())).not.toMatch(
       /canonicalWitnessText|privateKeyPkcs8|keyFingerprintSha256|preparedVerifier|CORE-\d/u,
     );
     expect(errors).toEqual([]);

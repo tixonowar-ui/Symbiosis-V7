@@ -1,5 +1,16 @@
+import { readCampaignLifecycleClientBinding } from './campaign-lifecycle-state.js';
+import {
+  CAMPAIGN_LIFECYCLE_NAV_TARGETS,
+  campaignLifecycleCommandForm,
+  type CampaignLifecycleForm,
+} from '@shared/campaign-lifecycle.js';
+import {
+  readCampaignLifecycleLedger,
+  verifyCampaignLifecycleMirrors,
+} from './campaign-lifecycle-ledger.js';
+import { CAMPAIGN_LIFECYCLE_IDENTITIES } from './migrations/0014-campaign-lifecycle.js';
 import { CAMPAIGN_LOBBY_GM_NAV_TARGETS, type CampaignLobbyGmForm } from '@shared/campaign-lobby.js';
-import { readCampaignLobbyLedger } from './campaign-lobby.js';
+import { hasCampaignLobbySchema, readCampaignLobbyLedger } from './campaign-lobby.js';
 import { CAMPAIGN_LOBBY_IDENTITIES } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
@@ -75,7 +86,7 @@ export type CampaignCreationCursor = {
   | { readonly kind: 'CAMPAIGN'; readonly formId: 'CMP-006'; readonly targetId: string }
   | {
       readonly kind: 'QUEUE';
-      readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm;
+      readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm | CampaignLifecycleForm;
       readonly targetId: string;
     }
   | {
@@ -568,7 +579,7 @@ function assertUnusedId(db: Database.Database, id: string): void {
   ];
   // An older campaign writer must not reuse identities already committed by a network family.
   const network =
-    version === 10 || version === 11 || version === 12 || version === 13
+    version === 10 || version === 11 || version === 12 || version === 13 || version === 14
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -580,7 +591,7 @@ function assertUnusedId(db: Database.Database, id: string): void {
         ] as const)
       : [];
   const review =
-    version === 11 || version === 12 || version === 13
+    version === 11 || version === 12 || version === 13 || version === 14
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -588,9 +599,15 @@ function assertUnusedId(db: Database.Database, id: string): void {
           ['gm_request_queue_event', ['event_id']],
         ] as const)
       : [];
-  const admission = version === 12 || version === 13 ? CAMPAIGN_ADMISSION_IDENTITIES : [];
-  if (version === 13)
-    for (const [table, columns] of CAMPAIGN_LOBBY_IDENTITIES)
+  const admission =
+    version === 12 || version === 13 || version === 14 ? CAMPAIGN_ADMISSION_IDENTITIES : [];
+  if (version === 13 || version === 14)
+    for (const [table, columns] of [
+      ...CAMPAIGN_LOBBY_IDENTITIES,
+      ...(db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() === undefined
+        ? []
+        : CAMPAIGN_LIFECYCLE_IDENTITIES),
+    ])
       for (const column of columns)
         if (rowAt(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
   for (const [table, columns] of [...network, ...review, ...admission])
@@ -1479,7 +1496,7 @@ function consumeNativePromise(value: unknown): void {
     // Trusted validators are not a sandbox for adversarial Promise species constructors.
   }
 }
-function validateOriginOwner(
+export function validateOriginOwner(
   db: Database.Database,
   privateOwner: CampaignPrivateOwner,
   callback: CampaignPrivateOwnerValidator,
@@ -1790,7 +1807,7 @@ export interface GmRequestReviewDraftRequest {
 }
 export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTriple {
   readonly schemaVersion: 1;
-  readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm;
+  readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm | CampaignLifecycleForm;
   readonly requestQueueRevision: number;
   readonly values: NetworkGmRequestDraftValues;
   readonly returnContext: Extract<NetworkGmRequestReturnContext, { originFormId: 'CMP-006' }>;
@@ -1944,11 +1961,9 @@ function verifyLobbyCause(
   db: Database.Database,
   scope: GmRequestReviewScope,
   cause: GmLobbySourceCause,
+  events = readCampaignLobbyLedger(db, scope.campaignId),
 ) {
-  const event =
-    readCampaignLobbyLedger(db, scope.campaignId).find(
-      (e) => e.request.commandId === cause.commandId,
-    ) ?? fail();
+  const event = events.find((e) => e.request.commandId === cause.commandId) ?? fail();
   if (campaignCreationHash(event) !== cause.recordSha256) return fail();
   if (
     event.authority.kind === 'GM' &&
@@ -1966,6 +1981,12 @@ function queueNavigationTarget(request: FormActionIntentV2Message): GmRequestRev
     return 'NET-017';
   if (request.actionKey === 'NET-017::CTA::009' && request.sourceFormId === 'NET-017')
     return 'CMP-006';
+  const lifecycleKey = request.actionKey as keyof typeof CAMPAIGN_LIFECYCLE_NAV_TARGETS;
+  if (
+    Object.hasOwn(CAMPAIGN_LIFECYCLE_NAV_TARGETS, lifecycleKey) &&
+    lifecycleKey.split('::')[0] === request.sourceFormId
+  )
+    return CAMPAIGN_LIFECYCLE_NAV_TARGETS[lifecycleKey];
   const key = request.actionKey as keyof typeof CAMPAIGN_LOBBY_GM_NAV_TARGETS;
   if (
     !Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, key) ||
@@ -1974,7 +1995,38 @@ function queueNavigationTarget(request: FormActionIntentV2Message): GmRequestRev
     return fail('INVALID_INPUT');
   return CAMPAIGN_LOBBY_GM_NAV_TARGETS[key];
 }
+function lifecycleCauseEventId(scope: GmRequestReviewScope, cause: GmLobbySourceCause): string {
+  return 'gm-lifecycle-source:' + campaignCreationHash({ scope, cause });
+}
+function verifyLifecycleCause(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  cause: GmLobbySourceCause,
+  events = readCampaignLifecycleLedger(db, scope.campaignId),
+) {
+  const event = events.find((e) => e.request.commandId === cause.commandId) ?? fail();
+  if (!same(event.scope, scope) || campaignCreationHash(event) !== cause.recordSha256)
+    return fail();
+  return {
+    actorVisibilityChanged: true,
+    client: null,
+    lifecycleClient: readCampaignLifecycleClientBinding(
+      event.clientRequestJsonOrNull,
+      scope,
+      event.request,
+    ),
+    sourceFormId: campaignLifecycleCommandForm(event.request.workflowCommandId),
+    checkpointRevision: event.receipt.campaignRevision,
+    returnFormId:
+      event.request.workflowCommandId === 'UI-CMD-CAMPAIGN-PAUSE-SET'
+        ? 'CMP-007'
+        : event.request.workflowCommandId === 'UI-CMD-CLIENT-DISCONNECT'
+          ? 'NET-023'
+          : 'CMP-008',
+  };
+}
 export type GmRequestReviewMutation =
+  | { readonly kind: 'LIFECYCLE_SOURCE'; readonly cause: GmLobbySourceCause }
   | { readonly kind: 'LOBBY_SOURCE'; readonly cause: GmLobbySourceCause }
   | { readonly kind: 'SOURCE_ADVANCE'; readonly cause: GmAdmissionSourceCause }
   | {
@@ -2168,6 +2220,10 @@ function queueDraft(value: unknown): GmRequestReviewDraftRequest {
 }
 function queueMutation(value: unknown): GmRequestReviewMutation {
   const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'LIFECYCLE_SOURCE') {
+    const row = queueObject(value, ['kind', 'cause']);
+    return { kind: 'LIFECYCLE_SOURCE', cause: lobbyCause(row['cause']) };
+  }
   if (record['kind'] === 'LOBBY_SOURCE') {
     const row = queueObject(value, ['kind', 'cause']);
     return { kind: 'LOBBY_SOURCE', cause: lobbyCause(row['cause']) };
@@ -2349,12 +2405,29 @@ interface QueueReduced {
   readonly connectionFactsSha256OrNull: string | null;
   readonly changed: boolean;
 }
+/** Read proofs live only for this synchronous reduction; no proof crosses a write or callback. */
+function queueSourceProofs(db: Database.Database, scope: GmRequestReviewScope) {
+  let lobby: ReturnType<typeof readCampaignLobbyLedger> | undefined;
+  let lifecycle: ReturnType<typeof readCampaignLifecycleLedger> | undefined;
+  return {
+    lobby: (cause: GmLobbySourceCause) =>
+      verifyLobbyCause(db, scope, cause, (lobby ??= readCampaignLobbyLedger(db, scope.campaignId))),
+    lifecycle: (cause: GmLobbySourceCause) =>
+      verifyLifecycleCause(
+        db,
+        scope,
+        cause,
+        (lifecycle ??= readCampaignLifecycleLedger(db, scope.campaignId)),
+      ),
+  };
+}
 function reduceQueue(
   db: Database.Database,
   scope: GmRequestReviewScope,
   initial: ReturnType<typeof queueBase>,
   state: GmRequestReviewViewState,
   mutation: GmRequestReviewMutation,
+  proofs = queueSourceProofs(db, scope),
 ): QueueReduced {
   const old = state.viewOrNull;
   if (old === null) {
@@ -2386,8 +2459,23 @@ function reduceQueue(
   let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
   let document = queueViewDocument(old);
   let changed = true;
-  if (mutation.kind === 'LOBBY_SOURCE') {
-    const proof = verifyLobbyCause(db, scope, mutation.cause);
+  if (mutation.kind === 'LIFECYCLE_SOURCE') {
+    const proof = proofs.lifecycle(mutation.cause);
+    if (
+      old.formId !== proof.sourceFormId ||
+      (proof.lifecycleClient !== null &&
+        !same(proof.lifecycleClient.request.expectedRevisions, presentationRevisions(old)))
+    )
+      return fail('STALE_REVISION');
+    document = {
+      ...document,
+      formId: proof.returnFormId as GmRequestReviewView['formId'],
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+      actorVisibilityRevision: next(old.actorVisibilityRevision),
+    };
+  } else if (mutation.kind === 'LOBBY_SOURCE') {
+    const proof = proofs.lobby(mutation.cause);
     document = {
       ...document,
       formId: proof.actorVisibilityChanged ? 'GM-001' : old.formId,
@@ -2429,7 +2517,7 @@ function reduceQueue(
     const started = state.events.some(
       (event) =>
         event.mutation.kind === 'LOBBY_SOURCE' &&
-        verifyLobbyCause(db, scope, event.mutation.cause).actorVisibilityChanged,
+        proofs.lobby(event.mutation.cause).actorVisibilityChanged,
     );
     if (started && (target === 'CMP-006' || target === 'NET-016' || target === 'NET-017'))
       return fail('DRAFT_UNAVAILABLE');
@@ -2495,10 +2583,16 @@ function reduceQueue(
 function queueSchema(db: Database.Database): void {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (row['version'] !== 11 && row['version'] !== 12 && row['version'] !== 13) return fail();
+  if (
+    row['version'] !== 11 &&
+    row['version'] !== 12 &&
+    row['version'] !== 13 &&
+    row['version'] !== 14
+  )
+    return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 12 || row['version'] === 13)
+  if (row['version'] === 12 || row['version'] === 13 || row['version'] === 14)
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -2527,6 +2621,7 @@ export function readGmRequestReviewViewStateInTransaction(
     events: [],
   };
   const events: StoredGmRequestQueueEvent[] = [];
+  const proofs = queueSourceProofs(db, scope);
   for (const [eventIndex, row] of rows.entries()) {
     const saved = queueObject(checkedJson(row), [
       'schemaVersion',
@@ -2564,9 +2659,14 @@ export function readGmRequestReviewViewStateInTransaction(
       eventId !== admissionCauseEventId(scope, mutation.cause)
     )
       return fail();
+    if (
+      mutation.kind === 'LIFECYCLE_SOURCE' &&
+      eventId !== lifecycleCauseEventId(scope, mutation.cause)
+    )
+      return fail('INVALID_INPUT');
     if (mutation.kind === 'LOBBY_SOURCE' && eventId !== lobbyCauseEventId(scope, mutation.cause))
       return fail();
-    const reduced = reduceQueue(db, scope, initial, state, mutation);
+    const reduced = reduceQueue(db, scope, initial, state, mutation, proofs);
     if (mutation.kind === 'ADMISSION_RETURN')
       verifyAdmissionReturnBridge(db, scope, eventId, mutation, pendingAdmissionReturnId);
     if (!same(saved['view'], reduced.view) || saved['changed'] !== reduced.changed) return fail();
@@ -2635,7 +2735,28 @@ export function verifyGmAdmissionSourceMirrorsInTransaction(
   }
   const batches = new Map<string, { reviewRevision: number; gm: boolean; player: boolean }>();
   let checkpointRevision = 0;
+  const lifecycleEvents = readCampaignLifecycleLedger(db, scope.campaignId);
+  verifyCampaignLifecycleMirrors(db, scope, lifecycleEvents);
+  const lobbyEvents = hasCampaignLobbySchema(db)
+    ? readCampaignLobbyLedger(db, scope.campaignId)
+    : [];
   for (const event of events) {
+    if (event.mutation.kind === 'LIFECYCLE_SOURCE') {
+      const proof = verifyLifecycleCause(db, scope, event.mutation.cause, lifecycleEvents);
+      if (proof.checkpointRevision !== next(checkpointRevision)) return fail();
+      checkpointRevision = proof.checkpointRevision;
+      continue;
+    }
+    if (event.mutation.kind === 'LOBBY_SOURCE') {
+      const causeCommandId = event.mutation.cause.commandId;
+      const lobby = lobbyEvents.find((e) => e.request.commandId === causeCommandId) ?? fail();
+      if (lobby.campaignRevision !== checkpointRevision) return fail();
+      if (lobby.receipt.workflowCommandId === 'UI-CMD-CAMPAIGN-START') {
+        if (lobby.receipt.campaignRevision !== next(checkpointRevision)) return fail();
+        checkpointRevision = lobby.receipt.campaignRevision;
+      }
+      continue;
+    }
     if (event.mutation.kind !== 'SOURCE_ADVANCE') continue;
     const cause = event.mutation.cause;
     if (!actual.has(cause.commandId) || !same(actual.get(cause.commandId), cause)) return fail();
@@ -2706,6 +2827,19 @@ export function appendGmLobbySourceInTransaction(
     mutation: { kind: 'LOBBY_SOURCE', cause },
   });
 }
+export function appendGmLifecycleSourceInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  value: GmLobbySourceCause,
+): void {
+  const cause = lobbyCause(value);
+  verifyLifecycleCause(db, scope, cause);
+  appendGmRequestReviewEventInTransaction(db, scope, {
+    eventId: lifecycleCauseEventId(scope, cause),
+    mutation: { kind: 'LIFECYCLE_SOURCE', cause },
+  });
+  verifyGmAdmissionSourceMirrorsInTransaction(db, scope);
+}
 function queueCursor(view: GmRequestReviewView): CampaignCreationCursor {
   return {
     gmLocalContextId: view.gmLocalContextId,
@@ -2771,12 +2905,18 @@ export function appendGmRequestReviewEventInTransaction(
     eventId !== admissionCauseEventId(scope, mutation.cause)
   )
     return fail('INVALID_INPUT');
+  if (
+    mutation.kind === 'LIFECYCLE_SOURCE' &&
+    eventId !== lifecycleCauseEventId(scope, mutation.cause)
+  )
+    return fail('INVALID_INPUT');
   if (mutation.kind === 'LOBBY_SOURCE' && eventId !== lobbyCauseEventId(scope, mutation.cause))
     return fail('INVALID_INPUT');
   const admissionBefore =
     (mutation.kind === 'SOURCE_ADVANCE' ||
       mutation.kind === 'REQUEST_REFRESH' ||
-      mutation.kind === 'LOBBY_SOURCE') &&
+      mutation.kind === 'LOBBY_SOURCE' ||
+      mutation.kind === 'LIFECYCLE_SOURCE') &&
     db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined
       ? readGmAdmissionViewStateInTransaction(db, scope)
       : null;
@@ -3304,10 +3444,11 @@ function reduceAdmissionView(
   scope: GmRequestReviewScope,
   old: GmAdmissionView | null,
   mutation: GmAdmissionViewMutation,
+  proofs = queueSourceProofs(db, scope),
 ): GmAdmissionView {
   if (mutation.kind === 'SOURCE_ADVANCE') {
     if (old === null) return fail();
-    const proof = admissionQueueAdvance(db, scope, mutation.queuePrefix);
+    const proof = admissionQueueAdvance(db, scope, mutation.queuePrefix, proofs);
     if (proof.client !== null) assertAdmissionClientView(scope, old, proof.client);
     const weaponCommitted = proof.client?.intentOrNull?.kind === 'WEAPON';
     const { snapshotSha256: _hash, ...previous } = old;
@@ -3454,6 +3595,7 @@ function readAdmissionViewState(
     .get(scope.gmLocalContextId, scope.campaignId) as Row | undefined;
   let view: GmAdmissionView | null = null;
   const events: StoredGmAdmissionViewEvent[] = [];
+  const proofs = queueSourceProofs(db, scope);
   for (const [index, row] of rows.entries()) {
     const saved = queueObject(checkedJson(row), [
       'eventId',
@@ -3511,7 +3653,7 @@ function readAdmissionViewState(
       eventId !== `gm-admission-view-source:${mutation.queuePrefix.eventId}`
     )
       return fail();
-    view = reduceAdmissionView(db, scope, view, mutation);
+    view = reduceAdmissionView(db, scope, view, mutation, proofs);
     if (!same(view, saved['view'])) return fail();
     events.push({
       eventId,
@@ -3594,7 +3736,8 @@ function readAdmissionViewState(
         (row) =>
           row['kind'] === 'SOURCE_ADVANCE' ||
           row['kind'] === 'REQUEST_REFRESH' ||
-          row['kind'] === 'LOBBY_SOURCE',
+          row['kind'] === 'LOBBY_SOURCE' ||
+          row['kind'] === 'LIFECYCLE_SOURCE',
       );
     const mirrors = events.filter((event) => event.mutation.kind === 'SOURCE_ADVANCE');
     if (
@@ -3617,6 +3760,7 @@ function admissionQueueAdvance(
   db: Database.Database,
   scope: GmRequestReviewScope,
   prefix: AdmissionQueuePrefix,
+  proofs = queueSourceProofs(db, scope),
 ) {
   const row = rowAt(db, 'gm_request_queue_event', 'event_id', prefix.eventId) ?? fail();
   const saved = checkedJson(row),
@@ -3631,9 +3775,13 @@ function admissionQueueAdvance(
     row['kind'] !== mutation.kind
   )
     return fail();
+  if (mutation.kind === 'LIFECYCLE_SOURCE') {
+    if (prefix.eventId !== lifecycleCauseEventId(scope, mutation.cause)) return fail();
+    return proofs.lifecycle(mutation.cause);
+  }
   if (mutation.kind === 'LOBBY_SOURCE') {
     if (prefix.eventId !== lobbyCauseEventId(scope, mutation.cause)) return fail();
-    return verifyLobbyCause(db, scope, mutation.cause);
+    return proofs.lobby(mutation.cause);
   }
   if (mutation.kind === 'REQUEST_REFRESH') return { actorVisibilityChanged: false, client: null };
   if (

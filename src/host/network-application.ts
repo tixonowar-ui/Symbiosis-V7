@@ -1,3 +1,47 @@
+import { campaignConnectionGate } from '@shared/campaign-lifecycle.js';
+import {
+  campaignPeerSnapshotId,
+  campaignPeerControlValue,
+  campaignPeerStateValue,
+  type CampaignPeerControlV3Message,
+  type CampaignPeerStateV3Message,
+} from '@shared/campaign-lifecycle.js';
+import {
+  readLocalCampaignConnection,
+  readLocalCampaignReconnectSettlement,
+  prepareLocalCampaignReconnect,
+  replaceLocalCampaignReconnectLocator,
+} from '../persistence/local-campaign-connection.js';
+import { readLocalNetworkHostPin } from '../persistence/network-local-application.js';
+import {
+  campaignLifecycleGmAnchorValue,
+  isCampaignLifecycleWorkflow,
+} from '@shared/campaign-lifecycle.js';
+import {
+  CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+  campaignLifecycleCommandValue,
+  campaignLifecycleClientBindingValue,
+  campaignLifecycleCommandForm,
+  redactCampaignLifecycleCommand,
+} from '@shared/campaign-lifecycle.js';
+import { commitCampaignLifecycleCommand } from '../persistence/campaign-lifecycle.js';
+import { readCampaignLifecycleLedger } from '../persistence/campaign-lifecycle-ledger.js';
+import type { CampaignLifecycleEvent } from '../persistence/campaign-lifecycle-state.js';
+import {
+  prepareMasterSecret,
+  verifyMasterSecret,
+  validateMasterSecretInput,
+} from './campaign-secret.js';
+import {
+  isCampaignLifecycleForm,
+  CAMPAIGN_LIFECYCLE_NAV_TARGETS,
+  type CampaignLifecycleGmProjection,
+} from '@shared/campaign-lifecycle.js';
+import { projectGmCampaignLifecycle } from './projections/net-application.js';
+import {
+  createCampaignGmScheduler,
+  type CampaignGmScheduler,
+} from './campaign-network-executor.js';
 import {
   commitLocalLobbyEvent,
   localLobbyState,
@@ -223,11 +267,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     const bound = scope(c),
       contextId = c.contextId;
     return () => {
-      trust(c);
+      // scope() proves trust and owner once for this synchronous fence.
       exact(scope(c), bound);
       if (c.contextId !== contextId) unavailable();
       if (expected !== undefined) {
-        const actual = current(c);
+        const actual = readLocalNetworkApplication(db, bound);
         if (!isDeepStrictEqual(actual, expected))
           throw new NetworkApplicationStoreError('STALE_REVISION');
       }
@@ -431,10 +475,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     const s = verifiedSource?.current ?? current(c),
       bound = scope(c),
       contextId = c.contextId;
-    const verify = (actual = current(c)) => {
-      trust(c);
+    const verify = () => {
       exact(scope(c), bound);
       if (c.contextId !== contextId) unavailable();
+      const actual = readLocalNetworkApplication(db, bound);
       if (!isDeepStrictEqual(actual, s)) throw new NetworkApplicationStoreError('STALE_REVISION');
     };
     if (!force && d.peer.current(s.networkScopeId) !== null) return;
@@ -449,9 +493,30 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         ? out.intent.campaignId
         : s.sessionOrNull?.campaignProof.campaignId;
     if (campaignId === undefined) return;
+    const savedConnection =
+      out?.intent.operation !== 'OPEN' && s.requestOrNull !== null
+        ? readLocalCampaignConnection(db, bound)
+        : null;
     const address =
-      out?.intent.operation === 'OPEN' ? out.intent.canonicalOrigin : s.addressOrQrPayload;
+      out?.intent.operation === 'OPEN'
+        ? out.intent.canonicalOrigin
+        : savedConnection !== null
+          ? (savedConnection.pendingOrNull?.canonicalOrigin ??
+            savedConnection.lastAuthenticatedEndpoint)
+          : s.addressOrQrPayload;
     await d.peer.reconnect(scope(c), address, campaignId);
+    if (s.requestOrNull !== null) {
+      verify();
+      const continuation = readLocalCampaignConnection(db, bound);
+      const status =
+        continuation.pendingOrNull === null
+          ? await d.peer.readConnection(bound, guard(c))
+          : (await d.peer.retryConnection(bound, continuation.pendingOrNull, guard(c)))
+              .statusOrNull;
+      verify();
+      if (status === null || campaignConnectionGate(status) === null)
+        throw new LocalNetworkPeerError('PEER_UNAVAILABLE');
+    }
     // A newly authenticated transport must reconcile the existing logical session
     // before it can issue another command against that session's generation.
     if (out?.intent.operation !== 'OPEN' && s.requestOrNull !== null) {
@@ -938,6 +1003,32 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           guard(c),
         );
       } else throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
+    }
+    const observed = localLobbyState(owned.admission).observations.find(
+      (v) => v.selectedCopy.controller.localControllerSeatId === owned.tab.tabId,
+    );
+    if (pending === null && observed !== undefined) {
+      const checked = await d.peer.checkLobbyObservation(root, owned.tab.tabId, observed);
+      guard(c)();
+      if (c.contextId !== contextId || c.networkScopeId !== bound.networkScopeId) unavailable();
+      if (checked.outcome === 'UNCHANGED') {
+        const fresh = readLocalAdmissionPresentation(db, bound);
+        if (fresh === null || !isDeepStrictEqual(fresh.admission.record.scope, root)) unavailable();
+        return fresh.admission;
+      }
+      const verify = guard(c);
+      return commitLocalLobbyEvent(
+        db,
+        bound,
+        randomUUID(),
+        checked.hostIdentity,
+        { kind: 'LOBBY_OBSERVATION', observation: checked.observation },
+        (actual) => {
+          verify();
+          // The writer checks this same root against its full replay before and after append.
+          if (!isDeepStrictEqual(actual.record.scope, root)) unavailable();
+        },
+      );
     }
     const response = await d.peer.fetchAdmission(root, owned.tab.tabId);
     guard(c)();
@@ -2616,6 +2707,20 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         });
     }
     const resumedSnapshot = snapshot(c, m.reconnectRequestId, 'RECONNECT', s);
+    const formId = resumedSnapshot.presentation.base.formId;
+    const continuation =
+      formId === 'NET-005' || isAdmissionOwnerForm(formId) || formId === 'PLY-001'
+        ? peerRoot(c)
+        : null;
+    const pairProof =
+      continuation === null
+        ? null
+        : {
+            contextId: c.contextId,
+            scopeId: c.networkScopeId,
+            rootScopeId: continuation.root.networkScopeId,
+            coveredConnectionRevision: readLocalCampaignConnection(db, continuation.root).revision,
+          };
     send({
       messageType: 'session.reconnect.capabilities',
       protocolVersion: 2,
@@ -2626,6 +2731,14 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       ),
     });
     send(resumedSnapshot);
+    // Only both successful publications can authorize NET010 for settlements already covered.
+    if (
+      pairProof !== null &&
+      c.trusted() &&
+      c.contextId === pairProof.contextId &&
+      c.networkScopeId === pairProof.scopeId
+    )
+      completedPeerReconnect.set(c, pairProof);
   }
   async function handle(
     m: LocalNetworkClientMessage,
@@ -2656,7 +2769,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       return false;
     try {
       trust(c);
-      if (m.messageType === 'network.local-context.resume') await resume(m, c, shell, send);
+      if (m.messageType === 'network.peer-control') await peerControl(m, c, send);
+      else if (m.messageType === 'network.local-context.resume') await resume(m, c, shell, send);
       else if (m.messageType === 'network.draft.replace') replace(m, c, send);
       else if (m.messageType === 'navigation.form-action') await navigate(m, c, shell, send);
       else if (
@@ -2701,7 +2815,30 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       }
       const conflict =
         error instanceof NetworkApplicationStoreError && error.code === 'IDEMPOTENCY_CONFLICT';
-      if (m.messageType === 'network.draft.replace')
+      if (m.messageType === 'network.peer-control') {
+        const view = peerViews.get(c);
+        if (
+          view !== undefined &&
+          c.trusted() &&
+          m.contextId === c.contextId &&
+          m.networkScopeId === c.networkScopeId
+        ) {
+          if (
+            m.operation === 'RETRY' &&
+            view.lastRetry !== null &&
+            isDeepStrictEqual(m, view.lastRetry.request)
+          )
+            throw new LocalNetworkPublicationError(error);
+          view.diagnostic = 'REQUEST_REFUSED';
+          publishPeerState(c, view, m.requestId, 'REFUSED', true);
+        } else
+          send({
+            messageType: 'protocol.refusal',
+            protocolVersion: 1,
+            relatedCommandId: null,
+            refusal: { code: 'UNRECOGNIZED', path: '$.networkContext', value: null },
+          });
+      } else if (m.messageType === 'network.draft.replace')
         send({
           messageType: 'network.draft.refusal',
           protocolVersion: 3,
@@ -2825,11 +2962,504 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       send: (m: LocalNetworkHostMessage) => void;
     }
   >();
-  let polling = false;
-  const ownerTimer = setInterval(() => {
-    if (closed || polling || ownerViews.size === 0) return;
-    polling = true;
+  interface PeerView {
+    contextId: string;
+    scopeId: string;
+    subscriptionId: string;
+    attemptId: string;
+    sequence: number;
+    token: string | null;
+    retryForm: boolean;
+    wantsReconciliation: boolean;
+    showReconciliation: boolean;
+    diagnostic: CampaignPeerStateV3Message['diagnosticOrNull'];
+    lastRetry: {
+      request: CampaignPeerControlV3Message;
+      outcome: CampaignPeerStateV3Message['retryOutcome'];
+    } | null;
+    send: (message: LocalNetworkHostMessage) => void;
+  }
+  const peerViews = new Map<LocalNetworkConnection, PeerView>();
+  const completedPeerReconnect = new WeakMap<
+    LocalNetworkConnection,
+    {
+      contextId: string;
+      scopeId: string;
+      rootScopeId: string;
+      coveredConnectionRevision: number;
+    }
+  >();
+  const publishedPeerSnapshots = new WeakMap<
+    LocalNetworkConnection,
+    {
+      revisions: RevisionVector;
+      presentation: { base: ProjectionSnapshotV2Message['presentation']['base'] };
+    }
+  >();
+  function recordPeerPublication(
+    c: LocalNetworkConnection,
+    message: {
+      revisions: RevisionVector;
+      presentation: { base: ProjectionSnapshotV2Message['presentation']['base'] };
+    },
+  ): void {
+    const formId = message.presentation.base.formId;
+    publishedPeerSnapshots.set(c, message);
+    if (!(formId === 'NET-005' || isAdmissionOwnerForm(formId) || formId === 'PLY-001'))
+      peerViews.delete(c);
+  }
+  function peerRoot(c: LocalNetworkConnection) {
+    const bound = scope(c),
+      contextId = c.contextId;
+    const owned = readLocalAdmissionPresentation(db, bound);
+    const root = owned?.admission.record.scope ?? bound;
+    const connection: LocalNetworkConnection = {
+      ...c,
+      networkScopeId: root.networkScopeId,
+      trusted: () => {
+        if (!c.trusted() || c.contextId !== contextId || c.networkScopeId !== bound.networkScopeId)
+          return false;
+        const actual = readLocalAdmissionPresentation(db, bound);
+        return isDeepStrictEqual(actual?.admission.record.scope ?? bound, root);
+      },
+    };
+    // Admission presentation already verified this root history in the same synchronous read.
+    const app = owned?.application ?? readLocalNetworkApplication(db, root);
+    if (app.sessionOrNull === null || app.requestOrNull === null) unavailable();
+    return { root, connection, app, owned };
+  }
+  function peerCurrent(c: LocalNetworkConnection, view: PeerView): void {
+    trust(c);
+    if (
+      peerViews.get(c) !== view ||
+      c.contextId !== view.contextId ||
+      c.networkScopeId !== view.scopeId
+    )
+      unavailable();
+  }
+  async function refreshPeerConnection(
+    c: LocalNetworkConnection,
+    view: PeerView,
+    verifiedSource?: ReturnType<typeof peerRoot>,
+  ): Promise<void> {
+    peerCurrent(c, view);
+    // WATCH may pass its full read only before its first await or SQL write.
+    const { root, connection } = verifiedSource ?? peerRoot(c),
+      check = guard(connection);
+    try {
+      if (d.peer.current(root.networkScopeId) === null) await reconnect(connection, true);
+      else await d.peer.readConnection(root, check);
+      peerCurrent(c, view);
+      view.diagnostic = null;
+    } catch {
+      peerCurrent(c, view);
+      view.diagnostic = 'PEER_UNAVAILABLE';
+    }
+  }
+  // Only OPEN_RETRY reuses this within one synchronous, read-only branch.
+  type SynchronousPeerRead = ReturnType<typeof peerRoot> & {
+    readonly state: ReturnType<typeof readLocalCampaignConnection>;
+  };
+  function peerState(
+    c: LocalNetworkConnection,
+    view: PeerView,
+    requestId: string,
+    retryOutcome: CampaignPeerStateV3Message['retryOutcome'],
+    verifiedRead?: SynchronousPeerRead,
+  ): CampaignPeerStateV3Message {
+    peerCurrent(c, view);
+    const source = verifiedRead ?? peerRoot(c);
+    const { root, app, owned } = source,
+      state = verifiedRead?.state ?? readLocalCampaignConnection(db, root);
+    const ownSnapshot = publishedPeerSnapshots.get(c);
+    if (ownSnapshot === undefined) unavailable();
+    const base = ownSnapshot.presentation.base;
+    const session = app.sessionOrNull!,
+      request = app.requestOrNull!;
+    const controllerSeat = base.roleFilteredPayload['controllerSeat'];
+    if (typeof controllerSeat !== 'string') unavailable();
+    const pending = base.roleFilteredPayload['pendingCommandIdOrNull'];
+    if (pending !== null && typeof pending !== 'string') unavailable();
+    const pendingCommandIdOrNull = pending;
+    const receiptIds = [
+      ...new Set([
+        session.receiptId,
+        request.submitReceiptId,
+        ...(owned?.admission.receiptOrNull === null || owned?.admission.receiptOrNull === undefined
+          ? []
+          : [owned.admission.receiptOrNull.receiptId]),
+      ]),
+    ];
+    const status = state.statusOrNull,
+      blocked = status !== null && campaignConnectionGate(status) === null;
+    const connected =
+      d.peer.current(root.networkScopeId) !== null && view.diagnostic === null && status !== null;
+    const connectionState =
+      state.pendingOrNull !== null || view.wantsReconciliation
+        ? 'RECONNECTING'
+        : blocked
+          ? 'DISCONNECTED'
+          : connected
+            ? 'CONNECTED'
+            : 'LOST';
+    const peace = base.formId === 'PLY-001';
+    const context = {
+      activeRole: 'PLAYER',
+      activeSeatOrGm: controllerSeat,
+      resumeContext: 'PEACE',
+      pendingCommandIdOrNull,
+      pendingRequestIdOrNull: request.requestId,
+      combatPhaseOrNull: null,
+      turnOrReactionWindowOrNull: null,
+      observerVisibilityRevisionOrNull: ownSnapshot.revisions.actorVisibilityRevision,
+      controlLeaseIdOrNull: null,
+    };
+    let formOrNull: CampaignPeerStateV3Message['formOrNull'] = null;
+    if (
+      view.showReconciliation &&
+      peace &&
+      connected &&
+      !blocked &&
+      pendingCommandIdOrNull === null
+    ) {
+      formOrNull = {
+        formId: 'NET-010',
+        availableActionKeys: [],
+        fields: {
+          ...context,
+          serverSnapshotId: campaignPeerSnapshotId(
+            view.contextId,
+            view.scopeId,
+            ownSnapshot.revisions,
+          ),
+          serverStateRevision: ownSnapshot.revisions.stateRevision,
+          serverProjectionRevision: ownSnapshot.revisions.projectionRevision,
+          resumeFormId: 'PLY-001',
+          pendingCommandOwnerOrNull: null,
+          receiptIds,
+          reconciliationResult: 'SERVER_CONFIRMED',
+        },
+      };
+    } else if (
+      view.retryForm ||
+      state.pendingOrNull !== null ||
+      view.wantsReconciliation ||
+      (!peace && connectionState !== 'CONNECTED')
+    ) {
+      const pin = readLocalNetworkHostPin(db, root.ownerDeviceId, state.campaignId);
+      if (pin === null) unavailable();
+      const address = parseCampaignLanAddress(
+        state.pendingOrNull?.canonicalOrigin ?? state.lastAuthenticatedEndpoint,
+      );
+      const attempt = state.pendingOrNull?.commandId ?? view.attemptId;
+      formOrNull = {
+        formId: 'NET-009',
+        availableActionKeys: ['NET-009::CTA::001'],
+        fields: {
+          deviceId: root.ownerDeviceId,
+          sessionId: session.technicalSessionId,
+          activeRole: 'PLAYER',
+          requestedSeatOrGm: controllerSeat,
+          reconnectAttemptId: attempt,
+          deviceBindingProof: {
+            campaignId: state.campaignId,
+            deviceId: root.ownerDeviceId,
+            requestId: request.requestId,
+            submitCommandId: request.submitCommandId,
+            technicalSessionId: session.technicalSessionId,
+            controllerSeat,
+          },
+          lastConfirmedStateRevision: ownSnapshot.revisions.stateRevision,
+          lastConfirmedProjectionRevision: ownSnapshot.revisions.projectionRevision,
+          resumeContextHint: base.formId,
+          pendingCommandIdOrNull,
+          pendingRequestIdOrNull: request.requestId,
+          commandId: attempt,
+          pinnedCampaignPeerReconnectOrNull: {
+            reconnectHostAddress: address.host,
+            reconnectHostPort: address.port,
+            previouslyPinnedHostIdentity: {
+              ownerDeviceId: pin.identity.ownerDeviceId,
+              keyFingerprintSha256: pin.identity.keyFingerprintSha256,
+            },
+            lastAuthenticatedEndpoint: state.lastAuthenticatedEndpoint,
+          },
+        },
+      };
+    } else if (connectionState !== 'CONNECTED') {
+      // No pre-Start or blocked-PROPOSED context is fabricated as PEACE.
+      if (!peace) unavailable();
+      formOrNull = {
+        formId: 'NET-008',
+        availableActionKeys: ['NET-008::CTA::002'],
+        fields: {
+          ...context,
+          deviceId: root.ownerDeviceId,
+          sessionId: session.technicalSessionId,
+          connectionState: 'LOST',
+          lastConfirmedStateRevision: ownSnapshot.revisions.stateRevision,
+          lastConfirmedProjectionRevision: ownSnapshot.revisions.projectionRevision,
+          lastReceiptIds: receiptIds,
+        },
+      };
+    }
+    return campaignPeerStateValue({
+      messageType: 'network.peer-state',
+      protocolVersion: 3,
+      subscriptionId: view.subscriptionId,
+      requestId,
+      networkScopeId: view.scopeId,
+      contextId: view.contextId,
+      campaignId: state.campaignId,
+      deviceId: root.ownerDeviceId,
+      controllerSeat,
+      sequence: view.sequence + 1,
+      revisions: ownSnapshot.revisions,
+      connectionRevision: state.revision,
+      connectionState,
+      statusOrNull: status,
+      formOrNull,
+      retryOutcome,
+      diagnosticOrNull: view.diagnostic,
+    });
+  }
+  function publishPeerState(
+    c: LocalNetworkConnection,
+    view: PeerView,
+    requestId = view.subscriptionId,
+    retryOutcome: CampaignPeerStateV3Message['retryOutcome'] = 'NONE',
+    force = false,
+    verifiedRead?: SynchronousPeerRead,
+  ) {
+    let message: CampaignPeerStateV3Message;
+    try {
+      message = peerState(c, view, requestId, retryOutcome, verifiedRead);
+    } catch (error) {
+      throw new LocalNetworkPublicationError(error);
+    }
+    const token = postSaveSha256(
+      canonicalPostSaveJson({ ...message, sequence: 0, requestId: view.subscriptionId }),
+    );
+    if (!force && token === view.token) return;
+    try {
+      view.send(message);
+    } catch (error) {
+      throw new LocalNetworkPublicationError(error);
+    }
+    view.token = token;
+    view.sequence = message.sequence;
+  }
+  async function peerControl(
+    raw: CampaignPeerControlV3Message,
+    c: LocalNetworkConnection,
+    send: (message: LocalNetworkHostMessage) => void,
+  ) {
+    const m = campaignPeerControlValue(raw),
+      bound = scope(c);
+    if (m.contextId !== c.contextId || m.networkScopeId !== bound.networkScopeId) unavailable();
+    const source = peerRoot(c),
+      { root, connection } = source;
+    if (m.operation === 'WATCH') {
+      const settlement =
+        m.commandIdOrNull === null
+          ? null
+          : readLocalCampaignReconnectSettlement(db, root, m.commandIdOrNull);
+      if (m.commandIdOrNull !== null && settlement === null) unavailable();
+      if (settlement !== null) {
+        const paired = completedPeerReconnect.get(c);
+        if (
+          paired === undefined ||
+          paired.contextId !== m.contextId ||
+          paired.scopeId !== m.networkScopeId ||
+          paired.rootScopeId !== root.networkScopeId ||
+          paired.coveredConnectionRevision < settlement.settlementRevision
+        )
+          unavailable();
+      }
+      const showReconciliation = settlement?.outcome === 'CONFIRMED';
+      const view: PeerView = {
+        contextId: m.contextId,
+        scopeId: m.networkScopeId,
+        subscriptionId: m.requestId,
+        attemptId: randomUUID(),
+        sequence: 0,
+        token: null,
+        retryForm: false,
+        wantsReconciliation: false,
+        showReconciliation,
+        diagnostic: null,
+        lastRetry: null,
+        send,
+      };
+      peerViews.set(c, view);
+      await refreshPeerConnection(c, view, source);
+      publishPeerState(c, view, m.requestId, 'NONE', true);
+      return;
+    }
+    const view = peerViews.get(c);
+    if (view === undefined) unavailable();
+    peerCurrent(c, view);
+    if (m.operation === 'RETRY' && view.lastRetry?.request.commandIdOrNull === m.commandIdOrNull) {
+      if (view.lastRetry.outcome !== 'NONE') {
+        exact(m, view.lastRetry.request);
+        publishPeerState(c, view, m.requestId, view.lastRetry.outcome, true);
+        return;
+      }
+      if (isDeepStrictEqual(m, view.lastRetry.request)) {
+        // An exact unresolved replay only proves the durable outcome. A new request with
+        // current CAS revisions may still correct its locator and explicitly retry below.
+        try {
+          const settled = readLocalCampaignReconnectSettlement(db, root, m.commandIdOrNull!);
+          if (settled !== null) {
+            view.lastRetry.outcome = settled.outcome;
+            view.wantsReconciliation = settled.outcome === 'CONFIRMED';
+            if (settled.outcome === 'REFUSED') view.attemptId = randomUUID();
+          }
+          publishPeerState(c, view, m.requestId, view.lastRetry.outcome, true);
+        } catch (error) {
+          throw new LocalNetworkPublicationError(error);
+        }
+        return;
+      }
+    }
+    const state = readLocalCampaignConnection(db, root);
+    exact(m.expectedConnectionRevision, state.revision);
+    if (m.operation === 'OPEN_RETRY') {
+      // No await, SQL write or external callback separates these reads and builds.
+      const verifiedRead = { ...source, state };
+      exact(m.expectedRevisions, vector(source.app));
+      const form = peerState(c, view, m.requestId, 'NONE', verifiedRead).formOrNull;
+      if (form?.formId !== 'NET-008') unavailable();
+      view.retryForm = true;
+      view.showReconciliation = false;
+      publishPeerState(c, view, m.requestId, 'NONE', true, verifiedRead);
+      return;
+    }
+    exact(m.expectedRevisions, currentVector(c));
+    const form = peerState(c, view, m.requestId, 'NONE').formOrNull;
+    if (
+      form?.formId !== 'NET-009' ||
+      m.commandIdOrNull !== form.fields['commandId'] ||
+      m.endpointOrNull === null
+    )
+      unavailable();
+    const endpoint = m.endpointOrNull;
+    const address = parseCampaignLanAddress(
+      'http://' +
+        (endpoint.hostAddress.includes(':')
+          ? '[' + endpoint.hostAddress + ']'
+          : endpoint.hostAddress) +
+        ':' +
+        String(endpoint.hostPort),
+    ).canonicalOrigin;
+    const check = guard(connection);
+    if (state.pendingOrNull === null)
+      prepareLocalCampaignReconnect(
+        db,
+        root,
+        {
+          commandId: m.commandIdOrNull!,
+          expectedConnectionRevision: state.revision,
+          canonicalOrigin: address,
+          disconnectCommandIdOrNull:
+            state.statusOrNull !== null && campaignConnectionGate(state.statusOrNull) === null
+              ? state.statusOrNull.disconnectOrNull!.disconnectCommandId
+              : null,
+        },
+        check,
+      );
+    else if (state.pendingOrNull.canonicalOrigin !== address)
+      replaceLocalCampaignReconnectLocator(
+        db,
+        root,
+        m.requestId,
+        {
+          commandId: state.pendingOrNull.commandId,
+          expectedConnectionRevision: state.revision,
+          canonicalOrigin: address,
+        },
+        check,
+      );
+    // The intent is durable now: a later transport/proof failure cannot prove refusal.
+    view.lastRetry = { request: m, outcome: 'NONE' };
+    try {
+      view.retryForm = true;
+      view.showReconciliation = false;
+      view.wantsReconciliation = false;
+      let settled: ReturnType<typeof readLocalCampaignReconnectSettlement> = null;
+      try {
+        const intent = readLocalCampaignConnection(db, root).pendingOrNull;
+        if (intent === null) {
+          settled = readLocalCampaignReconnectSettlement(db, root, m.commandIdOrNull!);
+          if (settled === null) unavailable();
+        } else {
+          await d.peer.reconnect(root, intent.canonicalOrigin, state.campaignId);
+          check();
+          peerCurrent(c, view);
+          await d.peer.retryConnection(root, intent, check);
+          check();
+          peerCurrent(c, view);
+          view.diagnostic = null;
+          settled = readLocalCampaignReconnectSettlement(db, root, m.commandIdOrNull!);
+        }
+      } catch {
+        peerCurrent(c, view);
+        view.diagnostic = 'PEER_UNAVAILABLE';
+        settled = readLocalCampaignReconnectSettlement(db, root, m.commandIdOrNull!);
+      }
+      const outcome = settled?.outcome ?? 'NONE';
+      view.lastRetry = { request: m, outcome };
+      // Settlement describes this command; a later disconnect independently keeps its gate closed.
+      view.wantsReconciliation = outcome === 'CONFIRMED';
+      if (outcome === 'REFUSED') view.attemptId = randomUUID();
+      publishPeerState(c, view, m.requestId, outcome, true);
+    } catch (error) {
+      throw new LocalNetworkPublicationError(error);
+    }
+  }
+
+  let ownerTimer: ReturnType<typeof setTimeout>;
+  function scheduleOwnerPoll(): void {
+    if (closed) return;
+    // A slow refresh must leave an interval for incoming frames instead of running overdue ticks.
+    ownerTimer = setTimeout(pollOwners, 1000);
+    ownerTimer.unref();
+  }
+  function pollOwners(): void {
+    if (closed) return;
+    if (ownerViews.size === 0 && peerViews.size === 0) {
+      scheduleOwnerPoll();
+      return;
+    }
+    const queuedViews = new Map(
+      [...ownerViews].map(([c, view]) => [
+        c,
+        {
+          contextId: view.contextId,
+          scopeId: view.scopeId,
+          publishedToken: view.publishedToken,
+        },
+      ]),
+    );
     const tick = frames.then(async () => {
+      for (const [c, view] of peerViews) {
+        if (!c.trusted() || c.contextId !== view.contextId || c.networkScopeId !== view.scopeId) {
+          peerViews.delete(c);
+          continue;
+        }
+        try {
+          if (view.wantsReconciliation && view.lastRetry?.outcome === 'CONFIRMED') {
+            // Retry a lost publication without executing or refreshing the committed command.
+            publishPeerState(c, view, view.lastRetry.request.requestId, 'CONFIRMED');
+            continue;
+          }
+          view.showReconciliation = false;
+          await refreshPeerConnection(c, view);
+          publishPeerState(c, view);
+        } catch {
+          /* Trust loss or an unverifiable source cannot publish a continuation. */
+        }
+      }
       const refreshedScopes = new Set<string>();
       // Settle a waiting browser command before refreshing passive sibling tabs.
       // They share the same verified journal and transport; no second queue is created.
@@ -2844,6 +3474,18 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           binding.terminalCommandIds.has(binding.publishedPendingCommandId)
             ? binding.publishedPendingCommandId
             : null;
+        const queued = queuedViews.get(c);
+        // A newer published view supersedes this queued passive poll; the next tick reads it afresh.
+        if (
+          interestedPending === null &&
+          (queued === undefined ||
+            queued.contextId !== binding.contextId ||
+            queued.scopeId !== binding.scopeId ||
+            queued.publishedToken !== binding.publishedToken)
+        )
+          continue;
+        // The browser must finish the paired reconnect before ordinary request refresh resumes.
+        if (peerViews.get(c)?.wantsReconciliation) continue;
         const sendTerminal = (message: LocalNetworkHostMessage): void => {
           const id =
             message.messageType === 'command.replay'
@@ -2869,8 +3511,22 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             db,
             scope(c),
           );
+          const application = owned?.application ?? observed.current;
+          if (application.sessionOrNull !== null && application.requestOrNull !== null) {
+            const root = owned?.admission.record.scope ?? scope(c);
+            const continuation = readLocalCampaignConnection(db, root);
+            // Technical status remains observable while admission/content RPC is gated.
+            // The existing confirmed sheet stays visible until explicit retry and reconciliation.
+            if (
+              continuation.pendingOrNull !== null ||
+              (continuation.statusOrNull !== null &&
+                campaignConnectionGate(continuation.statusOrNull) === null) ||
+              peerViews.get(c)?.wantsReconciliation === true
+            )
+              continue;
+          }
           if (owned !== null && owned.application.networkScopeId !== binding.scopeId) {
-            await refreshOwnerLobby(c);
+            await refreshOwnerLobby(c, owned);
             const refreshed = readLocalAdmissionPresentation(db, scope(c));
             if (refreshed === null) unavailable();
             // A prepared tab reads the original authenticated journal; it has no separate peer session.
@@ -2898,6 +3554,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
                 sendTerminal,
               );
               binding.send(message);
+              recordPeerPublication(c, message);
               binding.publishedToken = token;
               binding.publishedPendingCommandId = localLobbyPendingCommandId(
                 refreshed.admission,
@@ -2973,6 +3630,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
                 refusal: { code: 'GUARD_REJECTED' },
               });
             binding.send(message);
+            recordPeerPublication(c, message);
             // Publication failure retains the old token, so a quiet poll retries the same current.
             binding.publishedToken = token;
             binding.publishedPendingCommandId =
@@ -3021,16 +3679,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         }
       }
     });
-    frames = tick.then(
-      () => {
-        polling = false;
-      },
-      () => {
-        polling = false;
-      },
-    );
-  }, 1000);
-  ownerTimer.unref();
+    frames = tick.then(scheduleOwnerPoll, scheduleOwnerPoll);
+  }
+  scheduleOwnerPoll();
   return {
     currentVector,
     handle(
@@ -3065,6 +3716,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           terminalCommandIds.add(m.commandId);
         const handled = await handle(m, c, shell, (message) => {
           send(message);
+          if (message.messageType === 'projection.snapshot' && message.protocolVersion === 2)
+            recordPeerPublication(c, message);
           if (message.messageType === 'command.result' || message.messageType === 'command.replay')
             terminalCommandIds.delete(message.receipt.commandId);
           else if (message.messageType === 'command.refusal')
@@ -3075,10 +3728,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             watching =
               message.projectionRole === 'player' &&
               (message.presentation.base.formId === 'NET-005' ||
-                isAdmissionOwnerForm(message.presentation.base.formId));
-          else if (message.messageType === 'network.draft.result')
+                isAdmissionOwnerForm(message.presentation.base.formId) ||
+                message.presentation.base.formId === 'PLY-001');
+          else if (message.messageType === 'network.draft.result') {
+            recordPeerPublication(c, message);
             watching = message.presentation.base.formId === 'NET-005';
-          else return;
+          } else return;
           publishedToken = watching
             ? ownerViewToken(message.revisions, message.presentation.base)
             : null;
@@ -3117,8 +3772,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     },
     close() {
       closed = true;
-      clearInterval(ownerTimer);
+      clearTimeout(ownerTimer);
       ownerViews.clear();
+      peerViews.clear();
       d.peer.close();
     },
   };
@@ -3186,30 +3842,40 @@ import type { PresentedLayerForm } from '../shared/wire-v2-protocol.js';
 /** Local GM authority and technical QUEUE heads remain separate from campaign birth/checkpoints. */
 export function createGmNetworkRuntime(d: {
   readonly database: Database.Database;
-  readonly schedule?: <T>(run: () => Promise<T>) => Promise<T>;
+  readonly gmScheduler?: CampaignGmScheduler;
   readonly config: NetworkApplicationConfig;
   readonly baseline: LocalCharacterExportBaseline;
   readonly vocabulary: ProtocolVocabulary & WireV2Vocabulary;
   readonly campaignNetwork: Pick<
     ReturnType<typeof createCampaignNetworkRuntime>,
-    'requestConnectionFacts' | 'requestConnectionFactsFromSource' | 'conflictingOperationPending'
+    | 'requestConnectionFacts'
+    | 'requestConnectionFactsFromSource'
+    | 'conflictingOperationPending'
+    | 'operationCounts'
+    | 'heldNetworkConfiguration'
+    | 'availableNetworkInterfaces'
+    | 'prepareDisconnect'
   >;
   readonly campaignPresentation: (
     c: CampaignConnection,
   ) => Promise<{ base: PresentedBaseForm; revisions: RevisionVector }>;
 }) {
   const db = d.database;
-  let closed = false,
-    frames = Promise.resolve();
-  const schedule = <T>(run: () => Promise<T>): Promise<T> => {
-    if (d.schedule !== undefined) return d.schedule(run);
-    const next = frames.then(run);
-    frames = next.then(
-      () => {},
-      () => {},
-    );
-    return next;
-  };
+  let closed = false;
+  const gmScheduler =
+    d.gmScheduler ??
+    createCampaignGmScheduler((c) => {
+      try {
+        return authorityScope(c);
+      } catch {
+        return null;
+      }
+    });
+  const schedule = <T>(
+    run: () => Promise<T>,
+    connection: CampaignConnection | null = null,
+  ): Promise<T> =>
+    connection === null ? gmScheduler.poll(run) : gmScheduler.wire(connection, run);
   const validatedCandidates = new Set<string>();
   const watchers = new Map<
     CampaignConnection,
@@ -3275,6 +3941,81 @@ export function createGmNetworkRuntime(d: {
         });
       })
       .deferred();
+  const campaignPanelForm = (form: string) =>
+    isCampaignLobbyGmForm(form) || isCampaignLifecycleForm(form);
+  function pendingOperations(campaignId: string) {
+    const peer = d.campaignNetwork.operationCounts(campaignId),
+      gm = gmScheduler.pendingCounts(campaignId, gmScheduler.currentToken(campaignId));
+    return {
+      peer,
+      gm,
+      pendingOperationCount:
+        peer.pendingOperationCount + gm.queuedCommandCount + gm.executingCommandCount,
+    };
+  }
+  function lifecycleFacts(source: GmRequestReviewSource) {
+    const campaignId = source.scope.campaignId,
+      connections = d.campaignNetwork.requestConnectionFactsFromSource(source);
+    const deviceOperations = [...new Set(connections.map((c) => c.requestOwnerDeviceId))]
+      .sort()
+      .map((deviceId) => ({
+        deviceId,
+        ...d.campaignNetwork.operationCounts(campaignId, deviceId),
+      }));
+    return {
+      operations: pendingOperations(campaignId),
+      connections,
+      deviceOperations,
+      activeListenerEndpointOrNull: d.campaignNetwork.heldNetworkConfiguration(campaignId),
+      availableNetworkInterfaces: d.campaignNetwork.availableNetworkInterfaces(),
+    };
+  }
+  const lifecyclePresentation = (
+    c: CampaignConnection,
+    source: GmRequestReviewSource,
+    history: ReturnType<typeof admissionDecisionStorage.readHistory>,
+  ): GmPresentation => {
+    const facts = lifecycleFacts(source),
+      devices = new Map<string, CampaignLifecycleGmProjection['devices'][number]>();
+    for (const connection of facts.connections) {
+      const deviceId = connection.requestOwnerDeviceId,
+        previous = devices.get(deviceId);
+      devices.set(deviceId, {
+        deviceId,
+        connected: connection.connected || previous?.connected === true,
+        pendingOwnedCommandCount:
+          facts.deviceOperations.find((d) => d.deviceId === deviceId)?.pendingOperationCount ??
+          unavailable(),
+        controllerSeats: [...history.controllers.values()]
+          .filter((binding) => binding.deviceId === deviceId)
+          .sort((a, b) => a.localControllerSeatId.localeCompare(b.localControllerSeatId))
+          .map((binding) => ({
+            controllerSeat: binding.localControllerSeatId,
+            campaignCharacterId: binding.campaignCharacterId,
+            name:
+              history.lobbyOrNull?.copies.find(
+                (copy) => copy.campaignCharacterId === binding.campaignCharacterId,
+              )?.name ?? unavailable(),
+          })),
+      });
+    }
+    return projectGmCampaignLifecycle({
+      source,
+      history,
+      ...facts,
+      devices: [...devices.values()].sort((a, b) => a.deviceId.localeCompare(b.deviceId)),
+      pendingOperationCount: facts.operations.pendingOperationCount,
+      supported: c.executableReview ?? [],
+    });
+  };
+  const campaignPanelPresentation = (
+    c: CampaignConnection,
+    source: GmRequestReviewSource,
+    history: ReturnType<typeof admissionDecisionStorage.readHistory>,
+  ): GmPresentation =>
+    isCampaignLifecycleForm(source.viewOrNull?.formId ?? '')
+      ? lifecyclePresentation(c, source, history)
+      : lobbyPresentation(c, source, history);
   const lobbyPresentation = (
     c: CampaignConnection,
     source: GmRequestReviewSource,
@@ -3285,12 +4026,12 @@ export function createGmNetworkRuntime(d: {
         const view = source.viewOrNull;
         if (view === null || !isCampaignLobbyGmForm(view.formId)) unavailable();
         return projectGmCampaignLobby({
+          currentCampaign: source.currentCampaign,
           view,
           origin: source.creationOrigin,
           history,
-          conflictingOperationPending: d.campaignNetwork.conflictingOperationPending(
-            source.scope.campaignId,
-          ),
+          conflictingOperationPending:
+            pendingOperations(source.scope.campaignId).pendingOperationCount > 0,
           supported: c.executableReview ?? [],
         });
       })
@@ -3383,7 +4124,7 @@ export function createGmNetworkRuntime(d: {
       verifiedQueue(source.queue);
       return includeHistory &&
         source.viewOrNull !== null &&
-        isCampaignLobbyGmForm(source.viewOrNull.formId)
+        campaignPanelForm(source.viewOrNull.formId)
         ? admissionService().rules
         : null;
     });
@@ -3434,6 +4175,24 @@ export function createGmNetworkRuntime(d: {
     return db
       .transaction(() => {
         const own = scope(c);
+        const lifecycleSource = readGmRequestReviewViewStateInTransaction(db, own).events.find(
+          (event) =>
+            event.mutation.kind === 'LIFECYCLE_SOURCE' && event.mutation.cause.commandId === id,
+        );
+        if (lifecycleSource !== undefined) {
+          admissionDecisionStorage.readHistory(db, own, validateOwner, admissionService().rules);
+          const event = readCampaignLifecycleLedger(db, own.campaignId).find(
+            (e) => e.request.commandId === id,
+          );
+          if (event === undefined) unavailable();
+          if (event.clientRequestJsonOrNull === null) return null;
+          return {
+            commandId: id,
+            receiptId: event.receipt.receiptId,
+            revisions: vector(lifecycleSource.view),
+            result: { ...event.receipt, contextId: own.gmLocalContextId },
+          };
+        }
         const lobbySource = readGmRequestReviewViewStateInTransaction(db, own).events.find(
           (event) =>
             event.mutation.kind === 'LOBBY_SOURCE' && event.mutation.cause.commandId === id,
@@ -3569,14 +4328,89 @@ export function createGmNetworkRuntime(d: {
     };
   }
   const project = async (c: CampaignConnection): Promise<GmPresentation> => {
-    if (inAdmission(c)) return admissionPresentation(c);
+    if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
     const { source, historyOrNull } = sourceForPresentation(c);
-    if (source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId))
-      return lobbyPresentation(c, source, historyOrNull ?? unavailable());
-    return source.viewOrNull?.formId === 'NET-017'
-      ? queuePresentation(c, source)
-      : d.campaignPresentation(c);
+    if (source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId))
+      return withLifecycle(
+        c,
+        campaignPanelPresentation(c, source, historyOrNull ?? unavailable()),
+        {
+          source,
+          history: historyOrNull ?? unavailable(),
+        },
+      );
+    return withLifecycle(
+      c,
+      source.viewOrNull?.formId === 'NET-017'
+        ? queuePresentation(c, source)
+        : await d.campaignPresentation(c),
+    );
   };
+  /** Decorate only a live base payload; dialog payloads and stored observations remain untouched. */
+  type SynchronousLifecycleRead = {
+    readonly source: GmRequestReviewSource;
+    readonly history: ReturnType<typeof admissionDecisionStorage.readHistory>;
+  };
+  function withLifecycle(
+    c: CampaignConnection,
+    value: GmPresentation,
+    verifiedRead?: SynchronousLifecycleRead,
+  ): GmPresentation {
+    if (!(c.executableReview ?? []).some(isCampaignLifecycleWorkflow)) return value;
+    return db
+      .transaction(() => {
+        const own = scope(c),
+          cursor = readCampaignCreationCursor(db, own.gmLocalContextId);
+        exact(cursor.revisions, value.revisions);
+        if (verifiedRead !== undefined) exact(verifiedRead.source.scope, own);
+        // A panel builder can reuse its complete paired replay only before any await/write.
+        const history =
+          verifiedRead?.history ??
+          admissionDecisionStorage.readHistory(db, own, validateOwner, admissionService().rules);
+        const state = history.lifecycleOrNull ?? unavailable();
+        const header = readHostedCurrentPausedCampaign(db, own.campaignId, validateOwner);
+        exact(header.stateRevision, history.checkpoint.stateRevision);
+        if (verifiedRead !== undefined) {
+          exact(verifiedRead.source.currentCampaign.stateRevision, header.stateRevision);
+          exact(verifiedRead.source.currentCampaign.checkpointSha256, header.checkpointSha256);
+        }
+        const marker = campaignLifecycleGmAnchorValue({
+          contextId: own.gmLocalContextId,
+          campaignId: own.campaignId,
+          ...value.revisions,
+          campaignRevision: history.checkpoint.stateRevision,
+          settingsRevision: state.settingsRevision,
+          campaignStatus: header.status,
+          pauseReasonOrNull: state.pauseReasonOrNull,
+          firstStartCompleted: header.firstStartCompleted,
+        });
+        const payload = value.base.roleFilteredPayload;
+        exact(
+          payload[value.base.formId === 'CMP-006' ? 'gmLocalContextId' : 'contextId'],
+          own.gmLocalContextId,
+        );
+        exact(payload['campaignId'], own.campaignId);
+        if (Object.hasOwn(payload, 'currentCampaignLifecycle'))
+          exact(payload['currentCampaignLifecycle'], marker);
+        if (
+          (value.layers ?? []).some((layer) =>
+            Object.hasOwn(layer.roleFilteredPayload, 'currentCampaignLifecycle'),
+          )
+        )
+          unavailable();
+        return {
+          ...value,
+          base: {
+            ...value.base,
+            roleFilteredPayload: {
+              ...payload,
+              currentCampaignLifecycle: marker as unknown as JsonObject,
+            },
+          },
+        };
+      })
+      .deferred();
+  }
   const presentationHash = (c: CampaignConnection, value: GmPresentation) =>
     postSaveSha256(
       canonicalPostSaveJson({
@@ -3593,7 +4427,14 @@ export function createGmNetworkRuntime(d: {
     reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'],
     prepared?: GmPresentation,
   ): Promise<ProjectionSnapshotV2Message> {
-    const p = prepared ?? (await publication(c));
+    const p = withLifecycle(c, prepared ?? (await publication(c)));
+    return encodeSnapshot(p, id, reason);
+  }
+  function encodeSnapshot(
+    p: GmPresentation,
+    id: string,
+    reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'],
+  ): ProjectionSnapshotV2Message {
     const result: ProjectionSnapshotV2Message = {
       messageType: 'projection.snapshot',
       protocolVersion: 2,
@@ -3629,11 +4470,11 @@ export function createGmNetworkRuntime(d: {
   function connectionSource(c: CampaignConnection, includeHistory = true) {
     let paired = sourceForPresentation(c, includeHistory);
     let source = paired.source;
-    if (source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId)) {
+    if (source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId)) {
       const own = source.scope;
-      const facts = () => ({
-        kind: 'CAMPAIGN_LOBBY',
-        conflictingOperationPending: d.campaignNetwork.conflictingOperationPending(own.campaignId),
+      const facts = (verified = source) => ({
+        kind: 'CAMPAIGN_PANEL',
+        ...lifecycleFacts(verified),
       });
       const currentFacts = facts(),
         connectionFactsSha256 = postSaveSha256(canonicalPostSaveJson(currentFacts));
@@ -3657,7 +4498,7 @@ export function createGmNetworkRuntime(d: {
           (actual) => {
             exact(authorityScope(c), own);
             exact(actual.scope, own);
-            exact(facts(), currentFacts);
+            exact(facts(actual), currentFacts);
           },
         );
         paired = sourceForPresentation(c, includeHistory);
@@ -3696,29 +4537,68 @@ export function createGmNetworkRuntime(d: {
   function refreshConnectionPresentation(c: CampaignConnection): void {
     connectionSource(c, false);
   }
-  const publication = async (c: CampaignConnection): Promise<GmPresentation> => {
+  const publication = (c: CampaignConnection): GmPresentation | Promise<GmPresentation> => {
     const { source, facts, historyOrNull } = connectionSource(c);
-    if (inAdmission(c)) return admissionPresentation(c);
-    if (source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId))
-      return lobbyPresentation(c, source, historyOrNull ?? unavailable());
-    return facts === null ? d.campaignPresentation(c) : queuePresentation(c, source, facts);
+    if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
+    if (source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId))
+      return withLifecycle(
+        c,
+        campaignPanelPresentation(c, source, historyOrNull ?? unavailable()),
+        {
+          source,
+          history: historyOrNull ?? unavailable(),
+        },
+      );
+    return facts === null
+      ? d.campaignPresentation(c).then((value) => withLifecycle(c, value))
+      : withLifecycle(c, queuePresentation(c, source, facts));
   };
-  async function refresh(
+  async function sendNavigationSnapshot(
+    c: CampaignConnection,
+    own: GmRequestReviewScope,
+    send: (message: LocalNetworkHostMessage) => void,
+    requestId: string,
+  ): Promise<void> {
+    // Preserve the post-commit boundary, then read, encode and send the synchronous path together.
+    await Promise.resolve();
+    exact(scope(c), own);
+    const value = publication(c);
+    let current: GmPresentation;
+    if (value instanceof Promise) {
+      const resolved = await value;
+      exact(scope(c), own);
+      current = withLifecycle(c, resolved);
+    } else current = value;
+    sendSnapshot(c, send, encodeSnapshot(current, requestId, 'FORM_ACTION'));
+  }
+  function refresh(
     c: CampaignConnection,
     send: (m: LocalNetworkHostMessage) => void,
   ): Promise<void> {
     const { source, facts, historyOrNull } = connectionSource(c);
-    const lobby = source.viewOrNull !== null && isCampaignLobbyGmForm(source.viewOrNull.formId);
-    if (facts === null && !lobby) return;
-    const p = lobby
-        ? lobbyPresentation(c, source, historyOrNull ?? unavailable())
-        : inAdmission(c)
-          ? admissionPresentation(c)
-          : queuePresentation(c, source, facts ?? undefined),
-      hash = presentationHash(c, p),
+    const lobby = source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId);
+    if (facts === null && !lobby) return Promise.resolve();
+    const base = lobby
+      ? campaignPanelPresentation(c, source, historyOrNull ?? unavailable())
+      : inAdmission(c)
+        ? admissionPresentation(c)
+        : queuePresentation(c, source, facts ?? undefined);
+    const p = withLifecycle(
+      c,
+      base,
+      lobby
+        ? {
+            source,
+            history: historyOrNull ?? unavailable(),
+          }
+        : undefined,
+    );
+    const hash = presentationHash(c, p),
       watched = watchers.get(c);
+    // Build, hash, validate and send this fresh projection in one synchronous read boundary.
     if (watched !== undefined && watched.lastHash !== hash)
-      sendSnapshot(c, send, await snapshot(c, `network-gm-view:${hash}`, 'HOST_SYSTEM_EVENT', p));
+      sendSnapshot(c, send, encodeSnapshot(p, `network-gm-view:${hash}`, 'HOST_SYSTEM_EVENT'));
+    return Promise.resolve();
   }
   async function handleAdmission(
     m: LocalNetworkClientMessage,
@@ -3826,7 +4706,7 @@ export function createGmNetworkRuntime(d: {
           appliedRevisions = admissionApplied(own, m.draftUpdateId);
         }
         committed = true;
-        const p = await publication(c);
+        const p = withLifecycle(c, await publication(c));
         const result: HostToClientV3Message = {
           messageType: 'network.admission-draft.result',
           protocolVersion: 3,
@@ -4053,6 +4933,173 @@ export function createGmNetworkRuntime(d: {
     send: (m: LocalNetworkHostMessage) => void,
   ): Promise<boolean> {
     if (await handleAdmission(m, c, send)) return true;
+    if (
+      m.messageType === 'command.request' &&
+      m.commandKind === 'workflow-command' &&
+      CAMPAIGN_LIFECYCLE_WORKFLOW_IDS.some((id) => id === m.workflowCommandId)
+    ) {
+      let committed = false;
+      try {
+        const own = scope(c);
+        if (
+          m.role !== 'gm' ||
+          !(c.executableReview ?? []).includes(m.workflowCommandId) ||
+          Object.hasOwn(m.payload, 'commandId') ||
+          Object.hasOwn(m.payload, 'workflowCommandId')
+        )
+          unavailable();
+        const request = campaignLifecycleCommandValue({
+            ...m.payload,
+            commandId: m.commandId,
+            workflowCommandId: m.workflowCommandId,
+          }),
+          stored = redactCampaignLifecycleCommand(request),
+          { commandId: _id, workflowCommandId: _workflow, ...payload } = stored,
+          client = canonicalPostSaveJson(
+            campaignLifecycleClientBindingValue({
+              contextId: own.gmLocalContextId,
+              request: { ...m, payload },
+            }),
+          ),
+          service = admissionService(),
+          history = admissionDecisionStorage.readHistory(db, own, validateOwner, service.rules),
+          state = history.lifecycleOrNull ?? unavailable(),
+          known = readCampaignLifecycleLedger(db, own.campaignId).find(
+            (e) => e.request.commandId === request.commandId,
+          );
+        if (request.campaignId !== own.campaignId) unavailable();
+        const assertFresh = () => {
+          exact(authorityScope(c), own);
+          if (pendingOperations(own.campaignId).pendingOperationCount !== 0) unavailable();
+          const source = verifiedSource(c),
+            view = source.viewOrNull;
+          if (
+            view === null ||
+            view.formId !== campaignLifecycleCommandForm(request.workflowCommandId)
+          )
+            unavailable();
+          exact(vector(view), m.expectedRevisions);
+        };
+        if (known === undefined) assertFresh();
+        else {
+          exact(known.request, stored);
+          if (known.clientRequestJsonOrNull !== client)
+            throw new NetworkApplicationStoreError('IDEMPOTENCY_CONFLICT');
+        }
+        let passwordTransition: CampaignLifecycleEvent['passwordTransitionOrNull'] = null;
+        if (request.workflowCommandId === 'UI-CMD-MASTER-PASSWORD-CHANGE') {
+          validateMasterSecretInput(
+            request.newMasterPassword,
+            request.newMasterPasswordConfirmation,
+          );
+          const before = known?.passwordTransitionOrNull?.beforeVerifier ?? state.effectiveVerifier;
+          if (!(await verifyMasterSecret(request.currentMasterPassword, before))) unavailable();
+          if (known === undefined)
+            passwordTransition = {
+              beforeVerifier: before,
+              afterVerifier: await prepareMasterSecret(
+                request.newMasterPassword,
+                request.newMasterPasswordConfirmation,
+              ),
+            };
+          else {
+            passwordTransition = known.passwordTransitionOrNull ?? unavailable();
+            if (
+              !(await verifyMasterSecret(
+                request.newMasterPassword,
+                passwordTransition.afterVerifier,
+              ))
+            )
+              throw new NetworkApplicationStoreError('IDEMPOTENCY_CONFLICT');
+          }
+          // The peer executor and channel authority may change while scrypt yields.
+          exact(authorityScope(c), own);
+          if (known === undefined) assertFresh();
+        }
+        const disconnect =
+          request.workflowCommandId === 'UI-CMD-CLIENT-DISCONNECT' && known === undefined
+            ? d.campaignNetwork.prepareDisconnect(own.campaignId, request.deviceId)
+            : null;
+        const saved = commitCampaignLifecycleCommand(
+          db,
+          own,
+          stored,
+          {
+            receiptId: randomUUID(),
+            checkpointId: randomUUID(),
+            committedAt: new Date().toISOString(),
+          },
+          passwordTransition,
+          validateOwner,
+          service.rules,
+          (_source, phase) => {
+            exact(authorityScope(c), own);
+            if (phase === 'REPLAY') return;
+            disconnect?.assertCurrent();
+            if (pendingOperations(own.campaignId).pendingOperationCount !== 0) unavailable();
+            if (
+              request.workflowCommandId === 'UI-CMD-CAMPAIGN-SETTINGS-SET' &&
+              !isDeepStrictEqual(request.network, state.settings.network) &&
+              !d.campaignNetwork
+                .availableNetworkInterfaces()
+                .some(
+                  (iface) =>
+                    iface.hostAddress === request.network.hostAddress &&
+                    iface.networkInterface === request.network.networkInterface,
+                )
+            )
+              unavailable();
+          },
+          client,
+        );
+        committed = true;
+        if (!saved.replayed) disconnect?.retire(request.commandId);
+        watchers.set(c, { send, lastHash: watchers.get(c)?.lastHash ?? '' });
+        const original = receipt(c, request.commandId) ?? unavailable(),
+          destination = await snapshot(c, request.commandId, 'COMMAND_DESTINATION');
+        send(
+          saved.replayed
+            ? {
+                messageType: 'command.replay',
+                protocolVersion: 1,
+                lifecycleState: 'IDEMPOTENT_REPLAY',
+                receipt: original,
+              }
+            : {
+                messageType: 'command.result',
+                protocolVersion: 1,
+                lifecycleState: 'COMMITTED',
+                receipt: original,
+              },
+        );
+        sendSnapshot(c, send, destination);
+      } catch (error) {
+        if (committed) throw new LocalNetworkPublicationError(error);
+        let revisions: RevisionVector = {
+          stateRevision: 0,
+          projectionRevision: 0,
+          actorVisibilityRevision: 0,
+        };
+        try {
+          revisions = readCampaignCreationCursor(db, authorityScope(c).gmLocalContextId).revisions;
+        } catch {
+          /* Foreign or closed authority discloses no head. */
+        }
+        send({
+          messageType: 'command.refusal',
+          protocolVersion: 1,
+          commandId: m.commandId,
+          lastLifecycleState: null,
+          revisions,
+          refusal:
+            error instanceof NetworkApplicationStoreError && error.code === 'IDEMPOTENCY_CONFLICT'
+              ? { code: 'IDEMPOTENCY_CONFLICT', commandId: m.commandId, detail: 'PAYLOAD_MISMATCH' }
+              : { code: 'GUARD_REJECTED' },
+        });
+        // Refusal is read-only: even a connection-facts journal entry would violate zero-write.
+      }
+      return true;
+    }
     const lobbyCommand =
       m.messageType === 'command.request' &&
       m.commandKind === 'workflow-command' &&
@@ -4102,7 +5149,7 @@ export function createGmNetworkRuntime(d: {
           admissionService().rules,
           (_state, phase) => {
             exact(authorityScope(c), own);
-            if (phase === 'APPLY' && d.campaignNetwork.conflictingOperationPending(own.campaignId))
+            if (phase === 'APPLY' && pendingOperations(own.campaignId).pendingOperationCount > 0)
               unavailable();
           },
           canonicalPostSaveJson(m),
@@ -4160,7 +5207,8 @@ export function createGmNetworkRuntime(d: {
       m.messageType === 'navigation.form-action' &&
       (m.sourceFormId === 'NET-017' ||
         (m.sourceFormId === 'CMP-006' && m.actionKey === 'CMP-006::CTA::002') ||
-        Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, m.actionKey));
+        Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, m.actionKey) ||
+        Object.hasOwn(CAMPAIGN_LIFECYCLE_NAV_TARGETS, m.actionKey));
     const draft = m.messageType === 'network.gm-request-draft.replace';
     if (!command && !nav && !draft) return false;
     let committed = false;
@@ -4169,13 +5217,27 @@ export function createGmNetworkRuntime(d: {
       watchers.set(c, { send, lastHash: watchers.get(c)?.lastHash ?? '' });
       if (nav && m.messageType === 'navigation.form-action') {
         if (m.sourceFormId === 'CMP-006' && (c.executableReview?.length ?? 0) === 0) unavailable();
+        if (Object.hasOwn(CAMPAIGN_LIFECYCLE_NAV_TARGETS, m.actionKey)) {
+          const events = db
+            .transaction(() => readGmRequestReviewViewStateInTransaction(db, own).events)
+            .deferred();
+          if (!events.some((event) => event.eventId === m.navigationRequestId)) {
+            const p = await project(c),
+              active = p.layers?.at(-1) ?? p.base;
+            if (
+              active.formId !== m.sourceFormId ||
+              !active.availableActionKeys.includes(m.actionKey)
+            )
+              unavailable();
+          }
+        }
         commitGmRequestReviewNavigation(db, own, m, validateOwner, guard(c));
         committed = true;
-        sendSnapshot(c, send, await snapshot(c, m.navigationRequestId, 'FORM_ACTION'));
+        await sendNavigationSnapshot(c, own, send, m.navigationRequestId);
       } else if (draft) {
         const result = commitGmRequestReviewDraft(db, own, m, validateOwner, guard(c));
         committed = true;
-        const p = await publication(c);
+        const p = withLifecycle(c, await publication(c));
         send({
           messageType: 'network.gm-request-draft.result',
           protocolVersion: 3,
@@ -4322,10 +5384,19 @@ export function createGmNetworkRuntime(d: {
     return true;
   }
   // Technical polling observes persisted requests and authenticated channels; it cannot allocate gameplay state.
-  let polling = false;
-  const timer = setInterval(() => {
-    if (closed || polling || watchers.size === 0) return;
-    polling = true;
+  let gmTimer: ReturnType<typeof setTimeout>;
+  function scheduleGmPoll(): void {
+    if (closed) return;
+    // Leave incoming work a full interval after a slow projection, as the owner poll does.
+    gmTimer = setTimeout(pollGm, 1000);
+    gmTimer.unref();
+  }
+  function pollGm(): void {
+    if (closed) return;
+    if (watchers.size === 0) {
+      scheduleGmPoll();
+      return;
+    }
     const next = schedule(async () => {
       for (const [c, w] of watchers) {
         if (!c.trusted() || c.gmLocalContextId === null) {
@@ -4339,15 +5410,12 @@ export function createGmNetworkRuntime(d: {
         }
       }
     });
-    void next
-      .catch(() => {})
-      .finally(() => {
-        polling = false;
-      });
-  }, 1000);
-  timer.unref();
+    void next.then(scheduleGmPoll, scheduleGmPoll);
+  }
+  scheduleGmPoll();
   return {
     project,
+    withLifecycle: (c: CampaignConnection, value: GmPresentation) => withLifecycle(c, value),
     refreshConnectionPresentation,
     receipt,
     watch(c: CampaignConnection, send: (m: LocalNetworkHostMessage) => void): void {
@@ -4359,8 +5427,12 @@ export function createGmNetworkRuntime(d: {
       send: (m: LocalNetworkHostMessage) => void,
     ) {
       const relevant =
+        (m.messageType === 'command.request' &&
+          m.commandKind === 'workflow-command' &&
+          CAMPAIGN_LIFECYCLE_WORKFLOW_IDS.some((id) => id === m.workflowCommandId)) ||
         (m.messageType === 'navigation.form-action' &&
-          Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, m.actionKey)) ||
+          (Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, m.actionKey) ||
+            Object.hasOwn(CAMPAIGN_LIFECYCLE_NAV_TARGETS, m.actionKey))) ||
         (m.messageType === 'command.request' &&
           m.commandKind === 'workflow-command' &&
           (m.workflowCommandId === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' ||
@@ -4374,12 +5446,13 @@ export function createGmNetworkRuntime(d: {
           (m.sourceFormId === 'NET-017' ||
             (m.sourceFormId === 'CMP-006' && m.actionKey === 'CMP-006::CTA::002')));
       if (!relevant) return Promise.resolve(false);
-      return schedule(() => handle(m, c, send));
+      return schedule(() => handle(m, c, send), c);
     },
     close() {
       closed = true;
-      clearInterval(timer);
+      clearTimeout(gmTimer);
       watchers.clear();
+      if (d.gmScheduler === undefined) gmScheduler.close();
     },
   };
 }

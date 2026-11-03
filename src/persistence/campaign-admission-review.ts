@@ -1,5 +1,6 @@
-import { hasCampaignLobbySchema, readCampaignStartHeaderCheckpoint } from './campaign-lobby.js';
 import type Database from 'better-sqlite3';
+import { campaignCheckpointParts } from './campaign-lifecycle-state.js';
+import { readRevisions, type CampaignCheckpoint } from './store.js';
 import { types } from 'node:util';
 import type { WorkflowCommandRequestMessage } from '@shared/wire-protocol.js';
 import {
@@ -123,7 +124,7 @@ function callSynchronous<Args extends readonly unknown[], Result>(
 function schema(db: Database.Database): void {
   s.schema(db);
   if (
-    !([12, 13] as readonly unknown[]).includes(
+    !([12, 13, 14] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )
@@ -507,12 +508,7 @@ function readInTransaction(
     events,
     current,
     editable:
-      (!hasCampaignLobbySchema(db) ||
-        readCampaignStartHeaderCheckpoint(
-          db,
-          source.scope.campaignId,
-          source.creationOrigin.payload,
-        ) === null) &&
+      !source.currentCampaign.firstStartCompleted &&
       q.requestStatus === 'IN_REVIEW' &&
       q.requestRevision === request.payload.requestRevision &&
       terminal === undefined,
@@ -526,14 +522,64 @@ export const admissionReviewStorage = {
   readInTransaction,
   openInTransaction,
   /** The owning write verified all unchanged source rows; its checkpoint is not sealed yet. */
-  withCurrentPresentation(db: Database.Database, review: AdmissionReviewRead): AdmissionReviewRead {
+  withCurrentPresentation(
+    db: Database.Database,
+    review: AdmissionReviewRead,
+    advance?: Readonly<{
+      before: CampaignCheckpoint;
+      after: CampaignCheckpoint;
+      activePcCount: number;
+    }>,
+  ): AdmissionReviewRead {
     const scope = review.open.scope;
+    let currentCampaign = review.source.currentCampaign;
+    if (advance !== undefined) {
+      const { before, after } = advance;
+      const beforeParts = campaignCheckpointParts(before),
+        afterParts = campaignCheckpointParts(after),
+        copies = afterParts.snapshot['campaignCharacterCopies'];
+      const nextRevisions = {
+        stateRevision: s.increment(before.stateRevision),
+        projectionRevision: s.increment(before.projectionRevision),
+        actorVisibilityRevision: s.increment(before.actorVisibilityRevision),
+      };
+      if (
+        !db.inTransaction ||
+        before.campaignId !== scope.campaignId ||
+        after.campaignId !== scope.campaignId ||
+        currentCampaign.campaignId !== scope.campaignId ||
+        currentCampaign.firstStartCompleted ||
+        currentCampaign.status !== 'PAUSED' ||
+        !s.same(s.vectorOf(currentCampaign), s.vectorOf(before)) ||
+        currentCampaign.checkpointSha256 !== s.sha(before.snapshotJson) ||
+        !s.same(beforeParts.campaign, afterParts.campaign) ||
+        !s.same(s.vectorOf(after), nextRevisions) ||
+        !s.same(
+          readRevisions(db, { entity: 'campaign', entityId: scope.campaignId }),
+          nextRevisions,
+        ) ||
+        !Array.isArray(copies) ||
+        copies.filter((copy: unknown) => s.object(copy)['lifecycleState'] === 'ACTIVE').length !==
+          s.integer(advance.activePcCount) ||
+        advance.activePcCount > currentCampaign.activePlayerCapacity
+      )
+        return s.fail('SOURCE_CHANGED');
+      // The owner seals this already verified checkpoint after the final guard. A post-commit
+      // reread could fail after success; retaining the old header would make replay disagree.
+      currentCampaign = {
+        ...currentCampaign,
+        ...nextRevisions,
+        checkpointSha256: s.sha(after.snapshotJson),
+        activePcCount: advance.activePcCount,
+      };
+    }
     const state = readGmRequestReviewViewStateInTransaction(db, scope);
     readGmAdmissionViewStateInTransaction(db, scope);
     return {
       ...review,
       source: {
         ...review.source,
+        currentCampaign,
         viewOrNull: state.viewOrNull,
         connectionFactsSha256OrNull: state.connectionFactsSha256OrNull,
         cursor: readCampaignCreationCursor(db, scope.gmLocalContextId),
@@ -606,12 +652,7 @@ function openInTransaction(
       return { kind: 'REPLAYED' as const, review };
     }
     // A new OPEN may recover an existing workspace, but it cannot reuse another command's ID.
-    if (
-      hasCampaignLobbySchema(db) &&
-      readCampaignStartHeaderCheckpoint(db, scope.campaignId, source.creationOrigin.payload) !==
-        null
-    )
-      return s.fail('UNAVAILABLE');
+    if (source.currentCampaign.firstStartCompleted) return s.fail('UNAVAILABLE');
     s.assertUnused(db, request.commandId);
     const view = source.viewOrNull,
       q = currentRequest(source, request.payload.requestId);

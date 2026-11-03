@@ -1,4 +1,28 @@
 import {
+  campaignPeerMatchesSnapshot,
+  campaignConnectionStatusFollows,
+  type CampaignPeerControlV3Message,
+  type CampaignPeerStateV3Message,
+} from '@shared/campaign-lifecycle.js';
+import {
+  campaignLifecycleGmAnchorValue,
+  campaignLifecycleGmAnchorMonotonic,
+  type CampaignLifecycleGmAnchor,
+} from '@shared/campaign-lifecycle.js';
+import {
+  CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+  CAMPAIGN_LIFECYCLE_NAV_TARGETS,
+  isCampaignLifecycleForm,
+  isCampaignLifecycleWorkflow,
+  campaignLifecycleGmProjectionValue,
+  campaignLifecycleGmActions,
+  campaignLifecycleGmRequest,
+  campaignLifecyclePendingRequest,
+  campaignLifecycleGmReceipt,
+  campaignLifecycleGmReceiptDestination,
+  type CampaignLifecycleGmRequest,
+} from '@shared/campaign-lifecycle.js';
+import {
   lobbyReadyBrowserCommand,
   isCampaignOwnerForm,
   campaignOwnerSnapshotValue,
@@ -507,6 +531,15 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
         DEVICE_ID_PATTERN.test(binding.value)
       );
     }
+    if (isCampaignLifecycleForm(formId)) {
+      if (formType === 'dialog') return bindings.length === 0;
+      return (
+        bindings.length === 1 &&
+        bindings[0]?.parameterIndex === 0 &&
+        bindings[0].source === 'inherited' &&
+        UUID_PATTERN.test(bindings[0].value)
+      );
+    }
     if (isCampaignLobbyGmForm(formId) || formId === 'PLY-001')
       return (
         bindings.length === (formId === 'PLY-001' ? 2 : 1) &&
@@ -571,6 +604,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    isCampaignLifecycleWorkflow(value) ||
     (CAMPAIGN_LOBBY_WORKFLOW_IDS as readonly string[]).includes(value) ||
     value === 'UI-CMD-ADMISSION-PLAYER-DECIDE' ||
     (NETWORK_WORKFLOW_COMMAND_IDS as readonly string[]).includes(value) ||
@@ -1855,6 +1889,7 @@ type SymbiontPresentationFormId =
   'CHR-017' | 'CHR-018' | 'CHR-019' | 'CHR-020' | 'CHR-041' | 'CHR-042';
 
 interface ConfirmedProjectionSnapshotBase {
+  readonly currentCampaignLifecycle?: CampaignLifecycleGmAnchor;
   readonly availableActionKeys: readonly ActionKey[];
   readonly executableWorkflowCommandIds: readonly WorkflowCommandId[];
   readonly formId: Exclude<SupportedPresentationFormId, SymbiontPresentationFormId>;
@@ -1902,7 +1937,7 @@ export type ConfirmedPresentationLayer =
   | ConfirmedAbandonmentLayer
   | ConfirmedInvalidWeaponProfileLayer
   | {
-      readonly formId: 'NET-020' | 'NET-021' | 'NET-022';
+      readonly formId: 'NET-020' | 'NET-021' | 'NET-022' | 'CMP-014' | 'CMP-015' | 'NET-023';
       readonly path: string;
       readonly projection: JsonObject;
       readonly availableActionKeys: readonly ActionKey[];
@@ -1946,6 +1981,10 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  requestCampaignPeerAction(
+    actionKey: string,
+    endpoint: { readonly hostAddress: string; readonly hostPort: number } | null,
+  ): FormActionRequestResult;
   replaceAdmissionDraft(edit: AdmissionBrowserEdit): FormActionRequestResult;
   replaceNetworkGmRequestDraft(values: NetworkGmRequestDraftValues): FormActionRequestResult;
   replaceNetworkDraft(edit: NetworkEdit): FormActionRequestResult;
@@ -2000,6 +2039,7 @@ export interface ProjectionConnection {
     actionKey: ActionKey,
     manualFacesOrNull?: number | readonly [number, number] | null,
     initialTimeOrNull?: InitialCampaignTimeInput | null,
+    lifecycleInputs?: Readonly<Record<string, unknown>>,
   ): FormActionRequestResult;
   requestSkillCard(skillId: string): FormActionRequestResult;
   requestSymbiontCard(speciesKey: SymbiontSpeciesKey): FormActionRequestResult;
@@ -4122,6 +4162,36 @@ function decodePresentationLayers(
 ): DecodeResult<readonly ConfirmedPresentationLayer[]> {
   const layers = message.presentation.layers;
   if (layers.length === 0) return { ok: true, value: [] };
+  if (baseFormId === 'CMP-008') {
+    const layer = layers[0];
+    if (
+      layers.length !== 1 ||
+      layer === undefined ||
+      !['CMP-014', 'CMP-015', 'NET-023'].includes(layer.formId) ||
+      layer.routeBindings.length !== 0 ||
+      !sameJson(layer.roleFilteredPayload, baseProjection)
+    )
+      return unrecognized('$.presentation.layers', null);
+    const p = campaignLifecycleGmProjectionValue(layer.roleFilteredPayload);
+    if (!isCampaignLifecycleForm(layer.formId)) return unrecognized('$.presentation.layers', null);
+    const actions = exactSymbiontActionKeys(
+      layer.availableActionKeys,
+      campaignLifecycleGmActions(layer.formId, p, executableWorkflowCommandIds),
+      '$.presentation.layers.availableActionKeys',
+    );
+    if (!actions.ok) return actions;
+    return {
+      ok: true,
+      value: [
+        {
+          formId: layer.formId as 'CMP-014' | 'CMP-015' | 'NET-023',
+          path: layer.routeTemplate,
+          projection: layer.roleFilteredPayload,
+          availableActionKeys: layer.availableActionKeys,
+        },
+      ],
+    };
+  }
   if (isAdmissionGmForm(baseFormId)) {
     try {
       admissionGmPresentationValue(message.presentation.base, layers, message.revisions);
@@ -4225,10 +4295,70 @@ function decodePresentationLayers(
   };
 }
 
+const markerAsJson = (value: CampaignLifecycleGmAnchor): JsonObject =>
+  value as unknown as JsonObject;
 function decodeConfirmedSnapshot(
-  message: ProjectionSnapshotV2Message,
+  inputMessage: ProjectionSnapshotV2Message,
   executableWorkflowCommandIds: readonly WorkflowCommandId[],
 ): DecodeResult<ConfirmedProjectionSnapshot> {
+  let message = inputMessage;
+  let currentCampaignLifecycle: CampaignLifecycleGmAnchor | undefined;
+  const raw = inputMessage.presentation.base;
+  const campaignContext =
+    raw.formId === 'CMP-006' ||
+    raw.formId === 'NET-017' ||
+    isAdmissionGmForm(raw.formId) ||
+    isCampaignLobbyGmForm(raw.formId) ||
+    isCampaignLifecycleForm(raw.formId);
+  const negotiated = executableWorkflowCommandIds.some(isCampaignLifecycleWorkflow);
+  if (
+    inputMessage.presentation.layers.some((layer) =>
+      Object.hasOwn(layer.roleFilteredPayload, 'currentCampaignLifecycle'),
+    )
+  )
+    return unrecognized('$.presentation.layers.currentCampaignLifecycle', null);
+  if (Object.hasOwn(raw.roleFilteredPayload, 'currentCampaignLifecycle')) {
+    if (inputMessage.projectionRole !== 'gm' || !campaignContext || !negotiated)
+      return unrecognized('$.currentCampaignLifecycle', null);
+    try {
+      const { currentCampaignLifecycle: marker, ...payload } = raw.roleFilteredPayload;
+      currentCampaignLifecycle = campaignLifecycleGmAnchorValue(marker);
+      if (
+        currentCampaignLifecycle.contextId !==
+          payload[raw.formId === 'CMP-006' ? 'gmLocalContextId' : 'contextId'] ||
+        currentCampaignLifecycle.campaignId !== payload['campaignId'] ||
+        !sameCampaignRevisions(currentCampaignLifecycle, inputMessage.revisions)
+      )
+        return unrecognized('$.currentCampaignLifecycle', null);
+      if (
+        isCampaignLifecycleForm(raw.formId) &&
+        [
+          'campaignRevision',
+          'settingsRevision',
+          'campaignStatus',
+          'pauseReasonOrNull',
+          'firstStartCompleted',
+        ].some((key) => payload[key] !== markerAsJson(currentCampaignLifecycle!)[key])
+      )
+        return unrecognized('$.currentCampaignLifecycle', null);
+      if (
+        isCampaignLobbyGmForm(raw.formId) &&
+        (payload['campaignStatus'] !== currentCampaignLifecycle.campaignStatus ||
+          (payload['panelVariant'] === 'STARTED_PEACE') !==
+            currentCampaignLifecycle.firstStartCompleted)
+      )
+        return unrecognized('$.currentCampaignLifecycle', null);
+      message = {
+        ...inputMessage,
+        presentation: {
+          ...inputMessage.presentation,
+          base: { ...raw, roleFilteredPayload: payload },
+        },
+      };
+    } catch {
+      return unrecognized('$.currentCampaignLifecycle', null);
+    }
+  } else if (campaignContext && negotiated) return unrecognized('$.currentCampaignLifecycle', null);
   const base = message.presentation.base;
   const expectedRole =
     base.formId === 'APP-001'
@@ -4236,7 +4366,8 @@ function decodeConfirmedSnapshot(
       : base.formId === 'NET-017' ||
           isCampaignCreationForm(base.formId) ||
           isAdmissionGmForm(base.formId) ||
-          isCampaignLobbyGmForm(base.formId)
+          isCampaignLobbyGmForm(base.formId) ||
+          isCampaignLifecycleForm(base.formId)
         ? 'gm'
         : base.formId === 'APP-010' &&
             base.roleFilteredPayload['ownerContext'] === 'GM_ARCHIVE_EXPORT'
@@ -4251,13 +4382,39 @@ function decodeConfirmedSnapshot(
       [
         ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
         ...ADMISSION_GM_WORKFLOW_IDS,
+        ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
         'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
         'UI-CMD-CAMPAIGN-START',
       ].some((id) => executableWorkflowCommandIds.some((available) => available === id)))
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (isCampaignLobbyGmForm(base.formId)) {
+  if (isCampaignLifecycleForm(base.formId)) {
+    try {
+      const p = campaignLifecycleGmProjectionValue(base.roleFilteredPayload);
+      const layers = message.presentation.layers;
+      if (
+        !['CMP-008', 'CMP-016'].includes(base.formId) ||
+        base.routeBindings.length !== 1 ||
+        base.routeBindings[0]?.value !== p.campaignId ||
+        !sameNetworkRevisions(message.revisions, p) ||
+        layers.length > 1 ||
+        (layers.length > 0 && base.formId !== 'CMP-008')
+      )
+        return unrecognized('$.presentation', null);
+      const actions = exactSymbiontActionKeys(
+        base.availableActionKeys,
+        layers.length === 0
+          ? campaignLifecycleGmActions(base.formId, p, executableWorkflowCommandIds)
+          : [],
+        '$.availableActionKeys',
+      );
+      if (!actions.ok) return actions;
+      projection = { ok: true, value: p as unknown as JsonObject };
+    } catch {
+      return unrecognized('$.presentation', null);
+    }
+  } else if (isCampaignLobbyGmForm(base.formId)) {
     try {
       const p = campaignLobbyGmProjectionValue(base.roleFilteredPayload);
       if (
@@ -5071,6 +5228,7 @@ function decodeConfirmedSnapshot(
     path = path.replace(/:[^/]+/u, encodeURIComponent(binding.value));
   }
   const common = {
+    ...(currentCampaignLifecycle === undefined ? {} : { currentCampaignLifecycle }),
     availableActionKeys: [...base.availableActionKeys],
     executableWorkflowCommandIds: [...executableWorkflowCommandIds],
     path,
@@ -5737,6 +5895,22 @@ function decodeFormActionSnapshot(
       ? decoded
       : unrecognized('$.presentation', null);
   }
+  if (Object.hasOwn(CAMPAIGN_LIFECYCLE_NAV_TARGETS, pending.actionKey)) {
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    const target =
+      CAMPAIGN_LIFECYCLE_NAV_TARGETS[
+        pending.actionKey as keyof typeof CAMPAIGN_LIFECYCLE_NAV_TARGETS
+      ];
+    if (
+      activePresentedForm(previous).formId !== pending.sourceFormId ||
+      activePresentedForm(decoded.value).formId !== target ||
+      !gmQueueMonotonic(decoded.value, previous) ||
+      decoded.value.revisions.projectionRevision < previous.revisions.projectionRevision + 1
+    )
+      return unrecognized('$.presentation', null);
+    return decoded;
+  }
   if (Object.hasOwn(CAMPAIGN_LOBBY_GM_NAV_TARGETS, pending.actionKey)) {
     const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
     if (!decoded.ok) return decoded;
@@ -5955,6 +6129,7 @@ function decodeFormActionSnapshot(
               id !== CAMPAIGN_CREATE_COMMAND_ID &&
               !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id) &&
               !ADMISSION_GM_WORKFLOW_IDS.some((gmId) => gmId === id) &&
+              !isCampaignLifecycleWorkflow(id) &&
               id !== 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' &&
               id !== 'UI-CMD-CAMPAIGN-START',
           )
@@ -8677,7 +8852,11 @@ type NetworkGmDecisionRequest =
       NetworkGmAcceptToReviewPayload
     >
   | WorkflowCommandRequestMessage<'UI-CMD-DEVICE-REQUEST-REJECT', NetworkGmRejectRequestPayload>;
-type GmBrowserRequest = NetworkGmDecisionRequest | AdmissionBrowserRequest | CampaignLobbyGmRequest;
+type GmBrowserRequest =
+  | NetworkGmDecisionRequest
+  | AdmissionBrowserRequest
+  | CampaignLobbyGmRequest
+  | CampaignLifecycleGmRequest;
 export interface NetworkGmRequestDraftClientState extends NetworkGmRequestEditState {
   readonly lastRefusal: NetworkGmRequestDraftRefusal | null;
 }
@@ -8726,7 +8905,10 @@ function gmQueueScope(
   s: ConfirmedProjectionSnapshot,
 ): { contextId: string; campaignId: string } | null {
   const contextId =
-    s.formId === 'NET-017' || isAdmissionGmForm(s.formId) || isCampaignLobbyGmForm(s.formId)
+    s.formId === 'NET-017' ||
+    isAdmissionGmForm(s.formId) ||
+    isCampaignLobbyGmForm(s.formId) ||
+    isCampaignLifecycleForm(s.formId)
       ? s.projection['contextId']
       : s.formId === 'CMP-006'
         ? s.projection['gmLocalContextId']
@@ -8743,6 +8925,18 @@ function gmQueueMonotonic(
   const a = gmQueueScope(next),
     b = gmQueueScope(previous);
   if (
+    previous.currentCampaignLifecycle !== undefined &&
+    (next.currentCampaignLifecycle === undefined ||
+      !campaignLifecycleGmAnchorMonotonic(
+        next.currentCampaignLifecycle,
+        previous.currentCampaignLifecycle,
+      ) ||
+      (next.revisions.stateRevision === previous.revisions.stateRevision &&
+        next.currentCampaignLifecycle.campaignRevision !==
+          previous.currentCampaignLifecycle.campaignRevision))
+  )
+    return false;
+  if (
     a === null ||
     b === null ||
     a.contextId !== b.contextId ||
@@ -8756,7 +8950,9 @@ function gmQueueMonotonic(
     (isAdmissionGmForm(next.formId) ||
       isAdmissionGmForm(previous.formId) ||
       isCampaignLobbyGmForm(next.formId) ||
-      isCampaignLobbyGmForm(previous.formId)) &&
+      isCampaignLifecycleForm(next.formId) ||
+      isCampaignLobbyGmForm(previous.formId) ||
+      isCampaignLifecycleForm(previous.formId)) &&
     sameCampaignRevisions(next.revisions, previous.revisions) &&
     (next.formId !== previous.formId ||
       !sameJson(next.projection, previous.projection) ||
@@ -8824,6 +9020,20 @@ function gmDecisionReceipt(
   request: GmBrowserRequest,
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<CommandReceipt> {
+  if (isCampaignLifecycleWorkflow(request.workflowCommandId)) {
+    try {
+      return {
+        ok: true,
+        value: campaignLifecycleGmReceipt(
+          value,
+          request as CampaignLifecycleGmRequest,
+          campaignLifecycleGmProjectionValue(source.projection),
+        ),
+      };
+    } catch {
+      return unrecognized('$.receipt', null);
+    }
+  }
   if (
     request.workflowCommandId === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' ||
     request.workflowCommandId === 'UI-CMD-CAMPAIGN-START'
@@ -8895,6 +9105,23 @@ export function gmDecisionDestination(
   replay: boolean,
 ): boolean {
   const workflow = receipt.result['workflowCommandId'];
+  if (typeof workflow === 'string' && isCampaignLifecycleWorkflow(workflow)) {
+    if (next.currentCampaignLifecycle === undefined) return false;
+    const active = activePresentedForm(next);
+    return (
+      gmQueueMonotonic(next, source) &&
+      (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
+        (axis) => next.revisions[axis] >= receipt.revisions[axis],
+      ) &&
+      campaignLifecycleGmReceiptDestination(
+        active.formId,
+        active.projection,
+        receipt,
+        !sameCampaignRevisions(next.revisions, receipt.revisions),
+        next.currentCampaignLifecycle,
+      )
+    );
+  }
   if (workflow === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' || workflow === 'UI-CMD-CAMPAIGN-START')
     return (
       gmQueueMonotonic(next, source) &&
@@ -9101,6 +9328,7 @@ export function connectProjection(
   onCampaignDraft: (value: CampaignDraftClientState | null) => void = () => {},
   onNetworkDraft: (value: NetworkDraftClientState | null) => void = () => {},
   onNetworkGmRequestDraft: (value: NetworkGmRequestDraftClientState | null) => void = () => {},
+  onCampaignPeerState?: (value: CampaignPeerStateV3Message | null) => void,
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -9139,7 +9367,12 @@ export function connectProjection(
   } | null = null;
   const gmQueueHeads = new Map<
     string,
-    { revisions: RevisionVector; queueRevision: number | null; birth: JsonObject | null }
+    {
+      revisions: RevisionVector;
+      queueRevision: number | null;
+      birth: JsonObject | null;
+      lifecycle: CampaignLifecycleGmAnchor | null;
+    }
   >();
   const ownGmQueue = (next: ConfirmedProjectionSnapshot): boolean => {
     const scope = gmQueueScope(next);
@@ -9147,6 +9380,13 @@ export function connectProjection(
     const key = JSON.stringify(scope),
       old = gmQueueHeads.get(key),
       p = next.formId === 'NET-017' ? gmRequestProjection(next.projection) : null;
+    if (
+      old?.lifecycle !== null &&
+      old?.lifecycle !== undefined &&
+      (next.currentCampaignLifecycle === undefined ||
+        !campaignLifecycleGmAnchorMonotonic(next.currentCampaignLifecycle, old.lifecycle))
+    )
+      return false;
     if (next.formId === 'CMP-006' && next.projection['hostDeviceId'] !== deviceId) return false;
     if (
       old !== undefined &&
@@ -9181,6 +9421,7 @@ export function connectProjection(
       old = gmQueueHeads.get(key),
       p = next.formId === 'NET-017' ? gmRequestProjection(next.projection) : null;
     gmQueueHeads.set(key, {
+      lifecycle: next.currentCampaignLifecycle ?? old?.lifecycle ?? null,
       revisions: next.revisions,
       queueRevision: p?.requestQueueRevision ?? old?.queueRevision ?? null,
       birth: next.formId === 'CMP-006' ? next.projection : (old?.birth ?? null),
@@ -9244,6 +9485,234 @@ export function connectProjection(
   let startingWeaponDraft: StartingWeaponDraft | null = null;
   let socket: WebSocket | null = null;
   let stagedCapabilities: SessionReconnectCapabilitiesV2Message | null = null;
+  let peerSubscription: { requestId: string; contextId: string; networkScopeId: string } | null =
+    null;
+  const retiredPeerSubscriptions = new Map<string, { contextId: string; networkScopeId: string }>();
+  let peerState: CampaignPeerStateV3Message | null = null;
+  let pendingPeerControl: CampaignPeerControlV3Message | null = null;
+  let peerReconciliationCommandId: string | null = null;
+  const peerHeads = new Map<string, CampaignPeerStateV3Message>();
+  const peerDisconnectBindings = new Map<string, string>();
+  const peerReceiptBindings = new Map<string, string>();
+  const peerBlocksMutation = () =>
+    onCampaignPeerState !== undefined &&
+    peerSubscription !== null &&
+    (peerState === null ||
+      peerState.connectionState !== 'CONNECTED' ||
+      peerState.formOrNull !== null ||
+      pendingPeerControl !== null);
+  const watchCampaignPeer = (): void => {
+    if (
+      onCampaignPeerState === undefined ||
+      lastSnapshot === null ||
+      socket?.readyState !== WebSocket.OPEN
+    )
+      return;
+    const p = lastSnapshot.projection;
+    if (
+      !(lastSnapshot.formId === 'NET-005' || isCampaignOwnerForm(lastSnapshot.formId)) ||
+      typeof p['networkScopeId'] !== 'string' ||
+      typeof p['contextId'] !== 'string' ||
+      (typeof p['requestId'] !== 'string' && typeof p['requestIdOrNull'] !== 'string')
+    ) {
+      if (peerSubscription !== null)
+        retiredPeerSubscriptions.set(peerSubscription.requestId, peerSubscription);
+      peerSubscription = null;
+      peerState = null;
+      pendingPeerControl = null;
+      peerHeads.clear();
+      onCampaignPeerState(null);
+      return;
+    }
+    if (
+      peerSubscription?.contextId === p['contextId'] &&
+      peerSubscription.networkScopeId === p['networkScopeId']
+    )
+      return;
+    const requestId = createNetworkCommandId();
+    if (requestId === null) return;
+    const request: CampaignPeerControlV3Message = {
+      messageType: 'network.peer-control',
+      protocolVersion: 3,
+      requestId,
+      contextId: p['contextId'],
+      networkScopeId: p['networkScopeId'],
+      expectedRevisions: lastSnapshot.revisions,
+      operation: 'WATCH',
+      expectedConnectionRevision: null,
+      commandIdOrNull: peerReconciliationCommandId,
+      endpointOrNull: null,
+    };
+    const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok) return;
+    peerSubscription = {
+      requestId,
+      contextId: request.contextId,
+      networkScopeId: request.networkScopeId,
+    };
+    peerState = null;
+    pendingPeerControl = null;
+    onCampaignPeerState(null);
+    socket.send(encoded.text);
+  };
+  function acceptPeerState(message: CampaignPeerStateV3Message): void {
+    const retired = retiredPeerSubscriptions.get(message.subscriptionId);
+    // Only a known retired subscription can have an already queued final frame.
+    if (
+      retired !== undefined &&
+      message.contextId === retired.contextId &&
+      message.networkScopeId === retired.networkScopeId &&
+      message.deviceId === deviceId
+    )
+      return;
+    const subscription = peerSubscription,
+      source = lastSnapshot,
+      previous = peerHeads.get(message.networkScopeId);
+    if (
+      subscription === null ||
+      source === null ||
+      onCampaignPeerState === undefined ||
+      message.subscriptionId !== subscription.requestId ||
+      message.contextId !== subscription.contextId ||
+      message.networkScopeId !== subscription.networkScopeId ||
+      message.contextId !== source.projection['contextId'] ||
+      message.networkScopeId !== source.projection['networkScopeId'] ||
+      message.deviceId !== deviceId ||
+      message.controllerSeat !== source.projection['controllerSeat'] ||
+      message.campaignId !==
+        (source.projection['campaignId'] ?? source.projection['campaignIdOrNull']) ||
+      (message.requestId !== subscription.requestId &&
+        message.requestId !== pendingPeerControl?.requestId)
+    ) {
+      failUnexpected(
+        '$.peerState',
+        null,
+        'Campaign peer continuation changed its owner or correlation.',
+      );
+      return;
+    }
+    if (!campaignPeerMatchesSnapshot(message, source, peerReconciliationCommandId)) {
+      failUnexpected(
+        '$.peerState.revisions',
+        null,
+        'Campaign peer continuation does not match the confirmed own snapshot.',
+      );
+      return;
+    }
+    if (peerState !== null && message.sequence <= peerState.sequence) {
+      if (JSON.stringify(message) === JSON.stringify(peerState)) return;
+      failUnexpected('$.peerState.sequence', null, 'Campaign peer sequence did not advance.');
+      return;
+    }
+    const after = message.statusOrNull;
+    const disconnect = after?.disconnectOrNull;
+    const disconnectKey =
+      disconnect == null ? null : message.networkScopeId + '/' + disconnect.disconnectCommandId;
+    const disconnectValue =
+      disconnect == null ? null : JSON.stringify({ ...disconnect, retryReceiptOrNull: null });
+    const receipt = disconnect?.retryReceiptOrNull;
+    const receiptKey = receipt == null ? null : message.networkScopeId + '/' + receipt.commandId;
+    const receiptValue = receipt == null ? null : JSON.stringify(receipt);
+    if (
+      (previous !== undefined &&
+        (message.connectionRevision < previous.connectionRevision ||
+          (message.connectionRevision === previous.connectionRevision &&
+            JSON.stringify(after) !== JSON.stringify(previous.statusOrNull)) ||
+          !campaignConnectionStatusFollows(after, previous.statusOrNull))) ||
+      (disconnectKey !== null &&
+        peerDisconnectBindings.has(disconnectKey) &&
+        peerDisconnectBindings.get(disconnectKey) !== disconnectValue) ||
+      (receiptKey !== null &&
+        peerReceiptBindings.has(receiptKey) &&
+        peerReceiptBindings.get(receiptKey) !== receiptValue)
+    ) {
+      failUnexpected(
+        '$.peerState.statusOrNull',
+        null,
+        'Campaign peer status rolled back or reused an immutable identity.',
+      );
+      return;
+    }
+    if (
+      message.formOrNull !== null &&
+      message.formOrNull.formId !== 'NET-009' &&
+      source.formId !== 'PLY-001'
+    ) {
+      failUnexpected(
+        '$.peerState.formOrNull',
+        null,
+        'Peace reconnect requires a confirmed own PEACE projection.',
+      );
+      return;
+    }
+    const pending = pendingPeerControl;
+    if (
+      message.retryOutcome === 'CONFIRMED' &&
+      (pending?.operation !== 'RETRY' || pending.requestId !== message.requestId)
+    ) {
+      failUnexpected('$.peerState.retryOutcome', null, 'Unsolicited reconnect acknowledgement.');
+      return;
+    }
+    if (disconnectKey !== null) peerDisconnectBindings.set(disconnectKey, disconnectValue!);
+    if (receiptKey !== null) peerReceiptBindings.set(receiptKey, receiptValue!);
+    peerState = message;
+    peerHeads.set(message.networkScopeId, message);
+    if (message.requestId === pending?.requestId) pendingPeerControl = null;
+    onCampaignPeerState(message);
+    if (message.retryOutcome === 'CONFIRMED' && pending !== null && deviceId !== null) {
+      peerReconciliationCommandId = pending.commandIdOrNull;
+      const old = socket;
+      openTransport(deviceId);
+      old?.close(1000, 'reconcile confirmed campaign peer');
+    } else if (message.requestId === subscription.requestId) peerReconciliationCommandId = null;
+  }
+  function requestCampaignPeerAction(
+    actionKey: string,
+    endpoint: { readonly hostAddress: string; readonly hostPort: number } | null,
+  ): FormActionRequestResult {
+    if (
+      disposed ||
+      terminal ||
+      socket?.readyState !== WebSocket.OPEN ||
+      lastSnapshot === null ||
+      peerSubscription === null ||
+      peerState === null ||
+      pendingPeerControl !== null
+    )
+      return { ok: false, detail: 'campaign peer control is unavailable' };
+    const form = peerState.formOrNull;
+    if (form === null || !form.availableActionKeys.includes(actionKey))
+      return { ok: false, detail: 'campaign peer action is unavailable' };
+    const retry = actionKey === 'NET-009::CTA::001';
+    if ((!retry && actionKey !== 'NET-008::CTA::002') || (retry && endpoint === null))
+      return { ok: false, detail: 'campaign peer endpoint is required' };
+    const requestId = createNetworkCommandId();
+    if (requestId === null)
+      return { ok: false, detail: 'campaign peer correlation is unavailable' };
+    const request: CampaignPeerControlV3Message = {
+      messageType: 'network.peer-control',
+      protocolVersion: 3,
+      requestId,
+      contextId: peerSubscription.contextId,
+      networkScopeId: peerSubscription.networkScopeId,
+      expectedRevisions: lastSnapshot.revisions,
+      operation: retry ? 'RETRY' : 'OPEN_RETRY',
+      expectedConnectionRevision: peerState.connectionRevision,
+      commandIdOrNull: retry ? (form.fields['commandId'] as string) : null,
+      endpointOrNull: retry ? endpoint : null,
+    };
+    const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok) return { ok: false, detail: 'campaign peer input was refused' };
+    pendingPeerControl = request;
+    try {
+      socket.send(encoded.text);
+    } catch {
+      pendingPeerControl = null;
+      return { ok: false, detail: 'campaign peer transport is unavailable' };
+    }
+    return { ok: true };
+  }
+
   const commandPending = () =>
     pendingOwnerCommand !== null ||
     pendingAdmissionDraft !== null ||
@@ -9286,7 +9755,8 @@ export function connectProjection(
     if (
       isAdmissionGmForm(snapshot.formId) ||
       isCampaignOwnerForm(snapshot.formId) ||
-      isCampaignLobbyGmForm(snapshot.formId)
+      isCampaignLobbyGmForm(snapshot.formId) ||
+      isCampaignLifecycleForm(snapshot.formId)
     )
       return {
         ...visible,
@@ -9744,14 +10214,17 @@ export function connectProjection(
     } else if (
       next.formId === 'NET-017' ||
       isAdmissionGmForm(next.formId) ||
-      isCampaignLobbyGmForm(next.formId)
+      isCampaignLobbyGmForm(next.formId) ||
+      isCampaignLifecycleForm(next.formId)
     ) {
       const p =
         next.formId === 'NET-017'
           ? gmRequestProjection(next.projection)
-          : isCampaignLobbyGmForm(next.formId)
-            ? campaignLobbyGmProjectionValue(next.projection)
-            : admissionGmProjectionValue(next.formId, next.projection);
+          : isCampaignLifecycleForm(next.formId)
+            ? campaignLifecycleGmProjectionValue(next.projection)
+            : isCampaignLobbyGmForm(next.formId)
+              ? campaignLobbyGmProjectionValue(next.projection)
+              : admissionGmProjectionValue(next.formId, next.projection);
       if (p === null || p.contextId !== gmLocalContextId) {
         failUnexpected('$.contextId', null, 'GM queue changed the owned ticket.');
         return;
@@ -9938,6 +10411,7 @@ export function connectProjection(
           'The pending campaign draft could not be replayed.',
         );
     }
+    watchCampaignPeer();
   };
 
   const attachSocket = (
@@ -10301,7 +10775,8 @@ export function connectProjection(
               expectingCapabilities &&
               pendingGmCommand?.receipt === null &&
               message.lastLifecycleState === null &&
-              message.refusal.code === 'GUARD_REJECTED'
+              message.refusal.code === 'GUARD_REJECTED' &&
+              pendingGmCommand.request.workflowCommandId !== 'UI-CMD-MASTER-PASSWORD-CHANGE'
             )
               return;
             if (
@@ -10366,6 +10841,18 @@ export function connectProjection(
               ),
             });
           }
+          if (
+            !expectingCapabilities &&
+            pendingGmRefusal !== null &&
+            isCampaignLifecycleWorkflow(pendingGmRefusal.request.workflowCommandId) &&
+            deviceId !== null
+          ) {
+            // A refusal deliberately writes/publishes nothing on the host. Read the existing
+            // authority again; a known terminal intention is never sent for reconciliation.
+            const old = socket;
+            openTransport(deviceId);
+            old?.close(1000, 'refresh campaign lifecycle refusal');
+          }
           return;
         }
         if (message.messageType === 'protocol.refusal') {
@@ -10405,6 +10892,10 @@ export function connectProjection(
             message.messageType,
             'A wire v3 frame interrupted the staged reconnect pair.',
           );
+          return;
+        }
+        if (message.messageType === 'network.peer-state') {
+          acceptPeerState(message);
           return;
         }
         if (
@@ -10878,10 +11369,12 @@ export function connectProjection(
           const gm =
             (lastSnapshot.formId === 'NET-017' ||
               isAdmissionGmForm(lastSnapshot.formId) ||
-              isCampaignLobbyGmForm(lastSnapshot.formId)) &&
+              isCampaignLobbyGmForm(lastSnapshot.formId) ||
+              isCampaignLifecycleForm(lastSnapshot.formId)) &&
             (candidate.value.formId === 'NET-017' ||
               isAdmissionGmForm(candidate.value.formId) ||
-              isCampaignLobbyGmForm(candidate.value.formId)) &&
+              isCampaignLobbyGmForm(candidate.value.formId) ||
+              isCampaignLifecycleForm(candidate.value.formId)) &&
             /^network-gm-view:[0-9a-f]{64}$/u.test(message.presentation.assignment.correlationId) &&
             ownGmQueue(candidate.value) &&
             gmQueueMonotonic(candidate.value, lastSnapshot);
@@ -10989,7 +11482,8 @@ export function connectProjection(
             snapshot.ok &&
             (snapshot.value.formId === 'NET-017' ||
               isAdmissionGmForm(snapshot.value.formId) ||
-              isCampaignLobbyGmForm(snapshot.value.formId)) &&
+              isCampaignLobbyGmForm(snapshot.value.formId) ||
+              isCampaignLifecycleForm(snapshot.value.formId)) &&
             !ownGmQueue(snapshot.value)
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload.contextId', null);
@@ -11519,6 +12013,11 @@ export function connectProjection(
   };
 
   const openTransport = (currentDeviceId: string): void => {
+    retiredPeerSubscriptions.clear();
+    peerSubscription = null;
+    peerState = null;
+    pendingPeerControl = null;
+    onCampaignPeerState?.(null);
     const requestId = createRequestId('reconnect');
     const reconnect = {
       deviceId: currentDeviceId,
@@ -11542,7 +12041,9 @@ export function connectProjection(
           : pendingGmCommand !== null
             ? [pendingGmCommand.request.commandId]
             : pendingGmRefusal !== null
-              ? [pendingGmRefusal.request.commandId]
+              ? isCampaignLifecycleWorkflow(pendingGmRefusal.request.workflowCommandId)
+                ? []
+                : [pendingGmRefusal.request.commandId]
               : pendingNetworkCommand !== null
                 ? [pendingNetworkCommand.request.commandId]
                 : pendingNetworkRefusal !== null
@@ -11572,6 +12073,7 @@ export function connectProjection(
               CAMPAIGN_CREATE_COMMAND_ID,
               ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
               ...ADMISSION_GM_WORKFLOW_IDS,
+              ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
               'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
               'UI-CMD-CAMPAIGN-START',
             ],
@@ -11760,6 +12262,7 @@ export function connectProjection(
     return { ok: true };
   };
   return {
+    requestCampaignPeerAction,
     chooseLocalRole: (role) => {
       if (
         disposed ||
@@ -11850,6 +12353,7 @@ export function connectProjection(
       return { ok: true };
     },
     replaceNetworkDraft: (edit) => {
+      if (peerBlocksMutation()) return { ok: false, detail: 'campaign peer awaits reconciliation' };
       if (
         disposed ||
         terminal ||
@@ -12750,7 +13254,13 @@ export function connectProjection(
       notifyReady();
       return { ok: true };
     },
-    requestFormAction: (actionKey, manualFacesOrNull, initialTimeOrNull = null) => {
+    requestFormAction: (
+      actionKey,
+      manualFacesOrNull,
+      initialTimeOrNull = null,
+      lifecycleInputs = {},
+    ) => {
+      if (peerBlocksMutation()) return { ok: false, detail: 'campaign peer awaits reconciliation' };
       if (disposed || terminal) return { ok: false, detail: 'projection connection is closed' };
       if (lastSnapshot === null)
         return { ok: false, detail: 'no confirmed projection is available' };
@@ -12781,6 +13291,48 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (
+        isCampaignLifecycleForm(activeForm.formId) &&
+        [
+          'CMP-008::CTA::008',
+          'CMP-014::CTA::002',
+          'CMP-015::CTA::003',
+          'CMP-016::CTA::002',
+          'CMP-016::CTA::003',
+          'NET-023::CTA::002',
+        ].some((key) => key === actionKey)
+      ) {
+        try {
+          if (gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId)
+            return { ok: false, detail: 'GM authority is unavailable' };
+          const commandId = createNetworkCommandId();
+          if (commandId === null)
+            return { ok: false, detail: 'Не удалось создать идентификатор команды.' };
+          const request = campaignLifecycleGmRequest(
+            campaignLifecycleGmProjectionValue(activeForm.projection),
+            actionKey,
+            commandId,
+            lifecycleInputs,
+          );
+          const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+          if (!encoded.ok) return { ok: false, detail: 'Поля команды не прошли проверку.' };
+          pendingGmCommand = {
+            request: campaignLifecyclePendingRequest(request),
+            receipt: null,
+            source: lastSnapshot,
+            replay: false,
+          };
+          try {
+            socket.send(encoded.text);
+          } catch {
+            socket.close(1000, 'campaign command interrupted');
+          }
+          notifyReady();
+          return { ok: true };
+        } catch {
+          return { ok: false, detail: 'Проверьте обязательные поля и актуальность настроек.' };
+        }
       }
       if (actionKey === 'NET-016::CTA::004' || actionKey === 'NET-016::CTA::002') {
         try {

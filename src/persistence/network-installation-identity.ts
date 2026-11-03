@@ -1,3 +1,4 @@
+import { CAMPAIGN_LIFECYCLE_TABLES } from './migrations/0014-campaign-lifecycle.js';
 import { CAMPAIGN_LOBBY_TABLES } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import { types } from 'node:util';
@@ -146,7 +147,8 @@ function requireSchema(db: Database.Database): void {
     row?.version !== 10 &&
     row?.version !== 11 &&
     row?.version !== 12 &&
-    row?.version !== 13
+    row?.version !== 13 &&
+    row?.version !== 14
   )
     return fail('CORRUPT_STORAGE');
   if (row.version >= 9) {
@@ -156,14 +158,17 @@ function requireSchema(db: Database.Database): void {
   if (row.version >= 10)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 11 || row.version === 12 || row.version === 13)
+  if (row.version === 11 || row.version === 12 || row.version === 13 || row.version === 14)
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 12 || row.version === 13)
+  if (row.version === 12 || row.version === 13 || row.version === 14)
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 13)
+  if (row.version === 13 || row.version === 14)
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
+    for (const table of CAMPAIGN_LIFECYCLE_TABLES)
+      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 function read(
   db: Database.Database,

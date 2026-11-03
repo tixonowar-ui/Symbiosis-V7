@@ -873,6 +873,20 @@ describe('local network application/outbox aggregate', () => {
     expect(() => s.canonical(changingLength)).toThrow();
     expect(getter).not.toHaveBeenCalled();
   });
+  it('preserves the single serialization coercion of a captured Proxy array length', () => {
+    let coercions = 0;
+    const reportedLength = { valueOf: () => (++coercions <= 5 ? 2 : 0) };
+    const value = new Proxy([1, 2], {
+      get(target, key, receiver) {
+        if (key === 'length') return reportedLength;
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    // Size and the complete descriptor pass consume four coercions. Serialization
+    // captures ToLength once; observing it again would silently omit index 1.
+    expect(networkApplicationStorage.canonical({ nested: [value] })).toBe('{"nested":[[1,2]]}');
+    expect(coercions).toBe(5);
+  });
   it('rechecks stored hashes and canonical bytes after repeated immutable digest inputs', () => {
     const s = networkApplicationStorage;
     const witness = 'текст "quoted" \u0000 \ud800 \n'.repeat(300);

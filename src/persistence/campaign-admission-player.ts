@@ -1,3 +1,5 @@
+import type { CampaignLifecycleState } from './campaign-lifecycle-state.js';
+import { campaignCheckpointParts } from './campaign-lifecycle-state.js';
 import type { CampaignLobbyState } from './campaign-lobby-state.js';
 import type Database from 'better-sqlite3';
 import {
@@ -41,6 +43,7 @@ export interface StoredAdmissionPlayerDecision {
 export interface AdmissionHistory {
   checkpoint: CampaignCheckpoint;
   lobbyOrNull: CampaignLobbyState | null;
+  lifecycleOrNull?: CampaignLifecycleState;
   readonly decisions: Map<string, AdmissionDecisionRead>;
   readonly groups: Map<string, AdmissionGroup>;
   readonly controllers: Map<string, AdmissionControllerBinding>;
@@ -103,7 +106,9 @@ function plan(
         )
       )
         return s.fail('IDEMPOTENCY_CONFLICT');
-    const limit = current.review.source.creationOrigin.payload.host.activePlayerCapacity;
+    const limit = s.integer(
+      s.object(campaignCheckpointParts(history.checkpoint).payload['host'])['activePlayerCapacity'],
+    );
     capacity = {
       activePlayerCapacity: limit,
       occupiedCampaignPlaceCount: history.occupiedCampaignPlaceCount,
@@ -539,7 +544,14 @@ export function commitAdmissionPlayerDecision(
           commandId: request.commandId,
           recordSha256: s.sha(json),
         });
-        const refreshed = { ...after, review: working.withCurrentPresentation(db, after.review) };
+        const refreshed = {
+          ...after,
+          review: working.withCurrentPresentation(db, after.review, {
+            before: history.checkpoint,
+            after: next,
+            activePcCount: history.activePcCount,
+          }),
+        };
         s.guarded(db, guard, refreshed, 'APPLY');
         return { current: refreshed, replayed: false };
       }).result,

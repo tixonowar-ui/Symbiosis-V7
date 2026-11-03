@@ -1,3 +1,4 @@
+import { CAMPAIGN_PEER_FORMS, isCampaignLifecycleForm } from '../shared/campaign-lifecycle.js';
 import { isCampaignLobbyGmForm } from '../shared/campaign-lobby.js';
 import { join } from 'node:path';
 
@@ -25,6 +26,15 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'CMP-008',
+  'CMP-014',
+  'CMP-015',
+  'CMP-016',
+  'NET-023',
+  // Published through the closed own network.peer-state V3 contract, never generic V2.
+  'NET-008',
+  'NET-009',
+  'NET-010',
   'CMP-007',
   'NET-016',
   'GM-001',
@@ -178,7 +188,10 @@ export async function loadProtocolVocabulary(
     );
     if (new Set(keys).size !== keys.length) throw new Error(`${label}: duplicate actionKey`);
     actionKeys.set(formId, new Set(keys));
-    if (PRESENTED_FORM_IDS.has(formId)) {
+    if (
+      PRESENTED_FORM_IDS.has(formId) &&
+      !(CAMPAIGN_PEER_FORMS as readonly string[]).includes(formId)
+    ) {
       presentedForms.set(formId, {
         route: string(form['route'], `${label}.route`),
         type: string(form['type'], `${label}.type`),
@@ -269,7 +282,10 @@ export async function loadProtocolVocabulary(
       const form = presentedForms.get(formId);
       if (form === undefined || form.type !== formType || form.route !== routeTemplate)
         return false;
-      if ((CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)) {
+      if (
+        isCampaignLifecycleForm(formId) ||
+        (CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)
+      ) {
         if (formType === 'dialog') return bindings.length === 0;
         const binding = bindings[0];
         return (

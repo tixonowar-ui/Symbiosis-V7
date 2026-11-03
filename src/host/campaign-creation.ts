@@ -1,3 +1,5 @@
+import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
+import type { CampaignGmScheduler } from './campaign-network-executor.js';
 import { readOwnedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import { isCampaignLobbyGmForm } from '@shared/campaign-lobby.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -92,7 +94,7 @@ export interface CampaignConnection {
   readonly trusted: () => boolean;
 }
 interface Dependencies {
-  readonly schedule?: <T>(run: () => Promise<T>) => Promise<T>;
+  readonly gmScheduler?: CampaignGmScheduler;
   readonly database: Database.Database;
   readonly projectRoot: string;
   readonly baseline: LocalCharacterExportBaseline;
@@ -104,6 +106,18 @@ interface Dependencies {
       layers?: readonly PresentedLayerForm[];
       revisions: RevisionVector;
     }>;
+    readonly withLifecycle: (
+      c: CampaignConnection,
+      view: {
+        base: PresentedBaseForm;
+        layers?: readonly PresentedLayerForm[];
+        revisions: RevisionVector;
+      },
+    ) => {
+      base: PresentedBaseForm;
+      layers?: readonly PresentedLayerForm[];
+      revisions: RevisionVector;
+    };
     readonly receipt: (c: CampaignConnection, id: string) => CommandReceipt | null;
     readonly refreshConnectionPresentation: (c: CampaignConnection) => void;
   };
@@ -351,7 +365,9 @@ export function createCampaignCreationRuntime(d: Dependencies) {
     } else if (
       cursor.kind === 'ADMISSION' ||
       (cursor.kind === 'QUEUE' &&
-        (cursor.formId === 'NET-017' || isCampaignLobbyGmForm(cursor.formId)))
+        (cursor.formId === 'NET-017' ||
+          isCampaignLobbyGmForm(cursor.formId) ||
+          isCampaignLifecycleForm(cursor.formId)))
     ) {
       if (d.requestReview === undefined) return unavailable();
       return d.requestReview.project(c);
@@ -513,7 +529,12 @@ export function createCampaignCreationRuntime(d: Dependencies) {
     id: string,
     reason: 'FORM_ACTION' | 'RECONNECT' | 'COMMAND_DESTINATION',
   ): Promise<HostToClientV2Message> => {
-    const view = await project(c);
+    const raw = await project(c);
+    const view =
+      typeof raw.base.roleFilteredPayload['campaignId'] === 'string' &&
+      d.requestReview !== undefined
+        ? d.requestReview.withLifecycle(c, raw)
+        : raw;
     return {
       messageType: 'projection.snapshot',
       protocolVersion: 2,
@@ -1036,7 +1057,12 @@ export function createCampaignCreationRuntime(d: Dependencies) {
                     id === 'UI-CMD-ADMISSION-GM-REJECT' ||
                     id === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE' ||
                     id === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' ||
-                    id === 'UI-CMD-CAMPAIGN-START',
+                    id === 'UI-CMD-CAMPAIGN-START' ||
+                    id === 'UI-CMD-CAMPAIGN-SETTINGS-SET' ||
+                    id === 'UI-CMD-CAMPAIGN-CAPACITY-SET' ||
+                    id === 'UI-CMD-MASTER-PASSWORD-CHANGE' ||
+                    id === 'UI-CMD-CAMPAIGN-PAUSE-SET' ||
+                    id === 'UI-CMD-CLIENT-DISCONNECT',
                 );
           shell.enter();
           if (
@@ -1186,8 +1212,8 @@ export function createCampaignCreationRuntime(d: Dependencies) {
         return Promise.resolve(false);
       // One host serializes GM work across transports; async preparation never
       // lets another GM frame borrow or retire an intermediate lease/snapshot.
-      if (d.schedule !== undefined)
-        return d.schedule(() => runtime.handle(message, c, shell, send));
+      if (d.gmScheduler !== undefined)
+        return d.gmScheduler.wire(c, () => runtime.handle(message, c, shell, send));
       const pending = frames.then(() => runtime.handle(message, c, shell, send));
       frames = pending.then(
         () => {},

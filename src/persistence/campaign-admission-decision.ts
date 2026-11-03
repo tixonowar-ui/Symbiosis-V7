@@ -1,4 +1,17 @@
-import { hasCampaignLobbySchema, readCampaignLobbyContinuation } from './campaign-lobby.js';
+import {
+  initialCampaignLifecycleState,
+  replayCampaignLifecycleEvent,
+  type CampaignLifecycleRules,
+} from './campaign-lifecycle-state.js';
+import {
+  readCampaignLifecycleLedger,
+  verifyCampaignLifecycleMirrors,
+} from './campaign-lifecycle-ledger.js';
+import {
+  hasCampaignLobbySchema,
+  readCampaignLobbyLedger,
+  readCampaignLobbyContinuation,
+} from './campaign-lobby.js';
 import type Database from 'better-sqlite3';
 import { admissionGmClientBindingValue } from '@shared/campaign-admission-review.js';
 import {
@@ -91,6 +104,7 @@ export interface AdmissionDecisionRead {
   readonly playerDecisionOrNull: StoredAdmissionPlayerDecision | null;
 }
 export interface AdmissionPublicationRules extends AdmissionReviewRules {
+  readonly lifecycle?: CampaignLifecycleRules;
   /** Null IDs request a preview. Non-null IDs publish the same complete reviewed sheets. */
   readonly buildProposal: (
     review: AdmissionReviewRead,
@@ -589,6 +603,31 @@ function verifyCampaignHistory(
   source: GmRequestReviewSource,
   rules: AdmissionPublicationRules,
 ): AdmissionHistory {
+  const result: { value?: AdmissionHistory } = {};
+  // Every entry point, including historical receipt replay, owns this read-only callback fence.
+  let failed = false,
+    failure: unknown;
+  s.guarded(
+    db,
+    () => {
+      try {
+        result.value = rebuildCampaignHistory(db, source, rules);
+      } catch (error: unknown) {
+        failed = true;
+        failure = error;
+      }
+    },
+    {},
+    'REPLAY',
+  );
+  if (failed) throw failure;
+  return result.value ?? s.fail();
+}
+function rebuildCampaignHistory(
+  db: Database.Database,
+  source: GmRequestReviewSource,
+  rules: AdmissionPublicationRules,
+): AdmissionHistory {
   const verified = new Map<string, AdmissionDecisionRead>();
   let checkpoint: CampaignCheckpoint = {
     campaignId: source.scope.campaignId,
@@ -605,6 +644,37 @@ function verifyCampaignHistory(
     actorVisibilityRevision: 0,
   };
   const admissionCheckpoints = new Map([[0, checkpoint]]);
+  const lifecycleEvents = readCampaignLifecycleLedger(db, source.scope.campaignId);
+  verifyCampaignLifecycleMirrors(db, source.scope, lifecycleEvents);
+  let lifecycle = initialCampaignLifecycleState(
+    source.creationOrigin.payload,
+    source.privateOwner.verifier,
+  );
+  let lifecycleIndex = 0;
+  const start = hasCampaignLobbySchema(db)
+    ? readCampaignLobbyLedger(db, source.scope.campaignId).find(
+        (e) => e.request.workflowCommandId === 'UI-CMD-CAMPAIGN-START',
+      )
+    : undefined;
+  const advanceLifecycleBefore = (revision: number): void => {
+    while (lifecycleIndex < lifecycleEvents.length) {
+      const event = lifecycleEvents[lifecycleIndex]!;
+      if (event.receipt.campaignRevision >= revision) break;
+      if (event.receipt.campaignRevision !== s.increment(checkpoint.stateRevision)) return s.fail();
+      const replay = replayCampaignLifecycleEvent(
+        source.scope,
+        checkpoint,
+        lifecycle,
+        event,
+        rules.lifecycle ?? s.fail(),
+      );
+      lifecycle = replay.state;
+      checkpoint = replay.checkpoint;
+      history.checkpoint = checkpoint;
+      admissionCheckpoints.set(checkpoint.stateRevision, checkpoint);
+      lifecycleIndex += 1;
+    }
+  };
   const events = db
     .prepare(
       'SELECT * FROM campaign_admission_checkpoint_event WHERE campaign_id=? ORDER BY state_revision',
@@ -628,9 +698,12 @@ function verifyCampaignHistory(
     occupiedCampaignPlaceCount: 0,
     activePcCount: 0,
   };
-  for (const [index, row] of events.entries()) {
+  for (const row of events) {
+    const revision = s.integer(row['state_revision']);
+    if (start !== undefined && revision > start.campaignRevision) return s.fail();
+    advanceLifecycleBefore(revision);
     const batchId = s.uuid(row['admission_batch_id']);
-    if (row['state_revision'] !== index + 1) return s.fail();
+    if (row['state_revision'] !== s.increment(checkpoint.stateRevision)) return s.fail();
     let next: CampaignCheckpoint;
     let event: AdmissionCheckpointEvent;
     if (row['kind'] === 'GM_ACCEPT') {
@@ -668,6 +741,7 @@ function verifyCampaignHistory(
     history.checkpoint = next;
     admissionCheckpoints.set(next.stateRevision, next);
   }
+  advanceLifecycleBefore(start === undefined ? Infinity : s.increment(start.campaignRevision));
   if (hasCampaignLobbySchema(db)) {
     history.lobbyOrNull = readCampaignLobbyContinuation(
       db,
@@ -678,6 +752,9 @@ function verifyCampaignHistory(
     checkpoint = history.lobbyOrNull.checkpoint;
     history.checkpoint = checkpoint;
   }
+  advanceLifecycleBefore(Infinity);
+  if (history.lobbyOrNull !== null) history.lobbyOrNull = { ...history.lobbyOrNull, checkpoint };
+  history.lifecycleOrNull = lifecycle;
   if (!s.same(checkpoint, loadCampaignCheckpoint(db, source.scope.campaignId))) return s.fail();
   player.verifyLedger(db, source.scope.campaignId, history);
   return history;
@@ -814,7 +891,7 @@ export function readCampaignAdmissionAvailability(
         importedSources: [] as { sourceUuid: string; ownerDeviceId: string }[],
       };
     }
-    if (version !== 12 && version !== 13) return s.fail();
+    if (version !== 12 && version !== 13 && version !== 14) return s.fail();
     const source = readGmRequestReviewSource(db, scope, validate),
       history = verifyCampaignHistory(db, source, rules),
       releasedRequestIds: string[] = [];
@@ -1067,15 +1144,16 @@ export function commitAdmissionGmDecision(
           count += 1;
         }
       }
-      if (copies.length !== 0) {
+      const afterCheckpoint =
+        copies.length === 0 ? null : publicationCheckpoint(beforeCheckpoint, record);
+      if (afterCheckpoint !== null) {
         advanceRevisions(
           db,
           { entity: 'campaign', entityId: scope.campaignId },
           { stateChanged: true, projectionChanged: true, actorVisibilityChanged: true },
         );
         count += 1;
-        const afterCheckpoint = publicationCheckpoint(beforeCheckpoint, record),
-          event = publicationEvent(beforeCheckpoint, afterCheckpoint, record),
+        const event = publicationEvent(beforeCheckpoint, afterCheckpoint, record),
           eventJson = s.canonical(event);
         db.prepare('INSERT INTO campaign_admission_checkpoint_event VALUES (?,?,?,?,?,?,?)').run(
           scope.campaignId,
@@ -1099,7 +1177,17 @@ export function commitAdmissionGmDecision(
       // using the already replayed working prefix, whose rows this mutation never changes.
       const after = readDecision(
         db,
-        working.withCurrentPresentation(db, { ...review, editable: false }),
+        working.withCurrentPresentation(
+          db,
+          { ...review, editable: false },
+          afterCheckpoint === null
+            ? undefined
+            : {
+                before: beforeCheckpoint,
+                after: afterCheckpoint,
+                activePcCount: history.activePcCount,
+              },
+        ),
         rules,
       );
       s.guarded(db, guard, after, 'APPLY');
@@ -1131,8 +1219,10 @@ export const admissionDecisionStorage = {
     validate: CampaignPrivateOwnerValidator,
     rules: AdmissionPublicationRules,
   ): AdmissionHistory {
-    const source = readGmRequestReviewSource(db, scope, validate);
-    return verifyCampaignHistory(db, source, rules);
+    const { observed } = readGmRequestReviewSourceWith(db, scope, validate, (source) =>
+      verifyCampaignHistory(db, source, rules),
+    );
+    return observed;
   },
   event: publicationEvent,
 };

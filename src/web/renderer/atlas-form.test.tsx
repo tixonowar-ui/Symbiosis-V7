@@ -23,10 +23,18 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Exact literals are intentional: applied traceability requires every implemented form in a test. */
 const TEST_IMPLEMENTED_FORM_IDS = [
+  'NET-008',
+  'NET-009',
+  'NET-010',
   'CMP-007',
   'NET-016',
   'GM-001',
   'GRP-001',
+  'CMP-008',
+  'CMP-014',
+  'CMP-015',
+  'CMP-016',
+  'NET-023',
   'PLY-001',
   'NET-027',
   'NET-006',
@@ -245,9 +253,9 @@ describe('atlas implemented-form renderer', () => {
       if (form.tagName === 'DIALOG') dialogs += 1;
     }
 
-    // Atlas 1.8 delivers five lobby/PEACE screens; existing dialogs are unchanged.
-    expect(screens).toBe(69);
-    expect(dialogs).toBe(7);
+    // #174 adds CMP-008/016 and NET-008/009/010 screens, plus CMP-014/015/NET-023 dialogs.
+    expect(screens).toBe(74);
+    expect(dialogs).toBe(10);
   });
 
   it('renders APP-001 actions once and emits only its exact atlas transition', () => {

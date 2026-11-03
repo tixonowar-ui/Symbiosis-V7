@@ -1,8 +1,22 @@
-import { hasCampaignLobbySchema, readCampaignStartHeaderCheckpoint } from './campaign-lobby.js';
+import { campaignSettingsValue } from '@shared/campaign-lifecycle.js';
+import { readCampaignLifecycleLedger } from './campaign-lifecycle-ledger.js';
+import {
+  campaignCheckpointParts,
+  initialCampaignLifecycleState,
+  replayCampaignLifecycleEvent,
+} from './campaign-lifecycle-state.js';
+import { networkApplicationStorage as s } from './network-local-application.js';
+import {
+  hasCampaignLobbySchema,
+  readCampaignLobbyLedger,
+  readCampaignStartHeaderCheckpoint,
+} from './campaign-lobby.js';
 import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import {
   CampaignCreationStoreError,
+  readCampaignOwnerBinding,
+  validateOriginOwner,
   campaignCreationHash,
   readCampaignCreationOrigin,
   readHostedCampaignCreationOrigin,
@@ -20,6 +34,7 @@ export interface CurrentPausedCampaignHeader extends RevisionTriple {
   readonly campaignId: string;
   readonly title: string;
   readonly status: 'PAUSED' | 'HOSTING';
+  readonly firstStartCompleted: boolean;
   readonly activePlayerCapacity: number;
   readonly activePcCount: number;
   readonly checkpointSha256: string;
@@ -73,6 +88,7 @@ function header(
   db: Database.Database,
   campaignId: string,
   origin: CampaignCreationOrigin,
+  validatePrivateOwner: CampaignPrivateOwnerValidator,
 ): CurrentPausedCampaignHeader {
   const checkpoint = loadCampaignCheckpoint(db, campaignId);
   const snapshot = object(JSON.parse(checkpoint.snapshotJson) as unknown, [
@@ -83,19 +99,126 @@ function header(
   const status = campaign['lifecycleState'];
   if (campaign['campaignId'] !== campaignId || (status !== 'PAUSED' && status !== 'HOSTING'))
     return fail();
+  const owner = readCampaignOwnerBinding(
+    db,
+    origin.command.request.payload.gmLocalContextId,
+    campaignId,
+  );
+  const lifecycleEvents = readCampaignLifecycleLedger(db, campaignId);
+  let lifecycle = initialCampaignLifecycleState(origin.payload, owner.verifier);
+  let expectedPayload: unknown = origin.payload;
+  let expectedStatus: 'PAUSED' | 'HOSTING' = 'PAUSED';
+  let previous: typeof checkpoint | null = null;
+  let started = false;
   const start = hasCampaignLobbySchema(db)
-    ? readCampaignStartHeaderCheckpoint(db, campaignId, origin.payload)
-    : null;
-  if (start === null) {
+    ? readCampaignLobbyLedger(db, campaignId).find(
+        (e) => e.request.workflowCommandId === 'UI-CMD-CAMPAIGN-START',
+      )
+    : undefined;
+  const changes = [
+    ...lifecycleEvents.map((event) => ({
+      kind: 'LIFECYCLE' as const,
+      revision: event.receipt.campaignRevision,
+      before: event.beforeCheckpoint,
+      event,
+    })),
+    ...(start === undefined
+      ? []
+      : [
+          {
+            kind: 'START' as const,
+            revision: start.campaignRevision + 1,
+            before: start.beforeCheckpointOrNull ?? fail(),
+          },
+        ]),
+  ].sort((a, b) => a.revision - b.revision);
+  // With lifecycle evidence, every intervening revision must have an actual checkpoint event.
+  // Mechanics and predecessor hashes are independently rebuilt by the authoritative full fold.
+  if (lifecycleEvents.length !== 0) {
+    const admissionRows = db
+      .prepare(
+        'SELECT * FROM campaign_admission_checkpoint_event WHERE campaign_id=? ORDER BY state_revision',
+      )
+      .all(campaignId) as Record<string, unknown>[];
+    const revisions = changes.map((change) => change.revision);
+    for (const row of admissionRows) {
+      const record = s.object(s.checked(row));
+      if (
+        record['campaignId'] !== campaignId ||
+        record['stateRevision'] !== row['state_revision'] ||
+        (start !== undefined && s.integer(row['state_revision']) > start.campaignRevision)
+      )
+        return fail();
+      revisions.push(s.integer(row['state_revision']));
+    }
+    revisions.sort((a, b) => a - b);
     if (
-      status !== 'PAUSED' ||
-      campaignCreationHash(JSON.parse(text(campaign['payloadJson'])) as unknown) !==
-        campaignCreationHash(origin.payload)
+      revisions.length !== checkpoint.stateRevision ||
+      revisions.some((revision, index) => revision !== index + 1)
     )
       return fail();
-  } else if (
-    status !== 'HOSTING' ||
-    campaignCreationHash(checkpoint) !== campaignCreationHash(start)
+  }
+  for (const change of changes) {
+    const before = change.before;
+    const parts = campaignCheckpointParts(before);
+    if (
+      before.campaignId !== campaignId ||
+      before.stateRevision + 1 !== change.revision ||
+      before.projectionRevision !== before.stateRevision ||
+      before.actorVisibilityRevision !== before.stateRevision ||
+      !s.same(parts.payload, expectedPayload) ||
+      parts.campaign['lifecycleState'] !== expectedStatus
+    )
+      return fail();
+    if (
+      previous !== null &&
+      (before.stateRevision < previous.stateRevision ||
+        ((started || before.stateRevision === previous.stateRevision) && !s.same(before, previous)))
+    )
+      return fail();
+    if (change.kind === 'START') {
+      if (started) return fail();
+      previous = readCampaignStartHeaderCheckpoint(db, campaignId, expectedPayload) ?? fail();
+      started = true;
+    } else {
+      const replay = replayCampaignLifecycleEvent(
+        {
+          ownerDeviceId: owner.ownerDeviceId,
+          gmLocalContextId: owner.gmLocalContextId,
+          campaignId,
+        },
+        before,
+        lifecycle,
+        change.event,
+        {
+          validateSettings: (value) => {
+            campaignSettingsValue(value);
+          },
+          validateVerifier: (verifier) =>
+            validateOriginOwner(
+              db,
+              { ...owner, verifier, verifierSha256: campaignCreationHash(verifier) },
+              validatePrivateOwner,
+            ),
+        },
+      );
+      lifecycle = replay.state;
+      previous = replay.checkpoint;
+    }
+    const after = campaignCheckpointParts(previous);
+    expectedPayload = after.payload;
+    expectedStatus = after.campaign['lifecycleState'] as 'PAUSED' | 'HOSTING';
+  }
+  if (
+    status !== expectedStatus ||
+    !s.same(JSON.parse(text(campaign['payloadJson'])) as unknown, expectedPayload)
+  )
+    return fail();
+  if (
+    previous !== null &&
+    (checkpoint.stateRevision < previous.stateRevision ||
+      ((started || checkpoint.stateRevision === previous.stateRevision) &&
+        !s.same(checkpoint, previous)))
   )
     return fail();
   const copies = snapshot['campaignCharacterCopies'];
@@ -118,19 +241,20 @@ function header(
     if (lifecycle === 'ACTIVE') activePcCount += 1;
   }
   const source = origin.payload;
-  if (activePcCount > source.host.activePlayerCapacity) return fail();
+  if (activePcCount > lifecycle.activePlayerCapacity) return fail();
   return {
     campaignId,
-    title: source.metadata.title,
+    title: lifecycle.settings.title,
     status,
-    activePlayerCapacity: source.host.activePlayerCapacity,
+    firstStartCompleted: started,
+    activePlayerCapacity: lifecycle.activePlayerCapacity,
     activePcCount,
     checkpointSha256: createHash('sha256').update(checkpoint.snapshotJson, 'utf8').digest('hex'),
     baselineVersion: source.baselineVersion,
     bindConfiguration: {
-      hostAddress: source.host.hostAddress,
-      hostPort: source.host.hostPort,
-      networkInterface: source.host.networkInterface,
+      hostAddress: lifecycle.settings.network.hostAddress,
+      hostPort: lifecycle.settings.network.hostPort,
+      networkInterface: lifecycle.settings.network.networkInterface,
     },
     stateRevision: checkpoint.stateRevision,
     projectionRevision: checkpoint.projectionRevision,
@@ -152,6 +276,7 @@ export function readOwnedCurrentPausedCampaign(
       db,
       campaignId,
       readCampaignCreationOrigin(db, context, campaignId, validatePrivateOwner),
+      validatePrivateOwner,
     );
   });
 }
@@ -168,6 +293,7 @@ export function readHostedCurrentPausedCampaign(
       db,
       campaignId,
       readHostedCampaignCreationOrigin(db, campaignId, validatePrivateOwner),
+      validatePrivateOwner,
     );
   });
 }

@@ -1,3 +1,19 @@
+import {
+  decodeCampaignLobbyCheckCommand,
+  encodeCampaignLobbyCheckResponse,
+} from './campaign-connection-peer.js';
+import { campaignConnectionGate } from '@shared/campaign-lifecycle.js';
+import {
+  readCampaignConnectionStatus,
+  commitCampaignReconnect,
+} from '../persistence/campaign-lifecycle.js';
+import { readCampaignLifecycleLedger } from '../persistence/campaign-lifecycle-ledger.js';
+import {
+  decodeCampaignConnectionPeerCommand,
+  encodeCampaignConnectionPeerResponse,
+  type CampaignConnectionPeerCommand,
+  type CampaignConnectionPeerResponse,
+} from './campaign-connection-peer.js';
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
@@ -122,6 +138,7 @@ type Ack = Extract<DeviceAdmissionPeerResponse, { outcome: 'ACK' }>;
 interface Connection {
   readonly channel: CampaignPeerServerChannel;
   readonly handle: CampaignNetworkExecutionChannel;
+  gate: string | null;
   stage: Stage | null;
   task: Promise<void> | null;
 }
@@ -292,10 +309,103 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       peerIdentity: peer,
     };
   }
+  function connectionSource(c: Connection) {
+    const principal = authenticatedPrincipal(c);
+    const origin = readHostedCampaignCreationOrigin(
+      d.database,
+      principal.campaignId,
+      validateOwner,
+    );
+    return {
+      principal,
+      scope: {
+        ownerDeviceId: principal.hostOwnerDeviceId,
+        campaignId: principal.campaignId,
+        gmLocalContextId: origin.command.request.payload.gmLocalContextId,
+      },
+    };
+  }
+  function connectionStatus(c: Connection) {
+    const { principal, scope } = connectionSource(c);
+    return readCampaignConnectionStatus(
+      d.database,
+      scope,
+      principal,
+      validateOwner,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+    );
+  }
+  function currentGate(c: Connection): string | null {
+    const principal = authenticatedPrincipal(c);
+    // A brand-new application has no disconnect history yet and must retain its existing OPEN path.
+    if (
+      !readCampaignLifecycleLedger(d.database, principal.campaignId).some(
+        (e) =>
+          e.request.workflowCommandId === 'UI-CMD-CLIENT-DISCONNECT' &&
+          e.request.deviceId === principal.peerIdentity.ownerDeviceId,
+      )
+    )
+      return 'INITIAL';
+    return campaignConnectionGate(connectionStatus(c));
+  }
+  function connectionRpc(
+    c: Connection,
+    command: CampaignConnectionPeerCommand,
+  ): CampaignConnectionPeerResponse {
+    try {
+      if (command.operation === 'CAMPAIGN_CONNECTION_READ')
+        return {
+          schemaVersion: 1,
+          operation: command.operation,
+          outcome: 'STATUS',
+          status: connectionStatus(c),
+        };
+      const { principal, scope } = connectionSource(c);
+      const saved = commitCampaignReconnect(
+        d.database,
+        scope,
+        principal,
+        { commandId: command.commandId, disconnectCommandId: command.disconnectCommandId },
+        new Date().toISOString(),
+        validateOwner,
+        createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+        () => {
+          if (closed || c.channel.closed || !same(authenticatedPrincipal(c), principal))
+            fail('UNAVAILABLE');
+        },
+      );
+      const latest = saved.status.disconnectOrNull;
+      // Replaying an older retry never releases a subsequent disconnect or revives an old channel.
+      if (
+        latest?.disconnectCommandId === saved.receipt.disconnectCommandId &&
+        latest.retryReceiptOrNull?.commandId === saved.receipt.commandId
+      )
+        c.gate = campaignConnectionGate(saved.status);
+      return {
+        schemaVersion: 1,
+        operation: command.operation,
+        outcome: 'RETRIED',
+        status: saved.status,
+        receipt: saved.receipt,
+      };
+    } catch (error) {
+      return {
+        schemaVersion: 1,
+        operation: command.operation,
+        outcome: 'REFUSED',
+        code:
+          error instanceof NetworkApplicationStoreError &&
+          (error.code === 'IDEMPOTENCY_CONFLICT' || error.code === 'STALE_REVISION')
+            ? error.code
+            : 'UNAVAILABLE',
+      };
+    }
+  }
   function source(c: Connection): {
     principal: HostedNetworkPrincipal;
     campaign: CurrentPausedCampaignHeader;
   } {
+    if (c.gate === null || c.gate !== currentGate(c)) return fail('UNAVAILABLE');
     const principal = authenticatedPrincipal(c),
       campaign = readHostedCurrentPausedCampaign(d.database, principal.campaignId, validateOwner);
     requireCompatibleBaseline(campaign.baselineVersion);
@@ -1102,13 +1212,45 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     } catch {
       return Promise.reject(new DeviceAdmissionPeerRuntimeError('INVALID_CHANNEL'));
     }
-    const c: Connection = { channel, handle, stage: null, task: null };
+    const c: Connection = { channel, handle, gate: null, stage: null, task: null };
     connections.add(c);
     c.task = (async () => {
       try {
-        source(c);
+        c.gate = currentGate(c);
         while (!closed && !channel.closed) {
           const request = await channel.receiveRequest();
+          const connectionCommand = decodeCampaignConnectionPeerCommand(request.bodyJson);
+          if (connectionCommand !== null) {
+            d.executor.assertChannel(handle);
+            // This fully synchronous read observes committed state and cannot overlap a writer.
+            // Enqueuing each poll as pending work would make safe-boundary CTAs flicker.
+            // Mutations and staged transfers still count toward lifecycle guards.
+            const result =
+              connectionCommand.operation === 'CAMPAIGN_CONNECTION_READ'
+                ? connectionRpc(c, connectionCommand)
+                : await d.executor.run(handle, () => connectionRpc(c, connectionCommand));
+            await channel.respond(
+              request.sequenceNumber,
+              encodeCampaignConnectionPeerResponse(result),
+            );
+            continue;
+          }
+          if (c.gate === null || c.gate !== currentGate(c)) return fail('UNAVAILABLE');
+          const lobbyCheck = decodeCampaignLobbyCheckCommand(request.bodyJson);
+          if (lobbyCheck !== null) {
+            d.executor.assertChannel(handle);
+            // UNCHANGED allocates nothing; CHANGED materializes an immutable PUBLICATION
+            // under the same full authority/lease fold, without another BEGIN or SQL write.
+            const result = admission.checkLobby(c, lobbyCheck);
+            await channel.respond(
+              request.sequenceNumber,
+              encodeCampaignLobbyCheckResponse(result, {
+                maxPublicationBytes: admissionLimits.maxPublicationBytes,
+                maxChunkBytes: admissionLimits.maxChunkBytes,
+              }),
+            );
+            continue;
+          }
           const capacityCommand = decodeAdmissionCapacityCommand(request.bodyJson);
           if (capacityCommand !== null) {
             const result = await d.executor.run(handle, () =>
@@ -1119,9 +1261,16 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
           }
           const admissionCommand = decodeAdmissionPeerCommand(request.bodyJson);
           if (admissionCommand !== null) {
-            const result = await d.executor.run(handle, () =>
-              admission.execute(c, admissionCommand),
-            );
+            d.executor.assertChannel(handle);
+            // These operations materialize/read immutable owner snapshots synchronously.
+            // Accepted decisions, Ready and recovery still execute in the mutation queue.
+            const readOnly =
+              admissionCommand.operation === 'ADMISSION_LOBBY_BEGIN' ||
+              admissionCommand.operation === 'ADMISSION_PUBLICATION_BEGIN' ||
+              admissionCommand.operation === 'ADMISSION_PUBLICATION_CHUNK';
+            const result = readOnly
+              ? admission.execute(c, admissionCommand)
+              : await d.executor.run(handle, () => admission.execute(c, admissionCommand));
             await channel.respond(
               request.sequenceNumber,
               encodeAdmissionPeerResponse(result, {
@@ -1238,6 +1387,8 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
               !same(connection.channel.deviceIdentity, expected.peerIdentity)
             )
               return false;
+            if (connection.gate === null || connection.gate !== currentGate(connection))
+              return false;
             return same(source(connection).principal, expected);
           });
         return Object.freeze({
@@ -1249,6 +1400,62 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     );
   }
 
+  function prepareDisconnect(campaignId: string, deviceId: string) {
+    const matching = () =>
+      [...connections].filter(
+        (c) =>
+          !c.channel.closed &&
+          c.handle.campaignId === campaignId &&
+          authenticatedPrincipal(c).peerIdentity.ownerDeviceId === deviceId,
+      );
+    const captured = matching();
+    if (
+      closed ||
+      captured.length === 0 ||
+      captured.every((c) => c.gate === null || c.gate !== currentGate(c))
+    )
+      return fail('UNAVAILABLE');
+    const assertCurrent = () => {
+      const active = matching(),
+        counts = d.executor.pendingCounts(campaignId, deviceId);
+      if (
+        closed ||
+        active.length !== captured.length ||
+        active.some((c) => !captured.includes(c)) ||
+        counts.queuedCommandCount !== 0 ||
+        counts.executingCommandCount !== 0 ||
+        d.executor.pendingTransferCount(campaignId, deviceId) !== 0
+      )
+        fail('UNAVAILABLE');
+    };
+    assertCurrent();
+    return {
+      assertCurrent,
+      retire: (disconnectCommandId: string) => {
+        const latest = readCampaignLifecycleLedger(d.database, campaignId).findLast(
+          (e) =>
+            e.request.workflowCommandId === 'UI-CMD-CLIENT-DISCONNECT' &&
+            e.request.deviceId === deviceId,
+        );
+        if (latest?.request.commandId !== disconnectCommandId) fail('UNAVAILABLE');
+        let failed = false;
+        for (const c of captured) {
+          c.gate = null;
+          try {
+            d.executor.closeChannel(c.handle);
+          } catch {
+            failed = true;
+          }
+          try {
+            c.channel.close();
+          } catch {
+            failed = true;
+          }
+        }
+        if (failed) throw new DeviceAdmissionPeerRuntimeError('CHANNEL_FAILED');
+      },
+    };
+  }
   function close(): Promise<void> {
     if (closePromise !== undefined) return closePromise;
     closed = true;
@@ -1267,6 +1474,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
     close,
     requestConnectionFacts,
     requestConnectionFactsFromSource,
+    prepareDisconnect,
     conflictingOperationPending(campaignId: string): boolean {
       if (closed) throw new DeviceAdmissionPeerRuntimeError('CLOSED');
       return (

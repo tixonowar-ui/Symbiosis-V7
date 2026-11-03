@@ -1,3 +1,11 @@
+import { admissionJsonEqual } from './campaign-admission-codec.js';
+import {
+  campaignLifecycleGmAnchorValue,
+  campaignLifecycleGmProjectionValue,
+  isCampaignLifecycleForm,
+} from './campaign-lifecycle.js';
+import { isCampaignLobbyGmForm } from './campaign-lobby.js';
+import { campaignLobbyGmProjectionValue } from './campaign-lobby-presentation.js';
 import { redactProtocolInputRefusal, wireCodecPrimitives } from './wire-codec.js';
 import type { DecodeResult, EncodeResult } from './wire-protocol.js';
 import { encodeHostMessageV2 } from './wire-v2-codec.js';
@@ -898,11 +906,53 @@ export function networkGmRequestHostValue(
     '$.presentation.layers',
   ) as readonly PresentedLayerForm[];
   const base = record(presentation['base'], '$.presentation.base');
+  const rawPayload = record(base['roleFilteredPayload'], '$.roleFilteredPayload');
+  let payloadValue = rawPayload;
+  if (layers.some((layer) => Object.hasOwn(layer.roleFilteredPayload, 'currentCampaignLifecycle')))
+    invalid('$.presentation.layers', 'no lifecycle anchor on a layer', null);
+  if (Object.hasOwn(rawPayload, 'currentCampaignLifecycle')) {
+    const { currentCampaignLifecycle, ...payload } = rawPayload;
+    const anchor = campaignLifecycleGmAnchorValue(currentCampaignLifecycle);
+    if (
+      anchor.contextId !== scope.gmLocalContextId ||
+      anchor.campaignId !== scope.campaignId ||
+      anchor.contextId !==
+        payload[base['formId'] === 'CMP-006' ? 'gmLocalContextId' : 'contextId'] ||
+      anchor.campaignId !== payload['campaignId'] ||
+      AXES.some((axis) => anchor[axis] !== current[axis])
+    )
+      invalid('$.currentCampaignLifecycle', 'current scoped GM lifecycle proof', null);
+    if (
+      typeof base['formId'] === 'string' &&
+      isCampaignLifecycleForm(base['formId']) &&
+      [
+        'campaignRevision',
+        'settingsRevision',
+        'campaignStatus',
+        'pauseReasonOrNull',
+        'firstStartCompleted',
+      ].some(
+        (key) =>
+          payload[key] !== record(currentCampaignLifecycle, '$.currentCampaignLifecycle')[key],
+      )
+    )
+      invalid('$.currentCampaignLifecycle', 'matching lifecycle form', null);
+    if (
+      typeof base['formId'] === 'string' &&
+      isCampaignLobbyGmForm(base['formId']) &&
+      (payload['campaignStatus'] !== anchor.campaignStatus ||
+        (payload['panelVariant'] === 'STARTED_PEACE') !== anchor.firstStartCompleted)
+    )
+      invalid('$.currentCampaignLifecycle', 'matching campaign panel', null);
+    payloadValue = payload;
+  }
+  const panel = typeof base['formId'] === 'string' && isCampaignLobbyGmForm(base['formId']);
+  const lifecycle = typeof base['formId'] === 'string' && isCampaignLifecycleForm(base['formId']);
   const admission = typeof base['formId'] === 'string' && isAdmissionGmForm(base['formId']);
-  if (!admission && layers.length !== 0)
+  if (!admission && !lifecycle && layers.length !== 0)
     invalid('$.presentation.layers', 'empty GM queue layers', null);
   if (base['formId'] === 'NET-017') {
-    const payload = networkGmRequestProjectionValue(base['roleFilteredPayload']);
+    const payload = networkGmRequestProjectionValue(payloadValue);
     literal(
       payload.contextId,
       scope.gmLocalContextId,
@@ -928,13 +978,43 @@ export function networkGmRequestHostValue(
       currentQueue,
       '$.presentation.base.roleFilteredPayload.requestQueueRevision',
     );
-  } else if (base['formId'] === 'CMP-006')
-    gmQueueCampaignPayload(base['roleFilteredPayload'], scope);
+  } else if (base['formId'] === 'CMP-006') gmQueueCampaignPayload(payloadValue, scope);
   else if (admission) {
-    admissionGmPresentationValue(base as unknown as PresentedBaseForm, layers, current);
+    admissionGmPresentationValue(
+      { ...base, roleFilteredPayload: payloadValue } as unknown as PresentedBaseForm,
+      layers,
+      current,
+    );
     const payload = record(base['roleFilteredPayload'], '$.roleFilteredPayload');
     literal(payload['contextId'], scope.gmLocalContextId, '$.contextId');
     literal(payload['campaignId'], scope.campaignId, '$.campaignId');
+  } else if (panel || lifecycle) {
+    if (!Object.hasOwn(rawPayload, 'currentCampaignLifecycle'))
+      invalid('$.currentCampaignLifecycle', 'current GM lifecycle proof', null);
+    const parsed = panel
+      ? campaignLobbyGmProjectionValue(payloadValue)
+      : campaignLifecycleGmProjectionValue(payloadValue);
+    if (
+      parsed.contextId !== scope.gmLocalContextId ||
+      parsed.campaignId !== scope.campaignId ||
+      AXES.some((axis) => parsed[axis] !== current[axis])
+    )
+      invalid('$.roleFilteredPayload', 'current scoped campaign panel', null);
+    if (lifecycle) {
+      if (
+        (base['formId'] !== 'CMP-008' && base['formId'] !== 'CMP-016') ||
+        layers.length > 1 ||
+        (base['formId'] === 'CMP-016' && layers.length !== 0)
+      )
+        invalid('$.presentation', 'lifecycle base with at most one dialog', null);
+      for (const layer of layers) {
+        if (!['CMP-014', 'CMP-015', 'NET-023'].includes(layer.formId))
+          invalid('$.presentation.layers', 'lifecycle dialog', null);
+        const dialog = campaignLifecycleGmProjectionValue(layer.roleFilteredPayload);
+        if (!admissionJsonEqual(dialog, parsed))
+          invalid('$.presentation.layers', 'same lifecycle context', null);
+      }
+    }
   } else return unrecognized('$.presentation.base.formId', null);
   const bindings = list(base['routeBindings'], '$.presentation.base.routeBindings');
   if (bindings.length !== 1)

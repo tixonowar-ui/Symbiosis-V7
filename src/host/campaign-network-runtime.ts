@@ -128,8 +128,8 @@ export function createCampaignNetworkRuntime(d: {
     const offers: DiscoveredCampaign[] = [];
     for (const id of published) {
       if (d.bind.endpointForCampaign(id) === null) continue;
-      const campaign = current(id),
-        config = campaign.bindConfiguration;
+      const config = d.bind.configurationForCampaign(id);
+      if (config === null) continue;
       if (config.networkInterface !== selected.networkInterface) continue;
       const address = parseCampaignLanAddress(
         `http://${config.hostAddress.includes(':') ? `[${config.hostAddress}]` : config.hostAddress}:${String(config.hostPort)}`,
@@ -169,10 +169,14 @@ export function createCampaignNetworkRuntime(d: {
     if (closed) throw new CampaignNetworkRuntimeError('CLOSED');
     try {
       const row = current(id);
-      const recovery = await d.bind.recover(id, {
-        ...row.bindConfiguration,
-        activePlayerCapacity: row.activePlayerCapacity,
-      });
+      // Settings describe the next listener. Reopening a panel must not rebind a held lease.
+      const recovery: CampaignBindRecovery =
+        d.bind.configurationForCampaign(id) !== null
+          ? { status: 'RESERVED', reasonCode: null }
+          : await d.bind.recover(id, {
+              ...row.bindConfiguration,
+              activePlayerCapacity: row.activePlayerCapacity,
+            });
       if (closed) throw new CampaignNetworkRuntimeError('CLOSED');
       if (recovery.status !== 'RESERVED') {
         endpoint.unpublishCampaign(id);
@@ -277,9 +281,35 @@ export function createCampaignNetworkRuntime(d: {
     publishCampaign,
     start,
     discover,
-    conflictingOperationPending(campaignId: string): boolean {
-      return executor.hasPending(campaignId) || receiver.hasStagedUpload(campaignId);
+    availableNetworkInterfaces() {
+      if (closed) throw new CampaignNetworkRuntimeError('CLOSED');
+      return d.bind.interfaces();
     },
+    heldNetworkConfiguration(campaignId: string) {
+      if (closed) throw new CampaignNetworkRuntimeError('CLOSED');
+      const config = d.bind.configurationForCampaign(campaignId);
+      return config === null
+        ? null
+        : {
+            hostAddress: config.hostAddress,
+            hostPort: config.hostPort,
+            networkInterface: config.networkInterface,
+          };
+    },
+    operationCounts(campaignId: string, deviceIdOrNull: string | null = null) {
+      const commands = executor.pendingCounts(campaignId, deviceIdOrNull);
+      const stagedTransferCount = executor.pendingTransferCount(campaignId, deviceIdOrNull);
+      return {
+        ...commands,
+        stagedTransferCount,
+        pendingOperationCount:
+          commands.queuedCommandCount + commands.executingCommandCount + stagedTransferCount,
+      };
+    },
+    conflictingOperationPending(campaignId: string): boolean {
+      return executor.hasPending(campaignId) || executor.pendingTransferCount(campaignId) > 0;
+    },
+    prepareDisconnect: receiver.prepareDisconnect,
     requestConnectionFacts: receiver.requestConnectionFacts,
     requestConnectionFactsFromSource: receiver.requestConnectionFactsFromSource,
     close,
