@@ -745,21 +745,41 @@ let canonicalStrings: {
   remaining: number;
 } | null = null;
 function canonical(value: unknown): string {
+  const parts: string[] = [];
+  appendCanonical(value, parts);
+  return parts.join('');
+}
+// Joining each complete subtree repeatedly copies its already encoded descendants.
+// This buffer belongs to one call; descriptor checks still precede value reads.
+function appendCanonical(value: unknown, parts: string[]): void {
   if (typeof value === 'string') {
     const cache = canonicalStrings;
-    if (cache === null || value.length < 1024) return JSON.stringify(value);
+    if (cache === null || value.length < 1024) {
+      parts.push(JSON.stringify(value));
+      return;
+    }
     const known = cache.values.get(value);
-    if (known !== undefined) return known;
+    if (known !== undefined) {
+      parts.push(known);
+      return;
+    }
     const encoded = JSON.stringify(value);
     const bytes = (value.length + encoded.length) * 2;
     if (bytes <= cache.remaining) {
       cache.values.set(value, encoded);
       cache.remaining -= bytes;
     }
-    return encoded;
+    parts.push(encoded);
+    return;
   }
-  if (value === null || typeof value === 'boolean') return JSON.stringify(value);
-  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
+  if (value === null || typeof value === 'boolean') {
+    parts.push(JSON.stringify(value));
+    return;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    parts.push(JSON.stringify(value));
+    return;
+  }
   if (Array.isArray(value)) {
     const length = value.length;
     const ownKeys = new Set(Reflect.ownKeys(value));
@@ -771,13 +791,23 @@ function canonical(value: unknown): string {
       if (descriptor === undefined || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable)
         return fail();
     }
-    return `[${Array.from({ length }, (_, i) => canonical(value[i])).join(',')}]`;
+    parts.push('[');
+    Array.from({ length }, (_, i) => {
+      if (i !== 0) parts.push(',');
+      appendCanonical(value[i], parts);
+    });
+    parts.push(']');
+    return;
   }
   const row = object(value);
-  return `{${Object.keys(row)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonical(row[key])}`)
-    .join(',')}}`;
+  const keys = Object.keys(row).sort();
+  parts.push('{');
+  for (const [index, key] of keys.entries()) {
+    if (index !== 0) parts.push(',');
+    parts.push(JSON.stringify(key), ':');
+    appendCanonical(row[key], parts);
+  }
+  parts.push('}');
 }
 const sha = (value: string): string => {
   const cache = canonicalStrings;
