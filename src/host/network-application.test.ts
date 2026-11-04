@@ -1374,7 +1374,7 @@ describe('local network application with durable SQLite and real Node peers', ()
     expect(
       h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(submit.commandId),
     ).toEqual(originalHostedSubmit);
-  }, 30000);
+  }, 60000);
 
   it('binds an entry before the first NAV fault and refuses a changed envelope after reopen without binding the connection', async () => {
     const p = await client();
@@ -2664,7 +2664,7 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           await select(first as string);
         }
       },
-      scenario === 'MIXED' ? 30000 : 10000,
+      scenario === 'MIXED' ? 60000 : 30000,
     );
     beforeEach(async () => {
       await gmNav('NET-019', 'NET-019::CTA::002');
@@ -2918,7 +2918,7 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           const scene = campaignPeaceProjectionValue(p.payload()).sceneId;
           await p.restart();
           expect(campaignPeaceProjectionValue(p.payload()).sceneId).toBe(scene);
-        }, 30000);
+        }, 60000);
         it('keeps the blocked prepared tab in NET-006 while the original ACTIVE tab enters PEACE and both restore', async () => {
           child = await p.additionalOwnerView(tabScope);
           expect(campaignLobbyPlayerProjectionValue(payload()).lobby.campaignStarted).toBe(true);
@@ -3306,12 +3306,12 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                   () =>
                     campaignLobbyPlayerProjectionValue(p.payload()).lobby.initialCampaignTimeOrNull
                       ?.campaignTimestamp,
-                  { timeout: 10000 },
+                  { timeout: 30000 },
                 )
                 .toBe(2707);
 
               source = campaignLobbyPlayerProjectionValue(p.payload()).lobby.selectedCopy;
-            }, 30000);
+            }, 60000);
             beforeEach(async () => {
               await ready(true);
               expect(p.sent[0]?.messageType).toBe('command.result');

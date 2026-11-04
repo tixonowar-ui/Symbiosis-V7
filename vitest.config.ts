@@ -36,7 +36,8 @@ export default defineConfig({
       {
         resolve: { alias },
         test: {
-          testTimeout: DEFAULT_TEST_TIMEOUT_MS,
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
           name: 'node',
           environment: 'node',
           include: [

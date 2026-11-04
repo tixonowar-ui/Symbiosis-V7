@@ -1,5 +1,22 @@
 # Передача контекста — 2026-11-04
 
+## Принятые бюджеты проверок — 2026-11-04 UTC
+
+Владелец принял proposal 91d5e348: Node test/hook 30/30 с, web test 15 с;
+точечные admission/restart/initial-time/BIND ACK overrides, IPC READY 60 с
+и обычные network E2E 180 с. PEACE 180 / LIFECYCLE 360 задаются до запуска
+процессов. [Полный scope и история](../process/ci-checks.md#бюджеты-vitest-и-network-e2e).
+CI 60 минут, workers, retries, assertions и остальные явные бюджеты сохранены.
+
+Clean10 на exact9d8af1a с прежними лимитами завершился FAIL: 5020 PASS / 1 FAIL,
+без skipped; 186 файлов прошли, 1 отказал. Vitest — 1582,08 с. Единственный
+отказ — beforeEach в campaign-creation.test.ts:773, Hook timed out in 10000ms.
+Установка, import и предварительные проверки прошли; validate, import:verify
+и E2E не достигнуты. Новый бюджет этим прогоном не проверялся.
+Новый committed SHA потребует независимого review, полного clean gate и CI.
+Предыдущие отказы сохраняются; #204 после #186 должна сократить стоимость
+полного цикла PR, а не завершиться одним увеличением deadline.
+
 ## Исторический fixture #186 и clean09 — 2026-11-04
 
 Clean09 exact1092 завершился FAIL: 4933 PASS / 2 FAIL, без skipped; оба отказа

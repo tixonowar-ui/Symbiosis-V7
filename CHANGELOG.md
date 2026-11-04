@@ -9,6 +9,12 @@
 
 ### Добавлено
 
+- **2026-11-04 UTC, бюджеты проверок:** по явному решению владельца Node Vitest
+  получает test/hook 30/30 с; web сохраняет test 15 с. Для отдельных admission,
+  initial-time, BIND ACK и network E2E принят ограниченный запас; PEACE/LIFECYCLE
+  задают прежние бюджеты до запуска процессов. [Точный scope](docs/process/ci-checks.md#бюджеты-vitest-и-network-e2e).
+  CI 60 минут, workers, retries и assertions прежние; #204 остаётся открытой.
+
 - **2026-11-04, issue #186 (source):** Atlas 1.10 закрывает согласованные
   sex/mass/art, NPC OPEN→полный wizard→COMMIT N+1 и bound one-shot/receipt
   channel версии CUSTOM_MONSTER. Добавлены две утверждённые PNG и явные
