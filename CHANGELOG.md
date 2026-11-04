@@ -17,6 +17,9 @@
   механические каталоги и старые FINAL/receipts. Полные JSON/Markdown seals
   и negative mutations защищают зеркала. [ADR 0077](docs/adr/0077-gm-entity-source-closure.md).
   Runtime controls остаются отдельными #187/#188; #113 этим не закрывается.
+  Проверка всех supplied hashes использует один private буфер 1 МиБ на загрузку
+  baseline, сохраняя прежний верхний предел размера файла и все guards.
+  Это ограничивает буфер чтения; устранение timeout из #204 не заявляется.
 
 - **2026-11-03, CI:** общий предел существующего Windows job `verify` увеличен
   с 30 до 60 минут после прерывания Tests общим deadline в run 41643613044.
