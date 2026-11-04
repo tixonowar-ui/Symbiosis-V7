@@ -1019,12 +1019,13 @@
   },
   {
     "alternatives": [
-      "Создание новой версии полного листа сохраняет старую; активный бой использует закреплённый snapshot.",
+      "Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot. Sole current authenticated campaign GM; UI-CMD-NPC-NEW-VERSION phase=COMMIT only from NPC-017 with host-bound APPEND_N_PLUS_ONE attempt; expectedCurrentVersion and attemptRevision are current; all eight stages, sex/race/mass and resolved art validate. Atomically append the full N+1 snapshot/history to the same npcUuid; prior versions and combat pins remain unchanged.",
       "Дублирование NPC-008 создаёт новый UUID."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "NPC-009/010 блокируются при participant/target/pending-source ссылках; reconnect не удваивает экземпляр."
+      "NPC-009/010 блокируются при participant/target/pending-source ссылках; reconnect не удваивает экземпляр.",
+      "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts."
     ],
     "formIds": [
       "NPC-001",
@@ -1072,14 +1073,14 @@
           "NPC-002"
         ],
         "guards": "Имя/название, описание, арт, принадлежность и роль.",
-        "result": "Draft NPC UUID.",
+        "result": "Bound technical full-edit attempt; no persistent NPC UUID/version/history is created at navigation.",
         "state": "IDENTITY"
       },
       {
         "formIds": [
           "NPC-011"
         ],
-        "guards": "Допустимые раса/класс/анатомия по старшим реестрам.",
+        "guards": "Допустимые раса/класс/анатомия по старшим реестрам; обязательные sex и massKg НПС валидируются по #113: PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg, границы включительные, шаг 0.1kg.",
         "result": "Валидная персонажная схема.",
         "state": "SCHEMA"
       },
@@ -1127,15 +1128,15 @@
         "formIds": [
           "NPC-017"
         ],
-        "guards": "Все предыдущие этапы валидны; UI-CMD-NPC-COMMIT-V1 выполняется один раз.",
-        "result": "Постоянный NPC UUID, version=1, history v1.",
+        "guards": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима.",
+        "result": "Получена server-confirmed идемпотентная квитанция соответствующего режима: CREATE_V1 version=1 либо APPEND_N_PLUS_ONE version=N+1 того же npcUuid.",
         "state": "COMMIT"
       },
       {
         "formIds": [
           "NPC-003"
         ],
-        "guards": "Получена server-confirmed идемпотентная квитанция commit.",
+        "guards": "Получена server-confirmed идемпотентная квитанция соответствующего режима: CREATE_V1 version=1 либо APPEND_N_PLUS_ONE version=N+1 того же npcUuid.",
         "result": "Read-only лист сохранённого NPC.",
         "state": "RESULT"
       }
@@ -1292,11 +1293,14 @@
   {
     "alternatives": [
       "Canonical monsters read-only.",
-      "System-defined symbiotic monsters не являются допустимым обычным symbiont choice."
+      "System-defined symbiotic monsters не являются допустимым обычным symbiont choice.",
+      "Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA.",
+      "Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Попытка inventory отклоняется до создания container/item; one-shot receipt survives reconnect."
+      "Попытка inventory отклоняется до создания container/item; one-shot receipt survives reconnect.",
+      "CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt."
     ],
     "formIds": [
       "ENM-011",
@@ -1370,7 +1374,7 @@
       "MON-091",
       "SYM-001"
     ],
-    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
+    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine. Exception scoped to the CUSTOM_MONSTER child ENM-018/019: return to its host-bound attempt remains available after a committed roll, preserving that receipt and spent right; this is not rollback or reroll.",
     "steps": [
       {
         "formIds": [
@@ -1386,8 +1390,8 @@
           "ENM-018",
           "ENM-019"
         ],
-        "guards": "Семь baseStats 1–35; 7×R20 только один раз, затем ручная правка.",
-        "result": "Stats fixed/editable without reroll.",
+        "guards": "Семь baseStats 1–35; 7×R20 только один раз, затем ручная правка. Creation origin ENM-012; version origin ENM-017; unopened and committed-receipt paths have distinct guards.",
+        "result": "Immutable original RandomStatsReceipt; manually editable candidate without reroll; bound origin restored.",
         "state": "STATS_GENERATE"
       },
       {
@@ -1395,7 +1399,7 @@
           "ENM-013",
           "ENM-014"
         ],
-        "guards": "Положительные mass 0,1, age/baseMaxHP/naturalArmor; одна базовая MELEE атака.",
+        "guards": "CUSTOM_MONSTER massKg=5..10000kg включительно с шагом 0.1kg; существующие положительные age/baseMaxHP/naturalArmor; одна базовая MELEE атака.",
         "result": "Валидная физика.",
         "state": "PHYSICS_ATTACK"
       },
@@ -6116,11 +6120,13 @@
   },
   {
     "alternatives": [
-      "Active combat keeps its pinned snapshot while a later version/archive is created."
+      "Active combat keeps its pinned snapshot while a later version/archive is created.",
+      "NPC-003/NPC-007 phase=OPEN continues the complete J-NPC-CREATE eight-stage wizard; only NPC-017 phase=COMMIT appends N+1. Owner decision #186 C: the host-bound technical attempt carries campaignId, npcDraftId, attemptRevision and editMode=CREATE_V1|APPEND_N_PLUS_ONE. APPEND_N_PLUS_ONE additionally binds npcUuid and expectedCurrentVersion to the selected current snapshot. The client cannot select or change this mode/binding. All eight wizard stages preserve it; cancel before final commit creates no NPC version or history entry."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Reference blocker prevents delete before first write; reconnect returns the same blocker set."
+      "Reference blocker prevents delete before first write; reconnect returns the same blocker set.",
+      "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts."
     ],
     "formIds": [
       "NPC-003",
@@ -6172,11 +6178,14 @@
   },
   {
     "alternatives": [
-      "Historical version is viewable but cannot be selected for a new runtime instance."
+      "Historical version is viewable but cannot be selected for a new runtime instance.",
+      "Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA.",
+      "Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Reconnect restores currentVersionId and pending full-version draft without changing templates."
+      "Reconnect restores currentVersionId and pending full-version draft without changing templates.",
+      "CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt."
     ],
     "formIds": [
       "ENM-001",
@@ -6187,7 +6196,9 @@
       "ENM-020",
       "ENM-017",
       "ENM-021",
-      "ENM-022"
+      "ENM-022",
+      "ENM-018",
+      "ENM-019"
     ],
     "id": "J-TEMPLATE-LIFECYCLE",
     "operationIds": [
@@ -6225,7 +6236,7 @@
       "CORE-220",
       "MON-088"
     ],
-    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
+    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine. Exception scoped to the CUSTOM_MONSTER child ENM-018/019: return to its host-bound attempt remains available after a committed roll, preserving that receipt and spent right; this is not rollback or reroll.",
     "steps": [
       {
         "formIds": [
@@ -6246,7 +6257,8 @@
     ],
     "title": "System template, version history и safe catalog boundaries",
     "workflowCommandIds": [
-      "UI-CMD-ENEMY-NEW-VERSION"
+      "UI-CMD-ENEMY-NEW-VERSION",
+      "UI-CMD-MONSTER-STATS-ROLL-ONCE"
     ]
   },
   {

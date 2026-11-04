@@ -1,0 +1,8 @@
+{
+  "assets": 8,
+  "mediaDir": "generated/media/gm-entity-portraits",
+  "reusedLocalCharacterAssets": 6,
+  "source": "artifacts/gm-entity-portraits/manifest.json",
+  "suppliedEnemyAssets": 2,
+  "totalNewMediaBytes": 988713
+}

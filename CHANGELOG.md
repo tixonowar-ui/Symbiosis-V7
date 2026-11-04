@@ -9,6 +9,15 @@
 
 ### Добавлено
 
+- **2026-11-04, issue #186 (source):** Atlas 1.10 закрывает согласованные
+  sex/mass/art, NPC OPEN→полный wizard→COMMIT N+1 и bound one-shot/receipt
+  channel версии CUSTOM_MONSTER. Добавлены две утверждённые PNG и явные
+  восемь mappings с переиспользованием шести NPC-портретов; импорт проверяет
+  точные bytes/ключи. B0–B4→B5 допускает только три новых art paths, сохраняя
+  механические каталоги и старые FINAL/receipts. Полные JSON/Markdown seals
+  и negative mutations защищают зеркала. [ADR 0077](docs/adr/0077-gm-entity-source-closure.md).
+  Runtime controls остаются отдельными #187/#188; #113 этим не закрывается.
+
 - **2026-11-03, CI:** общий предел существующего Windows job `verify` увеличен
   с 30 до 60 минут после прерывания Tests общим deadline в run 41643613044.
   Состав проверок, required checks, индивидуальные лимиты, workers, retries

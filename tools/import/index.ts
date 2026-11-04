@@ -8,6 +8,7 @@
  * and is not. Everything downstream fails closed — see tools/import/lib/fail.ts.
  */
 import { describeFailure, verify } from '../checksums/manifest.js';
+import { importGmEntityPortraits } from './gm-entity-portraits.js';
 import { importAtlas } from './atlas.js';
 import { importCharacter } from './character.js';
 import { importBestiary } from './bestiary.js';
@@ -87,6 +88,9 @@ async function main(): Promise<number> {
       `(${(portraits.mediaBytes / 1024).toFixed(0)} KiB)`,
   );
 
+  const gmPortraits = await importGmEntityPortraits();
+  console.log(`GM portraits: ${String(gmPortraits.assets)} assets (six reused, two supplied)`);
+
   const atlas = await importAtlas();
   console.log(`atlas:     ${String(atlas.formIds.length)} forms`);
 
@@ -108,6 +112,7 @@ async function main(): Promise<number> {
     ...bestiary.files,
     ...sentient.files,
     ...portraits.files,
+    ...gmPortraits.files,
     ...atlas.files,
     ...qna.files,
     seed.file,
@@ -121,6 +126,7 @@ async function main(): Promise<number> {
     bestiary.bytesWritten +
     sentient.bytesWritten +
     portraits.bytesWritten +
+    gmPortraits.bytesWritten +
     atlas.bytesWritten +
     qna.bytesWritten +
     seed.bytesWritten;

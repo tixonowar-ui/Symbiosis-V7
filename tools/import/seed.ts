@@ -26,6 +26,7 @@ export const SPEC_META_PATHS = [
   'bestiary/meta.json',
   'character/meta.json',
   'effects/meta.json',
+  'gm-entity-portraits/meta.json',
   'items/meta.json',
   'local-character-portraits/meta.json',
   'qna/meta.json',
@@ -49,11 +50,11 @@ export const SKIPPED_INDEX_PATHS = [
 
 /** Input totals; source arrays count as data, while lookup projections stay skipped. */
 const EXPECTED = {
-  files: 129,
-  arrayFiles: 114,
-  // ADR 0075 adds two transitions, one workflow and one QA row to Atlas 1.8.
-  rows: 20_322,
-  metadataFiles: 9,
+  files: 131,
+  arrayFiles: 115,
+  // ADR 0077 adds six transition rows and eight portrait mappings (CTA rows are nested) to Atlas 1.9.
+  rows: 20_336,
+  metadataFiles: 10,
   skippedIndexes: 6,
 } as const;
 

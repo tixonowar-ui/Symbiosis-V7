@@ -2315,12 +2315,13 @@
         "executableOperationIds": [],
         "formId": "NPC-017",
         "primaryActions": [
-          "Сохранить NPC v1 атомарно",
+          "Сохранить NPC атомарно",
           "Назад до commit",
           "Открыть сохранённый лист после receipt"
         ],
         "workflowCommandIds": [
-          "UI-CMD-NPC-COMMIT-V1"
+          "UI-CMD-NPC-COMMIT-V1",
+          "UI-CMD-NPC-NEW-VERSION"
         ]
       }
     ],
@@ -2328,7 +2329,7 @@
     "errorOfflinePath": "Для NPC-002, NPC-011, NPC-012, NPC-013, NPC-014, NPC-015, NPC-016, NPC-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. OPEN writes only an attempt/phase receipt; CREATE_V1 and COMMIT N+1 save one full version/history at NPC-017.",
       "terminalStatesByForm": {
         "NPC-002": [
           "IDENTITY_INCOMPLETE",
@@ -2376,14 +2377,15 @@
       "NPC-016",
       "NPC-017"
     ],
-    "happyPath": "Выполнить J-NPC-CREATE через формы NPC-002, NPC-011, NPC-012, NPC-013, NPC-014, NPC-015, NPC-016, NPC-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-NPC-COMMIT-V1; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-NPC-CREATE через формы NPC-002, NPC-011, NPC-012, NPC-013, NPC-014, NPC-015, NPC-016, NPC-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-NPC-COMMIT-V1; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. NPC: sex=MALE|FEMALE обязателен; massKg имеет точный шаг 0.1kg; после выбора raceCode и перед сохранением v1 или N+1 проверяются включительные границы PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg. Смена пола или расы в несохранённом draft требует повторной проверки массы; неизменность пола после CHR IDENTITY checkpoint не переносится на NPC. NPC art: мастер может выбрать собственный арт; при отсутствии выбора успешное сохранение v1 или N+1 закрепляет одну из шести существующих local-character-portraits по raceCode и sex (UNITED использует explicit unified mapping). Полный snapshot хранит выбранный artAssetKey; открытие формы и reconnect не меняют сохранённый арт. Owner decision #186 C: the host-bound technical attempt carries campaignId, npcDraftId, attemptRevision and editMode=CREATE_V1|APPEND_N_PLUS_ONE. APPEND_N_PLUS_ONE additionally binds npcUuid and expectedCurrentVersion to the selected current snapshot. The client cannot select or change this mode/binding. All eight wizard stages preserve it; cancel before final commit creates no NPC version or history entry. Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot. Sole current authenticated campaign GM; UI-CMD-NPC-NEW-VERSION phase=COMMIT only from NPC-017 with host-bound APPEND_N_PLUS_ONE attempt; expectedCurrentVersion and attemptRevision are current; all eight stages, sex/race/mass and resolved art validate. Atomically append the full N+1 snapshot/history to the same npcUuid; prior versions and combat pins remain unchanged.",
     "journeyIds": [
       "J-NPC-CREATE"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -2407,7 +2409,8 @@
       "AQA-033"
     ],
     "workflowCommandIds": [
-      "UI-CMD-NPC-COMMIT-V1"
+      "UI-CMD-NPC-COMMIT-V1",
+      "UI-CMD-NPC-NEW-VERSION"
     ]
   },
   {
@@ -2478,14 +2481,94 @@
         "workflowCommandIds": [
           "UI-CMD-NPC-DELETE"
         ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-002",
+        "primaryActions": [
+          "Продолжить к расе, классу и анатомии",
+          "Отменить черновик до commit"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-011",
+        "primaryActions": [
+          "Назад к идентичности",
+          "Продолжить к характеристикам"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-012",
+        "primaryActions": [
+          "Назад к схеме",
+          "Продолжить к симбионтам"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-013",
+        "primaryActions": [
+          "Назад к характеристикам",
+          "Продолжить к навыкам"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-014",
+        "primaryActions": [
+          "Назад к симбионтам",
+          "Продолжить к инвентарю"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-015",
+        "primaryActions": [
+          "Назад к навыкам",
+          "Продолжить к HP и исходному состоянию"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-016",
+        "primaryActions": [
+          "Назад к инвентарю",
+          "Перейти к итоговой проверке"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NPC-017",
+        "primaryActions": [
+          "Сохранить NPC атомарно",
+          "Назад до commit",
+          "Открыть сохранённый лист после receipt"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-NPC-COMMIT-V1",
+          "UI-CMD-NPC-NEW-VERSION"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
     "errorOfflinePath": "Для NPC-001, NPC-003, NPC-007, NPC-008, NPC-009, NPC-010 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. OPEN writes only an attempt/phase receipt; CREATE_V1 and COMMIT N+1 save one full version/history at NPC-017.",
       "terminalStatesByForm": {
+        "NPC-002": [
+          "IDENTITY_INCOMPLETE",
+          "IDENTITY_VALID"
+        ],
         "NPC-008": [
           "READY_TO_DUPLICATE",
           "COMMITTED"
@@ -2499,6 +2582,36 @@
           "BLOCKED_USED",
           "READY_TO_DELETE",
           "COMMITTED"
+        ],
+        "NPC-011": [
+          "SCHEMA_INCOMPLETE",
+          "SCHEMA_VALID"
+        ],
+        "NPC-012": [
+          "STATS_INVALID",
+          "STATS_VALID"
+        ],
+        "NPC-013": [
+          "SYMBIONTS_INVALID",
+          "SYMBIONTS_VALID"
+        ],
+        "NPC-014": [
+          "SKILLS_INCOMPLETE",
+          "SKILLS_VALID"
+        ],
+        "NPC-015": [
+          "INVENTORY_INVALID",
+          "INVENTORY_VALID"
+        ],
+        "NPC-016": [
+          "INITIAL_STATE_INVALID",
+          "INITIAL_STATE_VALID"
+        ],
+        "NPC-017": [
+          "BLOCKED_INVALID",
+          "READY_TO_COMMIT",
+          "COMMITTED",
+          "IDEMPOTENT_REPLAY"
         ]
       }
     },
@@ -2508,16 +2621,25 @@
       "NPC-007",
       "NPC-008",
       "NPC-009",
-      "NPC-010"
+      "NPC-010",
+      "NPC-002",
+      "NPC-011",
+      "NPC-012",
+      "NPC-013",
+      "NPC-014",
+      "NPC-015",
+      "NPC-016",
+      "NPC-017"
     ],
-    "happyPath": "Выполнить J-NPC-CREATE через формы NPC-001, NPC-003, NPC-007, NPC-008, NPC-009, NPC-010; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-NPC-ARCHIVE, UI-CMD-NPC-DELETE, UI-CMD-NPC-DUPLICATE, UI-CMD-NPC-NEW-VERSION; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-NPC-CREATE через формы NPC-001, NPC-003, NPC-007, NPC-008, NPC-009, NPC-010; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-NPC-ARCHIVE, UI-CMD-NPC-DELETE, UI-CMD-NPC-DUPLICATE, UI-CMD-NPC-NEW-VERSION; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Owner decision #186 C: the host-bound technical attempt carries campaignId, npcDraftId, attemptRevision and editMode=CREATE_V1|APPEND_N_PLUS_ONE. APPEND_N_PLUS_ONE additionally binds npcUuid and expectedCurrentVersion to the selected current snapshot. The client cannot select or change this mode/binding. All eight wizard stages preserve it; cancel before final commit creates no NPC version or history entry. Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot. Sole current authenticated campaign GM; UI-CMD-NPC-NEW-VERSION phase=COMMIT only from NPC-017 with host-bound APPEND_N_PLUS_ONE attempt; expectedCurrentVersion and attemptRevision are current; all eight stages, sex/race/mass and resolved art validate. Atomically append the full N+1 snapshot/history to the same npcUuid; prior versions and combat pins remain unchanged.",
     "journeyIds": [
       "J-NPC-CREATE"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -2547,7 +2669,8 @@
       "UI-CMD-NPC-ARCHIVE",
       "UI-CMD-NPC-DELETE",
       "UI-CMD-NPC-DUPLICATE",
-      "UI-CMD-NPC-NEW-VERSION"
+      "UI-CMD-NPC-NEW-VERSION",
+      "UI-CMD-NPC-COMMIT-V1"
     ]
   },
   {
@@ -2602,7 +2725,9 @@
         "formId": "ENM-017",
         "primaryActions": [
           "Сохранить новую версию N+1",
-          "Отменить новую версию"
+          "Отменить новую версию",
+          "Открыть однократный бросок новой версии",
+          "Открыть квитанцию броска этой версии"
         ],
         "workflowCommandIds": [
           "UI-CMD-ENEMY-NEW-VERSION"
@@ -2616,17 +2741,45 @@
           "Вернуться к «Справочник врагов кампании»"
         ],
         "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "ENM-018",
+        "primaryActions": [
+          "Сгенерировать семь характеристик один раз",
+          "Вернуться без генерации",
+          "Вернуться к новой версии",
+          "Сгенерировать семь характеристик новой версии один раз",
+          "Вернуться к новой версии без генерации"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-MONSTER-STATS-ROLL-ONCE"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "ENM-019",
+        "primaryActions": [
+          "Вернуться к «Произвольный монстр: характеристики и HP»",
+          "Вернуться к новой версии с прежней квитанцией"
+        ],
+        "workflowCommandIds": []
       }
     ],
     "coverageStatus": "COVERED",
     "errorOfflinePath": "Для ENM-001, ENM-002, ENM-003, ENM-004, ENM-017, ENM-020 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. Child navigation/receipt viewing never rolls; only ENM-018 commits the attempt-bound roll once.",
       "terminalStatesByForm": {
         "ENM-017": [
           "EDITING_N_PLUS_1",
           "READY_TO_COMMIT",
+          "COMMITTED"
+        ],
+        "ENM-018": [
+          "NOT_ROLLED",
+          "ROLLING",
           "COMMITTED"
         ]
       }
@@ -2637,16 +2790,19 @@
       "ENM-003",
       "ENM-004",
       "ENM-017",
-      "ENM-020"
+      "ENM-020",
+      "ENM-018",
+      "ENM-019"
     ],
-    "happyPath": "Выполнить J-ENEMY-SENTIENT через формы ENM-001, ENM-002, ENM-003, ENM-004, ENM-017, ENM-020; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-NEW-VERSION; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-ENEMY-SENTIENT через формы ENM-001, ENM-002, ENM-003, ENM-004, ENM-017, ENM-020; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-NEW-VERSION; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA. CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt. SENTIENT N+1 preserves its full-sheet workflow with monsterRollContextOrNull=null and no ENM-018/019 action; forged monster context refuses.",
     "journeyIds": [
       "J-ENEMY-SENTIENT"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -2690,7 +2846,8 @@
       "OP-SENTIENT-IMPORT"
     ],
     "workflowCommandIds": [
-      "UI-CMD-ENEMY-NEW-VERSION"
+      "UI-CMD-ENEMY-NEW-VERSION",
+      "UI-CMD-MONSTER-STATS-ROLL-ONCE"
     ]
   },
   {
@@ -2803,7 +2960,7 @@
       "ENM-009",
       "ENM-010"
     ],
-    "happyPath": "Выполнить J-ENEMY-SENTIENT через формы ENM-005, ENM-006, ENM-007, ENM-008, ENM-009, ENM-010; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-COMMIT-V1, UI-CMD-ENEMY-DRAFT-PATCH; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-ENEMY-SENTIENT через формы ENM-005, ENM-006, ENM-007, ENM-008, ENM-009, ENM-010; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-COMMIT-V1, UI-CMD-ENEMY-DRAFT-PATCH; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Только пользовательский SENTIENT: massKg=30..500kg включительно, точный шаг 0.1kg, независимо от расы; поле sex отсутствует. Системные 44 шаблона из Runtime Pack остаются побайтово неизменными. SENTIENT art: собственный валидный арт имеет приоритет; при отсутствии выбора успешное сохранение v1 или N+1 закрепляет единственную заглушку sentient-enemy из согласованной поставки. Пол не вводится; существующий выбранный арт не заменяется при просмотре или reconnect.",
     "journeyIds": [
       "J-ENEMY-SENTIENT"
     ],
@@ -2929,7 +3086,10 @@
         "formId": "ENM-018",
         "primaryActions": [
           "Сгенерировать семь характеристик один раз",
-          "Вернуться без генерации"
+          "Вернуться без генерации",
+          "Вернуться к новой версии",
+          "Сгенерировать семь характеристик новой версии один раз",
+          "Вернуться к новой версии без генерации"
         ],
         "workflowCommandIds": [
           "UI-CMD-MONSTER-STATS-ROLL-ONCE"
@@ -2939,16 +3099,30 @@
         "executableOperationIds": [],
         "formId": "ENM-019",
         "primaryActions": [
-          "Вернуться к «Произвольный монстр: характеристики и HP»"
+          "Вернуться к «Произвольный монстр: характеристики и HP»",
+          "Вернуться к новой версии с прежней квитанцией"
         ],
         "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "ENM-017",
+        "primaryActions": [
+          "Сохранить новую версию N+1",
+          "Отменить новую версию",
+          "Открыть однократный бросок новой версии",
+          "Открыть квитанцию броска этой версии"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-ENEMY-NEW-VERSION"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
     "errorOfflinePath": "Для ENM-011, ENM-012, ENM-013, ENM-014, ENM-015, ENM-016, ENM-018, ENM-019 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. Child navigation/receipt viewing never rolls; only ENM-018 commits the attempt-bound roll once.",
       "terminalStatesByForm": {
         "ENM-011": [
           "DRAFTING",
@@ -2977,6 +3151,11 @@
           "READY_TO_COMMIT",
           "COMMITTED"
         ],
+        "ENM-017": [
+          "EDITING_N_PLUS_1",
+          "READY_TO_COMMIT",
+          "COMMITTED"
+        ],
         "ENM-018": [
           "NOT_ROLLED",
           "ROLLING",
@@ -2992,16 +3171,18 @@
       "ENM-015",
       "ENM-016",
       "ENM-018",
-      "ENM-019"
+      "ENM-019",
+      "ENM-017"
     ],
-    "happyPath": "Выполнить J-ENEMY-MONSTER через формы ENM-011, ENM-012, ENM-013, ENM-014, ENM-015, ENM-016, ENM-018, ENM-019; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-COMMIT-V1, UI-CMD-ENEMY-DRAFT-PATCH, UI-CMD-MONSTER-STATS-ROLL-ONCE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-ENEMY-MONSTER через формы ENM-011, ENM-012, ENM-013, ENM-014, ENM-015, ENM-016, ENM-018, ENM-019; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-COMMIT-V1, UI-CMD-ENEMY-DRAFT-PATCH, UI-CMD-MONSTER-STATS-ROLL-ONCE; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Только CUSTOM_MONSTER: massKg=5..10000kg включительно, точный шаг 0.1kg; поля sex и raceCode отсутствуют. Для ageYears и baseMaxHP сохраняются только существующие требования целого числа >=1; новые верхние пределы не вводятся. CUSTOM_MONSTER art: собственный валидный арт имеет приоритет; при отсутствии выбора успешное сохранение v1 или N+1 закрепляет единственную owner-supplied заглушку monster из согласованной поставки. Пол и раса не вводятся; просмотр и reconnect не заменяют арт. Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA. CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt. SENTIENT N+1 preserves its full-sheet workflow with monsterRollContextOrNull=null and no ENM-018/019 action; forged monster context refuses.",
     "journeyIds": [
       "J-ENEMY-MONSTER"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -3069,7 +3250,8 @@
     "workflowCommandIds": [
       "UI-CMD-ENEMY-COMMIT-V1",
       "UI-CMD-ENEMY-DRAFT-PATCH",
-      "UI-CMD-MONSTER-STATS-ROLL-ONCE"
+      "UI-CMD-MONSTER-STATS-ROLL-ONCE",
+      "UI-CMD-ENEMY-NEW-VERSION"
     ]
   },
   {
@@ -11504,7 +11686,9 @@
         "formId": "ENM-017",
         "primaryActions": [
           "Сохранить новую версию N+1",
-          "Отменить новую версию"
+          "Отменить новую версию",
+          "Открыть однократный бросок новой версии",
+          "Открыть квитанцию броска этой версии"
         ],
         "workflowCommandIds": [
           "UI-CMD-ENEMY-NEW-VERSION"
@@ -11525,17 +11709,45 @@
           "Вернуться к «Справочник врагов кампании»"
         ],
         "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "ENM-018",
+        "primaryActions": [
+          "Сгенерировать семь характеристик один раз",
+          "Вернуться без генерации",
+          "Вернуться к новой версии",
+          "Сгенерировать семь характеристик новой версии один раз",
+          "Вернуться к новой версии без генерации"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-MONSTER-STATS-ROLL-ONCE"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "ENM-019",
+        "primaryActions": [
+          "Вернуться к «Произвольный монстр: характеристики и HP»",
+          "Вернуться к новой версии с прежней квитанцией"
+        ],
+        "workflowCommandIds": []
       }
     ],
     "coverageStatus": "COVERED",
     "errorOfflinePath": "Для ENM-001, ENM-003, ENM-004, ENM-023, SYS-015, ENM-020, ENM-017, ENM-021, ENM-022 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only. Child navigation/receipt viewing never rolls; only ENM-018 commits the attempt-bound roll once.",
       "terminalStatesByForm": {
         "ENM-017": [
           "EDITING_N_PLUS_1",
           "READY_TO_COMMIT",
+          "COMMITTED"
+        ],
+        "ENM-018": [
+          "NOT_ROLLED",
+          "ROLLING",
           "COMMITTED"
         ],
         "SYS-015": [
@@ -11553,16 +11765,19 @@
       "ENM-020",
       "ENM-017",
       "ENM-021",
-      "ENM-022"
+      "ENM-022",
+      "ENM-018",
+      "ENM-019"
     ],
-    "happyPath": "Выполнить J-TEMPLATE-LIFECYCLE через формы ENM-001, ENM-003, ENM-004, ENM-023, SYS-015, ENM-020, ENM-017, ENM-021, ENM-022; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-NEW-VERSION; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-TEMPLATE-LIFECYCLE через формы ENM-001, ENM-003, ENM-004, ENM-023, SYS-015, ENM-020, ENM-017, ENM-021, ENM-022; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ENEMY-NEW-VERSION; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA. CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt. SENTIENT N+1 preserves its full-sheet workflow with monsterRollContextOrNull=null and no ENM-018/019 action; forged monster context refuses.",
     "journeyIds": [
       "J-TEMPLATE-LIFECYCLE"
     ],
     "offlineReconnectAssertions": [
       "Uncommitted local input may restore as draft but never as confirmed state.",
       "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
+      "Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt."
     ],
     "preconditions": [
       "Роль и authority соответствуют gm.",
@@ -11606,7 +11821,8 @@
       "OP-SENTIENT-IMPORT"
     ],
     "workflowCommandIds": [
-      "UI-CMD-ENEMY-NEW-VERSION"
+      "UI-CMD-ENEMY-NEW-VERSION",
+      "UI-CMD-MONSTER-STATS-ROLL-ONCE"
     ]
   },
   {
