@@ -95,3 +95,75 @@ d7ce715e83c073062db04a301f2f6dbcb96838b250f3bf36ee07129192122458.
 Независимый audit подтвердил результаты и границы. Новый test/doc SHA требует
 одного полного clean gate и CI; при новом отказе сохраняется весь результат,
 автоматический полный повтор не запускается. #204 остаётся открытой.
+
+## Применение исторических patches в test fixture
+
+Clean09 exact1092 завершился 4933 PASS / 2 FAIL из 4935 без skipped: два
+beforeEach превысили исходные 10 секунд. Первый создавал исторический B0
+для campaign-creation; второй выполнял ownerPreparation.submit() трёх FINAL.
+Тела этих случаев не были достигнуты. Весь network-application suite прошёл,
+но это не доказывает устранение причины предыдущих initial-time отказов.
+Validate, import:verify и E2E после неуспешного verify не запускались.
+[Отказ09 сохранён](https://github.com/tixonowar-ui/Symbiosis-V7/issues/204#issuecomment-6640454635).
+
+Отдельный diagnostic17 в новой копии с собственными npm ci/import и Node TSC
+прошёл исходные 15 campaign-creation cases за 46,07 с. В здоровом историческом
+setup измерены 5685,518 мс: пять реальных Git applications заняли 3837,887 мс,
+копирование generated/spec — 1116,877 мс. Git spans включают применение patch,
+а не только запуск процессов. Parent CPU не включает CPU Git children;
+остаток wall time не доказывает физическое дисковое I/O. Два временных source
+файла восстановлены, независимый audit подтвердил целостность evidence.
+[Замер17 и ограничения](https://github.com/tixonowar-ui/Symbiosis-V7/issues/204#issuecomment-6640927325).
+
+Узкая замена касается только tests/fixtures: те же пять reviewed patches
+применяются последовательным Buffer cursor. Грамматика разрешает ровно два
+Atlas paths, точные headers, положительные ranges и LF. Пустая context line
+из поставленных Markdown patches означает ровно пустую LF-строку; поиска
+похожего контекста и нормализации пробелов нет. Неподдерживаемая грамматика,
+несовпадение context, диапазонов или полного состава отказывают.
+
+Оба результата вычисляются и сверяются с независимыми full seals до первой
+записи. Initial/current, patch, intermediate, cache и read-after-write seals
+сохранены. Guard читает lstat/realpath фиксированных путей и отвергает links,
+необычные file kinds и hardlinks также на cache paths. Это private synchronous
+fixture, а не универсальная защита от конкурентной подмены filesystem;
+две записи не объявляются одной I/O-транзакцией. Недоступность создания file
+symlink на локальной Windows (EPERM) зафиксирована: реальный junction проверяет
+общую isSymbolicLink ветку, но не выдаётся за выполненный file-symlink case.
+
+Десять отдельных сравнений с настоящим Git проверяют пять edges в обоих
+направлениях; они не заменяют старые source-drift/replay tests. Исходные
+артефакты, runtime, hooks, budgets, workers и retries не изменяются.
+Снижение стоимости fixture само по себе не объясняет второй submit timeout
+и не завершает #204. Итоговый SHA требует независимого review, полного нового
+clean gate и собственного CI; повтор полного отказа без новых данных запрещён.
+
+Авторский прогон18 после исправления unused type прошёл Node TSC, lint и
+115/115 тестов трёх полных файлов: 86 новых oracle/negative cases, 14 прежних
+lineage и 15 campaign-creation. Длительность Vitest — 47,61 с, без skipped.
+Два ранних отказа TSC сохранены: второй был ошибочно запущен после неуспешного
+редактирования строки, поэтому не является новым измерением.
+
+В четырёх отдельных процессах original createBaselineLineageFixture(B0)
+замерен в порядке baseline/candidate/candidate/baseline: 4,934/1,799/1,722/5,117 с.
+Полные artifacts и generated/spec обеих копий совпали до и после, как и patches;
+выходные B0 Atlas/manifest сверены независимо. Импорт модуля, контрольный hash
+результата и cleanup находятся вне измеряемого вызова. Новый процесс исключает
+private module cache, но не OS cache: входы хешировались до замера. Изолированное
+сокращение стоимости подтверждено, устранение clean09 под полной нагрузкой — нет.
+
+Diagnostic19 отдельно измерил второй исходный case на прежнем exact1092:
+1 selected PASS / 216 unselected, Node TSC PASS, 22 ожидаемые отметки без
+observer errors; временные два файла восстановлены. Использовалась прежняя
+чистая копия17 с её собственным ci/import, не новая установка. Submit hook
+занял 4191,616 мс (parent CPU 3125 мс): requestAdvance 1230,478 мс,
+ACK 988,655 мс, INTENT 890,449 мс, host pin 831,303 мс. Это синхронные durable
+writers и проверки истории; Git/Atlas loader в этой фазе отсутствуют.
+Один здоровый selected case не объясняет отказ under load и не заменяет полный
+admission suite. Production правка submit из этого наблюдения не выводится.
+
+Следующий один чистый полный gate обоснован изменённым sealed fixture,
+115 целевыми тестами и измеренным сокращением его стоимости, а не повтором
+неизменённого кандидата до удачи. Все предыдущие отказы сохраняются.
+После #186 приоритет #204 — измеримое сокращение стоимости полного цикла PR,
+включая длинные suites и повторяющийся setup, при сохранении покрытия и guards.
