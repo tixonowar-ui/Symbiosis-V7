@@ -570,11 +570,11 @@ describe('ADR 0049 Atlas Markdown decision channels', () => {
       name: 'registryCoverage.qna Q-CHAR-010',
       id: 'qchar010-qna-registry',
       current:
-        '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013 | CURATED_QNA_FORM_OVERRIDE |',
+        '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, ENM-005, ENM-010, ENM-012, ENM-013, ENM-016, ENM-017, NET-019, NET-021, NPC-002, NPC-011, NPC-017 | CURATED_QNA_FORM_OVERRIDE |',
       withoutRandom:
-        '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013 | CURATED_QNA_FORM_OVERRIDE |',
+        '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-025, CHR-033, ENM-005, ENM-010, ENM-012, ENM-013, ENM-016, ENM-017, NET-019, NET-021, NPC-002, NPC-011, NPC-017 | CURATED_QNA_FORM_OVERRIDE |',
       qaScenario:
-        'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
+        'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, ENM-005, ENM-010, ENM-012, ENM-013, ENM-016, ENM-017, NET-019, NET-021, NPC-002, NPC-011, NPC-017: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
     },
   ] as const;
 

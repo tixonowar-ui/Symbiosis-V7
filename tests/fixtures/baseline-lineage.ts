@@ -99,8 +99,13 @@ export function applyBaselineFixtureRelease(
 ): void {
   const before = readAtlasBytes(projectRoot);
   const releases = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5'] as const;
+  // These private bytes cannot change during the synchronous release lookup.
+  // Hash each once instead of rehashing the same JSON for every older release.
+  const beforeDigests = Object.fromEntries(atlasPaths.map((path) => [path, sha(before[path])]));
   const actual =
-    releases.find((candidate) => matchesAtlas(before, releaseAtlas[candidate])) ?? null;
+    releases.find((candidate) =>
+      atlasPaths.every((path) => beforeDigests[path] === releaseAtlas[candidate][path]),
+    ) ?? null;
   assert.notEqual(actual, null, 'fixture requires exact known Atlas bytes');
   const patchSeal = (): string =>
     sha(

@@ -34,6 +34,21 @@ Typecheck-01 нашёл две unsafe indexed reads в тестовой порч
 целевых проверок — reports/186-source. Финальные пять этапов и CI ещё не
 заявлены; результаты окончательного SHA фиксируются в PR этой поставки.
 
+Полный clean02 на 54893bf завершился FAIL: 4899 PASS / 7 FAIL / 14 skipped,
+185 файлов, 1227,90 с Vitest. Семь assertions отказали из-за старого manifest
+count22, трёх Q-CHAR-010 test literals и CLI whitelist probe без sourceB4/targetB5.
+Эти точные ожидания исправлены; весь probe дополнительно прочитан независимо.
+Его прежние пять отказов происходили до replay, не доказывали ошибку runtime.
+Отдельный beforeAll lineage превысил прежние 10 с; его 14 случаев отдельно
+прошли без изменения лимитов. Фазовый cold fixture замер выделил Git apply
+как основную стоимость. Убрано только повторное SHA одних private buffers:
+identify 187→49 мс, но fixture+loader суммарно остались около 4,015 с в одном
+сравнении. Это не установленная причина или исправление полного timeout.
+Node CPU не включает Git children; physical I/O этим замером не измерялось.
+Полный log SHA-256 546d2e1cec795551d67c7e44e866cc945fc4223284ba51ad760764a29a9690e4
+сохранён вместе с clean02 manifest; targeted/phase evidence — reports/186-*.
+Новый committed SHA требует заново все пять стадий и CI. #204 остаётся открытой.
+
 Runtime NPC/ENM controls относятся к #187/#188; #113 не закрывать поставкой
 источников. Прежние лимиты PR применяются без исключений прошлых задач.
 Лимиты Vitest15/LIFECYCLE360/RETRY40+40/NAV15/CI60 сохранены.
