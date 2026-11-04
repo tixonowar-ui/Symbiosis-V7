@@ -65,6 +65,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate as nextEventLoopTurn } from 'node:timers/promises';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ADMISSION_GM_WORKFLOW_IDS,
@@ -2388,10 +2389,11 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
       actionKey: FormActionIntentV2Message['actionKey'],
     ) => {
       const view = await gm.runtime.project(gm.c);
+      const navigationRequestId = randomUUID();
       await gm.send({
         messageType: 'navigation.form-action',
         protocolVersion: 2,
-        navigationRequestId: randomUUID(),
+        navigationRequestId,
         sourceFormId,
         actionKey,
         expectedProjectionRevision: view.revisions.projectionRevision,
@@ -2407,6 +2409,18 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           messages: gm.sent,
         }),
       ).toMatchObject({ messageType: 'projection.snapshot' });
+      expect(
+        gm.sent.find(
+          (message) =>
+            message.messageType === 'projection.snapshot' &&
+            message.protocolVersion === 2 &&
+            message.presentation.assignment.correlationId === navigationRequestId,
+        ),
+      ).toMatchObject({
+        presentation: {
+          assignment: { correlationId: navigationRequestId, reason: 'FORM_ACTION' },
+        },
+      });
     };
     beforeEach(async () => {
       h = await host();
@@ -3258,10 +3272,16 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
                 'UI-CMD-CAMPAIGN-START',
               ];
+              // These are separate UI actions. Direct handler awaits can otherwise
+              // starve the real peer's polling timers across the whole setup sequence.
               await gmNav('NET-021', 'NET-021::CTA::001');
+              await nextEventLoopTurn();
               await gmNav('NET-017', 'NET-017::CTA::009');
+              await nextEventLoopTurn();
               await gmNav('CMP-006', 'CMP-006::CTA::001');
+              await nextEventLoopTurn();
               await gmNav('CMP-007', 'CMP-007::CTA::001');
+              await nextEventLoopTurn();
               const view = await gm.runtime.project(gm.c);
               await gm.send({
                 messageType: 'command.request',
