@@ -63,6 +63,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '53be8e781e116e9467f3a90fedd240884f4875884c2de7056a1bda0ee411d1ea',
   },
+  // ADR 0080 / #221: exact recovery Atlas successor; no new art or mechanics.
+  recoveryBaselineVersion:
+    'sha256:2f47b6aca09e5826fe502a6fc12661e415e5fae2fcecea1a3aaf1ebfd39bf8f7',
+  recoveryAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '7ba06a64842204b0df1e1ca5e21403093d66beb702a8bb156ea6b2f34a0695e8',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      'e9d130077f6d3178a15d0054394b387dff4c892a10f79644e52f2dc539bcbc77',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',

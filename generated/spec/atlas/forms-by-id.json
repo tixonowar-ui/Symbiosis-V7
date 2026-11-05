@@ -76488,18 +76488,19 @@
     "entryConditions": [
       "Роль текущего shell входит в roles формы.",
       "Загружена совместимая локальная либо серверная ревизия.",
-      "campaignId разрешён текущему устройству; authority определяется сервером, а не route."
+      "campaignId разрешён текущему устройству; authority определяется сервером, а не route.",
+      "Из NET-024 допускается ограниченный read-only FROZEN_RECOVERY для проверки checkpoint/receipt evidence; это не вход в игровые GM controls."
     ],
     "guardStates": [
       "stateRevision и projectionRevision актуальны",
-      "нет конфликтующей незавершённой операции",
-      "подтверждён единственный активный master authority"
+      "Обычный просмотр сохраняет existing pending-operation guard; recovery evidence читает только полный frozen checkpoint без conflicting in-flight write.",
+      "Обычный просмотр: sole GM authority; recovery evidence: scoped FROZEN_RECOVERY без authority и без mutation."
     ],
     "id": "CMP-010",
-    "inputOwner": "active controllerSeat/GM context according to roles",
+    "inputOwner": "Обычный current GM либо аутентифицированный оператор scoped FROZEN_RECOVERY_READ_ONLY; технический context не выдаёт gameplay authority.",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. FROZEN_RECOVERY_READ_ONLY показывает только checkpoint provenance, совместимость receipts и blockers; секреты и посторонние GM-private данные отсутствуют.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
     "purpose": "Состояние локальных реплик и время последнего подтверждения.",
@@ -76548,10 +76549,12 @@
       "clockMode",
       "dayPhase",
       "campaignId",
-      "campaignStatus"
+      "campaignStatus",
+      "checkpointViewContext=GM_AUTHORIZED|FROZEN_RECOVERY_READ_ONLY"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "system"
     ],
     "route": "/master/campaigns/:campaignId/campaign/cmp-010",
     "states": {
@@ -76584,7 +76587,7 @@
       },
       {
         "from": "NET-024",
-        "guard": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
+        "guard": "Read-only checkpoint evidence in NORMAL_TRANSFER or the scoped FROZEN_RECOVERY context; no mutation, automatic history selection or authority grant.",
         "kind": "subflow",
         "trigger": "J-MASTER-CONFLICT::RECOVER::open"
       },
@@ -78898,7 +78901,7 @@
         "trigger": "J-HOST-PUBLISH-SETTINGS::EDIT_SAFE_SETTINGS::return"
       },
       {
-        "guard": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
+        "guard": "Campaign frozen; current GM or password-authorized frozen recovery operator may select a paired authenticated LAN successor before UNLOCK; no PC is required.",
         "kind": "journey",
         "to": "NET-024",
         "trigger": "J-MASTER-TRANSFER::UNLOCK_TARGET"
@@ -93479,7 +93482,7 @@
       },
       {
         "from": "NET-024",
-        "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
+        "guard": "NORMAL_TRANSFER; current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
         "kind": "normative",
         "trigger": "Отменить"
       },
@@ -126388,7 +126391,7 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Соединение потеряно»; Повторить подключение."
+        "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Соединение потеряно»; Повторить подключение; Открыть frozen recovery."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -126538,6 +126541,60 @@
           ],
           "targetFormId": "NET-009",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-008::CTA::003",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Открыть frozen recovery",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-026",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -126551,7 +126608,8 @@
       ],
       "visible": [
         "Вернуться к «Соединение потеряно»",
-        "Повторить подключение"
+        "Повторить подключение",
+        "Открыть frozen recovery"
       ],
       "workflowCommandAvailability": []
     },
@@ -126615,7 +126673,9 @@
       "operationIds": [],
       "operationModes": {},
       "projectedOperationIds": [],
-      "qnaIds": [],
+      "qnaIds": [
+        "Q-CAMP-009"
+      ],
       "ruleIds": [],
       "sourceFiles": [
         "Symbiosis_V7_Executable_Rules_Registry_v1.7.xlsx",
@@ -126646,7 +126706,8 @@
       "turnOrReactionWindowOrNull",
       "observerVisibilityRevisionOrNull",
       "controlLeaseIdOrNull",
-      "lastReceiptIds[]"
+      "lastReceiptIds[]",
+      "frozenRecoveryContextOrNull={campaignId,reason,localCheckpointEvidenceAvailable}; not GM authority"
     ],
     "roles": [
       "player",
@@ -126694,6 +126755,12 @@
         "trigger": "Server publishes client disconnect"
       },
       {
+        "from": "NET-026",
+        "guard": "Recovery not committed; campaign remains frozen.",
+        "kind": "normative",
+        "trigger": "Вернуться к потерянному соединению"
+      },
+      {
         "from": "NET-009",
         "guard": "Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.",
         "kind": "normative",
@@ -126712,6 +126779,12 @@
         "kind": "normative",
         "to": "NET-009",
         "trigger": "Повторить подключение"
+      },
+      {
+        "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
+        "kind": "normative",
+        "to": "NET-026",
+        "trigger": "Открыть frozen recovery"
       }
     ],
     "type": "screen"
@@ -134581,9 +134654,9 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Выбор сопряжённого преемника и проверка текущего пароля GM для обычной безопасной передачи; unlock не выдаёт полномочий.",
+      "Назначение реализовано буквально: Выбор сопряжённого преемника и проверка текущего пароля GM для обычной передачи либо frozen recovery; unlock не выдаёт полномочий.",
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
-      "Без selected paired successor UNLOCK отсутствует; изменение target сначала закрывает token через CANCEL. Current sole GM, private password и точный complete checkpoint обязательны."
+      "NORMAL_TRANSFER без selected paired successor не разблокируется; изменение target инвалидирует token. FROZEN_RECOVERY не требует sole GM, но пароль без verified complete receipt-compatible checkpoint/fencing недостаточен."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -134597,7 +134670,7 @@
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
         "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-UNLOCK.",
-        "Разрешённые видимые действия/CTA именно этой формы: Проверить пароль и разблокировать transfer; Отменить; Открыть «Передача роли мастера»; Открыть «Снимки и синхронизация кампании»."
+        "Разрешённые видимые действия/CTA именно этой формы: Проверить пароль и разблокировать transfer; Отменить; Вернуться к frozen recovery; Открыть «Передача роли мастера»; Открыть «Снимки и синхронизация кампании»."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -134837,7 +134910,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
+          "guard": "NORMAL_TRANSFER; current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -134865,6 +134938,62 @@
           ],
           "targetFormId": "GM-001",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-024::CTA::005",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-UNLOCK"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "FROZEN_RECOVERY; no pending token (CANCEL receipt required if previously unlocked); navigation keeps the campaign frozen.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Вернуться к frozen recovery",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-026",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -134879,6 +135008,7 @@
       "visible": [
         "Проверить пароль и разблокировать transfer",
         "Отменить",
+        "Вернуться к frozen recovery",
         "Открыть «Передача роли мастера»",
         "Открыть «Снимки и синхронизация кампании»"
       ],
@@ -134910,7 +135040,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-MASTER-TRANSFER-UNLOCK",
-          "guard": "Current sole GM and current GM password verified privately; safe boundary with no pending operation; explicitly selected paired authenticated LAN successor, complete receipt-compatible checkpoint and exact campaign/authority/checkpoint/selection revisions. No PC is required. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+          "guard": "Current GM password verified privately; NORMAL_TRANSFER requires current sole GM and safe boundary with no pending operation; FROZEN_RECOVERY requires the verified recovery context instead of a sole GM and preserves any frozen unfinished operation at its exact confirmed checkpoint stage. No conflicting in-flight write; complete receipt-compatible checkpoint, explicitly selected paired authenticated LAN successor (PC not required), exact authority/checkpoint/selection revisions. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -134929,15 +135059,15 @@
     },
     "auditAtomicity": {
       "audit": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
-      "command": "Create one short-lived transfer token bound to campaign, current GM, successor identity, selection revision and exact checkpoint; changing target requires confirmed CANCEL before new selection/UNLOCK. Unlock never changes authority.",
+      "command": "Create one short-lived transfer token bound to campaign, mode, initiator, successor identity, selection revision and exact checkpoint; changing target invalidates it. Neither unlock nor recovery password verification grants authority.",
       "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Token state restores or expires closed; changed target requires a new unlock."
     },
     "components": [
       "Selector сопряжённого аутентифицированного LAN-устройства до unlock, в том числе без PC",
-      "Проверенный checkpoint, совместимость committed receipts и явные blockers",
+      "Проверенный checkpoint, совместимость committed receipts и явные blockers freeze",
       "Приватный ввод текущего пароля GM и CTA проверки",
       "Пока token действителен, selector закрыт: смена target сначала требует подтверждённый CANCEL в NET-025; затем новый выбор и UNLOCK",
-      "Отменить до unlock возвращает current GM в GM-001; pending transfer сначала отменяется в NET-025"
+      "Безопасный выход: обычный GM возвращается в GM-001, recovery остаётся frozen в NET-026; при pending token сначала CANCEL в NET-025"
     ],
     "contexts": [
       "network"
@@ -134950,22 +135080,22 @@
     ],
     "domain": "Подключение и полномочия",
     "entryConditions": [
-      "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
-      "Target фиксируется до UNLOCK; пока token действителен, смена устройства требует подтверждённый CANCEL."
+      "Campaign frozen; current GM or password-authorized frozen recovery operator may select a paired authenticated LAN successor before UNLOCK; no PC is required.",
+      "FROZEN_RECOVERY входит из NET-026; NORMAL_TRANSFER — от текущего GM. До UNLOCK никаких игровых полномочий по recovery не возникает."
     ],
     "guardStates": [
       "stateRevision, projectionRevision, authorityRevision, checkpointRevision и successorSelectionRevision актуальны",
-      "Подтверждён current sole GM; safe boundary и отсутствие pending operation",
-      "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts."
+      "NORMAL_TRANSFER: current sole GM; FROZEN_RECOVERY: ограниченный recovery context вместо требования sole GM",
+      "Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history."
     ],
     "id": "NET-024",
-    "inputOwner": "Текущий sole GM; пароль вводится приватно, route не является authority.",
+    "inputOwner": "Текущий GM в NORMAL_TRANSFER; аутентифицированный оператор ограниченного FROZEN_RECOVERY. Пароль вводится приватно; route и знание пароля не являются authority.",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Только текущий GM видит selector, blockers и приватный password control. Raw password никогда не входит в проекцию, receipt или audit; successor получает только адресованный технический context без GM gameplay controls.",
+      "controller": "Только инициатор видит selector, blockers и приватный password control. Raw password никогда не входит в проекцию, receipt или audit; recovery projection не открывает игровые GM controls.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Выбор сопряжённого преемника и проверка текущего пароля GM для обычной безопасной передачи; unlock не выдаёт полномочий.",
+    "purpose": "Выбор сопряжённого преемника и проверка текущего пароля GM для обычной передачи либо frozen recovery; unlock не выдаёт полномочий.",
     "qaScenarioIds": [
       "QA-FORM-NET-024",
       "QA-CHANGE-NET-024",
@@ -135015,19 +135145,21 @@
       "pendingOperationCount",
       "transferToken",
       "commandId",
+      "transferMode=NORMAL_TRANSFER|FROZEN_RECOVERY",
       "pairedSuccessorDevices[]={authenticatedDeviceId,installationIdentity,displayLabel}; PC/admission не требуются",
       "selectedSuccessorDeviceIdOrNull",
       "successorSelectionRevision",
       "checkpointRevision",
       "checkpointDigest",
       "acceptedReceiptFrontier",
-      "checkpointProofStatus=VERIFIED|INSUFFICIENT|CONFLICTING",
+      "recoveryProofStatus=VERIFIED|INSUFFICIENT|CONFLICTING",
       "authorityFenceStatus=CONFIRMED|UNRESOLVED",
       "stateRevision",
       "projectionRevision"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "system"
     ],
     "route": "/master/campaigns/:campaignId/network/net-024",
     "states": {
@@ -135053,13 +135185,13 @@
     "transitionsIn": [
       {
         "from": "CMP-015",
-        "guard": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
+        "guard": "Campaign frozen; current GM or password-authorized frozen recovery operator may select a paired authenticated LAN successor before UNLOCK; no PC is required.",
         "kind": "journey",
         "trigger": "J-MASTER-TRANSFER::UNLOCK_TARGET"
       },
       {
         "from": "NET-026",
-        "guard": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
+        "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
         "kind": "journey",
         "trigger": "J-MASTER-CONFLICT::RECOVER"
       },
@@ -135071,7 +135203,7 @@
       },
       {
         "from": "NET-025",
-        "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+        "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to the same NORMAL_TRANSFER or FROZEN_RECOVERY context only after confirmed CANCEL receipt",
         "kind": "workflow-command",
         "trigger": "Отменить до commit"
       }
@@ -135084,7 +135216,7 @@
         "trigger": "J-MASTER-TRANSFER::TRANSFER"
       },
       {
-        "guard": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
+        "guard": "Read-only checkpoint evidence in NORMAL_TRANSFER or the scoped FROZEN_RECOVERY context; no mutation, automatic history selection or authority grant.",
         "kind": "subflow",
         "to": "CMP-010",
         "trigger": "J-MASTER-CONFLICT::RECOVER::open"
@@ -135096,10 +135228,16 @@
         "trigger": "Проверить пароль и разблокировать transfer"
       },
       {
-        "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
+        "guard": "NORMAL_TRANSFER; current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
         "kind": "normative",
         "to": "GM-001",
         "trigger": "Отменить"
+      },
+      {
+        "guard": "FROZEN_RECOVERY; no pending token (CANCEL receipt required if previously unlocked); navigation keeps the campaign frozen.",
+        "kind": "normative",
+        "to": "NET-026",
+        "trigger": "Вернуться к frozen recovery"
       },
       {
         "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
@@ -135132,7 +135270,7 @@
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
         "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-ACK, UI-CMD-MASTER-TRANSFER-COMMIT, UI-CMD-MASTER-TRANSFER-CANCEL.",
-        "Разрешённые видимые действия/CTA именно этой формы: Передать полномочия выбранному successor; Отменить до commit; Принять роль и подтвердить checkpoint; Отклонить принятие роли; Открыть панель мастера; Продолжить как игрок; Закрыть техническое приглашение."
+        "Разрешённые видимые действия/CTA именно этой формы: Передать полномочия выбранному successor; Отменить до commit; Принять роль и подтвердить checkpoint; Отклонить принятие роли; Открыть панель мастера; Продолжить как игрок; Закрыть техническое приглашение; Вернуться к frozen recovery."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -135266,7 +135404,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+          "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to the same NORMAL_TRANSFER or FROZEN_RECOVERY context only after confirmed CANCEL receipt",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -135584,6 +135722,64 @@
           ],
           "targetFormId": "APP-001",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-025::CTA::008",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "DECLINED or CANCELLED terminal receipt; authenticated FROZEN_RECOVERY initiator and bound frozen context; retain freeze, dispose only transfer projection and grant no GM authority.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Вернуться к frozen recovery",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-026",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -135602,7 +135798,8 @@
         "Отклонить принятие роли",
         "Открыть панель мастера",
         "Продолжить как игрок",
-        "Закрыть техническое приглашение"
+        "Закрыть техническое приглашение",
+        "Вернуться к frozen recovery"
       ],
       "workflowCommandAvailability": [
         {
@@ -135678,7 +135875,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-MASTER-TRANSFER-COMMIT",
-          "guard": "Current sole GM initiator, current valid unlock, exact successor ACK/checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions and no pending operation; old authority fenced before successor grant. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+          "guard": "Authorized initiator, current valid unlock, exact successor ACK and checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions; NORMAL_TRANSFER has no pending operation, FROZEN_RECOVERY retains checkpointed unfinished operations without a conflicting in-flight write; old authority fenced before successor grant. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -135749,7 +135946,7 @@
       "На successor: отдельные кнопки принять/отклонить роль и приватный новый пароль GM с подтверждением",
       "На инициаторе: ACK/status, общий COMMIT и CANCEL до commit",
       "После commit: receipt и server-confirmed role; прежний GM становится player с прежними назначенными персонажами",
-      "Terminal controls возвращают в bound GM/player context; APP-001 доступен только прежнему role-neutral boot после удаления технического приглашения и без игровых session/authority",
+      "Terminal controls возвращают в bound GM/player/recovery context; APP-001 доступен только прежнему role-neutral boot после удаления технического приглашения и без игровых session/authority",
       "Ошибки пароля, stale proof, cancel, disconnect и conflict сохраняют одну authority либо freeze"
     ],
     "contexts": [
@@ -135764,16 +135961,16 @@
     "domain": "Подключение и полномочия",
     "entryConditions": [
       "Pending INITIATOR/SUCCESSOR_ACK: Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
-      "SUCCESSOR_ACK — адресованная проекция выбранного paired device, не GM authority; INITIATOR — текущий sole GM.",
+      "SUCCESSOR_ACK — адресованная проекция выбранного paired device, не GM authority; INITIATOR — текущий GM либо проверенный frozen recovery operator.",
       "TERMINAL_RECEIPT: подтверждённый DECLINE/CANCEL/COMMIT receipt связан с аутентифицированным участником; consumed token не требуется действующим, текущая роль определяется подтверждённой authority."
     ],
     "guardStates": [
       "Pending view: точные current token, campaign, successor identity, checkpointDigest, selection/authority/state/projection revisions; terminal view: authenticated immutable receipt и current role projection",
       "Игровые GM controls у successor отсутствуют до common commit",
-      "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts."
+      "Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history."
     ],
     "id": "NET-025",
-    "inputOwner": "Текущий sole GM инициатор выполняет COMMIT/CANCEL; только выбранное аутентифицированное устройство в SUCCESSOR_ACK принимает/отклоняет checkpoint и приватно задаёт новый GM password. PC не нужен. TERMINAL_RECEIPT доступен только связанному с receipt участнику, включая прежнего GM как player.",
+    "inputOwner": "INITIATOR выполняет COMMIT/CANCEL; только выбранное аутентифицированное устройство в SUCCESSOR_ACK принимает или отклоняет checkpoint и приватно задаёт новый GM password. PC не нужен. TERMINAL_RECEIPT доступен только связанному с receipt участнику, включая прежнего GM как player.",
     "origin": "v1.1-base-catalog",
     "projection": {
       "controller": "INITIATOR видит ACK/status без нового password/verifier; SUCCESSOR_ACK видит только адресованный checkpoint и свои private inputs без GM gameplay metadata. TERMINAL_RECEIPT показывает подтверждённую роль. Raw secrets никогда не сериализуются другим устройствам.",
@@ -135831,6 +136028,7 @@
       "successorAcknowledgedCheckpoint",
       "oldMasterAuthorityRevision",
       "commandId",
+      "transferMode=NORMAL_TRANSFER|FROZEN_RECOVERY",
       "transferView=INITIATOR|SUCCESSOR_ACK|TERMINAL_RECEIPT",
       "campaignId",
       "checkpointId",
@@ -135847,7 +136045,7 @@
       "stateRevision",
       "projectionRevision",
       "terminalReceiptOrNull={kind=DECLINE|CANCEL|COMMIT,commandId,confirmedParticipantBinding}; immutable receipt, not a live token",
-      "participantReturnContext=GM_PANEL|PLAYER_MENU|ROLE_NEUTRAL_BOOT; server-bound context of the authenticated participant: confirmed COMMIT derives GM_PANEL for successor and PLAYER_MENU for old GM; DECLINE/CANCEL preserve captured origin; revalidated against current confirmed role and destination entry guards; client cannot select or alter this binding"
+      "participantReturnContext=GM_PANEL|PLAYER_MENU|ROLE_NEUTRAL_BOOT|FROZEN_RECOVERY; server-bound context of the authenticated participant: confirmed COMMIT derives GM_PANEL for successor and PLAYER_MENU for old GM; DECLINE/CANCEL preserve captured origin; revalidated against current confirmed role and destination entry guards; client cannot select or alter this binding"
     ],
     "roles": [
       "gm",
@@ -135856,12 +136054,12 @@
     ],
     "route": "/master/campaigns/:campaignId/network/net-025",
     "states": {
-      "CANCELLED": "Инициатор отменил pending transfer; current old GM authority сохранена.",
+      "CANCELLED": "Инициатор отменил pending transfer; обычная authority сохранена либо recovery остаётся frozen.",
       "CONFLICT_FROZEN": "Кампания заморожена до recovery.",
       "DECLINED": "Преемник отказался; token закрыт, authority не передана.",
       "READY_TO_COMMIT": "Точные checkpoint ACK и новый verifier подтверждены; authority ещё не передана.",
       "TRANSFERRED": "Один common commit: old authority отозвана, successor получил authority с новым credential и собственной installation identity.",
-      "WAITING_SUCCESSOR_ACK": "Преемник не имеет GM authority; старый GM остаётся единственным мастером.",
+      "WAITING_SUCCESSOR_ACK": "Преемник не имеет GM authority; NORMAL_TRANSFER сохраняет старую authority, recovery остаётся frozen.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -135922,7 +136120,7 @@
         "trigger": "Передать полномочия выбранному successor"
       },
       {
-        "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+        "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to the same NORMAL_TRANSFER or FROZEN_RECOVERY context only after confirmed CANCEL receipt",
         "kind": "workflow-command",
         "to": "NET-024",
         "trigger": "Отменить до commit"
@@ -135958,6 +136156,12 @@
         "trigger": "Закрыть техническое приглашение"
       },
       {
+        "guard": "DECLINED or CANCELLED terminal receipt; authenticated FROZEN_RECOVERY initiator and bound frozen context; retain freeze, dispose only transfer projection and grant no GM authority.",
+        "kind": "normative",
+        "to": "NET-026",
+        "trigger": "Вернуться к frozen recovery"
+      },
+      {
         "guard": "Committed transfer receipt and verified authority continuity; player/device-specific proof without GM secrets.",
         "kind": "system-event",
         "to": "NET-009",
@@ -135972,8 +136176,9 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Блокировка операций до выбора единственного нормативного мастера.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Frozen recovery при недоступном прежнем host либо конфликте authority: проверка полного checkpoint/receipts и явный переход к приватной проверке текущего пароля GM без назначения authority.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Недоступный old host и split authority дают frozen recovery без заранее выданного recovery token; отсутствие доказательства сохраняет freeze."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -135986,7 +136191,7 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Разблокировка полномочий нового мастера»."
+        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Разблокировка полномочий нового мастера»; Вернуться к потерянному соединению."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -136082,6 +136287,60 @@
           ],
           "targetFormId": "NET-024",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-026::CTA::002",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Recovery not committed; campaign remains frozen.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Вернуться к потерянному соединению",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-008",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -136094,21 +136353,22 @@
         "Любой CTA, route target или same-form command, отсутствующий в visible и ctaAvailabilityByAction этой записи, запрещён."
       ],
       "visible": [
-        "Открыть «Разблокировка полномочий нового мастера»"
+        "Открыть «Разблокировка полномочий нового мастера»",
+        "Вернуться к потерянному соединению"
       ],
       "workflowCommandAvailability": []
     },
     "auditAtomicity": {
-      "audit": "Для изменения хранить actor/author, timestamp, before/after, reason/source и итоговую revision.",
-      "command": "Mutation имеет commandId/operationId и выполняется атомарно после повторной серверной проверки guards.",
-      "reconnect": "Восстанавливать только server-confirmed state; незавершённый commit не повторяет бросок или расход."
+      "audit": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
+      "command": "Просмотр/выбор evidence не выдаёт authority; UNLOCK/ACK/COMMIT имеют отдельные mutation boundaries.",
+      "reconnect": "Restart/reconnect сохраняет freeze и confirmed recovery evidence; Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history."
     },
     "components": [
-      "Заголовок и текущий контекст",
-      "Содержательная область: Блокировка операций до выбора единственного нормативного мастера.",
-      "Основной CTA",
-      "Back/Cancel/Retry только на безопасной границе",
-      "Индикатор связи и ревизии"
+      "Подтверждённый frozen context и причина недоступности/конфликта authority",
+      "Выбор доступного полного checkpoint и проверка его provenance/совместимости receipts",
+      "Явные blockers недостаточного доказательства, conflicting history и незавершённого fencing",
+      "Кнопка проверки текущего пароля GM в NET-024; не требует заранее выданного recovery token",
+      "Выход к экрану потерянного соединения сохраняет freeze"
     ],
     "contexts": [
       "network"
@@ -136121,23 +136381,20 @@
     ],
     "domain": "Подключение и полномочия",
     "entryConditions": [
-      "Роль текущего shell входит в roles формы.",
-      "Загружена совместимая локальная либо серверная ревизия.",
-      "campaignId разрешён текущему устройству; authority определяется сервером, а не route."
+      "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK."
     ],
     "guardStates": [
-      "stateRevision и projectionRevision актуальны",
-      "нет конфликтующей незавершённой операции",
-      "подтверждён единственный активный master authority"
+      "Кампания frozen; игровые mutations запрещены",
+      "Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history."
     ],
     "id": "NET-026",
-    "inputOwner": "active controllerSeat/GM context according to roles",
+    "inputOwner": "Аутентифицированный оператор ограниченного frozen recovery context; наличие маршрута или пароля не создаёт GM authority.",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+      "controller": "Recovery-only evidence projection; no raw credential, private key or unrelated GM-private gameplay metadata. Выбор checkpoint не превращает его в нормативную историю без полной проверки.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Блокировка операций до выбора единственного нормативного мастера.",
+    "purpose": "Frozen recovery при недоступном прежнем host либо конфликте authority: проверка полного checkpoint/receipts и явный переход к приватной проверке текущего пароля GM без назначения authority.",
     "qaScenarioIds": [
       "QA-FORM-NET-026"
     ],
@@ -136178,13 +136435,24 @@
     "requiredFields": [
       "contextId",
       "stateRevision",
-      "projectionRevision"
+      "projectionRevision",
+      "campaignId",
+      "recoveryReason=OLD_HOST_UNAVAILABLE|AUTHORITY_CONFLICT",
+      "candidateCheckpointIdOrNull",
+      "candidateCheckpointDigestOrNull",
+      "checkpointCompleteness=COMPLETE|INCOMPLETE",
+      "acceptedReceiptFrontier",
+      "historyCompatibility=VERIFIED|INSUFFICIENT|CONFLICTING",
+      "authorityFenceStatus=CONFIRMED|UNRESOLVED"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "system"
     ],
     "route": "/master/campaigns/:campaignId/network/net-026",
     "states": {
+      "FROZEN": "Gameplay mutations запрещены до единственного доказанного common commit.",
+      "PROOF_BLOCKED": "Недостаточная/конфликтующая история или unresolved fencing сохраняет freeze; автоматический выбор запрещён.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -136211,14 +136479,38 @@
         "guard": "role=gm; все entryConditions и guardStates целевой формы выполнены",
         "kind": "role-state-reachability",
         "trigger": "Адресуемый route либо server/system event текущей роли"
+      },
+      {
+        "from": "NET-024",
+        "guard": "FROZEN_RECOVERY; no pending token (CANCEL receipt required if previously unlocked); navigation keeps the campaign frozen.",
+        "kind": "normative",
+        "trigger": "Вернуться к frozen recovery"
+      },
+      {
+        "from": "NET-025",
+        "guard": "DECLINED or CANCELLED terminal receipt; authenticated FROZEN_RECOVERY initiator and bound frozen context; retain freeze, dispose only transfer projection and grant no GM authority.",
+        "kind": "normative",
+        "trigger": "Вернуться к frozen recovery"
+      },
+      {
+        "from": "NET-008",
+        "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
+        "kind": "normative",
+        "trigger": "Открыть frozen recovery"
       }
     ],
     "transitionsOut": [
       {
-        "guard": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
+        "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
         "kind": "journey",
         "to": "NET-024",
         "trigger": "J-MASTER-CONFLICT::RECOVER"
+      },
+      {
+        "guard": "Recovery not committed; campaign remains frozen.",
+        "kind": "normative",
+        "to": "NET-008",
+        "trigger": "Вернуться к потерянному соединению"
       }
     ],
     "type": "screen"

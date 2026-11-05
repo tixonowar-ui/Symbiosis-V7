@@ -9,6 +9,14 @@
 
 ### Добавлено
 
+- **2026-11-05, issue #221 (source, часть 3):** Atlas 1.13 задаёт frozen
+  recovery из полного проверенного checkpoint, scoped evidence view и отказ
+  при несовместимой истории или недоказанной единственности authority.
+  B8 сохраняет обычную передачу и pinned reconnect, старые baseline IDs
+  и receipts; игровые реестры не меняются.
+  [ADR 0080](docs/adr/0080-frozen-master-recovery-source.md). Runtime controls
+  и обработчики остаются задачей #215; #221 закрывается после приёмки B8.
+
 - **2026-11-05, issue #221 (source, часть 2):** Atlas 1.12 задаёт выбор
   сопряжённого преемника без обязательного PC, отдельное принятие checkpoint
   и нового пароля, общий commit единственной GM authority и явный proof-bound

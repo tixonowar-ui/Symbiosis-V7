@@ -4826,7 +4826,7 @@
       "Refresh/closed tab uses same path.",
       "Host failover freezes campaign until single-master recovery.",
       "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.",
-      "Обычный reconnect сохраняет прежнюю pinned identity. После verified common transfer NET-009 отдельно предлагает explicit transfer reconnect; без proof pin не меняется."
+      "Обычный reconnect сохраняет прежнюю pinned identity. После verified common transfer NET-009 отдельно предлагает explicit transfer reconnect; при недоступном old host NET-008 позволяет только frozen recovery через NET-026, без автоматического grant."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
@@ -5263,7 +5263,7 @@
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+      "Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
       "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices."
     ],
     "formIds": [
@@ -5297,7 +5297,7 @@
         "formIds": [
           "NET-024"
         ],
-        "guards": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
+        "guards": "Campaign frozen; current GM or password-authorized frozen recovery operator may select a paired authenticated LAN successor before UNLOCK; no PC is required.",
         "result": "Выбранный paired successor и checkpoint зафиксированы до UNLOCK; token не выдаёт authority.",
         "state": "UNLOCK_TARGET"
       },
@@ -5313,7 +5313,7 @@
         "formIds": [
           "NET-025"
         ],
-        "guards": "Current sole GM initiator, current valid unlock, exact successor ACK/checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions and no pending operation; old authority fenced before successor grant. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+        "guards": "Authorized initiator, current valid unlock, exact successor ACK and checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions; NORMAL_TRANSFER has no pending operation, FROZEN_RECOVERY retains checkpointed unfinished operations without a conflicting in-flight write; old authority fenced before successor grant. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
         "result": "One common commit, old GM becomes player; successor uses own host identity and new credential.",
         "state": "TRANSFER"
       },
@@ -5342,12 +5342,15 @@
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Disconnect preserves the frozen conflict until one audited recovery commits."
+      "Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
+      "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices."
     ],
     "formIds": [
       "NET-026",
       "NET-024",
-      "CMP-010"
+      "CMP-010",
+      "NET-025",
+      "NET-009"
     ],
     "id": "J-MASTER-CONFLICT",
     "operationIds": [],
@@ -5355,7 +5358,9 @@
       "Q-CAMP-009"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "system",
+      "player"
     ],
     "ruleIds": [],
     "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
@@ -5364,7 +5369,7 @@
         "formIds": [
           "NET-026"
         ],
-        "guards": "Two authorities detected or old host reappears with a stale lease.",
+        "guards": "Old host unavailable, two authorities detected or old host reappears with stale authority; enter scoped frozen recovery, not gameplay GM.",
         "result": "Campaign mutations frozen.",
         "state": "CONFLICT"
       },
@@ -5373,14 +5378,42 @@
           "NET-024",
           "CMP-010"
         ],
-        "guards": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
-        "result": "Exactly one master authority and reconciled snapshot.",
+        "guards": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
+        "result": "Read-only evidence checked; current password authorizes only the scoped recovery procedure, not authority.",
         "state": "RECOVER"
+      },
+      {
+        "formIds": [
+          "NET-025"
+        ],
+        "guards": "Only the authenticated device named in a current unlock may answer its exact campaign/token/checkpoint/revisions. ACCEPT requires explicit checkpoint confirmation and matching nonempty new GM password/confirmation, private to successor; DECLINE requires no new password. No admitted PC or pre-existing GM role is required.",
+        "result": "Selected paired successor confirms exact checkpoint and a new GM credential; no grant yet.",
+        "state": "SUCCESSOR_ACK"
+      },
+      {
+        "formIds": [
+          "NET-025"
+        ],
+        "guards": "Authorized initiator, current valid unlock, exact successor ACK and checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions; NORMAL_TRANSFER has no pending operation, FROZEN_RECOVERY retains checkpointed unfinished operations without a conflicting in-flight write; old authority fenced before successor grant. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
+        "result": "Exactly one authority or continue frozen; never unilateral partition recovery.",
+        "state": "RECOVERY_COMMIT"
+      },
+      {
+        "formIds": [
+          "NET-009"
+        ],
+        "guards": "Explicit local device confirmation of verified common transfer receipt/checkpoint and authority continuity from its pinned campaign to the successor installation identity; authenticate that exact successor endpoint. Incomplete/conflicting proof or partition cannot replace the pin. Ordinary reconnect still requires the previous pinned identity.",
+        "result": "Verified notification and explicit reconnect to successor own identity without fresh admission.",
+        "state": "TRANSFER_RECONNECT"
       }
     ],
     "title": "Блокирующий конфликт двух мастеров",
     "workflowCommandIds": [
-      "UI-CMD-MASTER-TRANSFER-UNLOCK"
+      "UI-CMD-MASTER-TRANSFER-UNLOCK",
+      "UI-CMD-MASTER-TRANSFER-ACK",
+      "UI-CMD-MASTER-TRANSFER-COMMIT",
+      "UI-CMD-MASTER-TRANSFER-CANCEL",
+      "UI-CMD-MASTER-TRANSFER-RECONNECT"
     ]
   },
   {

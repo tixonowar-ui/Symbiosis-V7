@@ -1,5 +1,20 @@
 # Состояние модулей
 
+## Source #221, аварийное восстановление — 2026-11-05
+
+Atlas 1.13/B8 закрывает источник frozen recovery: полный checkpoint и receipts,
+текущий пароль GM, successor ACK и доказанная единственная authority до commit.
+NET-026/CMP-010 показывают только scoped evidence; недостаточное доказательство
+сохраняет freeze. Обычные transfer и pinned-identity guards не ослаблены.
+[ADR 0080](../adr/0080-frozen-master-recovery-source.md).
+
+B7 сохраняется отдельным manifest; добавляются точные B0–B7 → B8 и identity.
+23 non-Atlas пути, 24 mechanical replay inputs, runtime tuple и saved bytes
+не меняются. Источник: 1721 transitions, 115 workflows, 2452 QA и 1283 CTA;
+Авторский import подтвердил 20357 seed rows, 115 array tables и 10 metadata.
+Runtime #215 не реализован.
+Приёмка B8 и закрытие #221 требуют отдельных clean gate, exact-SHA CI и squash.
+
 ## Source #221, штатная передача — 2026-11-05
 
 Atlas 1.12/B7 фиксирует selector преемника, его отдельный ACK и новый пароль,

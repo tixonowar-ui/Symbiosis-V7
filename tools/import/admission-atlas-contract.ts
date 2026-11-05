@@ -5,6 +5,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 /** Exact admission objects from ADR 0071; overlapping lobby fields updated by #206 / ADR 0073. */
 // Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
 // Intersecting witnesses include the accepted normal-transfer source amendment in ADR 0079.
+// Intersecting witnesses include the accepted frozen-recovery source amendment in ADR 0080.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -250,11 +251,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '1824e006901903a81275a8562ec37560238dc9042f4d4588885b51f469ee7e7f',
+    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
   },
   {
     key: 'transitions',
-    sha256: 'b076cda3f751ed503e635034d769ea179f4a20f6fdd5a654ad9dd0882c1ad15a',
+    sha256: 'e5f06ebbe462cfffc34951a75cac1e3b371ee718e440d4fa6ca76a1e632d7ec3',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

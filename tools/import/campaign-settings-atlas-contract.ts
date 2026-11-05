@@ -5,6 +5,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 /** Exact reviewed Atlas 1.9 objects, authorized by #208 and ADR 0075. */
 // Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
 // Intersecting witnesses include the accepted normal-transfer source amendment in ADR 0079.
+// Intersecting witnesses include the accepted frozen-recovery source amendment in ADR 0080.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -40,7 +41,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-RECONNECT',
-    sha256: '407da238722c9eba14a146c8ee82ed5b0e45a72c38a32644b9ebc12b75353c35',
+    sha256: '49967269ebad7d06f85e28da6ad4b8f564c4831957f7120511c7738fb7f68883',
   },
   {
     target: 'journeys',
@@ -100,7 +101,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-031',
-    sha256: 'aa2d5070cd3bdafbbf4e67f221975ddfcca0682921b32b13f0de7ea4f1c42384',
+    sha256: 'e779f1bb2ee5d51724c470454dd16bb27878e0f37e1af54cfdf3ff165d9a4111',
   },
   {
     target: 'qaScenarios',
@@ -124,11 +125,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '1824e006901903a81275a8562ec37560238dc9042f4d4588885b51f469ee7e7f',
+    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
   },
   {
     key: 'transitions',
-    sha256: 'b076cda3f751ed503e635034d769ea179f4a20f6fdd5a654ad9dd0882c1ad15a',
+    sha256: 'e5f06ebbe462cfffc34951a75cac1e3b371ee718e440d4fa6ca76a1e632d7ec3',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -154,7 +155,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-RECONNECT —',
-    sha256: '4f626cd4ae8fc44b9cbbc6183081b9fbdf3bf4bd1737b52b147dfbad9ebabbaf',
+    sha256: '9fdce05998ad3cbed4c0c7eff834ad47da4b2f8a4b71f9cbd3b297a4b11be48f',
   },
   {
     prefix: '### J-HOST-PUBLISH-SETTINGS —',
@@ -197,7 +198,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-031 | REQ-031 |',
-    sha256: '35e7e764ca77738496c8d5638ed2ab203e78e335f8a5940ae687fdb90192b899',
+    sha256: '385a1979cbcedbbb66a9f34a6383cc44e5dd58a086d5f86df0a6f6bf844c50c8',
   },
   {
     prefix: '| QA-REQ-055 | REQ-055 |',

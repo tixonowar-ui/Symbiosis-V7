@@ -3617,6 +3617,13 @@
     }
   },
   "NET-008": {
+    "Открыть frozen recovery": {
+      "from": "NET-008",
+      "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
+      "kind": "normative",
+      "to": "NET-026",
+      "trigger": "Открыть frozen recovery"
+    },
     "Повторить подключение": {
       "from": "NET-008",
       "guard": "network available",
@@ -3810,9 +3817,16 @@
     }
   },
   "NET-024": {
+    "Вернуться к frozen recovery": {
+      "from": "NET-024",
+      "guard": "FROZEN_RECOVERY; no pending token (CANCEL receipt required if previously unlocked); navigation keeps the campaign frozen.",
+      "kind": "normative",
+      "to": "NET-026",
+      "trigger": "Вернуться к frozen recovery"
+    },
     "Отменить": {
       "from": "NET-024",
-      "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
+      "guard": "NORMAL_TRANSFER; current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
       "kind": "normative",
       "to": "GM-001",
       "trigger": "Отменить"
@@ -3826,6 +3840,13 @@
     }
   },
   "NET-025": {
+    "Вернуться к frozen recovery": {
+      "from": "NET-025",
+      "guard": "DECLINED or CANCELLED terminal receipt; authenticated FROZEN_RECOVERY initiator and bound frozen context; retain freeze, dispose only transfer projection and grant no GM authority.",
+      "kind": "normative",
+      "to": "NET-026",
+      "trigger": "Вернуться к frozen recovery"
+    },
     "Закрыть техническое приглашение": {
       "from": "NET-025",
       "guard": "Authenticated terminal-receipt participant with captured ROLE_NEUTRAL_BOOT; dispose only the technical invitation, no player/GM session or gameplay authority, launch-mode unselected and all existing APP-001 entry/boot guards satisfied. Never reset an existing player/GM session to satisfy this route.",
@@ -3849,7 +3870,7 @@
     },
     "Отменить до commit": {
       "from": "NET-025",
-      "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+      "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to the same NORMAL_TRANSFER or FROZEN_RECOVERY context only after confirmed CANCEL receipt",
       "kind": "workflow-command",
       "to": "NET-024",
       "trigger": "Отменить до commit"
@@ -3874,6 +3895,15 @@
       "kind": "normative",
       "to": "APP-002",
       "trigger": "Продолжить как игрок"
+    }
+  },
+  "NET-026": {
+    "Вернуться к потерянному соединению": {
+      "from": "NET-026",
+      "guard": "Recovery not committed; campaign remains frozen.",
+      "kind": "normative",
+      "to": "NET-008",
+      "trigger": "Вернуться к потерянному соединению"
     }
   },
   "NET-027": {
