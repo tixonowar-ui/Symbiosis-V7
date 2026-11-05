@@ -135,8 +135,9 @@ describe('strict fixture Atlas byte patches', () => {
         git(['init', '--quiet']);
         // A temporary folder may be nested below the checkout; its own repository
         // prevents Git's parent-prefix discovery from silently skipping both files.
-        expect(realpathSync(git(['rev-parse', '--show-toplevel']).toString().trim())).toBe(
-          realpathSync(gitRoot),
+        // Windows TEMP can use 8.3 names; native resolution expands both aliases.
+        expect(realpathSync.native(git(['rev-parse', '--show-toplevel']).toString().trim())).toBe(
+          realpathSync.native(gitRoot),
         );
         expect(git(['rev-parse', '--show-prefix']).toString().trim()).toBe('');
         git(

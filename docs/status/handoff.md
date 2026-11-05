@@ -1,5 +1,17 @@
 # Передача контекста — 2026-11-05
 
+## Windows 8.3 в Git oracle — 2026-11-05
+
+Clean12 на exact64da прошёл все пять этапов; [CI 42021257458](https://github.com/tixonowar-ui/Symbiosis-V7/actions/runs/42021257458)
+того же SHA завершился 5011 PASS / 10 FAIL: сравнение Git root отвергало
+`RUNNER~1` и `runneradmin` до git apply. Это ошибка сравнения двух форм пути,
+не flaky/timeout. На реальном 8.3 TEMP исходные 86 случаев дали 76 PASS / 10 FAIL
+за 8,70 с; после `realpathSync.native` с обеих сторон — 86/86 PASS за 19,09 с.
+Теперь выполняется и Git apply, поэтому ускорение из этих времён не выводится.
+Строгое равенство root, пустой prefix, assertions и все seals сохранены.
+Локальный clean12 не заменяет CI; новый SHA требует свежих полного gate и CI.
+После подтверждённого merge #186 — остановка, #204/#187/#188 отложены.
+
 ## Clean11 и два согласованных лимита — 2026-11-05 (Москва)
 
 Clean11 exact8694 завершился FAIL: 4799 PASS / 2 FAIL и два worker-startup
