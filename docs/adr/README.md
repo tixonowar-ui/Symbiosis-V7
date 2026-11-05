@@ -109,6 +109,7 @@
 | [0075](0075-campaign-settings-source.md)                             | Безопасные настройки и сеть следующего запуска listener    | принято; #208                               |
 | [0076](0076-campaign-lifecycle-runtime.md)                           | Журнал lifecycle и восстановление отключённого устройства  | реализация #174                             |
 | [0077](0077-gm-entity-source-closure.md)                             | Полные NPC, user enemy templates, арт и B5                 | принято владельцем, source #186             |
+| [0078](0078-queue-source-closure.md)                                 | Время NPC и первый импорт; B6, первая часть #221           | принято владельцем, source #221             |
 
 ## Перенос решений аудита
 

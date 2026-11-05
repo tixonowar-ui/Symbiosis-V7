@@ -52,8 +52,8 @@ export const SKIPPED_INDEX_PATHS = [
 const EXPECTED = {
   files: 131,
   arrayFiles: 115,
-  // ADR 0077 adds six transition rows and eight portrait mappings (CTA rows are nested) to Atlas 1.9.
-  rows: 20_336,
+  // ADR 0078 adds two NPC initial-time transition rows to the 20,336 rows in Atlas 1.10.
+  rows: 20_338,
   metadataFiles: 10,
   skippedIndexes: 6,
 } as const;

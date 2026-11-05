@@ -18,6 +18,7 @@ const successorManifestUrl = new URL('./baselines/atlas-v1.6.checksums.sha256', 
 const admissionManifestUrl = new URL('./baselines/atlas-v1.7.checksums.sha256', import.meta.url);
 const lobbyManifestUrl = new URL('./baselines/atlas-v1.8.checksums.sha256', import.meta.url);
 const settingsManifestUrl = new URL('./baselines/atlas-v1.9.checksums.sha256', import.meta.url);
+const gmSourceManifestUrl = new URL('./baselines/atlas-v1.10.checksums.sha256', import.meta.url);
 const atlasPaths = new Set(Object.keys(BASELINE_LINEAGE_SEALS.successorAtlas));
 
 /** Explicit forward pairs only; no semantic-version comparison or inferred transitivity. */
@@ -29,6 +30,7 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
     lobbyBaselineVersion: b3,
     settingsBaselineVersion: b4,
     gmSourceBaselineVersion: b5,
+    queueSourceBaselineVersion: b6,
   } = BASELINE_LINEAGE_SEALS;
   return (
     (stored === b0 &&
@@ -37,13 +39,21 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
         current === b2 ||
         current === b3 ||
         current === b4 ||
-        current === b5)) ||
+        current === b5 ||
+        current === b6)) ||
     (stored === b1 &&
-      (current === b1 || current === b2 || current === b3 || current === b4 || current === b5)) ||
-    (stored === b2 && (current === b2 || current === b3 || current === b4 || current === b5)) ||
-    (stored === b3 && (current === b3 || current === b4 || current === b5)) ||
-    (stored === b4 && (current === b4 || current === b5)) ||
-    (stored === b5 && current === b5)
+      (current === b1 ||
+        current === b2 ||
+        current === b3 ||
+        current === b4 ||
+        current === b5 ||
+        current === b6)) ||
+    (stored === b2 &&
+      (current === b2 || current === b3 || current === b4 || current === b5 || current === b6)) ||
+    (stored === b3 && (current === b3 || current === b4 || current === b5 || current === b6)) ||
+    (stored === b4 && (current === b4 || current === b5 || current === b6)) ||
+    (stored === b5 && (current === b5 || current === b6)) ||
+    (stored === b6 && current === b6)
   );
 }
 
@@ -122,14 +132,18 @@ export function verifyHistoricalBaselineLineage(
             ? readFileSync(lobbyManifestUrl)
             : storedBaselineVersion === BASELINE_LINEAGE_SEALS.settingsBaselineVersion
               ? readFileSync(settingsManifestUrl)
-              : currentManifest;
+              : storedBaselineVersion === BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion
+                ? readFileSync(gmSourceManifestUrl)
+                : currentManifest;
   if (`sha256:${sha256(historicalBytes)}` !== storedBaselineVersion)
     fail('historical manifest seal differs');
   const historical = entries(historicalBytes);
   const current = entries(currentManifest);
   const additions =
-    currentId === BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion &&
-    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion
+    (currentId === BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion ||
+      currentId === BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion) &&
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion &&
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion
       ? Object.keys(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts)
       : [];
   const expectedPaths = new Set([...historical.keys(), ...additions]);
@@ -157,6 +171,12 @@ export function verifyHistoricalBaselineLineage(
       ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
     }))
       if (current.get(path) !== digest) fail(`approved GM source bytes differ: ${path}`);
+  if (currentId === BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion)
+    for (const [path, digest] of Object.entries({
+      ...BASELINE_LINEAGE_SEALS.queueSourceAtlas,
+      ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
+    }))
+      if (current.get(path) !== digest) fail(`approved queue source bytes differ: ${path}`);
   const expected = BASELINE_LINEAGE_SEALS.replayCatalogDigests;
   if (
     Object.keys(catalogDigests).length !== Object.keys(expected).length ||

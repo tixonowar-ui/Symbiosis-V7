@@ -1,7 +1,7 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1706
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1708
  * transitions, 66 journeys, 91 requirements, 2449 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
@@ -42,14 +42,19 @@ import {
   assertAdr0077GmSourcesMarkdown,
 } from './gm-entity-atlas-contract.js';
 
+import {
+  assertAdr0078QueueSources,
+  assertAdr0078QueueSourcesMarkdown,
+} from './queue-source-atlas-contract.js';
+
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.10';
+const ATLAS_VERSION = '1.11';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.10 has 1,270 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_270;
+/** Atlas v1.11 has 1,272 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_272;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -1613,18 +1618,18 @@ function adr0049CheckQnaChannels(
 
 /** ADR 0049 pins every new channel and every independent JSON mirror. */
 export function assertAdr0049MissingChannels(root: JsonObject): void {
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-04');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-05');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_706);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_708);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_706,
+    1_708,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1826,19 +1831,19 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
 
 /** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
 export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.10');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-04');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.11');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-05');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_706);
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_708);
   expectCount(
     WHERE,
     'ADR 0052 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_706,
+    1_708,
   );
 
   const advisor = adr0049Form(forms, 'CHR-041');
@@ -2671,7 +2676,7 @@ const ADR0069_CONTRACTS = [
     id: 'REQ-006',
     path: ['happyPath'],
     value:
-      'Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.',
+      'Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Первый GM import доступен из единой GM-001 через GM-002 без selected character. Только прежний signed GM_IMPORT_CANDIDATE origin/return GM-002 и sole current master authority; player local library не открывается. Cancel/error/reconnect/receipt return восстанавливают текущий вариант GM-002 без фиктивного PC/HP/group/marker/seat. Импорт/owner claim не заменяют финальный admission и не выдают преждевременные Ready/authority/reserve.',
   },
   {
     target: 'coverageRequirements',
@@ -2683,6 +2688,7 @@ const ADR0069_CONTRACTS = [
       'UI-CMD-IMPORTED-OWNER-CLAIM',
       'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
       'UI-CMD-DEVICE-REQUEST-REJECT',
+      'UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
     ],
   },
   {
@@ -2744,6 +2750,39 @@ const ADR0069_CONTRACTS = [
         executableOperationIds: [],
         workflowCommandIds: ['UI-CMD-ADMISSION-PLAYER-DECIDE'],
       },
+      {
+        formId: 'GM-001',
+        primaryActions: [
+          'Химера: скрытые пороги и внешние Пожирания',
+          'Группы',
+          'Кампания и настройки host',
+          'Открыть «Список персонажей кампании»',
+        ],
+        executableOperationIds: [],
+        workflowCommandIds: [],
+      },
+      {
+        formId: 'GM-002',
+        primaryActions: [
+          'Открыть «Входящие запросы устройств»',
+          'Открыть «Исходный локальный лист»',
+          'Открыть «Финализация кампанийной копии»',
+          'Открыть «Завершить кампанию»',
+          'Вернуться к «Главная панель мастера»',
+          'Импортировать кандидата из файла',
+        ],
+        executableOperationIds: [],
+        workflowCommandIds: [],
+      },
+      {
+        formId: 'PLY-030',
+        primaryActions: [
+          'Готов открыть следующую проекцию',
+          'Вернуть управление инициатору после ответа',
+        ],
+        executableOperationIds: [],
+        workflowCommandIds: ['UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK'],
+      },
     ],
   },
   {
@@ -2768,6 +2807,7 @@ const ADR0069_CONTRACTS = [
           'REQUEST_REJECTED',
           'STALE_REQUEST',
         ],
+        'GM-002': ['EMPTY_NO_CHARACTER', 'SELECTED_CHARACTER'],
       },
       mutationBoundary:
         'Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.',
@@ -2785,6 +2825,7 @@ const ADR0069_CONTRACTS = [
       'Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.',
       'Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.',
       'CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
+      'For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published.',
     ],
   },
   {
@@ -3229,6 +3270,7 @@ const ADR0069_CONTRACTS = [
       'Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.',
       'Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.',
       'Journey participants include GM and player, without broadening form authority: campaign creation, initial-time input and Start remain GM-only; the player can confirm only its own exact Ready set on NET-006 and receive its own PLY-001 projection.',
+      'До первого Start календарное состояние NPC требует подтверждённого начального времени. Только успешный CREATE_V1 или NEW-VERSION phase=COMMIT атомарно сохраняет полную версию/history/receipt и при первом таком commit закрепляет initialTimeLockOrNull на эту минуту. OPEN, draft, навигация, cancel, invalid/stale commit и NPC без календарных таймеров lock не создают. Исторические anchors, версии и receipts неизменны; снятие текущего эффекта, новая версия без таймера, archive/delete не снимают уже сохранённую привязку. После Start используется текущий campaign clock; новые initial-time input, автоматические часы, ADVANCE_TIME, scene/combat context и placement не добавляются.',
     ],
   },
   {
@@ -3330,9 +3372,9 @@ const ADR0069_CONTRACTS = [
       qaId: 'QA-REQ-006',
       scope: 'REQ-006',
       scenario:
-        'Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.',
+        'Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true.; GM-002 имеет закрытые characterPanelVariant=EMPTY_NO_CHARACTER|SELECTED_CHARACTER. EMPTY_NO_CHARACTER допустим при отсутствии выбранного campaignCharacterId, включая кампанию с нулём PC; selectedCampaignCharacterIdOrNull и selectedCharacterOrNull равны null, character-bound HP/OE/group/location/marker/device/seat/connection поля ABSENT, без нулевых/фиктивных значений. SELECTED_CHARACTER сохраняет прежние поля/проверки настоящего выбранного персонажа. Пустой variant показывает существующие импорт и безопасный возврат; он не открывает инспектор, source sheet или admission editor без их собственного действительного request/copy context. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Первый GM import доступен из единой GM-001 через GM-002 без selected character. Только прежний signed GM_IMPORT_CANDIDATE origin/return GM-002 и sole current master authority; player local library не открывается. Cancel/error/reconnect/receipt return восстанавливают текущий вариант GM-002 без фиктивного PC/HP/group/marker/seat. Импорт/owner claim не заменяют финальный admission и не выдают преждевременные Ready/authority/reserve. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.',
       expected:
-        'Terminal states/deltas: {"terminalStatesByForm":{"CHR-043":["NO_FILE","FILE_SELECTED","PICKER_CANCELLED"],"CHR-045":["IMPORTED_LOCAL_COPY","PENDING_OWNER_LINK","INCOMPATIBLE_REPORT","NO_PARTIAL_COMMIT"],"NET-028":["PENDING_OWNER_LINK","CLAIM_ACCEPTED","CLAIM_DECLINED","ADMISSION_REQUIRED"],"NET-027":["DIFF_LOADING","READY_FOR_WHOLE_BATCH_DECISION","ACCEPTED","DECLINED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.',
+        'Terminal states/deltas: {"terminalStatesByForm":{"CHR-043":["NO_FILE","FILE_SELECTED","PICKER_CANCELLED"],"CHR-045":["IMPORTED_LOCAL_COPY","PENDING_OWNER_LINK","INCOMPATIBLE_REPORT","NO_PARTIAL_COMMIT"],"NET-028":["PENDING_OWNER_LINK","CLAIM_ACCEPTED","CLAIM_DECLINED","ADMISSION_REQUIRED"],"NET-027":["DIFF_LOADING","READY_FOR_WHOLE_BATCH_DECISION","ACCEPTED","DECLINED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"],"GM-002":["EMPTY_NO_CHARACTER","SELECTED_CHARACTER"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.; For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published.',
     },
   },
   {
@@ -3792,12 +3834,12 @@ const ADR0069_PROTECTED = [
   {
     target: 'forms',
     id: 'NET-018',
-    sha256: 'dd058f0a28e9cf23fd2715640fb22a70b249077c8e4832d26ebf9626c69eba77',
+    sha256: 'c881977adb18e2c77a78e098c22e96a4b0b9023a7924e2325d1bc986d87682aa',
   },
   {
     target: 'forms',
     id: 'NET-019',
-    sha256: '678e7e6fbf39b424296ed6985b6637e160569ff4a90993678bf577439f3fe966',
+    sha256: 'eada98fe4c06201a883518c296999f8d6f094ce5e199d501d434b089116e9f95',
   },
   {
     target: 'forms',
@@ -4115,8 +4157,8 @@ function adr0069Row(root: JsonObject, target: string, id: string): JsonObject {
   );
 }
 export function assertAdr0069RequestReview(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.10');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-04');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.11');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-05');
   for (const expected of ADR0069_AUTHORITY_CONTRACTS) {
     const form = adr0069Row(root, 'forms', expected.id);
     for (const [key, value] of Object.entries(expected.fields))
@@ -4130,7 +4172,7 @@ export function assertAdr0069RequestReview(root: JsonObject): void {
   const counts = asObject(root['counts'], WHERE, 'counts');
   for (const [key, count] of Object.entries({
     forms: 376,
-    transitions: 1706,
+    transitions: 1708,
     workflowCommands: 112,
     qaScenarios: 2449,
   })) {
@@ -4272,6 +4314,8 @@ export async function importAtlas(): Promise<AtlasImport> {
   assertAdr0049MissingChannels(root);
   assertAdr0052AdvisorIntelligenceFloor(root);
   assertAdr0069RequestReview(root);
+  assertAdr0078QueueSources(root);
+  assertAdr0078QueueSourcesMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0071Admission(root);
   assertAdr0077GmSources(root);
   assertAdr0077GmSourcesMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
