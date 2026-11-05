@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   campaignPeerStateValue,
+  CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
   campaignPeerMatchesSnapshot,
   campaignPeerSnapshotId,
   type CampaignPeerStateV3Message,
 } from './campaign-lifecycle.js';
 import type { JsonObject } from './wire-protocol.js';
+import { NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS } from './device-admission.js';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const revisions = { stateRevision: 7, projectionRevision: 9, actorVisibilityRevision: 0 };
@@ -167,5 +169,40 @@ describe('#174 closed peer continuation anchors', () => {
         null,
       ),
     ).toBe(false);
+  });
+  it('keeps approved transfer source vocabulary outside the implemented pinned reconnect boundary', () => {
+    for (const workflow of [
+      'UI-CMD-MASTER-TRANSFER-UNLOCK',
+      'UI-CMD-MASTER-TRANSFER-COMMIT',
+      'UI-CMD-MASTER-TRANSFER-ACK',
+      'UI-CMD-MASTER-TRANSFER-CANCEL',
+      'UI-CMD-MASTER-TRANSFER-RECONNECT',
+    ]) {
+      expect(NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS).not.toContain(workflow);
+      expect(CAMPAIGN_LIFECYCLE_WORKFLOW_IDS).not.toContain(workflow);
+    }
+    const ordinary = peer('NET-009');
+    expect(campaignPeerStateValue(ordinary)).toEqual(ordinary);
+    expect(ordinary.formOrNull!.availableActionKeys).toEqual(['NET-009::CTA::001']);
+    for (const actionKey of ['NET-009::CTA::003', 'NET-009::CTA::004']) {
+      const source = peer('NET-009');
+      const forged = {
+        ...source,
+        formOrNull: {
+          ...source.formOrNull!,
+          availableActionKeys: ['NET-009::CTA::001', actionKey],
+        },
+      };
+      expect(() => campaignPeerStateValue(forged), actionKey).toThrow();
+    }
+    const proofSource = peer('NET-009');
+    const forgedProof = {
+      ...proofSource,
+      formOrNull: {
+        ...proofSource.formOrNull!,
+        fields: { ...proofSource.formOrNull!.fields, transferReconnectOrNull: null },
+      },
+    };
+    expect(() => campaignPeerStateValue(forgedProof)).toThrow();
   });
 });
