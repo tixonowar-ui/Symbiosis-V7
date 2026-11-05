@@ -1,5 +1,18 @@
 # Состояние модулей
 
+## Source #221, штатная передача — 2026-11-05
+
+Atlas 1.12/B7 фиксирует selector преемника, его отдельный ACK и новый пароль,
+отмену до commit, единственную authority и явный переход доверия к собственной
+installation identity преемника. Реальные controls и terminal return contexts
+закреплены источником; runtime handlers и экраны остаются задачей #215.
+[ADR 0079](../adr/0079-normal-master-transfer-source.md).
+
+B6 сохранён отдельным manifest; добавлены только точные forward-пары к B7.
+24 mechanical replay inputs, runtime tuple, 23 non-Atlas paths и старые
+данные неизменны. Аварийное recovery поставляется отдельно; #221 открыта
+до завершения третьей части. Проверки окончательного SHA фиксируются в PR.
+
 ## Source #221 — 2026-11-05
 
 Atlas 1.11 поставляет первую часть принятых решений #221: календарный NPC

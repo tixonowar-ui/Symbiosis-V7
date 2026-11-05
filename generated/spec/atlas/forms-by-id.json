@@ -4183,6 +4183,12 @@
         "guard": "launch-shell exception only: no active campaign/host/player projection, no pending command or authority handoff; dispose the complete GM DOM/a11y/hotkey/cache namespace before rendering role-neutral APP-001; no game data mutation",
         "kind": "normative",
         "trigger": "Сменить режим"
+      },
+      {
+        "from": "NET-025",
+        "guard": "Authenticated terminal-receipt participant with captured ROLE_NEUTRAL_BOOT; dispose only the technical invitation, no player/GM session or gameplay authority, launch-mode unselected and all existing APP-001 entry/boot guards satisfied. Never reset an existing player/GM session to satisfy this route.",
+        "kind": "normative",
+        "trigger": "Закрыть техническое приглашение"
       }
     ],
     "transitionsOut": [
@@ -4945,6 +4951,12 @@
         "guard": "Own terminal result confirmed; DEVICE_REQUEST or MASTER_IMPORT with signed returnMode=REMOTE_PLAYER; no pending command; preserve original receipts/local FINAL and release only presentation context. Imported LOCAL_HANDOFF must use its signed privacy return, never this direct APP-002 route.",
         "kind": "safe-return",
         "trigger": "Вернуться в меню игрока"
+      },
+      {
+        "from": "NET-025",
+        "guard": "Authenticated terminal-receipt participant; confirmed current PLAYER shell and bound PLAYER_MENU context; existing APP-002 entry guards satisfied. Includes old GM after COMMIT or existing player after CANCEL/DECLINE; retain character/campaign bindings and dispose only the transfer projection.",
+        "kind": "normative",
+        "trigger": "Продолжить как игрок"
       }
     ],
     "transitionsOut": [
@@ -9682,12 +9694,6 @@
         "guard": "campaignDraftId not committed",
         "kind": "normative",
         "trigger": "Отменить черновик кампании"
-      },
-      {
-        "from": "NET-025",
-        "guard": "UI-CMD-MASTER-TRANSFER-COMMIT guards",
-        "kind": "workflow-command",
-        "trigger": "Передать полномочия выбранному successor"
       },
       {
         "from": "NET-011",
@@ -78892,7 +78898,7 @@
         "trigger": "J-HOST-PUBLISH-SETTINGS::EDIT_SAFE_SETTINGS::return"
       },
       {
-        "guard": "Campaign frozen and target device explicitly selected.",
+        "guard": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
         "kind": "journey",
         "to": "NET-024",
         "trigger": "J-MASTER-TRANSFER::UNLOCK_TARGET"
@@ -93473,7 +93479,7 @@
       },
       {
         "from": "NET-024",
-        "guard": "authority unchanged",
+        "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
         "kind": "normative",
         "trigger": "Отменить"
       },
@@ -93482,12 +93488,6 @@
         "guard": "device and character binding unchanged",
         "kind": "normative",
         "trigger": "Отменить"
-      },
-      {
-        "from": "NET-025",
-        "guard": "old authority retained",
-        "kind": "normative",
-        "trigger": "Отменить до commit"
       },
       {
         "from": "CMB-063",
@@ -93674,6 +93674,12 @@
         "guard": "otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=GM; returnContext=gm/admin",
         "kind": "safe-return",
         "trigger": "Закрыть и вернуть вызывающий GM context"
+      },
+      {
+        "from": "NET-025",
+        "guard": "Authenticated terminal-receipt participant; current single GM authority and bound GM_PANEL context; existing GM-001 entry guards satisfied. Includes successor after COMMIT or retained GM after CANCEL/DECLINE; dispose only the transfer projection.",
+        "kind": "normative",
+        "trigger": "Открыть панель мастера"
       }
     ],
     "transitionsOut": [
@@ -126686,6 +126692,12 @@
         "guard": "UI-CMD-CLIENT-DISCONNECT committed; preserved character binding is observer-safe",
         "kind": "system-event",
         "trigger": "Server publishes client disconnect"
+      },
+      {
+        "from": "NET-009",
+        "guard": "Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.",
+        "kind": "normative",
+        "trigger": "Отложить переход к преемнику"
       }
     ],
     "transitionsOut": [
@@ -126713,7 +126725,8 @@
       "Назначение реализовано буквально: Повторно аутентифицировать устройство/место или master authority и запросить server-authoritative snapshot; клиентский route не передаётся как источник resumeFormId.",
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
       "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.",
-      "The new pinnedCampaignPeerReconnectOrNull variant applies only to an existing authenticated campaign-peer binding. Its fields come from that saved pin and last authenticated endpoint; editable address/port are an explicit manual intent. A local GM or a legacy recovery context without a campaign-peer binding uses null and its existing recovery route, never a fabricated peer identity or endpoint."
+      "The new pinnedCampaignPeerReconnectOrNull variant applies only to an existing authenticated campaign-peer binding. Its fields come from that saved pin and last authenticated endpoint; editable address/port are an explicit manual intent. A local GM or a legacy recovery context without a campaign-peer binding uses null and its existing recovery route, never a fabricated peer identity or endpoint.",
+      "Обычный reconnect к иной host identity отклоняется; только verified common transfer proof + explicit reconnect допускают новый pin без admission/copy/gameplay replay."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -126726,7 +126739,8 @@
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Сверка состояния после переподключения»; Получен snapshot."
+        "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-RECONNECT.",
+        "Разрешённые видимые действия/CTA именно этой формы: Открыть «Сверка состояния после переподключения»; Получен snapshot; Переподключиться к подтверждённому преемнику; Отложить переход к преемнику."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -126734,7 +126748,9 @@
           "operationIds": [],
           "ruleIds": [],
           "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
-          "workflowCommandIds": []
+          "workflowCommandIds": [
+            "UI-CMD-MASTER-TRANSFER-RECONNECT"
+          ]
         },
         "availabilityInputs": [
           "actorId",
@@ -126776,7 +126792,9 @@
             "operationIds": [],
             "ruleIds": [],
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
-            "workflowCommandIds": []
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-RECONNECT"
+            ]
           },
           "availabilityInputs": [
             "actorId",
@@ -126830,7 +126848,9 @@
             "operationIds": [],
             "ruleIds": [],
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
-            "workflowCommandIds": []
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-RECONNECT"
+            ]
           },
           "availabilityInputs": [
             "actorId",
@@ -126876,6 +126896,118 @@
           ],
           "targetFormId": "NET-010",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-009::CTA::003",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-RECONNECT"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "UI-CMD-MASTER-TRANSFER-RECONNECT guards",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Переподключиться к подтверждённому преемнику",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-010",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-009::CTA::004",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-RECONNECT"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Отложить переход к преемнику",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-008",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -126889,14 +127021,59 @@
       ],
       "visible": [
         "Открыть «Сверка состояния после переподключения»",
-        "Получен snapshot"
+        "Получен snapshot",
+        "Переподключиться к подтверждённому преемнику",
+        "Отложить переход к преемнику"
       ],
-      "workflowCommandAvailability": []
+      "workflowCommandAvailability": [
+        {
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-RECONNECT"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "commandId": "UI-CMD-MASTER-TRANSFER-RECONNECT",
+          "guard": "Explicit local device confirmation of verified common transfer receipt/checkpoint and authority continuity from its pinned campaign to the successor installation identity; authenticate that exact successor endpoint. Incomplete/conflicting proof or partition cannot replace the pin. Ordinary reconnect still requires the previous pinned identity.",
+          "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ]
+        }
+      ]
     },
     "auditAtomicity": {
       "audit": "Для изменения хранить actor/author, timestamp, before/after, reason/source и итоговую revision.",
       "command": "Mutation имеет commandId/operationId и выполняется атомарно после повторной серверной проверки guards.",
-      "reconnect": "Восстанавливать только server-confirmed state; незавершённый commit не повторяет бросок или расход."
+      "reconnect": "Восстанавливать только server-confirmed state; незавершённый commit не повторяет бросок или расход. Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Lost ACK/restart restores the same common commit; uncertainty stays frozen. Verified transfer notification enables only explicit player reconnect. Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Interrupted transfer reconnect restores its exact intent and proved identity transition; a changed endpoint never authorizes a different host identity."
     },
     "components": [
       "Identity/binding verification",
@@ -126904,7 +127081,8 @@
       "Snapshot request",
       "Attempt status",
       "Cancel without campaign mutation",
-      "Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку."
+      "Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку.",
+      "Проверенное уведомление о common transfer: старая и новая host identity, checkpoint и отдельная кнопка reconnect; закрыть уведомление оставляет прежний pin"
     ],
     "contexts": [
       "network"
@@ -126923,7 +127101,8 @@
     ],
     "guardStates": [
       "stateRevision и projectionRevision актуальны",
-      "нет конфликтующей незавершённой операции"
+      "нет конфликтующей незавершённой операции",
+      "Обычный reconnect требует previouslyPinnedHostIdentity; смена identity допустима только отдельной командой по verified common transfer proof и явному подтверждению устройства."
     ],
     "id": "NET-009",
     "inputOwner": "active controllerSeat/GM context according to roles",
@@ -126935,7 +127114,8 @@
     "purpose": "Повторно аутентифицировать устройство/место или master authority и запросить server-authoritative snapshot; клиентский route не передаётся как источник resumeFormId.",
     "qaScenarioIds": [
       "QA-FORM-NET-009",
-      "QA-CHANGE-NET-009"
+      "QA-CHANGE-NET-009",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-RECONNECT"
     ],
     "references": {
       "abilityIds": [],
@@ -126956,7 +127136,8 @@
       "projectedOperationIds": [],
       "qnaIds": [
         "Q-CAMP-005",
-        "Q-CAMP-006"
+        "Q-CAMP-006",
+        "Q-CAMP-009"
       ],
       "ruleIds": [],
       "sourceFiles": [
@@ -126971,7 +127152,9 @@
         136,
         276
       ],
-      "workflowCommandIds": []
+      "workflowCommandIds": [
+        "UI-CMD-MASTER-TRANSFER-RECONNECT"
+      ]
     },
     "requiredFields": [
       "deviceId",
@@ -126986,7 +127169,8 @@
       "pendingCommandIdOrNull",
       "pendingRequestIdOrNull",
       "commandId",
-      "pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}"
+      "pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}",
+      "transferReconnectOrNull={transferReceiptId,campaignId,checkpointId,checkpointDigest,previousPinnedHostIdentity,successorInstallationIdentity,authorityContinuityProof,successorEndpoint,proofStatus}; separate from ordinary pinned reconnect"
     ],
     "roles": [
       "player",
@@ -126994,6 +127178,9 @@
     ],
     "route": "/player/campaigns/:campaignId/network/net-009",
     "states": {
+      "TRANSFER_PROOF_PENDING": "Пока transfer proof не проверен, pin не меняется и reconnect к другой identity недоступен.",
+      "TRANSFER_PROOF_REFUSED": "Недостаточный/чужой/stale/conflicting proof не меняет pin, copies, admission или receipts.",
+      "TRANSFER_RECONNECT_READY": "Proof связывает прежний pin с единственным successor; только явное подтверждение пользователя разрешает trust transition.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -127044,6 +127231,12 @@
         "guard": "UI-CMD-CONNECTION-OPEN retry guards; interrupted session/device binding and resumeContext exist for activeRole=PLAYER|GM; transport receipt committed before reconciliation",
         "kind": "workflow-command",
         "trigger": "Повторить прерванную сессию по тому же адресу"
+      },
+      {
+        "from": "NET-025",
+        "guard": "Committed transfer receipt and verified authority continuity; player/device-specific proof without GM secrets.",
+        "kind": "system-event",
+        "trigger": "Проверенное уведомление о передаче host identity"
       }
     ],
     "transitionsOut": [
@@ -127064,6 +127257,18 @@
         "kind": "system-event",
         "to": "NET-015",
         "trigger": "Reconnect identity or binding rejected"
+      },
+      {
+        "guard": "UI-CMD-MASTER-TRANSFER-RECONNECT guards",
+        "kind": "workflow-command",
+        "to": "NET-010",
+        "trigger": "Переподключиться к подтверждённому преемнику"
+      },
+      {
+        "guard": "Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.",
+        "kind": "normative",
+        "to": "NET-008",
+        "trigger": "Отложить переход к преемнику"
       }
     ],
     "type": "screen"
@@ -127341,6 +127546,12 @@
         "guard": "device identity accepted",
         "kind": "normative",
         "trigger": "Получен snapshot"
+      },
+      {
+        "from": "NET-009",
+        "guard": "UI-CMD-MASTER-TRANSFER-RECONNECT guards",
+        "kind": "workflow-command",
+        "trigger": "Переподключиться к подтверждённому преемнику"
       }
     ],
     "transitionsOut": [
@@ -134370,8 +134581,9 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Ввод пароля смены мастера и проверка полномочий.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Выбор сопряжённого преемника и проверка текущего пароля GM для обычной безопасной передачи; unlock не выдаёт полномочий.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Без selected paired successor UNLOCK отсутствует; изменение target сначала закрывает token через CANCEL. Current sole GM, private password и точный complete checkpoint обязательны."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -134383,9 +134595,9 @@
       "allowed": [
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-        "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-UNLOCK.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-        "Разрешённые видимые действия/CTA именно этой формы: Проверить пароль и разблокировать transfer; Отменить."
+        "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-UNLOCK.",
+        "Разрешённые видимые действия/CTA именно этой формы: Проверить пароль и разблокировать transfer; Отменить; Открыть «Передача роли мастера»; Открыть «Снимки и синхронизация кампании»."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -134625,7 +134837,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "authority unchanged",
+          "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -134666,7 +134878,9 @@
       ],
       "visible": [
         "Проверить пароль и разблокировать transfer",
-        "Отменить"
+        "Отменить",
+        "Открыть «Передача роли мастера»",
+        "Открыть «Снимки и синхронизация кампании»"
       ],
       "workflowCommandAvailability": [
         {
@@ -134696,7 +134910,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-MASTER-TRANSFER-UNLOCK",
-          "guard": "Correct transfer password; safe boundary; checkpoint complete; one current master.",
+          "guard": "Current sole GM and current GM password verified privately; safe boundary with no pending operation; explicitly selected paired authenticated LAN successor, complete receipt-compatible checkpoint and exact campaign/authority/checkpoint/selection revisions. No PC is required. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -134714,15 +134928,16 @@
       ]
     },
     "auditAtomicity": {
-      "audit": "Для изменения хранить actor/author, timestamp, before/after, reason/source и итоговую revision.",
-      "command": "Mutation имеет commandId/operationId и выполняется атомарно после повторной серверной проверки guards.",
-      "reconnect": "Восстанавливать только server-confirmed state; незавершённый commit не повторяет бросок или расход."
+      "audit": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
+      "command": "Create one short-lived transfer token bound to campaign, current GM, successor identity, selection revision and exact checkpoint; changing target requires confirmed CANCEL before new selection/UNLOCK. Unlock never changes authority.",
+      "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Token state restores or expires closed; changed target requires a new unlock."
     },
     "components": [
-      "Password input",
-      "Safe-boundary/checkpoint blockers",
-      "CTA разблокировки",
-      "Token expiry"
+      "Selector сопряжённого аутентифицированного LAN-устройства до unlock, в том числе без PC",
+      "Проверенный checkpoint, совместимость committed receipts и явные blockers",
+      "Приватный ввод текущего пароля GM и CTA проверки",
+      "Пока token действителен, selector закрыт: смена target сначала требует подтверждённый CANCEL в NET-025; затем новый выбор и UNLOCK",
+      "Отменить до unlock возвращает current GM в GM-001; pending transfer сначала отменяется в NET-025"
     ],
     "contexts": [
       "network"
@@ -134735,26 +134950,26 @@
     ],
     "domain": "Подключение и полномочия",
     "entryConditions": [
-      "Роль текущего shell входит в roles формы.",
-      "Загружена совместимая локальная либо серверная ревизия.",
-      "campaignId разрешён текущему устройству; authority определяется сервером, а не route."
+      "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
+      "Target фиксируется до UNLOCK; пока token действителен, смена устройства требует подтверждённый CANCEL."
     ],
     "guardStates": [
-      "stateRevision и projectionRevision актуальны",
-      "нет конфликтующей незавершённой операции",
-      "подтверждён единственный активный master authority"
+      "stateRevision, projectionRevision, authorityRevision, checkpointRevision и successorSelectionRevision актуальны",
+      "Подтверждён current sole GM; safe boundary и отсутствие pending operation",
+      "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts."
     ],
     "id": "NET-024",
-    "inputOwner": "active controllerSeat/GM context according to roles",
+    "inputOwner": "Текущий sole GM; пароль вводится приватно, route не является authority.",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+      "controller": "Только текущий GM видит selector, blockers и приватный password control. Raw password никогда не входит в проекцию, receipt или audit; successor получает только адресованный технический context без GM gameplay controls.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Ввод пароля смены мастера и проверка полномочий.",
+    "purpose": "Выбор сопряжённого преемника и проверка текущего пароля GM для обычной безопасной передачи; unlock не выдаёт полномочий.",
     "qaScenarioIds": [
       "QA-FORM-NET-024",
-      "QA-CHANGE-NET-024"
+      "QA-CHANGE-NET-024",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK"
     ],
     "references": {
       "abilityIds": [],
@@ -134799,7 +135014,17 @@
       "checkpointId",
       "pendingOperationCount",
       "transferToken",
-      "commandId"
+      "commandId",
+      "pairedSuccessorDevices[]={authenticatedDeviceId,installationIdentity,displayLabel}; PC/admission не требуются",
+      "selectedSuccessorDeviceIdOrNull",
+      "successorSelectionRevision",
+      "checkpointRevision",
+      "checkpointDigest",
+      "acceptedReceiptFrontier",
+      "checkpointProofStatus=VERIFIED|INSUFFICIENT|CONFLICTING",
+      "authorityFenceStatus=CONFIRMED|UNRESOLVED",
+      "stateRevision",
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -134808,7 +135033,9 @@
     "states": {
       "LOCKED": "Transfer token отсутствует.",
       "PASSWORD_INVALID": "Попытка записана; transfer остаётся locked.",
-      "UNLOCKED_TOKEN": "Одноразовый token выдан без смены authority.",
+      "PROOF_BLOCKED": "Недостаточные или противоречивые receipts/checkpoint/fencing: freeze сохранён, unlock и commit отсутствуют.",
+      "TARGET_CHANGED": "Прежний token недействителен; необходимы новый выбор и unlock.",
+      "UNLOCKED_TOKEN": "Token связан с точными successor/checkpoint/revisions; игровые полномочия не меняются.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -134826,7 +135053,7 @@
     "transitionsIn": [
       {
         "from": "CMP-015",
-        "guard": "Campaign frozen and target device explicitly selected.",
+        "guard": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
         "kind": "journey",
         "trigger": "J-MASTER-TRANSFER::UNLOCK_TARGET"
       },
@@ -134841,11 +135068,17 @@
         "guard": "safe boundary or completed child context",
         "kind": "subflow-return",
         "trigger": "J-MASTER-CONFLICT::RECOVER::return"
+      },
+      {
+        "from": "NET-025",
+        "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+        "kind": "workflow-command",
+        "trigger": "Отменить до commit"
       }
     ],
     "transitionsOut": [
       {
-        "guard": "Old master confirms; target acknowledges before authority changes.",
+        "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
         "kind": "journey",
         "to": "NET-025",
         "trigger": "J-MASTER-TRANSFER::TRANSFER"
@@ -134863,10 +135096,16 @@
         "trigger": "Проверить пароль и разблокировать transfer"
       },
       {
-        "guard": "authority unchanged",
+        "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
         "kind": "normative",
         "to": "GM-001",
         "trigger": "Отменить"
+      },
+      {
+        "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
+        "kind": "system-event",
+        "to": "NET-025",
+        "trigger": "Адресованное приглашение выбранному successor"
       }
     ],
     "type": "screen"
@@ -134877,8 +135116,9 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Выбор компьютера-преемника и контроль передачи снимка.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Отдельное принятие роли выбранным преемником, новый пароль GM и общий commit передачи; до общего commit у преемника нет authority.",
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Paired successor без PC принимает тот же checkpoint и новый GM password отдельной кнопкой; до общего COMMIT отсутствуют GM controls. DECLINE/CANCEL/replay не создают grant; прежний GM после COMMIT имеет только player authority."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -134890,9 +135130,9 @@
       "allowed": [
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-        "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-COMMIT.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-        "Разрешённые видимые действия/CTA именно этой формы: Передать полномочия выбранному successor; Отменить до commit."
+        "Разрешённые atlas workflow commands этой формы: UI-CMD-MASTER-TRANSFER-ACK, UI-CMD-MASTER-TRANSFER-COMMIT, UI-CMD-MASTER-TRANSFER-CANCEL.",
+        "Разрешённые видимые действия/CTA именно этой формы: Передать полномочия выбранному successor; Отменить до commit; Принять роль и подтвердить checkpoint; Отклонить принятие роли; Открыть панель мастера; Продолжить как игрок; Закрыть техническое приглашение."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -134901,7 +135141,9 @@
           "ruleIds": [],
           "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
           "workflowCommandIds": [
-            "UI-CMD-MASTER-TRANSFER-COMMIT"
+            "UI-CMD-MASTER-TRANSFER-ACK",
+            "UI-CMD-MASTER-TRANSFER-COMMIT",
+            "UI-CMD-MASTER-TRANSFER-CANCEL"
           ]
         },
         "availabilityInputs": [
@@ -134945,7 +135187,9 @@
             "ruleIds": [],
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
             "workflowCommandIds": [
-              "UI-CMD-MASTER-TRANSFER-COMMIT"
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
             ]
           },
           "availabilityInputs": [
@@ -134990,7 +135234,7 @@
             "game time/campaign state",
             "stateRevision/projectionRevision"
           ],
-          "targetFormId": "APP-011",
+          "targetFormId": "NET-025",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         },
         {
@@ -135001,7 +135245,9 @@
             "ruleIds": [],
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
             "workflowCommandIds": [
-              "UI-CMD-MASTER-TRANSFER-COMMIT"
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
             ]
           },
           "availabilityInputs": [
@@ -135020,7 +135266,181 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "old authority retained",
+          "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Отменить до commit",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-024",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-025::CTA::003",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=ACCEPT; new GM password required",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Принять роль и подтвердить checkpoint",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-025",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-025::CTA::004",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=DECLINE; show confirmed terminal receipt before a role/context-bound exit",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "workflow-command",
+          "label": "Отклонить принятие роли",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "NET-025",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-025::CTA::005",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Authenticated terminal-receipt participant; current single GM authority and bound GM_PANEL context; existing GM-001 entry guards satisfied. Includes successor after COMMIT or retained GM after CANCEL/DECLINE; dispose only the transfer projection.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -135033,7 +135453,7 @@
             "playerProjection": "ABSENT"
           },
           "kind": "normative",
-          "label": "Отменить до commit",
+          "label": "Открыть панель мастера",
           "recomputeTriggers": [
             "action budget",
             "HP/OE/effects/death or incapacity",
@@ -135048,6 +135468,122 @@
           ],
           "targetFormId": "GM-001",
           "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-025::CTA::006",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Authenticated terminal-receipt participant; confirmed current PLAYER shell and bound PLAYER_MENU context; existing APP-002 entry guards satisfied. Includes old GM after COMMIT or existing player after CANCEL/DECLINE; retain character/campaign bindings and dispose only the transfer projection.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Продолжить как игрок",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "APP-002",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "NET-025::CTA::007",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "guard": "Authenticated terminal-receipt participant with captured ROLE_NEUTRAL_BOOT; dispose only the technical invitation, no player/GM session or gameplay authority, launch-mode unselected and all existing APP-001 entry/boot guards satisfied. Never reset an existing player/GM session to satisfy this route.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Закрыть техническое приглашение",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "APP-001",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
         }
       ],
       "dynamicAvailability": "Форма показывает только операции, разрешённые текущей ролью и guard-состоянием.",
@@ -135061,7 +135597,12 @@
       ],
       "visible": [
         "Передать полномочия выбранному successor",
-        "Отменить до commit"
+        "Отменить до commit",
+        "Принять роль и подтвердить checkpoint",
+        "Отклонить принятие роли",
+        "Открыть панель мастера",
+        "Продолжить как игрок",
+        "Закрыть техническое приглашение"
       ],
       "workflowCommandAvailability": [
         {
@@ -135071,7 +135612,53 @@
             "ruleIds": [],
             "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
             "workflowCommandIds": [
-              "UI-CMD-MASTER-TRANSFER-COMMIT"
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "commandId": "UI-CMD-MASTER-TRANSFER-ACK",
+          "guard": "Only the authenticated device named in a current unlock may answer its exact campaign/token/checkpoint/revisions. ACCEPT requires explicit checkpoint confirmation and matching nonempty new GM password/confirmation, private to successor; DECLINE requires no new password. No admitted PC or pre-existing GM role is required.",
+          "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ]
+        },
+        {
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
             ]
           },
           "availabilityInputs": [
@@ -135091,7 +135678,51 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-MASTER-TRANSFER-COMMIT",
-          "guard": "Valid unlock token; successor device acknowledged checkpoint; no pending operation.",
+          "guard": "Current sole GM initiator, current valid unlock, exact successor ACK/checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions and no pending operation; old authority fenced before successor grant. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+          "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ]
+        },
+        {
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-MASTER-TRANSFER-ACK",
+              "UI-CMD-MASTER-TRANSFER-COMMIT",
+              "UI-CMD-MASTER-TRANSFER-CANCEL"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "commandId": "UI-CMD-MASTER-TRANSFER-CANCEL",
+          "guard": "Only the authenticated initiator of this current unlock may cancel before common COMMIT; exact campaign/token/selection/authority revisions. After committed transfer CANCEL is refused.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -135109,16 +135740,17 @@
       ]
     },
     "auditAtomicity": {
-      "audit": "Для изменения хранить actor/author, timestamp, before/after, reason/source и итоговую revision.",
-      "command": "Mutation имеет commandId/operationId и выполняется атомарно после повторной серверной проверки guards.",
-      "reconnect": "Восстанавливать только server-confirmed state; незавершённый commit не повторяет бросок или расход."
+      "audit": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
+      "command": "ACK и CANCEL — самостоятельные durable commands без grant; только COMMIT меняет authority. One durable common commit revokes old authority and grants exactly one successor using its own installation identity; it activates the new GM credential and records the transfer/checkpoint/authority proof and one receipt. Old GM becomes an ordinary player retaining assigned characters. Only confirmed COMMIT derives terminal participantReturnContext server-side: GM_PANEL for the successor and PLAYER_MENU for the old GM; DECLINE/CANCEL preserve the captured origin; clients cannot select or alter this binding. Never copy an old host private key or repeat gameplay receipts.",
+      "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Lost ACK/restart restores the same common commit; uncertainty stays frozen. Verified transfer notification enables only explicit player reconnect."
     },
     "components": [
-      "Выбор successor",
-      "Checkpoint acknowledgement",
-      "Atomic revoke+grant preview",
-      "CTA передачи",
-      "Conflict freeze"
+      "Точный checkpoint и paired successor identity, без требования PC",
+      "На successor: отдельные кнопки принять/отклонить роль и приватный новый пароль GM с подтверждением",
+      "На инициаторе: ACK/status, общий COMMIT и CANCEL до commit",
+      "После commit: receipt и server-confirmed role; прежний GM становится player с прежними назначенными персонажами",
+      "Terminal controls возвращают в bound GM/player context; APP-001 доступен только прежнему role-neutral boot после удаления технического приглашения и без игровых session/authority",
+      "Ошибки пароля, stale proof, cancel, disconnect и conflict сохраняют одну authority либо freeze"
     ],
     "contexts": [
       "network"
@@ -135131,26 +135763,29 @@
     ],
     "domain": "Подключение и полномочия",
     "entryConditions": [
-      "Роль текущего shell входит в roles формы.",
-      "Загружена совместимая локальная либо серверная ревизия.",
-      "campaignId разрешён текущему устройству; authority определяется сервером, а не route."
+      "Pending INITIATOR/SUCCESSOR_ACK: Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
+      "SUCCESSOR_ACK — адресованная проекция выбранного paired device, не GM authority; INITIATOR — текущий sole GM.",
+      "TERMINAL_RECEIPT: подтверждённый DECLINE/CANCEL/COMMIT receipt связан с аутентифицированным участником; consumed token не требуется действующим, текущая роль определяется подтверждённой authority."
     ],
     "guardStates": [
-      "stateRevision и projectionRevision актуальны",
-      "нет конфликтующей незавершённой операции",
-      "подтверждён единственный активный master authority"
+      "Pending view: точные current token, campaign, successor identity, checkpointDigest, selection/authority/state/projection revisions; terminal view: authenticated immutable receipt и current role projection",
+      "Игровые GM controls у successor отсутствуют до common commit",
+      "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts."
     ],
     "id": "NET-025",
-    "inputOwner": "active controllerSeat/GM context according to roles",
+    "inputOwner": "Текущий sole GM инициатор выполняет COMMIT/CANCEL; только выбранное аутентифицированное устройство в SUCCESSOR_ACK принимает/отклоняет checkpoint и приватно задаёт новый GM password. PC не нужен. TERMINAL_RECEIPT доступен только связанному с receipt участнику, включая прежнего GM как player.",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+      "controller": "INITIATOR видит ACK/status без нового password/verifier; SUCCESSOR_ACK видит только адресованный checkpoint и свои private inputs без GM gameplay metadata. TERMINAL_RECEIPT показывает подтверждённую роль. Raw secrets никогда не сериализуются другим устройствам.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Выбор компьютера-преемника и контроль передачи снимка.",
+    "purpose": "Отдельное принятие роли выбранным преемником, новый пароль GM и общий commit передачи; до общего commit у преемника нет authority.",
     "qaScenarioIds": [
       "QA-FORM-NET-025",
-      "QA-CHANGE-NET-025"
+      "QA-CHANGE-NET-025",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-ACK",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-CANCEL"
     ],
     "references": {
       "abilityIds": [],
@@ -135185,7 +135820,9 @@
         137
       ],
       "workflowCommandIds": [
-        "UI-CMD-MASTER-TRANSFER-COMMIT"
+        "UI-CMD-MASTER-TRANSFER-ACK",
+        "UI-CMD-MASTER-TRANSFER-COMMIT",
+        "UI-CMD-MASTER-TRANSFER-CANCEL"
       ]
     },
     "requiredFields": [
@@ -135193,17 +135830,38 @@
       "successorDeviceId",
       "successorAcknowledgedCheckpoint",
       "oldMasterAuthorityRevision",
-      "commandId"
+      "commandId",
+      "transferView=INITIATOR|SUCCESSOR_ACK|TERMINAL_RECEIPT",
+      "campaignId",
+      "checkpointId",
+      "checkpointDigest",
+      "checkpointRevision",
+      "successorSelectionRevision",
+      "successorInstallationIdentity",
+      "successorDecision=ACCEPT|DECLINE|UNANSWERED",
+      "successorAckReceiptOrNull",
+      "newGmPasswordInputAndConfirmation=PRIVATE_SUCCESSOR_INPUT_ONLY",
+      "newGmCredentialStatus=NOT_SET|CONFIRMED_VERIFIER; verifier successor-local only, other devices receive setup commitment",
+      "transferReceiptOrNull",
+      "authorityFenceStatus=CONFIRMED|UNRESOLVED",
+      "stateRevision",
+      "projectionRevision",
+      "terminalReceiptOrNull={kind=DECLINE|CANCEL|COMMIT,commandId,confirmedParticipantBinding}; immutable receipt, not a live token",
+      "participantReturnContext=GM_PANEL|PLAYER_MENU|ROLE_NEUTRAL_BOOT; server-bound context of the authenticated participant: confirmed COMMIT derives GM_PANEL for successor and PLAYER_MENU for old GM; DECLINE/CANCEL preserve captured origin; revalidated against current confirmed role and destination entry guards; client cannot select or alter this binding"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "system",
+      "player"
     ],
     "route": "/master/campaigns/:campaignId/network/net-025",
     "states": {
+      "CANCELLED": "Инициатор отменил pending transfer; current old GM authority сохранена.",
       "CONFLICT_FROZEN": "Кампания заморожена до recovery.",
-      "READY_TO_COMMIT": "Successor подтвердил checkpoint.",
-      "TRANSFERRED": "Authority revoke+grant выполнены атомарно.",
-      "WAITING_SUCCESSOR_ACK": "Старая authority остаётся единственной.",
+      "DECLINED": "Преемник отказался; token закрыт, authority не передана.",
+      "READY_TO_COMMIT": "Точные checkpoint ACK и новый verifier подтверждены; authority ещё не передана.",
+      "TRANSFERRED": "Один common commit: old authority отозвана, successor получил authority с новым credential и собственной installation identity.",
+      "WAITING_SUCCESSOR_ACK": "Преемник не имеет GM authority; старый GM остаётся единственным мастером.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -135221,7 +135879,7 @@
     "transitionsIn": [
       {
         "from": "NET-024",
-        "guard": "Old master confirms; target acknowledges before authority changes.",
+        "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
         "kind": "journey",
         "trigger": "J-MASTER-TRANSFER::TRANSFER"
       },
@@ -135230,20 +135888,80 @@
         "guard": "UI-CMD-MASTER-TRANSFER-UNLOCK guards",
         "kind": "workflow-command",
         "trigger": "Проверить пароль и разблокировать transfer"
+      },
+      {
+        "from": "NET-025",
+        "guard": "UI-CMD-MASTER-TRANSFER-COMMIT guards",
+        "kind": "workflow-command",
+        "trigger": "Передать полномочия выбранному successor"
+      },
+      {
+        "from": "NET-025",
+        "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=ACCEPT; new GM password required",
+        "kind": "workflow-command",
+        "trigger": "Принять роль и подтвердить checkpoint"
+      },
+      {
+        "from": "NET-025",
+        "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=DECLINE; show confirmed terminal receipt before a role/context-bound exit",
+        "kind": "workflow-command",
+        "trigger": "Отклонить принятие роли"
+      },
+      {
+        "from": "NET-024",
+        "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
+        "kind": "system-event",
+        "trigger": "Адресованное приглашение выбранному successor"
       }
     ],
     "transitionsOut": [
       {
         "guard": "UI-CMD-MASTER-TRANSFER-COMMIT guards",
         "kind": "workflow-command",
-        "to": "APP-011",
+        "to": "NET-025",
         "trigger": "Передать полномочия выбранному successor"
       },
       {
-        "guard": "old authority retained",
+        "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+        "kind": "workflow-command",
+        "to": "NET-024",
+        "trigger": "Отменить до commit"
+      },
+      {
+        "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=ACCEPT; new GM password required",
+        "kind": "workflow-command",
+        "to": "NET-025",
+        "trigger": "Принять роль и подтвердить checkpoint"
+      },
+      {
+        "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=DECLINE; show confirmed terminal receipt before a role/context-bound exit",
+        "kind": "workflow-command",
+        "to": "NET-025",
+        "trigger": "Отклонить принятие роли"
+      },
+      {
+        "guard": "Authenticated terminal-receipt participant; current single GM authority and bound GM_PANEL context; existing GM-001 entry guards satisfied. Includes successor after COMMIT or retained GM after CANCEL/DECLINE; dispose only the transfer projection.",
         "kind": "normative",
         "to": "GM-001",
-        "trigger": "Отменить до commit"
+        "trigger": "Открыть панель мастера"
+      },
+      {
+        "guard": "Authenticated terminal-receipt participant; confirmed current PLAYER shell and bound PLAYER_MENU context; existing APP-002 entry guards satisfied. Includes old GM after COMMIT or existing player after CANCEL/DECLINE; retain character/campaign bindings and dispose only the transfer projection.",
+        "kind": "normative",
+        "to": "APP-002",
+        "trigger": "Продолжить как игрок"
+      },
+      {
+        "guard": "Authenticated terminal-receipt participant with captured ROLE_NEUTRAL_BOOT; dispose only the technical invitation, no player/GM session or gameplay authority, launch-mode unselected and all existing APP-001 entry/boot guards satisfied. Never reset an existing player/GM session to satisfy this route.",
+        "kind": "normative",
+        "to": "APP-001",
+        "trigger": "Закрыть техническое приглашение"
+      },
+      {
+        "guard": "Committed transfer receipt and verified authority continuity; player/device-specific proof without GM secrets.",
+        "kind": "system-event",
+        "to": "NET-009",
+        "trigger": "Проверенное уведомление о передаче host identity"
       }
     ],
     "type": "screen"

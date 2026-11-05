@@ -54,6 +54,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       'a8972fe03778ed8869580d162bf08f44b6d793e49c35e78b95732901905169fd',
   },
+  // ADR 0079 / #221: exact normal-transfer Atlas successor; no new art or mechanics.
+  normalTransferBaselineVersion:
+    'sha256:00cf6b3773528c767d3e1b05488a521497745b2e8d6a7d0c5ab1667b7424bacc',
+  normalTransferAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '2a31ca54a27096f0b8a704c59a38e7c16cbf585def5211e7a3700a0db8799deb',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '53be8e781e116e9467f3a90fedd240884f4875884c2de7056a1bda0ee411d1ea',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',

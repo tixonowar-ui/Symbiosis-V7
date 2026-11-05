@@ -185,25 +185,25 @@
     "title": "Завершить кампанию в immutable archive"
   },
   {
-    "atomicity": "Create one short-lived successor transfer token without changing authority.",
+    "atomicity": "Create one short-lived transfer token bound to campaign, current GM, successor identity, selection revision and exact checkpoint; changing target requires confirmed CANCEL before new selection/UNLOCK. Unlock never changes authority.",
     "commandId": "UI-CMD-MASTER-TRANSFER-UNLOCK",
     "formIds": [
       "NET-024"
     ],
-    "guards": "Correct transfer password; safe boundary; checkpoint complete; one current master.",
+    "guards": "Current sole GM and current GM password verified privately; safe boundary with no pending operation; explicitly selected paired authenticated LAN successor, complete receipt-compatible checkpoint and exact campaign/authority/checkpoint/selection revisions. No PC is required. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
     "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK",
-    "reconnect": "Token state restores or expires closed.",
+    "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Token state restores or expires closed; changed target requires a new unlock.",
     "title": "Разблокировать передачу мастера"
   },
   {
-    "atomicity": "Revoke old authority and grant successor in one transaction; never two masters.",
+    "atomicity": "One durable common commit revokes old authority and grants exactly one successor using its own installation identity; it activates the new GM credential and records the transfer/checkpoint/authority proof and one receipt. Old GM becomes an ordinary player retaining assigned characters. Only confirmed COMMIT derives terminal participantReturnContext server-side: GM_PANEL for the successor and PLAYER_MENU for the old GM; DECLINE/CANCEL preserve the captured origin; clients cannot select or alter this binding. Never copy an old host private key or repeat gameplay receipts.",
     "commandId": "UI-CMD-MASTER-TRANSFER-COMMIT",
     "formIds": [
       "NET-025"
     ],
-    "guards": "Valid unlock token; successor device acknowledged checkpoint; no pending operation.",
+    "guards": "Current sole GM initiator, current valid unlock, exact successor ACK/checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions and no pending operation; old authority fenced before successor grant. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
     "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT",
-    "reconnect": "Conflict freezes campaign until recovery; commit receipt is idempotent.",
+    "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Lost ACK/restart restores the same common commit; uncertainty stays frozen. Verified transfer notification enables only explicit player reconnect.",
     "title": "Передать полномочия одному преемнику"
   },
   {
@@ -1296,5 +1296,38 @@
     "qa": "QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET",
     "reconnect": "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
     "title": "Сохранить безопасные настройки кампании"
+  },
+  {
+    "atomicity": "Persist exactly one ACCEPT or DECLINE receipt for the bound request. ACCEPT stores the new credential verifier only on the successor installation and binds its confirmed setup commitment to the checkpoint ACK without granting authority; DECLINE invalidates the pending transfer. Raw password and verifier never leave the successor or enter public receipts.",
+    "commandId": "UI-CMD-MASTER-TRANSFER-ACK",
+    "formIds": [
+      "NET-025"
+    ],
+    "guards": "Only the authenticated device named in a current unlock may answer its exact campaign/token/checkpoint/revisions. ACCEPT requires explicit checkpoint confirmation and matching nonempty new GM password/confirmation, private to successor; DECLINE requires no new password. No admitted PC or pre-existing GM role is required.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-ACK",
+    "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
+    "title": "Подтвердить или отклонить принятие роли мастера"
+  },
+  {
+    "atomicity": "Invalidate the pending transfer and successor ACK atomically, retaining current old GM authority; never revoke a completed transfer.",
+    "commandId": "UI-CMD-MASTER-TRANSFER-CANCEL",
+    "formIds": [
+      "NET-025"
+    ],
+    "guards": "Only the authenticated initiator of this current unlock may cancel before common COMMIT; exact campaign/token/selection/authority revisions. After committed transfer CANCEL is refused.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-CANCEL",
+    "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
+    "title": "Отменить передачу до общего commit"
+  },
+  {
+    "atomicity": "Record one proved local trust transition and resume the same campaign/device bindings through NET-010 reconciliation. No new admission, copy, PC, gameplay receipt or old private key transfer.",
+    "commandId": "UI-CMD-MASTER-TRANSFER-RECONNECT",
+    "formIds": [
+      "NET-009"
+    ],
+    "guards": "Explicit local device confirmation of verified common transfer receipt/checkpoint and authority continuity from its pinned campaign to the successor installation identity; authenticate that exact successor endpoint. Incomplete/conflicting proof or partition cannot replace the pin. Ordinary reconnect still requires the previous pinned identity.",
+    "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-RECONNECT",
+    "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Interrupted transfer reconnect restores its exact intent and proved identity transition; a changed endpoint never authorizes a different host identity.",
+    "title": "Переподключиться к подтверждённому преемнику"
   }
 ]

@@ -2766,14 +2766,14 @@
   },
   {
     "from": "CMP-015",
-    "guard": "Campaign frozen and target device explicitly selected.",
+    "guard": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
     "kind": "journey",
     "to": "NET-024",
     "trigger": "J-MASTER-TRANSFER::UNLOCK_TARGET"
   },
   {
     "from": "NET-024",
-    "guard": "Old master confirms; target acknowledges before authority changes.",
+    "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
     "kind": "journey",
     "to": "NET-025",
     "trigger": "J-MASTER-TRANSFER::TRANSFER"
@@ -6448,7 +6448,7 @@
   },
   {
     "from": "NET-024",
-    "guard": "authority unchanged",
+    "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
     "kind": "normative",
     "to": "GM-001",
     "trigger": "Отменить"
@@ -6464,14 +6464,14 @@
     "from": "NET-025",
     "guard": "UI-CMD-MASTER-TRANSFER-COMMIT guards",
     "kind": "workflow-command",
-    "to": "APP-011",
+    "to": "NET-025",
     "trigger": "Передать полномочия выбранному successor"
   },
   {
     "from": "NET-025",
-    "guard": "old authority retained",
-    "kind": "normative",
-    "to": "GM-001",
+    "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+    "kind": "workflow-command",
+    "to": "NET-024",
     "trigger": "Отменить до commit"
   },
   {
@@ -11954,5 +11954,68 @@
     "kind": "subflow-return",
     "to": "NPC-016",
     "trigger": "Вернуться к исходному состоянию NPC"
+  },
+  {
+    "from": "NET-025",
+    "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=ACCEPT; new GM password required",
+    "kind": "workflow-command",
+    "to": "NET-025",
+    "trigger": "Принять роль и подтвердить checkpoint"
+  },
+  {
+    "from": "NET-025",
+    "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=DECLINE; show confirmed terminal receipt before a role/context-bound exit",
+    "kind": "workflow-command",
+    "to": "NET-025",
+    "trigger": "Отклонить принятие роли"
+  },
+  {
+    "from": "NET-025",
+    "guard": "Authenticated terminal-receipt participant; current single GM authority and bound GM_PANEL context; existing GM-001 entry guards satisfied. Includes successor after COMMIT or retained GM after CANCEL/DECLINE; dispose only the transfer projection.",
+    "kind": "normative",
+    "to": "GM-001",
+    "trigger": "Открыть панель мастера"
+  },
+  {
+    "from": "NET-025",
+    "guard": "Authenticated terminal-receipt participant; confirmed current PLAYER shell and bound PLAYER_MENU context; existing APP-002 entry guards satisfied. Includes old GM after COMMIT or existing player after CANCEL/DECLINE; retain character/campaign bindings and dispose only the transfer projection.",
+    "kind": "normative",
+    "to": "APP-002",
+    "trigger": "Продолжить как игрок"
+  },
+  {
+    "from": "NET-025",
+    "guard": "Authenticated terminal-receipt participant with captured ROLE_NEUTRAL_BOOT; dispose only the technical invitation, no player/GM session or gameplay authority, launch-mode unselected and all existing APP-001 entry/boot guards satisfied. Never reset an existing player/GM session to satisfy this route.",
+    "kind": "normative",
+    "to": "APP-001",
+    "trigger": "Закрыть техническое приглашение"
+  },
+  {
+    "from": "NET-024",
+    "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
+    "kind": "system-event",
+    "to": "NET-025",
+    "trigger": "Адресованное приглашение выбранному successor"
+  },
+  {
+    "from": "NET-009",
+    "guard": "UI-CMD-MASTER-TRANSFER-RECONNECT guards",
+    "kind": "workflow-command",
+    "to": "NET-010",
+    "trigger": "Переподключиться к подтверждённому преемнику"
+  },
+  {
+    "from": "NET-009",
+    "guard": "Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.",
+    "kind": "normative",
+    "to": "NET-008",
+    "trigger": "Отложить переход к преемнику"
+  },
+  {
+    "from": "NET-025",
+    "guard": "Committed transfer receipt and verified authority continuity; player/device-specific proof without GM secrets.",
+    "kind": "system-event",
+    "to": "NET-009",
+    "trigger": "Проверенное уведомление о передаче host identity"
   }
 ]

@@ -4,6 +4,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact reviewed Atlas 1.11 objects, authorized by decisions 1–2 in #221 / ADR 0078. */
 // Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
+// Intersecting witnesses include the accepted normal-transfer source amendment in ADR 0079.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -45,7 +46,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '6984ca06ccb3f59e57bfabd6a32ccb8994caf8ffe2872e6394e0cb86b01760f4',
+    sha256: '910889c4e2e7a2935afc0c2149a007228a92476b8015764b2d91546f0affcdba',
   },
   {
     target: 'forms',
@@ -315,15 +316,15 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '0ce9ee6815a54ce2c7f7075be20a8cd5c14d5822d764c970393d7087ca45fa04',
+    sha256: '1824e006901903a81275a8562ec37560238dc9042f4d4588885b51f469ee7e7f',
   },
   {
     key: 'transitions',
-    sha256: '978077d54e8e43652a5bc0dfccd413c2553199cb926722cd504450abae504a06',
+    sha256: 'b076cda3f751ed503e635034d769ea179f4a20f6fdd5a654ad9dd0882c1ad15a',
   },
   {
     key: 'registryCoverage',
-    sha256: 'db5ead24bcdbccc46283c104e3a2ea46b1acd0c3ef13cc4642f5adb7a4a2e73e',
+    sha256: '327b95f752271eb26ca7dbece2c8bb5903486ecb418cc365832437d707256805',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -353,7 +354,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### GM-001 —',
-    sha256: '0351909542206b6c4abd2f67ae2f85da598e965b6c11034f092ed8a629c35c3f',
+    sha256: 'b6c68faa89e85692134963187c297caeb52b76662968ddd6e81c675130bebf23',
   },
   {
     prefix: '### GM-002 —',

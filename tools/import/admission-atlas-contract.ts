@@ -4,12 +4,13 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact admission objects from ADR 0071; overlapping lobby fields updated by #206 / ADR 0073. */
 // Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
+// Intersecting witnesses include the accepted normal-transfer source amendment in ADR 0079.
 const OBJECT_SEALS = [
   {
     target: 'forms',
     key: 'id',
     id: 'APP-002',
-    sha256: 'af0f79172f6043c5b4a9e81f2b34b516e1966209bac6de7a6a3f26b9c8d18e13',
+    sha256: '7b7fd633ba5d9fc5ccb6eae526cd2c84cc854079f137bef295404d22da832aa5',
   },
   {
     target: 'forms',
@@ -249,17 +250,17 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '0ce9ee6815a54ce2c7f7075be20a8cd5c14d5822d764c970393d7087ca45fa04',
+    sha256: '1824e006901903a81275a8562ec37560238dc9042f4d4588885b51f469ee7e7f',
   },
   {
     key: 'transitions',
-    sha256: '978077d54e8e43652a5bc0dfccd413c2553199cb926722cd504450abae504a06',
+    sha256: 'b076cda3f751ed503e635034d769ea179f4a20f6fdd5a654ad9dd0882c1ad15a',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
   {
     prefix: '### APP-002 —',
-    sha256: '6b8d07191583c2e467b7c2a8b4e1b8c3578d9591db4577e40e148e74ba479207',
+    sha256: '5340bbbc62f461158e4ed9348fb13f6f5338da86f3a079d19fa5afb49752bbdd',
   },
   {
     prefix: '### NET-003 —',

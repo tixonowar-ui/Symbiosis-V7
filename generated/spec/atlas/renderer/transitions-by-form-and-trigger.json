@@ -3626,6 +3626,20 @@
     }
   },
   "NET-009": {
+    "Отложить переход к преемнику": {
+      "from": "NET-009",
+      "guard": "Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.",
+      "kind": "normative",
+      "to": "NET-008",
+      "trigger": "Отложить переход к преемнику"
+    },
+    "Переподключиться к подтверждённому преемнику": {
+      "from": "NET-009",
+      "guard": "UI-CMD-MASTER-TRANSFER-RECONNECT guards",
+      "kind": "workflow-command",
+      "to": "NET-010",
+      "trigger": "Переподключиться к подтверждённому преемнику"
+    },
     "Получен snapshot": {
       "from": "NET-009",
       "guard": "device identity accepted",
@@ -3798,7 +3812,7 @@
   "NET-024": {
     "Отменить": {
       "from": "NET-024",
-      "guard": "authority unchanged",
+      "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
       "kind": "normative",
       "to": "GM-001",
       "trigger": "Отменить"
@@ -3812,19 +3826,54 @@
     }
   },
   "NET-025": {
-    "Отменить до commit": {
+    "Закрыть техническое приглашение": {
       "from": "NET-025",
-      "guard": "old authority retained",
+      "guard": "Authenticated terminal-receipt participant with captured ROLE_NEUTRAL_BOOT; dispose only the technical invitation, no player/GM session or gameplay authority, launch-mode unselected and all existing APP-001 entry/boot guards satisfied. Never reset an existing player/GM session to satisfy this route.",
+      "kind": "normative",
+      "to": "APP-001",
+      "trigger": "Закрыть техническое приглашение"
+    },
+    "Отклонить принятие роли": {
+      "from": "NET-025",
+      "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=DECLINE; show confirmed terminal receipt before a role/context-bound exit",
+      "kind": "workflow-command",
+      "to": "NET-025",
+      "trigger": "Отклонить принятие роли"
+    },
+    "Открыть панель мастера": {
+      "from": "NET-025",
+      "guard": "Authenticated terminal-receipt participant; current single GM authority and bound GM_PANEL context; existing GM-001 entry guards satisfied. Includes successor after COMMIT or retained GM after CANCEL/DECLINE; dispose only the transfer projection.",
       "kind": "normative",
       "to": "GM-001",
+      "trigger": "Открыть панель мастера"
+    },
+    "Отменить до commit": {
+      "from": "NET-025",
+      "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+      "kind": "workflow-command",
+      "to": "NET-024",
       "trigger": "Отменить до commit"
     },
     "Передать полномочия выбранному successor": {
       "from": "NET-025",
       "guard": "UI-CMD-MASTER-TRANSFER-COMMIT guards",
       "kind": "workflow-command",
-      "to": "APP-011",
+      "to": "NET-025",
       "trigger": "Передать полномочия выбранному successor"
+    },
+    "Принять роль и подтвердить checkpoint": {
+      "from": "NET-025",
+      "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=ACCEPT; new GM password required",
+      "kind": "workflow-command",
+      "to": "NET-025",
+      "trigger": "Принять роль и подтвердить checkpoint"
+    },
+    "Продолжить как игрок": {
+      "from": "NET-025",
+      "guard": "Authenticated terminal-receipt participant; confirmed current PLAYER shell and bound PLAYER_MENU context; existing APP-002 entry guards satisfied. Includes old GM after COMMIT or existing player after CANCEL/DECLINE; retain character/campaign bindings and dispose only the transfer projection.",
+      "kind": "normative",
+      "to": "APP-002",
+      "trigger": "Продолжить как игрок"
     }
   },
   "NET-027": {
