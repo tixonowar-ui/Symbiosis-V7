@@ -726,6 +726,13 @@ export function readCampaignCreationCursor(
   db: Database.Database,
   gmLocalContextId: string,
 ): CampaignCreationCursor {
+  return readCreationCursor(db, gmLocalContextId);
+}
+function readCreationCursor(
+  db: Database.Database,
+  gmLocalContextId: string,
+  reads?: GmStructuralRead,
+): CampaignCreationCursor {
   const context = readLocalGmContext(db, gmLocalContextId);
   const row = rowAt(db, 'campaign_creation_cursor', 'context_id', gmLocalContextId);
   if (row === undefined) return fail('NOT_FOUND');
@@ -756,6 +763,14 @@ export function readCampaignCreationCursor(
     cursor.formId !== row['form_id']
   )
     return fail();
+  // A local context can point at another campaign; only the exact scope can share a fold.
+  const matching =
+    reads !== undefined &&
+    reads.scope.ownerDeviceId === context.ownerDeviceId &&
+    reads.scope.gmLocalContextId === gmLocalContextId &&
+    reads.scope.campaignId === cursor.targetId
+      ? reads
+      : undefined;
   if (cursor.kind === 'MENU') {
     if (!same(cursor, menuCursor(context))) return fail();
   } else if (cursor.kind === 'DRAFT') {
@@ -773,28 +788,34 @@ export function readCampaignCreationCursor(
       return fail();
   } else if (cursor.kind === 'QUEUE') {
     const state = readOriginTransaction(db, () =>
-      readGmRequestReviewViewStateInTransaction(db, {
-        ownerDeviceId: context.ownerDeviceId,
-        gmLocalContextId,
-        campaignId: cursor.targetId,
-      }),
+      matching !== undefined
+        ? matching.queue()
+        : readGmRequestReviewViewStateInTransaction(db, {
+            ownerDeviceId: context.ownerDeviceId,
+            gmLocalContextId,
+            campaignId: cursor.targetId,
+          }),
     );
     if (state.viewOrNull === null || !same(cursor, queueCursor(state.viewOrNull))) return fail();
     if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined)
       readOriginTransaction(db, () =>
-        readGmAdmissionViewStateInTransaction(db, {
-          ownerDeviceId: context.ownerDeviceId,
-          gmLocalContextId,
-          campaignId: cursor.targetId,
-        }),
+        matching !== undefined
+          ? matching.admission()
+          : readGmAdmissionViewStateInTransaction(db, {
+              ownerDeviceId: context.ownerDeviceId,
+              gmLocalContextId,
+              campaignId: cursor.targetId,
+            }),
       );
   } else if (cursor.kind === 'ADMISSION') {
     const state = readOriginTransaction(db, () =>
-      readGmAdmissionViewStateInTransaction(db, {
-        ownerDeviceId: context.ownerDeviceId,
-        gmLocalContextId,
-        campaignId: cursor.targetId,
-      }),
+      matching !== undefined
+        ? matching.admission()
+        : readGmAdmissionViewStateInTransaction(db, {
+            ownerDeviceId: context.ownerDeviceId,
+            gmLocalContextId,
+            campaignId: cursor.targetId,
+          }),
     );
     if (state.viewOrNull?.active !== true || !same(cursor, admissionCursor(state.viewOrNull)))
       return fail();
@@ -2409,17 +2430,43 @@ interface QueueReduced {
 function queueSourceProofs(db: Database.Database, scope: GmRequestReviewScope) {
   let lobby: ReturnType<typeof readCampaignLobbyLedger> | undefined;
   let lifecycle: ReturnType<typeof readCampaignLifecycleLedger> | undefined;
+  const lobbyEvents = () => (lobby ??= readCampaignLobbyLedger(db, scope.campaignId));
+  const lifecycleEvents = () => (lifecycle ??= readCampaignLifecycleLedger(db, scope.campaignId));
   return {
-    lobby: (cause: GmLobbySourceCause) =>
-      verifyLobbyCause(db, scope, cause, (lobby ??= readCampaignLobbyLedger(db, scope.campaignId))),
+    lobbyEvents,
+    lifecycleEvents,
+    lobby: (cause: GmLobbySourceCause) => verifyLobbyCause(db, scope, cause, lobbyEvents()),
     lifecycle: (cause: GmLobbySourceCause) =>
-      verifyLifecycleCause(
-        db,
-        scope,
-        cause,
-        (lifecycle ??= readCampaignLifecycleLedger(db, scope.campaignId)),
-      ),
+      verifyLifecycleCause(db, scope, cause, lifecycleEvents()),
   };
+}
+interface GmStructuralRead {
+  readonly scope: GmRequestReviewScope;
+  readonly proofs: ReturnType<typeof queueSourceProofs>;
+  queue(): GmRequestReviewViewState;
+  admission(): ReturnType<typeof readAdmissionViewState>;
+}
+/** Owns one callback-free SQL read. Only data escapes, never the reusable readers. */
+export function readGmRequestReviewStructureInTransaction(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+): { state: GmRequestReviewViewState; cursor: CampaignCreationCursor } {
+  if (!db.inTransaction) return fail('INVALID_INPUT');
+  const scope = queueScope(value);
+  let queue: GmRequestReviewViewState | undefined;
+  let admission: ReturnType<typeof readAdmissionViewState> | undefined;
+  const reads: GmStructuralRead = {
+    scope,
+    proofs: queueSourceProofs(db, scope),
+    queue: () => (queue ??= readQueueViewState(db, scope, undefined, reads)),
+    admission: () => (admission ??= readAdmissionViewState(db, scope, undefined, reads)),
+  };
+  const state = reads.queue();
+  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined) {
+    reads.admission();
+    verifyAdmissionSourceMirrors(db, scope, reads);
+  }
+  return { state, cursor: readCreationCursor(db, scope.gmLocalContextId, reads) };
 }
 function reduceQueue(
   db: Database.Database,
@@ -2602,6 +2649,14 @@ export function readGmRequestReviewViewStateInTransaction(
   value: GmRequestReviewScope,
   pendingAdmissionReturnId?: string,
 ): GmRequestReviewViewState {
+  return readQueueViewState(db, value, pendingAdmissionReturnId);
+}
+function readQueueViewState(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+  pendingAdmissionReturnId?: string,
+  reads?: GmStructuralRead,
+): GmRequestReviewViewState {
   queueSchema(db);
   const scope = queueScope(value);
   owner(db, scope.ownerDeviceId);
@@ -2621,7 +2676,7 @@ export function readGmRequestReviewViewStateInTransaction(
     events: [],
   };
   const events: StoredGmRequestQueueEvent[] = [];
-  const proofs = queueSourceProofs(db, scope);
+  const proofs = reads?.proofs ?? queueSourceProofs(db, scope);
   for (const [eventIndex, row] of rows.entries()) {
     const saved = queueObject(checkedJson(row), [
       'schemaVersion',
@@ -2668,7 +2723,7 @@ export function readGmRequestReviewViewStateInTransaction(
       return fail();
     const reduced = reduceQueue(db, scope, initial, state, mutation, proofs);
     if (mutation.kind === 'ADMISSION_RETURN')
-      verifyAdmissionReturnBridge(db, scope, eventId, mutation, pendingAdmissionReturnId);
+      verifyAdmissionReturnBridge(db, scope, eventId, mutation, pendingAdmissionReturnId, reads);
     if (!same(saved['view'], reduced.view) || saved['changed'] !== reduced.changed) return fail();
     const event: StoredGmRequestQueueEvent = {
       schemaVersion: 1,
@@ -2711,9 +2766,16 @@ export function verifyGmAdmissionSourceMirrorsInTransaction(
   db: Database.Database,
   value: GmRequestReviewScope,
 ): void {
+  verifyAdmissionSourceMirrors(db, value);
+}
+function verifyAdmissionSourceMirrors(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+  reads?: GmStructuralRead,
+): void {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const scope = queueScope(value);
-  const events = readGmRequestReviewViewStateInTransaction(db, scope).events;
+  const events = (reads?.queue() ?? readGmRequestReviewViewStateInTransaction(db, scope)).events;
   const actual = new Map<string, GmAdmissionSourceCause>();
   for (const kind of Object.keys(admissionCauseTables) as (keyof typeof admissionCauseTables)[]) {
     const rows = db
@@ -2735,10 +2797,12 @@ export function verifyGmAdmissionSourceMirrorsInTransaction(
   }
   const batches = new Map<string, { reviewRevision: number; gm: boolean; player: boolean }>();
   let checkpointRevision = 0;
-  const lifecycleEvents = readCampaignLifecycleLedger(db, scope.campaignId);
+  // Even an empty queue must verify the current ledger heads and mirror coverage.
+  const lifecycleEvents =
+    reads?.proofs.lifecycleEvents() ?? readCampaignLifecycleLedger(db, scope.campaignId);
   verifyCampaignLifecycleMirrors(db, scope, lifecycleEvents);
   const lobbyEvents = hasCampaignLobbySchema(db)
-    ? readCampaignLobbyLedger(db, scope.campaignId)
+    ? (reads?.proofs.lobbyEvents() ?? readCampaignLobbyLedger(db, scope.campaignId))
     : [];
   for (const event of events) {
     if (event.mutation.kind === 'LIFECYCLE_SOURCE') {
@@ -3581,6 +3645,7 @@ function readAdmissionViewState(
   db: Database.Database,
   value: GmRequestReviewScope,
   pendingReturnEventId?: string,
+  reads?: GmStructuralRead,
 ): { viewOrNull: GmAdmissionView | null; events: readonly StoredGmAdmissionViewEvent[] } {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const scope = queueScope(value);
@@ -3595,7 +3660,7 @@ function readAdmissionViewState(
     .get(scope.gmLocalContextId, scope.campaignId) as Row | undefined;
   let view: GmAdmissionView | null = null;
   const events: StoredGmAdmissionViewEvent[] = [];
-  const proofs = queueSourceProofs(db, scope);
+  const proofs = reads?.proofs ?? queueSourceProofs(db, scope);
   for (const [index, row] of rows.entries()) {
     const saved = queueObject(checkedJson(row), [
       'eventId',
@@ -3965,8 +4030,11 @@ function verifyAdmissionReturnBridge(
   eventId: string,
   mutation: Extract<GmRequestReviewMutation, { kind: 'ADMISSION_RETURN' }>,
   pendingReturnEventId?: string,
+  reads?: GmStructuralRead,
 ) {
-  const state = readAdmissionViewState(db, scope, pendingReturnEventId),
+  // The normal aggregate never receives the writer-only unpaired RETURN exception.
+  if (reads !== undefined && pendingReturnEventId !== undefined) return fail('INVALID_INPUT');
+  const state = reads?.admission() ?? readAdmissionViewState(db, scope, pendingReturnEventId),
     event = state.events.find((entry) => entry.eventId === mutation.viewEventId);
   if (
     event?.mutation.kind !== 'RETURN' ||

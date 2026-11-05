@@ -17,10 +17,9 @@ import {
   readLocalGmProfile,
   readLocalGmContext,
   readCampaignOwnerBinding,
-  readCampaignCreationCursor,
+  type readCampaignCreationCursor,
   readGmRequestReviewViewStateInTransaction,
-  readGmAdmissionViewStateInTransaction,
-  verifyGmAdmissionSourceMirrorsInTransaction,
+  readGmRequestReviewStructureInTransaction,
   appendGmRequestReviewEventInTransaction,
   gmRequestReviewRefreshEventId,
   type GmRequestReviewScope,
@@ -538,12 +537,8 @@ function gmSource(
   const creationOrigin = readHostedCampaignCreationOrigin(db, scope.campaignId, validate);
   // Current foundation supports PAUSED campaigns; birth0 remains a separate immutable anchor.
   const currentCampaign = readHostedCurrentPausedCampaign(db, scope.campaignId, validate);
-  const state = readGmRequestReviewViewStateInTransaction(db, scope),
+  const { state, cursor } = readGmRequestReviewStructureInTransaction(db, scope),
     queue = queueInTransaction(db, scope);
-  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined) {
-    readGmAdmissionViewStateInTransaction(db, scope);
-    verifyGmAdmissionSourceMirrorsInTransaction(db, scope);
-  }
   for (const event of state.events) {
     const m = event.mutation;
     if (m.kind === 'NAV' && m.initialQueueOrNull !== null)
@@ -601,7 +596,7 @@ function gmSource(
     privateOwner,
     creationOrigin,
     currentCampaign,
-    cursor: readCampaignCreationCursor(db, scope.gmLocalContextId),
+    cursor,
     viewOrNull: state.viewOrNull,
     connectionFactsSha256OrNull: state.connectionFactsSha256OrNull,
     queue,

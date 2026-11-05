@@ -348,6 +348,46 @@ function advanceReview(p: ReturnType<typeof setup>, proof: VerifiedRequestReview
   );
 }
 describe('owner request review enrichment and delivery', () => {
+  it('rechecks both hash links of initial, interior and final events after replay and SQLite snapshot reopen', () => {
+    const p = setup();
+    submittedForReview(p);
+    const expected = readLocalNetworkApplication(p.db, p.scope);
+    const snapshot = p.db.serialize();
+    const rows = p.db
+      .prepare(
+        'SELECT event_id,record_json FROM local_network_application_event WHERE network_scope_id=? ORDER BY event_index',
+      )
+      .all(p.scope.networkScopeId) as { event_id: string; record_json: string }[];
+    expect(rows.length).toBeGreaterThan(2);
+    for (const row of [rows[0]!, rows[1]!, rows.at(-1)!]) {
+      for (const field of ['previousSha256', 'nextSha256']) {
+        const db = new Database(snapshot);
+        dbs.push(db);
+        db.pragma('foreign_keys=ON');
+        expect(readLocalNetworkApplication(db, p.scope)).toEqual(expected);
+        db.transaction(() => {
+          expect(readLocalNetworkApplication(db, p.scope)).toEqual(expected);
+          const changed = canonical({
+            ...(JSON.parse(row.record_json) as Record<string, unknown>),
+            [field]: '0'.repeat(64),
+          });
+          expect(
+            db
+              .prepare(
+                'UPDATE local_network_application_event SET record_json=?,record_sha256=? WHERE event_id=?',
+              )
+              .run(changed, sha(changed), row.event_id).changes,
+          ).toBe(1);
+          const corrupt = db.serialize();
+          expect(() => readLocalNetworkApplication(db, p.scope)).toThrow('CORRUPT_STORAGE');
+          expect(db.serialize().equals(corrupt)).toBe(true);
+        })();
+      }
+    }
+    expect(readLocalNetworkApplication(p.db, p.scope)).toEqual(expected);
+    expect(p.db.serialize().equals(snapshot)).toBe(true);
+  });
+
   it('requires exact canonical replay bytes and valid hashes for every materialized history tail', () => {
     const p = setup(),
       s = submittedForReview(p);
