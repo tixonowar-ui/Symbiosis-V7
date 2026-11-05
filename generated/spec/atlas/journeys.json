@@ -364,13 +364,17 @@
   },
   {
     "alternatives": [
-      "Без owner link кандидат не получает Ready, authority, scene, reserve или initiative."
+      "Без owner link кандидат не получает Ready, authority, scene, reserve или initiative.",
+      "GM-002 имеет закрытые characterPanelVariant=EMPTY_NO_CHARACTER|SELECTED_CHARACTER. EMPTY_NO_CHARACTER допустим при отсутствии выбранного campaignCharacterId, включая кампанию с нулём PC; selectedCampaignCharacterIdOrNull и selectedCharacterOrNull равны null, character-bound HP/OE/group/location/marker/device/seat/connection поля ABSENT, без нулевых/фиктивных значений. SELECTED_CHARACTER сохраняет прежние поля/проверки настоящего выбранного персонажа. Пустой variant показывает существующие импорт и безопасный возврат; он не открывает инспектор, source sheet или admission editor без их собственного действительного request/copy context."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Повтор claim/import идемпотентен по candidateId/source UUID/checksum; disconnect ничего не подтверждает."
+      "Повтор claim/import идемпотентен по candidateId/source UUID/checksum; disconnect ничего не подтверждает.",
+      "Первый GM import доступен из единой GM-001 через GM-002 без selected character. Только прежний signed GM_IMPORT_CANDIDATE origin/return GM-002 и sole current master authority; player local library не открывается. Cancel/error/reconnect/receipt return восстанавливают текущий вариант GM-002 без фиктивного PC/HP/group/marker/seat. Импорт/owner claim не заменяют финальный admission и не выдают преждевременные Ready/authority/reserve."
     ],
     "formIds": [
+      "GM-001",
+      "GM-002",
       "CHR-043",
       "CHR-044",
       "CHR-045",
@@ -413,6 +417,15 @@
     ],
     "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
     "steps": [
+      {
+        "formIds": [
+          "GM-001",
+          "GM-002"
+        ],
+        "guards": "Confirmed sole current GM authority; same bound campaign and current revisions; safe boundary. A selected campaignCharacterId is not required to open GM-002; no selection opens EMPTY_NO_CHARACTER. GM-003 inspector still requires a real selected campaignCharacterId.",
+        "result": "GM-002 EMPTY_NO_CHARACTER or the existing selected-character context; import requires no fabricated character.",
+        "state": "CAMPAIGN_LIST"
+      },
       {
         "formIds": [
           "CHR-043"
@@ -626,12 +639,14 @@
       "Owner decision #206, 2026-11-02: includedCopies are all admitted ACTIVE copies with valid committed mechanics and no blockers; includedDevices are exactly their distinct controlling devices. Ready records the ordered campaignCharacterIds controlled by that authenticated device. PROPOSED copies with blockers remain lobby-only and never Ready or in the scene. A mixed ACTIVE/blocked device confirms only its ACTIVE subset, clearly displayed separately from its blocked copies; a blocked-only device cannot Ready. There is no manual exclusion of an otherwise included ACTIVE copy.",
       "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
       "Every newly available player/GM capability has a real labeled keyboard-accessible control on its form, not only a workflow ID. NET-006 exposes Ready/Unready only under host guards and displays the exact included subset and blockers; NET-016 exposes explicit dayNumber/hour/minute inputs, save/validation/current confirmed time and Start preflight. No forbidden CTA exists in player payload, DOM, accessibility tree or hotkeys.",
-      "Journey participants include GM and player, without broadening form authority: campaign creation, initial-time input and Start remain GM-only; the player can confirm only its own exact Ready set on NET-006 and receive its own PLY-001 projection."
+      "Journey participants include GM and player, without broadening form authority: campaign creation, initial-time input and Start remain GM-only; the player can confirm only its own exact Ready set on NET-006 and receive its own PLY-001 projection.",
+      "До первого Start календарное состояние NPC требует подтверждённого начального времени. Только успешный CREATE_V1 или NEW-VERSION phase=COMMIT атомарно сохраняет полную версию/history/receipt и при первом таком commit закрепляет initialTimeLockOrNull на эту минуту. OPEN, draft, навигация, cancel, invalid/stale commit и NPC без календарных таймеров lock не создают. Исторические anchors, версии и receipts неизменны; снятие текущего эффекта, новая версия без таймера, archive/delete не снимают уже сохранённую привязку. После Start используется текущий campaign clock; новые initial-time input, автоматические часы, ADVANCE_TIME, scene/combat context и placement не добавляются."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
       "Host close/checkpoint/refresh возвращают paused state; два master authority блокируются NET-026.",
-      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability."
+      "Existing authenticated admitted bindings recover both before and after Start through the same campaign transport, GM context and routes. The immutable campaign birth/old admission receipts are not rewritten. Current HOSTING/PAUSED scene state is separate from birth PAUSED; reconnect never creates a new campaign/copy/group/scene or grants late admission, NPC, local-seat or future mutation capability.",
+      "При сохранённом initial-time lock другое время отклоняется без записи; тот же exact receipt и исторические anchors восстанавливаются без переноса."
     ],
     "formIds": [
       "APP-011",
@@ -698,7 +713,7 @@
           "GRP-001",
           "PLY-001"
         ],
-        "guards": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+        "guards": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation. For a new Start command npcInitialTimeReturnContextOrNull=null: Start is unavailable while NET-016 is the host-bound NPC initial-time child; exact historical Start receipt replay remains unchanged.",
         "result": "Start atomically creates exactly one campaign PEACE scene context, checkpoint and immutable receipt and transitions the campaign to HOSTING. The scene references the existing included campaignCharacterIds, controller bindings, groupIds and GM-entered location/subLocation labels from admission journals; Start never creates replacement groups, map markers, coordinates, combat actors or localLighting. It commits the confirmed campaignTimestamp/STOPPED/dayPhase once. Replay, repeated click and restart restore the same sceneId/checkpoint/receipt/timestamp without allocating new IDs. Blocked PROPOSED copies stay outside the scene.",
         "state": "LOBBY_START"
       }
@@ -1019,13 +1034,16 @@
   },
   {
     "alternatives": [
-      "Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot. Sole current authenticated campaign GM; UI-CMD-NPC-NEW-VERSION phase=COMMIT only from NPC-017 with host-bound APPEND_N_PLUS_ONE attempt; expectedCurrentVersion and attemptRevision are current; all eight stages, sex/race/mass and resolved art validate. Atomically append the full N+1 snapshot/history to the same npcUuid; prior versions and combat pins remain unchanged.",
-      "Дублирование NPC-008 создаёт новый UUID."
+      "Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot. Sole current authenticated campaign GM; UI-CMD-NPC-NEW-VERSION phase=COMMIT only from NPC-017 with host-bound APPEND_N_PLUS_ONE attempt; expectedCurrentVersion and attemptRevision are current; all eight stages, sex/race/mass and resolved art validate. Atomically append the full N+1 snapshot/history to the same npcUuid; prior versions and combat pins remain unchanged. COMMIT only: При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
+      "Дублирование NPC-008 создаёт новый UUID.",
+      "При необходимости календарного времени NPC-016 открывает существующий NET-016 и возвращается по host-bound child context к тому же attempt. Untimed NPC не обязан проходить этот child route. Sole current authenticated GM; same bound pre-Start campaign and saved technical attempt; current attempt/campaign revisions; safe boundary; no conflicting mutation. Host stores campaignId,npcDraftId,attemptRevision,editMode,versionBindingOrNull and returnFormId=NPC-016; browser cannot choose or replace return context. Navigation saves no NPC version/history/time lock. Host-bound npcInitialTimeReturnContextOrNull exists; same GM/campaign/attempt/editMode/version binding and current revisions. Return restores the same technical attempt; changed time/revision requires fresh preview, never a saved NPC version or automatic anchor rebase. Stale context refuses; the ordinary safe CMP-007 exit remains available."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
       "NPC-009/010 блокируются при participant/target/pending-source ссылках; reconnect не удваивает экземпляр.",
-      "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts."
+      "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts.",
+      "До первого Start календарное состояние NPC требует подтверждённого начального времени. Только успешный CREATE_V1 или NEW-VERSION phase=COMMIT атомарно сохраняет полную версию/history/receipt и при первом таком commit закрепляет initialTimeLockOrNull на эту минуту. OPEN, draft, навигация, cancel, invalid/stale commit и NPC без календарных таймеров lock не создают. Исторические anchors, версии и receipts неизменны; снятие текущего эффекта, новая версия без таймера, archive/delete не снимают уже сохранённую привязку. После Start используется текущий campaign clock; новые initial-time input, автоматические часы, ADVANCE_TIME, scene/combat context и placement не добавляются.",
+      "Календарность определяется обязательными timestamp/таймерами известных EffectTypeID и их источников; бессрочный эффект сам по себе не создаёт lock, неизвестная модель времени отказывает. Host формирует calendarTimeBindingOrNull для полного preview: PRE_START_INITIAL связывает подтверждённую campaignTimestamp и lobbySnapshotRevision; CURRENT_CAMPAIGN после Start связывает текущие campaignTimestamp/stateRevision, без pre-Start lobby revision. Перед commit binding и все anchors проверяются заново. Изменённые время/ревизия требуют нового preview, stale commit даёт zero write; anchors автоматически не перебазируются. Exact replay/reconnect возвращает прежние snapshot/receipt/lock отдельно от текущей проекции."
     ],
     "formIds": [
       "NPC-001",
@@ -1037,7 +1055,8 @@
       "NPC-015",
       "NPC-016",
       "NPC-017",
-      "NPC-003"
+      "NPC-003",
+      "NET-016"
     ],
     "id": "J-NPC-CREATE",
     "operationIds": [],
@@ -1120,7 +1139,7 @@
         "formIds": [
           "NPC-016"
         ],
-        "guards": "HP, OE, типизированные эффекты и исходная дееспособность.",
+        "guards": "HP, OE, типизированные эффекты и исходная дееспособность. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
         "result": "Полный runtime snapshot.",
         "state": "INITIAL_STATE"
       },
@@ -1128,7 +1147,7 @@
         "formIds": [
           "NPC-017"
         ],
-        "guards": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима.",
+        "guards": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
         "result": "Получена server-confirmed идемпотентная квитанция соответствующего режима: CREATE_V1 version=1 либо APPEND_N_PLUS_ONE version=N+1 того же npcUuid.",
         "state": "COMMIT"
       },
@@ -1144,7 +1163,8 @@
     "title": "Полный wizard постоянного НПС",
     "workflowCommandIds": [
       "UI-CMD-NPC-COMMIT-V1",
-      "UI-CMD-NPC-NEW-VERSION"
+      "UI-CMD-NPC-NEW-VERSION",
+      "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
     ]
   },
   {
@@ -1771,8 +1791,8 @@
           "GM-002",
           "GM-003"
         ],
-        "guards": "Выбран campaignCharacterId, не локальный source sheet.",
-        "result": "Открыт единый inspector.",
+        "guards": "Confirmed sole current GM authority; same bound campaign and current revisions; safe boundary. A selected campaignCharacterId is not required to open GM-002; no selection opens EMPTY_NO_CHARACTER. GM-003 inspector still requires a real selected campaignCharacterId. Inspector selection uses the existing campaign copy, never a local source sheet.",
+        "result": "GM-002 list opens without a selection; GM-003 inspector opens only for the selected campaign copy.",
         "state": "SELECT"
       },
       {
@@ -5094,13 +5114,15 @@
       "Player password is not invented; master password never enters player payload.",
       "Closed initialCampaignTime input: dayNumber positive safe integer, hour integer 0..23, minute integer 0..59, all explicitly entered by GM without defaults. campaignTimestamp is the safe integer (dayNumber-1)*1440+hour*60+minute in virtual minutes; reject overflow, fractions, negative values and unknown keys. No timezone, system date, Date.now or invented initial value. Missing confirmed initial time blocks Start. At Start clockMode=STOPPED, the Atlas representation of AQ2-006 paused; DAY iff 06:00<=timeOfDay<21:00, otherwise NIGHT. localLighting is not inferred; no automatic clock start or ADVANCE_TIME.",
       "Closed settings command payload: commandId, campaignId, expectedSettingsRevision, title, descriptionOrNull, defaultFutureRollMode=MANUAL|AUTO, network={hostAddress,hostPort,networkInterface}. GM identity is derived from the authenticated session, never supplied by the browser. Title/description/roll-mode validation reuses campaign creation; no new length limits or defaults. Art remains read-only by existing checksum or explicit absence. Capacity and password use their existing separate CMP-014/CMP-015 commands.",
-      "CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection."
+      "CMP-008 exposes labeled, keyboard-accessible title, description and future-roll-mode controls, plus explicit next-listener address/port/interface controls; save and cancel are real controls with validation, pending and committed-revision feedback. Cancel discards only the unsaved draft and returns to the same CMP-007 authority. No new NPC, group/map, local-seat, shared-screen, import, master-transfer, archive or future capability is enabled. Passwords, verifiers, settings payloads and foreign device details never enter the player projection.",
+      "До первого Start календарное состояние NPC требует подтверждённого начального времени. Только успешный CREATE_V1 или NEW-VERSION phase=COMMIT атомарно сохраняет полную версию/history/receipt и при первом таком commit закрепляет initialTimeLockOrNull на эту минуту. OPEN, draft, навигация, cancel, invalid/stale commit и NPC без календарных таймеров lock не создают. Исторические anchors, версии и receipts неизменны; снятие текущего эффекта, новая версия без таймера, archive/delete не снимают уже сохранённую привязку. После Start используется текущий campaign clock; новые initial-time input, автоматические часы, ADVANCE_TIME, scene/combat context и placement не добавляются."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
       "Reconnect requires a new validated session and does not delete or duplicate characters.",
       "Exact commandId/payload replay returns the original immutable receipt separately from the current projection. Foreign authority, stale revision, changed payload, invalid fields or conflicting pending operation causes zero writes. Settings revisions do not rewrite saved mode snapshots, roll results, admission sheets, campaign birth, old receipts or FINAL.",
-      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable."
+      "NET-009 permits an explicit address/port input and manual reconnect to the previously pinned campaign host identity, including after a saved next-listener endpoint is activated. The existing reconcile action sends that intent; NET-010 opens only after identity/binding verification and authoritative reconciliation. A different host identity is refused before trusting its snapshot. This is neither OPEN/new TOFU nor admission: no new device binding, campaign copy, group or scene is created. Failed input/connect does not overwrite the last authenticated endpoint; pending commandId and old receipts remain reconcilable.",
+      "При сохранённом initial-time lock другое время отклоняется без записи; тот же exact receipt и исторические anchors восстанавливаются без переноса."
     ],
     "formIds": [
       "CMP-007",

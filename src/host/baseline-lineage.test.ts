@@ -36,7 +36,7 @@ beforeAll(async () => {
 afterAll(() => fixture?.close());
 
 describe('verified baseline lineage', () => {
-  it('accepts only explicit forward pairs among the six reviewed releases', () => {
+  it('accepts only explicit forward pairs among the seven reviewed releases', () => {
     const ids = BASELINE_FIXTURE_IDS;
     for (const [from, to] of [
       ['B0', 'B1'],
@@ -54,6 +54,12 @@ describe('verified baseline lineage', () => {
       ['B2', 'B5'],
       ['B3', 'B5'],
       ['B4', 'B5'],
+      ['B0', 'B6'],
+      ['B1', 'B6'],
+      ['B2', 'B6'],
+      ['B3', 'B6'],
+      ['B4', 'B6'],
+      ['B5', 'B6'],
     ] as const) {
       expect(isApprovedBaselineLineagePair(ids[from], ids[to])).toBe(true);
       expect(() =>

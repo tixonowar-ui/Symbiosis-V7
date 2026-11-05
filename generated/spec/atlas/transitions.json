@@ -330,7 +330,7 @@
   },
   {
     "from": "GM-002",
-    "guard": "Исключение/замена выполняются только на safe boundary; новый персонаж проходит полный proposal/review/acceptance.",
+    "guard": "Исключение/замена выполняются только на safe boundary; новый персонаж проходит полный proposal/review/acceptance. Requires an actual addressed request/copy context; EMPTY_NO_CHARACTER alone never supplies it.",
     "kind": "subflow",
     "to": "NET-018",
     "trigger": "J-CAMPAIGN-LIFECYCLE::REMOVE_REPLACE::open"
@@ -344,7 +344,7 @@
   },
   {
     "from": "GM-002",
-    "guard": "Исключение/замена выполняются только на safe boundary; новый персонаж проходит полный proposal/review/acceptance.",
+    "guard": "Исключение/замена выполняются только на safe boundary; новый персонаж проходит полный proposal/review/acceptance. Requires an actual addressed request/copy context; EMPTY_NO_CHARACTER alone never supplies it.",
     "kind": "subflow",
     "to": "NET-019",
     "trigger": "J-CAMPAIGN-LIFECYCLE::REMOVE_REPLACE::open"
@@ -491,7 +491,7 @@
   },
   {
     "from": "NPC-016",
-    "guard": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима.",
+    "guard": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
     "kind": "journey",
     "to": "NPC-017",
     "trigger": "J-NPC-CREATE::COMMIT"
@@ -792,7 +792,7 @@
   },
   {
     "from": "GM-001",
-    "guard": "Выбран campaignCharacterId, не локальный source sheet.",
+    "guard": "Confirmed sole current GM authority; same bound campaign and current revisions; safe boundary. A selected campaignCharacterId is not required to open GM-002; no selection opens EMPTY_NO_CHARACTER. GM-003 inspector still requires a real selected campaignCharacterId.",
     "kind": "subflow",
     "to": "GM-002",
     "trigger": "J-GM-CHAR-OPS::SELECT::open"
@@ -6413,7 +6413,7 @@
   },
   {
     "from": "NET-016",
-    "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation.",
+    "guard": "UI-CMD-CAMPAIGN-START guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; at least one included valid ACTIVE PC; every included controlling device Ready for its exact current set; initial time confirmed; no conflicting pending operation. For a new Start command npcInitialTimeReturnContextOrNull=null: Start is unavailable while NET-016 is the host-bound NPC initial-time child; exact historical Start receipt replay remains unchanged.",
     "kind": "workflow-command",
     "to": "GM-001",
     "trigger": "Начать кампанию"
@@ -6581,14 +6581,14 @@
   },
   {
     "from": "NPC-016",
-    "guard": "INITIAL_STATE_VALID",
+    "guard": "INITIAL_STATE_VALID При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
     "kind": "normative",
     "to": "NPC-017",
     "trigger": "Перейти к итоговой проверке"
   },
   {
     "from": "NPC-017",
-    "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history.",
+    "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
     "kind": "workflow-command",
     "to": "NPC-003",
     "trigger": "Сохранить NPC атомарно"
@@ -11873,7 +11873,7 @@
   },
   {
     "from": "NET-016",
-    "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation.",
+    "guard": "UI-CMD-CAMPAIGN-INITIAL-TIME-SET guards: Sole current campaign GM authority; pre-Start PAUSED; expected lobbySnapshotRevision current; explicit dayNumber/hour/minute valid; no pending operation. initialTimeLockOrNull is null or the requested campaignTimestamp equals its locked campaignTimestamp; a different minute refuses with an explicit saved-NPC-time-lock reason and zero writes.",
     "kind": "workflow-command",
     "to": "NET-016",
     "trigger": "Сохранить начальное время"
@@ -11940,5 +11940,19 @@
     "kind": "safe-return",
     "to": "ENM-017",
     "trigger": "Вернуться к новой версии с прежней квитанцией"
+  },
+  {
+    "from": "NPC-016",
+    "guard": "Sole current authenticated GM; same bound pre-Start campaign and saved technical attempt; current attempt/campaign revisions; safe boundary; no conflicting mutation. Host stores campaignId,npcDraftId,attemptRevision,editMode,versionBindingOrNull and returnFormId=NPC-016; browser cannot choose or replace return context. Navigation saves no NPC version/history/time lock.",
+    "kind": "subflow",
+    "to": "NET-016",
+    "trigger": "Открыть начальное время кампании"
+  },
+  {
+    "from": "NET-016",
+    "guard": "Host-bound npcInitialTimeReturnContextOrNull exists; same GM/campaign/attempt/editMode/version binding and current revisions. Return restores the same technical attempt; changed time/revision requires fresh preview, never a saved NPC version or automatic anchor rebase. Stale context refuses; the ordinary safe CMP-007 exit remains available.",
+    "kind": "subflow-return",
+    "to": "NPC-016",
+    "trigger": "Вернуться к исходному состоянию NPC"
   }
 ]

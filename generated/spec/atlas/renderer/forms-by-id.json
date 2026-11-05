@@ -12407,7 +12407,8 @@
       "Содержательная область: Подключение, группа, HP, состояния, симбионты и активная сцена.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
-      "Индикатор связи и ревизии"
+      "Индикатор связи и ревизии",
+      "Явный EMPTY_NO_CHARACTER: персонаж не выбран/PC отсутствуют; импорт и безопасный возврат без вымышленных характеристик"
     ],
     "contexts": [
       "gm-operations"
@@ -12419,28 +12420,21 @@
     ],
     "requiredFields": [
       "contextId",
+      "campaignId",
+      "campaignStatus",
       "stateRevision",
       "projectionRevision",
-      "currentHP",
-      "maxHP(read-only)",
-      "derivedCondition",
-      "symbiontInstanceId",
-      "currentOE",
-      "maxOE(read-only)",
-      "groupId",
-      "location/subLocation",
-      "markerRevision",
-      "deviceId",
-      "controllerSeat",
-      "connectionState",
-      "campaignId",
-      "campaignStatus"
+      "characterPanelVariant=EMPTY_NO_CHARACTER|SELECTED_CHARACTER",
+      "selectedCampaignCharacterIdOrNull",
+      "selectedCharacterOrNull=null|{currentHP,maxHP(read-only),derivedCondition,symbiontInstanceId,currentOE,maxOE(read-only),groupId,location/subLocation,markerRevision,deviceId,controllerSeat,connectionState}"
     ],
     "roles": [
       "gm"
     ],
     "route": "/master/campaigns/:campaignId/gm-operations/gm-002",
     "states": {
+      "EMPTY_NO_CHARACTER": "Нет выбранного campaignCharacterId; отсутствующие character-bound fields не создаются. Доступны импорт и безопасный возврат при их собственных guards.",
+      "SELECTED_CHARACTER": "Подтверждён настоящий выбранный кампанийный персонаж; прежние поля и guards сохранены.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -17324,6 +17318,10 @@
         {
           "actionKey": "NET-016::CTA::004",
           "label": "Сохранить начальное время"
+        },
+        {
+          "actionKey": "NET-016::CTA::005",
+          "label": "Вернуться к исходному состоянию NPC"
         }
       ]
     },
@@ -17334,7 +17332,8 @@
       "Validation blockers",
       "Start preflight",
       "Atomic Start CTA",
-      "Поля начального времени: день, часы, минуты; отдельное сохранение и ошибки полей; подтверждённое значение показано отдельно от ввода."
+      "Поля начального времени: день, часы, минуты; отдельное сохранение и ошибки полей; подтверждённое значение показано отдельно от ввода.",
+      "Причина закрепления начальной минуты сохранённым NPC; явный read-only lock и ошибка изменения на другую минуту"
     ],
     "contexts": [
       "network"
@@ -17362,13 +17361,16 @@
       "initialTimeInput(dayNumber,hour,minute)",
       "initialCampaignTimeOrNull",
       "startPreflightStatus",
-      "commandId"
+      "commandId",
+      "initialTimeLockOrNull=null|{campaignTimestamp,sourceNpcUuid,sourceVersion}",
+      "npcInitialTimeReturnContextOrNull=null|{campaignId,npcDraftId,attemptRevision,editMode,versionBindingOrNull,returnFormId=NPC-016}"
     ],
     "roles": [
       "gm"
     ],
     "route": "/master/campaigns/:campaignId/network/net-016",
     "states": {
+      "INITIAL_TIME_LOCKED": "Сохранённый календарный NPC закрепил начальную минуту до Start; другое значение отклоняется с объяснением. Та же минута и exact replay не снимают lock.",
       "NOT_READY": "Есть неподтверждённая готовность включённого устройства, невалидный персонаж или не сохранено начальное время; Start CTA отсутствует.",
       "READY_TO_START": "Есть ≥1 валидный ACTIVE PC, все включённые devices Ready на текущем snapshot и начальное время подтверждено.",
       "STARTED": "Campaign status и начальная мирная сцена созданы один раз.",
@@ -19218,6 +19220,10 @@
         {
           "actionKey": "NPC-016::CTA::003",
           "label": "Перейти к итоговой проверке"
+        },
+        {
+          "actionKey": "NPC-016::CTA::004",
+          "label": "Открыть начальное время кампании"
         }
       ]
     },
@@ -19226,7 +19232,8 @@
       "ОЭ по экземплярам",
       "Типизированные эффекты",
       "Исходное состояние",
-      "Запрет моделировать смерть как снимаемый эффект"
+      "Запрет моделировать смерть как снимаемый эффект",
+      "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock"
     ],
     "contexts": [
       "npc"
@@ -19246,7 +19253,11 @@
       "effectInstances[]",
       "EffectTypeID",
       "initialActionState",
-      "stateValidationSummary"
+      "stateValidationSummary",
+      "requiresCampaignTime",
+      "calendarTimeBindingOrNull=null|{kind=PRE_START_INITIAL,campaignTimestamp,lobbySnapshotRevision}|{kind=CURRENT_CAMPAIGN,campaignTimestamp,stateRevision}",
+      "initialTimeLockOrNull=null|{campaignTimestamp,sourceNpcUuid,sourceVersion}",
+      "initialTimeValidationStatus=NOT_REQUIRED|MISSING|CURRENT|STALE"
     ],
     "roles": [
       "gm"
@@ -19254,7 +19265,9 @@
     "route": "/master/campaigns/:campaignId/npc/npc-016",
     "states": {
       "INITIAL_STATE_INVALID": "HP/OE/effect instance либо дееспособность противоречат старшим реестрам.",
-      "INITIAL_STATE_VALID": "Полный исходный runtime snapshot валиден.",
+      "INITIAL_STATE_VALID": "Полный исходный runtime snapshot валиден. Для календарного состояния подтверждён свежий host-bound time preview.",
+      "INITIAL_TIME_REQUIRED": "Календарное состояние до Start требует ввода и сохранения времени в NET-016; commit недоступен.",
+      "INITIAL_TIME_STALE": "Время или bound revision изменены после preview; требуется новая проверка без автоматического переноса anchors.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -19295,7 +19308,8 @@
       "Ошибки по обязательным этапам",
       "UUID/version/provenance",
       "Атомарный commit",
-      "Идемпотентная квитанция выбранного режима и история полной версии"
+      "Идемпотентная квитанция выбранного режима и история полной версии",
+      "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock"
     ],
     "contexts": [
       "npc"
@@ -19322,7 +19336,11 @@
       "resolvedArtAssetKey",
       "hostBoundEditMode=CREATE_V1|APPEND_N_PLUS_ONE",
       "attemptRevision",
-      "versionBindingOrNull={npcUuid,expectedCurrentVersion}"
+      "versionBindingOrNull={npcUuid,expectedCurrentVersion}",
+      "requiresCampaignTime",
+      "calendarTimeBindingOrNull=null|{kind=PRE_START_INITIAL,campaignTimestamp,lobbySnapshotRevision}|{kind=CURRENT_CAMPAIGN,campaignTimestamp,stateRevision}",
+      "initialTimeLockOrNull=null|{campaignTimestamp,sourceNpcUuid,sourceVersion}",
+      "initialTimeValidationStatus=NOT_REQUIRED|MISSING|CURRENT|STALE"
     ],
     "roles": [
       "gm"
@@ -19332,6 +19350,8 @@
       "BLOCKED_INVALID": "Хотя бы один обязательный этап невалиден; commit CTA отсутствует.",
       "COMMITTED": "Получена server-confirmed идемпотентная квитанция соответствующего режима: CREATE_V1 version=1 либо APPEND_N_PLUS_ONE version=N+1 того же npcUuid.",
       "IDEMPOTENT_REPLAY": "Повтор commandId возвращает прежний receipt без второго NPC.",
+      "INITIAL_TIME_REQUIRED": "Календарное состояние до Start требует ввода и сохранения времени в NET-016; commit недоступен.",
+      "INITIAL_TIME_STALE": "Время или bound revision изменены после preview; требуется новая проверка без автоматического переноса anchors.",
       "READY_TO_COMMIT": "Все восемь этапов валидны; показан полный diff и один commit CTA.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",

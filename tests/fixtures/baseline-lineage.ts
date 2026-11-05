@@ -21,13 +21,14 @@ import {
   type FixtureAtlasBytes,
 } from './baseline-atlas-patch.js';
 
-export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2' | 'B3' | 'B4' | 'B5';
+export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2' | 'B3' | 'B4' | 'B5' | 'B6';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
 const lobbyPatchPath = fileURLToPath(new URL('./atlas-206-lineage.patch', import.meta.url));
 const settingsPatchPath = fileURLToPath(new URL('./atlas-208-lineage.patch', import.meta.url));
 const gmSourcePatchPath = fileURLToPath(new URL('./atlas-186-lineage.patch', import.meta.url));
+const queueSourcePatchPath = fileURLToPath(new URL('./atlas-221-lineage.patch', import.meta.url));
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
 );
@@ -59,6 +60,7 @@ export const BASELINE_FIXTURE_IDS = {
   B3: BASELINE_LINEAGE_SEALS.lobbyBaselineVersion,
   B4: BASELINE_LINEAGE_SEALS.settingsBaselineVersion,
   B5: BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion,
+  B6: BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
@@ -67,6 +69,7 @@ const releaseAtlas = {
   B3: BASELINE_LINEAGE_SEALS.lobbyAtlas,
   B4: BASELINE_LINEAGE_SEALS.settingsAtlas,
   B5: BASELINE_LINEAGE_SEALS.gmSourceAtlas,
+  B6: BASELINE_LINEAGE_SEALS.queueSourceAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -77,7 +80,7 @@ export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer
     assert.ok(text.includes(`${prior}  ${path}`));
     text = text.replace(`${prior}  ${path}`, `${digest}  ${path}`);
   }
-  if (release === 'B5') {
+  if (release === 'B5' || release === 'B6') {
     const entries = text.trimEnd().split('\n');
     entries.push(
       ...Object.entries(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts).map(
@@ -100,7 +103,7 @@ export function applyBaselineFixtureRelease(
   release: BaselineFixtureRelease,
 ): void {
   const before = readAtlasBytes(projectRoot);
-  const releases = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5'] as const;
+  const releases = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6'] as const;
   // These private bytes cannot change during the synchronous release lookup.
   // Hash each once instead of rehashing the same JSON for every older release.
   const beforeDigests = Object.fromEntries(atlasPaths.map((path) => [path, sha(before[path])]));
@@ -117,6 +120,7 @@ export function applyBaselineFixtureRelease(
         readFileSync(lobbyPatchPath),
         readFileSync(settingsPatchPath),
         readFileSync(gmSourcePatchPath),
+        readFileSync(queueSourcePatchPath),
       ]),
     );
   const patchSha256 = patchSeal();
@@ -166,7 +170,9 @@ export function applyBaselineFixtureRelease(
                   ? lobbyPatchPath
                   : edge === 3
                     ? settingsPatchPath
-                    : gmSourcePatchPath,
+                    : edge === 4
+                      ? gmSourcePatchPath
+                      : queueSourcePatchPath,
           ),
           reverse,
         );
@@ -201,7 +207,7 @@ export function applyBaselineFixtureRelease(
     const target = join(projectRoot, 'artifacts', path);
     if (existsSync(target))
       assert.equal(sha(readFileSync(target)), digest, 'fixture GM source bytes changed');
-    if (release === 'B5') {
+    if (release === 'B5' || release === 'B6') {
       const supplied = readFileSync(join(sourceRoot, 'artifacts', path));
       assert.equal(sha(supplied), digest, 'supplied GM source bytes differ');
       mkdirSync(dirname(target), { recursive: true });
@@ -211,7 +217,7 @@ export function applyBaselineFixtureRelease(
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0–B5 sources use the five reviewed Atlas patches and the three sealed B5 art paths. */
+/** Exact B0–B6 sources use six reviewed Atlas patches and the three sealed B5/B6 art paths. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

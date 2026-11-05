@@ -344,14 +344,16 @@ assert.ok(
     sourceRelease === 'B1' ||
     sourceRelease === 'B2' ||
     sourceRelease === 'B3' ||
-    sourceRelease === 'B4',
+    sourceRelease === 'B4' ||
+    sourceRelease === 'B5',
 );
 assert.ok(
   targetRelease === 'B1' ||
     targetRelease === 'B2' ||
     targetRelease === 'B3' ||
     targetRelease === 'B4' ||
-    targetRelease === 'B5',
+    targetRelease === 'B5' ||
+    targetRelease === 'B6',
 );
 const sourceBaselineId = BASELINE_FIXTURE_IDS[sourceRelease];
 const targetBaselineId = BASELINE_FIXTURE_IDS[targetRelease];

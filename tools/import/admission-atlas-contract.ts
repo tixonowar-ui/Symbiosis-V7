@@ -3,6 +3,7 @@ import { fail } from './lib/fail.js';
 import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact admission objects from ADR 0071; overlapping lobby fields updated by #206 / ADR 0073. */
+// Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -50,13 +51,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-018',
-    sha256: 'dd058f0a28e9cf23fd2715640fb22a70b249077c8e4832d26ebf9626c69eba77',
+    sha256: 'c881977adb18e2c77a78e098c22e96a4b0b9023a7924e2325d1bc986d87682aa',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-019',
-    sha256: '678e7e6fbf39b424296ed6985b6637e160569ff4a90993678bf577439f3fe966',
+    sha256: 'eada98fe4c06201a883518c296999f8d6f094ce5e199d501d434b089116e9f95',
   },
   {
     target: 'forms',
@@ -86,7 +87,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: 'c93d07345cecc582615d9bb5f448ad1247b09f40fe39be0c97ca1afa90640282',
+    sha256: 'b54d89dd2b58491ef338424c7095dadb3caa4676ab699e9ad6d58af467473cd6',
   },
   {
     target: 'forms',
@@ -122,7 +123,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-006',
-    sha256: '6b4c8166d3bcff95861b87b4e1567d7c5f5b7d5e594bced96798c139a19baad9',
+    sha256: '7c51e510d6406614166d3bcf3a8b70f05b805c4feb8a7d11bfa7db51d5d7343c',
   },
   {
     target: 'coverageRequirements',
@@ -248,11 +249,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: 'dccc072f9ca4a568fc34d2d0cb892428907397d85f59f19946ca9d3ac7f57f6b',
+    sha256: '0ce9ee6815a54ce2c7f7075be20a8cd5c14d5822d764c970393d7087ca45fa04',
   },
   {
     key: 'transitions',
-    sha256: 'eb3e68b18ac7d1276e5ac9beb50b4ceac3aae38e1bf1814c18cc3b032a23c384',
+    sha256: '978077d54e8e43652a5bc0dfccd413c2553199cb926722cd504450abae504a06',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -286,11 +287,11 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-018 —',
-    sha256: 'e7b6b61e1e209b15ac939f184bdfb2ba8a1a4cab6afc389efe7005c8bd39103a',
+    sha256: 'd2d436a5677301742c0e8fc17f416622b1ebdd6376493ba8e7a4f705ccacd51f',
   },
   {
     prefix: '### NET-019 —',
-    sha256: '4ac450790787c5025c622b147c9fd04b303d52c724d799543006bc6022fcd6b0',
+    sha256: '6c832e45b0eef825f3156b62f1b9548c959ddfa6c1f91146f0afd0f908671e58',
   },
   {
     prefix: '### NET-020 —',
@@ -310,7 +311,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: 'c92c86d42b3ff3d017796755460b909ff7d70fb3c39c8899fbf26988222d96e1',
+    sha256: 'a36ee4bcace06a0f0e65dbdd74510f6810162c54d7fe2f97c3fa83c23f3a44aa',
   },
   {
     prefix: '### GM-019 —',
@@ -336,7 +337,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| REQ-006 | Master-import требует owner/device/seat link |',
-    sha256: '5ee196f14d83f5c3c9a741ecf83e8962de3ef7226a6e2fa73581b6eabbac4b13',
+    sha256: '2a77c4df115db3955ab92425de612c9416617a3a514b0c0285a995c638e309f6',
   },
   {
     prefix: '| REQ-010 | Первоначальное заявление local player на host до player tab |',

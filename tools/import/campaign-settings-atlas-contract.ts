@@ -3,6 +3,7 @@ import { fail } from './lib/fail.js';
 import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact reviewed Atlas 1.9 objects, authorized by #208 and ADR 0075. */
+// Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -44,7 +45,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-HOST-PUBLISH-SETTINGS',
-    sha256: 'c47e9023095feb62be359bf9aae0226e95da285c32fe376cb37731fd98b13352',
+    sha256: '5ec5300e107e11358b0c3db8e4e092f9e65b860b2bd9ae5a4debbdf7adf56023',
   },
   {
     target: 'coverageRequirements',
@@ -56,7 +57,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-055',
-    sha256: '923f7b7d34c5127942e82e12ed6713c4bfef1fc13656c60976da4dd5eb0a5836',
+    sha256: 'ac558316349496594e4fa933b980288cfacf259e3b3d0ba08037aa8135c52551',
   },
   {
     target: 'qaScenarios',
@@ -104,7 +105,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-055',
-    sha256: 'ff5764c6b7469c41fa29b56960ef3c3778b5ca945753a4b86a12c2dc8c7c469c',
+    sha256: '351fe4331eed729a67eabd12d33bd98e97fb9ad51639030c58eabbfd00a3b74a',
   },
   {
     target: 'qaScenarios',
@@ -122,11 +123,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: 'dccc072f9ca4a568fc34d2d0cb892428907397d85f59f19946ca9d3ac7f57f6b',
+    sha256: '0ce9ee6815a54ce2c7f7075be20a8cd5c14d5822d764c970393d7087ca45fa04',
   },
   {
     key: 'transitions',
-    sha256: 'eb3e68b18ac7d1276e5ac9beb50b4ceac3aae38e1bf1814c18cc3b032a23c384',
+    sha256: '978077d54e8e43652a5bc0dfccd413c2553199cb926722cd504450abae504a06',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -156,7 +157,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-HOST-PUBLISH-SETTINGS —',
-    sha256: '723d00bed95a1cb009cebb5b21453b097ed631d46bb88d045c31b658d0f2eab0',
+    sha256: '0a19c33bab85b7ec26e9df2510d1a54d08e8f56cf63f58b48adcf9a669059243',
   },
 ] as const;
 const MARKDOWN_LINES = [
@@ -167,7 +168,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| REQ-055 | Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client |',
-    sha256: '099c49643e1659f103c03eda53be1cbdfa68a633868e54d485808b6caa95b19c',
+    sha256: '846b8025a23789276d38d4595f075e302bbe33b8b3d0847ec200da9428d9b1df',
   },
   {
     prefix: '| QA-FORM-NET-009 | NET-009 |',
@@ -199,7 +200,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-055 | REQ-055 |',
-    sha256: 'e0ed28975cc3f86fbcb3e91c3b6eda029009812a853a67af1758e685452bdf40',
+    sha256: '0ba6e842dc2febff9e0163291ccf7e77550dbe451ced829fcb0cbcb23488b1fb',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-CAMPAIGN-SETTINGS-SET | UI-CMD-CAMPAIGN-SETTINGS-SET |',

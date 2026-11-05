@@ -45,6 +45,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '8b66f22b88eda02345ad3e0933d218467da533c801f8781f2d349a4260aae558',
   },
+  // ADR 0078 / #221: exact Atlas-only successor; prior GM art and mechanics remain sealed.
+  queueSourceBaselineVersion:
+    'sha256:0fc96e57886ef0051667f48f9ada58b1152f7ae8ca0b547397879fadd32779ab',
+  queueSourceAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '3097f40e94901d1928591e7b967e80e9c57be09b015af38869eaa96120751563',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      'a8972fe03778ed8869580d162bf08f44b6d793e49c35e78b95732901905169fd',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
