@@ -1,65 +1,66 @@
-import { encodeDeviceAdmissionPeerCommand } from './device-admission-peer-commands.js';
-import { decodeDeviceAdmissionPeerResponse } from './device-admission-peer-response.js';
+import { createTestPhaseDiagnostics } from './test-phase-diagnostics.js';
+import { encodeDeviceAdmissionPeerCommand } from '../../src/host/device-admission-peer-commands.js';
+import { decodeDeviceAdmissionPeerResponse } from '../../src/host/device-admission-peer-response.js';
 import {
   encodeCampaignLobbyCheckCommand,
   decodeCampaignLobbyCheckResponse,
-} from './campaign-connection-peer.js';
-import * as peerChannelModule from './campaign-peer-channel.js';
+} from '../../src/host/campaign-connection-peer.js';
+import * as peerChannelModule from '../../src/host/campaign-peer-channel.js';
 import {
   campaignPeerStateValue,
   type CampaignPeerControlV3Message,
 } from '@shared/campaign-lifecycle.js';
-import * as localConnectionStore from '../persistence/local-campaign-connection.js';
+import * as localConnectionStore from '../../src/persistence/local-campaign-connection.js';
 import {
   readLocalCampaignConnection,
   observeLocalCampaignConnection,
   prepareLocalCampaignReconnect,
   settleLocalCampaignReconnect,
   replaceLocalCampaignReconnectLocator,
-} from '../persistence/local-campaign-connection.js';
+} from '../../src/persistence/local-campaign-connection.js';
 import {
   encodeCampaignConnectionPeerCommand,
   decodeCampaignConnectionPeerResponse,
-} from './campaign-connection-peer.js';
+} from '../../src/host/campaign-connection-peer.js';
 import {
   encodeAdmissionCapacityCommand,
   encodeAdmissionPeerCommand,
   decodeAdmissionPeerResponse,
   type AdmissionPeerResponse,
-} from './campaign-admission-peer-codec.js';
+} from '../../src/host/campaign-admission-peer-codec.js';
 import { campaignLifecycleGmAnchorValue } from '@shared/campaign-lifecycle.js';
-import * as campaignSecretModule from './campaign-secret.js';
+import * as campaignSecretModule from '../../src/host/campaign-secret.js';
 import {
   CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
   campaignLifecycleGmProjectionValue,
   campaignLifecycleGmRequest,
 } from '@shared/campaign-lifecycle.js';
-import { createCampaignGmScheduler } from './campaign-network-executor.js';
-import { readCampaignCreationCursor } from '../persistence/campaign-creation.js';
-import type { NetworkWorkflowRequest } from '../shared/network-application.js';
-import * as localAdmissionStore from '../persistence/local-campaign-admission.js';
+import { createCampaignGmScheduler } from '../../src/host/campaign-network-executor.js';
+import { readCampaignCreationCursor } from '../../src/persistence/campaign-creation.js';
+import type { NetworkWorkflowRequest } from '../../src/shared/network-application.js';
+import * as localAdmissionStore from '../../src/persistence/local-campaign-admission.js';
 import {
   campaignLobbyPlayerProjectionValue,
   campaignPeaceProjectionValue,
 } from '@shared/campaign-lobby-presentation.js';
 import Database from 'better-sqlite3';
-import { encodeHostMessageV3 } from '../shared/wire-v3-codec.js';
-import { configurePersistenceDatabase } from '../persistence/database.js';
-import { applyMigrationSequence, applyMigrations } from '../persistence/migrations/index.js';
-import { migration0001 } from '../persistence/migrations/0001-initial.js';
-import { migration0002 } from '../persistence/migrations/0002-local-character-checkpoint.js';
-import { migration0003 } from '../persistence/migrations/0003-device-identity.js';
-import { migration0004 } from '../persistence/migrations/0004-skill-presentation.js';
-import { migration0005 } from '../persistence/migrations/0005-symbiont-presentation.js';
-import { migration0006 } from '../persistence/migrations/0006-local-character-post-save.js';
-import { migration0007 } from '../persistence/migrations/0007-campaign-creation.js';
-import { migration0008 } from '../persistence/migrations/0008-network-installation-identity.js';
-import { migration0009 } from '../persistence/migrations/0009-device-admission.js';
-import { migration0010 } from '../persistence/migrations/0010-network-application.js';
-import { migration0011 } from '../persistence/migrations/0011-device-request-review.js';
-import { readCampaignAdmissionAvailability } from '../persistence/campaign-admission-decision.js';
-import { advanceRevisions, commitCampaignCheckpoint } from '../persistence/store.js';
-import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import { encodeHostMessageV3 } from '../../src/shared/wire-v3-codec.js';
+import { configurePersistenceDatabase } from '../../src/persistence/database.js';
+import { applyMigrationSequence, applyMigrations } from '../../src/persistence/migrations/index.js';
+import { migration0001 } from '../../src/persistence/migrations/0001-initial.js';
+import { migration0002 } from '../../src/persistence/migrations/0002-local-character-checkpoint.js';
+import { migration0003 } from '../../src/persistence/migrations/0003-device-identity.js';
+import { migration0004 } from '../../src/persistence/migrations/0004-skill-presentation.js';
+import { migration0005 } from '../../src/persistence/migrations/0005-symbiont-presentation.js';
+import { migration0006 } from '../../src/persistence/migrations/0006-local-character-post-save.js';
+import { migration0007 } from '../../src/persistence/migrations/0007-campaign-creation.js';
+import { migration0008 } from '../../src/persistence/migrations/0008-network-installation-identity.js';
+import { migration0009 } from '../../src/persistence/migrations/0009-device-admission.js';
+import { migration0010 } from '../../src/persistence/migrations/0010-network-application.js';
+import { migration0011 } from '../../src/persistence/migrations/0011-device-request-review.js';
+import { readCampaignAdmissionAvailability } from '../../src/persistence/campaign-admission-decision.js';
+import { advanceRevisions, commitCampaignCheckpoint } from '../../src/persistence/store.js';
+import { createCampaignAdmissionRules } from '../../src/host/campaign-admission-service.js';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -70,18 +71,18 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import {
   ADMISSION_GM_WORKFLOW_IDS,
   admissionOwnerProjectionValue,
-} from '../shared/campaign-admission-presentation.js';
-import { admissionReviewInputsValue } from '../shared/campaign-admission-codec.js';
-import { readLocalAdmission } from '../persistence/local-campaign-admission.js';
-import type { JsonObject } from '../shared/wire-protocol.js';
-import type { ProjectionSnapshotV2Message } from '../shared/wire-v2-protocol.js';
-import { NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS } from '../shared/device-admission.js';
-import { campaignQrPayload } from '../shared/campaign-creation.js';
+} from '../../src/shared/campaign-admission-presentation.js';
+import { admissionReviewInputsValue } from '../../src/shared/campaign-admission-codec.js';
+import { readLocalAdmission } from '../../src/persistence/local-campaign-admission.js';
+import type { JsonObject } from '../../src/shared/wire-protocol.js';
+import type { ProjectionSnapshotV2Message } from '../../src/shared/wire-v2-protocol.js';
+import { NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS } from '../../src/shared/device-admission.js';
+import { campaignQrPayload } from '../../src/shared/campaign-creation.js';
 import {
   openPersistenceDatabase,
   bootstrapDeviceIdentity,
   loadDeviceId,
-} from '../persistence/index.js';
+} from '../../src/persistence/index.js';
 import {
   ensureLocalGmProfile,
   createLocalGmContext,
@@ -92,8 +93,8 @@ import {
   commitCampaignCreation,
   readHostedCampaignCreationOrigin,
   type RedactedCampaignDraftRequest,
-} from '../persistence/campaign-creation.js';
-import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
+} from '../../src/persistence/campaign-creation.js';
+import { readHostedCurrentPausedCampaign } from '../../src/persistence/current-paused-campaign.js';
 import {
   readHostedPausedCampaignIds,
   commitHostedNetworkCommand,
@@ -104,7 +105,7 @@ import {
   commitGmRequestReviewDraft,
   commitGmDeviceRequestDecision,
   type NetworkGmDecisionRequest,
-} from '../persistence/network-device-request.js';
+} from '../../src/persistence/network-device-request.js';
 import {
   readLocalNetworkApplication,
   readLocalNetworkOutbox,
@@ -113,48 +114,59 @@ import {
   readLocalRequestLaneBinding,
   readLocalNetworkCancelSettlementEvent,
   commitLocalNetworkMutation,
-} from '../persistence/network-local-application.js';
+} from '../../src/persistence/network-local-application.js';
 import {
   createCreationFinalizationSetup,
   creationPropertySummaryRequest,
   creationFinalSaveRequest,
-} from '../../tests/fixtures/creation-finalization-stage.js';
-import { commitCreationFinalization } from './creation-finalization.js';
-import { loadCreationWizardCheckpoint } from './creation-set-decide.js';
+} from './creation-finalization-stage.js';
+import { commitCreationFinalization } from '../../src/host/creation-finalization.js';
+import { loadCreationWizardCheckpoint } from '../../src/host/creation-set-decide.js';
 import {
   loadLocalCharacterExportBaseline,
   canonicalPostSaveJson,
   postSaveSha256,
   type LocalCharacterExportBaseline,
-} from './local-character-export.js';
-import { createCampaignBindManager } from './campaign-bind.js';
-import { createCampaignNetworkEndpoint } from './campaign-network-endpoint.js';
-import { createCampaignNetworkExecutor } from './campaign-network-executor.js';
-import { initializeNetworkInstallation, loadNetworkInstallation } from './network-installation.js';
-import { campaignPeerPublicIdentity } from './campaign-peer-identity.js';
-import { acceptCampaignPeerChannel, connectCampaignPeerChannel } from './campaign-peer-channel.js';
-import { parseCampaignLanAddress } from './campaign-lan-address.js';
-import { validatePeerCampaignHeader } from './campaign-peer-handshake.js';
-import { prepareMasterSecret, validateMasterSecretVerifier } from './campaign-secret.js';
+} from '../../src/host/local-character-export.js';
+import { createCampaignBindManager } from '../../src/host/campaign-bind.js';
+import { createCampaignNetworkEndpoint } from '../../src/host/campaign-network-endpoint.js';
+import { createCampaignNetworkExecutor } from '../../src/host/campaign-network-executor.js';
+import {
+  initializeNetworkInstallation,
+  loadNetworkInstallation,
+} from '../../src/host/network-installation.js';
+import { campaignPeerPublicIdentity } from '../../src/host/campaign-peer-identity.js';
+import {
+  acceptCampaignPeerChannel,
+  connectCampaignPeerChannel,
+} from '../../src/host/campaign-peer-channel.js';
+import { parseCampaignLanAddress } from '../../src/host/campaign-lan-address.js';
+import { validatePeerCampaignHeader } from '../../src/host/campaign-peer-handshake.js';
+import {
+  prepareMasterSecret,
+  validateMasterSecretVerifier,
+} from '../../src/host/campaign-secret.js';
 import {
   createDeviceAdmissionPeerRuntime,
   type DeviceAdmissionPeerRuntimeLimits,
-} from './device-admission-peer-runtime.js';
-import { createLocalNetworkPeer } from './network-local-peer.js';
-import type { DeviceAdmissionPeerResponse } from './device-admission-peer-response.js';
+} from '../../src/host/device-admission-peer-runtime.js';
+import { createLocalNetworkPeer } from '../../src/host/network-local-peer.js';
+import type { DeviceAdmissionPeerResponse } from '../../src/host/device-admission-peer-response.js';
 import {
   loadNetworkApplicationConfig,
   type NetworkApplicationConfig,
-} from './network-application-config.js';
+} from '../../src/host/network-application-config.js';
 import {
   createLocalNetworkRuntime,
   type LocalNetworkConnection,
   type LocalNetworkShell,
   type LocalNetworkClientMessage,
   type LocalNetworkHostMessage,
-} from './network-application.js';
-import { isNetworkApplicationProjection } from '../shared/network-application-codec.js';
-import { validateFinalAdmissionCandidate } from './device-admission-candidate.js';
+} from '../../src/host/network-application.js';
+import { isNetworkApplicationProjection } from '../../src/shared/network-application-codec.js';
+import { validateFinalAdmissionCandidate } from '../../src/host/device-admission-candidate.js';
+
+let phaseDiagnostics: ReturnType<typeof createTestPhaseDiagnostics>;
 
 let baseline: LocalCharacterExportBaseline,
   config: NetworkApplicationConfig,
@@ -171,39 +183,72 @@ const cleaners: (() => Promise<void>)[] = [],
   dirs: string[] = [];
 let limits: DeviceAdmissionPeerRuntimeLimits, channelLimits: NetworkApplicationConfig['channel'];
 let vocabulary: Awaited<ReturnType<typeof loadProtocolVocabulary>>;
-beforeAll(async () => {
-  vocabulary = await loadProtocolVocabulary(process.cwd());
-  baseline = await loadLocalCharacterExportBaseline(process.cwd());
-  config = await loadNetworkApplicationConfig(process.cwd());
-  limits = config.transfer;
-  channelLimits = config.channel;
-  secret = await prepareMasterSecret('Valid fixture secret', 'Valid fixture secret');
-  player = await createCreationFinalizationSetup({
-    prefix: 'local-application-source',
-    raceChoice: 'FREE',
-    diceInputMode: 'AUTO',
+type NetworkFixtureOwner =
+  | 'network-application-transport'
+  | 'network-application-lifecycle'
+  | 'network-application-admission-accepted'
+  | 'network-application-admission-other'
+  | 'network-application-peace';
+export function setupNetworkFixture(owner: NetworkFixtureOwner) {
+  phaseDiagnostics = createTestPhaseDiagnostics(owner);
+  const modulePhase = phaseDiagnostics.begin('module.registered-to-cleanup');
+  const startupPhase = phaseDiagnostics.begin('module.registered-to-beforeAll');
+  beforeAll(async () => {
+    const measuredPhase = phaseDiagnostics.begin('root.prepare');
+    try {
+      phaseDiagnostics.end(startupPhase);
+      const inputsPhase = phaseDiagnostics.begin('root.source-inputs');
+      vocabulary = await loadProtocolVocabulary(process.cwd());
+      baseline = await loadLocalCharacterExportBaseline(process.cwd());
+      config = await loadNetworkApplicationConfig(process.cwd());
+      limits = config.transfer;
+      channelLimits = config.channel;
+      phaseDiagnostics.end(inputsPhase);
+      secret = await prepareMasterSecret('Valid fixture secret', 'Valid fixture secret');
+      const finalPhase = phaseDiagnostics.begin('root.real-final-prepare');
+      player = await createCreationFinalizationSetup({
+        prefix: 'local-application-source',
+        raceChoice: 'FREE',
+        diceInputMode: 'AUTO',
+      });
+      const current = commitCreationFinalization(
+        player.setup.database,
+        creationPropertySummaryRequest(player.current, 'local-source-summary'),
+        'local-source-summary-receipt',
+        player.dependencies,
+      );
+      commitCreationFinalization(
+        player.setup.database,
+        creationFinalSaveRequest(current, 'local-source-final'),
+        'local-source-final-receipt',
+        player.dependencies,
+      );
+      playerMaterial = initializeNetworkInstallation(player.setup.database);
+      phaseDiagnostics.end(finalPhase);
+    } finally {
+      phaseDiagnostics.end(measuredPhase);
+    }
   });
-  const current = commitCreationFinalization(
-    player.setup.database,
-    creationPropertySummaryRequest(player.current, 'local-source-summary'),
-    'local-source-summary-receipt',
-    player.dependencies,
-  );
-  commitCreationFinalization(
-    player.setup.database,
-    creationFinalSaveRequest(current, 'local-source-final'),
-    'local-source-final-receipt',
-    player.dependencies,
-  );
-  playerMaterial = initializeNetworkInstallation(player.setup.database);
-});
-afterEach(async () => {
-  for (const close of cleaners.splice(0).reverse()) await close();
-});
-afterAll(() => {
-  if (player.setup.database.open) player.setup.database.close();
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
-});
+  afterEach(async () => {
+    const measuredPhase = phaseDiagnostics.begin('case.cleanup');
+    try {
+      for (const close of cleaners.splice(0).reverse()) await close();
+    } finally {
+      phaseDiagnostics.end(measuredPhase);
+    }
+  });
+  afterAll(() => {
+    const measuredPhase = phaseDiagnostics.begin('module.cleanup');
+    try {
+      if (player.setup.database.open) player.setup.database.close();
+      for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+    } finally {
+      phaseDiagnostics.end(measuredPhase);
+      phaseDiagnostics.end(modulePhase);
+      phaseDiagnostics.finish();
+    }
+  });
+}
 
 function client(twoSources = false) {
   const dir = mkdtempSync(join(tmpdir(), 'network-app-'));
@@ -235,8 +280,14 @@ function client(twoSources = false) {
         second.setup.database.close();
       }
     }
-    let db = openPersistenceDatabase(path),
-      runtime: ReturnType<typeof createLocalNetworkRuntime>;
+    const openPhase = phaseDiagnostics.begin('client.open-migrate');
+    let db: ReturnType<typeof openPersistenceDatabase>;
+    try {
+      db = openPersistenceDatabase(path);
+    } finally {
+      phaseDiagnostics.end(openPhase);
+    }
+    let runtime: ReturnType<typeof createLocalNetworkRuntime>;
     let live = true,
       loseExit = false,
       loseDestination = false,
@@ -486,22 +537,27 @@ function client(twoSources = false) {
     });
     const state = () => readLocalNetworkApplication(db, scope());
     const send = async (m: LocalNetworkClientMessage) => {
-      sent.length = 0;
-      expect(
-        await runtime.handle(m, c, shell, (value) => {
-          if (
-            loseDestination &&
-            value.messageType === 'projection.snapshot' &&
-            value.protocolVersion === 2 &&
-            value.presentation.assignment.reason === 'COMMAND_DESTINATION'
-          ) {
-            loseDestination = false;
-            throw new Error('Simulated encoder failure after terminal delivery');
-          }
-          sent.push(value);
-        }),
-      ).toBe(true);
-      return sent;
+      const measuredPhase = phaseDiagnostics.begin('player.send-handler');
+      try {
+        sent.length = 0;
+        expect(
+          await runtime.handle(m, c, shell, (value) => {
+            if (
+              loseDestination &&
+              value.messageType === 'projection.snapshot' &&
+              value.protocolVersion === 2 &&
+              value.presentation.assignment.reason === 'COMMAND_DESTINATION'
+            ) {
+              loseDestination = false;
+              throw new Error('Simulated encoder failure after terminal delivery');
+            }
+            sent.push(value);
+          }),
+        ).toBe(true);
+        return sent;
+      } finally {
+        phaseDiagnostics.end(measuredPhase);
+      }
     };
     const nav = async (action: string, from?: string) => {
       const s = c.networkScopeId === null ? null : state();
@@ -659,16 +715,21 @@ function client(twoSources = false) {
         loseExit = true;
       },
       reopenShell(formId: 'APP-002' | 'CHR-040', sourceId = player.setup.characterDraftId) {
-        runtime.close();
-        db.close();
-        db = openPersistenceDatabase(path);
-        c.networkScopeId = null;
-        c.contextId = null;
-        shellForm = formId;
-        shellContext = randomUUID();
-        shellFinalId = sourceId;
-        lastExit = null;
-        start();
+        const measuredPhase = phaseDiagnostics.begin('client.reopen-shell');
+        try {
+          runtime.close();
+          db.close();
+          db = openPersistenceDatabase(path);
+          c.networkScopeId = null;
+          c.contextId = null;
+          shellForm = formId;
+          shellContext = randomUUID();
+          shellFinalId = sourceId;
+          lastExit = null;
+          start();
+        } finally {
+          phaseDiagnostics.end(measuredPhase);
+        }
       },
       async additionalOwnerView(
         networkScopeId = scope().networkScopeId,
@@ -721,25 +782,30 @@ function client(twoSources = false) {
         };
       },
       async restart(pending: readonly string[] = [], retiredScope?: string) {
-        const id = retiredScope ?? c.networkScopeId!,
-          v = retiredScope === undefined ? vector(state()) : zero;
-        runtime.close();
-        db.close();
-        db = openPersistenceDatabase(path);
-        c.networkScopeId = null;
-        c.contextId = null;
-        shellForm = null;
-        lastExit = null;
-        start();
-        await send({
-          messageType: 'network.local-context.resume',
-          protocolVersion: 3,
-          networkScopeId: id,
-          reconnectRequestId: randomUUID(),
-          knownRevisions: v,
-          supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
-          unacknowledgedCommandIds: pending,
-        });
+        const measuredPhase = phaseDiagnostics.begin('client.restart-with-resume');
+        try {
+          const id = retiredScope ?? c.networkScopeId!,
+            v = retiredScope === undefined ? vector(state()) : zero;
+          runtime.close();
+          db.close();
+          db = openPersistenceDatabase(path);
+          c.networkScopeId = null;
+          c.contextId = null;
+          shellForm = null;
+          lastExit = null;
+          start();
+          await send({
+            messageType: 'network.local-context.resume',
+            protocolVersion: 3,
+            networkScopeId: id,
+            reconnectRequestId: randomUUID(),
+            knownRevisions: v,
+            supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+            unacknowledgedCommandIds: pending,
+          });
+        } finally {
+          phaseDiagnostics.end(measuredPhase);
+        }
       },
     };
   });
@@ -963,7 +1029,7 @@ function gmDecision(h: Awaited<ReturnType<typeof host>>, requestId: string, reje
   );
 }
 
-describe('local network application with durable SQLite and real Node peers', () => {
+const transportCases = () => {
   it.each([10, 11] as const)(
     'proves empty admission history only for an intact schema %s CREATE checkpoint',
     async (legacySchema) => {
@@ -1898,7 +1964,7 @@ describe('local network application with durable SQLite and real Node peers', ()
         .get(),
     ).toEqual({ count: 1 });
   }, 30000);
-});
+};
 async function host(
   options: {
     path?: string;
@@ -1909,6 +1975,8 @@ async function host(
     legacySchema?: 10 | 11;
   } = {},
 ) {
+  const preparePhase = phaseDiagnostics.begin('host.prepare');
+  const openPhase = phaseDiagnostics.begin('host.open-migrate');
   const db = options.legacySchema
     ? new Database(options.path ?? ':memory:')
     : openPersistenceDatabase(options.path ?? ':memory:');
@@ -1928,6 +1996,7 @@ async function host(
       ...(options.legacySchema === 11 ? [migration0011] : []),
     ]);
   }
+  phaseDiagnostics.end(openPhase);
   bootstrapDeviceIdentity(db);
   initializeNetworkInstallation(db);
   const http = createServer((_request, response) => {
@@ -1965,7 +2034,7 @@ async function host(
     };
     ensureLocalGmProfile(db, { ownerDeviceId: owner, masterProfileId: randomUUID() }, owned);
     // read the real profile id through its public owner reader rather than inventing another owner.
-    const { readLocalGmProfile } = await import('../persistence/campaign-creation.js');
+    const { readLocalGmProfile } = await import('../../src/persistence/campaign-creation.js');
     createLocalGmContext(
       db,
       {
@@ -2186,6 +2255,7 @@ async function host(
     campaignId,
     peerIdentity: campaignPeerPublicIdentity(playerMaterial),
   };
+  phaseDiagnostics.end(preparePhase);
   return {
     db,
     campaignId,
@@ -2226,12 +2296,15 @@ async function host(
     errors,
   };
 }
-import { createGmNetworkRuntime } from './network-application.js';
-import type { FormActionIntentV2Message } from '../shared/wire-v2-protocol.js';
-import { createCampaignCreationRuntime, type CampaignConnection } from './campaign-creation.js';
-import { loadProtocolVocabulary } from './protocol-vocabulary.js';
-import { NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS } from '../shared/device-admission.js';
-import { readGmDeviceRequestQueue } from '../persistence/network-device-request.js';
+import { createGmNetworkRuntime } from '../../src/host/network-application.js';
+import type { FormActionIntentV2Message } from '../../src/shared/wire-v2-protocol.js';
+import {
+  createCampaignCreationRuntime,
+  type CampaignConnection,
+} from '../../src/host/campaign-creation.js';
+import { loadProtocolVocabulary } from '../../src/host/protocol-vocabulary.js';
+import { NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS } from '../../src/shared/device-admission.js';
+import { readGmDeviceRequestQueue } from '../../src/persistence/network-device-request.js';
 
 function lifecycleProjection(view: {
   base: { roleFilteredPayload: JsonObject };
@@ -2309,9 +2382,14 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
   };
   const view = () => readGmRequestReviewView(h.db, scope, h.validate)!;
   const send = async (m: LocalNetworkClientMessage) => {
-    sent.length = 0;
-    expect(await runtime.handle(m, c, (v) => sent.push(v))).toBe(true);
-    return sent;
+    const measuredPhase = phaseDiagnostics.begin('gm.send-handler');
+    try {
+      sent.length = 0;
+      expect(await runtime.handle(m, c, (v) => sent.push(v))).toBe(true);
+      return sent;
+    } finally {
+      phaseDiagnostics.end(measuredPhase);
+    }
   };
   const nav = async (enter = true) => {
     const request = {
@@ -2376,133 +2454,156 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
   return { c, runtime, campaign, sent, scope, view, send, nav, select, resume, gmScheduler };
 }
 
-describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] as const)(
-  'actual final admission owner runtime %s',
-  (scenario) => {
-    let h: Awaited<ReturnType<typeof host>>,
-      p: Awaited<ReturnType<typeof client>>,
-      gm: Awaited<ReturnType<typeof gmClient>>,
-      requestId: string;
-    let sourceRows: unknown;
-    const gmNav = async (
-      sourceFormId: FormActionIntentV2Message['sourceFormId'],
-      actionKey: FormActionIntentV2Message['actionKey'],
-    ) => {
-      const view = await gm.runtime.project(gm.c);
-      const navigationRequestId = randomUUID();
-      await gm.send({
-        messageType: 'navigation.form-action',
-        protocolVersion: 2,
-        navigationRequestId,
+type AdmissionScenario = 'ACCEPT' | 'ACCEPT_WITH_BLOCKERS' | 'DECLINE' | 'REJECT' | 'MIXED';
+function createAdmissionScenario(scenario: AdmissionScenario) {
+  let h: Awaited<ReturnType<typeof host>>,
+    p: Awaited<ReturnType<typeof client>>,
+    gm: Awaited<ReturnType<typeof gmClient>>,
+    requestId: string;
+  let sourceRows: unknown;
+  const gmNav = async (
+    sourceFormId: FormActionIntentV2Message['sourceFormId'],
+    actionKey: FormActionIntentV2Message['actionKey'],
+  ) => {
+    const view = await gm.runtime.project(gm.c);
+    const navigationRequestId = randomUUID();
+    await gm.send({
+      messageType: 'navigation.form-action',
+      protocolVersion: 2,
+      navigationRequestId,
+      sourceFormId,
+      actionKey,
+      expectedProjectionRevision: view.revisions.projectionRevision,
+    });
+    expect(
+      gm.sent[0],
+      JSON.stringify({
         sourceFormId,
         actionKey,
-        expectedProjectionRevision: view.revisions.projectionRevision,
-      });
-      expect(
-        gm.sent[0],
-        JSON.stringify({
-          sourceFormId,
-          actionKey,
-          actual: view.base.formId,
-          layer: view.layers?.at(-1)?.formId,
-          revisions: view.revisions,
-          messages: gm.sent,
-        }),
-      ).toMatchObject({ messageType: 'projection.snapshot' });
-      expect(
-        gm.sent.find(
-          (message) =>
-            message.messageType === 'projection.snapshot' &&
-            message.protocolVersion === 2 &&
-            message.presentation.assignment.correlationId === navigationRequestId,
-        ),
-      ).toMatchObject({
-        presentation: {
-          assignment: { correlationId: navigationRequestId, reason: 'FORM_ACTION' },
-        },
-      });
+        actual: view.base.formId,
+        layer: view.layers?.at(-1)?.formId,
+        revisions: view.revisions,
+        messages: gm.sent,
+      }),
+    ).toMatchObject({ messageType: 'projection.snapshot' });
+    expect(
+      gm.sent.find(
+        (message) =>
+          message.messageType === 'projection.snapshot' &&
+          message.protocolVersion === 2 &&
+          message.presentation.assignment.correlationId === navigationRequestId,
+      ),
+    ).toMatchObject({
+      presentation: {
+        assignment: { correlationId: navigationRequestId, reason: 'FORM_ACTION' },
+      },
+    });
+  };
+  beforeEach(async () => {
+    h = await host();
+  });
+  beforeEach(async () => {
+    p = await connectedPlayer(h, scenario === 'MIXED');
+  });
+  beforeEach(async () => {
+    const submitted = await submitConnectedPlayer(
+      p,
+      h,
+      false,
+      false,
+      undefined,
+      scenario === 'MIXED' ? 2 : 1,
+    );
+    requestId = submitted.batch.requestId;
+    sourceRows = p.db.prepare('SELECT * FROM local_character').all();
+  });
+  beforeEach(async () => {
+    gm = gmClient(h);
+    gm.c.executableReview = [
+      ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+      ...ADMISSION_GM_WORKFLOW_IDS,
+    ];
+    await gm.nav();
+  });
+  beforeEach(async () => {
+    await gm.select(requestId);
+  });
+  beforeEach(async () => {
+    await gm.send({
+      messageType: 'command.request',
+      protocolVersion: 1,
+      commandKind: 'workflow-command',
+      role: 'gm',
+      commandId: randomUUID(),
+      workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
+      expectedRevisions: vector(gm.view()),
+      payload: { campaignId: h.campaignId, requestId, requestRevision: 0 },
+    });
+    expect(gm.sent[0]?.messageType).toBe('command.result');
+  });
+  beforeEach(async () => {
+    await gm.send({
+      messageType: 'command.request',
+      protocolVersion: 1,
+      commandKind: 'workflow-command',
+      role: 'gm',
+      commandId: randomUUID(),
+      workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN',
+      expectedRevisions: vector(gm.view()),
+      payload: { campaignId: h.campaignId, requestId, requestRevision: 1 },
+    });
+    expect(gm.sent[0]?.messageType).toBe('command.result');
+    await gmNav('NET-018', 'NET-018::CTA::002');
+  });
+  beforeEach(async () => {
+    if (scenario === 'REJECT') return;
+    const view = await gm.runtime.project(gm.c),
+      q = view.base.roleFilteredPayload;
+    const inputs = structuredClone(admissionReviewInputsValue(q['reviewDraft']));
+    const edited = {
+      ...inputs,
+      massReview: {
+        ...inputs.massReview,
+        decision:
+          scenario === 'ACCEPT_WITH_BLOCKERS'
+            ? ('PENDING_MASTER_APPROVAL' as const)
+            : ('APPROVED' as const),
+      },
+      inventoryReview: {
+        ...inputs.inventoryReview,
+        status: 'FINAL' as const,
+        unresolvedSourceEntryIds: [],
+      },
+      moneyReview: { status: 'FINAL' as const, amountOrNull: 42 },
+      groupAssignmentOrNull: { kind: 'START' as const },
+      locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
     };
-    beforeEach(async () => {
-      h = await host();
+    await gm.send({
+      messageType: 'network.admission-review.edit',
+      protocolVersion: 3,
+      draftUpdateId: randomUUID(),
+      contextId: h.gmLocalContextId,
+      campaignId: h.campaignId,
+      admissionBatchId: q['admissionBatchId'] as string,
+      sourceFormId: 'NET-019',
+      expectedRevisions: view.revisions,
+      expectedReviewRevision: Number(q['reviewRevisionOrNull']!),
+      intent: { kind: 'EDIT', reviewCopyId: q['selectedReviewCopyId'] as string, inputs: edited },
     });
-    beforeEach(async () => {
-      p = await connectedPlayer(h, scenario === 'MIXED');
-    });
-    beforeEach(async () => {
-      const submitted = await submitConnectedPlayer(
-        p,
-        h,
-        false,
-        false,
-        undefined,
-        scenario === 'MIXED' ? 2 : 1,
-      );
-      requestId = submitted.batch.requestId;
-      sourceRows = p.db.prepare('SELECT * FROM local_character').all();
-    });
-    beforeEach(async () => {
-      gm = gmClient(h);
-      gm.c.executableReview = [
-        ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
-        ...ADMISSION_GM_WORKFLOW_IDS,
-      ];
-      await gm.nav();
-    });
-    beforeEach(async () => {
-      await gm.select(requestId);
-    });
-    beforeEach(async () => {
-      await gm.send({
-        messageType: 'command.request',
-        protocolVersion: 1,
-        commandKind: 'workflow-command',
-        role: 'gm',
-        commandId: randomUUID(),
-        workflowCommandId: 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW',
-        expectedRevisions: vector(gm.view()),
-        payload: { campaignId: h.campaignId, requestId, requestRevision: 0 },
-      });
-      expect(gm.sent[0]?.messageType).toBe('command.result');
-    });
-    beforeEach(async () => {
-      await gm.send({
-        messageType: 'command.request',
-        protocolVersion: 1,
-        commandKind: 'workflow-command',
-        role: 'gm',
-        commandId: randomUUID(),
-        workflowCommandId: 'UI-CMD-ADMISSION-REVIEW-OPEN',
-        expectedRevisions: vector(gm.view()),
-        payload: { campaignId: h.campaignId, requestId, requestRevision: 1 },
-      });
-      expect(gm.sent[0]?.messageType).toBe('command.result');
-      await gmNav('NET-018', 'NET-018::CTA::002');
-    });
-    beforeEach(async () => {
-      if (scenario === 'REJECT') return;
+    expect(gm.sent[0]).toMatchObject({ messageType: 'network.admission-draft.result' });
+  });
+  beforeEach(async () => {
+    if (scenario !== 'MIXED') return;
+    const current = await gm.runtime.project(gm.c),
+      first = current.base.roleFilteredPayload['selectedReviewCopyId'];
+    const second = (current.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[])[1]![
+      'reviewCopyId'
+    ];
+    const select = async (id: JsonObject[string]) => {
       const view = await gm.runtime.project(gm.c),
         q = view.base.roleFilteredPayload;
-      const inputs = structuredClone(admissionReviewInputsValue(q['reviewDraft']));
-      const edited = {
-        ...inputs,
-        massReview: {
-          ...inputs.massReview,
-          decision:
-            scenario === 'ACCEPT_WITH_BLOCKERS'
-              ? ('PENDING_MASTER_APPROVAL' as const)
-              : ('APPROVED' as const),
-        },
-        inventoryReview: {
-          ...inputs.inventoryReview,
-          status: 'FINAL' as const,
-          unresolvedSourceEntryIds: [],
-        },
-        moneyReview: { status: 'FINAL' as const, amountOrNull: 42 },
-        groupAssignmentOrNull: { kind: 'START' as const },
-        locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
-      };
       await gm.send({
-        messageType: 'network.admission-review.edit',
+        messageType: 'network.admission-view.replace',
         protocolVersion: 3,
         draftUpdateId: randomUUID(),
         contextId: h.gmLocalContextId,
@@ -2510,220 +2611,197 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
         admissionBatchId: q['admissionBatchId'] as string,
         sourceFormId: 'NET-019',
         expectedRevisions: view.revisions,
-        expectedReviewRevision: Number(q['reviewRevisionOrNull']!),
-        intent: { kind: 'EDIT', reviewCopyId: q['selectedReviewCopyId'] as string, inputs: edited },
-      });
-      expect(gm.sent[0]).toMatchObject({ messageType: 'network.admission-draft.result' });
-    });
-    beforeEach(async () => {
-      if (scenario !== 'MIXED') return;
-      const current = await gm.runtime.project(gm.c),
-        first = current.base.roleFilteredPayload['selectedReviewCopyId'];
-      const second = (current.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[])[1]![
-        'reviewCopyId'
-      ];
-      const select = async (id: JsonObject[string]) => {
-        const view = await gm.runtime.project(gm.c),
-          q = view.base.roleFilteredPayload;
-        await gm.send({
-          messageType: 'network.admission-view.replace',
-          protocolVersion: 3,
-          draftUpdateId: randomUUID(),
-          contextId: h.gmLocalContextId,
-          campaignId: h.campaignId,
-          admissionBatchId: q['admissionBatchId'] as string,
-          sourceFormId: 'NET-019',
-          expectedRevisions: view.revisions,
-          values: {
-            selectedReviewCopyId: id as string,
-            rejectionReason: '',
-            weaponDraftOrNull: null,
-          },
-        });
-        expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
-      };
-      await select(second!);
-      const view = await gm.runtime.project(gm.c),
-        q = view.base.roleFilteredPayload;
-      const inputs = admissionReviewInputsValue(q['reviewDraft']);
-      await gm.send({
-        messageType: 'network.admission-review.edit',
-        protocolVersion: 3,
-        draftUpdateId: randomUUID(),
-        contextId: h.gmLocalContextId,
-        campaignId: h.campaignId,
-        admissionBatchId: q['admissionBatchId'] as string,
-        sourceFormId: 'NET-019',
-        expectedRevisions: view.revisions,
-        expectedReviewRevision: Number(q['reviewRevisionOrNull']),
-        intent: {
-          kind: 'EDIT',
-          reviewCopyId: second as string,
-          inputs: {
-            ...inputs,
-            groupAssignmentOrNull: { kind: 'START' },
-            locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
-          },
+        values: {
+          selectedReviewCopyId: id as string,
+          rejectionReason: '',
+          weaponDraftOrNull: null,
         },
       });
       expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
-      await select(first!);
+    };
+    await select(second!);
+    const view = await gm.runtime.project(gm.c),
+      q = view.base.roleFilteredPayload;
+    const inputs = admissionReviewInputsValue(q['reviewDraft']);
+    await gm.send({
+      messageType: 'network.admission-review.edit',
+      protocolVersion: 3,
+      draftUpdateId: randomUUID(),
+      contextId: h.gmLocalContextId,
+      campaignId: h.campaignId,
+      admissionBatchId: q['admissionBatchId'] as string,
+      sourceFormId: 'NET-019',
+      expectedRevisions: view.revisions,
+      expectedReviewRevision: Number(q['reviewRevisionOrNull']),
+      intent: {
+        kind: 'EDIT',
+        reviewCopyId: second as string,
+        inputs: {
+          ...inputs,
+          groupAssignmentOrNull: { kind: 'START' },
+          locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
+        },
+      },
     });
-    beforeEach(
-      async () => {
-        if (scenario !== 'REJECT') {
-          const initial = await gm.runtime.project(gm.c),
-            first = initial.base.roleFilteredPayload['selectedReviewCopyId'];
-          const select = async (id: string) => {
-            const view = await gm.runtime.project(gm.c),
-              q = view.base.roleFilteredPayload;
-            if (q['selectedReviewCopyId'] === id) return;
+    expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
+    await select(first!);
+  });
+  beforeEach(
+    async () => {
+      if (scenario !== 'REJECT') {
+        const initial = await gm.runtime.project(gm.c),
+          first = initial.base.roleFilteredPayload['selectedReviewCopyId'];
+        const select = async (id: string) => {
+          const view = await gm.runtime.project(gm.c),
+            q = view.base.roleFilteredPayload;
+          if (q['selectedReviewCopyId'] === id) return;
+          await gm.send({
+            messageType: 'network.admission-view.replace',
+            protocolVersion: 3,
+            draftUpdateId: randomUUID(),
+            contextId: h.gmLocalContextId,
+            campaignId: h.campaignId,
+            admissionBatchId: q['admissionBatchId'] as string,
+            sourceFormId: 'NET-019',
+            expectedRevisions: view.revisions,
+            values: { selectedReviewCopyId: id, rejectionReason: '', weaponDraftOrNull: null },
+          });
+          expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
+        };
+        const copyIds =
+          scenario === 'MIXED'
+            ? (initial.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[]).map(
+                (c) => c['reviewCopyId'] as string,
+              )
+            : [first as string];
+        for (const copyId of copyIds) {
+          await select(copyId);
+          const view = await gm.runtime.project(gm.c),
+            q = view.base.roleFilteredPayload;
+          const requests = q['validatedWeaponRequests'] as readonly {
+            requestId: string;
+            validationReceiptId: string;
+          }[];
+          for (const request of requests) {
+            await gmNav('NET-019', 'NET-019::CTA::004');
+            let current = await gm.runtime.project(gm.c),
+              payload = current.base.roleFilteredPayload;
+            const values = {
+              ...(payload['viewValues'] as unknown as {
+                selectedReviewCopyId: string;
+                rejectionReason: string;
+              }),
+              weaponDraftOrNull: {
+                weaponReviewInput: { kind: 'VALIDATED_REQUEST' as const, ...request },
+                decision: 'APPROVE' as const,
+                overrideProfileOrNull: null,
+                reasonOrNull: null,
+              },
+            };
+            // The public request summary contains only the two typed input identities here.
+            values.weaponDraftOrNull.weaponReviewInput = {
+              kind: 'VALIDATED_REQUEST',
+              requestId: request.requestId,
+              validationReceiptId: request.validationReceiptId,
+            };
             await gm.send({
               messageType: 'network.admission-view.replace',
               protocolVersion: 3,
               draftUpdateId: randomUUID(),
               contextId: h.gmLocalContextId,
               campaignId: h.campaignId,
-              admissionBatchId: q['admissionBatchId'] as string,
-              sourceFormId: 'NET-019',
-              expectedRevisions: view.revisions,
-              values: { selectedReviewCopyId: id, rejectionReason: '', weaponDraftOrNull: null },
+              admissionBatchId: payload['admissionBatchId'] as string,
+              sourceFormId: 'GM-019',
+              expectedRevisions: current.revisions,
+              values,
             });
             expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
-          };
-          const copyIds =
-            scenario === 'MIXED'
-              ? (initial.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[]).map(
-                  (c) => c['reviewCopyId'] as string,
-                )
-              : [first as string];
-          for (const copyId of copyIds) {
-            await select(copyId);
-            const view = await gm.runtime.project(gm.c),
-              q = view.base.roleFilteredPayload;
-            const requests = q['validatedWeaponRequests'] as readonly {
-              requestId: string;
-              validationReceiptId: string;
-            }[];
-            for (const request of requests) {
-              await gmNav('NET-019', 'NET-019::CTA::004');
-              let current = await gm.runtime.project(gm.c),
-                payload = current.base.roleFilteredPayload;
-              const values = {
-                ...(payload['viewValues'] as unknown as {
-                  selectedReviewCopyId: string;
-                  rejectionReason: string;
-                }),
-                weaponDraftOrNull: {
-                  weaponReviewInput: { kind: 'VALIDATED_REQUEST' as const, ...request },
-                  decision: 'APPROVE' as const,
-                  overrideProfileOrNull: null,
-                  reasonOrNull: null,
-                },
-              };
-              // The public request summary contains only the two typed input identities here.
-              values.weaponDraftOrNull.weaponReviewInput = {
-                kind: 'VALIDATED_REQUEST',
-                requestId: request.requestId,
-                validationReceiptId: request.validationReceiptId,
-              };
-              await gm.send({
-                messageType: 'network.admission-view.replace',
-                protocolVersion: 3,
-                draftUpdateId: randomUUID(),
+            current = await gm.runtime.project(gm.c);
+            payload = current.base.roleFilteredPayload;
+            await gm.send({
+              messageType: 'command.request',
+              protocolVersion: 1,
+              commandKind: 'workflow-command',
+              role: 'gm',
+              commandId: randomUUID(),
+              workflowCommandId: 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
+              expectedRevisions: current.revisions,
+              payload: {
                 contextId: h.gmLocalContextId,
                 campaignId: h.campaignId,
-                admissionBatchId: payload['admissionBatchId'] as string,
-                sourceFormId: 'GM-019',
-                expectedRevisions: current.revisions,
-                values,
-              });
-              expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
-              current = await gm.runtime.project(gm.c);
-              payload = current.base.roleFilteredPayload;
-              await gm.send({
-                messageType: 'command.request',
-                protocolVersion: 1,
-                commandKind: 'workflow-command',
-                role: 'gm',
-                commandId: randomUUID(),
-                workflowCommandId: 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE',
-                expectedRevisions: current.revisions,
-                payload: {
-                  contextId: h.gmLocalContextId,
-                  campaignId: h.campaignId,
-                  admissionBatchId: payload['admissionBatchId']!,
-                  reviewCopyId: payload['selectedReviewCopyId']!,
-                  reviewRevision: payload['reviewRevisionOrNull']!,
-                  input: values.weaponDraftOrNull,
-                },
-              });
-              expect(gm.sent[0]?.messageType).toBe('command.result');
-            }
+                admissionBatchId: payload['admissionBatchId']!,
+                reviewCopyId: payload['selectedReviewCopyId']!,
+                reviewRevision: payload['reviewRevisionOrNull']!,
+                input: values.weaponDraftOrNull,
+              },
+            });
+            expect(gm.sent[0]?.messageType).toBe('command.result');
           }
-          await select(first as string);
         }
-      },
-      scenario === 'MIXED' ? 60000 : 30000,
-    );
-    beforeEach(async () => {
-      await gmNav('NET-019', 'NET-019::CTA::002');
-      await gmNav('NET-018', 'NET-018::CTA::004');
-      if (scenario === 'REJECT') {
-        await gmNav('NET-021', 'NET-021::CTA::002');
-        const view = await gm.runtime.project(gm.c),
-          q = view.layers!.at(-1)!.roleFilteredPayload;
-        await gm.send({
-          messageType: 'network.admission-view.replace',
-          protocolVersion: 3,
-          draftUpdateId: randomUUID(),
-          contextId: h.gmLocalContextId,
-          campaignId: h.campaignId,
-          admissionBatchId: q['admissionBatchId'] as string,
-          sourceFormId: 'NET-022',
-          expectedRevisions: view.revisions,
-          values: {
-            selectedReviewCopyId: q['selectedReviewCopyId'] as string,
-            rejectionReason: 'Нужно другое снаряжение',
-            weaponDraftOrNull: null,
-          },
-        });
-        expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
+        await select(first as string);
       }
-    });
-    beforeEach(async () => {
+    },
+    scenario === 'MIXED' ? 60000 : 30000,
+  );
+  beforeEach(async () => {
+    await gmNav('NET-019', 'NET-019::CTA::002');
+    await gmNav('NET-018', 'NET-018::CTA::004');
+    if (scenario === 'REJECT') {
+      await gmNav('NET-021', 'NET-021::CTA::002');
       const view = await gm.runtime.project(gm.c),
         q = view.layers!.at(-1)!.roleFilteredPayload;
-      if (scenario !== 'REJECT') expect(q['missingRequiredFields']).toEqual([]);
       await gm.send({
-        messageType: 'command.request',
-        protocolVersion: 1,
-        commandKind: 'workflow-command',
-        role: 'gm',
-        commandId: randomUUID(),
-        workflowCommandId:
-          scenario === 'REJECT' ? 'UI-CMD-ADMISSION-GM-REJECT' : 'UI-CMD-ADMISSION-GM-ACCEPT',
+        messageType: 'network.admission-view.replace',
+        protocolVersion: 3,
+        draftUpdateId: randomUUID(),
+        contextId: h.gmLocalContextId,
+        campaignId: h.campaignId,
+        admissionBatchId: q['admissionBatchId'] as string,
+        sourceFormId: 'NET-022',
         expectedRevisions: view.revisions,
-        payload: {
-          contextId: h.gmLocalContextId,
-          campaignId: h.campaignId,
-          admissionBatchId: q['admissionBatchId']!,
-          reviewRevision: q['reviewRevisionOrNull']!,
-          expectedCampaignRevision: (q['capacityPreview'] as JsonObject)[
-            'evaluatedCampaignRevision'
-          ]!,
-          previewChecksumOrNull: scenario === 'REJECT' ? null : q['proposalChecksum']!,
-          reasonOrNull: scenario === 'REJECT' ? 'Нужно другое снаряжение' : null,
+        values: {
+          selectedReviewCopyId: q['selectedReviewCopyId'] as string,
+          rejectionReason: 'Нужно другое снаряжение',
+          weaponDraftOrNull: null,
         },
       });
-      expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+      expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
+    }
+  });
+  beforeEach(async () => {
+    const view = await gm.runtime.project(gm.c),
+      q = view.layers!.at(-1)!.roleFilteredPayload;
+    if (scenario !== 'REJECT') expect(q['missingRequiredFields']).toEqual([]);
+    await gm.send({
+      messageType: 'command.request',
+      protocolVersion: 1,
+      commandKind: 'workflow-command',
+      role: 'gm',
+      commandId: randomUUID(),
+      workflowCommandId:
+        scenario === 'REJECT' ? 'UI-CMD-ADMISSION-GM-REJECT' : 'UI-CMD-ADMISSION-GM-ACCEPT',
+      expectedRevisions: view.revisions,
+      payload: {
+        contextId: h.gmLocalContextId,
+        campaignId: h.campaignId,
+        admissionBatchId: q['admissionBatchId']!,
+        reviewRevision: q['reviewRevisionOrNull']!,
+        expectedCampaignRevision: (q['capacityPreview'] as JsonObject)[
+          'evaluatedCampaignRevision'
+        ]!,
+        previewChecksumOrNull: scenario === 'REJECT' ? null : q['proposalChecksum']!,
+        reasonOrNull: scenario === 'REJECT' ? 'Нужно другое снаряжение' : null,
+      },
     });
-    beforeEach(async () => {
-      // This composite SQLite/peer restoration previously ran inside a 30s scenario.
-      // Moving initial setup to a hook must not impose the implicit 10s hook deadline.
-      // Later recovery/fault assertions retain their separate 30s scenario budget.
-      await p.restart();
-    }, 30000);
+    expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+  });
+  beforeEach(async () => {
+    // This composite SQLite/peer restoration previously ran inside a 30s scenario.
+    // Moving initial setup to a hook must not impose the implicit 10s hook deadline.
+    // Later recovery/fault assertions retain their separate 30s scenario budget.
+    await p.restart();
+  }, 30000);
+  const preparedTabs = () => {
     if (scenario === 'MIXED')
       describe('#173 prepared-tab authenticated transport', () => {
         let tabScope: string,
@@ -2928,6 +3006,10 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
         }, 30000);
       });
+  };
+  const registerReadyAndPeace = (
+    register: (groups: { ready: () => void; peace: () => void }) => void,
+  ) => {
     if (scenario === 'ACCEPT' || scenario === 'ACCEPT_WITH_BLOCKERS')
       describe('#173 authenticated Ready and first PEACE destination', () => {
         beforeEach(async () => {
@@ -3007,124 +3089,65 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
             expect(recovered.outcome).toBe('ACK');
             return peer;
           }
-          it('checks an unchanged complete lobby digest without SQL writes or a staged transfer', async () => {
-            const observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
-            const peer = await isolatedLobbyPeer();
-            const localBefore = p.db.serialize(),
-              hostBefore = h.db.serialize();
-            expect(
-              await peer.checkLobbyObservation(p.scope(), p.state().tabId, observation),
-            ).toEqual({ outcome: 'UNCHANGED' });
-            expect(p.db.serialize().equals(localBefore)).toBe(true);
-            expect(h.db.serialize().equals(hostBefore)).toBe(true);
-            expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
-            expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
-          });
-          describe('freshness after Ready changes only the lobby journal', () => {
-            let observation: ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby'];
-            beforeEach(async () => {
-              observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
-              await ready(true);
-              expect(p.sent[0]?.messageType).toBe('command.result');
-            }, 30000);
-            it('revokes a changed CHECK publication before any chunk when its channel closes', async () => {
+          const readyCases = () => {
+            it('checks an unchanged complete lobby digest without SQL writes or a staged transfer', async () => {
+              const observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
               const peer = await isolatedLobbyPeer();
-              const root = p.scope(),
-                request = p.state().requestOrNull!;
-              const channel = peer.current(root.networkScopeId)!;
-              const limits = {
-                maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
-                maxChunkBytes: config.transfer.maxChunkBytes,
-              };
-              const query = {
-                schemaVersion: 1 as const,
-                operation: 'CAMPAIGN_LOBBY_CHECK' as const,
-                requestId: request.requestId,
-                technicalSessionId: request.technicalSessionId,
-                submitCommandId: request.submitCommandId,
-                admittedTabId: p.state().tabId,
-                knownObservationSha256: postSaveSha256(canonicalPostSaveJson(observation)),
-              };
-              const changed = decodeCampaignLobbyCheckResponse(
-                await channel.call(encodeCampaignLobbyCheckCommand(query)),
-                limits,
-              );
-              expect(changed.outcome).toBe('CHANGED');
-              if (changed.outcome !== 'CHANGED') throw Error('Expected changed CHECK publication');
-              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+              const localBefore = p.db.serialize(),
+                hostBefore = h.db.serialize();
+              expect(
+                await peer.checkLobbyObservation(p.scope(), p.state().tabId, observation),
+              ).toEqual({ outcome: 'UNCHANGED' });
+              expect(p.db.serialize().equals(localBefore)).toBe(true);
+              expect(h.db.serialize().equals(hostBefore)).toBe(true);
               expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
-              const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
-              channel.close();
-              await peer.reconnect(
-                root,
-                parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin,
-                h.campaignId,
-              );
-              const replacement = peer.current(root.networkScopeId)!;
-              expect(replacement).not.toBe(channel);
-              const reply = decodeAdmissionPeerResponse(
-                await replacement.call(
-                  encodeAdmissionPeerCommand({
-                    schemaVersion: 1,
-                    operation: 'ADMISSION_PUBLICATION_CHUNK',
-                    requestId: query.requestId,
-                    technicalSessionId: query.technicalSessionId,
-                    submitCommandId: query.submitCommandId,
-                    transferId: changed.manifest.transferId,
-                    publicationChecksum: changed.manifest.publicationChecksum,
-                    chunkIndex: 0,
-                  }),
-                ),
-                limits,
-              );
-              expect(reply).toMatchObject({ outcome: 'REFUSED', code: 'TRANSFER_UNAVAILABLE' });
               expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
-              expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
-              expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
             });
-            it('detects the complete changed observation and rejects a foreign admitted tab', async () => {
-              const updated = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
-              expect(updated.campaignRevision).toBe(observation.campaignRevision);
-              expect(updated.lobbySnapshotRevision).toBe(observation.lobbySnapshotRevision);
-              const peer = await isolatedLobbyPeer();
-              const request = p.state().requestOrNull!,
-                root = p.scope();
-              const query = {
-                schemaVersion: 1 as const,
-                operation: 'CAMPAIGN_LOBBY_CHECK' as const,
-                requestId: request.requestId,
-                technicalSessionId: request.technicalSessionId,
-                submitCommandId: request.submitCommandId,
-                admittedTabId: p.state().tabId,
-                knownObservationSha256: postSaveSha256(canonicalPostSaveJson(observation)),
-              };
-              const channel = peer.current(root.networkScopeId)!;
-              const limits = {
-                maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
-                maxChunkBytes: config.transfer.maxChunkBytes,
-              };
-              const changed = decodeCampaignLobbyCheckResponse(
-                await channel.call(encodeCampaignLobbyCheckCommand(query)),
-                limits,
-              );
-              expect(changed).toMatchObject({
-                outcome: 'CHANGED',
-                observationSha256: postSaveSha256(canonicalPostSaveJson(updated)),
-              });
-              const refused = decodeCampaignLobbyCheckResponse(
-                await channel.call(
-                  encodeCampaignLobbyCheckCommand({ ...query, admittedTabId: randomUUID() }),
-                ),
-                limits,
-              );
-              expect(refused).toMatchObject({ outcome: 'REFUSED' });
-              if (changed.outcome !== 'CHANGED') throw Error('Expected changed lobby manifest');
-              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
-              expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
-              const parts: Buffer[] = [];
-              for (let index = 0; index < changed.manifest.chunkCount; index++) {
-                const chunk = decodeAdmissionPeerResponse(
-                  await channel.call(
+            describe('freshness after Ready changes only the lobby journal', () => {
+              let observation: ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby'];
+              beforeEach(async () => {
+                observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+                await ready(true);
+                expect(p.sent[0]?.messageType).toBe('command.result');
+              }, 30000);
+              it('revokes a changed CHECK publication before any chunk when its channel closes', async () => {
+                const peer = await isolatedLobbyPeer();
+                const root = p.scope(),
+                  request = p.state().requestOrNull!;
+                const channel = peer.current(root.networkScopeId)!;
+                const limits = {
+                  maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
+                  maxChunkBytes: config.transfer.maxChunkBytes,
+                };
+                const query = {
+                  schemaVersion: 1 as const,
+                  operation: 'CAMPAIGN_LOBBY_CHECK' as const,
+                  requestId: request.requestId,
+                  technicalSessionId: request.technicalSessionId,
+                  submitCommandId: request.submitCommandId,
+                  admittedTabId: p.state().tabId,
+                  knownObservationSha256: postSaveSha256(canonicalPostSaveJson(observation)),
+                };
+                const changed = decodeCampaignLobbyCheckResponse(
+                  await channel.call(encodeCampaignLobbyCheckCommand(query)),
+                  limits,
+                );
+                expect(changed.outcome).toBe('CHANGED');
+                if (changed.outcome !== 'CHANGED')
+                  throw Error('Expected changed CHECK publication');
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+                expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+                const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                channel.close();
+                await peer.reconnect(
+                  root,
+                  parseCampaignLanAddress(p.state().addressOrQrPayload).canonicalOrigin,
+                  h.campaignId,
+                );
+                const replacement = peer.current(root.networkScopeId)!;
+                expect(replacement).not.toBe(channel);
+                const reply = decodeAdmissionPeerResponse(
+                  await replacement.call(
                     encodeAdmissionPeerCommand({
                       schemaVersion: 1,
                       operation: 'ADMISSION_PUBLICATION_CHUNK',
@@ -3133,386 +3156,219 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                       submitCommandId: query.submitCommandId,
                       transferId: changed.manifest.transferId,
                       publicationChecksum: changed.manifest.publicationChecksum,
-                      chunkIndex: index,
+                      chunkIndex: 0,
                     }),
                   ),
                   limits,
                 );
-                expect(chunk.outcome).toBe('CHUNK');
-                if (chunk.outcome !== 'CHUNK') throw Error('Expected immutable lobby chunk');
-                parts.push(Buffer.from(chunk.bytesBase64, 'base64'));
-              }
-              const bytes = Buffer.concat(parts);
-              expect(postSaveSha256(bytes)).toBe(changed.observationSha256);
-              expect(JSON.parse(bytes.toString('utf8'))).toEqual(updated);
-              expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
-              await expect(
-                peer.checkLobbyObservation(root, p.state().tabId, observation),
-              ).rejects.toThrow();
-            });
-          });
-          it.each(['lost ACK', 'lost observation'] as const)(
-            'recovers %s through the background channel without manual reconnect',
-            async (fault) => {
-              if (fault === 'lost ACK') p.loseNextReadyResponse(true);
-              else p.loseNextLobbyObservation();
-              const command = await ready(true);
-              expect(
-                p.sent.some(
-                  (m) => m.messageType === 'command.result' || m.messageType === 'command.refusal',
-                ),
-              ).toBe(false);
-              expect(p.payload()['pendingCommandIdOrNull']).toBe(command.commandId);
-              expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
-              const passive = fault === 'lost ACK' ? await p.additionalOwnerView() : null;
-              if (passive !== null)
-                expect(passive.messages.at(-1)).toMatchObject({
-                  presentation: {
-                    base: { roleFilteredPayload: { pendingCommandIdOrNull: command.commandId } },
-                  },
+                expect(reply).toMatchObject({ outcome: 'REFUSED', code: 'TRANSFER_UNAVAILABLE' });
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+                expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
+                expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
+              });
+              it('detects the complete changed observation and rejects a foreign admitted tab', async () => {
+                const updated = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+                expect(updated.campaignRevision).toBe(observation.campaignRevision);
+                expect(updated.lobbySnapshotRevision).toBe(observation.lobbySnapshotRevision);
+                const peer = await isolatedLobbyPeer();
+                const request = p.state().requestOrNull!,
+                  root = p.scope();
+                const query = {
+                  schemaVersion: 1 as const,
+                  operation: 'CAMPAIGN_LOBBY_CHECK' as const,
+                  requestId: request.requestId,
+                  technicalSessionId: request.technicalSessionId,
+                  submitCommandId: request.submitCommandId,
+                  admittedTabId: p.state().tabId,
+                  knownObservationSha256: postSaveSha256(canonicalPostSaveJson(observation)),
+                };
+                const channel = peer.current(root.networkScopeId)!;
+                const limits = {
+                  maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
+                  maxChunkBytes: config.transfer.maxChunkBytes,
+                };
+                const changed = decodeCampaignLobbyCheckResponse(
+                  await channel.call(encodeCampaignLobbyCheckCommand(query)),
+                  limits,
+                );
+                expect(changed).toMatchObject({
+                  outcome: 'CHANGED',
+                  observationSha256: postSaveSha256(canonicalPostSaveJson(updated)),
                 });
-              p.releaseOwnerRecovery();
-              await expect
-                .poll(
-                  () =>
-                    p.sent.some(
-                      (m) =>
-                        m.messageType === 'command.replay' &&
-                        m.receipt.commandId === command.commandId,
+                const refused = decodeCampaignLobbyCheckResponse(
+                  await channel.call(
+                    encodeCampaignLobbyCheckCommand({ ...query, admittedTabId: randomUUID() }),
+                  ),
+                  limits,
+                );
+                expect(refused).toMatchObject({ outcome: 'REFUSED' });
+                if (changed.outcome !== 'CHANGED') throw Error('Expected changed lobby manifest');
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+                expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+                const parts: Buffer[] = [];
+                for (let index = 0; index < changed.manifest.chunkCount; index++) {
+                  const chunk = decodeAdmissionPeerResponse(
+                    await channel.call(
+                      encodeAdmissionPeerCommand({
+                        schemaVersion: 1,
+                        operation: 'ADMISSION_PUBLICATION_CHUNK',
+                        requestId: query.requestId,
+                        technicalSessionId: query.technicalSessionId,
+                        submitCommandId: query.submitCommandId,
+                        transferId: changed.manifest.transferId,
+                        publicationChecksum: changed.manifest.publicationChecksum,
+                        chunkIndex: index,
+                      }),
                     ),
-                  { timeout: 10000 },
-                )
-                .toBe(true);
-              const receipt = p.sent.find((m) => m.messageType === 'command.replay');
-              if (passive !== null)
+                    limits,
+                  );
+                  expect(chunk.outcome).toBe('CHUNK');
+                  if (chunk.outcome !== 'CHUNK') throw Error('Expected immutable lobby chunk');
+                  parts.push(Buffer.from(chunk.bytesBase64, 'base64'));
+                }
+                const bytes = Buffer.concat(parts);
+                expect(postSaveSha256(bytes)).toBe(changed.observationSha256);
+                expect(JSON.parse(bytes.toString('utf8'))).toEqual(updated);
+                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+                await expect(
+                  peer.checkLobbyObservation(root, p.state().tabId, observation),
+                ).rejects.toThrow();
+              });
+            });
+            it.each(['lost ACK', 'lost observation'] as const)(
+              'recovers %s through the background channel without manual reconnect',
+              async (fault) => {
+                if (fault === 'lost ACK') p.loseNextReadyResponse(true);
+                else p.loseNextLobbyObservation();
+                const command = await ready(true);
+                expect(
+                  p.sent.some(
+                    (m) =>
+                      m.messageType === 'command.result' || m.messageType === 'command.refusal',
+                  ),
+                ).toBe(false);
+                expect(p.payload()['pendingCommandIdOrNull']).toBe(command.commandId);
+                expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
+                const passive = fault === 'lost ACK' ? await p.additionalOwnerView() : null;
+                if (passive !== null)
+                  expect(passive.messages.at(-1)).toMatchObject({
+                    presentation: {
+                      base: { roleFilteredPayload: { pendingCommandIdOrNull: command.commandId } },
+                    },
+                  });
+                p.releaseOwnerRecovery();
                 await expect
                   .poll(
-                    () => {
-                      const latest = passive.messages.findLast(
-                        (m) => m.messageType === 'projection.snapshot' && m.protocolVersion === 2,
-                      );
-                      return latest?.messageType === 'projection.snapshot' &&
-                        latest.protocolVersion === 2
-                        ? latest.presentation.base.roleFilteredPayload['pendingCommandIdOrNull']
-                        : undefined;
-                    },
+                    () =>
+                      p.sent.some(
+                        (m) =>
+                          m.messageType === 'command.replay' &&
+                          m.receipt.commandId === command.commandId,
+                      ),
                     { timeout: 10000 },
                   )
-                  .toBeNull();
+                  .toBe(true);
+                const receipt = p.sent.find((m) => m.messageType === 'command.replay');
+                if (passive !== null)
+                  await expect
+                    .poll(
+                      () => {
+                        const latest = passive.messages.findLast(
+                          (m) => m.messageType === 'projection.snapshot' && m.protocolVersion === 2,
+                        );
+                        return latest?.messageType === 'projection.snapshot' &&
+                          latest.protocolVersion === 2
+                          ? latest.presentation.base.roleFilteredPayload['pendingCommandIdOrNull']
+                          : undefined;
+                      },
+                      { timeout: 10000 },
+                    )
+                    .toBeNull();
+                expect(
+                  passive?.messages.some((m) =>
+                    ['command.result', 'command.replay', 'command.refusal'].includes(m.messageType),
+                  ) ?? false,
+                ).toBe(false);
+                expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(true);
+                expect(p.payload()['pendingCommandIdOrNull']).toBeNull();
+                await p.send(command);
+                expect(p.sent[0]).toEqual(receipt);
+                expect(
+                  h.db
+                    .prepare("SELECT count(*) AS n FROM campaign_lobby_event WHERE kind='READY'")
+                    .get(),
+                ).toEqual({ n: 1 });
+              },
+              30000,
+            );
+            it('fences the Ready destination when browser trust is revoked during delivery', async () => {
+              p.afterNextReadyResponse(() => p.revoke());
+              await ready(true);
               expect(
-                passive?.messages.some((m) =>
-                  ['command.result', 'command.replay', 'command.refusal'].includes(m.messageType),
-                ) ?? false,
+                p.sent.some(
+                  (m) =>
+                    m.messageType === 'projection.snapshot' ||
+                    m.messageType === 'command.result' ||
+                    m.messageType === 'command.replay',
+                ),
               ).toBe(false);
-              expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(true);
-              expect(p.payload()['pendingCommandIdOrNull']).toBeNull();
-              await p.send(command);
-              expect(p.sent[0]).toEqual(receipt);
               expect(
                 h.db
                   .prepare("SELECT count(*) AS n FROM campaign_lobby_event WHERE kind='READY'")
                   .get(),
               ).toEqual({ n: 1 });
-            },
-            30000,
-          );
-          it('fences the Ready destination when browser trust is revoked during delivery', async () => {
-            p.afterNextReadyResponse(() => p.revoke());
-            await ready(true);
-            expect(
-              p.sent.some(
-                (m) =>
-                  m.messageType === 'projection.snapshot' ||
-                  m.messageType === 'command.result' ||
-                  m.messageType === 'command.replay',
-              ),
-            ).toBe(false);
-            expect(
-              h.db
-                .prepare("SELECT count(*) AS n FROM campaign_lobby_event WHERE kind='READY'")
-                .get(),
-            ).toEqual({ n: 1 });
-            expect(
-              readLocalAdmission(p.db, p.scope(), requestId)!.events.some(
-                (e) => e.payload.kind === 'READY_INTENT',
-              ),
-            ).toBe(true);
-            expect(
-              readLocalAdmission(p.db, p.scope(), requestId)!.events.some(
-                (e) => e.payload.kind === 'READY_ACK',
-              ),
-            ).toBe(false);
-          }, 30000);
-          it('cancels a confirmed Ready through the authenticated channel', async () => {
-            await ready(true);
-            expect(p.sent[0]?.messageType).toBe('command.result');
-            expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(true);
-            const unready = await ready(false),
-              original = p.sent[0];
-            expect(original?.messageType).toBe('command.result');
-            expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
-            p.goOffline();
-            await p.send(unready);
-            expect(p.sent[0]).toEqual({
-              ...original,
-              messageType: 'command.replay',
-              lifecycleState: 'IDEMPOTENT_REPLAY',
-            });
-            expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
-            expect(p.payload()['pendingCommandIdOrNull']).toBeNull();
-            expect(p.payload()['technicalSessionAvailable']).toBe(false);
-          }, 30000);
-          describe('confirmed initial time', () => {
-            let source: ReturnType<
-              typeof campaignLobbyPlayerProjectionValue
-            >['lobby']['selectedCopy'];
-            beforeEach(async () => {
-              gm.c.executableReview = [
-                ...(gm.c.executableReview ?? []),
-                'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-                'UI-CMD-CAMPAIGN-START',
-              ];
-              // These are separate UI actions. Direct handler awaits can otherwise
-              // starve the real peer's polling timers across the whole setup sequence.
-              await gmNav('NET-021', 'NET-021::CTA::001');
-              await nextEventLoopTurn();
-              await gmNav('NET-017', 'NET-017::CTA::009');
-              await nextEventLoopTurn();
-              await gmNav('CMP-006', 'CMP-006::CTA::001');
-              await nextEventLoopTurn();
-              await gmNav('CMP-007', 'CMP-007::CTA::001');
-              await nextEventLoopTurn();
-              const view = await gm.runtime.project(gm.c);
-              await gm.send({
-                messageType: 'command.request',
-                protocolVersion: 1,
-                commandKind: 'workflow-command',
-                role: 'gm',
-                commandId: randomUUID(),
-                workflowCommandId: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-                expectedRevisions: view.revisions,
-                payload: {
-                  campaignId: h.campaignId,
-                  expectedLobbySnapshotRevision:
-                    view.base.roleFilteredPayload['lobbySnapshotRevision']!,
-                  dayNumber: 2,
-                  hour: 21,
-                  minute: 7,
-                },
-              });
-              expect(gm.sent[0]?.messageType).toBe('command.result');
-              await expect
-                .poll(
-                  () =>
-                    campaignLobbyPlayerProjectionValue(p.payload()).lobby.initialCampaignTimeOrNull
-                      ?.campaignTimestamp,
-                  { timeout: 30000 },
-                )
-                .toBe(2707);
-
-              source = campaignLobbyPlayerProjectionValue(p.payload()).lobby.selectedCopy;
-            }, 60000);
-            beforeEach(async () => {
+              expect(
+                readLocalAdmission(p.db, p.scope(), requestId)!.events.some(
+                  (e) => e.payload.kind === 'READY_INTENT',
+                ),
+              ).toBe(true);
+              expect(
+                readLocalAdmission(p.db, p.scope(), requestId)!.events.some(
+                  (e) => e.payload.kind === 'READY_ACK',
+                ),
+              ).toBe(false);
+            }, 30000);
+            it('cancels a confirmed Ready through the authenticated channel', async () => {
               await ready(true);
               expect(p.sent[0]?.messageType).toBe('command.result');
+              expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(true);
+              const unready = await ready(false),
+                original = p.sent[0];
+              expect(original?.messageType).toBe('command.result');
+              expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
+              p.goOffline();
+              await p.send(unready);
+              expect(p.sent[0]).toEqual({
+                ...original,
+                messageType: 'command.replay',
+                lifecycleState: 'IDEMPOTENT_REPLAY',
+              });
+              expect(campaignLobbyPlayerProjectionValue(p.payload()).lobby.ready).toBe(false);
+              expect(p.payload()['pendingCommandIdOrNull']).toBeNull();
+              expect(p.payload()['technicalSessionAvailable']).toBe(false);
             }, 30000);
-            describe('immutable outgoing downloads across lifecycle mutations', () => {
-              let channel: Awaited<ReturnType<typeof h.connect>>;
-              let manifest: Extract<AdmissionPeerResponse, { outcome: 'MANIFEST' }>;
-              let observation: ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby'];
-              let binding: {
-                requestId: string;
-                technicalSessionId: string;
-                submitCommandId: string;
-              };
-              const rpc = async (command: Parameters<typeof encodeAdmissionPeerCommand>[0]) =>
-                decodeAdmissionPeerResponse(
-                  await channel.call(encodeAdmissionPeerCommand(command)),
-                  {
-                    maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
-                    maxChunkBytes: config.transfer.maxChunkBytes,
-                  },
-                );
-              // The real browser polls while GM works; keep this raw test client alive too.
-              const observeStatus = async () => {
-                const response = decodeCampaignConnectionPeerResponse(
-                  await channel.call(
-                    encodeCampaignConnectionPeerCommand({
-                      schemaVersion: 1,
-                      operation: 'CAMPAIGN_CONNECTION_READ',
-                    }),
-                  ),
-                );
-                expect(response.outcome).toBe('STATUS');
-              };
-              const beginDownload = async () => {
-                const response = await rpc({
-                  schemaVersion: 1,
-                  operation: 'ADMISSION_LOBBY_BEGIN',
-                  ...binding,
-                  admittedTabId: p.state().tabId,
-                });
-                expect(response.outcome, JSON.stringify(response)).toBe('MANIFEST');
-                if (response.outcome !== 'MANIFEST') throw Error('Expected own snapshot');
-                return response;
-              };
-              const download = async (saved: typeof manifest) => {
-                const chunks: Buffer[] = [];
-                for (let chunkIndex = 0; chunkIndex < saved.chunkCount; chunkIndex++) {
-                  const response = await rpc({
-                    schemaVersion: 1,
-                    operation: 'ADMISSION_PUBLICATION_CHUNK',
-                    ...binding,
-                    transferId: saved.transferId,
-                    publicationChecksum: saved.publicationChecksum,
-                    chunkIndex,
-                  });
-                  if (response.outcome !== 'CHUNK') throw Error(JSON.stringify(response));
-                  chunks.push(Buffer.from(response.bytesBase64, 'base64'));
-                }
-                const bytes = Buffer.concat(chunks);
-                expect(bytes.length).toBe(saved.byteLength);
-                expect(postSaveSha256(bytes)).toBe(saved.bodySha256);
-                return bytes.toString('utf8');
-              };
+          };
+          const confirmedTimeCases = () => {
+            describe('confirmed initial time', () => {
+              let source: ReturnType<
+                typeof campaignLobbyPlayerProjectionValue
+              >['lobby']['selectedCopy'];
               beforeEach(async () => {
-                observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
-                const request = p.state().requestOrNull!;
-                binding = {
-                  requestId: request.requestId,
-                  technicalSessionId: request.technicalSessionId,
-                  submitCommandId: request.submitCommandId,
-                };
-                p.disconnect();
-                channel = await h.connect(loadNetworkInstallation(p.db));
-                const recovered = decodeDeviceAdmissionPeerResponse(
-                  await channel.call(
-                    encodeDeviceAdmissionPeerCommand(
-                      {
-                        schemaVersion: 1,
-                        operation: 'DEVICE_REQUEST_RECOVER',
-                        ...binding,
-                      },
-                      {
-                        maxSubmitBodyBytes: config.transfer.maxSubmitBodyBytes,
-                        maxWitnessBytes: config.transfer.maxWitnessBytes,
-                        maxChunkBytes: config.transfer.maxChunkBytes,
-                      },
-                    ),
-                  ),
-                );
-                expect(recovered.outcome).toBe('ACK');
-                manifest = await beginDownload();
-                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
-                expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
-              }, 30000);
-              beforeEach(async () => {
-                const view = await gm.runtime.project(gm.c);
-                await gm.send({
-                  messageType: 'command.request',
-                  protocolVersion: 1,
-                  commandKind: 'workflow-command',
-                  role: 'gm',
-                  commandId: randomUUID(),
-                  workflowCommandId: 'UI-CMD-CAMPAIGN-START',
-                  expectedRevisions: view.revisions,
-                  payload: {
-                    campaignId: h.campaignId,
-                    expectedLobbySnapshotRevision:
-                      view.base.roleFilteredPayload['lobbySnapshotRevision']!,
-                    expectedReadinessRevision: view.base.roleFilteredPayload['readinessRevision']!,
-                  },
-                });
-                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
-                  messageType: 'command.result',
-                });
-                await observeStatus();
                 gm.c.executableReview = [
                   ...(gm.c.executableReview ?? []),
-                  ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+                  'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+                  'UI-CMD-CAMPAIGN-START',
                 ];
-                await gmNav('GM-001', 'GM-001::CTA::013');
-                await observeStatus();
-                await gmNav('CMP-007', 'CMP-007::CTA::003');
-                await observeStatus();
-                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
-              }, 30000);
-              it('starts and pauses while retaining old snapshot bytes and publishes a newer current snapshot', async () => {
-                await gmNav('CMP-008', 'CMP-008::CTA::004');
-                await observeStatus();
-                const current = lifecycleProjection(await gm.runtime.project(gm.c));
-                expect(current.safeBoundary).toBe(true);
-                await gm.send(
-                  campaignLifecycleGmRequest(current, 'CMP-016::CTA::002', randomUUID(), {
-                    reason: 'Пауза во время скачивания',
-                  }),
-                );
-                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
-                  messageType: 'command.result',
-                });
-                await observeStatus();
-                expect(await download(manifest)).toBe(canonicalPostSaveJson(observation));
-                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
-                const fresh = await beginDownload();
-                expect(fresh.campaignRevision).toBeGreaterThan(manifest.campaignRevision);
-                expect(fresh.bodySha256).not.toBe(manifest.bodySha256);
-                expect(JSON.parse(await download(fresh))).toMatchObject({
-                  campaignStarted: true,
-                  campaignRevision: fresh.campaignRevision,
-                });
-              });
-              it('disconnects an unfinished outgoing download, retains copies and bindings, and fences the old channel', async () => {
-                await gmNav('CMP-008', 'CMP-008::CTA::007');
-                const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
-                const accepted = h.db
-                  .prepare('SELECT * FROM campaign_admission_player_decision')
-                  .all();
-                const current = lifecycleProjection(await gm.runtime.project(gm.c));
-                await gm.send(
-                  campaignLifecycleGmRequest(current, 'NET-023::CTA::002', randomUUID(), {
-                    deviceId: loadNetworkInstallation(p.db).ownerDeviceId,
-                    selectedControllerSeatOrNull: null,
-                    reason: 'Отключение во время скачивания',
-                  }),
-                );
-                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
-                  messageType: 'command.result',
-                });
-                await expect.poll(() => channel.closed).toBe(true);
-                expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
-                expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
-                expect(
-                  h.db.prepare('SELECT * FROM campaign_admission_player_decision').all(),
-                ).toEqual(accepted);
-                await expect(download(manifest)).rejects.toThrow();
-                channel = await h.connect(loadNetworkInstallation(p.db));
-                await expect(beginDownload()).rejects.toThrow();
-              });
-            });
-            describe('late pending request after Start', () => {
-              let waiting: Awaited<ReturnType<typeof client>>;
-              beforeEach(async () => {
-                waiting = await client(true);
-              }, 30000);
-              beforeEach(async () => {
-                await waiting.nav('APP-002::CTA::003', 'APP-002');
-                await waiting.nav('NET-001::CTA::001');
-                await waiting.replace('ADDRESS', {
-                  addressOrQrPayload: campaignQrPayload('127.0.0.1', h.port, h.campaignId),
-                });
-              }, 30000);
-              beforeEach(async () => {
-                await waiting.command('UI-CMD-CONNECTION-OPEN', {
-                  attemptId: waiting.state().plannedAttemptIdOrNull,
-                  addressOrQrPayload: waiting.state().addressOrQrPayload,
-                  selectedCampaignIdOrNull: null,
-                });
-              }, 30000);
-              beforeEach(async () => {
-                await submitConnectedPlayer(waiting, h);
-                expect(waiting.payload()['requestStatus']).toBe('PENDING');
-              }, 30000);
-              it('cancels over the existing session and publishes current HOSTING without fresh admission controls', async () => {
+                // These are separate UI actions. Direct handler awaits can otherwise
+                // starve the real peer's polling timers across the whole setup sequence.
+                await gmNav('NET-021', 'NET-021::CTA::001');
+                await nextEventLoopTurn();
+                await gmNav('NET-017', 'NET-017::CTA::009');
+                await nextEventLoopTurn();
+                await gmNav('CMP-006', 'CMP-006::CTA::001');
+                await nextEventLoopTurn();
+                await gmNav('CMP-007', 'CMP-007::CTA::001');
+                await nextEventLoopTurn();
                 const view = await gm.runtime.project(gm.c);
                 await gm.send({
                   messageType: 'command.request',
@@ -3520,49 +3376,482 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                   commandKind: 'workflow-command',
                   role: 'gm',
                   commandId: randomUUID(),
-                  workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+                  workflowCommandId: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
                   expectedRevisions: view.revisions,
                   payload: {
                     campaignId: h.campaignId,
                     expectedLobbySnapshotRevision:
                       view.base.roleFilteredPayload['lobbySnapshotRevision']!,
-                    expectedReadinessRevision: view.base.roleFilteredPayload['readinessRevision']!,
+                    dayNumber: 2,
+                    hour: 21,
+                    minute: 7,
                   },
                 });
                 expect(gm.sent[0]?.messageType).toBe('command.result');
-                await waiting.replace('CANCEL_REASON', { cancelReason: 'Withdraw after Start' });
-                const request = waiting.state().requestOrNull!;
-                const command = await waiting.command('UI-CMD-DEVICE-REQUEST-CANCEL', {
-                  requestId: request.requestId,
-                  technicalSessionId: request.technicalSessionId,
-                  requestRevision: request.requestRevision,
-                  reason: 'Withdraw after Start',
-                });
-                expect(waiting.sent[0]?.messageType).toBe('command.result');
-                const receipt = waiting.sent[0];
-                expect(waiting.payload()['campaignStatus']).toBe('HOSTING');
-                const destination = waiting.sent.findLast(
-                  (m) => m.messageType === 'projection.snapshot',
-                );
-                expect(destination).toMatchObject({
-                  presentation: { base: { formId: 'NET-003', availableActionKeys: [] } },
-                });
-                await waiting.restart([command.commandId]);
-                expect(waiting.sent[0]).toEqual({
-                  ...receipt,
-                  messageType: 'command.replay',
-                  lifecycleState: 'IDEMPOTENT_REPLAY',
-                });
-                expect(waiting.payload()['campaignStatus']).toBe('HOSTING');
-                expect(
-                  h.db.prepare('SELECT count(*) AS n FROM campaign_peace_scene').get(),
-                ).toEqual({ n: 1 });
-              }, 30000);
-            });
-            describe('#174 real started campaign', () => {
+                await expect
+                  .poll(
+                    () =>
+                      campaignLobbyPlayerProjectionValue(p.payload()).lobby
+                        .initialCampaignTimeOrNull?.campaignTimestamp,
+                    { timeout: 30000 },
+                  )
+                  .toBe(2707);
+
+                source = campaignLobbyPlayerProjectionValue(p.payload()).lobby.selectedCopy;
+              }, 60000);
               beforeEach(async () => {
+                await ready(true);
+                expect(p.sent[0]?.messageType).toBe('command.result');
+              }, 30000);
+              describe('immutable outgoing downloads across lifecycle mutations', () => {
+                let channel: Awaited<ReturnType<typeof h.connect>>;
+                let manifest: Extract<AdmissionPeerResponse, { outcome: 'MANIFEST' }>;
+                let observation: ReturnType<typeof campaignLobbyPlayerProjectionValue>['lobby'];
+                let binding: {
+                  requestId: string;
+                  technicalSessionId: string;
+                  submitCommandId: string;
+                };
+                const rpc = async (command: Parameters<typeof encodeAdmissionPeerCommand>[0]) =>
+                  decodeAdmissionPeerResponse(
+                    await channel.call(encodeAdmissionPeerCommand(command)),
+                    {
+                      maxPublicationBytes: config.transfer.maxSubmitBodyBytes,
+                      maxChunkBytes: config.transfer.maxChunkBytes,
+                    },
+                  );
+                // The real browser polls while GM works; keep this raw test client alive too.
+                const observeStatus = async () => {
+                  const response = decodeCampaignConnectionPeerResponse(
+                    await channel.call(
+                      encodeCampaignConnectionPeerCommand({
+                        schemaVersion: 1,
+                        operation: 'CAMPAIGN_CONNECTION_READ',
+                      }),
+                    ),
+                  );
+                  expect(response.outcome).toBe('STATUS');
+                };
+                const beginDownload = async () => {
+                  const response = await rpc({
+                    schemaVersion: 1,
+                    operation: 'ADMISSION_LOBBY_BEGIN',
+                    ...binding,
+                    admittedTabId: p.state().tabId,
+                  });
+                  expect(response.outcome, JSON.stringify(response)).toBe('MANIFEST');
+                  if (response.outcome !== 'MANIFEST') throw Error('Expected own snapshot');
+                  return response;
+                };
+                const download = async (saved: typeof manifest) => {
+                  const chunks: Buffer[] = [];
+                  for (let chunkIndex = 0; chunkIndex < saved.chunkCount; chunkIndex++) {
+                    const response = await rpc({
+                      schemaVersion: 1,
+                      operation: 'ADMISSION_PUBLICATION_CHUNK',
+                      ...binding,
+                      transferId: saved.transferId,
+                      publicationChecksum: saved.publicationChecksum,
+                      chunkIndex,
+                    });
+                    if (response.outcome !== 'CHUNK') throw Error(JSON.stringify(response));
+                    chunks.push(Buffer.from(response.bytesBase64, 'base64'));
+                  }
+                  const bytes = Buffer.concat(chunks);
+                  expect(bytes.length).toBe(saved.byteLength);
+                  expect(postSaveSha256(bytes)).toBe(saved.bodySha256);
+                  return bytes.toString('utf8');
+                };
+                beforeEach(async () => {
+                  observation = campaignLobbyPlayerProjectionValue(p.payload()).lobby;
+                  const request = p.state().requestOrNull!;
+                  binding = {
+                    requestId: request.requestId,
+                    technicalSessionId: request.technicalSessionId,
+                    submitCommandId: request.submitCommandId,
+                  };
+                  p.disconnect();
+                  channel = await h.connect(loadNetworkInstallation(p.db));
+                  const recovered = decodeDeviceAdmissionPeerResponse(
+                    await channel.call(
+                      encodeDeviceAdmissionPeerCommand(
+                        {
+                          schemaVersion: 1,
+                          operation: 'DEVICE_REQUEST_RECOVER',
+                          ...binding,
+                        },
+                        {
+                          maxSubmitBodyBytes: config.transfer.maxSubmitBodyBytes,
+                          maxWitnessBytes: config.transfer.maxWitnessBytes,
+                          maxChunkBytes: config.transfer.maxChunkBytes,
+                        },
+                      ),
+                    ),
+                  );
+                  expect(recovered.outcome).toBe('ACK');
+                  manifest = await beginDownload();
+                  expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+                  expect(h.runtime.operationCounts(h.campaignId).pendingOperationCount).toBe(0);
+                }, 30000);
+                beforeEach(async () => {
+                  const view = await gm.runtime.project(gm.c);
+                  await gm.send({
+                    messageType: 'command.request',
+                    protocolVersion: 1,
+                    commandKind: 'workflow-command',
+                    role: 'gm',
+                    commandId: randomUUID(),
+                    workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+                    expectedRevisions: view.revisions,
+                    payload: {
+                      campaignId: h.campaignId,
+                      expectedLobbySnapshotRevision:
+                        view.base.roleFilteredPayload['lobbySnapshotRevision']!,
+                      expectedReadinessRevision:
+                        view.base.roleFilteredPayload['readinessRevision']!,
+                    },
+                  });
+                  expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                    messageType: 'command.result',
+                  });
+                  await observeStatus();
+                  gm.c.executableReview = [
+                    ...(gm.c.executableReview ?? []),
+                    ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+                  ];
+                  await gmNav('GM-001', 'GM-001::CTA::013');
+                  await observeStatus();
+                  await gmNav('CMP-007', 'CMP-007::CTA::003');
+                  await observeStatus();
+                  expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(1);
+                }, 30000);
+                it('starts and pauses while retaining old snapshot bytes and publishes a newer current snapshot', async () => {
+                  await gmNav('CMP-008', 'CMP-008::CTA::004');
+                  await observeStatus();
+                  const current = lifecycleProjection(await gm.runtime.project(gm.c));
+                  expect(current.safeBoundary).toBe(true);
+                  await gm.send(
+                    campaignLifecycleGmRequest(current, 'CMP-016::CTA::002', randomUUID(), {
+                      reason: 'Пауза во время скачивания',
+                    }),
+                  );
+                  expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                    messageType: 'command.result',
+                  });
+                  await observeStatus();
+                  expect(await download(manifest)).toBe(canonicalPostSaveJson(observation));
+                  expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+                  const fresh = await beginDownload();
+                  expect(fresh.campaignRevision).toBeGreaterThan(manifest.campaignRevision);
+                  expect(fresh.bodySha256).not.toBe(manifest.bodySha256);
+                  expect(JSON.parse(await download(fresh))).toMatchObject({
+                    campaignStarted: true,
+                    campaignRevision: fresh.campaignRevision,
+                  });
+                });
+                it('disconnects an unfinished outgoing download, retains copies and bindings, and fences the old channel', async () => {
+                  await gmNav('CMP-008', 'CMP-008::CTA::007');
+                  const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                  const accepted = h.db
+                    .prepare('SELECT * FROM campaign_admission_player_decision')
+                    .all();
+                  const current = lifecycleProjection(await gm.runtime.project(gm.c));
+                  await gm.send(
+                    campaignLifecycleGmRequest(current, 'NET-023::CTA::002', randomUUID(), {
+                      deviceId: loadNetworkInstallation(p.db).ownerDeviceId,
+                      selectedControllerSeatOrNull: null,
+                      reason: 'Отключение во время скачивания',
+                    }),
+                  );
+                  expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                    messageType: 'command.result',
+                  });
+                  await expect.poll(() => channel.closed).toBe(true);
+                  expect(h.runtime.trackedTransferCount(h.campaignId)).toBe(0);
+                  expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+                    copies,
+                  );
+                  expect(
+                    h.db.prepare('SELECT * FROM campaign_admission_player_decision').all(),
+                  ).toEqual(accepted);
+                  await expect(download(manifest)).rejects.toThrow();
+                  channel = await h.connect(loadNetworkInstallation(p.db));
+                  await expect(beginDownload()).rejects.toThrow();
+                });
+              });
+              describe('late pending request after Start', () => {
+                let waiting: Awaited<ReturnType<typeof client>>;
+                beforeEach(async () => {
+                  waiting = await client(true);
+                }, 30000);
+                beforeEach(async () => {
+                  await waiting.nav('APP-002::CTA::003', 'APP-002');
+                  await waiting.nav('NET-001::CTA::001');
+                  await waiting.replace('ADDRESS', {
+                    addressOrQrPayload: campaignQrPayload('127.0.0.1', h.port, h.campaignId),
+                  });
+                }, 30000);
+                beforeEach(async () => {
+                  await waiting.command('UI-CMD-CONNECTION-OPEN', {
+                    attemptId: waiting.state().plannedAttemptIdOrNull,
+                    addressOrQrPayload: waiting.state().addressOrQrPayload,
+                    selectedCampaignIdOrNull: null,
+                  });
+                }, 30000);
+                beforeEach(async () => {
+                  await submitConnectedPlayer(waiting, h);
+                  expect(waiting.payload()['requestStatus']).toBe('PENDING');
+                }, 30000);
+                it('cancels over the existing session and publishes current HOSTING without fresh admission controls', async () => {
+                  const view = await gm.runtime.project(gm.c);
+                  await gm.send({
+                    messageType: 'command.request',
+                    protocolVersion: 1,
+                    commandKind: 'workflow-command',
+                    role: 'gm',
+                    commandId: randomUUID(),
+                    workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+                    expectedRevisions: view.revisions,
+                    payload: {
+                      campaignId: h.campaignId,
+                      expectedLobbySnapshotRevision:
+                        view.base.roleFilteredPayload['lobbySnapshotRevision']!,
+                      expectedReadinessRevision:
+                        view.base.roleFilteredPayload['readinessRevision']!,
+                    },
+                  });
+                  expect(gm.sent[0]?.messageType).toBe('command.result');
+                  await waiting.replace('CANCEL_REASON', { cancelReason: 'Withdraw after Start' });
+                  const request = waiting.state().requestOrNull!;
+                  const command = await waiting.command('UI-CMD-DEVICE-REQUEST-CANCEL', {
+                    requestId: request.requestId,
+                    technicalSessionId: request.technicalSessionId,
+                    requestRevision: request.requestRevision,
+                    reason: 'Withdraw after Start',
+                  });
+                  expect(waiting.sent[0]?.messageType).toBe('command.result');
+                  const receipt = waiting.sent[0];
+                  expect(waiting.payload()['campaignStatus']).toBe('HOSTING');
+                  const destination = waiting.sent.findLast(
+                    (m) => m.messageType === 'projection.snapshot',
+                  );
+                  expect(destination).toMatchObject({
+                    presentation: { base: { formId: 'NET-003', availableActionKeys: [] } },
+                  });
+                  await waiting.restart([command.commandId]);
+                  expect(waiting.sent[0]).toEqual({
+                    ...receipt,
+                    messageType: 'command.replay',
+                    lifecycleState: 'IDEMPOTENT_REPLAY',
+                  });
+                  expect(waiting.payload()['campaignStatus']).toBe('HOSTING');
+                  expect(
+                    h.db.prepare('SELECT count(*) AS n FROM campaign_peace_scene').get(),
+                  ).toEqual({ n: 1 });
+                }, 30000);
+              });
+              describe('#174 real started campaign', () => {
+                beforeEach(async () => {
+                  const view = await gm.runtime.project(gm.c);
+                  await gm.send({
+                    messageType: 'command.request',
+                    protocolVersion: 1,
+                    commandKind: 'workflow-command',
+                    role: 'gm',
+                    commandId: randomUUID(),
+                    workflowCommandId: 'UI-CMD-CAMPAIGN-START',
+                    expectedRevisions: view.revisions,
+                    payload: {
+                      campaignId: h.campaignId,
+                      expectedLobbySnapshotRevision:
+                        view.base.roleFilteredPayload['lobbySnapshotRevision']!,
+                      expectedReadinessRevision:
+                        view.base.roleFilteredPayload['readinessRevision']!,
+                    },
+                  });
+                  expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                    messageType: 'command.result',
+                  });
+                  gm.c.executableReview = [
+                    ...(gm.c.executableReview ?? []),
+                    ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+                  ];
+                  await gmNav('GM-001', 'GM-001::CTA::013');
+                  await gmNav('CMP-007', 'CMP-007::CTA::003');
+                  await gmNav('CMP-008', 'CMP-008::CTA::004');
+                });
+                describe('confirmed disconnect in PEACE', () => {
+                  const watch = (): CampaignPeerControlV3Message => ({
+                    messageType: 'network.peer-control',
+                    protocolVersion: 3,
+                    requestId: randomUUID(),
+                    contextId: p.c.contextId!,
+                    networkScopeId: p.scope().networkScopeId,
+                    expectedRevisions: vector(p.state()),
+                    operation: 'WATCH',
+                    expectedConnectionRevision: null,
+                    commandIdOrNull: null,
+                    endpointOrNull: null,
+                  });
+                  beforeEach(async () => {
+                    let peaceArrived!: () => void, disconnected!: () => void;
+                    const peace = new Promise<void>((resolve) => {
+                      peaceArrived = resolve;
+                    });
+                    const closed = new Promise<void>((resolve) => {
+                      disconnected = resolve;
+                    });
+                    const push = p.sent.push.bind(p.sent);
+                    const publication = vi
+                      .spyOn(p.sent, 'push')
+                      .mockImplementation((...messages) => {
+                        const size = push(...messages);
+                        if (
+                          messages.some(
+                            (message) =>
+                              message.messageType === 'projection.snapshot' &&
+                              message.protocolVersion === 2 &&
+                              message.presentation.base.roleFilteredPayload['projectionVariant'] ===
+                                'PEACE_SNAPSHOT',
+                          )
+                        )
+                          peaceArrived();
+                        if (
+                          messages.some(
+                            (message) =>
+                              message.messageType === 'network.peer-state' &&
+                              message.connectionState === 'DISCONNECTED' &&
+                              message.statusOrNull?.disconnectOrNull?.retryReceiptOrNull === null,
+                          )
+                        )
+                          disconnected();
+                        return size;
+                      });
+                    try {
+                      // Observe the real publication under the existing hook deadline.
+                      if (p.payload()['projectionVariant'] !== 'PEACE_SNAPSHOT') await peace;
+
+                      await p.send(watch());
+
+                      await gmNav('CMP-016', 'CMP-016::CTA::004');
+                      await gmNav('CMP-008', 'CMP-008::CTA::007');
+                      await gm.send(
+                        campaignLifecycleGmRequest(
+                          lifecycleProjection(await gm.runtime.project(gm.c)),
+                          'NET-023::CTA::002',
+                          randomUUID(),
+                          {
+                            deviceId: p.scope().ownerDeviceId,
+                            selectedControllerSeatOrNull: null,
+                            reason: 'Только подтверждённый лист до повтора',
+                          },
+                        ),
+                      );
+                      expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+
+                      await closed;
+                    } finally {
+                      publication.mockRestore();
+                    }
+                  }, 60000);
+                  it('keeps PEACE content unchanged and polls status without gated lobby downloads', async () => {
+                    const peer = p.peerForTest,
+                      read = peer.readConnection.bind(peer);
+                    const admission = readLocalAdmission(p.db, p.scope(), requestId),
+                      copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                    let observed!: () => void;
+                    const nextStatus = new Promise<void>((resolve) => {
+                      observed = resolve;
+                    });
+                    const reads = vi
+                      .spyOn(peer, 'readConnection')
+                      .mockImplementation(async (...args) => {
+                        const status = await read(...args);
+                        if (status.disconnectOrNull?.retryReceiptOrNull === null) observed();
+                        return status;
+                      });
+                    const checks = vi.spyOn(peer, 'checkLobbyObservation'),
+                      downloads = vi.spyOn(peer, 'fetchAdmission'),
+                      recovery = vi.spyOn(peer, 'recover');
+                    try {
+                      await nextStatus;
+                      await p.send(watch());
+                      expect(checks).not.toHaveBeenCalled();
+                      expect(downloads).not.toHaveBeenCalled();
+                      expect(recovery).not.toHaveBeenCalled();
+                      expect(readLocalAdmission(p.db, p.scope(), requestId)).toEqual(admission);
+                      expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+                        copies,
+                      );
+                      expect(
+                        h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get(),
+                      ).toEqual({ n: 0 });
+                    } finally {
+                      reads.mockRestore();
+                      checks.mockRestore();
+                      downloads.mockRestore();
+                      recovery.mockRestore();
+                    }
+                  });
+                });
+                it('pauses and resumes the same PEACE scene through CMP-016 and replays Pause after Resume', async () => {
+                  const view = await gm.runtime.project(gm.c),
+                    p = lifecycleProjection(view),
+                    scene = h.db.prepare('SELECT * FROM campaign_peace_scene').all(),
+                    copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+                  const pause = campaignLifecycleGmRequest(p, 'CMP-016::CTA::002', randomUUID(), {
+                    reason: 'Перерыв за столом',
+                  });
+                  await gm.send(pause);
+                  expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                    messageType: 'command.result',
+                  });
+                  const original = structuredClone(gm.sent[0]);
+                  expect(h.header().status).toBe('PAUSED');
+                  expect((await gm.runtime.project(gm.c)).base).toMatchObject({
+                    formId: 'CMP-007',
+                    roleFilteredPayload: {
+                      campaignStatus: 'PAUSED',
+                      panelVariant: 'STARTED_PEACE',
+                    },
+                  });
+                  await gmNav('CMP-007', 'CMP-007::CTA::003');
+                  expect((await gm.runtime.project(gm.c)).base.availableActionKeys).not.toContain(
+                    'CMP-008::CTA::005',
+                  );
+                  await gmNav('CMP-008', 'CMP-008::CTA::004');
+                  const paused = lifecycleProjection(await gm.runtime.project(gm.c));
+                  expect(paused).toMatchObject({
+                    campaignStatus: 'PAUSED',
+                    pauseReasonOrNull: 'Перерыв за столом',
+                    clockMode: 'STOPPED',
+                  });
+                  await gm.send(
+                    campaignLifecycleGmRequest(paused, 'CMP-016::CTA::003', randomUUID(), {
+                      reason: 'Продолжаем сессию',
+                    }),
+                  );
+                  expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
+                    messageType: 'command.result',
+                  });
+                  expect(h.header().status).toBe('HOSTING');
+                  const after = h.db.serialize();
+                  await gm.send(pause);
+                  expect(gm.sent[0]).toEqual({
+                    ...original,
+                    messageType: 'command.replay',
+                    lifecycleState: 'IDEMPOTENT_REPLAY',
+                  });
+                  expect(h.db.serialize().equals(after)).toBe(true);
+                  expect(h.db.prepare('SELECT * FROM campaign_peace_scene').all()).toEqual(scene);
+                  expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
+                    copies,
+                  );
+                });
+              });
+              it('enters one stopped PEACE scene and resumes the same owner sheet', async () => {
                 const view = await gm.runtime.project(gm.c);
-                await gm.send({
+                const start = {
                   messageType: 'command.request',
                   protocolVersion: 1,
                   commandKind: 'workflow-command',
@@ -3576,242 +3865,56 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                       view.base.roleFilteredPayload['lobbySnapshotRevision']!,
                     expectedReadinessRevision: view.base.roleFilteredPayload['readinessRevision']!,
                   },
-                });
-                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
-                  messageType: 'command.result',
-                });
-                gm.c.executableReview = [
-                  ...(gm.c.executableReview ?? []),
-                  ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
-                ];
-                await gmNav('GM-001', 'GM-001::CTA::013');
-                await gmNav('CMP-007', 'CMP-007::CTA::003');
-                await gmNav('CMP-008', 'CMP-008::CTA::004');
-              });
-              describe('confirmed disconnect in PEACE', () => {
-                const watch = (): CampaignPeerControlV3Message => ({
-                  messageType: 'network.peer-control',
-                  protocolVersion: 3,
-                  requestId: randomUUID(),
-                  contextId: p.c.contextId!,
-                  networkScopeId: p.scope().networkScopeId,
-                  expectedRevisions: vector(p.state()),
-                  operation: 'WATCH',
-                  expectedConnectionRevision: null,
-                  commandIdOrNull: null,
-                  endpointOrNull: null,
-                });
-                beforeEach(async () => {
-                  let peaceArrived!: () => void, disconnected!: () => void;
-                  const peace = new Promise<void>((resolve) => {
-                    peaceArrived = resolve;
-                  });
-                  const closed = new Promise<void>((resolve) => {
-                    disconnected = resolve;
-                  });
-                  const push = p.sent.push.bind(p.sent);
-                  const publication = vi.spyOn(p.sent, 'push').mockImplementation((...messages) => {
-                    const size = push(...messages);
-                    if (
-                      messages.some(
-                        (message) =>
-                          message.messageType === 'projection.snapshot' &&
-                          message.protocolVersion === 2 &&
-                          message.presentation.base.roleFilteredPayload['projectionVariant'] ===
-                            'PEACE_SNAPSHOT',
-                      )
-                    )
-                      peaceArrived();
-                    if (
-                      messages.some(
-                        (message) =>
-                          message.messageType === 'network.peer-state' &&
-                          message.connectionState === 'DISCONNECTED' &&
-                          message.statusOrNull?.disconnectOrNull?.retryReceiptOrNull === null,
-                      )
-                    )
-                      disconnected();
-                    return size;
-                  });
-                  try {
-                    // Observe the real publication under the existing hook deadline.
-                    if (p.payload()['projectionVariant'] !== 'PEACE_SNAPSHOT') await peace;
-
-                    await p.send(watch());
-
-                    await gmNav('CMP-016', 'CMP-016::CTA::004');
-                    await gmNav('CMP-008', 'CMP-008::CTA::007');
-                    await gm.send(
-                      campaignLifecycleGmRequest(
-                        lifecycleProjection(await gm.runtime.project(gm.c)),
-                        'NET-023::CTA::002',
-                        randomUUID(),
-                        {
-                          deviceId: p.scope().ownerDeviceId,
-                          selectedControllerSeatOrNull: null,
-                          reason: 'Только подтверждённый лист до повтора',
-                        },
-                      ),
-                    );
-                    expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
-
-                    await closed;
-                  } finally {
-                    publication.mockRestore();
-                  }
-                }, 60000);
-                it('keeps PEACE content unchanged and polls status without gated lobby downloads', async () => {
-                  const peer = p.peerForTest,
-                    read = peer.readConnection.bind(peer);
-                  const admission = readLocalAdmission(p.db, p.scope(), requestId),
-                    copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
-                  let observed!: () => void;
-                  const nextStatus = new Promise<void>((resolve) => {
-                    observed = resolve;
-                  });
-                  const reads = vi
-                    .spyOn(peer, 'readConnection')
-                    .mockImplementation(async (...args) => {
-                      const status = await read(...args);
-                      if (status.disconnectOrNull?.retryReceiptOrNull === null) observed();
-                      return status;
-                    });
-                  const checks = vi.spyOn(peer, 'checkLobbyObservation'),
-                    downloads = vi.spyOn(peer, 'fetchAdmission'),
-                    recovery = vi.spyOn(peer, 'recover');
-                  try {
-                    await nextStatus;
-                    await p.send(watch());
-                    expect(checks).not.toHaveBeenCalled();
-                    expect(downloads).not.toHaveBeenCalled();
-                    expect(recovery).not.toHaveBeenCalled();
-                    expect(readLocalAdmission(p.db, p.scope(), requestId)).toEqual(admission);
-                    expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(
-                      copies,
-                    );
-                    expect(
-                      h.db.prepare('SELECT COUNT(*) AS n FROM campaign_disconnect_retry').get(),
-                    ).toEqual({ n: 0 });
-                  } finally {
-                    reads.mockRestore();
-                    checks.mockRestore();
-                    downloads.mockRestore();
-                    recovery.mockRestore();
-                  }
-                });
-              });
-              it('pauses and resumes the same PEACE scene through CMP-016 and replays Pause after Resume', async () => {
-                const view = await gm.runtime.project(gm.c),
-                  p = lifecycleProjection(view),
-                  scene = h.db.prepare('SELECT * FROM campaign_peace_scene').all(),
-                  copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
-                const pause = campaignLifecycleGmRequest(p, 'CMP-016::CTA::002', randomUUID(), {
-                  reason: 'Перерыв за столом',
-                });
-                await gm.send(pause);
-                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
-                  messageType: 'command.result',
-                });
-                const original = structuredClone(gm.sent[0]);
-                expect(h.header().status).toBe('PAUSED');
-                expect((await gm.runtime.project(gm.c)).base).toMatchObject({
-                  formId: 'CMP-007',
-                  roleFilteredPayload: { campaignStatus: 'PAUSED', panelVariant: 'STARTED_PEACE' },
-                });
-                await gmNav('CMP-007', 'CMP-007::CTA::003');
-                expect((await gm.runtime.project(gm.c)).base.availableActionKeys).not.toContain(
-                  'CMP-008::CTA::005',
-                );
-                await gmNav('CMP-008', 'CMP-008::CTA::004');
-                const paused = lifecycleProjection(await gm.runtime.project(gm.c));
-                expect(paused).toMatchObject({
-                  campaignStatus: 'PAUSED',
-                  pauseReasonOrNull: 'Перерыв за столом',
+                } as const;
+                await gm.send(start);
+                expect(gm.sent[0]?.messageType).toBe('command.result');
+                const original = gm.sent[0];
+                await expect
+                  .poll(() => p.payload()['projectionVariant'], { timeout: 10000 })
+                  .toBe('PEACE_SNAPSHOT');
+                const peace = campaignPeaceProjectionValue(p.payload());
+                expect(peace).toMatchObject({
+                  campaignCharacterId: source.campaignCharacterId,
+                  mechanicalSheet: source.sheet,
+                  groupId: source.groupId,
+                  location: source.location,
+                  effectiveController: source.controller,
+                  campaignTimestamp: 2707,
                   clockMode: 'STOPPED',
+                  dayPhase: 'NIGHT',
+                  ownMarkerVisibility: 'UNKNOWN',
+                  markerReason: 'NOT_SET',
                 });
-                await gm.send(
-                  campaignLifecycleGmRequest(paused, 'CMP-016::CTA::003', randomUUID(), {
-                    reason: 'Продолжаем сессию',
-                  }),
-                );
-                expect(gm.sent[0], JSON.stringify(gm.sent)).toMatchObject({
-                  messageType: 'command.result',
+                for (const key of [
+                  'combatId',
+                  'combatActor',
+                  'turn',
+                  'reactionWindow',
+                  'markerRevision',
+                  'coordinates',
+                ])
+                  expect(Object.hasOwn(peace, key)).toBe(false);
+                await p.restart();
+                expect(campaignPeaceProjectionValue(p.payload())).toMatchObject({
+                  sceneId: peace.sceneId,
+                  campaignTimestamp: 2707,
+                  mechanicalSheet: source.sheet,
                 });
-                expect(h.header().status).toBe('HOSTING');
-                const after = h.db.serialize();
-                await gm.send(pause);
+                await gm.send(start);
                 expect(gm.sent[0]).toEqual({
                   ...original,
                   messageType: 'command.replay',
                   lifecycleState: 'IDEMPOTENT_REPLAY',
                 });
-                expect(h.db.serialize().equals(after)).toBe(true);
-                expect(h.db.prepare('SELECT * FROM campaign_peace_scene').all()).toEqual(scene);
-                expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
-              });
+                expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
+              }, 30000);
             });
-            it('enters one stopped PEACE scene and resumes the same owner sheet', async () => {
-              const view = await gm.runtime.project(gm.c);
-              const start = {
-                messageType: 'command.request',
-                protocolVersion: 1,
-                commandKind: 'workflow-command',
-                role: 'gm',
-                commandId: randomUUID(),
-                workflowCommandId: 'UI-CMD-CAMPAIGN-START',
-                expectedRevisions: view.revisions,
-                payload: {
-                  campaignId: h.campaignId,
-                  expectedLobbySnapshotRevision:
-                    view.base.roleFilteredPayload['lobbySnapshotRevision']!,
-                  expectedReadinessRevision: view.base.roleFilteredPayload['readinessRevision']!,
-                },
-              } as const;
-              await gm.send(start);
-              expect(gm.sent[0]?.messageType).toBe('command.result');
-              const original = gm.sent[0];
-              await expect
-                .poll(() => p.payload()['projectionVariant'], { timeout: 10000 })
-                .toBe('PEACE_SNAPSHOT');
-              const peace = campaignPeaceProjectionValue(p.payload());
-              expect(peace).toMatchObject({
-                campaignCharacterId: source.campaignCharacterId,
-                mechanicalSheet: source.sheet,
-                groupId: source.groupId,
-                location: source.location,
-                effectiveController: source.controller,
-                campaignTimestamp: 2707,
-                clockMode: 'STOPPED',
-                dayPhase: 'NIGHT',
-                ownMarkerVisibility: 'UNKNOWN',
-                markerReason: 'NOT_SET',
-              });
-              for (const key of [
-                'combatId',
-                'combatActor',
-                'turn',
-                'reactionWindow',
-                'markerRevision',
-                'coordinates',
-              ])
-                expect(Object.hasOwn(peace, key)).toBe(false);
-              await p.restart();
-              expect(campaignPeaceProjectionValue(p.payload())).toMatchObject({
-                sceneId: peace.sceneId,
-                campaignTimestamp: 2707,
-                mechanicalSheet: source.sheet,
-              });
-              await gm.send(start);
-              expect(gm.sent[0]).toEqual({
-                ...original,
-                messageType: 'command.replay',
-                lifecycleState: 'IDEMPOTENT_REPLAY',
-              });
-              expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
-            }, 30000);
-          });
+          };
+          register({ ready: readyCases, peace: confirmedTimeCases });
         }
       });
+  };
+  const results = () => {
     if (scenario !== 'MIXED') {
       it('delivers the complete owner result, preserves source and recovers original decisions after SQLite reopen', async () => {
         expect(p.sent.at(-1), JSON.stringify({ sent: p.sent, errors: p.peerErrors })).toMatchObject(
@@ -4169,10 +4272,40 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           );
         }, 30000);
     }
-  },
-);
+  };
+  return {
+    preparedTabs,
+    ready: () => registerReadyAndPeace(({ ready }) => ready()),
+    peace: () => registerReadyAndPeace(({ peace }) => peace()),
+    results,
+  };
+}
+function registerAdmissionScenarios(
+  scenarios: readonly AdmissionScenario[],
+  registerCases: (suite: ReturnType<typeof createAdmissionScenario>) => void,
+) {
+  describe.each(scenarios)('actual final admission owner runtime %s', (scenario) => {
+    registerCases(createAdmissionScenario(scenario));
+  });
+}
+export function registerAcceptedReadyAndResults() {
+  registerAdmissionScenarios(['ACCEPT'], (suite) => {
+    suite.ready();
+    suite.results();
+  });
+}
+export function registerOtherAdmissionResults() {
+  registerAdmissionScenarios(['ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'], (suite) => {
+    suite.preparedTabs();
+    suite.ready();
+    suite.results();
+  });
+}
+export function registerStartedPeace() {
+  registerAdmissionScenarios(['ACCEPT'], (suite) => suite.peace());
+}
 
-describe('actual GM request review orchestration', () => {
+const gmReviewCases = () => {
   describe('final admission of an incomplete submitted batch', () => {
     let h: Awaited<ReturnType<typeof host>>,
       batch: Awaited<ReturnType<typeof submittedPlayer>>['batch'],
@@ -4648,9 +4781,9 @@ describe('actual GM request review orchestration', () => {
       n: 0,
     });
   }, 30000);
-});
+};
 
-describe('NET-016 and shared CMP-007/GM-001/GRP-001 campaign lobby', () => {
+const preStartPanelCases = () => {
   let h: Awaited<ReturnType<typeof host>>, gm: ReturnType<typeof gmClient>;
   beforeEach(async () => {
     h = await host();
@@ -4792,9 +4925,9 @@ describe('NET-016 and shared CMP-007/GM-001/GRP-001 campaign lobby', () => {
       expect(h.db.serialize().equals(before)).toBe(true);
     });
   });
-});
+};
 
-describe('#174 actual GM lifecycle handlers', () => {
+const gmLifecycleCases = () => {
   let h: Awaited<ReturnType<typeof host>>, gm: ReturnType<typeof gmClient>;
   const current = async () => {
     const view = await gm.runtime.project(gm.c);
@@ -6386,8 +6519,10 @@ describe('#174 actual GM lifecycle handlers', () => {
       const spy = vi
         .spyOn(campaignSecretModule, 'verifyMasterSecret')
         .mockImplementationOnce(async (...args) => {
-          const result = await realVerify(...args);
+          // Signal before yielding so the competing tab precedes unrelated timer polling.
+          // The real password verification and gate still finish before the handler resumes.
           started();
+          const result = await realVerify(...args);
           await gate;
           return result;
         });
@@ -6468,4 +6603,13 @@ describe('#174 actual GM lifecycle handlers', () => {
       /saltBase64|verifierBase64|beforeVerifier|afterVerifier/,
     );
   });
-});
+};
+
+export function registerTransportAndReview() {
+  describe('local network application with durable SQLite and real Node peers', transportCases);
+  describe('actual GM request review orchestration', gmReviewCases);
+  describe('NET-016 and shared CMP-007/GM-001/GRP-001 campaign lobby', preStartPanelCases);
+}
+export function registerGmLifecycle() {
+  describe('#174 actual GM lifecycle handlers', gmLifecycleCases);
+}

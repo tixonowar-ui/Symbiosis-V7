@@ -9,6 +9,14 @@
 
 ### Добавлено
 
+- **2026-11-05, issue #204:** повторные GM journal folds объединены только
+  внутри одного синхронного чтения; локальный replay повторно использует
+  уже вычисленный хеш предыдущего шага. Все guards и проверки цепочки
+  сохранены. 89 сетевых сценариев распределены по пяти изолированным suites;
+  подготовка, команды, reopen и cleanup публикуют bounded фазовые метрики.
+  Уточнена синхронизация двух password-guard тестов при настоящем verifier,
+  сохранив refusal/no-write assertions. Workers, retries, budgets и CI прежние. [Измерения и границы](docs/status/test-cycle-stability.md).
+
 - **2026-11-04 UTC, бюджеты проверок:** по явному решению владельца Node Vitest
   получает test/hook 30/30 с; web сохраняет test 15 с. Для отдельных admission,
   initial-time, BIND ACK и network E2E принят ограниченный запас; PEACE/LIFECYCLE

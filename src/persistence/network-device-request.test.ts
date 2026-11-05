@@ -26,6 +26,13 @@ import {
   commitCampaignDraftUpdate,
   navigateCampaignDraft,
   commitCampaignCreation,
+  readCampaignCreationCursor,
+  readLocalGmContext,
+  readGmRequestReviewViewStateInTransaction,
+  readGmAdmissionViewStateInTransaction,
+  readGmRequestReviewStructureInTransaction,
+  verifyGmAdmissionSourceMirrorsInTransaction,
+  returnGmAdmissionViewInTransaction,
   type RedactedCampaignDraftRequest,
 } from './campaign-creation.js';
 import { readHostedCurrentPausedCampaign } from './current-paused-campaign.js';
@@ -54,6 +61,7 @@ import {
 import type { NetworkPreparedBatch } from './network-local-application.js';
 import {
   commitAdmissionReviewOpen,
+  commitAdmissionReviewOpenWithView,
   commitAdmissionReviewEdit,
   readAdmissionReview,
   type AdmissionReviewOpenRequest,
@@ -115,19 +123,29 @@ const open = (filename = ':memory:', legacy = false) => {
   databases.push(db);
   return db;
 };
-function setup(filename = ':memory:', legacy = false) {
-  const db = open(filename, legacy),
+function setup(
+  filename = ':memory:',
+  legacy = false,
+  existing?: { db: Database.Database; draftId: string },
+) {
+  const db = existing?.db ?? open(filename, legacy),
     owner = bootstrapDeviceIdentity(db),
-    campaignId = randomUUID();
+    campaignId = randomUUID(),
+    draftId = existing?.draftId ?? 'draft';
   ensureLocalGmProfile(db, { ownerDeviceId: owner, masterProfileId: 'profile' }, allow);
-  createLocalGmContext(
-    db,
-    { ownerDeviceId: owner, masterProfileId: 'profile', gmLocalContextId: 'context' },
-    allow,
-  );
+  if (existing === undefined)
+    createLocalGmContext(
+      db,
+      { ownerDeviceId: owner, masterProfileId: 'profile', gmLocalContextId: 'context' },
+      allow,
+    );
   createCampaignDraft(
     db,
-    { gmLocalContextId: 'context', campaignDraftId: 'draft', expectedRevisions: zero },
+    {
+      gmLocalContextId: 'context',
+      campaignDraftId: draftId,
+      expectedRevisions: vector(readLocalGmContext(db, 'context')),
+    },
     allow,
   );
   for (const stage of [
@@ -149,13 +167,13 @@ function setup(filename = ':memory:', legacy = false) {
     { form: 'CMP-003', variant: 'SECRET', values: { secretProvided: true } },
     { form: 'CMP-004', variant: 'MODE', values: { defaultFutureRollMode: 'AUTO' } },
   ] as const) {
-    let d = readCampaignDraft(db, 'context', 'draft');
+    let d = readCampaignDraft(db, 'context', draftId);
     if (d.formId !== stage.form) {
       navigateCampaignDraft(
         db,
         {
           gmLocalContextId: 'context',
-          campaignDraftId: 'draft',
+          campaignDraftId: draftId,
           expectedDraftRevision: d.draftRevision,
           expectedRevisions: vector(d),
           sourceFormId: d.formId,
@@ -163,13 +181,14 @@ function setup(filename = ':memory:', legacy = false) {
         },
         allow,
       );
-      d = readCampaignDraft(db, 'context', 'draft');
+      d = readCampaignDraft(db, 'context', draftId);
     }
     const request = {
       messageType: 'campaign.draft.replace',
       protocolVersion: 3,
-      draftUpdateId: `update-${stage.variant}`,
-      scope: { gmLocalContextId: 'context', campaignDraftId: 'draft', sourceFormId: d.formId },
+      draftUpdateId:
+        existing === undefined ? `update-${stage.variant}` : `${draftId}-update-${stage.variant}`,
+      scope: { gmLocalContextId: 'context', campaignDraftId: draftId, sourceFormId: d.formId },
       expectedDraftRevision: d.draftRevision,
       expectedRevisions: vector(d),
       variant: stage.variant,
@@ -191,12 +210,12 @@ function setup(filename = ':memory:', legacy = false) {
       allow,
     );
   }
-  let d = readCampaignDraft(db, 'context', 'draft');
+  let d = readCampaignDraft(db, 'context', draftId);
   navigateCampaignDraft(
     db,
     {
       gmLocalContextId: 'context',
-      campaignDraftId: 'draft',
+      campaignDraftId: draftId,
       expectedDraftRevision: d.draftRevision,
       expectedRevisions: vector(d),
       sourceFormId: d.formId,
@@ -204,12 +223,12 @@ function setup(filename = ':memory:', legacy = false) {
     },
     allow,
   );
-  d = readCampaignDraft(db, 'context', 'draft');
+  d = readCampaignDraft(db, 'context', draftId);
   commitCampaignCreation(
     db,
     {
       campaignId,
-      receiptId: 'creation-receipt',
+      receiptId: existing === undefined ? 'creation-receipt' : randomUUID(),
       createdAt: '2026-10-30T10:00:00.000Z',
       qrPayload: `http://127.0.0.1:30111/?campaignId=${campaignId}`,
       baselineVersion: 'baseline',
@@ -219,13 +238,13 @@ function setup(filename = ':memory:', legacy = false) {
         commandKind: 'workflow-command',
         workflowCommandId: 'UI-CMD-CAMPAIGN-CREATE',
         role: 'gm',
-        commandId: 'create',
+        commandId: existing === undefined ? 'create' : randomUUID(),
         expectedRevisions: vector(d),
         payload: {
           stage: 'CAMPAIGN_CREATE',
           sourceFormId: 'CMP-005',
           gmLocalContextId: 'context',
-          campaignDraftId: 'draft',
+          campaignDraftId: draftId,
           draftRevision: d.draftRevision,
           preflightLeaseId: 'lease',
         },
@@ -513,6 +532,266 @@ function reviewStoreSetup(filename = ':memory:') {
 }
 
 describe('synchronous GM source composition', () => {
+  it('matches fresh structural readers through two RETURN cycles and preserves exact old receipts', () => {
+    const f = reviewStoreSetup(),
+      { p } = f,
+      scope = gmScope(p);
+    const check = () => {
+      const bytes = p.db.serialize();
+      p.db
+        .transaction(() => {
+          const state = readGmRequestReviewViewStateInTransaction(p.db, scope);
+          readGmAdmissionViewStateInTransaction(p.db, scope);
+          verifyGmAdmissionSourceMirrorsInTransaction(p.db, scope);
+          const cursor = readCampaignCreationCursor(p.db, scope.gmLocalContextId);
+          expect(readGmRequestReviewStructureInTransaction(p.db, scope)).toEqual({ state, cursor });
+        })
+        .deferred();
+      expect(p.db.serialize().equals(bytes)).toBe(true);
+    };
+    check();
+    const original = commitAdmissionReviewOpenWithView(
+      p.db,
+      scope,
+      f.input,
+      allow,
+      reviewStoreRules,
+      f.seed,
+      allow,
+    );
+    const firstReceipt = structuredClone(original.review.open.receipt);
+    for (let cycle = 0; cycle < 2; cycle++) {
+      check();
+      const view = p.db
+        .transaction(() => readGmAdmissionViewStateInTransaction(p.db, scope))
+        .deferred().viewOrNull!;
+      p.db
+        .transaction(() =>
+          returnGmAdmissionViewInTransaction(p.db, scope, {
+            messageType: 'navigation.form-action',
+            protocolVersion: 2,
+            navigationRequestId: randomUUID(),
+            sourceFormId: 'NET-018',
+            actionKey: 'NET-018::CTA::001',
+            expectedProjectionRevision: view.projectionRevision,
+          }),
+        )
+        .immediate();
+      check();
+      if (cycle === 0) {
+        const queue = readGmRequestReviewView(p.db, scope, allow)!;
+        const reopened = commitAdmissionReviewOpenWithView(
+          p.db,
+          scope,
+          {
+            ...f.input,
+            request: {
+              ...f.input.request,
+              commandId: randomUUID(),
+              expectedRevisions: vector(queue),
+            },
+            receiptId: randomUUID(),
+          },
+          allow,
+          reviewStoreRules,
+          f.seed,
+          allow,
+        );
+        expect(reopened.kind).toBe('RECOVERED');
+        expect(reopened.review.open.receipt).toEqual(firstReceipt);
+      }
+    }
+    const bytes = p.db.serialize();
+    expect(
+      commitAdmissionReviewOpenWithView(
+        p.db,
+        scope,
+        f.input,
+        allow,
+        reviewStoreRules,
+        f.seed,
+        allow,
+      ).review.open.receipt,
+    ).toEqual(firstReceipt);
+    expect(p.db.serialize().equals(bytes)).toBe(true);
+    const state = p.db
+      .transaction(() => readGmRequestReviewViewStateInTransaction(p.db, scope))
+      .deferred();
+    expect(state.events.filter((e) => e.mutation.kind === 'ADMISSION_RETURN')).toHaveLength(2);
+    const firstReturn = state.events.find((e) => e.mutation.kind === 'ADMISSION_RETURN')!;
+    p.db.prepare('DELETE FROM gm_request_queue_event WHERE event_id=?').run(firstReturn.eventId);
+    const damaged = p.db.serialize();
+    expect(() =>
+      p.db.transaction(() => readGmAdmissionViewStateInTransaction(p.db, scope)).deferred(),
+    ).toThrow('CORRUPT_STORAGE');
+    expect(() => readGmRequestReviewSource(p.db, scope, allow)).toThrow('CORRUPT_STORAGE');
+    expect(p.db.serialize().equals(damaged)).toBe(true);
+  });
+
+  it.each(['campaign_lobby_head', 'campaign_lifecycle_head'] as const)(
+    'checks an orphan %s even with empty queue and admission histories',
+    (table) => {
+      const p = setup(),
+        scope = gmScope(p);
+      p.db
+        .transaction(() => {
+          expect(readGmRequestReviewViewStateInTransaction(p.db, scope).events).toEqual([]);
+          expect(readGmAdmissionViewStateInTransaction(p.db, scope).events).toEqual([]);
+          readGmRequestReviewStructureInTransaction(p.db, scope);
+        })
+        .deferred();
+      p.db.pragma('foreign_keys=OFF');
+      try {
+        p.db
+          .prepare('INSERT INTO ' + table + ' VALUES (?,?,?,?)')
+          .run(scope.campaignId, 1, randomUUID(), '0'.repeat(64));
+      } finally {
+        p.db.pragma('foreign_keys=ON');
+      }
+      const damaged = p.db.serialize();
+      expect(() =>
+        p.db.transaction(() => readGmRequestReviewStructureInTransaction(p.db, scope)).deferred(),
+      ).toThrow('CORRUPT_STORAGE');
+      expect(p.db.serialize().equals(damaged)).toBe(true);
+    },
+  );
+
+  it('does not retain a verified queue across a write in the same transaction', () => {
+    const p = setup(),
+      scope = gmScope(p);
+    enterQueue(p);
+    p.db
+      .transaction(() => {
+        const first = readGmRequestReviewSource(p.db, scope, allow);
+        expect(first.cursor.kind).toBe('QUEUE');
+        const row = p.db.prepare('SELECT record_json FROM gm_request_queue_view').get() as {
+          record_json: string;
+        };
+        const value = JSON.parse(row.record_json) as Record<string, unknown>;
+        value['projectionRevision'] = Number(value['projectionRevision']) + 1;
+        const json = canonical(value);
+        p.db
+          .prepare('UPDATE gm_request_queue_view SET record_json=?,record_sha256=?')
+          .run(json, sha(json));
+        const damaged = p.db.serialize();
+        expect(() => readGmRequestReviewSource(p.db, scope, allow)).toThrow('CORRUPT_STORAGE');
+        expect(p.db.serialize().equals(damaged)).toBe(true);
+      })
+      .immediate();
+  });
+
+  it('validates a different campaign cursor independently of the requested queue', () => {
+    const p = setup(),
+      scope = gmScope(p);
+    enterQueue(p);
+    const original = readGmRequestReviewSource(p.db, scope, allow);
+    // Both campaigns use actual CREATE journals. Select the structurally valid menu cursor
+    // to prepare a second campaign for this storage-only cross-campaign read boundary.
+    const context = readLocalGmContext(p.db, 'context');
+    const menu = {
+      gmLocalContextId: context.gmLocalContextId,
+      ownerDeviceId: context.ownerDeviceId,
+      kind: 'MENU',
+      formId: 'APP-011',
+      targetId: context.gmLocalContextId,
+      revisions: vector(context),
+      targetSha256: sha(canonical(context)),
+    };
+    p.db
+      .prepare(
+        'UPDATE campaign_creation_cursor SET kind=?,target_id=?,form_id=?,record_json=?,record_sha256=?',
+      )
+      .run(menu.kind, menu.targetId, menu.formId, canonical(menu), sha(canonical(menu)));
+    const second = setup(':memory:', false, { db: p.db, draftId: 'second-draft' });
+    enterQueue(second);
+    const secondCursor = readCampaignCreationCursor(p.db, 'context');
+    const bytes = p.db.serialize();
+    const source = readGmRequestReviewSource(p.db, scope, allow);
+    expect(source.cursor).toEqual(secondCursor);
+    expect(source.cursor.targetId).toBe(second.principal.campaignId);
+    expect(source.viewOrNull).toEqual(original.viewOrNull);
+    expect(source.queue).toEqual(original.queue);
+    expect(p.db.serialize().equals(bytes)).toBe(true);
+    p.db
+      .prepare('UPDATE gm_request_queue_view SET record_sha256=? WHERE campaign_id=?')
+      .run('0'.repeat(64), second.principal.campaignId);
+    const damaged = p.db.serialize();
+    expect(() => readGmRequestReviewSource(p.db, scope, allow)).toThrow('CORRUPT_STORAGE');
+    expect(p.db.serialize().equals(damaged)).toBe(true);
+  });
+
+  it.each(['queue', 'admission', 'both'] as const)(
+    'retains no-write refusal for %s corruption',
+    (fault) => {
+      const f = reviewStoreSetup(),
+        { p } = f,
+        scope = gmScope(p);
+      commitAdmissionReviewOpenWithView(
+        p.db,
+        scope,
+        f.input,
+        allow,
+        reviewStoreRules,
+        f.seed,
+        allow,
+      );
+      readGmRequestReviewSource(p.db, scope, allow);
+      for (const table of fault === 'both'
+        ? ['gm_request_queue_view', 'gm_admission_view']
+        : [fault === 'queue' ? 'gm_request_queue_view' : 'gm_admission_view']) {
+        const row = p.db.prepare('SELECT record_json FROM ' + table).get() as {
+          record_json: string;
+        };
+        const value = JSON.parse(row.record_json) as Record<string, unknown>;
+        value['projectionRevision'] = Number(value['projectionRevision']) + 1;
+        const json = canonical(value);
+        p.db.prepare('UPDATE ' + table + ' SET record_json=?,record_sha256=?').run(json, sha(json));
+      }
+      const damaged = p.db.serialize();
+      expect(() => readGmRequestReviewSource(p.db, scope, allow)).toThrow('CORRUPT_STORAGE');
+      expect(p.db.serialize().equals(damaged)).toBe(true);
+    },
+  );
+
+  it.each(['admission', 'request', 'both'] as const)(
+    'preserves the public no-write refusal for %s malformed-source faults',
+    (fault) => {
+      const f = reviewStoreSetup(),
+        { p } = f,
+        scope = gmScope(p);
+      commitAdmissionReviewOpenWithView(
+        p.db,
+        scope,
+        f.input,
+        allow,
+        reviewStoreRules,
+        f.seed,
+        allow,
+      );
+      readGmRequestReviewSource(p.db, scope, allow);
+      if (fault !== 'request') {
+        const row = p.db
+          .prepare("SELECT event_id,record_json FROM gm_admission_view_event WHERE kind='ENTER'")
+          .get() as { event_id: string; record_json: string };
+        const document = JSON.parse(row.record_json) as { mutation: { kind: string } };
+        document.mutation.kind = 'UNKNOWN';
+        const json = canonical(document);
+        p.db
+          .prepare(
+            'UPDATE gm_admission_view_event SET record_json=?,record_sha256=? WHERE event_id=?',
+          )
+          .run(json, sha(json), row.event_id);
+      }
+      if (fault !== 'admission')
+        p.db
+          .prepare('UPDATE hosted_device_request SET record_sha256=? WHERE request_id=?')
+          .run('0'.repeat(64), f.submitted.requestId);
+      const damaged = p.db.serialize();
+      expect(() => readGmRequestReviewSource(p.db, scope, allow)).toThrow('CORRUPT_STORAGE');
+      expect(p.db.serialize().equals(damaged)).toBe(true);
+    },
+  );
+
   it('observes the complete verified source in its read transaction without writes', () => {
     const p = setup(),
       scope = gmScope(p),

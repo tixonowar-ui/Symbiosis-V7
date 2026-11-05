@@ -2253,6 +2253,9 @@ function readHistory(
   review: LocalReviewReplay;
 } {
   let current = initial(tab);
+  // The previous result stays private to this synchronous fold. Reuse its exact hash,
+  // while each event, receipt, next state and persisted head is still verified.
+  let previousSha256: string | undefined;
   const outboxes = new Map<string, LocalNetworkOutbox>();
   const events: EventRecord[] = [];
   const attempts = new Set<string>();
@@ -2273,7 +2276,7 @@ function readHistory(
       row['event_id'] !== i.eventId ||
       row['receipt_id'] !== i.receiptId ||
       row['event_index'] !== index ||
-      value['previousSha256'] !== sha(canonical(current)) ||
+      value['previousSha256'] !== (previousSha256 ?? sha(canonical(current))) ||
       !same(i.expectedRevisions, vectorOf(current)) ||
       i.expectedDraftRevision !== current.draftRevision
     )
@@ -2289,6 +2292,7 @@ function readHistory(
     if (value['nextSha256'] !== nextSha256 || !same(value['receipt'], receipt)) return fail();
     events.push({ input: i, receipt, previousSha256: value['previousSha256'], nextSha256 });
     current = next;
+    previousSha256 = nextSha256;
   }
   const head = at(db, 'local_network_application', 'network_scope_id', tab.networkScopeId);
   if (events.length === 0) {
