@@ -111,6 +111,7 @@
 | [0077](0077-gm-entity-source-closure.md)                             | Полные NPC, user enemy templates, арт и B5                 | принято владельцем, source #186             |
 | [0078](0078-queue-source-closure.md)                                 | Время NPC и первый импорт; B6, первая часть #221           | принято владельцем, source #221             |
 | [0079](0079-normal-master-transfer-source.md)                        | Штатная передача мастера и доверие преемнику; B7           | принято владельцем, source #221             |
+| [0080](0080-frozen-master-recovery-source.md)                        | Аварийное frozen recovery; B8                              | принято владельцем, source #221             |
 
 ## Перенос решений аудита
 

@@ -3,6 +3,7 @@ import { fail } from './lib/fail.js';
 import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact reviewed Atlas 1.12 objects, authorized by decisions 4–5 in #221 / ADR 0079. */
+// Intersecting witnesses include the accepted frozen-recovery source amendment in ADR 0080.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -20,7 +21,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-008',
-    sha256: '484e943140500dc1f1652f29c92a31ec27f5e89ed157e4102732b00d757f324c',
+    sha256: 'ec99484348303d30fe77ee18956eb6bfcb35981b8d6d173650123a3391069a21',
   },
   {
     target: 'forms',
@@ -38,25 +39,25 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-024',
-    sha256: 'b22e35f765486b82f4b6e288bdba344c320ba985e2d9e054179902a9eacfbdc2',
+    sha256: '28b0a4054e83ffbecc2195c264eb347008bbc33851c700342bdfc06d70d58467',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-025',
-    sha256: '630b2c91356fc57dc0e3666a6e143dad70629d09ac41bd74d70c7bb51cc57469',
+    sha256: '385c396df80458323fc0835378660b48ddf8e2068845d7ecc08c0e68414d5c0d',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'CMP-015',
-    sha256: 'ee43f433e403a1c14e49d25c51e0e92d3c390c18d0e5dc8ed3d576b301b89b20',
+    sha256: '08390f08624271bacc08166eaee854abcdaa6559379660144972a2559125cce5',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '910889c4e2e7a2935afc0c2149a007228a92476b8015764b2d91546f0affcdba',
+    sha256: '9cf3928e13c50554c6dde8df07230fb357ab5ecabc09696d350d571c36a6066e',
   },
   {
     target: 'forms',
@@ -68,37 +69,37 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-RECONNECT',
-    sha256: '407da238722c9eba14a146c8ee82ed5b0e45a72c38a32644b9ebc12b75353c35',
+    sha256: '49967269ebad7d06f85e28da6ad4b8f564c4831957f7120511c7738fb7f68883',
   },
   {
     target: 'journeys',
     key: 'id',
     id: 'J-MASTER-TRANSFER',
-    sha256: '2ee714c6391d3b53ce8726336e939299a802b4557691d640f1e185ebd8cf7e08',
+    sha256: '664bd1cbe62f1848298c4b17506e3629e0ce792c6d7028cb91d7ef7a904d571c',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-031',
-    sha256: 'e92608cdc8fc5fa230c4df3d4664dbb67902862b384737d267b1b5dde1a958be',
+    sha256: 'a680e1254f9f174566a2092b8fac21c3e1cdeef9c4924f701819b51f8c7d6d12',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-050',
-    sha256: '5e5b18fbb54a7041ada2b19b2d58885a695f373078cd3fe3ba3708760eb80252',
+    sha256: 'd006033582d37e8569017da6b17556425d5904b72af3e79e04cff4d423c88784',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-057',
-    sha256: 'f2b5f026d91d330d206263327112f35dba6ec500e2324312ef7373bcf74f2b9e',
+    sha256: 'ff348257194061ab97b5963049473baa269528848064ecd23a18110d2a7a4880',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-058',
-    sha256: 'a44311230d5e95c2e25b41b71e7ce21c67d9c6a45cfcf2f5059d98472b34e04d',
+    sha256: '10092dd50dd7d3f8a3d54803c0d929f79985bd3c5d2759ca90ef07081fe3adf8',
   },
   {
     target: 'qaScenarios',
@@ -110,55 +111,55 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-024',
-    sha256: 'd7e860d4ba0789ad6e1faa802c3f4deeca805a1123d58fb22d76245d810c1369',
+    sha256: '68a7bf5dd2dcc3d6d8e86f9fdb2a88edf614af2b6889bdbde33234fb1937f0f5',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-025',
-    sha256: 'c4cc34088c079158adf68f45add5024503a051b919ee9e5dca19868afa5afbca',
+    sha256: 'cfb025cd9dbff0b2382cfda9c60a21b44d6e754729199244e00d0746c21c5d59',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-031',
-    sha256: 'aa2d5070cd3bdafbbf4e67f221975ddfcca0682921b32b13f0de7ea4f1c42384',
+    sha256: 'e779f1bb2ee5d51724c470454dd16bb27878e0f37e1af54cfdf3ff165d9a4111',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-050',
-    sha256: '6d3f9e2d5870b2ae6f7317c4ccf1ed21c0ab0c2b92b656a3c4022443b6331892',
+    sha256: '7a6a03b3e418d06a52a756b3ee098c313e6d70c3b6cd2661e594718f8934a75b',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-057',
-    sha256: '74df1c491b32e18b8da2a79bf4d86232823e23316dc6667788a4d6176b0264b8',
+    sha256: '213ebd89ee713662d56a7309cc7702a4473996716e4db2a406f80b33968731b1',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-058',
-    sha256: 'd81545038ffeb580225c9f0983945569b18eefce5316fb73979bbdc07fafd593',
+    sha256: 'a80cedc3a3ff2bf17aa07bee5e9bfa193e740e1852580ca7d3f043886b6441f7',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK',
-    sha256: '8d69e74e62e28772383363d29b3d479ba8e1901748b2995db233c7865e472726',
+    sha256: '9fdacb9fd265e9ed048a2b4d0a2773c70c9b3632a1ceca58c76b3f1ef4722637',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT',
-    sha256: '2ce72c7a04ab3a4885cbe0760a91ead6c36096b6f70546d94fb037ae73523cd7',
+    sha256: '39aa4a31955f5c902dbeda6b5303cedb1daa797f0814b623c72a361c28966d1e',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-QNA-Q-CAMP-009-ROW-296',
-    sha256: '2124d6e633e2b1e599ef4d2728eab3f6b36c2cf22d48adf02be6af683972eef1',
+    sha256: '80564233f65b416ff0a39150e0e4ce023aaa070fcdc3fd855f5f171e026eca98',
   },
   {
     target: 'qaScenarios',
@@ -170,7 +171,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-CANCEL',
-    sha256: 'e3b0c8398b56b617823ab4463f6e72524338658eeeb08f04c0a4083042b32a6d',
+    sha256: '0d33393799401cebb9e15315a9d1592db4958164e529b6e47d3a252d3d632b86',
   },
   {
     target: 'qaScenarios',
@@ -182,13 +183,13 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-MASTER-TRANSFER-UNLOCK',
-    sha256: 'ce93c92675ebe135d0983ca0a194fac9f502c17dbef4401b944d10b6e972ff11',
+    sha256: 'ed92a4f1f9cbd0551ba05b9c21b30ec1a3e6f3f90cb74bc6e656d7acd00ef1ce',
   },
   {
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-MASTER-TRANSFER-COMMIT',
-    sha256: '2bceedfd9786ee0dd5c9429fa3e62289056443e3350835f7a9863d8716a50f72',
+    sha256: '95f89a0f39848fd59692d108f3e5f79c86e6280ffc1f3fbd2485270d2702fa83',
   },
   {
     target: 'workflowCommands',
@@ -200,7 +201,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-MASTER-TRANSFER-CANCEL',
-    sha256: 'cefa0adc7ca9f96d0ccce09b7b043013efa3d733259d2b7bf5017df74c7e8e60',
+    sha256: 'dfd5aab263b04232c267829844b673807d97cb65f957a7bf667cb13256db0501',
   },
   {
     target: 'workflowCommands',
@@ -212,15 +213,15 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '1824e006901903a81275a8562ec37560238dc9042f4d4588885b51f469ee7e7f',
+    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
   },
   {
     key: 'transitions',
-    sha256: 'b076cda3f751ed503e635034d769ea179f4a20f6fdd5a654ad9dd0882c1ad15a',
+    sha256: 'e5f06ebbe462cfffc34951a75cac1e3b371ee718e440d4fa6ca76a1e632d7ec3',
   },
   {
     key: 'registryCoverage',
-    sha256: '327b95f752271eb26ca7dbece2c8bb5903486ecb418cc365832437d707256805',
+    sha256: '303344878fb469eabea4c2b7c9e5a872a4580f8d3a7b1399a68138622419a11c',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -234,7 +235,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-008 —',
-    sha256: '2327a68fa6fe7f7483d422fe81797511262392f242fc266a6059d5cd224eb1c4',
+    sha256: '5b8a606652f290b792ce7ec9158dff0a0d9320221fc61b57b9a5f3495257f159',
   },
   {
     prefix: '### NET-009 —',
@@ -246,19 +247,19 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-024 —',
-    sha256: '773e9ab060877753f771c3772c960a942fbe4fa6782011fedd402cb4b5c6941a',
+    sha256: '7278c9c05bbb7df8c0819471134a4f2ecd2783b11dac1de261727db2b6db0ab4',
   },
   {
     prefix: '### NET-025 —',
-    sha256: '70601a6810a2cc4ed4b70a80f142c457b20d24f47ffd5cfc587c5d00cf666982',
+    sha256: '57e14c614d9d9eec13f65562e485a3fb610ad00d347ee5ecaed4480bf444315d',
   },
   {
     prefix: '### CMP-015 —',
-    sha256: '577a31e344520d73570a0ba39034b1a5576699e507bff53af3db5f4e3a98707a',
+    sha256: '08d62f3540e0acb3217fb36ed3620aee9e67d328ad646b98b9110ea8189c3222',
   },
   {
     prefix: '### GM-001 —',
-    sha256: 'b6c68faa89e85692134963187c297caeb52b76662968ddd6e81c675130bebf23',
+    sha256: 'f880661a65bcc4cf682d963cdf3fba06d03c5411b5341b9f5805926b8d660833',
   },
   {
     prefix: '### APP-011 —',
@@ -266,29 +267,29 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-RECONNECT —',
-    sha256: '4f626cd4ae8fc44b9cbbc6183081b9fbdf3bf4bd1737b52b147dfbad9ebabbaf',
+    sha256: '9fdce05998ad3cbed4c0c7eff834ad47da4b2f8a4b71f9cbd3b297a4b11be48f',
   },
   {
     prefix: '### J-MASTER-TRANSFER —',
-    sha256: 'ffb613c7e51c5b7dc6bdc43faf3c053894d7dc6584e7270a6c9102f933d0a7bb',
+    sha256: 'f8c3f7d5a2f7967aa06fccbff649b93163d002475061fc123eac20abb573ab3f',
   },
 ] as const;
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-031 |',
-    sha256: '2e4ed1aee0135011ae92d08548bcb008e7d7df94982a2ac258bb4d0a14eb3786',
+    sha256: 'fa00a07e9267c4791b21bdd6f1cf3654b5fa8b638a5729df858e05b69453b7c8',
   },
   {
     prefix: '| REQ-050 |',
-    sha256: '9dee009486c27933791a491f7e593c60a4e7c1886e8e782c18ece566f7221032',
+    sha256: 'f5807b8e982d83f4208bca21c513db7c18802c5c81eb447d342c8bcb511471b4',
   },
   {
     prefix: '| REQ-057 |',
-    sha256: '887f6abb2e755d4ac1b416dcdc51a82b8d67e951e4762efee1c9f3e5926e0b84',
+    sha256: 'e45ce1b27798f77ca8e415e035fc9e64aa11407646fe9ccbcc0357f10be7e097',
   },
   {
     prefix: '| REQ-058 |',
-    sha256: '6f297898d32c157a056c392ef5fc1deceb155fe958d8afd78f9713ab24947322',
+    sha256: '9a241514da19a9911a9f033e329ce7e4edf42a1b342f8046ab7719ab9a68cf08',
   },
   {
     prefix: '| QA-FORM-NET-009 |',
@@ -296,39 +297,39 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NET-024 |',
-    sha256: '309d6ab0dc1c27e1f948cd70a5f7d10dceeedc64b21768e3d3046cf829e7da33',
+    sha256: '16647b5e38ca1ec423e8ec86c3bcbd2f79ab163bf2085ffe1c95afa0695f91bb',
   },
   {
     prefix: '| QA-FORM-NET-025 |',
-    sha256: 'd7730c0373b2c2ce5c8b88fdb0d12f5aa3601f760dadf3bb06fcf8208fdf9f51',
+    sha256: 'c4992fd1e99853f36b89e2f804ee4b0fe09f5e3cb95e0caf7b537bbfc7d924cb',
   },
   {
     prefix: '| QA-REQ-031 |',
-    sha256: '35e7e764ca77738496c8d5638ed2ab203e78e335f8a5940ae687fdb90192b899',
+    sha256: '385a1979cbcedbbb66a9f34a6383cc44e5dd58a086d5f86df0a6f6bf844c50c8',
   },
   {
     prefix: '| QA-REQ-050 |',
-    sha256: '7ce5bd0d202b601be53c4d9912ddfb40c170c9ecc39f7f4d5f33cc434ae19520',
+    sha256: '073fec9fc3db97fcc1f2b17da57af77ad6b4878d8e04056bba7e6067bf4f538b',
   },
   {
     prefix: '| QA-REQ-057 |',
-    sha256: 'dbb855490f9cedd4f9b5fcfe83bd193db4004048f9c95e7a2c3a45b8aa813805',
+    sha256: '53c0f579423b8dc385525125ec49e57d170bc9d2b46690fd5ab989942f1cf012',
   },
   {
     prefix: '| QA-REQ-058 |',
-    sha256: '7d2925a5ec4b6fa9c0e83202ad67bcab7e23f69d99064e3d34c3b624386df2da',
+    sha256: '076065ad09e7e687d47852693407abc24908be496954e8a2aa417af0f4619d9c',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK |',
-    sha256: 'dc8af07484638df2745c79bfd9fa66a2ea90635ed375d0498ab9592879f36fbe',
+    sha256: '3f48aff5c61c7414db44010b04237e8ccf879d81ad6eb6b15bbecba15752b56e',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT |',
-    sha256: 'a46da710c75d92e8ae8c5d4ff26d6cdc6146d68310254ce319547ccd4b7f62fb',
+    sha256: '99762fbcb8f10fdc4f7ff52ebbb53e568f903bcd894a62cabaac82417410cdb7',
   },
   {
     prefix: '| QA-QNA-Q-CAMP-009-ROW-296 |',
-    sha256: '934a1557c051dc0812eefe258dd90ae6963d22805b11c224c60a95f1fa5babd7',
+    sha256: '45716c3bb0ba3826c6467d766d9c3c6783ce8408879464a7be57fcc9692c36f1',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-ACK |',
@@ -336,7 +337,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-CANCEL |',
-    sha256: 'e6c6ab3741acc25b5f26e3b39fa106bca53d515800f33ca9a9077efbc8c23410',
+    sha256: 'b3591f1ae2e071dc1014cb66a79dc446f3c16690d1c13f1fb82a8ac8b9f42e93',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-RECONNECT |',
@@ -344,11 +345,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-MASTER-TRANSFER-UNLOCK | Разблокировать передачу мастера |',
-    sha256: '9d95b11c0df1865c3e5ff6ac03a3f78127e1da332314e4bbc12bc1f2de0610bb',
+    sha256: '4fad6b631e54c8ac963a6dccb922f947a25750ae74af3d5e3b33561a7d5062a0',
   },
   {
     prefix: '| UI-CMD-MASTER-TRANSFER-COMMIT | Передать полномочия одному преемнику |',
-    sha256: '9e36a5e240aad84b308ff30d922a6ab8113956e4f38dda7e3b838eec97593d10',
+    sha256: 'ce6a149cfc932492389db51fc814f56e8717405eac6ea73cf84c09faef8531f6',
   },
   {
     prefix: '| UI-CMD-MASTER-TRANSFER-ACK | Подтвердить или отклонить принятие роли мастера |',
@@ -356,7 +357,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-MASTER-TRANSFER-CANCEL | Отменить передачу до общего commit |',
-    sha256: '1e13184cdfc40ca914212eeffaaba4603de94117989f963b43284b8fa3b3fae6',
+    sha256: '3fb7b73de58888682ad999e286f0bf1f6652882d14b65a5121462cd7e38479c7',
   },
   {
     prefix: '| UI-CMD-MASTER-TRANSFER-RECONNECT | Переподключиться к подтверждённому преемнику |',

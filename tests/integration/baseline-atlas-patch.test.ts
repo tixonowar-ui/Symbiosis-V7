@@ -33,7 +33,16 @@ import {
 
 const [jsonPath, markdownPath] = FIXTURE_ATLAS_PATHS;
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
-const patchNames = ['177', '199', '206', '208', '186', '221', '221-transfer'] as const;
+const patchNames = [
+  '177',
+  '199',
+  '206',
+  '208',
+  '186',
+  '221',
+  '221-transfer',
+  '221-recovery',
+] as const;
 // The B0 seal is recorded in the frozen atlas-v1.5.checksums.sha256 manifest.
 const releaseSeals = [
   {
@@ -47,6 +56,7 @@ const releaseSeals = [
   BASELINE_LINEAGE_SEALS.gmSourceAtlas,
   BASELINE_LINEAGE_SEALS.queueSourceAtlas,
   BASELINE_LINEAGE_SEALS.normalTransferAtlas,
+  BASELINE_LINEAGE_SEALS.recoveryAtlas,
 ] as const;
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const digests = (bytes: FixtureAtlasBytes): Record<string, string> =>
@@ -89,10 +99,10 @@ function patchBytes(edge: number): Buffer {
 }
 function sealedInput(release: number): FixtureAtlasBytes {
   let bytes = rawRead(sourceRoot);
-  expectSealed(bytes, 7);
+  expectSealed(bytes, 8);
   // Preparation may use the candidate only under independent complete release seals.
   // Expected outputs below come from a real Git apply, never from this preparation.
-  for (let edge = 6; edge >= release; edge--) {
+  for (let edge = 7; edge >= release; edge--) {
     bytes = applyFixtureAtlasPatch(bytes, patchBytes(edge), true);
     expectSealed(bytes, edge);
   }

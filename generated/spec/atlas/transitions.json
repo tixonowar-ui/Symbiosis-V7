@@ -2766,7 +2766,7 @@
   },
   {
     "from": "CMP-015",
-    "guard": "Campaign frozen; current sole GM selects a paired authenticated LAN successor before UNLOCK; no PC is required.",
+    "guard": "Campaign frozen; current GM or password-authorized frozen recovery operator may select a paired authenticated LAN successor before UNLOCK; no PC is required.",
     "kind": "journey",
     "to": "NET-024",
     "trigger": "J-MASTER-TRANSFER::UNLOCK_TARGET"
@@ -2780,14 +2780,14 @@
   },
   {
     "from": "NET-026",
-    "guard": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
+    "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
     "kind": "journey",
     "to": "NET-024",
     "trigger": "J-MASTER-CONFLICT::RECOVER"
   },
   {
     "from": "NET-024",
-    "guard": "One authoritative checkpoint/lease is selected through the safe recovery procedure.",
+    "guard": "Read-only checkpoint evidence in NORMAL_TRANSFER or the scoped FROZEN_RECOVERY context; no mutation, automatic history selection or authority grant.",
     "kind": "subflow",
     "to": "CMP-010",
     "trigger": "J-MASTER-CONFLICT::RECOVER::open"
@@ -6448,7 +6448,7 @@
   },
   {
     "from": "NET-024",
-    "guard": "Current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
+    "guard": "NORMAL_TRANSFER; current old GM authority; no pending token (CANCEL receipt required if previously unlocked).",
     "kind": "normative",
     "to": "GM-001",
     "trigger": "Отменить"
@@ -6469,7 +6469,7 @@
   },
   {
     "from": "NET-025",
-    "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to current GM NET-024 only after confirmed CANCEL receipt",
+    "guard": "UI-CMD-MASTER-TRANSFER-CANCEL guards; return to the same NORMAL_TRANSFER or FROZEN_RECOVERY context only after confirmed CANCEL receipt",
     "kind": "workflow-command",
     "to": "NET-024",
     "trigger": "Отменить до commit"
@@ -11956,6 +11956,13 @@
     "trigger": "Вернуться к исходному состоянию NPC"
   },
   {
+    "from": "NET-024",
+    "guard": "FROZEN_RECOVERY; no pending token (CANCEL receipt required if previously unlocked); navigation keeps the campaign frozen.",
+    "kind": "normative",
+    "to": "NET-026",
+    "trigger": "Вернуться к frozen recovery"
+  },
+  {
     "from": "NET-025",
     "guard": "UI-CMD-MASTER-TRANSFER-ACK guards; decision=ACCEPT; new GM password required",
     "kind": "workflow-command",
@@ -11991,11 +11998,32 @@
     "trigger": "Закрыть техническое приглашение"
   },
   {
+    "from": "NET-025",
+    "guard": "DECLINED or CANCELLED terminal receipt; authenticated FROZEN_RECOVERY initiator and bound frozen context; retain freeze, dispose only transfer projection and grant no GM authority.",
+    "kind": "normative",
+    "to": "NET-026",
+    "trigger": "Вернуться к frozen recovery"
+  },
+  {
     "from": "NET-024",
     "guard": "Valid unlock bound to the selected authenticated device and exact checkpoint; successor has no GM authority before the common COMMIT.",
     "kind": "system-event",
     "to": "NET-025",
     "trigger": "Адресованное приглашение выбранному successor"
+  },
+  {
+    "from": "NET-026",
+    "guard": "Recovery not committed; campaign remains frozen.",
+    "kind": "normative",
+    "to": "NET-008",
+    "trigger": "Вернуться к потерянному соединению"
+  },
+  {
+    "from": "NET-008",
+    "guard": "Frozen recovery context for unavailable/conflicting authority; show only recovery evidence and blockers, never gameplay authority; current GM password and complete receipt-compatible checkpoint are checked by UNLOCK.",
+    "kind": "normative",
+    "to": "NET-026",
+    "trigger": "Открыть frozen recovery"
   },
   {
     "from": "NET-009",

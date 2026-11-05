@@ -185,12 +185,12 @@
     "title": "Завершить кампанию в immutable archive"
   },
   {
-    "atomicity": "Create one short-lived transfer token bound to campaign, current GM, successor identity, selection revision and exact checkpoint; changing target requires confirmed CANCEL before new selection/UNLOCK. Unlock never changes authority.",
+    "atomicity": "Create one short-lived transfer token bound to campaign, mode, initiator, successor identity, selection revision and exact checkpoint; changing target invalidates it. Neither unlock nor recovery password verification grants authority.",
     "commandId": "UI-CMD-MASTER-TRANSFER-UNLOCK",
     "formIds": [
       "NET-024"
     ],
-    "guards": "Current sole GM and current GM password verified privately; safe boundary with no pending operation; explicitly selected paired authenticated LAN successor, complete receipt-compatible checkpoint and exact campaign/authority/checkpoint/selection revisions. No PC is required. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+    "guards": "Current GM password verified privately; NORMAL_TRANSFER requires current sole GM and safe boundary with no pending operation; FROZEN_RECOVERY requires the verified recovery context instead of a sole GM and preserves any frozen unfinished operation at its exact confirmed checkpoint stage. No conflicting in-flight write; complete receipt-compatible checkpoint, explicitly selected paired authenticated LAN successor (PC not required), exact authority/checkpoint/selection revisions. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
     "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK",
     "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Token state restores or expires closed; changed target requires a new unlock.",
     "title": "Разблокировать передачу мастера"
@@ -201,7 +201,7 @@
     "formIds": [
       "NET-025"
     ],
-    "guards": "Current sole GM initiator, current valid unlock, exact successor ACK/checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions and no pending operation; old authority fenced before successor grant. Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+    "guards": "Authorized initiator, current valid unlock, exact successor ACK and checkpoint, confirmed successor-local new GM credential setup commitment, unchanged revisions; NORMAL_TRANSFER has no pending operation, FROZEN_RECOVERY retains checkpointed unfinished operations without a conflicting in-flight write; old authority fenced before successor grant. Verified complete checkpoint is compatible with every accepted receipt; conflicting or insufficient history, unresolved authority fencing or partition keeps the campaign frozen. Password knowledge alone never grants authority; no unilateral recovery, automatic merge or loss of committed history.",
     "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT",
     "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Lost ACK/restart restores the same common commit; uncertainty stays frozen. Verified transfer notification enables only explicit player reconnect.",
     "title": "Передать полномочия одному преемнику"
@@ -1309,7 +1309,7 @@
     "title": "Подтвердить или отклонить принятие роли мастера"
   },
   {
-    "atomicity": "Invalidate the pending transfer and successor ACK atomically, retaining current old GM authority; never revoke a completed transfer.",
+    "atomicity": "Invalidate the pending transfer and successor ACK atomically, retaining old authority for NORMAL_TRANSFER and the frozen state for FROZEN_RECOVERY; never revoke a completed transfer.",
     "commandId": "UI-CMD-MASTER-TRANSFER-CANCEL",
     "formIds": [
       "NET-025"

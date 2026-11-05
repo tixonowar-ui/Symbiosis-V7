@@ -92,7 +92,7 @@ describe('catalog extraction', () => {
       roles: 3,
       guardStates: 10,
       forms: 376,
-      transitions: 1717,
+      transitions: 1721,
       journeys: 66,
       requirements: 91,
       qaScenarios: 2452,
