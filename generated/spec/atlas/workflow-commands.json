@@ -5,7 +5,7 @@
     "formIds": [
       "NPC-017"
     ],
-    "guards": "Все восемь обязательных этапов валидны; UUID ещё не зафиксирован; revision актуальна.",
+    "guards": "Host-bound editMode=CREATE_V1; Все восемь обязательных этапов валидны; sex, raceCode и massKg прошли включительные границы #113 при шаге 0.1kg; resolvedArtAssetKey определён; UUID ещё не зафиксирован; revision актуальна.",
     "qa": "QA-WORKFLOW-UI-CMD-NPC-COMMIT-V1",
     "reconnect": "Same commandId возвращает прежнюю квитанцию и не создаёт второго НПС.",
     "title": "Атомарно сохранить первую версию постоянного НПС"
@@ -99,15 +99,16 @@
     "title": "Принять либо отклонить полный campaign-copy diff"
   },
   {
-    "atomicity": "Keep npcUuid; append version N+1 and history; never mutate prior snapshot.",
+    "atomicity": "OPEN persists only the technical full-edit attempt and its phase receipt. COMMIT atomically appends one full N+1 snapshot and history under the existing npcUuid with optimistic current-version/attempt guards. Owner decision #186 C: the host-bound technical attempt carries campaignId, npcDraftId, attemptRevision and editMode=CREATE_V1|APPEND_N_PLUS_ONE. APPEND_N_PLUS_ONE additionally binds npcUuid and expectedCurrentVersion to the selected current snapshot. The client cannot select or change this mode/binding. All eight wizard stages preserve it; cancel before final commit creates no NPC version or history entry.",
     "commandId": "UI-CMD-NPC-NEW-VERSION",
     "formIds": [
       "NPC-003",
-      "NPC-007"
+      "NPC-007",
+      "NPC-017"
     ],
-    "guards": "NPC persistent and not archived; active combat keeps pinned prior snapshot.",
+    "guards": "Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot. Sole current authenticated campaign GM; UI-CMD-NPC-NEW-VERSION phase=COMMIT only from NPC-017 with host-bound APPEND_N_PLUS_ONE attempt; expectedCurrentVersion and attemptRevision are current; all eight stages, sex/race/mass and resolved art validate. Atomically append the full N+1 snapshot/history to the same npcUuid; prior versions and combat pins remain unchanged.",
     "qa": "QA-WORKFLOW-UI-CMD-NPC-NEW-VERSION",
-    "reconnect": "Same version command returns the prior N+1 receipt.",
+    "reconnect": "Exact commandId and phase/payload replay returns the original immutable phase receipt separately from current projection: OPEN restores the same attempt; COMMIT returns the same saved version. Reusing an OPEN commandId as COMMIT is a changed request and refuses. Foreign authority/binding, stale revision or changed request causes zero writes; reconnect never appends a second version or rewrites old receipts.",
     "title": "Создать новую полную версию NPC"
   },
   {
@@ -657,7 +658,7 @@
     "title": "Установить или переместить метку группы"
   },
   {
-    "atomicity": "Patch one draft stage only; no runtime actor or currentVersion changes.",
+    "atomicity": "Patch one technical attempt stage only; no template row, runtime actor or currentVersion changes; CORE-194 creates the template only with a fully validated atomic save.",
     "commandId": "UI-CMD-ENEMY-DRAFT-PATCH",
     "formIds": [
       "ENM-005",
@@ -671,7 +672,7 @@
       "ENM-014",
       "ENM-015"
     ],
-    "guards": "GM authority; template remains DRAFT; stage-specific fields and draftRevision valid.",
+    "guards": "GM authority; only a technical creationAttempt/editAttempt exists before save; no enemyTemplate.status or persisted DRAFT template; stage-specific fields and attempt revision valid.",
     "qa": "QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH",
     "reconnect": "Draft revision and any committed roll receipt restore exactly.",
     "title": "Сохранить этап шаблона врага/монстра"
@@ -683,7 +684,7 @@
       "ENM-010",
       "ENM-016"
     ],
-    "guards": "All mandatory wizard stages valid; template UUID not committed; inventory/ability boundaries pass.",
+    "guards": "All mandatory wizard stages valid; owner #113 inclusive mass bounds pass (SENTIENT 30..500kg, CUSTOM_MONSTER 5..10000kg, exact 0.1kg step); resolved art fixed; template UUID not committed; inventory/ability boundaries pass.",
     "qa": "QA-WORKFLOW-UI-CMD-ENEMY-COMMIT-V1",
     "reconnect": "Same command returns the same template and never creates a duplicate.",
     "title": "Сохранить первую версию шаблона врага/монстра"
@@ -694,20 +695,20 @@
     "formIds": [
       "ENM-017"
     ],
-    "guards": "Current user template exists; diff/reason valid; active combats keep pinned old snapshot.",
+    "guards": "Current user template exists; full candidate snapshot and diff/reason valid; owner #113 inclusive mass bounds pass by immutable templateKind (SENTIENT 30..500kg, CUSTOM_MONSTER 5..10000kg, exact 0.1kg step); resolved art fixed; active combats keep pinned old snapshot. The host-bound technical version attempt has current templateId/expectedCurrentVersion/attemptRevision; CUSTOM_MONSTER may use its own CORE-201 right through ENM-018, then edit the candidate manually.",
     "qa": "QA-WORKFLOW-UI-CMD-ENEMY-NEW-VERSION",
-    "reconnect": "Same version command returns prior N+1 receipt.",
+    "reconnect": "Same version command returns prior N+1 receipt. Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
     "title": "Выпустить новую версию пользовательского шаблона"
   },
   {
-    "atomicity": "Persist one seed, seven concrete stats and random receipt; result becomes immutable for the draft.",
+    "atomicity": "Persist one operationId-bound receipt with seven independent host R20 faces in S,D,M,Z,I,W,C order and the original resulting stats for this creationAttemptId. The receipt is immutable; the candidate stats remain manually editable under CORE-200. No template is created by the roll. CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt. Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
     "commandId": "UI-CMD-MONSTER-STATS-ROLL-ONCE",
     "formIds": [
       "ENM-018"
     ],
-    "guards": "Monster draft uses ROLL_ONCE; status=NOT_ROLLED; eligible ranges and draft revision fixed.",
+    "guards": "Technical CUSTOM_MONSTER creation/edit attempt uses ROLL_ONCE; no prior random receipt for this creationAttemptId; expected attempt revision valid; seven independent host R20 in S,D,M,Z,I,W,C order, without critical handling and independent of dice input mode. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA.",
     "qa": "QA-WORKFLOW-UI-CMD-MONSTER-STATS-ROLL-ONCE",
-    "reconnect": "Replay restores the same values and cannot reroll.",
+    "reconnect": "CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt. Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
     "title": "Однократно сгенерировать характеристики монстра"
   },
   {

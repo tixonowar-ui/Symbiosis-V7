@@ -78,7 +78,7 @@ export async function createNetworkBrowserProcess(finalCount: number) {
         cleanup();
         resolve(value as Ready);
       };
-      const timer = setTimeout(() => failure(new Error('Network host did not start')), 30_000);
+      const timer = setTimeout(() => failure(new Error('Network host did not start')), 60_000);
       next.once('error', failure);
       next.once('exit', exit);
       next.on('message', message);

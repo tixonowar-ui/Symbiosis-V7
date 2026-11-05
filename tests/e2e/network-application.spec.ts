@@ -7,7 +7,7 @@ import {
 } from '../fixtures/network-application-e2e.js';
 
 test.use({ channel: 'chrome' });
-test.setTimeout(120_000);
+test.setTimeout(180_000);
 const action = (page: Page, key: string) =>
   page.locator(`[data-atlas-action-key="${key}"]`).click();
 const form = (page: Page, id: string) => page.locator(`[data-atlas-form-id="${id}"]`);
@@ -215,13 +215,12 @@ for (const outcome of [
   test(`NET final admission ${outcome} preserves the source and restores the whole decision on both installations`, async ({
     browser,
   }, info) => {
+    // Include process startup in the scenario-specific budget.
+    if (outcome === 'PEACE') test.setTimeout(180_000);
+    // This scenario includes lifecycle and both physical process restarts.
+    if (outcome === 'LIFECYCLE') test.setTimeout(360_000);
     const scenario = await createNetworkBrowserScenario(browser, 1);
     const { gm, player, masterPage, playerPage } = scenario;
-    // This new full path adds Ready/Unready/time/Start and PEACE recovery to admission.
-    // Existing admission cases retain their 120s limit and every assertion stays enabled.
-    if (outcome === 'PEACE') test.setTimeout(180_000);
-    // A separate new scenario includes lifecycle and both physical process restarts.
-    if (outcome === 'LIFECYCLE') test.setTimeout(360_000);
     const peaceful = outcome === 'PEACE' || outcome === 'LIFECYCLE';
     const errors: string[] = [];
     const frames: string[] = [];

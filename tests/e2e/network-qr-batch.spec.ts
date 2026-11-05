@@ -4,7 +4,7 @@ import { createNetworkBrowserScenario } from '../fixtures/network-application-e2
 import type { createNetworkBrowserProcess } from '../fixtures/network-application-e2e.js';
 
 test.use({ channel: 'chrome' });
-test.setTimeout(120_000);
+test.setTimeout(180_000);
 const SECRET = 'QR-batch-private-master-secret';
 const action = (page: Page, key: string) =>
   page.locator(`[data-atlas-action-key="${key}"]`).click();

@@ -23,6 +23,8 @@ const LOCAL_CHARACTER_PORTRAITS = join(ARTIFACTS_DIR, 'local-character-portraits
 const SYMBIONT_MEDIA = join(ARTIFACTS_DIR, 'symbiont-media');
 
 export const ARTIFACT = {
+  gmEntityPortraitDirectory: join(ARTIFACTS_DIR, 'gm-entity-portraits'),
+  gmEntityPortraitManifest: join(ARTIFACTS_DIR, 'gm-entity-portraits', 'manifest.json'),
   atlasJson: join(ATLAS, 'Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json'),
   atlasMd: join(ATLAS, 'Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md'),
   rules: join(REGISTRIES, 'Symbiosis_V7_Executable_Rules_Registry_v1.7.xlsx'),

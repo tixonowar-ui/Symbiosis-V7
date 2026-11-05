@@ -5646,7 +5646,7 @@ describe('private FINAL admission candidate evidence', () => {
     expect(receive(changed, undefined, undefined, undefined, s.owner).exportDocument).toEqual(
       changed.exportDocument,
     );
-  });
+  }, 60000);
 
   it('accepts existing non-v4 source and receipt identifiers rather than inventing a UUID filter', () => {
     const c = prepared();

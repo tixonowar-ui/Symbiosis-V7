@@ -2454,7 +2454,7 @@
     },
     "Сохранить идентичность и продолжить": {
       "from": "ENM-005",
-      "guard": "UI-CMD-ENEMY-DRAFT-PATCH stage=SENTIENT_IDENTITY",
+      "guard": "UI-CMD-ENEMY-DRAFT-PATCH stage=SENTIENT_IDENTITY; massKg=30..500 inclusive at exact 0.1kg step; no sex",
       "kind": "workflow-command",
       "to": "ENM-006",
       "trigger": "Сохранить идентичность и продолжить"
@@ -2566,14 +2566,14 @@
     },
     "Однократно сгенерировать характеристики": {
       "from": "ENM-012",
-      "guard": "rollOnceStatus=NOT_ROLLED",
+      "guard": "Host-bound originFormId=ENM-012 creation attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=NOT_ROLLED and no persisted RandomStatsReceipt for this attempt.",
       "kind": "normative",
       "to": "ENM-018",
       "trigger": "Однократно сгенерировать характеристики"
     },
     "Сохранить характеристики и HP и продолжить": {
       "from": "ENM-012",
-      "guard": "UI-CMD-ENEMY-DRAFT-PATCH stage=MONSTER_STATS",
+      "guard": "UI-CMD-ENEMY-DRAFT-PATCH stage=MONSTER_STATS; massKg=5..10000 inclusive at exact 0.1kg step; no sex or race",
       "kind": "workflow-command",
       "to": "ENM-013",
       "trigger": "Сохранить характеристики и HP и продолжить"
@@ -2589,7 +2589,7 @@
     },
     "Сохранить физику и продолжить": {
       "from": "ENM-013",
-      "guard": "UI-CMD-ENEMY-DRAFT-PATCH stage=MONSTER_PHYSICS",
+      "guard": "UI-CMD-ENEMY-DRAFT-PATCH stage=MONSTER_PHYSICS; massKg=5..10000 inclusive at exact 0.1kg step; no sex or race",
       "kind": "workflow-command",
       "to": "ENM-014",
       "trigger": "Сохранить физику и продолжить"
@@ -2644,6 +2644,20 @@
     }
   },
   "ENM-017": {
+    "Открыть квитанцию броска этой версии": {
+      "from": "ENM-017",
+      "guard": "Host-bound originFormId=ENM-017 version attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=COMMITTED and the same persisted attempt-bound RandomStatsReceipt exists; read-only, no RNG.",
+      "kind": "subflow",
+      "to": "ENM-019",
+      "trigger": "Открыть квитанцию броска этой версии"
+    },
+    "Открыть однократный бросок новой версии": {
+      "from": "ENM-017",
+      "guard": "Host-bound originFormId=ENM-017 version attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=NOT_ROLLED and no persisted RandomStatsReceipt for this attempt.",
+      "kind": "subflow",
+      "to": "ENM-018",
+      "trigger": "Открыть однократный бросок новой версии"
+    },
     "Отменить новую версию": {
       "from": "ENM-017",
       "guard": "prior currentVersion unchanged",
@@ -2662,17 +2676,47 @@
   "ENM-018": {
     "Вернуться без генерации": {
       "from": "ENM-018",
-      "guard": "rollOnceStatus=NOT_ROLLED",
+      "guard": "Host-bound originFormId=ENM-012 creation attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=NOT_ROLLED and no persisted RandomStatsReceipt for this attempt. No mutation in flight; return without rolling.",
       "kind": "normative",
       "to": "ENM-012",
       "trigger": "Вернуться без генерации"
     },
+    "Вернуться к новой версии": {
+      "from": "ENM-018",
+      "guard": "Host-bound originFormId=ENM-017 version attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. No mutation in flight; Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
+      "kind": "safe-return",
+      "to": "ENM-017",
+      "trigger": "Вернуться к новой версии"
+    },
+    "Вернуться к новой версии без генерации": {
+      "from": "ENM-018",
+      "guard": "Host-bound originFormId=ENM-017 version attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=NOT_ROLLED and no persisted RandomStatsReceipt for this attempt. No mutation in flight; return without rolling.",
+      "kind": "safe-return",
+      "to": "ENM-017",
+      "trigger": "Вернуться к новой версии без генерации"
+    },
+    "Сгенерировать семь характеристик новой версии один раз": {
+      "from": "ENM-018",
+      "guard": "Host-bound originFormId=ENM-017 version attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=NOT_ROLLED and no persisted RandomStatsReceipt for this attempt. UI-CMD-MONSTER-STATS-ROLL-ONCE guards",
+      "kind": "workflow-command",
+      "to": "ENM-017",
+      "trigger": "Сгенерировать семь характеристик новой версии один раз"
+    },
     "Сгенерировать семь характеристик один раз": {
       "from": "ENM-018",
-      "guard": "UI-CMD-MONSTER-STATS-ROLL-ONCE guards",
+      "guard": "Host-bound originFormId=ENM-012 creation attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=NOT_ROLLED and no persisted RandomStatsReceipt for this attempt. UI-CMD-MONSTER-STATS-ROLL-ONCE guards",
       "kind": "workflow-command",
       "to": "ENM-012",
       "trigger": "Сгенерировать семь характеристик один раз"
+    }
+  },
+  "ENM-019": {
+    "Вернуться к новой версии с прежней квитанцией": {
+      "from": "ENM-019",
+      "guard": "Host-bound originFormId=ENM-017 version attempt. Current authenticated campaign GM; bound CUSTOM_MONSTER attempt and attemptRevision are current; for ENM-017 origin templateId/expectedCurrentVersion still match; no conflicting pending operation. rollOnceStatus=COMMITTED and the same persisted attempt-bound RandomStatsReceipt exists; read-only, no RNG. Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
+      "kind": "safe-return",
+      "to": "ENM-017",
+      "trigger": "Вернуться к новой версии с прежней квитанцией"
     }
   },
   "ENM-024": {
@@ -3832,7 +3876,7 @@
     },
     "Продолжить к расе, классу и анатомии": {
       "from": "NPC-002",
-      "guard": "identity fields valid",
+      "guard": "NPC identity fields valid; sex is MALE|FEMALE; massKg>0 at exact 0.1kg step; race/sex bounds must pass NPC-011 and NPC-017 before save",
       "kind": "normative",
       "to": "NPC-011",
       "trigger": "Продолжить к расе, классу и анатомии"
@@ -3862,7 +3906,7 @@
     },
     "Создать новую полную версию N+1": {
       "from": "NPC-003",
-      "guard": "UI-CMD-NPC-NEW-VERSION initializes full wizard from current snapshot",
+      "guard": "Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot.",
       "kind": "workflow-command",
       "to": "NPC-002",
       "trigger": "Создать новую полную версию N+1"
@@ -3878,7 +3922,7 @@
     },
     "Создать новую полную версию N+1": {
       "from": "NPC-007",
-      "guard": "UI-CMD-NPC-NEW-VERSION guards",
+      "guard": "Sole current authenticated campaign GM; persistent non-archived NPC; current campaign/npcUuid and expectedCurrentVersion match. UI-CMD-NPC-NEW-VERSION phase=OPEN is allowed only from NPC-003/NPC-007 and creates only a bound full-edit attempt from the current snapshot, without changing NPC/currentVersion/history; active combat retains its pinned prior snapshot.",
       "kind": "workflow-command",
       "to": "NPC-002",
       "trigger": "Создать новую полную версию N+1"
@@ -4043,12 +4087,12 @@
       "to": "NPC-003",
       "trigger": "Открыть сохранённый лист после receipt"
     },
-    "Сохранить NPC v1 атомарно": {
+    "Сохранить NPC атомарно": {
       "from": "NPC-017",
-      "guard": "UI-CMD-NPC-COMMIT-V1 guards",
+      "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history.",
       "kind": "workflow-command",
       "to": "NPC-003",
-      "trigger": "Сохранить NPC v1 атомарно"
+      "trigger": "Сохранить NPC атомарно"
     }
   },
   "PLY-001": {

@@ -104,10 +104,7 @@
       "J-ENEMY-GENERATOR"
     ],
     "states": [
-      "DRAFT",
-      "VERSIONED",
-      "ARCHIVED",
-      "RUNTIME_CLONE"
+      "VERSIONED"
     ]
   },
   {

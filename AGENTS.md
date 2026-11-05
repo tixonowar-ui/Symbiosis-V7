@@ -14,10 +14,10 @@ Offline-first LAN-приложение с **единственным автор�
 `player`, `gm`, `system`. Целевая платформа — Windows 10 (1809+) / 11 x64.
 
 Проект строится **от поставленных артефактов**, а не от кода. В `artifacts/`
-лежат 22 поставленных файла: двенадцать xlsx (шесть предметных реестров,
+лежат 25 поставленных файлов: двенадцать xlsx (шесть предметных реестров,
 Soundtrack, Q&A, манифест поставки, отчёт аудита и два mapping-файла #139),
 атлас UI в json+md, замороженный Runtime Pack, manifest и шесть портретов
-локального персонажа. Mapping-файлы содержат 23 арта и 23 изображения деревьев
+локального персонажа, manifest GM-арта и две заглушки врагов (#186). Mapping-файлы содержат 23 арта и 23 изображения деревьев
 с явным SpeciesKey; `tools/import/symbiont-media` детерминированно извлекает их
 в `generated/media`. Всё игровое содержимое — формулы, пороги, названия,
 ограничения — берётся оттуда.
@@ -144,7 +144,7 @@ Actions `e2e-diagnostics-<номер попытки workflow>` на 14 дней.
 ```
 artifacts/          READ-ONLY. Поставленные артефакты. Менять запрещено
   registries/       10 xlsx — реестры, манифест, отчёт аудита
-  atlas/            Atlas UI: JSON и Markdown amendment v1.9 в legacy-файлах v1.2
+  atlas/            Atlas UI: JSON и Markdown amendment v1.10 в legacy-файлах v1.2
   packs/            Runtime Pack v1.2 (zip) — заморожен побайтово
   symbiont-media/   2 xlsx — 23 арта и 23 дерева; импорт по SpeciesKey работает
   CHECKSUMS.sha256  единственный файл, который туда пишет инструмент
@@ -176,7 +176,7 @@ tests/
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              76 ADR-записей + README. Статусы решений указаны в реестре
+  adr/              77 ADR-записей + README. Статусы решений указаны в реестре
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

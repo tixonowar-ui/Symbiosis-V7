@@ -1,7 +1,7 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1700
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1706
  * transitions, 66 journeys, 91 requirements, 2449 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
@@ -37,14 +37,19 @@ import {
   assertAdr0075CampaignSettingsMarkdown,
 } from './campaign-settings-atlas-contract.js';
 
+import {
+  assertAdr0077GmSources,
+  assertAdr0077GmSourcesMarkdown,
+} from './gm-entity-atlas-contract.js';
+
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.9';
+const ATLAS_VERSION = '1.10';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.9 has 1,264 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_264;
+/** Atlas v1.10 has 1,270 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_270;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -1253,13 +1258,20 @@ const ADR0049_QNA_CHANNELS = [
       'CHR-020',
       'CHR-025',
       'CHR-033',
+      'ENM-005',
+      'ENM-010',
+      'ENM-012',
+      'ENM-013',
+      'ENM-016',
+      'ENM-017',
       'NET-019',
       'NET-021',
+      'NPC-002',
       'NPC-011',
-      'ENM-013',
+      'NPC-017',
     ],
     scenario:
-      'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
+      'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, ENM-005, ENM-010, ENM-012, ENM-013, ENM-016, ENM-017, NET-019, NET-021, NPC-002, NPC-011, NPC-017: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
   },
 ] as const;
 
@@ -1272,7 +1284,7 @@ const ADR0049_AQA004 = {
 } as const;
 
 const ADR0049_QCHAR010_EFFECTIVE_SUFFIX =
-  'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019, NET-021, NPC-011 and ENM-013.';
+  'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019 and NET-021; NPC humanoid anatomy, monster TORSO-only semantics and every non-conflicting original provision remain effective.';
 
 type Adr0049Action = (typeof ADR0049_ACTIONS)[number] | typeof ADR0052_ACTION;
 type Adr0049Transition = (typeof ADR0049_TRANSITIONS)[number] | typeof ADR0052_TRANSITION;
@@ -1601,18 +1613,18 @@ function adr0049CheckQnaChannels(
 
 /** ADR 0049 pins every new channel and every independent JSON mirror. */
 export function assertAdr0049MissingChannels(root: JsonObject): void {
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-04');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_700);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_706);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_700,
+    1_706,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1814,19 +1826,19 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
 
 /** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
 export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.9');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.10');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-04');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_700);
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_706);
   expectCount(
     WHERE,
     'ADR 0052 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_700,
+    1_706,
   );
 
   const advisor = adr0049Form(forms, 'CHR-041');
@@ -4103,8 +4115,8 @@ function adr0069Row(root: JsonObject, target: string, id: string): JsonObject {
   );
 }
 export function assertAdr0069RequestReview(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.9');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-02');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.10');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-04');
   for (const expected of ADR0069_AUTHORITY_CONTRACTS) {
     const form = adr0069Row(root, 'forms', expected.id);
     for (const [key, value] of Object.entries(expected.fields))
@@ -4118,7 +4130,7 @@ export function assertAdr0069RequestReview(root: JsonObject): void {
   const counts = asObject(root['counts'], WHERE, 'counts');
   for (const [key, count] of Object.entries({
     forms: 376,
-    transitions: 1700,
+    transitions: 1706,
     workflowCommands: 112,
     qaScenarios: 2449,
   })) {
@@ -4261,6 +4273,8 @@ export async function importAtlas(): Promise<AtlasImport> {
   assertAdr0052AdvisorIntelligenceFloor(root);
   assertAdr0069RequestReview(root);
   assertAdr0071Admission(root);
+  assertAdr0077GmSources(root);
+  assertAdr0077GmSourcesMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0075CampaignSettings(root);
   assertAdr0075CampaignSettingsMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0073LobbyStart(root);

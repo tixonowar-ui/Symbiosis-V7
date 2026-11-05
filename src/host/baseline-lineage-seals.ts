@@ -36,6 +36,23 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '6a11ef9453cdd4fbe861a7c65b6c9227cc928b5c40aebaa784ead2eca7e41e89',
   },
+  // ADR 0077 / #186: exact Atlas plus three approved GM art paths; no mechanics change.
+  gmSourceBaselineVersion:
+    'sha256:8487957025cf3bb29f892f057b924d7f44c5db214e8ea3fda427132e78e0f40c',
+  gmSourceAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'a4f23d8282acecdf1e8209b53cc8fab196c169db14d9b31af4d504666b45003a',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '8b66f22b88eda02345ad3e0933d218467da533c801f8781f2d349a4260aae558',
+  },
+  gmSourceAddedArtifacts: {
+    'gm-entity-portraits/manifest.json':
+      '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
+    'gm-entity-portraits/symbiosis_placeholder_monster.png':
+      '563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86',
+    'gm-entity-portraits/symbiosis_placeholder_sentient_enemy.png':
+      '5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f',
+  },
   replayCatalogDigests: {
     'generated/spec/character/classes.json':
       '6bfdb854b7d3158c882017a2b89314795dd88f674b540a91e89fdea1db0c62e6',

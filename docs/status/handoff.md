@@ -1,4 +1,171 @@
-# Передача контекста — 2026-11-04
+# Передача контекста — 2026-11-05
+
+## Windows 8.3 в Git oracle — 2026-11-05
+
+Clean12 на exact64da прошёл все пять этапов; [CI 42021257458](https://github.com/tixonowar-ui/Symbiosis-V7/actions/runs/42021257458)
+того же SHA завершился 5011 PASS / 10 FAIL: сравнение Git root отвергало
+`RUNNER~1` и `runneradmin` до git apply. Это ошибка сравнения двух форм пути,
+не flaky/timeout. На реальном 8.3 TEMP исходные 86 случаев дали 76 PASS / 10 FAIL
+за 8,70 с; после `realpathSync.native` с обеих сторон — 86/86 PASS за 19,09 с.
+Теперь выполняется и Git apply, поэтому ускорение из этих времён не выводится.
+Строгое равенство root, пустой prefix, assertions и все seals сохранены.
+Локальный clean12 не заменяет CI; новый SHA требует свежих полного gate и CI.
+После подтверждённого merge #186 — остановка, #204/#187/#188 отложены.
+
+## Clean11 и два согласованных лимита — 2026-11-05 (Москва)
+
+Clean11 exact8694 завершился FAIL: 4799 PASS / 2 FAIL и два worker-startup
+errors; 220 случаев не исполнены, E2E не достигнут.
+[Сохранённый результат](https://github.com/tixonowar-ui/Symbiosis-V7/issues/204#issuecomment-6655164681).
+Изолированный запуск двух отсутствовавших файлов: 220/220 PASS за 14,99 с;
+это не доказательство устранения отказа под полной нагрузкой.
+Владелец принял только metadata/reopen test body 30 → 60 с и confirmed-disconnect
+PEACE beforeEach 30 → 60 с. Остальные budgets, workers, retries и assertions
+неизменны; новый полный gate и CI окончательного SHA ещё ожидаются.
+Актуальная точка остановки: завершить #186 до merge и остановиться;
+#204/#187/#188 отложены, прежняя очередь ниже — историческая.
+
+## Принятые бюджеты проверок — 2026-11-04 UTC
+
+Владелец принял proposal 91d5e348: Node test/hook 30/30 с, web test 15 с;
+точечные admission/restart/initial-time/BIND ACK overrides, IPC READY 60 с
+и обычные network E2E 180 с. PEACE 180 / LIFECYCLE 360 задаются до запуска
+процессов. [Полный scope и история](../process/ci-checks.md#бюджеты-vitest-и-network-e2e).
+CI 60 минут, workers, retries, assertions и остальные явные бюджеты сохранены.
+
+Clean10 на exact9d8af1a с прежними лимитами завершился FAIL: 5020 PASS / 1 FAIL,
+без skipped; 186 файлов прошли, 1 отказал. Vitest — 1582,08 с. Единственный
+отказ — beforeEach в campaign-creation.test.ts:773, Hook timed out in 10000ms.
+Установка, import и предварительные проверки прошли; validate, import:verify
+и E2E не достигнуты. Новый бюджет этим прогоном не проверялся.
+Новый committed SHA потребует независимого review, полного clean gate и CI.
+Предыдущие отказы сохраняются; #204 после #186 должна сократить стоимость
+полного цикла PR, а не завершиться одним увеличением deadline.
+
+## Исторический fixture #186 и clean09 — 2026-11-04
+
+Clean09 exact1092 завершился FAIL: 4933 PASS / 2 FAIL, без skipped; оба отказа
+в beforeEach (создание B0 и admission owner submit). Следующие этапы не достигнуты.
+Diagnostic17 прошёл исходные 15 campaign-creation cases, сохранив все настройки:
+в здоровом B0 setup пять Git applications заняли 3,838 из 5,686 секунды.
+Это измеренная работа, не установленная причина полного отказа.
+
+Fixture теперь использует строгий bytewise applier тех же пяти patches,
+сохраняющий все full seals и проверки после каждого перехода. Независимый
+Git oracle и негативные проверки покрывают отдельный узкий helper. Замена
+не касается production, источников или настройки проверок. Полная история
+и границы находятся в [отчёте проверки](baseline-verification-resources.md).
+
+Авторский прогон: Node TSC/lint и 115/115 тестов трёх файлов PASS.
+Четыре отдельных замера B0 дали baseline 4,934/5,117 с и candidate 1,799/1,722 с;
+входы и sealed outputs совпали. OS cache не контролировался, полного gate ещё нет.
+
+Отдельный diagnostic19: исходный admission case PASS (1 selected / 216 unselected),
+submit 4,192 с; временные файлы восстановлены. Причина прежнего full-load timeout
+не установлена и остаётся в #204. Целевые результаты и старый CI exact336
+не заменяют обязательную новую чистую проверку окончательного SHA.
+#186 и draft PR #219 ещё открыты; очередь #186 → #204 → #187 → #188 сохраняется.
+
+## GM-навигация в проверочном стенде #186 — 2026-11-04
+
+Clean08 exact0bed завершился FAIL: 4933 PASS / 2 FAIL на initial-time setup;
+import:verify и E2E не запускались. Полный инструментированный unit diagnostic15
+также завершился FAIL: 4880 PASS / 3 FAIL / 52 skipped. Все отказы сохранены
+в #204. Общая причина разных setup/operation/cleanup задержек не установлена.
+
+Diagnostic16 сравнил два исходных случая до/после четырёх event-loop границ
+между завершёнными GM-навигациями. Оба варианта прошли; candidate дал фоновому
+CHECK выполниться между отдельными действиями. Его полный case не быстрее,
+timeout не воспроизведён, поэтому устранение исторического отказа не заявлено.
+После независимого ревью принята только эта корректировка стенда: исходный
+первый snapshot assertion сохранён, FORM_ACTION дополнительно связан с точным
+navigationRequestId. После TIME-SET дополнительного ожидания перед poll нет.
+
+[Подробные результаты и ограничения](baseline-verification-resources.md).
+В новый кандидат входят bounded verifier и минимальная правка тестового
+setup; production transport, budgets, workers и retries не меняются.
+Новый committed SHA требует свежего независимого review, одной новой чистой
+копии всех пяти стадий и зелёного CI. Прежние targeted PASS и CI exact336
+не заменяют эти gates. #186 ещё не завершена, #204 открыта; очередь остаётся
+#186 → #204 → #187 → #188. При новом полном отказе — диагностика, не blind retry.
+
+## Проверка baseline #186 — 2026-11-04
+
+Clean03 exact336 завершился 42/44 E2E; clean04 остановился в verify на
+beforeAll admission (4703 PASS/217 skipped). Оба отказа сохранены в #204.
+Зелёный CI 41756048573 exact336 не заменяет локальный gate. Prefix06 повторил
+отказ при проверке supplied bytes до шести FINAL fixtures: из наблюдаемых
+9,086 с на read-await завершённых файлов пришлось 8,184 с, process CPU281 мс.
+Причина физического I/O, scheduling или paging этим не установлена.
+
+Временный prototype08 после прежнего пятикомандного prefix прошёл все
+358 тестов четырёх suites за 1193,32 с без изменения лимитов и assertions.
+Все пять временных файлов восстановлены, семь исходных clean04 evidence files
+не изменены. Наблюдаемые baseline maxima arrayBuffers05→08 снизились
+80 346 569→11 821 626 байт; это snapshots, не истинные peaks или доказательство
+устранения timeout. [Границы замера и правки](baseline-verification-resources.md).
+
+Авторская копия на D прошла собственные npm ci/import, Node TSC, targeted lint
+и 52/52 теста пяти baseline suites, включая 15 новых integrity cases.
+Первый lint отказал на type-only import; исправление и обе попытки сохранены.
+Эти целевые проверки не являются полным gate.
+
+В кандидат включается только bounded verifier и его проверки целостности.
+Новый SHA требует свежего независимого review, полного чистого gate и CI.
+#204 остаётся открытой; очередь #186 → #204 → #187 → #188 сохраняется.
+
+## Source #186 и завершение #174 — 2026-11-04
+
+#174 завершена squash PR #217: merge main
+9a06d44a3cdd77ee243e54a88106cafabc97b597, tree
+7bea62a5bc17a8bdcdf247ee094b2e060d8b3d7b точно совпал с проверенным 719533d.
+#174/#208 закрыты 2026-11-03T23:59:41Z. Независимые code review и аудит
+отдельного clean04 подтверждены; npm ci → import → verify → import:verify →
+test:e2e: 4854/182, 319 exact generated paths, 44/44 E2E без retries.
+CI 41738795009 attempt1 и size 41738795207 прошли; HTML подтверждает
+44 первых попытки без flaky. Длительность CI verify 28m57, E2E 10.3m.
+Предыдущие FAIL сохранены в #204; это не заявление о решении всей нестабильности.
+
+Следующая авторизованная очередь: #186 → #204 → #187 → #188, squash каждой,
+независимое ревью, отдельная чистая копия всех пяти этапов, зелёный CI точного
+SHA, равенство дерева main и фактическое закрытие. Разрешения A/B/C/D+art #186
+и поставки #208 уже получены; повторное подтверждение не требуется.
+
+Для #186 фактическая база — Atlas1.9/B4; старые proposals1.6 перенесены точно,
+с тремя явными адаптациями GM-001. Новый Atlas1.10/B5 сохраняет 72 NET/CHR
+формы и прежнюю общую GM authority. C/D закрывают OPEN/COMMIT и bound monster
+child/receipt, включая SENTIENT null variant. Независимые предварительные
+ревью нашли и помогли исправить противоречивые states/fields/QA и Markdown
+table gaps. Их охват не подменяет финальный committed-SHA review.
+
+Новые source paths — gm-entity-portraits manifest и две PNG; все 20 прежних
+non-Atlas bytes и 24 механических replay inputs сохраняются. Новый импорт
+создаёт восемь mappings и две media, без ручных generated правок. Первоначальный
+seed counter 20342 был ошибочен: CTA вложены, не отдельные SQLite rows.
+Отказ import-01 сохранён; import-02 подтвердил 115 arrays/20336 rows/10 meta.
+Typecheck-01 нашёл две unsafe indexed reads в тестовой порче bytes; они
+исправлены без изменения assertions, typecheck-02 прошёл. Логи текущих
+целевых проверок — reports/186-source. Финальные пять этапов и CI ещё не
+заявлены; результаты окончательного SHA фиксируются в PR этой поставки.
+
+Полный clean02 на 54893bf завершился FAIL: 4899 PASS / 7 FAIL / 14 skipped,
+185 файлов, 1227,90 с Vitest. Семь assertions отказали из-за старого manifest
+count22, трёх Q-CHAR-010 test literals и CLI whitelist probe без sourceB4/targetB5.
+Эти точные ожидания исправлены; весь probe дополнительно прочитан независимо.
+Его прежние пять отказов происходили до replay, не доказывали ошибку runtime.
+Отдельный beforeAll lineage превысил прежние 10 с; его 14 случаев отдельно
+прошли без изменения лимитов. Фазовый cold fixture замер выделил Git apply
+как основную стоимость. Убрано только повторное SHA одних private buffers:
+identify 187→49 мс, но fixture+loader суммарно остались около 4,015 с в одном
+сравнении. Это не установленная причина или исправление полного timeout.
+Node CPU не включает Git children; physical I/O этим замером не измерялось.
+Полный log SHA-256 546d2e1cec795551d67c7e44e866cc945fc4223284ba51ad760764a29a9690e4
+сохранён вместе с clean02 manifest; targeted/phase evidence — reports/186-*.
+Новый committed SHA требует заново все пять стадий и CI. #204 остаётся открытой.
+
+Runtime NPC/ENM controls относятся к #187/#188; #113 не закрывать поставкой
+источников. Прежние лимиты PR применяются без исключений прошлых задач.
+Лимиты Vitest15/LIFECYCLE360/RETRY40+40/NAV15/CI60 сохранены.
 
 ## Каноническое кодирование и оставшийся CI gate #174 — 2026-11-04
 

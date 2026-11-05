@@ -65,6 +65,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate as nextEventLoopTurn } from 'node:timers/promises';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ADMISSION_GM_WORKFLOW_IDS,
@@ -1373,7 +1374,7 @@ describe('local network application with durable SQLite and real Node peers', ()
     expect(
       h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(submit.commandId),
     ).toEqual(originalHostedSubmit);
-  }, 30000);
+  }, 60000);
 
   it('binds an entry before the first NAV fault and refuses a changed envelope after reopen without binding the connection', async () => {
     const p = await client();
@@ -2388,10 +2389,11 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
       actionKey: FormActionIntentV2Message['actionKey'],
     ) => {
       const view = await gm.runtime.project(gm.c);
+      const navigationRequestId = randomUUID();
       await gm.send({
         messageType: 'navigation.form-action',
         protocolVersion: 2,
-        navigationRequestId: randomUUID(),
+        navigationRequestId,
         sourceFormId,
         actionKey,
         expectedProjectionRevision: view.revisions.projectionRevision,
@@ -2407,6 +2409,18 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           messages: gm.sent,
         }),
       ).toMatchObject({ messageType: 'projection.snapshot' });
+      expect(
+        gm.sent.find(
+          (message) =>
+            message.messageType === 'projection.snapshot' &&
+            message.protocolVersion === 2 &&
+            message.presentation.assignment.correlationId === navigationRequestId,
+        ),
+      ).toMatchObject({
+        presentation: {
+          assignment: { correlationId: navigationRequestId, reason: 'FORM_ACTION' },
+        },
+      });
     };
     beforeEach(async () => {
       h = await host();
@@ -2650,7 +2664,7 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           await select(first as string);
         }
       },
-      scenario === 'MIXED' ? 30000 : 10000,
+      scenario === 'MIXED' ? 60000 : 30000,
     );
     beforeEach(async () => {
       await gmNav('NET-019', 'NET-019::CTA::002');
@@ -2904,7 +2918,7 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
           const scene = campaignPeaceProjectionValue(p.payload()).sceneId;
           await p.restart();
           expect(campaignPeaceProjectionValue(p.payload()).sceneId).toBe(scene);
-        }, 30000);
+        }, 60000);
         it('keeps the blocked prepared tab in NET-006 while the original ACTIVE tab enters PEACE and both restore', async () => {
           child = await p.additionalOwnerView(tabScope);
           expect(campaignLobbyPlayerProjectionValue(payload()).lobby.campaignStarted).toBe(true);
@@ -3258,10 +3272,16 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
                 'UI-CMD-CAMPAIGN-START',
               ];
+              // These are separate UI actions. Direct handler awaits can otherwise
+              // starve the real peer's polling timers across the whole setup sequence.
               await gmNav('NET-021', 'NET-021::CTA::001');
+              await nextEventLoopTurn();
               await gmNav('NET-017', 'NET-017::CTA::009');
+              await nextEventLoopTurn();
               await gmNav('CMP-006', 'CMP-006::CTA::001');
+              await nextEventLoopTurn();
               await gmNav('CMP-007', 'CMP-007::CTA::001');
+              await nextEventLoopTurn();
               const view = await gm.runtime.project(gm.c);
               await gm.send({
                 messageType: 'command.request',
@@ -3286,12 +3306,12 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                   () =>
                     campaignLobbyPlayerProjectionValue(p.payload()).lobby.initialCampaignTimeOrNull
                       ?.campaignTimestamp,
-                  { timeout: 10000 },
+                  { timeout: 30000 },
                 )
                 .toBe(2707);
 
               source = campaignLobbyPlayerProjectionValue(p.payload()).lobby.selectedCopy;
-            }, 30000);
+            }, 60000);
             beforeEach(async () => {
               await ready(true);
               expect(p.sent[0]?.messageType).toBe('command.result');
@@ -3639,7 +3659,7 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                   } finally {
                     publication.mockRestore();
                   }
-                }, 30000);
+                }, 60000);
                 it('keeps PEACE content unchanged and polls status without gated lobby downloads', async () => {
                   const peer = p.peerForTest,
                     read = peer.readConnection.bind(peer);

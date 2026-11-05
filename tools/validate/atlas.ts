@@ -61,28 +61,28 @@ const NO_SECTION = ['', ''] as const;
 export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.9',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.10',
     retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.9 |',
+    current: '| Версия атласа | 1.10 |',
     retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-11-02 |',
+    current: '| Дата | 2026-11-04 |',
     retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-transition-count',
-    current: '1700',
+    current: '1706',
     retired: '1681',
     expected: 2,
     section: NO_SECTION,
@@ -534,7 +534,7 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'qchar010-qna-registry',
     current:
-      '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013 | CURATED_QNA_FORM_OVERRIDE |',
+      '| 306 | Q-CHAR-010 | Закрыт | CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, ENM-005, ENM-010, ENM-012, ENM-013, ENM-016, ENM-017, NET-019, NET-021, NPC-002, NPC-011, NPC-017 | CURATED_QNA_FORM_OVERRIDE | MATERIALIZED_WITH_LATER_AUTHOR_OVERRIDE | Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря? | До финальной проверки масса обязательна как положительное число килограммов с точностью 0,1. Приложение показывает справочные средние значения расы из рулбука, но не вводит выдуманных автоматических минимумов/максимумов; значение становится pendingMasterApproval. Персонажа с неподтверждённой массой можно отправить в запрос и добавить в лобби, но он не может стать активным, получить статус «Готов», войти в сцену или участвовать в запуске сессии до подтверждения массы мастером. Игровые расы получают стандартную гуманоидную анатомию и зоны попадания из V7; произвольная анатомия доступна только отдельному редактору существа у мастера (для НПС так же доступна только гуманоидная анатомия). Произвольная анатомия задается чек-боксом, если он заполнен, атака в любую часть существа считается атакой по корпусу. Никаких других особенностей произвольной анатомии приложение не учитывает. При выборе Совы игрок выбирает правый или левый глаз, по умолчанию правый; при выборе Угря — правую или левую руку, по умолчанию правую. Клещ всегда привязан к правой руке, Паук — к обоим запястьям, Богомол — к обоим предплечьям. Эти привязки сохраняются в листе и используются при потере/отключении соответствующей части тела. | Later author decision 2026-08-18 applies only to local character creation: CHR-001 requires sex=MALE\\|FEMALE, mutable until the IDENTITY checkpoint and immutable after it, while its massKg input remains any positive value at the existing exact 0.1kg step. CHR-025 validates inclusive creation massKg bounds by race/sex: PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg; massApprovalStatus=PENDING_GM remains after range validation. These bounds are not reference race averages. For CHR-025 this override replaces only the conflicting no-minimum/maximum statement; the original approval and anatomy semantics remain effective. Owner decision #113 (2026-08-19; artwork clarification 2026-10-26) additionally applies to GM-created NPC and user enemy templates: NPC requires sex=MALE\\|FEMALE and uses inclusive massKg bounds PURE/MALE=60..400kg, PURE/FEMALE=40..350kg, UNITED/MALE=30..150kg, UNITED/FEMALE=25..120kg, FREE/MALE=40..200kg, FREE/FEMALE=30..160kg; user SENTIENT uses inclusive massKg=30..500kg independent of race and has no sex; CUSTOM_MONSTER uses inclusive massKg=5..10000kg and has neither sex nor race. All retain the exact 0.1kg step. Validate before saving v1 or N+1; these are not reference averages and do not migrate immutable existing versions or the 44 frozen system templates. The CHR-only sex checkpoint rule is not extended to NPC. The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019 and NET-021; NPC humanoid anatomy, monster TORSO-only semantics and every non-conflicting original provision remain effective. | QA-QNA-Q-CHAR-010-ROW-306 |',
     retired: '',
     expected: 1,
     section: NO_SECTION,
@@ -566,7 +566,7 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'qchar010-scenario',
     current:
-      'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, NET-019, NET-021, NPC-011, ENM-013: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
+      'Подтвердить материализацию строки Q&A в CHR-001, CHR-018, CHR-020, CHR-025, CHR-033, ENM-005, ENM-010, ENM-012, ENM-013, ENM-016, ENM-017, NET-019, NET-021, NPC-002, NPC-011, NPC-017: Где при создании задаются масса и анатомия, какие значения допустимы и как выбирается сторона для Совы и Угря?',
     retired: '',
     expected: 1,
     section: NO_SECTION,
@@ -574,7 +574,7 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'qchar010-effective-suffix',
     current:
-      'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019, NET-021, NPC-011 and ENM-013.',
+      'The original answer remains effective for CHR-018, CHR-020, CHR-033, NET-019 and NET-021; NPC humanoid anatomy, monster TORSO-only semantics and every non-conflicting original provision remain effective.',
     retired: '',
     expected: 1,
     section: NO_SECTION,
@@ -593,28 +593,28 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
 export const ATLAS_MARKDOWN_ADR0052_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.9',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.10',
     retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.9 |',
+    current: '| Версия атласа | 1.10 |',
     retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-11-02 |',
+    current: '| Дата | 2026-11-04 |',
     retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-transition-count',
-    current: '1700',
+    current: '1706',
     retired: '1681',
     expected: 2,
     section: NO_SECTION,
@@ -2347,7 +2347,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-59-0',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.9',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.10',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2355,7 +2355,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-59-0',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.9',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.10',
     retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: ['', ''],
@@ -2363,7 +2363,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-60-0',
-    current: '| Версия атласа | 1.9 |',
+    current: '| Версия атласа | 1.10 |',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2371,7 +2371,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-60-0',
-    current: '| Версия атласа | 1.9 |',
+    current: '| Версия атласа | 1.10 |',
     retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: ['', ''],
@@ -2379,7 +2379,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-61-0',
-    current: '| Дата | 2026-11-02 |',
+    current: '| Дата | 2026-11-04 |',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2387,7 +2387,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-61-0',
-    current: '| Дата | 2026-11-02 |',
+    current: '| Дата | 2026-11-04 |',
     retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: ['', ''],
@@ -2395,7 +2395,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-62-0',
-    current: '| Переходы | 1700 |',
+    current: '| Переходы | 1706 |',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2403,7 +2403,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-62-0',
-    current: '| Переходы | 1700 |',
+    current: '| Переходы | 1706 |',
     retired: '| Переходы | 1681 |',
     expected: 1,
     section: ['', ''],
@@ -2412,7 +2412,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   {
     id: 'request-review-63-0',
     current:
-      'Итог: **376 форм, 1700 переходов, 66 journeys, 91 требований, 112 workflow-команд и 2449 QA-сценариев; открытых UX-вопросов нет.**',
+      'Итог: **376 форм, 1706 переходов, 66 journeys, 91 требований, 112 workflow-команд и 2449 QA-сценариев; открытых UX-вопросов нет.**',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2421,7 +2421,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   {
     id: 'request-review-retired-63-0',
     current:
-      'Итог: **376 форм, 1700 переходов, 66 journeys, 91 требований, 112 workflow-команд и 2449 QA-сценариев; открытых UX-вопросов нет.**',
+      'Итог: **376 форм, 1706 переходов, 66 journeys, 91 требований, 112 workflow-команд и 2449 QA-сценариев; открытых UX-вопросов нет.**',
     retired:
       'Итог: **376 форм, 1681 переходов, 66 journeys, 91 требований; открытых UX-вопросов нет.**',
     expected: 1,

@@ -1,18 +1,33 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { BASELINE_LINEAGE_SEALS } from '../../src/host/baseline-lineage-seals.js';
+import {
+  FIXTURE_ATLAS_PATHS,
+  applyFixtureAtlasPatch,
+  readFixtureAtlas,
+  writeFixtureAtlas,
+  type FixtureAtlasBytes,
+} from './baseline-atlas-patch.js';
 
-export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2' | 'B3' | 'B4';
+export type BaselineFixtureRelease = 'B0' | 'B1' | 'B2' | 'B3' | 'B4' | 'B5';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
 const lobbyPatchPath = fileURLToPath(new URL('./atlas-206-lineage.patch', import.meta.url));
 const settingsPatchPath = fileURLToPath(new URL('./atlas-208-lineage.patch', import.meta.url));
+const gmSourcePatchPath = fileURLToPath(new URL('./atlas-186-lineage.patch', import.meta.url));
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
 );
@@ -23,18 +38,14 @@ const historicalAtlas = {
   'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
     '2514c723b92847ff3d0f392e35cfb041459b589d0ffc2f79d1b60d2e7456f03e',
 };
-type AtlasPath = keyof typeof historicalAtlas;
-type AtlasBytes = Record<AtlasPath, Buffer>;
-const atlasPaths = Object.keys(historicalAtlas) as AtlasPath[];
-const readAtlasBytes = (projectRoot: string): AtlasBytes =>
-  Object.fromEntries(
-    atlasPaths.map((path) => [path, readFileSync(join(projectRoot, 'artifacts', path))]),
-  ) as AtlasBytes;
+type AtlasBytes = FixtureAtlasBytes;
+const atlasPaths = FIXTURE_ATLAS_PATHS;
+const readAtlasBytes = readFixtureAtlas;
 const matchesAtlas = (bytes: AtlasBytes, digests: Readonly<Record<string, string>>): boolean =>
   atlasPaths.every((path) => sha(bytes[path]) === digests[path]);
 
-// Repeated real git applies dominate these filesystem fixtures. Retain one
-// privately verified byte pair, never catalogs or a production baseline context.
+// Retain only privately verified historical byte pairs, never catalogs or a
+// production baseline context; every hit still requires current source seals.
 let atlasByteCache:
   | {
       readonly patchSha256: string;
@@ -47,6 +58,7 @@ export const BASELINE_FIXTURE_IDS = {
   B2: BASELINE_LINEAGE_SEALS.admissionBaselineVersion,
   B3: BASELINE_LINEAGE_SEALS.lobbyBaselineVersion,
   B4: BASELINE_LINEAGE_SEALS.settingsBaselineVersion,
+  B5: BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
@@ -54,6 +66,7 @@ const releaseAtlas = {
   B2: BASELINE_LINEAGE_SEALS.admissionAtlas,
   B3: BASELINE_LINEAGE_SEALS.lobbyAtlas,
   B4: BASELINE_LINEAGE_SEALS.settingsAtlas,
+  B5: BASELINE_LINEAGE_SEALS.gmSourceAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -63,6 +76,18 @@ export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer
     const prior = historicalAtlas[path as keyof typeof historicalAtlas];
     assert.ok(text.includes(`${prior}  ${path}`));
     text = text.replace(`${prior}  ${path}`, `${digest}  ${path}`);
+  }
+  if (release === 'B5') {
+    const entries = text.trimEnd().split('\n');
+    entries.push(
+      ...Object.entries(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts).map(
+        ([path, digest]) => digest + '  ' + path,
+      ),
+    );
+    text =
+      entries
+        .sort((a, b) => (a.slice(66) < b.slice(66) ? -1 : a.slice(66) > b.slice(66) ? 1 : 0))
+        .join('\n') + '\n';
   }
   const bytes = Buffer.from(text);
   assert.equal(`sha256:${sha(bytes)}`, BASELINE_FIXTURE_IDS[release]);
@@ -75,9 +100,14 @@ export function applyBaselineFixtureRelease(
   release: BaselineFixtureRelease,
 ): void {
   const before = readAtlasBytes(projectRoot);
-  const releases = ['B0', 'B1', 'B2', 'B3', 'B4'] as const;
+  const releases = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5'] as const;
+  // These private bytes cannot change during the synchronous release lookup.
+  // Hash each once instead of rehashing the same JSON for every older release.
+  const beforeDigests = Object.fromEntries(atlasPaths.map((path) => [path, sha(before[path])]));
   const actual =
-    releases.find((candidate) => matchesAtlas(before, releaseAtlas[candidate])) ?? null;
+    releases.find((candidate) =>
+      atlasPaths.every((path) => beforeDigests[path] === releaseAtlas[candidate][path]),
+    ) ?? null;
   assert.notEqual(actual, null, 'fixture requires exact known Atlas bytes');
   const patchSeal = (): string =>
     sha(
@@ -86,6 +116,7 @@ export function applyBaselineFixtureRelease(
         readFileSync(admissionPatchPath),
         readFileSync(lobbyPatchPath),
         readFileSync(settingsPatchPath),
+        readFileSync(gmSourcePatchPath),
       ]),
     );
   const patchSha256 = patchSeal();
@@ -101,7 +132,7 @@ export function applyBaselineFixtureRelease(
         upper = Math.max(position, target);
       let intermediate: AtlasBytes | undefined;
       // Cached bytes were already sealed under these exact patches.
-      // Reuse the closest one instead of spawning git again for that same prefix.
+      // Reuse the closest one instead of applying that same verified prefix again.
       for (let candidate = lower + 1; candidate < upper; candidate += 1) {
         const bytes =
           atlasByteCache?.patchSha256 === patchSha256
@@ -118,33 +149,30 @@ export function applyBaselineFixtureRelease(
           matchesAtlas(intermediate, seal),
           'cached intermediate Atlas differs from its seal',
         );
-        for (const path of atlasPaths)
-          writeFileSync(join(projectRoot, 'artifacts', path), intermediate[path]);
+        writeFixtureAtlas(projectRoot, intermediate, seal);
         assert.ok(matchesAtlas(readAtlasBytes(projectRoot), seal));
       }
       while (position !== target) {
         const reverse = position > target;
         const edge = reverse ? position - 1 : position;
-        execFileSync(
-          'git',
-          [
-            '-c',
-            'core.autocrlf=false',
-            'apply',
-            '--no-index',
-            ...(reverse ? ['--reverse'] : []),
+        const patched = applyFixtureAtlasPatch(
+          readAtlasBytes(projectRoot),
+          readFileSync(
             edge === 0
               ? patchPath
               : edge === 1
                 ? admissionPatchPath
                 : edge === 2
                   ? lobbyPatchPath
-                  : settingsPatchPath,
-          ],
-          { cwd: projectRoot, stdio: 'pipe' },
+                  : edge === 3
+                    ? settingsPatchPath
+                    : gmSourcePatchPath,
+          ),
+          reverse,
         );
         position += reverse ? -1 : 1;
         const reached = releases[position]!;
+        writeFixtureAtlas(projectRoot, patched, releaseAtlas[reached]);
         const bytes = readAtlasBytes(projectRoot);
         assert.ok(
           matchesAtlas(bytes, releaseAtlas[reached]),
@@ -154,8 +182,7 @@ export function applyBaselineFixtureRelease(
       }
     } else {
       assert.ok(matchesAtlas(cached, expected), 'cached Atlas bytes differ from their seal');
-      for (const path of atlasPaths)
-        writeFileSync(join(projectRoot, 'artifacts', path), cached[path]);
+      writeFixtureAtlas(projectRoot, cached, expected);
     }
   }
   const after = readAtlasBytes(projectRoot);
@@ -169,10 +196,22 @@ export function applyBaselineFixtureRelease(
       [release]: after,
     },
   };
+  // Historical roots must contain exactly their own artifact set, even when the Atlas cache is warm.
+  for (const [path, digest] of Object.entries(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts)) {
+    const target = join(projectRoot, 'artifacts', path);
+    if (existsSync(target))
+      assert.equal(sha(readFileSync(target)), digest, 'fixture GM source bytes changed');
+    if (release === 'B5') {
+      const supplied = readFileSync(join(sourceRoot, 'artifacts', path));
+      assert.equal(sha(supplied), digest, 'supplied GM source bytes differ');
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, supplied);
+    } else if (existsSync(target)) rmSync(target);
+  }
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0/B1/B2/B3/B4 sources are reconstructed through the four reviewed delivery patches. */
+/** Exact B0–B5 sources use the five reviewed Atlas patches and the three sealed B5 art paths. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

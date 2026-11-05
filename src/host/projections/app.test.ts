@@ -133,7 +133,7 @@ describe('APP host projection', () => {
         changed: [],
         missing: [],
         ok: true,
-        tracked: 22,
+        tracked: 25,
         untracked: [],
       },
     });

@@ -9,6 +9,32 @@
 
 ### Добавлено
 
+- **2026-11-04 UTC, бюджеты проверок:** по явному решению владельца Node Vitest
+  получает test/hook 30/30 с; web сохраняет test 15 с. Для отдельных admission,
+  initial-time, BIND ACK и network E2E принят ограниченный запас; PEACE/LIFECYCLE
+  задают прежние бюджеты до запуска процессов. [Точный scope](docs/process/ci-checks.md#бюджеты-vitest-и-network-e2e).
+  CI 60 минут, workers, retries и assertions прежние; #204 остаётся открытой.
+  Дополнение 2026-11-05 (Москва): отдельно согласованы metadata/reopen body
+  и confirmed-disconnect PEACE beforeEach по 60 с; worker-startup ошибки этим не исправлены.
+
+- **2026-11-04, issue #186 (source):** Atlas 1.10 закрывает согласованные
+  sex/mass/art, NPC OPEN→полный wizard→COMMIT N+1 и bound one-shot/receipt
+  channel версии CUSTOM_MONSTER. Добавлены две утверждённые PNG и явные
+  восемь mappings с переиспользованием шести NPC-портретов; импорт проверяет
+  точные bytes/ключи. B0–B4→B5 допускает только три новых art paths, сохраняя
+  механические каталоги и старые FINAL/receipts. Полные JSON/Markdown seals
+  и negative mutations защищают зеркала. [ADR 0077](docs/adr/0077-gm-entity-source-closure.md).
+  Runtime controls остаются отдельными #187/#188; #113 этим не закрывается.
+  Проверка всех supplied hashes использует один private буфер 1 МиБ на загрузку
+  baseline, сохраняя прежний верхний предел размера файла и все guards.
+  Это ограничивает буфер чтения; устранение timeout из #204 не заявляется.
+  В lifecycle-стенде четыре законченных GM-навигации разделены event-loop
+  границами; точный FORM_ACTION подтверждается отдельно от фоновых snapshot.
+  Исторический test fixture применяет те же точные Atlas patches внутри
+  процесса, сохраняя все промежуточные seals и независимый Git oracle.
+  2026-11-05: Git oracle сравнивает обе Windows 8.3 формы через realpathSync.native;
+  строгое равенство root, проверка prefix и все seals сохранены.
+
 - **2026-11-03, CI:** общий предел существующего Windows job `verify` увеличен
   с 30 до 60 минут после прерывания Tests общим deadline в run 41643613044.
   Состав проверок, required checks, индивидуальные лимиты, workers, retries

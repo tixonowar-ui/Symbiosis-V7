@@ -10690,7 +10690,7 @@
       "contextId",
       "stateRevision",
       "projectionRevision",
-      "artAssetKey/filePickerState",
+      "systemTemplateArtAssetKey(read-only; pinned Runtime Pack)",
       "groupId",
       "location/subLocation",
       "markerRevision",
@@ -10818,7 +10818,7 @@
       "name",
       "description",
       "origin",
-      "massKg(number>0; step=0.1)",
+      "massKg(number; 30..500 inclusive; step=0.1)",
       "anatomyProfileId=ORDINARY_SENTIENT",
       "artAssetKey(optional)",
       "affiliation",
@@ -11322,7 +11322,7 @@
       "C",
       "baseMaxHP(integer>=1)",
       "currentHP(read-only; runtime instance initializes to effectiveMaxHP)",
-      "massKg(number>0; step=0.1)",
+      "massKg(number; 5..10000 inclusive; step=0.1)",
       "ageYears(integer>=1)",
       "rollReceiptOrNull",
       "draftRevision",
@@ -11334,7 +11334,7 @@
     "route": "/master/campaigns/:campaignId/enemy-catalog/enm-012",
     "states": {
       "MANUAL_EDIT": "Manual values editable.",
-      "ROLL_COMMITTED": "Generated stats fixed for this draft.",
+      "ROLL_COMMITTED": "Original RandomStatsReceipt is immutable; candidate base stats remain manually editable within CORE-200 1..35, without reroll.",
       "ROLL_NOT_USED": "One-time generation remains available.",
       "STAGE_VALID": "Stats/HP validate.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
@@ -11392,7 +11392,7 @@
     ],
     "requiredFields": [
       "monsterDraftId",
-      "massKg",
+      "massKg(number; 5..10000 inclusive; step=0.1)",
       "ageYears(integer>=1)",
       "baseMaxHP(integer>=1)",
       "naturalArmorDefinition",
@@ -11651,6 +11651,14 @@
         {
           "actionKey": "ENM-017::CTA::005",
           "label": "Отменить новую версию"
+        },
+        {
+          "actionKey": "ENM-017::CTA::006",
+          "label": "Открыть однократный бросок новой версии"
+        },
+        {
+          "actionKey": "ENM-017::CTA::007",
+          "label": "Открыть квитанцию броска этой версии"
         }
       ]
     },
@@ -11679,7 +11687,8 @@
       "changeSet",
       "reason(required)",
       "activeCombatPins[]",
-      "commandId"
+      "commandId",
+      "monsterRollContextOrNull={attemptId,attemptRevision,originFormId=ENM-017,templateId,expectedCurrentVersion,randomStatsReceiptOrNull}"
     ],
     "roles": [
       "gm"
@@ -11717,6 +11726,18 @@
         {
           "actionKey": "ENM-018::CTA::003",
           "label": "Вернуться без генерации"
+        },
+        {
+          "actionKey": "ENM-018::CTA::004",
+          "label": "Вернуться к новой версии"
+        },
+        {
+          "actionKey": "ENM-018::CTA::005",
+          "label": "Сгенерировать семь характеристик новой версии один раз"
+        },
+        {
+          "actionKey": "ENM-018::CTA::006",
+          "label": "Вернуться к новой версии без генерации"
         }
       ]
     },
@@ -11724,8 +11745,8 @@
       "Eligible ranges",
       "One-time warning",
       "Generate once",
-      "Immutable result/receipt",
-      "Continue with fixed stats"
+      "Immutable original roll receipt",
+      "Return to the same attempt with manually editable candidate stats"
     ],
     "contexts": [
       "enemy-catalog"
@@ -11743,14 +11764,18 @@
       "rollOnceStatus=NOT_ROLLED|COMMITTED",
       "generatedStatsOrNull",
       "randomReceiptOrNull",
-      "commandId"
+      "commandId",
+      "attemptId",
+      "attemptRevision",
+      "hostBoundOriginFormId=ENM-012|ENM-017",
+      "versionBindingOrNull={templateId,expectedCurrentVersion}"
     ],
     "roles": [
       "gm"
     ],
     "route": "/master/campaigns/:campaignId/enemy-catalog/enm-018",
     "states": {
-      "COMMITTED": "Stats and receipt immutable; replay cannot reroll.",
+      "COMMITTED": "Original roll and RandomStatsReceipt are immutable; candidate base stats remain manually editable within CORE-200 1..35. Replay cannot reroll.",
       "NOT_ROLLED": "Generate-once available.",
       "ROLLING": "One server seed is pending.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
@@ -11773,12 +11798,16 @@
         {
           "actionKey": "ENM-019::CTA::001",
           "label": "Вернуться к «Произвольный монстр: характеристики и HP»"
+        },
+        {
+          "actionKey": "ENM-019::CTA::002",
+          "label": "Вернуться к новой версии с прежней квитанцией"
         }
       ]
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Фиксирует использованную попытку и блокирует повтор для этой операции.",
+      "Содержательная область: Показывает неизменяемую квитанцию семи R20 для конкретного creationAttemptId/operationId монстра; повтор возвращает ту же квитанцию, а второй новый бросок в этой попытке недоступен. Ручные правки candidate stats не изменяют квитанцию.",
       "Основной CTA",
       "Back/Cancel/Retry только на безопасной границе",
       "Индикатор связи и ревизии"
@@ -11795,8 +11824,17 @@
       "contextId",
       "stateRevision",
       "projectionRevision",
-      "xpEligibleSymbiontId",
-      "xpValue/source"
+      "creationAttemptId",
+      "operationId",
+      "randomReceiptId",
+      "rollOnceStatus=COMMITTED",
+      "dieFaces[7](integers 1..20; order S,D,M,Z,I,W,C)",
+      "originalGeneratedStats(read-only)",
+      "candidateStats(read-only current edited values)",
+      "attemptRevision",
+      "attemptId",
+      "hostBoundOriginFormId=ENM-012|ENM-017",
+      "versionBindingOrNull={templateId,expectedCurrentVersion}"
     ],
     "roles": [
       "gm"
@@ -18239,7 +18277,7 @@
       "contextId",
       "stateRevision",
       "projectionRevision",
-      "artAssetKey/filePickerState",
+      "npcList[].resolvedArtAssetKey(read-only)",
       "groupId",
       "location/subLocation",
       "markerRevision",
@@ -18303,10 +18341,15 @@
       "npcDraftId",
       "name",
       "description(optional)",
+      "sex=MALE|FEMALE",
+      "massKg(number>0; step=0.1)",
       "artAssetKey/filePickerState(optional)",
       "affiliation",
       "campaignRole",
-      "draftRevision"
+      "draftRevision",
+      "hostBoundEditMode=CREATE_V1|APPEND_N_PLUS_ONE",
+      "attemptRevision",
+      "versionBindingOrNull={npcUuid,expectedCurrentVersion}"
     ],
     "roles": [
       "gm"
@@ -18871,6 +18914,8 @@
       "npcDraftId",
       "raceCode",
       "pureClassOrNull",
+      "sex=MALE|FEMALE",
+      "massKg(number; inclusive bounds by race/sex; step=0.1)",
       "anatomyProfileId",
       "registryVersion",
       "schemaValidationSummary"
@@ -19233,7 +19278,7 @@
         },
         {
           "actionKey": "NPC-017::CTA::002",
-          "label": "Сохранить NPC v1 атомарно"
+          "label": "Сохранить NPC атомарно"
         },
         {
           "actionKey": "NPC-017::CTA::003",
@@ -19250,7 +19295,7 @@
       "Ошибки по обязательным этапам",
       "UUID/version/provenance",
       "Атомарный commit",
-      "Идемпотентная квитанция и history v1"
+      "Идемпотентная квитанция выбранного режима и история полной версии"
     ],
     "contexts": [
       "npc"
@@ -19259,17 +19304,25 @@
     "id": "NPC-017",
     "qaScenarioIds": [
       "QA-FORM-NPC-017",
-      "QA-CHANGE-NPC-017"
+      "QA-CHANGE-NPC-017",
+      "QA-WORKFLOW-UI-CMD-NPC-NEW-VERSION"
     ],
     "requiredFields": [
       "npcDraftId",
       "npcUuidOnCommit",
-      "version=1",
+      "resultVersion=1|expectedCurrentVersion+1",
       "fullValidationStatus",
       "validationErrors[]",
       "historyEntry",
       "commandId",
-      "commitStatus"
+      "commitStatus",
+      "sex=MALE|FEMALE",
+      "raceCode",
+      "massKg(number; inclusive bounds by race/sex; step=0.1)",
+      "resolvedArtAssetKey",
+      "hostBoundEditMode=CREATE_V1|APPEND_N_PLUS_ONE",
+      "attemptRevision",
+      "versionBindingOrNull={npcUuid,expectedCurrentVersion}"
     ],
     "roles": [
       "gm"
@@ -19277,7 +19330,7 @@
     "route": "/master/campaigns/:campaignId/npc/npc-017",
     "states": {
       "BLOCKED_INVALID": "Хотя бы один обязательный этап невалиден; commit CTA отсутствует.",
-      "COMMITTED": "UUID/version=1/snapshot/history созданы одной транзакцией.",
+      "COMMITTED": "Получена server-confirmed идемпотентная квитанция соответствующего режима: CREATE_V1 version=1 либо APPEND_N_PLUS_ONE version=N+1 того же npcUuid.",
       "IDEMPOTENT_REPLAY": "Повтор commandId возвращает прежний receipt без второго NPC.",
       "READY_TO_COMMIT": "Все восемь этапов валидны; показан полный diff и один commit CTA.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",

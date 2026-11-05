@@ -49,12 +49,64 @@ assertions и сетевых операций, workers, retry policy и сост
 сохранены. Наблюдавшиеся отдельные timeout исследуются в [issue #204](https://github.com/tixonowar-ui/Symbiosis-V7/issues/204);
 увеличение общего бюджета не закрывает эту задачу и не исправляет их причину.
 
-## Стандартный лимит Vitest
+## Бюджеты Vitest и network E2E
+
+По явному решению владельца от **2026-11-04 UTC** inline-проект `node`
+получает стандартные `testTimeout: 30_000` и `hookTimeout: 30_000`.
+Прежние значения — 15 секунд для теста и не переопределённый default 10 секунд
+для hook. Проект `web` сохраняет `testTimeout: 15_000`; inline projects
+не наследуют эту настройку корневой конфигурации.
+
+Приняты только следующие дополнительные изменения явных бюджетов:
+
+| Место                                                                                    | Прежний бюджет | Принятый бюджет |
+| ---------------------------------------------------------------------------------------- | -------------: | --------------: |
+| Admission setup в network-application.test.ts: MIXED / остальные варианты                |      30 / 10 с |       60 / 30 с |
+| MIXED prepared-tab restart beforeEach                                                    |           30 с |            60 с |
+| Confirmed initial time: poll / enclosing beforeEach                                      |      10 / 30 с |       30 / 60 с |
+| Тест «recovers a lost first BIND ACK using the original input and command after restart» |           30 с |            60 с |
+| Network browser fixture: IPC READY                                                       |           30 с |            60 с |
+| Обычные network-application и network-qr-batch E2E                                       |          120 с |           180 с |
+
+Существующие PEACE 180 секунд и LIFECYCLE 360 секунд устанавливаются до
+`createNetworkBrowserScenario`, чтобы специальный бюджет действовал уже
+во время запуска процессов. Остальные явные test/hook/poll budgets,
+assertions, workers, retries, shutdown и production network timeouts
+сохранены. Общий CI-бюджет остаётся 60 минут.
+
+Основание — сохранённые отказы setup/restart, initial-time poll и IPC READY.
+Clean09 на exact1092 завершился двумя beforeEach timeout по 10 секунд;
+4933 случая прошли, 2 отказали, последующие этапы не достигнуты.
+Для единственного BIND ACK теста основание историческое: PR #203,
+SHA `366eda88049168525663795373ae0adc3651f612`,
+[run 41288588029, попытка 1](https://github.com/tixonowar-ui/Symbiosis-V7/actions/runs/41288588029/attempts/1),
+сохранённый timeout 30 секунд. Raw log этого run при принятии бюджета заново
+не проверялся; текущий reproducer этого отказа не заявляется.
+
+Это согласованный запас, не измеренное необходимое время и не исправление
+причин нестабильности. Прежние отказы сохраняются. Увеличение бюджета не
+закрывает #204; после #186 её приоритет — измеримо сократить стоимость
+полного цикла PR, включая долгие suites и повторяющийся setup, сохранив
+покрытие и guards. Результат требует проверок окончательного SHA.
+
+### Дополнение 2026-11-05 (Москва): два отдельных лимита
+
+Владелец согласовал только metadata/reopen test body в
+`device-admission-candidate.test.ts` (Node default 30 → explicit 60 с) и
+`confirmed disconnect in PEACE` beforeEach в `network-application.test.ts`
+(explicit 30 → 60 с). Остальные budgets, assertions, workers, retries и CI неизменны.
+[Clean11 и последующая изолированная проверка](https://github.com/tixonowar-ui/Symbiosis-V7/issues/204#issuecomment-6655164681):
+4799 PASS / 2 FAIL и два worker-startup errors; 220 случаев не исполнены,
+E2E не достигнут. Отдельный запуск двух отсутствовавших файлов прошёл
+220/220 за 14,99 с, но не доказывает исправление под полной нагрузкой.
+Новые два бюджета не исправляют worker startup; полный gate нового SHA ещё ожидается.
+
+### История решения 2026-11-02: 5 → 15 секунд
 
 По явному решению владельца от 2026-11-02 стандартный `testTimeout`
-увеличен с 5 до **15 секунд**. Он задан для обоих проектов — `node` и
+увеличен с 5 до **15 секунд**. Тогда он был задан для обоих проектов — `node` и
 `web`; inline projects не наследуют эту настройку корневой конфигурации.
-Явно заданные лимиты отдельных тестов сохраняются, как и лимиты hooks,
+В том решении явно заданные лимиты отдельных тестов сохранялись, как и лимиты hooks,
 сетевых операций, Playwright, число workers и retries. Текущий общий бюджет
 CI описан выше; изменение стандартного Vitest-лимита само по себе его не меняло.
 

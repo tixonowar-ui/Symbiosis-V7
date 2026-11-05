@@ -29,6 +29,7 @@ import {
   type ReplayCatalogDigests,
 } from './baseline-lineage.js';
 import { BASELINE_LINEAGE_SEALS } from './baseline-lineage-seals.js';
+import { baselineArtifactDigest } from './baseline-artifact-digest.js';
 
 export interface LocalCharacterExportBaseline {
   readonly baselineVersion: string;
@@ -132,6 +133,7 @@ export function resolveStoredLocalCharacterExportBaseline(
     BASELINE_LINEAGE_SEALS.admissionBaselineVersion,
     BASELINE_LINEAGE_SEALS.lobbyBaselineVersion,
     BASELINE_LINEAGE_SEALS.settingsBaselineVersion,
+    BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion,
   ];
   if (!knownStored.includes(storedBaselineVersion)) return fail('unknown stored baseline');
   verifyHistoricalBaselineLineage(
@@ -163,6 +165,9 @@ export async function loadLocalCharacterExportBaseline(
   const directory = join(projectRoot, 'artifacts');
   const manifest = await readFile(join(directory, 'CHECKSUMS.sha256'));
   const paths = new Set<string>();
+  // One private I/O buffer for this sequential pass, independent of supplied file sizes.
+  // Scratch bound and observed snapshots: docs/status/baseline-verification-resources.md.
+  const artifactScratch = Buffer.allocUnsafe(1024 * 1024);
   for (const line of manifest.toString('utf8').split(/\r?\n/u)) {
     if (line.trim() === '' || line.startsWith('#')) continue;
     const match = /^([0-9a-f]{64}) {2}(.+)$/u.exec(line);
@@ -179,7 +184,10 @@ export async function loadLocalCharacterExportBaseline(
     )
       return fail('malformed or unsafe baseline manifest');
     paths.add(path);
-    if (postSaveSha256(await readFile(join(directory, ...path.split('/')))) !== match![1])
+    if (
+      (await baselineArtifactDigest(join(directory, ...path.split('/')), artifactScratch)) !==
+      match![1]
+    )
       return fail(`baseline checksum differs for ${path}`);
   }
   const actual = (await readdir(directory, { recursive: true, withFileTypes: true }))

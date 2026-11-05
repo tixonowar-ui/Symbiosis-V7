@@ -1,6 +1,19 @@
 # Состояние модулей
 
-## Runtime #174 — кандидат, 2026-11-03
+## Source #186 — 2026-11-04
+
+Atlas 1.10 поставляет принятые A/B/C/D: NPC sex/mass/art, technical attempts,
+двухфазную N+1 и отдельное monster roll right каждой версии. Шесть новых
+CTA дают bound child/receipt/return paths без нового host RNG. Текущие
+NET/CHR и единая GM-панель сохранены. [ADR 0077](../adr/0077-gm-entity-source-closure.md).
+
+Новый gm-entity-portraits importer создаёт каталог восьми mappings и копирует
+только две новые PNG. Все двадцать прежних non-Atlas paths неизменны; B5
+содержит 25 артефактов. Exact compatibility сохраняет B0–B4 и старые данные.
+Это source-поставка: экранные реализации NPC и врагов ещё относятся к #187/#188;
+#113 остаётся открытой. Итоги финального SHA и всех merge gates фиксируются в PR.
+
+## Runtime #174 — объединён, 2026-11-04
 
 В существующий GM context встроены CMP-008/014/015/016 и NET-023. Атомарный
 lifecycle journal сохраняет status/settings, checkpoint и receipt; exact
@@ -18,9 +31,11 @@ retry receipt не снимают более поздний disconnect. NET-010 
 не переписываются. Новые игровые shared mutations не добавлены.
 [ADR 0076](../adr/0076-campaign-lifecycle-runtime.md).
 
-Исходная поставка #208 объединена PR #216; runtime #174 ещё проходит приёмку.
-Окончательные независимое ревью, clean-copy пять этапов, exact-SHA CI,
-совпадение дерева main и закрытие #174/#208 фиксируются в runtime PR.
+Runtime #174 объединён squash PR #217: main 9a06d44a3cdd77ee243e54a88106cafabc97b597,
+дерево 7bea62a5bc17a8bdcdf247ee094b2e060d8b3d7b совпало с проверенным 719533d.
+Независимые review/clean-copy пять этапов и exact-SHA CI 41738795009 прошли;
+4854 Vitest и 44 E2E без retries. #174/#208 фактически закрыты. Предыдущие
+отказы сохранены в #204, которая этим успешным прогоном не объявляется исправленной.
 
 ## Source #208 — 2026-11-02
 
