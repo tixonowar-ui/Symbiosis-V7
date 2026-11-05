@@ -4,12 +4,13 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact reviewed Atlas 1.9 objects, authorized by #208 and ADR 0075. */
 // Intersecting witnesses include the accepted NPC time/import amendment in ADR 0078.
+// Intersecting witnesses include the accepted normal-transfer source amendment in ADR 0079.
 const OBJECT_SEALS = [
   {
     target: 'forms',
     key: 'id',
     id: 'NET-009',
-    sha256: '56b038287c05198a4bd7112ce1423e4a6c8ec2e5ca27cfe3a08270e1a95df905',
+    sha256: 'ea3b7fb49f7ccfdbf2196f1480f27fe846b2bef89d73fb6f8d9d4c0e801039bb',
   },
   {
     target: 'forms',
@@ -39,7 +40,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-RECONNECT',
-    sha256: '5ffd0b1dcdc4495995693f61130b66c40cae1352ecbe4850a26834a2a414dc85',
+    sha256: '407da238722c9eba14a146c8ee82ed5b0e45a72c38a32644b9ebc12b75353c35',
   },
   {
     target: 'journeys',
@@ -63,7 +64,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-009',
-    sha256: '59fb3906540994024d40958c51c55561068c9870e46c0ec2d550c9e5b47b2ee0',
+    sha256: '644185be1d3db11ff50f24158ae1ba3aebd5a5905c94f16b970421d3bb2b4567',
   },
   {
     target: 'qaScenarios',
@@ -99,7 +100,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-031',
-    sha256: '6806722493d9335c6d1a6438fdff1ef89dde47a44f60daaa34875b9c1d799224',
+    sha256: 'aa2d5070cd3bdafbbf4e67f221975ddfcca0682921b32b13f0de7ea4f1c42384',
   },
   {
     target: 'qaScenarios',
@@ -123,17 +124,17 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '0ce9ee6815a54ce2c7f7075be20a8cd5c14d5822d764c970393d7087ca45fa04',
+    sha256: '1824e006901903a81275a8562ec37560238dc9042f4d4588885b51f469ee7e7f',
   },
   {
     key: 'transitions',
-    sha256: '978077d54e8e43652a5bc0dfccd413c2553199cb926722cd504450abae504a06',
+    sha256: 'b076cda3f751ed503e635034d769ea179f4a20f6fdd5a654ad9dd0882c1ad15a',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
   {
     prefix: '### NET-009 —',
-    sha256: '11f7aa012863423c47db8de81ac9d1012a0df7cfd40c323e0ef5a6c8250b9d50',
+    sha256: '69634fd03bccb4236933317970653433e804d593fae0884190403171f6649bbd',
   },
   {
     prefix: '### CMP-006 —',
@@ -153,7 +154,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-RECONNECT —',
-    sha256: 'cd173bc7f2c52fb797c4d9f711a07f6f5763a2e5efd6a433083542c553b75c04',
+    sha256: '4f626cd4ae8fc44b9cbbc6183081b9fbdf3bf4bd1737b52b147dfbad9ebabbaf',
   },
   {
     prefix: '### J-HOST-PUBLISH-SETTINGS —',
@@ -172,7 +173,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NET-009 | NET-009 |',
-    sha256: 'f579c4837dc98cf714506dc1fcffd6de639fa109db9f38b2512ab4d2cbb6e6c1',
+    sha256: '34cc5f4ce904d6a14584ab49bfab5ea29b4c2d3453c72ab48161d3f2b05290ff',
   },
   {
     prefix: '| QA-FORM-CMP-006 | CMP-006 |',
@@ -196,7 +197,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-031 | REQ-031 |',
-    sha256: 'b3658c0e1153357658fd0d4245ca8cde58dc110d98ecc5a2735f0ffcb56a4ec8',
+    sha256: '35e7e764ca77738496c8d5638ed2ab203e78e335f8a5940ae687fdb90192b899',
   },
   {
     prefix: '| QA-REQ-055 | REQ-055 |',

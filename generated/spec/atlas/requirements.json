@@ -5624,9 +5624,13 @@
         "formId": "NET-009",
         "primaryActions": [
           "Открыть «Сверка состояния после переподключения»",
-          "Получен snapshot"
+          "Получен snapshot",
+          "Переподключиться к подтверждённому преемнику",
+          "Отложить переход к преемнику"
         ],
-        "workflowCommandIds": []
+        "workflowCommandIds": [
+          "UI-CMD-MASTER-TRANSFER-RECONNECT"
+        ]
       },
       {
         "executableOperationIds": [],
@@ -5680,6 +5684,11 @@
           "IN_REVIEW",
           "REJECTED"
         ],
+        "NET-009": [
+          "TRANSFER_PROOF_PENDING",
+          "TRANSFER_RECONNECT_READY",
+          "TRANSFER_PROOF_REFUSED"
+        ],
         "NET-011": [
           "UNAVAILABLE",
           "RETRY_READY",
@@ -5706,7 +5715,7 @@
       "NET-012",
       "NET-013"
     ],
-    "happyPath": "Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-RECONNECT, J-JOIN-REVIEW через формы NET-004, NET-005, NET-008, NET-009, NET-010, NET-011, NET-012, NET-013; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-CONNECTION-OPEN, UI-CMD-DEVICE-REQUEST-CANCEL, UI-CMD-DEVICE-REQUEST-SUBMIT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Отдельная transfer-ветвь NET-009 использует UI-CMD-MASTER-TRANSFER-RECONNECT только после verified common transfer proof и явного подтверждения; обычный reconnect неизменён.",
     "journeyIds": [
       "J-RECONNECT",
       "J-JOIN-REVIEW"
@@ -5717,7 +5726,8 @@
       "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
       "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
       "REJECTED safe-return changes only the local cursor; the owning historical request and immutable receipt survive return/reconnect, and a new submit requires a fresh explicit command.",
-      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
+      "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.",
+      "Transfer proof не создаёт admission/copies и не повторяет gameplay receipts; без него прежний pin неизменен."
     ],
     "preconditions": [
       "Роль и authority соответствуют player/gm.",
@@ -5728,7 +5738,8 @@
     "qnaIds": [
       "Q-CAMP-002",
       "Q-CAMP-005",
-      "Q-CAMP-006"
+      "Q-CAMP-006",
+      "Q-CAMP-009"
     ],
     "requirement": "Waiting/connect/reconnect/connection-lost states",
     "requirementId": "REQ-031",
@@ -5743,7 +5754,8 @@
     "workflowCommandIds": [
       "UI-CMD-CONNECTION-OPEN",
       "UI-CMD-DEVICE-REQUEST-CANCEL",
-      "UI-CMD-DEVICE-REQUEST-SUBMIT"
+      "UI-CMD-DEVICE-REQUEST-SUBMIT",
+      "UI-CMD-MASTER-TRANSFER-RECONNECT"
     ]
   },
   {
@@ -8950,7 +8962,9 @@
         "formId": "NET-024",
         "primaryActions": [
           "Проверить пароль и разблокировать transfer",
-          "Отменить"
+          "Отменить",
+          "Открыть «Передача роли мастера»",
+          "Открыть «Снимки и синхронизация кампании»"
         ],
         "workflowCommandIds": [
           "UI-CMD-MASTER-TRANSFER-UNLOCK"
@@ -8961,10 +8975,17 @@
         "formId": "NET-025",
         "primaryActions": [
           "Передать полномочия выбранному successor",
-          "Отменить до commit"
+          "Отменить до commit",
+          "Принять роль и подтвердить checkpoint",
+          "Отклонить принятие роли",
+          "Открыть панель мастера",
+          "Продолжить как игрок",
+          "Закрыть техническое приглашение"
         ],
         "workflowCommandIds": [
-          "UI-CMD-MASTER-TRANSFER-COMMIT"
+          "UI-CMD-MASTER-TRANSFER-ACK",
+          "UI-CMD-MASTER-TRANSFER-COMMIT",
+          "UI-CMD-MASTER-TRANSFER-CANCEL"
         ]
       },
       {
@@ -8985,6 +9006,19 @@
           "Вернуться к «Разблокировка полномочий нового мастера»"
         ],
         "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-009",
+        "primaryActions": [
+          "Открыть «Сверка состояния после переподключения»",
+          "Получен snapshot",
+          "Переподключиться к подтверждённому преемнику",
+          "Отложить переход к преемнику"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-MASTER-TRANSFER-RECONNECT"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
@@ -8993,6 +9027,11 @@
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
       "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
       "terminalStatesByForm": {
+        "NET-009": [
+          "TRANSFER_PROOF_PENDING",
+          "TRANSFER_RECONNECT_READY",
+          "TRANSFER_PROOF_REFUSED"
+        ],
         "NET-024": [
           "LOCKED",
           "UNLOCKED_TOKEN",
@@ -9002,7 +9041,9 @@
           "WAITING_SUCCESSOR_ACK",
           "READY_TO_COMMIT",
           "TRANSFERRED",
-          "CONFLICT_FROZEN"
+          "CONFLICT_FROZEN",
+          "DECLINED",
+          "CANCELLED"
         ]
       }
     },
@@ -9010,9 +9051,10 @@
       "NET-024",
       "NET-025",
       "NET-026",
-      "CMP-010"
+      "CMP-010",
+      "NET-009"
     ],
-    "happyPath": "Выполнить J-RECONNECT через формы NET-024, NET-025, NET-026, CMP-010; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-MASTER-TRANSFER-COMMIT, UI-CMD-MASTER-TRANSFER-UNLOCK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-RECONNECT через формы NET-024, NET-025, NET-026, CMP-010; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-MASTER-TRANSFER-COMMIT, UI-CMD-MASTER-TRANSFER-UNLOCK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Normal transfer дополнен successor ACK, новым successor-local GM credential и explicit proved reconnect; frozen recovery сохраняет прежнюю отдельную ветвь.",
     "journeyIds": [
       "J-RECONNECT"
     ],
@@ -9022,7 +9064,7 @@
       "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
     ],
     "preconditions": [
-      "Роль и authority соответствуют gm.",
+      "Для normal transfer инициатор — current sole GM; successor — адресованный paired/authenticated technical context без GM authority до COMMIT. Отдельная recovery-ветвь сохраняет прежние guards.",
       "Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.",
       "Player/effective-controller projection содержит только CTA, для которых per-action guard=true."
     ],
@@ -9033,12 +9075,17 @@
     "requirement": "Safe master transfer/recovery and conflict of two masters",
     "requirementId": "REQ-050",
     "roles": [
-      "gm"
+      "gm",
+      "system",
+      "player"
     ],
     "ruleOperationRefs": [],
     "workflowCommandIds": [
       "UI-CMD-MASTER-TRANSFER-COMMIT",
-      "UI-CMD-MASTER-TRANSFER-UNLOCK"
+      "UI-CMD-MASTER-TRANSFER-UNLOCK",
+      "UI-CMD-MASTER-TRANSFER-ACK",
+      "UI-CMD-MASTER-TRANSFER-CANCEL",
+      "UI-CMD-MASTER-TRANSFER-RECONNECT"
     ]
   },
   {
@@ -9769,7 +9816,9 @@
         "formId": "NET-024",
         "primaryActions": [
           "Проверить пароль и разблокировать transfer",
-          "Отменить"
+          "Отменить",
+          "Открыть «Передача роли мастера»",
+          "Открыть «Снимки и синхронизация кампании»"
         ],
         "workflowCommandIds": [
           "UI-CMD-MASTER-TRANSFER-UNLOCK"
@@ -9780,18 +9829,38 @@
         "formId": "NET-025",
         "primaryActions": [
           "Передать полномочия выбранному successor",
-          "Отменить до commit"
+          "Отменить до commit",
+          "Принять роль и подтвердить checkpoint",
+          "Отклонить принятие роли",
+          "Открыть панель мастера",
+          "Продолжить как игрок",
+          "Закрыть техническое приглашение"
         ],
         "workflowCommandIds": [
-          "UI-CMD-MASTER-TRANSFER-COMMIT"
+          "UI-CMD-MASTER-TRANSFER-ACK",
+          "UI-CMD-MASTER-TRANSFER-COMMIT",
+          "UI-CMD-MASTER-TRANSFER-CANCEL"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-009",
+        "primaryActions": [
+          "Открыть «Сверка состояния после переподключения»",
+          "Получен snapshot",
+          "Переподключиться к подтверждённому преемнику",
+          "Отложить переход к преемнику"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-MASTER-TRANSFER-RECONNECT"
         ]
       }
     ],
     "coverageStatus": "COVERED",
-    "errorOfflinePath": "Для CMP-015, NET-024, NET-025 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
+    "errorOfflinePath": "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts. Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Lost ACK/restart restores the same common commit; uncertainty stays frozen. Verified transfer notification enables only explicit player reconnect.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
-      "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
+      "mutationBoundary": "UNLOCK, successor ACK/DECLINE, initiator CANCEL, common COMMIT and explicit transfer RECONNECT are distinct receipts; only common COMMIT grants authority.",
       "terminalStatesByForm": {
         "CMP-015": [
           "CURRENT_PASSWORD_INVALID",
@@ -9799,37 +9868,47 @@
           "READY_TO_CHANGE",
           "CHANGED"
         ],
+        "NET-009": [
+          "TRANSFER_PROOF_PENDING",
+          "TRANSFER_RECONNECT_READY",
+          "TRANSFER_PROOF_REFUSED"
+        ],
         "NET-024": [
           "LOCKED",
           "UNLOCKED_TOKEN",
-          "PASSWORD_INVALID"
+          "PASSWORD_INVALID",
+          "PROOF_BLOCKED",
+          "TARGET_CHANGED"
         ],
         "NET-025": [
           "WAITING_SUCCESSOR_ACK",
           "READY_TO_COMMIT",
           "TRANSFERRED",
-          "CONFLICT_FROZEN"
+          "CONFLICT_FROZEN",
+          "DECLINED",
+          "CANCELLED"
         ]
       }
     },
     "formIds": [
       "CMP-015",
       "NET-024",
-      "NET-025"
+      "NET-025",
+      "NET-009"
     ],
-    "happyPath": "Выполнить J-MASTER-TRANSFER через формы CMP-015, NET-024, NET-025; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-MASTER-PASSWORD-CHANGE, UI-CMD-MASTER-TRANSFER-COMMIT, UI-CMD-MASTER-TRANSFER-UNLOCK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Current GM выбирает paired successor до UNLOCK → explicit checkpoint ACK и новый successor-local GM credential → common COMMIT → проверенное уведомление и явный transfer reconnect.",
     "journeyIds": [
       "J-MASTER-TRANSFER"
     ],
     "offlineReconnectAssertions": [
-      "Uncommitted local input may restore as draft but never as confirmed state.",
-      "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
-      "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache."
+      "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices.",
+      "Before common COMMIT no successor authority; canceled/declined tokens cannot commit.",
+      "Ordinary same-pinned-identity reconnect remains unchanged; transfer proof never creates new admission/copies or repeats gameplay receipts."
     ],
     "preconditions": [
-      "Роль и authority соответствуют gm.",
-      "Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.",
-      "Player/effective-controller projection содержит только CTA, для которых per-action guard=true."
+      "Current sole GM initiates normal transfer; successor is paired/authenticated and needs no PC.",
+      "Complete checkpoint is compatible with every accepted receipt; insufficient or conflicting proof or unresolved old-authority fencing refuses COMMIT and preserves one authority or freeze. No automatic history merge or loss of committed receipts.",
+      "Successor ACK/new credential and final common COMMIT are separate; current action-specific revisions and guards apply."
     ],
     "qa": "QA-REQ-057",
     "qnaIds": [
@@ -9838,13 +9917,18 @@
     "requirement": "Самостоятельная обязательная ветвь: Пароль, безопасная передача мастера и конфликт двух мастеров",
     "requirementId": "REQ-057",
     "roles": [
-      "gm"
+      "gm",
+      "system",
+      "player"
     ],
     "ruleOperationRefs": [],
     "workflowCommandIds": [
       "UI-CMD-MASTER-PASSWORD-CHANGE",
+      "UI-CMD-MASTER-TRANSFER-UNLOCK",
+      "UI-CMD-MASTER-TRANSFER-ACK",
       "UI-CMD-MASTER-TRANSFER-COMMIT",
-      "UI-CMD-MASTER-TRANSFER-UNLOCK"
+      "UI-CMD-MASTER-TRANSFER-CANCEL",
+      "UI-CMD-MASTER-TRANSFER-RECONNECT"
     ]
   },
   {
@@ -9862,7 +9946,9 @@
         "formId": "NET-024",
         "primaryActions": [
           "Проверить пароль и разблокировать transfer",
-          "Отменить"
+          "Отменить",
+          "Открыть «Передача роли мастера»",
+          "Открыть «Снимки и синхронизация кампании»"
         ],
         "workflowCommandIds": [
           "UI-CMD-MASTER-TRANSFER-UNLOCK"

@@ -52,8 +52,8 @@ export const SKIPPED_INDEX_PATHS = [
 const EXPECTED = {
   files: 131,
   arrayFiles: 115,
-  // ADR 0078 adds two NPC initial-time transition rows to the 20,336 rows in Atlas 1.10.
-  rows: 20_338,
+  // ADR 0079 adds 9 transition, 3 workflow and 3 QA rows to the 20,338 rows in Atlas 1.11.
+  rows: 20_353,
   metadataFiles: 10,
   skippedIndexes: 6,
 } as const;

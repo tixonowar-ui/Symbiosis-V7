@@ -143,7 +143,7 @@ describe('shared layer contract', () => {
     expect(masterPredicate['purpose']).toMatch(/disconnect.+без резерва/);
   });
 
-  it('derives exactly six command kinds and the same 112 UI commands as atlas QA', () => {
+  it('derives exactly six command kinds and the same 115 UI commands as atlas QA', () => {
     const transitions = readJson('transitions.json');
     const transitionKinds = new Set(
       asArray(transitions, 'transitions')
@@ -163,7 +163,7 @@ describe('shared layer contract', () => {
         )
         .map((id) => id.slice('QA-WORKFLOW-'.length)),
     );
-    expect(transitionCommandIds.size).toBe(112);
+    expect(transitionCommandIds.size).toBe(115);
     expect([...qaCommandIds].sort()).toEqual([...transitionCommandIds].sort());
   });
 });

@@ -133,6 +133,7 @@ export const NET_CONNECT_FORM_CONTRACTS = [
       'pendingRequestIdOrNull',
       'commandId',
       'pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}',
+      'transferReconnectOrNull={transferReceiptId,campaignId,checkpointId,checkpointDigest,previousPinnedHostIdentity,successorInstallationIdentity,authorityContinuityProof,successorEndpoint,proofStatus}; separate from ordinary pinned reconnect',
     ],
   },
   {
@@ -405,7 +406,7 @@ export const NET_CONNECT_ACTION_CONTRACTS = [
     'NET-010',
     'journey',
     'Server is normative; local unconfirmed command reconciled by commandId.',
-    [],
+    ['UI-CMD-MASTER-TRANSFER-RECONNECT'],
   ],
   [
     'NET-009',
@@ -414,7 +415,25 @@ export const NET_CONNECT_ACTION_CONTRACTS = [
     'NET-010',
     'normative',
     'device identity accepted',
-    [],
+    ['UI-CMD-MASTER-TRANSFER-RECONNECT'],
+  ],
+  [
+    'NET-009',
+    'NET-009::CTA::003',
+    'Переподключиться к подтверждённому преемнику',
+    'NET-010',
+    'workflow-command',
+    'UI-CMD-MASTER-TRANSFER-RECONNECT guards',
+    ['UI-CMD-MASTER-TRANSFER-RECONNECT'],
+  ],
+  [
+    'NET-009',
+    'NET-009::CTA::004',
+    'Отложить переход к преемнику',
+    'NET-008',
+    'normative',
+    'Transfer notification dismissed; previous pin unchanged; no authority/admission mutation.',
+    ['UI-CMD-MASTER-TRANSFER-RECONNECT'],
   ],
   [
     'NET-010',

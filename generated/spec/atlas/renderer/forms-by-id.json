@@ -16810,6 +16810,14 @@
         {
           "actionKey": "NET-009::CTA::002",
           "label": "Получен snapshot"
+        },
+        {
+          "actionKey": "NET-009::CTA::003",
+          "label": "Переподключиться к подтверждённому преемнику"
+        },
+        {
+          "actionKey": "NET-009::CTA::004",
+          "label": "Отложить переход к преемнику"
         }
       ]
     },
@@ -16819,7 +16827,8 @@
       "Snapshot request",
       "Attempt status",
       "Cancel without campaign mutation",
-      "Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку."
+      "Явный ввод адреса и порта для ручного reconnect к прежней host identity; ошибки подключения не меняют сохранённую привязку.",
+      "Проверенное уведомление о common transfer: старая и новая host identity, checkpoint и отдельная кнопка reconnect; закрыть уведомление оставляет прежний pin"
     ],
     "contexts": [
       "network"
@@ -16828,7 +16837,8 @@
     "id": "NET-009",
     "qaScenarioIds": [
       "QA-FORM-NET-009",
-      "QA-CHANGE-NET-009"
+      "QA-CHANGE-NET-009",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-RECONNECT"
     ],
     "requiredFields": [
       "deviceId",
@@ -16843,7 +16853,8 @@
       "pendingCommandIdOrNull",
       "pendingRequestIdOrNull",
       "commandId",
-      "pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}"
+      "pinnedCampaignPeerReconnectOrNull={reconnectHostAddress,reconnectHostPort,previouslyPinnedHostIdentity,lastAuthenticatedEndpoint}",
+      "transferReconnectOrNull={transferReceiptId,campaignId,checkpointId,checkpointDigest,previousPinnedHostIdentity,successorInstallationIdentity,authorityContinuityProof,successorEndpoint,proofStatus}; separate from ordinary pinned reconnect"
     ],
     "roles": [
       "player",
@@ -16851,6 +16862,9 @@
     ],
     "route": "/player/campaigns/:campaignId/network/net-009",
     "states": {
+      "TRANSFER_PROOF_PENDING": "Пока transfer proof не проверен, pin не меняется и reconnect к другой identity недоступен.",
+      "TRANSFER_PROOF_REFUSED": "Недостаточный/чужой/stale/conflicting proof не меняет pin, copies, admission или receipts.",
+      "TRANSFER_RECONNECT_READY": "Proof связывает прежний pin с единственным successor; только явное подтверждение пользователя разрешает trust transition.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -17943,10 +17957,11 @@
       ]
     },
     "components": [
-      "Password input",
-      "Safe-boundary/checkpoint blockers",
-      "CTA разблокировки",
-      "Token expiry"
+      "Selector сопряжённого аутентифицированного LAN-устройства до unlock, в том числе без PC",
+      "Проверенный checkpoint, совместимость committed receipts и явные blockers",
+      "Приватный ввод текущего пароля GM и CTA проверки",
+      "Пока token действителен, selector закрыт: смена target сначала требует подтверждённый CANCEL в NET-025; затем новый выбор и UNLOCK",
+      "Отменить до unlock возвращает current GM в GM-001; pending transfer сначала отменяется в NET-025"
     ],
     "contexts": [
       "network"
@@ -17955,7 +17970,8 @@
     "id": "NET-024",
     "qaScenarioIds": [
       "QA-FORM-NET-024",
-      "QA-CHANGE-NET-024"
+      "QA-CHANGE-NET-024",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-UNLOCK"
     ],
     "requiredFields": [
       "campaignId",
@@ -17964,7 +17980,17 @@
       "checkpointId",
       "pendingOperationCount",
       "transferToken",
-      "commandId"
+      "commandId",
+      "pairedSuccessorDevices[]={authenticatedDeviceId,installationIdentity,displayLabel}; PC/admission не требуются",
+      "selectedSuccessorDeviceIdOrNull",
+      "successorSelectionRevision",
+      "checkpointRevision",
+      "checkpointDigest",
+      "acceptedReceiptFrontier",
+      "checkpointProofStatus=VERIFIED|INSUFFICIENT|CONFLICTING",
+      "authorityFenceStatus=CONFIRMED|UNRESOLVED",
+      "stateRevision",
+      "projectionRevision"
     ],
     "roles": [
       "gm"
@@ -17973,7 +17999,9 @@
     "states": {
       "LOCKED": "Transfer token отсутствует.",
       "PASSWORD_INVALID": "Попытка записана; transfer остаётся locked.",
-      "UNLOCKED_TOKEN": "Одноразовый token выдан без смены authority.",
+      "PROOF_BLOCKED": "Недостаточные или противоречивые receipts/checkpoint/fencing: freeze сохранён, unlock и commit отсутствуют.",
+      "TARGET_CHANGED": "Прежний token недействителен; необходимы новый выбор и unlock.",
+      "UNLOCKED_TOKEN": "Token связан с точными successor/checkpoint/revisions; игровые полномочия не меняются.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -17998,15 +18026,36 @@
         {
           "actionKey": "NET-025::CTA::002",
           "label": "Отменить до commit"
+        },
+        {
+          "actionKey": "NET-025::CTA::003",
+          "label": "Принять роль и подтвердить checkpoint"
+        },
+        {
+          "actionKey": "NET-025::CTA::004",
+          "label": "Отклонить принятие роли"
+        },
+        {
+          "actionKey": "NET-025::CTA::005",
+          "label": "Открыть панель мастера"
+        },
+        {
+          "actionKey": "NET-025::CTA::006",
+          "label": "Продолжить как игрок"
+        },
+        {
+          "actionKey": "NET-025::CTA::007",
+          "label": "Закрыть техническое приглашение"
         }
       ]
     },
     "components": [
-      "Выбор successor",
-      "Checkpoint acknowledgement",
-      "Atomic revoke+grant preview",
-      "CTA передачи",
-      "Conflict freeze"
+      "Точный checkpoint и paired successor identity, без требования PC",
+      "На successor: отдельные кнопки принять/отклонить роль и приватный новый пароль GM с подтверждением",
+      "На инициаторе: ACK/status, общий COMMIT и CANCEL до commit",
+      "После commit: receipt и server-confirmed role; прежний GM становится player с прежними назначенными персонажами",
+      "Terminal controls возвращают в bound GM/player context; APP-001 доступен только прежнему role-neutral boot после удаления технического приглашения и без игровых session/authority",
+      "Ошибки пароля, stale proof, cancel, disconnect и conflict сохраняют одну authority либо freeze"
     ],
     "contexts": [
       "network"
@@ -18015,24 +18064,48 @@
     "id": "NET-025",
     "qaScenarioIds": [
       "QA-FORM-NET-025",
-      "QA-CHANGE-NET-025"
+      "QA-CHANGE-NET-025",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-ACK",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-COMMIT",
+      "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-CANCEL"
     ],
     "requiredFields": [
       "transferToken",
       "successorDeviceId",
       "successorAcknowledgedCheckpoint",
       "oldMasterAuthorityRevision",
-      "commandId"
+      "commandId",
+      "transferView=INITIATOR|SUCCESSOR_ACK|TERMINAL_RECEIPT",
+      "campaignId",
+      "checkpointId",
+      "checkpointDigest",
+      "checkpointRevision",
+      "successorSelectionRevision",
+      "successorInstallationIdentity",
+      "successorDecision=ACCEPT|DECLINE|UNANSWERED",
+      "successorAckReceiptOrNull",
+      "newGmPasswordInputAndConfirmation=PRIVATE_SUCCESSOR_INPUT_ONLY",
+      "newGmCredentialStatus=NOT_SET|CONFIRMED_VERIFIER; verifier successor-local only, other devices receive setup commitment",
+      "transferReceiptOrNull",
+      "authorityFenceStatus=CONFIRMED|UNRESOLVED",
+      "stateRevision",
+      "projectionRevision",
+      "terminalReceiptOrNull={kind=DECLINE|CANCEL|COMMIT,commandId,confirmedParticipantBinding}; immutable receipt, not a live token",
+      "participantReturnContext=GM_PANEL|PLAYER_MENU|ROLE_NEUTRAL_BOOT; server-bound context of the authenticated participant: confirmed COMMIT derives GM_PANEL for successor and PLAYER_MENU for old GM; DECLINE/CANCEL preserve captured origin; revalidated against current confirmed role and destination entry guards; client cannot select or alter this binding"
     ],
     "roles": [
-      "gm"
+      "gm",
+      "system",
+      "player"
     ],
     "route": "/master/campaigns/:campaignId/network/net-025",
     "states": {
+      "CANCELLED": "Инициатор отменил pending transfer; current old GM authority сохранена.",
       "CONFLICT_FROZEN": "Кампания заморожена до recovery.",
-      "READY_TO_COMMIT": "Successor подтвердил checkpoint.",
-      "TRANSFERRED": "Authority revoke+grant выполнены атомарно.",
-      "WAITING_SUCCESSOR_ACK": "Старая authority остаётся единственной.",
+      "DECLINED": "Преемник отказался; token закрыт, authority не передана.",
+      "READY_TO_COMMIT": "Точные checkpoint ACK и новый verifier подтверждены; authority ещё не передана.",
+      "TRANSFERRED": "Один common commit: old authority отозвана, successor получил authority с новым credential и собственной installation identity.",
+      "WAITING_SUCCESSOR_ACK": "Преемник не имеет GM authority; старый GM остаётся единственным мастером.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
