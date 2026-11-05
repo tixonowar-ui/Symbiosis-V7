@@ -89,6 +89,18 @@ SHA `366eda88049168525663795373ae0adc3651f612`,
 полного цикла PR, включая долгие suites и повторяющийся setup, сохранив
 покрытие и guards. Результат требует проверок окончательного SHA.
 
+### Дополнение 2026-11-05 (Москва): два отдельных лимита
+
+Владелец согласовал только metadata/reopen test body в
+`device-admission-candidate.test.ts` (Node default 30 → explicit 60 с) и
+`confirmed disconnect in PEACE` beforeEach в `network-application.test.ts`
+(explicit 30 → 60 с). Остальные budgets, assertions, workers, retries и CI неизменны.
+[Clean11 и последующая изолированная проверка](https://github.com/tixonowar-ui/Symbiosis-V7/issues/204#issuecomment-6655164681):
+4799 PASS / 2 FAIL и два worker-startup errors; 220 случаев не исполнены,
+E2E не достигнут. Отдельный запуск двух отсутствовавших файлов прошёл
+220/220 за 14,99 с, но не доказывает исправление под полной нагрузкой.
+Новые два бюджета не исправляют worker startup; полный gate нового SHA ещё ожидается.
+
 ### История решения 2026-11-02: 5 → 15 секунд
 
 По явному решению владельца от 2026-11-02 стандартный `testTimeout`

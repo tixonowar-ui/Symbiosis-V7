@@ -3659,7 +3659,7 @@ describe.each(['ACCEPT', 'ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'] a
                   } finally {
                     publication.mockRestore();
                   }
-                }, 30000);
+                }, 60000);
                 it('keeps PEACE content unchanged and polls status without gated lobby downloads', async () => {
                   const peer = p.peerForTest,
                     read = peer.readConnection.bind(peer);
