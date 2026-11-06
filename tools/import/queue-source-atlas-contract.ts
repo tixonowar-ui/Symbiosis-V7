@@ -7,6 +7,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 // Intersecting witnesses include the accepted normal-transfer source amendment in ADR 0079.
 // Intersecting witnesses include the accepted frozen-recovery source amendment in ADR 0080.
 // Intersecting witnesses include the accepted initial NPC trauma source amendment in ADR 0081.
+// Intersecting witnesses include the accepted NPC source consequences in ADR 0082.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -36,13 +37,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NPC-003',
-    sha256: 'ef5e8a33d082e599e93542a0e6ea48322fe4d9790005ae9b176ba9110d26718d',
+    sha256: '2e4dae8b9824f00b5ac4e6be49f2fcd49d031f20c6787be24fe9b1010ccf1380',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NPC-007',
-    sha256: '29635bcc369add6538bdefec7d2127d23e9da890f270550d9c2a861f329b5070',
+    sha256: '65dce1a13d430f59f55cf27cbf29245defba3eb29dcca238e2278bd11d3f99c8',
   },
   {
     target: 'forms',
@@ -60,13 +61,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NPC-016',
-    sha256: '1a0677035735da2eb14aac66433a8b8e0e9c93ef099124ec79fb1572d31da6b1',
+    sha256: '6365a7959dc15e889477662f2ef7e3481efa73c8a0fb3b6d5ea5fc7ab8ec0d15',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NPC-017',
-    sha256: 'e3855c80eda754608bb46dbd1ffe107be0f21114a9051ab1a47d3bdac5dd89d9',
+    sha256: 'f4c7f07addd72f0d2d6a5eeb9c6d15f43078bb45ed9498aa3f645f87e53316cd',
   },
   {
     target: 'journeys',
@@ -84,7 +85,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-NPC-CREATE',
-    sha256: 'f6120979ae14952fc419736a6356626aadd0aa5863fade0d10a52bbda79e8200',
+    sha256: '7a4facd61a479f90b5a62a1180601ad5a475d537890a3cc086d9cb43477beb21',
   },
   {
     target: 'journeys',
@@ -114,13 +115,13 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-011',
-    sha256: '162db3b81c614d9a1d77750f54a418b0311cb847cdd7920f664b5a2a791e626c',
+    sha256: '960809d92345795f0595a399bc5cfb15fdd868d4dd5c14f69a8b57448eee3ca9',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-012',
-    sha256: 'c1af0f0de034946fb3d730693fcbf0aa2dfe98e37e1ff5dbbc9386345f5688b7',
+    sha256: '067781bfe4d9d39e91aaa2e6295a1782a237af0933da7fb4e8e76a243e8c8de1',
   },
   {
     target: 'coverageRequirements',
@@ -168,25 +169,25 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NPC-003',
-    sha256: '3fad213c7aa15de53ac71b91c70f6a74d0177218d6759ea411b0d70285ed9f93',
+    sha256: 'dfe53b03af1469f8bd48eacb9c23610fc3ddd5cced8ec7b3bb94ef3b364198d8',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-CHANGE-NPC-003',
-    sha256: '254f3597c3a1b29a8f01c72dbb74271e3c09583a9292b7d539b20f87b709856e',
+    sha256: 'deed6798d64c9d32cdb5d8dd25df09bfa9b851d110cc49cdeeda914681b84a1d',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NPC-007',
-    sha256: '4b4662675a222174717e2f5a2814ddc7fec1b4e1b9620e7dd02b83990205c064',
+    sha256: '5f613f41c290a04c12d20e0bd1417900a383c4666428f2f6d8d53ac0baac0115',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-CHANGE-NPC-007',
-    sha256: '90534d68b0f0f2884e012dbfbf2e6f46bacffd243e8d02d9a2f4be6c26145ed7',
+    sha256: 'eb642fbe9dc7e4a395066895a269eb48fbe6a5768fe4b6a8dd7eba9cbd892ed7',
   },
   {
     target: 'qaScenarios',
@@ -204,25 +205,25 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NPC-016',
-    sha256: '9c0f9df966023f0eb0ecbc220d9aba059a6caffc27053710f9e450018411bb8f',
+    sha256: '421a5da01e61db0e503d0c57e5706020d9a1dde15353004c557f0556649efe77',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-CHANGE-NPC-016',
-    sha256: '5299b63c293963b9809773b3190db1810f628416bde434b6aab7f73828654b8d',
+    sha256: '0ca8b2d4bd700397109ae5b798132d4b0f3aa2b72d977be9af6be9fa4928de11',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NPC-017',
-    sha256: 'e1965bad7adde582a7785ddfb4a70e75eee290297dcda23487e5a1ba34c5dcce',
+    sha256: '71982f4ce0f1be0aaf88eacda91a1b76edc82e17739c6e0ba172b17c479168d8',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-CHANGE-NPC-017',
-    sha256: '96e31aac722a85e13549a3b312ca7f86cac594c326d8583bee8a1a7f88431e47',
+    sha256: 'c31381f6d65da8120a981873ba0eda108d19895a3e639c8ca709e56855853604',
   },
   {
     target: 'qaScenarios',
@@ -240,13 +241,13 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-011',
-    sha256: 'f534f62076ad2389eccfc53f2e8c1b71c6957671f67b1c1f6f9d6c4789e98501',
+    sha256: '0cd73ff6ace86aba2a74815177379f79b477f638c81b8021bbb4199704aa1bd1',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-012',
-    sha256: '5ed4616028dc6c72113fa7b725ca062f3397038e799cc89325344612624b8492',
+    sha256: '51c2cb4b2ce4d51e13e576ae3d320b3c5c439cf710ff63a15a9f62b8d76543f7',
   },
   {
     target: 'qaScenarios',
@@ -258,13 +259,13 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-NPC-COMMIT-V1',
-    sha256: '82d8fe6bdc32cdd47a11f3451403faafd8111e7db868a8c9c409d960a27b8d58',
+    sha256: '9d4d378cbb3c1db21438f8ce20013c7be691eae55a0d584e836822c80cf090a8',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-NPC-NEW-VERSION',
-    sha256: '68417879d4aadb3df8d9ddd09a0d391ad425bb89c8e99884b8311f04b7e89ec0',
+    sha256: '621007bc9423a042cfb827272972e30a94da1a93c6ad7fbe61a54aa0fd881db5',
   },
   {
     target: 'qaScenarios',
@@ -288,13 +289,13 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-NPC-COMMIT-V1',
-    sha256: '18db12c1451d221821c094e5b055c83014e56fa91839c371bc56ee6af98563ac',
+    sha256: 'e1e7d2bee7c71fd1c4f0780311975c773d7bcccb206623906b3bb4c026080c1f',
   },
   {
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-NPC-NEW-VERSION',
-    sha256: 'ef6559268765d8173548889474663ff29a6fa98ebba6a03c5322bc478603ae38',
+    sha256: '865280bf7115961dae9e15b06d9497e25eab2edeb85161b498b3a9fdf49c677a',
   },
   {
     target: 'workflowCommands',
@@ -322,11 +323,11 @@ const ROOT_SEALS = [
   },
   {
     key: 'transitions',
-    sha256: '5c3348120a086133d0d54e204ccf3de10df4da2a42c5ea2c3c5a99149db8fad0',
+    sha256: '3ba27fd45599e0af62d2e585bf47dd2677ef308eeec6261cbeca5341fb4d0473',
   },
   {
     key: 'registryCoverage',
-    sha256: 'c57cfa3010320a34d15b0f07d205e8bacbbf80b5e9ba9f11c99b1f2d318e7366',
+    sha256: 'b6f7f5e05d0e5f144ca3c43343a6d4d11bbb623fd019243751aa435c3f6ce5b4',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -348,11 +349,11 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NPC-003 —',
-    sha256: '8b61cdb015bd2f0ff7ecbf7aa0bde5ab9f148efd2ea0692cd0e271d93cbd511e',
+    sha256: '29df0e03dc1479f23a8b04dcc4bb0f80f5c89283959e379db78bfa3b49b9936a',
   },
   {
     prefix: '### NPC-007 —',
-    sha256: '65865fae540ed57441422ef0c838992dbf74e7f66e87824bd24d4ccd8fbea93d',
+    sha256: '1f97efce900d05d233a5713b95e06042a65cc76c74a3ba0b72f503b0195d553f',
   },
   {
     prefix: '### GM-001 —',
@@ -364,11 +365,11 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NPC-016 —',
-    sha256: '20fd015ba4c6961c3bfbcd24dafafd7ada85ecd31aa0e785f43c5943ac5ab754',
+    sha256: 'b394929f70fc58b757ec38b293acf2c5bc0fe7e6ab6bb48c7cac4c3128f55188',
   },
   {
     prefix: '### NPC-017 —',
-    sha256: '03a9b44b49e00d3115585a0fafb4deb3d3addd2db570e119267c958c45d917a1',
+    sha256: '81f23ef3cce3fe588b78218e4fcc730e07fe3810a565595dda86f92ac9124a40',
   },
   {
     prefix: '### J-GM-IMPORT-ADMISSION —',
@@ -380,7 +381,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-NPC-CREATE —',
-    sha256: 'ce9883a3cbf255dff2ba1a7253611146700a3e9d9ede09844579e6ccb21b4a5a',
+    sha256: '0f6f989cf498b51c46d44ce868320a19cd02d9bc9daf617435fd59b4debd7227',
   },
   {
     prefix: '### J-GM-CHAR-OPS —',
@@ -402,11 +403,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| REQ-011 |',
-    sha256: '7bfa401293e5bdd23d84bac23da4b6f3f3ab2b3cdd07fa9c01727092add11ddf',
+    sha256: 'a7a54e7ce747e295929110dfc389e955087fb88e3bfe8737098ab5cffe1b32b4',
   },
   {
     prefix: '| REQ-012 |',
-    sha256: '9c9c4ebb00da267176d1413776f105529697eff2f777f0dbe508c8e7883b93d1',
+    sha256: '5ef03f15c61e2b6fa7af87df8518a825692e19023739716b2c6bc079dd2e7f28',
   },
   {
     prefix: '| REQ-055 |',
@@ -438,19 +439,19 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NPC-003 |',
-    sha256: '4546aad8bdc4b611237abeabb8c0998e355ed8c38eb74b5f77c6b82bfef7ce91',
+    sha256: '484f089c609ac67d6a814ec0294e74fd60d12a332874b2c4f1f70c69f9426fe2',
   },
   {
     prefix: '| QA-CHANGE-NPC-003 |',
-    sha256: '13180cde6657d7dde018705e899b01c531c0e4f2b54564ec6f40c40fd11f1b86',
+    sha256: 'f098e8a983ea434306f7a3beb24416ae8948cca960990d3d5d54aa5065649b27',
   },
   {
     prefix: '| QA-FORM-NPC-007 |',
-    sha256: 'f950f6a8a34632703e5193c4332ce30aa2fa2eaa398c926d284048d7b8e9f0dd',
+    sha256: '641f84bb105fa61b238748c045d17bc2de1efcd816ee0c5ae889504cbb1c48b8',
   },
   {
     prefix: '| QA-CHANGE-NPC-007 |',
-    sha256: '13fa7774d40c10f5c406d5a65f1212b0e7e3f29fe74719f0cb637fce83751cbe',
+    sha256: 'bc289bfb6fe3716822111e35b6dd4f4c351684354582eba421505379ee881203',
   },
   {
     prefix: '| QA-FORM-GM-001 |',
@@ -462,19 +463,19 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NPC-016 |',
-    sha256: 'ef4519eb5ca408615f5337fcb8d94f40d1a635a90640266e217ce06621584f8a',
+    sha256: '91f49d74fc35280abdcdbea7ad5aff2937f93bd1f3deeed27e86642e1de5dc26',
   },
   {
     prefix: '| QA-CHANGE-NPC-016 |',
-    sha256: '25daada51caada66ec7cabee76fe22fab3de6ab6d5c1ea71209866e67e8c3817',
+    sha256: '32993eee7543e583502effabd2ae63159eb8ab21aab3419be3a4c47f71936d72',
   },
   {
     prefix: '| QA-FORM-NPC-017 |',
-    sha256: '002abf1cb6f2173d6f19a836d1df4fcb3ac57e3a3f7271decdbfa76772394661',
+    sha256: '703b40b6d84e11b42a1d7ab14754a442b3685022e62e6f4896a32eec3963a1c9',
   },
   {
     prefix: '| QA-CHANGE-NPC-017 |',
-    sha256: 'bfb5118e7c594c4c2a54c65a7c8a58fcd01426908e60ee6c776e6f03bb2cfeaa',
+    sha256: '3700e4d34eb570c922851ae2e8c2920d488d93950f5cdd881f0b7da58f0358cd',
   },
   {
     prefix: '| QA-REQ-006 |',
@@ -486,11 +487,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-011 |',
-    sha256: '3fb8a68b76b6a7a05b4afb2f5d7092b2ca7943f04182996389009c97e0ac8284',
+    sha256: 'f7c50ee9c582a6ccac0ab504f124d9212abb186b74934739eb902235e7e31394',
   },
   {
     prefix: '| QA-REQ-012 |',
-    sha256: 'f72e5595db9491a9fd545872a263f024681cf5135757e6787eafb820d8a806df',
+    sha256: '73238d7c8176eabdd9f96eac45a2eacfad3ded000323060ab345ecd5e6bfaeda',
   },
   {
     prefix: '| QA-REQ-055 |',
@@ -498,11 +499,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-NPC-COMMIT-V1 |',
-    sha256: '8fef7c1a1a8805f2d78cb834b31d1caf4fff049c436c84b36f5af63f622d804c',
+    sha256: 'd47726f1dac90e81fe91fa904264db3a727f808d960f237548cf065c3b9a161a',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-NPC-NEW-VERSION |',
-    sha256: '31ab3cd85bf64742f5afbfb52fdf36d352cb600d2f3ac5fdbbe8581b16ada66c',
+    sha256: 'd68f0a7ad21b7feef778192b88c1d0a9044ece947d5f3a734d681e51dfc602ec',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-CAMPAIGN-START |',
@@ -518,11 +519,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-NPC-COMMIT-V1 | Атомарно сохранить первую версию постоянного НПС |',
-    sha256: '37f9d8f3d20f951a47ea61c107c2f33943bc6ac9e326bedeca2be06c744cdf6b',
+    sha256: '3f9d1e7889d7b8e747fad81fbd4471a0e8da92f01141822e8ef0b4ec08aaea53',
   },
   {
     prefix: '| UI-CMD-NPC-NEW-VERSION | Создать новую полную версию NPC |',
-    sha256: 'ad16462cddbcb63faf39f21867e764c7ebf03ef250f56f75453c3558f19c8dea',
+    sha256: 'a69162e5cc9b15fc58f7104deac30b776dc7d78c8290161778bd4b94c19b1196',
   },
   {
     prefix: '| UI-CMD-CAMPAIGN-START | Запустить подготовленную кампанию |',

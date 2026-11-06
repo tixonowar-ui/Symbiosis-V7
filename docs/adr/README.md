@@ -113,6 +113,7 @@
 | [0079](0079-normal-master-transfer-source.md)                        | Штатная передача мастера и доверие преемнику; B7           | принято владельцем, source #221             |
 | [0080](0080-frozen-master-recovery-source.md)                        | Аварийное frozen recovery; B8                              | принято владельцем, source #221             |
 | [0081](0081-initial-npc-trauma-source.md)                            | Исходные травмы постоянного NPC; Atlas 1.14/B9             | принято владельцем, source #228             |
+| [0082](0082-npc-source-consequences.md)                              | Календарь, наследие, HP и пулы NPC; Atlas 1.15/B10         | принято владельцем, #224/#226/#227/#232     |
 
 ## Перенос решений аудита
 

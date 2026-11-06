@@ -5,6 +5,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 /** Exact reviewed Atlas 1.12 objects, authorized by decisions 4–5 in #221 / ADR 0079. */
 // Intersecting witnesses include the accepted frozen-recovery source amendment in ADR 0080.
 // Intersecting witnesses include the accepted initial NPC trauma source amendment in ADR 0081.
+// Intersecting witnesses include the accepted NPC source consequences in ADR 0082.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -218,11 +219,11 @@ const ROOT_SEALS = [
   },
   {
     key: 'transitions',
-    sha256: '5c3348120a086133d0d54e204ccf3de10df4da2a42c5ea2c3c5a99149db8fad0',
+    sha256: '3ba27fd45599e0af62d2e585bf47dd2677ef308eeec6261cbeca5341fb4d0473',
   },
   {
     key: 'registryCoverage',
-    sha256: 'c57cfa3010320a34d15b0f07d205e8bacbbf80b5e9ba9f11c99b1f2d318e7366',
+    sha256: 'b6f7f5e05d0e5f144ca3c43343a6d4d11bbb623fd019243751aa435c3f6ce5b4',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

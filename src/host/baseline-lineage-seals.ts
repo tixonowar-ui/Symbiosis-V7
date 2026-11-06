@@ -81,6 +81,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '8b9438fcc70c37e2a0091de408403f689696f1b3a9b314b37816b1d36446d387',
   },
+  // ADR 0082 / #224, #226, #227, #232: exact NPC source clarification; saved bytes remain unchanged.
+  npcRulesBaselineVersion:
+    'sha256:ab8f52c27442a697b098d9863e0ed90e6b2a4b8a7995aadd55ee57ad9a6860c9',
+  npcRulesAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '5b79638b2b555523fa730849f2f1a4acb07f33f6604bb3ef488a3a47cfd4364b',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '18c21dd61b4bdf6651f563fd7a0a4de0592ade88cd98c54a1165ff6a253b7f32',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
