@@ -254,7 +254,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.13', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.14', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',
@@ -658,7 +658,7 @@ describe('ADR 0049 missing decision channels', () => {
     expect(() => assertAdr0049MissingChannels(root)).toThrow();
   };
 
-  it('accepts the exact v1.13 delivery', () => {
+  it('accepts the exact v1.14 delivery', () => {
     expect(() => assertAdr0049MissingChannels(clonedAtlas())).not.toThrow();
   });
 
@@ -1100,7 +1100,7 @@ describe('ADR 0052 advisor intelligence floor channel', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(root)).toThrow();
   };
 
-  it('accepts the exact v1.13 delivery', () => {
+  it('accepts the exact v1.14 delivery', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(clonedAtlas())).not.toThrow();
   });
 
@@ -1246,7 +1246,7 @@ describe('ADR 0069 request-level review source boundary', () => {
       });
     }
   }
-  it('accepts the complete real v1.13 delivery and preserves both older semantic guards', () => {
+  it('accepts the complete real v1.14 delivery and preserves both older semantic guards', () => {
     const root = clonedAtlas();
     expect(() => {
       assertAdr0069RequestReview(root);

@@ -112,6 +112,7 @@
 | [0078](0078-queue-source-closure.md)                                 | Время NPC и первый импорт; B6, первая часть #221           | принято владельцем, source #221             |
 | [0079](0079-normal-master-transfer-source.md)                        | Штатная передача мастера и доверие преемнику; B7           | принято владельцем, source #221             |
 | [0080](0080-frozen-master-recovery-source.md)                        | Аварийное frozen recovery; B8                              | принято владельцем, source #221             |
+| [0081](0081-initial-npc-trauma-source.md)                            | Исходные травмы постоянного NPC; Atlas 1.14/B9             | принято владельцем, source #228             |
 
 ## Перенос решений аудита
 

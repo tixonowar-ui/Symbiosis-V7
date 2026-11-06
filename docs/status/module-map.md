@@ -1,5 +1,22 @@
 # Состояние модулей
 
+## Source #228, исходные травмы NPC — 2026-11-06
+
+Atlas 1.14/B9 отделяет current initial state от нового применения травмы.
+TORSO не уменьшает уже введённый итоговый HP; HEAD имеет явные независимые
+penalty/stun, ACTIVE только при traumaValue>6 и точном 0<r<=5 минут.
+Closed facts сохраняют original COMMIT/source/calendar evidence.
+[ADR 0081](../adr/0081-initial-npc-trauma-source.md). GM-014 и CORE handlers
+не получают новых полномочий; runtime #187 и родительская #113 не завершены.
+
+B8 сохранён отдельным manifest, приняты только B0–B8→B9 и identity вместе
+со старыми парами. 23 non-Atlas пути, 24 mechanical replay inputs, runtime
+tuple, старые versions/FINAL/receipts остаются неизменными. Состав Atlas
+прежний: 376/1721/66/91/115/2452, 1283 CTA. Авторский import подтвердил
+115 array tables, 20357 rows и 10 metadata. Import:verify подтвердил одинаковые
+пути и SHA-256 всех 324 generated files, включая media и SQLite seed.
+Проверки окончательного SHA и независимое ревью фиксируются в PR.
+
 ## Source #221, аварийное восстановление — 2026-11-05
 
 Atlas 1.13/B8 закрывает источник frozen recovery: полный checkpoint и receipts,
