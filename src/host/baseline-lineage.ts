@@ -29,6 +29,7 @@ const initialTraumaManifestUrl = new URL(
   './baselines/atlas-v1.14.checksums.sha256',
   import.meta.url,
 );
+const npcRulesManifestUrl = new URL('./baselines/atlas-v1.15.checksums.sha256', import.meta.url);
 const atlasPaths = new Set(Object.keys(BASELINE_LINEAGE_SEALS.successorAtlas));
 
 /** Explicit forward pairs only; no semantic-version comparison or inferred transitivity. */
@@ -45,6 +46,7 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
     recoveryBaselineVersion: b8,
     initialTraumaBaselineVersion: b9,
     npcRulesBaselineVersion: b10,
+    freshTrogrBaselineVersion: b11,
   } = BASELINE_LINEAGE_SEALS;
   return (
     (stored === b0 &&
@@ -109,7 +111,20 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
       stored === b8 ||
       stored === b9 ||
       stored === b10) &&
-      current === b10)
+      current === b10) ||
+    ((stored === b0 ||
+      stored === b1 ||
+      stored === b2 ||
+      stored === b3 ||
+      stored === b4 ||
+      stored === b5 ||
+      stored === b6 ||
+      stored === b7 ||
+      stored === b8 ||
+      stored === b9 ||
+      stored === b10 ||
+      stored === b11) &&
+      current === b11)
   );
 }
 
@@ -199,7 +214,9 @@ export function verifyHistoricalBaselineLineage(
                       : storedBaselineVersion ===
                           BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion
                         ? readFileSync(initialTraumaManifestUrl)
-                        : currentManifest;
+                        : storedBaselineVersion === BASELINE_LINEAGE_SEALS.npcRulesBaselineVersion
+                          ? readFileSync(npcRulesManifestUrl)
+                          : currentManifest;
   if (`sha256:${sha256(historicalBytes)}` !== storedBaselineVersion)
     fail('historical manifest seal differs');
   const historical = entries(historicalBytes);
@@ -210,13 +227,15 @@ export function verifyHistoricalBaselineLineage(
       currentId === BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion ||
       currentId === BASELINE_LINEAGE_SEALS.recoveryBaselineVersion ||
       currentId === BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion ||
-      currentId === BASELINE_LINEAGE_SEALS.npcRulesBaselineVersion) &&
+      currentId === BASELINE_LINEAGE_SEALS.npcRulesBaselineVersion ||
+      currentId === BASELINE_LINEAGE_SEALS.freshTrogrBaselineVersion) &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.recoveryBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion &&
-    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.npcRulesBaselineVersion
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.npcRulesBaselineVersion &&
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.freshTrogrBaselineVersion
       ? Object.keys(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts)
       : [];
   const expectedPaths = new Set([...historical.keys(), ...additions]);
@@ -274,6 +293,12 @@ export function verifyHistoricalBaselineLineage(
       ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
     }))
       if (current.get(path) !== digest) fail(`approved NPC rule source bytes differ: ${path}`);
+  if (currentId === BASELINE_LINEAGE_SEALS.freshTrogrBaselineVersion)
+    for (const [path, digest] of Object.entries({
+      ...BASELINE_LINEAGE_SEALS.freshTrogrAtlas,
+      ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
+    }))
+      if (current.get(path) !== digest) fail(`approved fresh Trogr source bytes differ: ${path}`);
   const expected = BASELINE_LINEAGE_SEALS.replayCatalogDigests;
   if (
     Object.keys(catalogDigests).length !== Object.keys(expected).length ||

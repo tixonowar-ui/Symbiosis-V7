@@ -44,6 +44,7 @@ const patchNames = [
   '221-recovery',
   '228',
   '232',
+  '234',
 ] as const;
 // The B0 seal is recorded in the frozen atlas-v1.5.checksums.sha256 manifest.
 const releaseSeals = [
@@ -61,6 +62,7 @@ const releaseSeals = [
   BASELINE_LINEAGE_SEALS.recoveryAtlas,
   BASELINE_LINEAGE_SEALS.initialTraumaAtlas,
   BASELINE_LINEAGE_SEALS.npcRulesAtlas,
+  BASELINE_LINEAGE_SEALS.freshTrogrAtlas,
 ] as const;
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const digests = (bytes: FixtureAtlasBytes): Record<string, string> =>
@@ -103,10 +105,10 @@ function patchBytes(edge: number): Buffer {
 }
 function sealedInput(release: number): FixtureAtlasBytes {
   let bytes = rawRead(sourceRoot);
-  expectSealed(bytes, 10);
+  expectSealed(bytes, 11);
   // Preparation may use the candidate only under independent complete release seals.
   // Expected outputs below come from a real Git apply, never from this preparation.
-  for (let edge = 9; edge >= release; edge--) {
+  for (let edge = 10; edge >= release; edge--) {
     bytes = applyFixtureAtlasPatch(bytes, patchBytes(edge), true);
     expectSealed(bytes, edge);
   }
