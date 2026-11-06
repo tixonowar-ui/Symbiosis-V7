@@ -90,6 +90,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '18c21dd61b4bdf6651f563fd7a0a4de0592ade88cd98c54a1165ff6a253b7f32',
   },
+  // ADR 0083 / #234: exact fresh Trogr death source; historical versions and receipts remain sealed.
+  freshTrogrBaselineVersion:
+    'sha256:66e56c0be943bb52978a933571bfb98db6eeaa6264819a0cfbdcdcaaf44a9e7c',
+  freshTrogrAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'edd42440dcbb0f5c32e0bd38844b4d0411ef77e8358fc043340f03d721f7dec1',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '5fe7a5d7eef07610047e80050a9aa9be31ede6d1545739d97ce84561ca03b0ed',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
