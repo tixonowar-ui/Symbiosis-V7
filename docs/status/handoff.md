@@ -1,5 +1,38 @@
 # Передача контекста — 2026-11-06
 
+## Источники #237/#239: исходная жизнь и formal состояния Ткача
+
+Владелец принял явный остаток вместе с Atlas/ADR/CHECKSUMS. Поставка
+продолжает B12 после #236: Atlas 1.18/B13 и [ADR 0085](../adr/0085-initial-npc-life-state.md)
+задают ALIVE/SEVERELY_WOUNDED/DEAD без defaults, новый formal D6 и отдельный
+точный ввод остатка. Множитель дубля доказывается на фактической границе;
+retained N+1 сохраняет исходные D6, multiplier, anchor и deadline.
+Текущее отсутствие дубля убирает его действия, но не исторический ×4.
+DEAD терминален, ordinary HP edit не воскрешает; fake damage/death events
+и повторный расход защит запрещены. Controls входят в текущий NPC wizard.
+
+Владелец также принял #239 целиком и общую поставку. Новый
+[ADR 0086](../adr/0086-formal-npc-weaver-states.md) вводит отдельное formal
+назначение REPLACEMENT_TEMPORARY/REPLACEMENT_RECOVERY/PROTECTION с actual
+источником, причиной и точным остатком в пределах 5/7/10 минут. Original
+R20 отсутствует; OE/действия/RNG не расходуются, мирная played активация
+SYM-030 остаётся запрещённой. RECOVERY должен уложиться в уже выбранный
+death deadline, без продления, reroll или restart. Exact origins и
+явное снятие с причиной сохраняют историю; будущий expiry resolver
+не добавляется, истёкший неразрешённый effect блокирует current snapshot.
+Atlas остаётся ещё не выпущенным 1.18/B13, ADR 0085 не переписан.
+
+Отдельный `validate` теперь проверяет sealed-контракты ADR 0085/0086
+на фактически импортированных forms, transitions, journeys, requirements,
+workflow, QA и global contracts, а также на источнике JSON/Markdown.
+Отсутствующий generated-компонент не подменяется исходными данными.
+
+Отдельный B12 manifest и B13 forward lineage сохраняют прежние пары.
+Предметные XLSX, Runtime Pack и остальные 23 non-Atlas артефакта неизменны.
+Source review, author verify, отдельный clean5 и CI точного SHA фиксируются
+в PR. Эта запись не приписывает ещё не выполненным gates успех; runtime
+life state, controls и actual owning history остаются в #187/#237/#239.
+
 ## Источник #236: произвольный предмет кампании
 
 База отдельной поставки — main `ef6fc28c5e36369cbfd3fea99d64d43a33c144d3`

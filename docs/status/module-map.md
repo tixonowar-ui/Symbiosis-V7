@@ -1,5 +1,20 @@
 # Состояние модулей
 
+## Source #237/#239 — 2026-11-06
+
+Atlas 1.18/B13 и [ADR 0085](../adr/0085-initial-npc-life-state.md) определяют
+явное ALIVE/SEVERELY_WOUNDED/DEAD без defaults. Новый severe assignment
+использует один реальный host D6, явный точный остаток и действительный
+duplicate/time proof. Retained N+1 сохраняет original timer/source;
+обычная правка не воскрешает DEAD и не реанимирует retained severe.
+NPC-016/017, лист и история получают controls/readback контракт.
+[ADR 0086](../adr/0086-formal-npc-weaver-states.md) дополняет ту же
+поставку тремя formal состояниями Ткача. Actual source, причина и точный
+остаток 5/7/10 обязательны; original R20 отсутствует. RECOVERY требует
+совместимого неизменного death deadline; retained origins не меняются.
+Это поставка источников, не завершение runtime #187/#237/#239; другие реестры,
+старые версии/FINAL/receipts и прежняя совместимость неизменны.
+
 ## Source #236 — 2026-11-06
 
 Atlas 1.17/B12 и [ADR 0084](../adr/0084-campaign-custom-item-source.md)

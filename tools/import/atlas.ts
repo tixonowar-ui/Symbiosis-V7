@@ -69,14 +69,22 @@ import {
   assertAdr0084CustomItem,
   assertAdr0084CustomItemMarkdown,
 } from './custom-item-atlas-contract.js';
+import {
+  assertAdr0085InitialLife,
+  assertAdr0085InitialLifeMarkdown,
+} from './initial-life-atlas-contract.js';
+import {
+  assertAdr0086TemporaryWeaver,
+  assertAdr0086TemporaryWeaverMarkdown,
+} from './temporary-weaver-atlas-contract.js';
 
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.17';
+const ATLAS_VERSION = '1.18';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.17 has 1,283 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+/** Atlas v1.18 has 1,283 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
 const EXPECTED_ACTION_KEY_COUNT = 1_283;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
@@ -1854,7 +1862,7 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
 
 /** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
 export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.17');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.18');
   expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-06');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
@@ -4191,7 +4199,7 @@ function adr0069Row(root: JsonObject, target: string, id: string): JsonObject {
   );
 }
 export function assertAdr0069RequestReview(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.17');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.18');
   expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-06');
   for (const expected of ADR0069_AUTHORITY_CONTRACTS) {
     const form = adr0069Row(root, 'forms', expected.id);
@@ -4362,6 +4370,10 @@ export async function importAtlas(): Promise<AtlasImport> {
   assertAdr0083FreshTrogrMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0084CustomItem(root);
   assertAdr0084CustomItemMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
+  assertAdr0085InitialLife(root);
+  assertAdr0085InitialLifeMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
+  assertAdr0086TemporaryWeaver(root);
+  assertAdr0086TemporaryWeaverMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
   assertAdr0071Admission(root);
   assertAdr0077GmSources(root);
   assertAdr0077GmSourcesMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));

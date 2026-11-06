@@ -28,6 +28,7 @@ import {
   validateRendererFormGraph,
 } from './atlas.js';
 import { validateQuestionRefs } from './question-refs.js';
+import { validateNpcInitialStateContracts } from './npc-initial-contract.js';
 import {
   assertAdr0071Admission,
   assertAdr0071AdmissionMarkdown,
@@ -323,16 +324,21 @@ try {
 // --- orphans ---------------------------------------------------------------
 
 const transitionRows = rows('atlas/transitions.json');
+const journeyRows = rows('atlas/journeys.json');
+const requirementRows = rows('atlas/requirements.json');
+const workflowRows = rows('atlas/workflow-commands.json');
+let suppliedAtlas: ImportJsonObject | undefined;
 try {
-  assertAdr0071Admission(JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as ImportJsonObject);
+  suppliedAtlas = JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as ImportJsonObject;
+  assertAdr0071Admission(suppliedAtlas);
   assertAdr0071Admission({
     counts: atlasMeta?.['counts'],
     forms: formRows,
     transitions: transitionRows,
-    journeys: rows('atlas/journeys.json'),
-    coverageRequirements: rows('atlas/requirements.json'),
+    journeys: journeyRows,
+    coverageRequirements: requirementRows,
     qaScenarios: qaScenarioRows,
-    registryCoverage: { workflowCommands: rows('atlas/workflow-commands.json') },
+    registryCoverage: { workflowCommands: workflowRows },
   } as unknown as ImportJsonObject);
 } catch (cause) {
   report(
@@ -341,13 +347,36 @@ try {
     cause instanceof Error ? cause.message : 'invalid admission source',
   );
 }
+try {
+  if (suppliedAtlas === undefined) throw new Error('Atlas source could not be loaded');
+  validateNpcInitialStateContracts(
+    suppliedAtlas,
+    {
+      counts: atlasMeta?.['counts'],
+      forms: formRows,
+      transitions: transitionRows,
+      journeys: journeyRows,
+      coverageRequirements: requirementRows,
+      qaScenarios: qaScenarioRows,
+      workflowCommands: workflowRows,
+      globalContracts: rows('atlas/global-contracts.json'),
+    } as unknown as ImportJsonObject,
+    readFileSync(ARTIFACT.atlasMd, 'utf8'),
+  );
+} catch (cause) {
+  report(
+    'atlas NPC initial-state contract',
+    'ADR 0085/0086',
+    cause instanceof Error ? cause.message : 'invalid initial-state source or generated output',
+  );
+}
 if (rendererFormsById !== null) {
   validateRendererFormGraph(forms, transitionRows).forEach((problem) =>
     report(problem.file, problem.id, problem.message),
   );
 }
-validateChr001IdentityTextMirrors(formRows, rows('atlas/journeys.json'), transitionRows).forEach(
-  (problem) => report(problem.file, problem.id, problem.message),
+validateChr001IdentityTextMirrors(formRows, journeyRows, transitionRows).forEach((problem) =>
+  report(problem.file, problem.id, problem.message),
 );
 
 try {
