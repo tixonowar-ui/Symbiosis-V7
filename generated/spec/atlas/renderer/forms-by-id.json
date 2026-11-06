@@ -19339,7 +19339,10 @@
       "Типизированные эффекты",
       "Исходное состояние",
       "Запрет моделировать смерть как снимаемый эффект",
-      "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock"
+      "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock",
+      "Травмы: зона, resolved значение, причина и отдельные identities",
+      "Явные PENDING/CONSUMED и ABSENT/ACTIVE оглушения головы; оставшийся срок без defaults",
+      "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей"
     ],
     "contexts": [
       "npc"
@@ -19363,7 +19366,11 @@
       "requiresCampaignTime",
       "calendarTimeBindingOrNull=null|{kind=PRE_START_INITIAL,campaignTimestamp,lobbySnapshotRevision}|{kind=CURRENT_CAMPAIGN,campaignTimestamp,stateRevision}",
       "initialTimeLockOrNull=null|{campaignTimestamp,sourceNpcUuid,sourceVersion}",
-      "initialTimeValidationStatus=NOT_REQUIRED|MISSING|CURRENT|STALE"
+      "initialTimeValidationStatus=NOT_REQUIRED|MISSING|CURRENT|STALE",
+      "currentTraumas[]",
+      "traumaAuthoringChoices[]=exact {traumaInstanceId,reason,consequence:{kind=LIMB}|{kind=TORSO,hpInterpretation=CURRENT_HP_ALREADY_FINAL}|{kind=HEAD,penalty=PENDING|CONSUMED,stun:{status=ABSENT}|{status=ACTIVE,remainingMinutes:canonicalDecimalString}}}",
+      "traumaStateValidationSummary",
+      "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}"
     ],
     "roles": [
       "gm"
@@ -19374,6 +19381,8 @@
       "INITIAL_STATE_VALID": "Полный исходный runtime snapshot валиден. Для календарного состояния подтверждён свежий host-bound time preview.",
       "INITIAL_TIME_REQUIRED": "Календарное состояние до Start требует ввода и сохранения времени в NET-016; commit недоступен.",
       "INITIAL_TIME_STALE": "Время или bound revision изменены после preview; требуется новая проверка без автоматического переноса anchors.",
+      "TRAUMA_AUTHORING_INCOMPLETE": "Не задана reason или явная обязательная HEAD choice; некорректны closed fields, диапазон/grammar остатка либо source/calendar binding. Неполный technical draft сохраняет UNSET, но forward/COMMIT постоянной версии недоступен с field error.",
+      "TRAUMA_AUTHORING_VALID": "Closed choices и real immutable origin facts проверены; final HP, limb totals, явные penalty/stun и original exact calendar anchor/остаток согласованы без повторного применения последствий.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -19415,7 +19424,10 @@
       "UUID/version/provenance",
       "Атомарный commit",
       "Идемпотентная квитанция выбранного режима и история полной версии",
-      "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock"
+      "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock",
+      "Травмы: зона, resolved значение, причина и отдельные identities",
+      "Явные PENDING/CONSUMED и ABSENT/ACTIVE оглушения головы; оставшийся срок без defaults",
+      "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей"
     ],
     "contexts": [
       "npc"
@@ -19446,7 +19458,11 @@
       "requiresCampaignTime",
       "calendarTimeBindingOrNull=null|{kind=PRE_START_INITIAL,campaignTimestamp,lobbySnapshotRevision}|{kind=CURRENT_CAMPAIGN,campaignTimestamp,stateRevision}",
       "initialTimeLockOrNull=null|{campaignTimestamp,sourceNpcUuid,sourceVersion}",
-      "initialTimeValidationStatus=NOT_REQUIRED|MISSING|CURRENT|STALE"
+      "initialTimeValidationStatus=NOT_REQUIRED|MISSING|CURRENT|STALE",
+      "currentTraumas[]",
+      "traumaAuthoringChoices[]=exact {traumaInstanceId,reason,consequence:{kind=LIMB}|{kind=TORSO,hpInterpretation=CURRENT_HP_ALREADY_FINAL}|{kind=HEAD,penalty=PENDING|CONSUMED,stun:{status=ABSENT}|{status=ACTIVE,remainingMinutes:canonicalDecimalString}}}",
+      "traumaStateValidationSummary",
+      "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}"
     ],
     "roles": [
       "gm"
@@ -19459,6 +19475,8 @@
       "INITIAL_TIME_REQUIRED": "Календарное состояние до Start требует ввода и сохранения времени в NET-016; commit недоступен.",
       "INITIAL_TIME_STALE": "Время или bound revision изменены после preview; требуется новая проверка без автоматического переноса anchors.",
       "READY_TO_COMMIT": "Все восемь этапов валидны; показан полный diff и один commit CTA.",
+      "TRAUMA_AUTHORING_INCOMPLETE": "Не задана reason или явная обязательная HEAD choice; некорректны closed fields, диапазон/grammar остатка либо source/calendar binding. Неполный technical draft сохраняет UNSET, но forward/COMMIT постоянной версии недоступен с field error.",
+      "TRAUMA_AUTHORING_VALID": "Closed choices и real immutable origin facts проверены; final HP, limb totals, явные penalty/stun и original exact calendar anchor/остаток согласованы без повторного применения последствий.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",

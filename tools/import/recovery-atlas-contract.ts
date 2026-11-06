@@ -3,6 +3,7 @@ import { fail } from './lib/fail.js';
 import { asArray, asObject, type JsonObject } from './lib/json.js';
 
 /** Exact reviewed Atlas 1.13 objects, authorized by decision 3 in #221 / ADR 0080. */
+// Intersecting witnesses include the accepted initial NPC trauma source amendment in ADR 0081.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -192,11 +193,11 @@ const ROOT_SEALS = [
   },
   {
     key: 'transitions',
-    sha256: 'e5f06ebbe462cfffc34951a75cac1e3b371ee718e440d4fa6ca76a1e632d7ec3',
+    sha256: '5c3348120a086133d0d54e204ccf3de10df4da2a42c5ea2c3c5a99149db8fad0',
   },
   {
     key: 'registryCoverage',
-    sha256: '303344878fb469eabea4c2b7c9e5a872a4580f8d3a7b1399a68138622419a11c',
+    sha256: 'c57cfa3010320a34d15b0f07d205e8bacbbf80b5e9ba9f11c99b1f2d318e7366',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

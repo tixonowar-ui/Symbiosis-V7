@@ -9,6 +9,14 @@
 
 ### Добавлено
 
+- **2026-11-06, issue #228 (source):** Atlas 1.14 задаёт исходные травмы NPC
+  с итоговым HP, явными head penalty/stun и точным десятичным остатком.
+  Original authoring facts/anchors сохраняются при replay и N+1; новое
+  применение травмы через GM-014 не меняется. B9 добавляет только точные
+  forward-пары со старых поставок без переписывания FINAL/snapshots/receipts.
+  [ADR 0081](docs/adr/0081-initial-npc-trauma-source.md). Реальные controls
+  и durable runtime остаются в #187; source-поставка их не объявляет готовыми.
+
 - **2026-11-05, issue #221 (source, часть 3):** Atlas 1.13 задаёт frozen
   recovery из полного проверенного checkpoint, scoped evidence view и отказ
   при несовместимой истории или недоказанной единственности authority.

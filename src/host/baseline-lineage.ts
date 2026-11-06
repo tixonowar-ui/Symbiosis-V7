@@ -24,6 +24,7 @@ const normalTransferManifestUrl = new URL(
   './baselines/atlas-v1.12.checksums.sha256',
   import.meta.url,
 );
+const recoveryManifestUrl = new URL('./baselines/atlas-v1.13.checksums.sha256', import.meta.url);
 const atlasPaths = new Set(Object.keys(BASELINE_LINEAGE_SEALS.successorAtlas));
 
 /** Explicit forward pairs only; no semantic-version comparison or inferred transitivity. */
@@ -38,6 +39,7 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
     queueSourceBaselineVersion: b6,
     normalTransferBaselineVersion: b7,
     recoveryBaselineVersion: b8,
+    initialTraumaBaselineVersion: b9,
   } = BASELINE_LINEAGE_SEALS;
   return (
     (stored === b0 &&
@@ -49,7 +51,8 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
         current === b5 ||
         current === b6 ||
         current === b7 ||
-        current === b8)) ||
+        current === b8 ||
+        current === b9)) ||
     (stored === b1 &&
       (current === b1 ||
         current === b2 ||
@@ -58,7 +61,8 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
         current === b5 ||
         current === b6 ||
         current === b7 ||
-        current === b8)) ||
+        current === b8 ||
+        current === b9)) ||
     (stored === b2 &&
       (current === b2 ||
         current === b3 ||
@@ -66,20 +70,29 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
         current === b5 ||
         current === b6 ||
         current === b7 ||
-        current === b8)) ||
+        current === b8 ||
+        current === b9)) ||
     (stored === b3 &&
       (current === b3 ||
         current === b4 ||
         current === b5 ||
         current === b6 ||
         current === b7 ||
-        current === b8)) ||
+        current === b8 ||
+        current === b9)) ||
     (stored === b4 &&
-      (current === b4 || current === b5 || current === b6 || current === b7 || current === b8)) ||
-    (stored === b5 && (current === b5 || current === b6 || current === b7 || current === b8)) ||
-    (stored === b6 && (current === b6 || current === b7 || current === b8)) ||
-    (stored === b7 && (current === b7 || current === b8)) ||
-    (stored === b8 && current === b8)
+      (current === b4 ||
+        current === b5 ||
+        current === b6 ||
+        current === b7 ||
+        current === b8 ||
+        current === b9)) ||
+    (stored === b5 &&
+      (current === b5 || current === b6 || current === b7 || current === b8 || current === b9)) ||
+    (stored === b6 && (current === b6 || current === b7 || current === b8 || current === b9)) ||
+    (stored === b7 && (current === b7 || current === b8 || current === b9)) ||
+    (stored === b8 && (current === b8 || current === b9)) ||
+    (stored === b9 && current === b9)
   );
 }
 
@@ -164,7 +177,9 @@ export function verifyHistoricalBaselineLineage(
                   ? readFileSync(queueSourceManifestUrl)
                   : storedBaselineVersion === BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion
                     ? readFileSync(normalTransferManifestUrl)
-                    : currentManifest;
+                    : storedBaselineVersion === BASELINE_LINEAGE_SEALS.recoveryBaselineVersion
+                      ? readFileSync(recoveryManifestUrl)
+                      : currentManifest;
   if (`sha256:${sha256(historicalBytes)}` !== storedBaselineVersion)
     fail('historical manifest seal differs');
   const historical = entries(historicalBytes);
@@ -173,11 +188,13 @@ export function verifyHistoricalBaselineLineage(
     (currentId === BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion ||
       currentId === BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion ||
       currentId === BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion ||
-      currentId === BASELINE_LINEAGE_SEALS.recoveryBaselineVersion) &&
+      currentId === BASELINE_LINEAGE_SEALS.recoveryBaselineVersion ||
+      currentId === BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion) &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion &&
-    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.recoveryBaselineVersion
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.recoveryBaselineVersion &&
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion
       ? Object.keys(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts)
       : [];
   const expectedPaths = new Set([...historical.keys(), ...additions]);
@@ -223,6 +240,12 @@ export function verifyHistoricalBaselineLineage(
       ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
     }))
       if (current.get(path) !== digest) fail(`approved recovery bytes differ: ${path}`);
+  if (currentId === BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion)
+    for (const [path, digest] of Object.entries({
+      ...BASELINE_LINEAGE_SEALS.initialTraumaAtlas,
+      ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
+    }))
+      if (current.get(path) !== digest) fail(`approved initial trauma bytes differ: ${path}`);
   const expected = BASELINE_LINEAGE_SEALS.replayCatalogDigests;
   if (
     Object.keys(catalogDigests).length !== Object.keys(expected).length ||

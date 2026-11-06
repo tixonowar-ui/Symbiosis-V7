@@ -491,7 +491,7 @@
   },
   {
     "from": "NPC-016",
-    "guard": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
+    "guard": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes.",
     "kind": "journey",
     "to": "NPC-017",
     "trigger": "J-NPC-CREATE::COMMIT"
@@ -6581,14 +6581,14 @@
   },
   {
     "from": "NPC-016",
-    "guard": "INITIAL_STATE_VALID При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
+    "guard": "INITIAL_STATE_VALID При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes.",
     "kind": "normative",
     "to": "NPC-017",
     "trigger": "Перейти к итоговой проверке"
   },
   {
     "from": "NPC-017",
-    "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write.",
+    "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes.",
     "kind": "workflow-command",
     "to": "NPC-003",
     "trigger": "Сохранить NPC атомарно"

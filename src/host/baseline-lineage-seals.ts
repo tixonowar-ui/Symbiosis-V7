@@ -72,6 +72,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       'e9d130077f6d3178a15d0054394b387dff4c892a10f79644e52f2dc539bcbc77',
   },
+  // ADR 0081 / #228: exact initial NPC trauma source; no old snapshot rewrite.
+  initialTraumaBaselineVersion:
+    'sha256:d19b288a208943da83b2e25569adfa96fc7ef7722d5539e776509ff19d4719b2',
+  initialTraumaAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'badcb72c2667fd12ece51e782ab932600189ceeb0e3969b757a90717f112a47a',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '8b9438fcc70c37e2a0091de408403f689696f1b3a9b314b37816b1d36446d387',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
