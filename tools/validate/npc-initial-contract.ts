@@ -6,6 +6,10 @@ import {
   assertAdr0086TemporaryWeaver,
   assertAdr0086TemporaryWeaverMarkdown,
 } from '../import/temporary-weaver-atlas-contract.js';
+import {
+  assertAdr0087InitialPoison,
+  assertAdr0087InitialPoisonMarkdown,
+} from '../import/initial-poison-atlas-contract.js';
 import { asArray, asObject, asString, type JsonObject } from '../import/lib/json.js';
 import { fail } from '../import/lib/fail.js';
 
@@ -19,6 +23,7 @@ export function validateNpcInitialStateContracts(
 ): void {
   assertAdr0085InitialLife(source);
   assertAdr0086TemporaryWeaver(source);
+  assertAdr0087InitialPoison(source);
 
   const seen = new Set<string>();
   const globalContracts = Object.fromEntries(
@@ -50,6 +55,8 @@ export function validateNpcInitialStateContracts(
   };
   assertAdr0085InitialLife(emitted);
   assertAdr0086TemporaryWeaver(emitted);
+  assertAdr0087InitialPoison(emitted);
   assertAdr0085InitialLifeMarkdown(markdown);
   assertAdr0086TemporaryWeaverMarkdown(markdown);
+  assertAdr0087InitialPoisonMarkdown(markdown);
 }

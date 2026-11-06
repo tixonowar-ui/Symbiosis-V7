@@ -1,5 +1,16 @@
 # Состояние модулей
 
+## Source #240 — 2026-11-07
+
+Atlas 1.19/B14 и [ADR 0087](../adr/0087-initial-taipan-poison-and-coatings.md) определяют
+явный initial activePoisonType нового Тайпана, сохранение retained mode/pending
+timer и приготовленную дозу на отдельной source-bound поверхности. Новая доза
+совпадает с действующим mode; future value использует current L доступного
+источника либо последнее доказанное значение после его утраты. Original
+snapshot неизменен. Target dice/Z/anatomy отсутствуют, coating expiry
+не придумывается. Controls входят в NPC-015/016, readback — в лист/историю.
+Это поставка источников, не завершение runtime #187/#240 или future delivery.
+
 ## Source #237/#239 — 2026-11-06
 
 Atlas 1.18/B13 и [ADR 0085](../adr/0085-initial-npc-life-state.md) определяют

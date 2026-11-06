@@ -12,6 +12,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 // Intersecting witnesses include the accepted custom item source clarification in ADR 0084.
 // Intersecting witnesses include the accepted initial life source clarification in ADR 0085.
 // Intersecting witnesses include the accepted formal Weaver source clarification in ADR 0086.
+// Intersecting witnesses include the accepted initial poison source clarification in ADR 0087.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -261,7 +262,7 @@ const ROOT_SEALS = [
   },
   {
     key: 'transitions',
-    sha256: 'd99c7420fd95b74c2cc55324701e224a8ac8ecd76b2de238658da768768b63d5',
+    sha256: '76d2cf3f7b0e93adaffd28e06efc23883ff19863c023c8530ef003a92abf5c6c',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

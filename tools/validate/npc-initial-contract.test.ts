@@ -42,6 +42,22 @@ describe('standalone validation of delivered and generated NPC initial-state con
   it('accepts the real independently emitted contract and Markdown', () => {
     expect(() => validateNpcInitialStateContracts(source, generated, markdown)).not.toThrow();
   });
+  it.each(['NPC-015', 'NPC-016', 'NPC-017', 'NPC-003', 'NPC-007'])(
+    'refuses generated-only poison drift in %s with unchanged source and QA mirrors',
+    (id) => {
+      const modified = changedRow(generated, 'forms', 'id', id, (row) => {
+        row['acceptanceCriteria'] = (row['acceptanceCriteria'] as string[]).filter(
+          (clause) => !clause.startsWith('ADR0087'),
+        );
+      });
+      expect(() => validateNpcInitialStateContracts(source, modified, markdown)).toThrow(id);
+    },
+  );
+  it('refuses independently changed poison Markdown even with exact emitted files', () => {
+    const changed = markdown.replace('ADR0087 controls:', 'Unapproved poison controls:');
+    expect(changed).not.toBe(markdown);
+    expect(() => validateNpcInitialStateContracts(source, generated, changed)).toThrow();
+  });
   it.each(['ADR0085', 'ADR0086'])(
     'rejects generated-only %s state clauses even when generic QA mirrors are unchanged',
     (prefix) => {
