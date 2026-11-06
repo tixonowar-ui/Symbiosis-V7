@@ -108,6 +108,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '35bd2f81b29060bb6cab3471aadca4438c604442183d678fec217bbc51cf3b66',
   },
+  // ADR 0085/0086 / #237/#239: exact initial NPC life/Weaver source; old snapshots and receipts stay sealed.
+  initialLifeBaselineVersion:
+    'sha256:7e18365f92f7f980238795decc3a770335627c9fb2a34fa2eafc11512ea01e3b',
+  initialLifeAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '77446e031f78633d8c2f48501cbf19ad912a8692c0e3d6bbe52ebc00f1fb43d7',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '81d4c0ed98f9401bc0c814581f36237be4df0bb0e61c8b43a9b4ab35dfc6b36e',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',

@@ -19362,7 +19362,13 @@
       "Явные PENDING/CONSUMED и ABSENT/ACTIVE оглушения головы; оставшийся срок без defaults",
       "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей",
       "Алкогольное состояние: причина, подтверждённое начало и первое/следующее срабатывание либо NO_EFFECT",
-      "Текущие Hunger/Regeneration, источник и сроки; H и вычисленные HP без повторного применения"
+      "Текущие Hunger/Regeneration, источник и сроки; H и вычисленные HP без повторного применения",
+      "Явное ALIVE/SEVERELY_WOUNDED/DEAD, HP и причина",
+      "Настоящий formal D6 и отдельный точный остаток; original/current source proof",
+      "Терминальность DEAD и исходные life flags без повторного события",
+      "Текущее formal состояние Ткача: actual source, branch, причина и точный остаток",
+      "Совместимость RECOVERY/death deadlines без продления и нового D6",
+      "Явное снятие с причиной; originalR20 ABSENT и независимый origin"
     ],
     "contexts": [
       "npc"
@@ -19392,17 +19398,29 @@
       "traumaStateValidationSummary",
       "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}",
       "alcoholScheduleOrNoEffectOrNull",
-      "combinedHpModesAndValidationOrNull"
+      "combinedHpModesAndValidationOrNull",
+      "initialLifeState=ALIVE|SEVERELY_WOUNDED|DEAD",
+      "lifeStateReason",
+      "severeWoundPreparationOrNull",
+      "initialLifeStateFacts[]",
+      "lifeStateValidationSummary",
+      "temporaryWeaverStates[]",
+      "temporaryWeaverStatePreparations[]",
+      "temporaryWeaverValidationSummary"
     ],
     "roles": [
       "gm"
     ],
     "route": "/master/campaigns/:campaignId/npc/npc-016",
     "states": {
-      "INITIAL_STATE_INVALID": "HP/OE/effect instance либо дееспособность противоречат старшим реестрам.",
-      "INITIAL_STATE_VALID": "Полный исходный runtime snapshot валиден. Для календарного состояния подтверждён свежий host-bound time preview.",
+      "INITIAL_STATE_INVALID": "HP/OE/effect instance либо дееспособность противоречат старшим реестрам. Несогласованные life state/HP/proof, новый D6 вместо retained или попытка ordinary воскрешения дают отказ. Неполный/недоказанный source, неподходящий life/HP, истёкший неразрешённый эффект, изменённый original origin, превышенный остаток, конфликт cardinality или несовместимые deadlines блокируют final PREVIEW/COMMIT.",
+      "INITIAL_STATE_VALID": "Полный исходный runtime snapshot валиден. Для календарного состояния подтверждён свежий host-bound time preview. ADR0085 initial life closure: explicit ALIVE/SEVERELY_WOUNDED/DEAD and reason with matching HP; severe state has one actual host D6, explicit exact remaining minutes and independently proven original/current duplicate and time binding; retained timers never restart, terminal death never revives by ordinary edit; no synthetic damage, repeated protections or self-proven historical origins. ADR0086 temporary Weaver closure: only explicit source-bound formal TEMPORARY/RECOVERY/PROTECTION with reason, exact remaining within 5/7/10 and actual time; original R20 ABSENT and no activation/resource replay; final life/HP/source/cardinality valid, recovery deadline fits unchanged death deadline, retained origins immutable and expired unresolved source blocks current snapshot.",
       "INITIAL_TIME_REQUIRED": "Календарное состояние до Start требует ввода и сохранения времени в NET-016; commit недоступен.",
       "INITIAL_TIME_STALE": "Время или bound revision изменены после preview; требуется новая проверка без автоматического переноса anchors.",
+      "LIFE_STATE_INCOMPLETE": "Не выбран явный life state/reason, отсутствует настоящий D6, точный остаток или независимый source/time proof. UNSET сохраняется в draft, forward/COMMIT недоступны.",
+      "LIFE_STATE_VALID": "Состояние, HP, source capabilities и original/current proof согласованы; нет повторного урона/защиты, перезапуска retained таймера или ordinary воскрешения.",
+      "TEMPORARY_WEAVER_INVALID": "Неполный/недоказанный source, неподходящий life/HP, истёкший неразрешённый эффект, изменённый original origin, превышенный остаток, конфликт cardinality или несовместимые deadlines блокируют final PREVIEW/COMMIT.",
+      "TEMPORARY_WEAVER_VALID": "Проверены actual source/узел, formal branch, exact срок, cardinality и final life/HP; RECOVERY укладывается в неизменный death deadline. Явное отсутствие состояний допускает пустой массив; defaults не назначаются.",
       "TRAUMA_AUTHORING_INCOMPLETE": "Не задана reason или явная обязательная HEAD choice; некорректны closed fields, диапазон/grammar остатка либо source/calendar binding. Неполный technical draft сохраняет UNSET, но forward/COMMIT постоянной версии недоступен с field error.",
       "TRAUMA_AUTHORING_VALID": "Closed choices и real immutable origin facts проверены; final HP, limb totals, явные penalty/stun и original exact calendar anchor/остаток согласованы без повторного применения последствий.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
@@ -19451,7 +19469,13 @@
       "Явные PENDING/CONSUMED и ABSENT/ACTIVE оглушения головы; оставшийся срок без defaults",
       "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей",
       "Алкогольное состояние: причина, подтверждённое начало и первое/следующее срабатывание либо NO_EFFECT",
-      "Текущие Hunger/Regeneration, источник и сроки; H и вычисленные HP без повторного применения"
+      "Текущие Hunger/Regeneration, источник и сроки; H и вычисленные HP без повторного применения",
+      "Явное ALIVE/SEVERELY_WOUNDED/DEAD, HP и причина",
+      "Настоящий formal D6 и отдельный точный остаток; original/current source proof",
+      "Терминальность DEAD и исходные life flags без повторного события",
+      "Текущее formal состояние Ткача: actual source, branch, причина и точный остаток",
+      "Совместимость RECOVERY/death deadlines без продления и нового D6",
+      "Явное снятие с причиной; originalR20 ABSENT и независимый origin"
     ],
     "contexts": [
       "npc"
@@ -19491,7 +19515,15 @@
       "combinedHpModesAndValidationOrNull",
       "trogrStrengthAndLegacyOrNull",
       "sym166Pool={capacity:0|5,used,available,overfill,charges[]}",
-      "sourceClosureValidationSummary"
+      "sourceClosureValidationSummary",
+      "initialLifeState=ALIVE|SEVERELY_WOUNDED|DEAD",
+      "lifeStateReason",
+      "severeWoundPreparationOrNull",
+      "initialLifeStateFacts[]",
+      "lifeStateValidationSummary",
+      "temporaryWeaverStates[]",
+      "temporaryWeaverStatePreparations[]",
+      "temporaryWeaverValidationSummary"
     ],
     "roles": [
       "gm"
@@ -19503,7 +19535,11 @@
       "IDEMPOTENT_REPLAY": "Повтор commandId возвращает прежний receipt без второго NPC.",
       "INITIAL_TIME_REQUIRED": "Календарное состояние до Start требует ввода и сохранения времени в NET-016; commit недоступен.",
       "INITIAL_TIME_STALE": "Время или bound revision изменены после preview; требуется новая проверка без автоматического переноса anchors.",
-      "READY_TO_COMMIT": "Все восемь этапов валидны; показан полный diff и один commit CTA.",
+      "LIFE_STATE_INCOMPLETE": "Не выбран явный life state/reason, отсутствует настоящий D6, точный остаток или независимый source/time proof. UNSET сохраняется в draft, forward/COMMIT недоступны.",
+      "LIFE_STATE_VALID": "Состояние, HP, source capabilities и original/current proof согласованы; нет повторного урона/защиты, перезапуска retained таймера или ordinary воскрешения.",
+      "READY_TO_COMMIT": "Все восемь этапов валидны; показан полный diff и один commit CTA. ADR0085 initial life closure: explicit ALIVE/SEVERELY_WOUNDED/DEAD and reason with matching HP; severe state has one actual host D6, explicit exact remaining minutes and independently proven original/current duplicate and time binding; retained timers never restart, terminal death never revives by ordinary edit; no synthetic damage, repeated protections or self-proven historical origins. ADR0086 temporary Weaver closure: only explicit source-bound formal TEMPORARY/RECOVERY/PROTECTION with reason, exact remaining within 5/7/10 and actual time; original R20 ABSENT and no activation/resource replay; final life/HP/source/cardinality valid, recovery deadline fits unchanged death deadline, retained origins immutable and expired unresolved source blocks current snapshot.",
+      "TEMPORARY_WEAVER_INVALID": "Неполный/недоказанный source, неподходящий life/HP, истёкший неразрешённый эффект, изменённый original origin, превышенный остаток, конфликт cardinality или несовместимые deadlines блокируют final PREVIEW/COMMIT.",
+      "TEMPORARY_WEAVER_VALID": "Проверены actual source/узел, formal branch, exact срок, cardinality и final life/HP; RECOVERY укладывается в неизменный death deadline. Явное отсутствие состояний допускает пустой массив; defaults не назначаются.",
       "TRAUMA_AUTHORING_INCOMPLETE": "Не задана reason или явная обязательная HEAD choice; некорректны closed fields, диапазон/grammar остатка либо source/calendar binding. Неполный technical draft сохраняет UNSET, но forward/COMMIT постоянной версии недоступен с field error.",
       "TRAUMA_AUTHORING_VALID": "Closed choices и real immutable origin facts проверены; final HP, limb totals, явные penalty/stun и original exact calendar anchor/остаток согласованы без повторного применения последствий.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
