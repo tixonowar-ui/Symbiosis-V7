@@ -1,5 +1,16 @@
 # Состояние модулей
 
+## Source #236 — 2026-11-06
+
+Atlas 1.17/B12 и [ADR 0084](../adr/0084-campaign-custom-item-source.md)
+закрывают идентичность нового произвольного custom item: campaign profile
+с host UUID/version, явные bonus controls и реальный backpack binding.
+Каталожная ветвь сохраняет FK и исходную механику; предметный слой не
+подменяет базу или постоянный вклад. NPC-015/017, лист и история обязаны
+показывать источник, версию, действующий бонус и причину. Старые snapshots,
+receipts, FINAL и non-Atlas артефакты неизменны. B12 добавляет точную forward
+совместимость; runtime #187/#236 эта source-поставка не завершает.
+
 ## Source #234 — 2026-11-06
 
 Atlas 1.16/B11 и [ADR 0083](../adr/0083-fresh-trogr-death.md) уточняют

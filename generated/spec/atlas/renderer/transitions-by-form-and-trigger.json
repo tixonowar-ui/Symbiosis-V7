@@ -4145,7 +4145,7 @@
     },
     "Продолжить к HP и исходному состоянию": {
       "from": "NPC-015",
-      "guard": "INVENTORY_VALID",
+      "guard": "INVENTORY_VALID ADR0084 custom item closure: closed CATALOG_ITEM FK or campaign-bound CAMPAIGN_CUSTOM_PROFILE identity; explicit structured fields and NONE or one positive integer stat bonus; quantity=1 for each bonus instance; actual same-owner backpack or explicit outside state; immutable profile/version/provenance and separate source-derived item layer; no invented catalogue IDs, containers, defaults or replaced canonical mechanics.",
       "kind": "normative",
       "to": "NPC-016",
       "trigger": "Продолжить к HP и исходному состоянию"
