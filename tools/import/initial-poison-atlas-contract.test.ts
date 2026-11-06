@@ -105,7 +105,7 @@ describe('ADR 0087 initial Taipan mode and prepared poison source boundary', () 
     ['NPC-015', 'NPC-016', 'INITIAL_STATE', 'NPC-014', 'ADR0087 coating inventory closure:'],
     ['NPC-016', 'NPC-017', 'COMMIT', 'NPC-015', 'ADR0087 poison closure:'],
   ])('mirrors %s forward guards and preserves back routes', (from, to, state, backId, witness) => {
-    const { root, form } = editedForm(from!);
+    const { root, form } = editedForm(from);
     const actions = (form['actions'] as JsonObject)['ctaAvailabilityByAction'] as JsonObject[];
     const forward = actions.filter((row) => row['targetFormId'] === to);
     expect(forward).toHaveLength(2);
