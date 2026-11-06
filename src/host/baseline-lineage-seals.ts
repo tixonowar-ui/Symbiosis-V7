@@ -101,12 +101,12 @@ export const BASELINE_LINEAGE_SEALS = {
   },
   // ADR 0084 / #236: exact campaign custom-item source; historical item types and receipts remain sealed.
   customItemBaselineVersion:
-    'sha256:b431dcff9858de48d50a6134c68dd64f3564ec29538adc0295a0db2669e7c64a',
+    'sha256:7d5fa296104b3a25b1f2465b1247284fbda34df470388c9aefaf4159191e72f6',
   customItemAtlas: {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
-      '352e47cffd5675b2d7cea70db7172e86b5716ec8cacea3e4c57d3ba59adf74eb',
+      'c565edcb5487b9ba9d9de8e9fba1f9424b5c8e532442e2408f83b9cb0e5bc3f7',
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
-      '2e1275d39ce0f29d6e8162befb18b4573eab0ba8146bd523491be21a23931ec8',
+      '35bd2f81b29060bb6cab3471aadca4438c604442183d678fec217bbc51cf3b66',
   },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':

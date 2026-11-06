@@ -26,6 +26,20 @@ describe('ADR 0084 campaign custom item source boundary', () => {
     expect(() => assertAdr0084CustomItem(source)).not.toThrow();
     expect(() => assertAdr0084CustomItemMarkdown(markdown)).not.toThrow();
   });
+  it.each(['NPC-003', 'NPC-007', 'NPC-014', 'NPC-015', 'NPC-016', 'NPC-017'])(
+    'keeps the complete ordered required-field list in the form QA mirror for %s',
+    (id) => {
+      const { form } = editedForm(id);
+      const qa = (source['qaScenarios'] as JsonObject[]).find(
+        (row) => row['qaId'] === `QA-FORM-${id}`,
+      );
+      const fields = form['requiredFields'];
+      if (!Array.isArray(fields) || !fields.every((field) => typeof field === 'string'))
+        throw new Error('Expected exact source required fields');
+      expect(fields.length).toBeGreaterThan(0);
+      expect(qa?.['scenario']).toContain(fields.join(', '));
+    },
+  );
   it('replaces only the unconditional catalogue identity requirement with the closed variant', () => {
     const { root, form } = editedForm('NPC-015');
     expect(form['requiredFields']).toContain('itemTypeReference');

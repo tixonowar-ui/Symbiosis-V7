@@ -98,7 +98,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NPC-015',
-    sha256: '8c945b60e59212638cfe699d04fbc6944256d26c51de19bd8df16d9032623d1a',
+    sha256: 'fc495607ae85c5e38e762fe0fa121144d8545454ff7945815d851ea1cfc3e1a0',
   },
   {
     target: 'qaScenarios',
@@ -260,7 +260,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NPC-015 |',
-    sha256: '921102f9278084ea84abd637589421b2ac4a4e3d5ea9350a304de7eac7658569',
+    sha256: 'e7799dba716887897aa9e6bf867996ae14e32931eadfb3c2580097b1f45c9756',
   },
   {
     prefix: '| QA-CHANGE-NPC-015 |',
