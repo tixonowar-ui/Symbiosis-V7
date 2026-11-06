@@ -1,5 +1,21 @@
 # Передача контекста — 2026-11-06
 
+## Согласованная поставка четырёх NPC-правил
+
+База source-кандидата — main `532969707a419142fbabeeaf92f349201f445d7d`
+после squash PR #231; #230 фактически закрыта. Atlas 1.15/B10 и новый
+[ADR 0082](../adr/0082-npc-source-consequences.md) поставляют принятые
+#224/#226/#227/#232: startsAt+60, signed legacy с reached ledger,
+exact1000 для двух HP-режимов и отдельный SYM-166 pool. Поставка источника
+не закрывает требования runtime/controls этих issues и полный #187.
+
+Atlas counts, IDs, GM-014, globalContracts, mechanical XLSX/Runtime Pack
+сохранены. B9 manifest заморожен; B10 hash
+`ab8f52c27442a697b098d9863e0ed90e6b2a4b8a7995aadd55ee57ad9a6860c9`.
+Новый lineage patch — реальный Git diff. Generated создаётся только import.
+Авторские проверки, независимые review/clean5 и CI нужно читать по
+окончательному committed SHA в PR, не по предварительным source reports.
+
 ## Техническая граница #230 и оставшийся runtime #187
 
 Source #228 поставлена squash PR #229: main

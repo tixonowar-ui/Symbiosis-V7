@@ -470,14 +470,14 @@
   },
   {
     "from": "NPC-013",
-    "guard": "Требования, классовые/расовые источники и slots.",
+    "guard": "Требования, классовые/расовые источники и slots. ADR0082 composition closure: actual source-bound Trogr strength/included-strength/signed-snapshot facts and immutable history are complete; current symbiont source and SYM-166 capacity are recomputed, not client asserted. ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools.",
     "kind": "journey",
     "to": "NPC-014",
     "trigger": "J-NPC-CREATE::SKILLS"
   },
   {
     "from": "NPC-014",
-    "guard": "Полные типизированные предметные профили и допустимые story/custom items.",
+    "guard": "Полные типизированные предметные профили и допустимые story/custom items. ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools.",
     "kind": "journey",
     "to": "NPC-015",
     "trigger": "J-NPC-CREATE::INVENTORY"
@@ -491,7 +491,7 @@
   },
   {
     "from": "NPC-016",
-    "guard": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes.",
+    "guard": "Все восемь этапов валидны; host-bound CREATE_V1 или APPEND_N_PLUS_ONE и ревизии подтверждены. Переход NPC-016→NPC-017 открывает итоговую проверку без сохранения NPC/history; отдельная кнопка commit использует команду подтверждённого режима. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes. ADR0082 composition closure: actual source-bound Trogr strength/included-strength/signed-snapshot facts and immutable history are complete; current symbiont source and SYM-166 capacity are recomputed, not client asserted. ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools. ADR0082 initial-state closure: CORE-110 uses exact startsAt+60 schedule or proven NO_EFFECT; combined MON-023/SYM-034 HP uses exact1000 precedence and proven source/time state without replaying activation/expiry consequences. ADR0082 source closure: immutable old snapshots/FINAL/receipts/IDs/timestamps and exact proof prefixes are retained; new facts bind to actual owner/attempt/version/campaign/time and source instances. Unknown, missing, foreign, stale, changed or unproven historical data refuses with zero writes. No invented histories/RNG, unchecked numerical fields or second NPC shell; all new editable choices have actual controls, computed values remain read-only.",
     "kind": "journey",
     "to": "NPC-017",
     "trigger": "J-NPC-CREATE::COMMIT"
@@ -6539,7 +6539,7 @@
   },
   {
     "from": "NPC-013",
-    "guard": "SYMBIONTS_VALID",
+    "guard": "SYMBIONTS_VALID ADR0082 composition closure: actual source-bound Trogr strength/included-strength/signed-snapshot facts and immutable history are complete; current symbiont source and SYM-166 capacity are recomputed, not client asserted. ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools.",
     "kind": "normative",
     "to": "NPC-014",
     "trigger": "Продолжить к навыкам"
@@ -6553,7 +6553,7 @@
   },
   {
     "from": "NPC-014",
-    "guard": "SKILLS_VALID",
+    "guard": "SKILLS_VALID ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools.",
     "kind": "normative",
     "to": "NPC-015",
     "trigger": "Продолжить к инвентарю"
@@ -6581,14 +6581,14 @@
   },
   {
     "from": "NPC-016",
-    "guard": "INITIAL_STATE_VALID При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes.",
+    "guard": "INITIAL_STATE_VALID При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes. ADR0082 composition closure: actual source-bound Trogr strength/included-strength/signed-snapshot facts and immutable history are complete; current symbiont source and SYM-166 capacity are recomputed, not client asserted. ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools. ADR0082 initial-state closure: CORE-110 uses exact startsAt+60 schedule or proven NO_EFFECT; combined MON-023/SYM-034 HP uses exact1000 precedence and proven source/time state without replaying activation/expiry consequences. ADR0082 source closure: immutable old snapshots/FINAL/receipts/IDs/timestamps and exact proof prefixes are retained; new facts bind to actual owner/attempt/version/campaign/time and source instances. Unknown, missing, foreign, stale, changed or unproven historical data refuses with zero writes. No invented histories/RNG, unchecked numerical fields or second NPC shell; all new editable choices have actual controls, computed values remain read-only.",
     "kind": "normative",
     "to": "NPC-017",
     "trigger": "Перейти к итоговой проверке"
   },
   {
     "from": "NPC-017",
-    "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes.",
+    "guard": "Все восемь этапов валидны. Host-bound CREATE_V1 выполняет UI-CMD-NPC-COMMIT-V1; APPEND_N_PLUS_ONE выполняет UI-CMD-NPC-NEW-VERSION phase=COMMIT с текущими expectedCurrentVersion/attemptRevision. Команда сохраняет одну атомарную полную версию и history. При pre-Start calendar state подтверждены initial time и свежий host-bound PRE_START_INITIAL preview; после Start проверяется CURRENT_CAMPAIGN preview. Без календарного состояния time binding не требуется. Stale time/attempt/campaign revision causes zero write. Initial trauma authoring is closed and source-valid: one explicit choice per host-bound trauma identity; final entered HP is preserved for TORSO; HEAD penalty=PENDING|CONSUMED and stun=ABSENT|ACTIVE are explicit. ACTIVE requires traumaValue>6, a canonical decimal-string remainingMinutes with exact rational 0<r<=5 and a current typed calendar binding; ABSENT has no timer fields. Retained identities keep original committed facts/anchors. No played damage/RNG event or repeated one-time consequence is synthesized; incomplete/stale/foreign/changed input refuses with zero writes. ADR0082 composition closure: actual source-bound Trogr strength/included-strength/signed-snapshot facts and immutable history are complete; current symbiont source and SYM-166 capacity are recomputed, not client asserted. ADR0082 skill closure: every charge names START, TRAINING or SYM-166; SYM-166 has current capacity5/0 with retained costs and explicit overfill, no repeated grant or rewriting original pools. ADR0082 initial-state closure: CORE-110 uses exact startsAt+60 schedule or proven NO_EFFECT; combined MON-023/SYM-034 HP uses exact1000 precedence and proven source/time state without replaying activation/expiry consequences. ADR0082 source closure: immutable old snapshots/FINAL/receipts/IDs/timestamps and exact proof prefixes are retained; new facts bind to actual owner/attempt/version/campaign/time and source instances. Unknown, missing, foreign, stale, changed or unproven historical data refuses with zero writes. No invented histories/RNG, unchecked numerical fields or second NPC shell; all new editable choices have actual controls, computed values remain read-only.",
     "kind": "workflow-command",
     "to": "NPC-003",
     "trigger": "Сохранить NPC атомарно"

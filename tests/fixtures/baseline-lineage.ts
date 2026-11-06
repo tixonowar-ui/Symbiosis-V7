@@ -22,7 +22,7 @@ import {
 } from './baseline-atlas-patch.js';
 
 export type BaselineFixtureRelease =
-  'B0' | 'B1' | 'B2' | 'B3' | 'B4' | 'B5' | 'B6' | 'B7' | 'B8' | 'B9';
+  'B0' | 'B1' | 'B2' | 'B3' | 'B4' | 'B5' | 'B6' | 'B7' | 'B8' | 'B9' | 'B10';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
@@ -37,6 +37,7 @@ const recoveryPatchPath = fileURLToPath(
   new URL('./atlas-221-recovery-lineage.patch', import.meta.url),
 );
 const initialTraumaPatchPath = fileURLToPath(new URL('./atlas-228-lineage.patch', import.meta.url));
+const npcRulesPatchPath = fileURLToPath(new URL('./atlas-232-lineage.patch', import.meta.url));
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
 );
@@ -72,6 +73,7 @@ export const BASELINE_FIXTURE_IDS = {
   B7: BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion,
   B8: BASELINE_LINEAGE_SEALS.recoveryBaselineVersion,
   B9: BASELINE_LINEAGE_SEALS.initialTraumaBaselineVersion,
+  B10: BASELINE_LINEAGE_SEALS.npcRulesBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
@@ -84,6 +86,7 @@ const releaseAtlas = {
   B7: BASELINE_LINEAGE_SEALS.normalTransferAtlas,
   B8: BASELINE_LINEAGE_SEALS.recoveryAtlas,
   B9: BASELINE_LINEAGE_SEALS.initialTraumaAtlas,
+  B10: BASELINE_LINEAGE_SEALS.npcRulesAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -99,7 +102,8 @@ export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer
     release === 'B6' ||
     release === 'B7' ||
     release === 'B8' ||
-    release === 'B9'
+    release === 'B9' ||
+    release === 'B10'
   ) {
     const entries = text.trimEnd().split('\n');
     entries.push(
@@ -123,7 +127,7 @@ export function applyBaselineFixtureRelease(
   release: BaselineFixtureRelease,
 ): void {
   const before = readAtlasBytes(projectRoot);
-  const releases = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9'] as const;
+  const releases = ['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'] as const;
   // These private bytes cannot change during the synchronous release lookup.
   // Hash each once instead of rehashing the same JSON for every older release.
   const beforeDigests = Object.fromEntries(atlasPaths.map((path) => [path, sha(before[path])]));
@@ -144,6 +148,7 @@ export function applyBaselineFixtureRelease(
         readFileSync(normalTransferPatchPath),
         readFileSync(recoveryPatchPath),
         readFileSync(initialTraumaPatchPath),
+        readFileSync(npcRulesPatchPath),
       ]),
     );
   const patchSha256 = patchSeal();
@@ -201,7 +206,9 @@ export function applyBaselineFixtureRelease(
                           ? normalTransferPatchPath
                           : edge === 7
                             ? recoveryPatchPath
-                            : initialTraumaPatchPath,
+                            : edge === 8
+                              ? initialTraumaPatchPath
+                              : npcRulesPatchPath,
           ),
           reverse,
         );
@@ -241,7 +248,8 @@ export function applyBaselineFixtureRelease(
       release === 'B6' ||
       release === 'B7' ||
       release === 'B8' ||
-      release === 'B9'
+      release === 'B9' ||
+      release === 'B10'
     ) {
       const supplied = readFileSync(join(sourceRoot, 'artifacts', path));
       assert.equal(sha(supplied), digest, 'supplied GM source bytes differ');
@@ -252,7 +260,7 @@ export function applyBaselineFixtureRelease(
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0–B9 sources use nine reviewed Atlas patches and the three sealed B5–B9 art paths. */
+/** Exact B0–B10 sources use ten reviewed Atlas patches and the three sealed B5–B10 art paths. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

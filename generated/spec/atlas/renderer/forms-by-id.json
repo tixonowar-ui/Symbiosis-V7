@@ -19138,7 +19138,9 @@
       "Привязки",
       "Взаимодействия",
       "Текущий/максимальный ОЭ",
-      "Слоты и blockers"
+      "Слоты и blockers",
+      "Уровень/узлы/состав и последствия до подтверждения; reached/included strength и signed snapshot Трогра",
+      "Действующий источник SYM-166 и влияние изменения состава на вместимость его пула"
     ],
     "contexts": [
       "npc"
@@ -19159,7 +19161,10 @@
       "interactions[]",
       "currentOE",
       "computedMaxOE",
-      "slotCapacityAndCompatibility"
+      "slotCapacityAndCompatibility",
+      "trogrStrengthAndLegacyOrNull",
+      "compositionHistoryValidationSummary",
+      "sym166SourceAvailability"
     ],
     "roles": [
       "gm"
@@ -19204,7 +19209,9 @@
       "Требования",
       "Классовые/расовые источники",
       "Слоты",
-      "Итоговая валидация навыков"
+      "Итоговая валидация навыков",
+      "Выбор навыка, targetBonus и пула оплаты; отдельный остаток и переполнение SYM-166",
+      "Реальные затраты и источник каждой ступени без сброса истории"
     ],
     "contexts": [
       "npc"
@@ -19223,7 +19230,10 @@
       "requirements",
       "slotSource",
       "slotUsage",
-      "skillValidationSummary"
+      "skillValidationSummary",
+      "skillPools[]=START|TRAINING|SYM-166",
+      "sym166Pool={capacity:0|5,used,available,overfill,charges[]}",
+      "skillChargeProvenance[]"
     ],
     "roles": [
       "gm"
@@ -19342,7 +19352,9 @@
       "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock",
       "Травмы: зона, resolved значение, причина и отдельные identities",
       "Явные PENDING/CONSUMED и ABSENT/ACTIVE оглушения головы; оставшийся срок без defaults",
-      "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей"
+      "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей",
+      "Алкогольное состояние: причина, подтверждённое начало и первое/следующее срабатывание либо NO_EFFECT",
+      "Текущие Hunger/Regeneration, источник и сроки; H и вычисленные HP без повторного применения"
     ],
     "contexts": [
       "npc"
@@ -19370,7 +19382,9 @@
       "currentTraumas[]",
       "traumaAuthoringChoices[]=exact {traumaInstanceId,reason,consequence:{kind=LIMB}|{kind=TORSO,hpInterpretation=CURRENT_HP_ALREADY_FINAL}|{kind=HEAD,penalty=PENDING|CONSUMED,stun:{status=ABSENT}|{status=ACTIVE,remainingMinutes:canonicalDecimalString}}}",
       "traumaStateValidationSummary",
-      "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}"
+      "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}",
+      "alcoholScheduleOrNoEffectOrNull",
+      "combinedHpModesAndValidationOrNull"
     ],
     "roles": [
       "gm"
@@ -19427,7 +19441,9 @@
       "Подтверждённое время и календарные anchors; причина отсутствующей/устаревшей привязки; сохранённый initial-time lock",
       "Травмы: зона, resolved значение, причина и отдельные identities",
       "Явные PENDING/CONSUMED и ABSENT/ACTIVE оглушения головы; оставшийся срок без defaults",
-      "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей"
+      "Введённый и итоговый HP без повторного урона корпуса; суммы травм конечностей",
+      "Алкогольное состояние: причина, подтверждённое начало и первое/следующее срабатывание либо NO_EFFECT",
+      "Текущие Hunger/Regeneration, источник и сроки; H и вычисленные HP без повторного применения"
     ],
     "contexts": [
       "npc"
@@ -19462,7 +19478,12 @@
       "currentTraumas[]",
       "traumaAuthoringChoices[]=exact {traumaInstanceId,reason,consequence:{kind=LIMB}|{kind=TORSO,hpInterpretation=CURRENT_HP_ALREADY_FINAL}|{kind=HEAD,penalty=PENDING|CONSUMED,stun:{status=ABSENT}|{status=ACTIVE,remainingMinutes:canonicalDecimalString}}}",
       "traumaStateValidationSummary",
-      "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}"
+      "initialTraumaFacts[]=exact {format=NPC_INITIAL_TRAUMA_V1,originKind=INITIAL_STATE_AUTHORING,scope:{campaignId,gmLocalContextId,ownerDeviceId},npcUuid,origin:{commitOperationId,sourceOperationId,version,committedAt},trauma:{traumaInstanceId,regionId,traumaValue},reason,consequence:SealedConsequence}",
+      "alcoholScheduleOrNoEffectOrNull",
+      "combinedHpModesAndValidationOrNull",
+      "trogrStrengthAndLegacyOrNull",
+      "sym166Pool={capacity:0|5,used,available,overfill,charges[]}",
+      "sourceClosureValidationSummary"
     ],
     "roles": [
       "gm"
