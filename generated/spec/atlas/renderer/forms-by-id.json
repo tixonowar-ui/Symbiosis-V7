@@ -19279,7 +19279,10 @@
       "Фармацевтика",
       "Инструменты и артефакты",
       "Типизированные story/custom items",
-      "Полные профили и экипировка"
+      "Полные профили и экипировка",
+      "Новый произвольный профиль кампании",
+      "Явный бонус либо его отсутствие",
+      "Реальный рюкзак и действующий предметный слой"
     ],
     "contexts": [
       "npc"
@@ -19294,20 +19297,25 @@
       "npcDraftId",
       "inventoryItems[]",
       "itemInstanceId",
-      "itemTypeId",
+      "itemTypeReference",
       "quantity",
       "profileVersion",
       "equipmentState",
       "storyCustomStructuredFields",
-      "inventoryValidationSummary"
+      "inventoryValidationSummary",
+      "customProfileOrNull",
+      "customBonusChoice",
+      "bonusContainerBinding",
+      "customProfileReasonOrNull",
+      "effectiveItemModifierSummary"
     ],
     "roles": [
       "gm"
     ],
     "route": "/master/campaigns/:campaignId/npc/npc-015",
     "states": {
-      "INVENTORY_INVALID": "Есть неполный профиль или свободная неописанная механика.",
-      "INVENTORY_VALID": "Все предметы типизированы и имеют полные профили.",
+      "INVENTORY_INVALID": "Есть неполный профиль или свободная неописанная механика. Неизвестная type reference, неподтверждённый custom profile или чужой/выдуманный container binding не становятся допустимым предметом.",
+      "INVENTORY_VALID": "Все предметы типизированы и имеют полные профили. ADR0084 custom item closure: closed CATALOG_ITEM FK or campaign-bound CAMPAIGN_CUSTOM_PROFILE identity; explicit structured fields and NONE or one positive integer stat bonus; quantity=1 for each bonus instance; actual same-owner backpack or explicit outside state; immutable profile/version/provenance and separate source-derived item layer; no invented catalogue IDs, containers, defaults or replaced canonical mechanics.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",

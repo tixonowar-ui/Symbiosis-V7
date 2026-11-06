@@ -7,6 +7,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 // Intersecting witnesses include the accepted initial NPC trauma source amendment in ADR 0081.
 // Intersecting witnesses include the accepted NPC source consequences in ADR 0082.
 // Intersecting witnesses include the accepted fresh Trogr source clarification in ADR 0083.
+// Intersecting witnesses include the accepted custom item source clarification in ADR 0084.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -220,11 +221,11 @@ const ROOT_SEALS = [
   },
   {
     key: 'transitions',
-    sha256: '9dd9bbdccade7312f84a8689e3f312bcb0c91c46e168d30d7a5e2dfe21b5f8f3',
+    sha256: 'f3869b71e58597b08c93237cc3293476b118b3be0022de41214638707b957678',
   },
   {
     key: 'registryCoverage',
-    sha256: '8542af9faa630e9945805bec06b674e76ee766468e0f704532ec9009ecc3035f',
+    sha256: '84f0b172c4c63e32407dea4642a166cdfef83729e7e4db151d5a37b5c2669260',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

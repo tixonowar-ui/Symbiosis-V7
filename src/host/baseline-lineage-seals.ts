@@ -99,6 +99,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '5fe7a5d7eef07610047e80050a9aa9be31ede6d1545739d97ce84561ca03b0ed',
   },
+  // ADR 0084 / #236: exact campaign custom-item source; historical item types and receipts remain sealed.
+  customItemBaselineVersion:
+    'sha256:7d5fa296104b3a25b1f2465b1247284fbda34df470388c9aefaf4159191e72f6',
+  customItemAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'c565edcb5487b9ba9d9de8e9fba1f9424b5c8e532442e2408f83b9cb0e5bc3f7',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '35bd2f81b29060bb6cab3471aadca4438c604442183d678fec217bbc51cf3b66',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
