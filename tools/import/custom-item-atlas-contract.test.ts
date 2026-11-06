@@ -66,8 +66,15 @@ describe('ADR 0084 campaign custom item source boundary', () => {
   ])('refuses changing the accepted clause: %s', (before, after) => {
     const { root, form } = editedForm('NPC-015');
     const clauses = form['acceptanceCriteria'] as string[];
-    expect(clauses.filter((line) => line.includes(before))).toHaveLength(1);
-    form['acceptanceCriteria'] = clauses.map((line) => line.replace(before, after));
+    const targets = clauses.filter(
+      (line) => /^ADR0084(?: |:)/u.test(line) && line.includes(before),
+    );
+    expect(targets).toHaveLength(1);
+    const changed = clauses.map((line) =>
+      line === targets[0] ? line.replace(before, after) : line,
+    );
+    expect(changed.filter((line, index) => line !== clauses[index])).toHaveLength(1);
+    form['acceptanceCriteria'] = changed;
     expect(() => assertAdr0084CustomItem(root)).toThrow('NPC-015');
   });
   it('keeps ordinary catalogue fields conditional and profile absence explicit', () => {
