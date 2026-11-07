@@ -353,6 +353,13 @@
 
 ### Исправлено
 
+- **2026-11-07, issue #245:** PEACE/LIFECYCLE E2E возвращает GM из review в
+  лобби до принятия набора игроком. После каждого Ready → unready → Ready
+  сценарий ждёт соответствующую видимую строку устройства на экране GM.
+  Это устраняет отправку возврата с ревизией, устаревшей из-за чужого Ready;
+  исходные controls, assertions и все бюджеты сохранены. Production guards
+  не меняются; неудачная первая CI-попытка сохранена в диагностике issue.
+
 - **2026-10-30, issue #191:** 19 сравнений полного SQLite snapshot в тестах
   current campaign и installation identity используют native `Buffer.equals`.
   Проверка всех байтов и длины сохранена вместе с rollback, corruption,

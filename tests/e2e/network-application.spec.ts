@@ -356,6 +356,16 @@ for (const outcome of [
         await expect(
           playerPage.getByRole('region', { name: 'Согласование набора персонажей' }),
         ).toBeVisible();
+        if (peaceful) {
+          // Reach the lobby before the player's ACCEPT/Ready can advance the GM navigation revision.
+          await action(masterPage, 'NET-021::CTA::001');
+          await action(masterPage, 'NET-017::CTA::009');
+          await action(masterPage, 'CMP-006::CTA::001');
+          await expect(form(masterPage, 'CMP-007')).toBeVisible();
+          await expect(masterPage.locator('input[type="file"]')).toHaveCount(0);
+          await action(masterPage, 'CMP-007::CTA::001');
+          await expect(form(masterPage, 'NET-016')).toBeVisible();
+        }
         await action(playerPage, outcome === 'DECLINE' ? 'NET-027::CTA::004' : 'NET-027::CTA::003');
         await expect(form(playerPage, outcome === 'DECLINE' ? 'NET-007' : 'NET-006')).toBeVisible({
           timeout: player.operationTimeoutMs,
@@ -412,21 +422,29 @@ for (const outcome of [
         await expect(playerPage.getByText('Ваше устройство готово.', { exact: true })).toBeVisible({
           timeout: player.operationTimeoutMs,
         });
+        await expect(
+          masterPage
+            .getByRole('region', { name: 'Кампания и лобби' })
+            .getByText(`Устройство ${player.deviceId}: готово.`, { exact: false }),
+        ).toBeVisible({ timeout: gm.operationTimeoutMs });
         await action(playerPage, 'NET-006::CTA::004');
         await expect(
           playerPage.getByText('Ваше устройство не готово.', { exact: true }),
         ).toBeVisible({ timeout: player.operationTimeoutMs });
+        await expect(
+          masterPage
+            .getByRole('region', { name: 'Кампания и лобби' })
+            .getByText(`Устройство ${player.deviceId}: не готово.`, { exact: false }),
+        ).toBeVisible({ timeout: gm.operationTimeoutMs });
         await action(playerPage, 'NET-006::CTA::003');
         await expect(playerPage.getByText('Ваше устройство готово.', { exact: true })).toBeVisible({
           timeout: player.operationTimeoutMs,
         });
-        await action(masterPage, 'NET-021::CTA::001');
-        await action(masterPage, 'NET-017::CTA::009');
-        await action(masterPage, 'CMP-006::CTA::001');
-        await expect(form(masterPage, 'CMP-007')).toBeVisible();
-        await expect(masterPage.locator('input[type="file"]')).toHaveCount(0);
-        await action(masterPage, 'CMP-007::CTA::001');
-        await expect(form(masterPage, 'NET-016')).toBeVisible();
+        await expect(
+          masterPage
+            .getByRole('region', { name: 'Кампания и лобби' })
+            .getByText(`Устройство ${player.deviceId}: готово.`, { exact: false }),
+        ).toBeVisible({ timeout: gm.operationTimeoutMs });
         for (const label of ['День календаря', 'Час', 'Минута'])
           await expect(masterPage.getByLabel(label, { exact: true })).toHaveValue('');
         await expect(masterPage.locator('[data-atlas-action-key="NET-016::CTA::002"]')).toHaveCount(
