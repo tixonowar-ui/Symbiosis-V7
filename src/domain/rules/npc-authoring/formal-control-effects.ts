@@ -204,7 +204,7 @@ export function createNpcFormalControlCatalog(
   const formal = one(source.gaps, 'GapID', 'GAP-033');
   data.equal('RESOLVED_BY_THIS_REGISTRY', formal['Статус']);
   data.equal(
-    'Разрешать только известный EffectTypeID с automationStatus не BLOCKED/NOT_MODELED и обязательными структурированными полями',
+    'Разрешать только известный EffectTypeID с automationStatus не BLOCKED/NOT_MODELED и обязательными структурированными полями', // BLOCKED(source-status): GAP-033 literal required for exact source validation.
     formal['Действующая политика / решение'],
   );
   const permission = one(source.rules, 'Rule ID', 'AQA-028');
