@@ -1,3 +1,6 @@
+import type { NpcLobbyProjectionFields } from './npc-presentation.js';
+import { npcLobbyProjectionFieldsValue, npcProjectionDataValue } from './npc-presentation-codec.js';
+
 import {
   admissionGroupLabelsValue,
   type AdmissionGroupLabel,
@@ -55,7 +58,8 @@ export interface CampaignPanelGroup {
   readonly nameOrNull: string | null;
   readonly members: readonly CampaignPanelMember[];
 }
-export interface CampaignLobbyGmProjection extends RevisionVector {
+export interface CampaignLobbyGmProjection
+  extends RevisionVector, Partial<NpcLobbyProjectionFields> {
   readonly contextId: string;
   readonly campaignId: string;
   readonly panelVariant: 'PRE_START' | 'STARTED_PEACE';
@@ -122,7 +126,20 @@ function ids(v: unknown, p: string): string[] {
   return values;
 }
 export function campaignLobbyGmProjectionValue(value: unknown): CampaignLobbyGmProjection {
-  const row = r.exact(value, gmKeys, '$.campaignLobby');
+  const data = npcProjectionDataValue(value);
+  const hasLock =
+    data !== null && typeof data === 'object' && Object.hasOwn(data, 'initialTimeLockOrNull');
+  const hasChild =
+    data !== null &&
+    typeof data === 'object' &&
+    Object.hasOwn(data, 'npcInitialTimeReturnContextOrNull');
+  if (hasLock !== hasChild)
+    r.invalid('$.campaignLobby', 'both NPC fields or exact historical absence', null);
+  const row = r.exact(
+    data,
+    gmKeys + (hasLock ? ' initialTimeLockOrNull npcInitialTimeReturnContextOrNull' : ''),
+    '$.campaignLobby',
+  );
   common(row);
   const variant = r.oneOf(
     row['panelVariant'],
@@ -333,6 +350,24 @@ export function campaignLobbyGmProjectionValue(value: unknown): CampaignLobbyGmP
   w.literal(row['startPreflightStatus'], preflight, '$.startPreflightStatus');
   bool(row['conflictingOperationPending'], '$.conflictingOperationPending');
   w.literal(row['commandId'], null, '$.commandId');
+  if (hasLock) {
+    const npc = npcLobbyProjectionFieldsValue(
+      {
+        initialTimeLockOrNull: row['initialTimeLockOrNull'],
+        npcInitialTimeReturnContextOrNull: row['npcInitialTimeReturnContextOrNull'],
+      },
+      row['campaignId'] as string,
+      variant === 'PRE_START',
+    );
+    if (
+      variant === 'PRE_START' &&
+      npc.initialTimeLockOrNull !== null &&
+      (time === null ||
+        (time as InitialCampaignTime).campaignTimestamp !==
+          npc.initialTimeLockOrNull.campaignTimestamp)
+    )
+      r.invalid('$.initialTimeLockOrNull', 'confirmed locked initial time', null);
+  }
   return w.validated(row);
 }
 
@@ -492,7 +527,14 @@ export function campaignLobbyGmActions(
             : []),
           'CMP-007::CTA::004',
         ];
-  if (form === 'GM-001') return ['GM-001::CTA::006', 'GM-001::CTA::013'];
+  if (form === 'GM-001')
+    return [
+      ...(supported.includes('UI-CMD-NPC-COMMIT-V1') && supported.includes('UI-CMD-NPC-NEW-VERSION')
+        ? ['GM-001::CTA::004' as const]
+        : []),
+      'GM-001::CTA::006',
+      'GM-001::CTA::013',
+    ];
   if (form === 'GRP-001') return ['GRP-001::CTA::009'];
   if (p.panelVariant !== 'PRE_START') r.invalid('$.formId', 'pre-Start NET-016', null);
   return [
@@ -500,7 +542,10 @@ export function campaignLobbyGmActions(
     ...(supported.includes('UI-CMD-CAMPAIGN-INITIAL-TIME-SET')
       ? ['NET-016::CTA::004' as const]
       : []),
-    ...(p.startPreflightStatus === 'READY_TO_START' && supported.includes('UI-CMD-CAMPAIGN-START')
+    ...(p.npcInitialTimeReturnContextOrNull != null ? ['NET-016::CTA::005' as const] : []),
+    ...(p.npcInitialTimeReturnContextOrNull == null &&
+    p.startPreflightStatus === 'READY_TO_START' &&
+    supported.includes('UI-CMD-CAMPAIGN-START')
       ? ['NET-016::CTA::002' as const]
       : []),
   ];
@@ -951,3 +996,16 @@ export function campaignLobbyPlayerActions(
 export const isCampaignOwnerProjection = (value: JsonObject): boolean =>
   value['projectionVariant'] === 'LOBBY_SNAPSHOT' ||
   value['projectionVariant'] === 'PEACE_SNAPSHOT';
+
+/** Fresh current messages must carry both fields. Old stored observations retain their exact absent keyset. */
+export function campaignLobbyGmCurrentProjectionValue(
+  value: unknown,
+): CampaignLobbyGmProjection & NpcLobbyProjectionFields {
+  const result = campaignLobbyGmProjectionValue(value);
+  if (
+    !Object.hasOwn(result, 'initialTimeLockOrNull') ||
+    !Object.hasOwn(result, 'npcInitialTimeReturnContextOrNull')
+  )
+    r.invalid('$.campaignLobby', 'fresh NPC lobby fields', null);
+  return result as CampaignLobbyGmProjection & NpcLobbyProjectionFields;
+}
