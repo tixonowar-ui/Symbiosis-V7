@@ -1,36 +1,35 @@
-/** Current GM display data only. Type-only domain links emit no browser game evaluator. */
+/** Current GM display data only; editor DTOs are independent of the domain evaluator. */
 export type {
   NpcDiceEditor,
   NpcMasterWeaponEditor,
   NpcItemProfileEditor,
   NpcInventoryEditorRow,
-} from '../domain/rules/npc-authoring/staged-input.js';
-import type { ClassCode, RaceCode, StatCode } from '@generated/types/character.js';
+} from './npc-editor-presentation.js';
+import type {
+  NpcClassCode as ClassCode,
+  NpcRaceCode as RaceCode,
+  NpcStatCode as StatCode,
+  NpcEditorStages,
+  NpcSymbiontEditorRow,
+  NpcInventoryEditorRow,
+  NpcSkillSelectionRequest,
+  NpcDraftSection,
+  NpcSymbiontInput,
+  NpcInventoryRequestEntry,
+  NpcItemProfileRequest,
+  NpcItemQualityTier,
+  NpcClothingProperties,
+  NpcMasterWeaponProfileInput as MasterWeaponProfileInput,
+  NpcSymbiontBinding as SymbiontBinding,
+  NpcBodyZone as ArmorBodyZone,
+  NpcUntimedDiseaseId,
+  NpcWoundType,
+} from './npc-editor-presentation.js';
 import type {
   NpcCompositeItemTypeId,
   NpcWeaverStateBranch,
   NpcTaipanPoisonProfileId,
 } from './npc-command.js';
-import type { NpcEditorStages } from '../domain/rules/npc-authoring/staged-input.js';
-import type {
-  NpcSymbiontEditorRow,
-  NpcInventoryEditorRow,
-  NpcSkillSelectionRequest,
-} from '../domain/rules/npc-authoring/staged-input.js';
-import type { NpcDraftSection, NpcSymbiontInput } from '../domain/rules/npc-authoring/types.js';
-import type {
-  NpcInventoryRequestEntry,
-  NpcItemProfileRequest,
-  NpcItemQualityTier,
-  NpcClothingProperties,
-} from '../domain/rules/npc-authoring/inventory.js';
-import type { MasterWeaponProfileInput } from '../domain/rules/item-stage/master-weapon-profile.js';
-import type { SymbiontBinding } from '../domain/rules/symbiont-stage/catalog.js';
-import type { ArmorBodyZone } from '../domain/rules/item-stage/armor-bundle.js';
-import type {
-  NpcUntimedDiseaseId,
-  NpcWoundInstance,
-} from '../domain/rules/npc-authoring/effect-types.js';
 
 /** Leaf content only. The existing AtlasForm owns route/command buttons and its host guard set. */
 export const NPC_CONTROL_FORM_IDS = [
@@ -348,14 +347,14 @@ export interface NpcDiseasePreparation {
 }
 /** Formal GM assignment; the host allocates and journals wound identity and provenance. */
 export interface NpcWoundPreparationInput {
-  readonly woundType: NpcDraftSection<NpcWoundInstance['woundType']>;
+  readonly woundType: NpcDraftSection<NpcWoundType>;
   readonly regionId: NpcDraftSection<ArmorBodyZone>;
   readonly damagePerTick: NpcDraftSection<number>;
 }
 export interface NpcWoundPreparation {
   readonly capabilityKey: string;
   readonly input: NpcWoundPreparationInput;
-  readonly typeChoices: readonly NpcChoice<NpcWoundInstance['woundType']>[];
+  readonly typeChoices: readonly NpcChoice<NpcWoundType>[];
   readonly regionChoices: readonly NpcChoice<ArmorBodyZone>[];
   readonly errors: NpcFieldErrors<keyof NpcWoundPreparationInput>;
   readonly canSubmit: boolean;
