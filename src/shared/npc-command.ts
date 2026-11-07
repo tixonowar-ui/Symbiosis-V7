@@ -1,4 +1,3 @@
-import type { DiseaseId } from '@generated/types/effects.js';
 import type { IdentityDraftArtValue } from './wire-v3-protocol.js';
 import type {
   DecodeResult,
@@ -22,7 +21,8 @@ export const NPC_DISEASE_IDS = [
   'DIS-RHINITIS',
   'DIS-SCABIES',
   'DIS-SKIN_GROWTHS',
-] as const satisfies readonly DiseaseId[];
+] as const;
+type NpcDiseaseId = (typeof NPC_DISEASE_IDS)[number];
 export const NPC_WORKFLOW_COMMAND_IDS = ['UI-CMD-NPC-COMMIT-V1', 'UI-CMD-NPC-NEW-VERSION'] as const;
 
 export type NpcCommitV1Payload = {
@@ -632,7 +632,7 @@ export type NpcPreparationRequest = NpcTechnicalEnvelope & {
         readonly sourceFormId: 'NPC-016';
         readonly preparation:
           | { readonly kind: 'POISON_MODE_SET'; readonly input: NpcPoisonModeSetRequestInput }
-          | { readonly kind: 'DISEASE_RESERVE'; readonly diseaseId: DiseaseId }
+          | { readonly kind: 'DISEASE_RESERVE'; readonly diseaseId: NpcDiseaseId }
           | { readonly kind: 'TRAUMA_RESERVE' }
           | { readonly kind: 'ALCOHOL_PREPARE'; readonly input: NpcAlcoholPreparationRequestInput }
           | { readonly kind: 'HP_MODE_PREPARE'; readonly input: NpcHpModePreparationRequestInput }
