@@ -3,6 +3,7 @@ import type { AdvisorBodyStats } from '../symbiont-stage/advisor.js';
 import type { SelectedSkillInput } from '../skill-stage/skills.js';
 import type { StatBlock } from '../skill-stage/stats.js';
 import type { NpcSkillProof } from './skill-evaluation.js';
+import type { NpcSkillAccountingFact } from './skill-accounting.js';
 import type {
   NpcCompositionBinding,
   NpcCompositionPendingRequirement,
@@ -35,6 +36,16 @@ interface ResolutionIdentity {
 export type NpcCompositionResolution =
   | (ResolutionIdentity &
       Readonly<{
+        kind: 'TROGR_PERMANENT_STAT_CLOSURE';
+        symbiontInstanceId: string;
+        beforeRemovalOrNull: Readonly<{
+          statContextFactId: string;
+          nonTrogrBasis: StatBlock;
+          permanentStats: StatBlock;
+        }> | null;
+      }>)
+  | (ResolutionIdentity &
+      Readonly<{
         kind: 'FREE_SLOT_ROLL';
         statContextFactId: string;
         permanentStatsBefore: StatBlock;
@@ -65,8 +76,13 @@ export type NpcCompositionResolution =
       Readonly<{
         kind: 'GROSS_SKILL_GRANT';
         symbiontInstanceId: string;
-        skillProof: NpcSkillProof;
-      }>);
+      }> &
+      (
+        | Readonly<{ skillProof: NpcSkillProof }>
+        | Readonly<{
+            initialGrant: Extract<NpcSkillAccountingFact, { kind: 'TROGR_GROSS_GRANT' }>;
+          }>
+      ));
 
 /** New identity begins with an actual empty history; N+1 supplies its exact immutable old prefix. */
 export interface NpcCompositionConsequenceProof {

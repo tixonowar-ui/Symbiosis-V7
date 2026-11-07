@@ -1,4 +1,8 @@
-import type { SymbiontCatalog, Core169SpeciesKey } from '../symbiont-stage/catalog.js';
+import type { SymbiontCatalog } from '../symbiont-stage/catalog.js';
+import {
+  deriveNpcInitialMonsterProfile,
+  type NpcInitialMonsterCatalog,
+} from './initial-monster-composition.js';
 import { resolveSymbiontCurrentOeDuel } from '../symbiont-stage/composition.js';
 import type { NpcDevelopmentCatalog } from './catalog.js';
 import {
@@ -26,14 +30,17 @@ export interface NpcOrdinaryCompositionState {
   readonly [compositionState]: true;
 }
 type MutableInstance = {
-  -readonly [K in keyof NpcOrdinaryCompositionInstance]: NpcOrdinaryCompositionInstance[K];
-};
+  -readonly [
+    K in Exclude<keyof NpcOrdinaryCompositionInstance, 'acquisitionFactId'>
+  ]: NpcOrdinaryCompositionInstance[K];
+} & { acquisitionFactId: string | null };
 interface Context {
   readonly symbionts: SymbiontCatalog;
   readonly development: NpcDevelopmentCatalog;
   readonly native: NpcSymbiontNativeCatalog;
   readonly dolphinLevel: number;
   readonly freeExpandedCapacity: number;
+  readonly initialMonsters: NpcInitialMonsterCatalog | null;
 }
 interface State {
   readonly context: Context;
@@ -144,6 +151,7 @@ export function createNpcOrdinaryCompositionCatalog(
   development: NpcDevelopmentCatalog,
   native: NpcSymbiontNativeCatalog,
   rules: unknown,
+  initialMonsters?: NpcInitialMonsterCatalog,
 ): NpcOrdinaryCompositionCatalog {
   for (const id of [
     'SYM-UNIQUE-SPECIES',
@@ -183,10 +191,11 @@ export function createNpcOrdinaryCompositionCatalog(
     native,
     dolphinLevel: integer(Number(level[1]), 1, 'Dolphin grant level'),
     freeExpandedCapacity: 2,
+    initialMonsters: initialMonsters ?? null,
   });
   return result;
 }
-function present(instance: NpcOrdinaryCompositionInstance): boolean {
+function present(instance: Pick<NpcOrdinaryCompositionInstance, 'status'>): boolean {
   return instance.status === 'ACTIVE' || instance.status === 'SUPPRESSED';
 }
 function sourceCapacity(context: Context, binding: NpcCompositionBinding): number {
@@ -204,7 +213,14 @@ function view(
 ): NpcOrdinaryCompositionView {
   return freeze({
     ...binding,
-    kind: 'ORDINARY_STRUCTURAL_COMPOSITION_ONLY',
+    kind: instances.some(
+      (row) =>
+        present(row) &&
+        context.symbionts.species.find((source) => source.speciesKey === row.speciesKey)?.kind ===
+          'SYMBIOTIC_MONSTER',
+    )
+      ? 'INITIAL_MONSTER_STRUCTURAL_COMPOSITION_ONLY'
+      : 'ORDINARY_STRUCTURAL_COMPOSITION_ONLY',
     lastOrdinal: ordinal,
     instances,
     occupiedSlots: instances.filter(present).reduce((sum, row) => sum + row.slotCost, 0),
@@ -239,53 +255,30 @@ export function createNpcOrdinaryComposition(
 function state(value: NpcOrdinaryCompositionState): State {
   return states.get(value) ?? fail('expected issued composition state');
 }
-function normalizeFact(current: State, value: unknown): NpcOrdinaryCompositionFact {
-  const row = exact(
-    value,
-    'factId journalId ordinal kind raceCode removals additions buildChanges currentOeChanges',
-    'fact',
-  );
-  const identity = {
-    factId: uuid(row.factId, 'factId'),
-    journalId: uuid(row.journalId, 'journalId'),
-    ordinal: integer(row.ordinal, 1, 'ordinal'),
-  };
-  if (identity.journalId !== current.binding.journalId) return fail('foreign journal binding');
-  if (row.kind !== 'APPLY_COMPOSITION_EDIT') return fail('unknown fact kind');
-  const selectedRace = current.context.symbionts.races.find(
-    (race) => race.raceCode === row.raceCode,
-  );
-  if (selectedRace === undefined) return fail('unknown selected race');
+export type NpcOrdinaryCompositionEdit = Pick<
+  NpcOrdinaryCompositionFact,
+  'raceCode' | 'removals' | 'additions' | 'buildChanges' | 'currentOeChanges'
+>;
+
+/** Closed edit grammar only; application still proves source builds, resource bounds and history. */
+export function readNpcOrdinaryCompositionEdit(value: unknown): NpcOrdinaryCompositionEdit {
+  const row = exact(value, 'raceCode removals additions buildChanges currentOeChanges', 'edit');
+  if (row.raceCode !== 'PURE' && row.raceCode !== 'UNITED' && row.raceCode !== 'FREE')
+    return fail('unknown selected race');
   const removals = array(row.removals, 'removals').map((id) => uuid(id, 'removal ID'));
-  const additions = array(row.additions, 'additions').map((raw): NpcSymbiontInput => {
-    const item = exact(
-      raw,
-      'symbiontInstanceId speciesKey targetLevel learnedNodeRefs binding currentOE',
-      'addition',
-    );
-    const nativeInput = {
-      symbiontInstanceId: item.symbiontInstanceId,
-      speciesKey: item.speciesKey,
-      targetLevel: item.targetLevel,
-      learnedNodeRefs: item.learnedNodeRefs,
-      binding: item.binding,
-    };
-    const profile = deriveNpcSymbiontNativeProfile(current.context.native, nativeInput);
-    const currentOE = validateNpcNativeCurrentOe(profile, item.currentOE);
-    // Preserve request array order for exact replay; the derived profile has source order.
-    return { ...nativeInput, currentOE } as NpcSymbiontInput;
-  });
-  const buildChanges = array(row.buildChanges, 'buildChanges').map((raw) => {
+  const build = (raw: unknown): NpcOrdinaryCompositionFact['buildChanges'][number] => {
     const item = exact(
       raw,
       'symbiontInstanceId targetLevel learnedNodeRefs binding',
       'build change',
     );
-    uuid(item.symbiontInstanceId, 'build instance');
-    integer(item.targetLevel, 1, 'targetLevel');
+    const symbiontInstanceId = uuid(item.symbiontInstanceId, 'build instance');
+    const targetLevel = integer(item.targetLevel, 1, 'targetLevel');
     // The species is host-fold-owned and is resolved after exact replay has been checked.
-    array(item.learnedNodeRefs, 'learnedNodeRefs').forEach((ref) => {
-      if (typeof ref !== 'string') fail('node reference must be string');
+    const learnedNodeRefs = array(item.learnedNodeRefs, 'learnedNodeRefs').map((ref) => {
+      if (typeof ref !== 'string' || !ref || ref.trim() !== ref)
+        return fail('node reference must be exact nonempty string');
+      return ref;
     });
     const binding = item.binding;
     if (
@@ -313,8 +306,39 @@ function normalizeFact(current: State, value: unknown): NpcOrdinaryCompositionFa
     const parsed = exact(binding, sided ? 'kind side' : 'kind', 'build binding');
     if (sided && parsed.side !== 'LEFT' && parsed.side !== 'RIGHT')
       return fail('binding side must be LEFT or RIGHT');
-    return item as unknown as NpcOrdinaryCompositionFact['buildChanges'][number];
+    return {
+      symbiontInstanceId,
+      targetLevel,
+      learnedNodeRefs,
+      binding: parsed as unknown as NpcSymbiontInput['binding'],
+    };
+  };
+  const additions = array(row.additions, 'additions').map((raw): NpcSymbiontInput => {
+    const item = exact(
+      raw,
+      'symbiontInstanceId speciesKey targetLevel learnedNodeRefs binding currentOE',
+      'addition',
+    );
+    if (
+      typeof item.speciesKey !== 'string' ||
+      !item.speciesKey ||
+      item.speciesKey.trim() !== item.speciesKey
+    )
+      return fail('invalid species reference');
+    const selected = build({
+      symbiontInstanceId: item.symbiontInstanceId,
+      targetLevel: item.targetLevel,
+      learnedNodeRefs: item.learnedNodeRefs,
+      binding: item.binding,
+    });
+    // The owning source catalog, not this structural codec, recognizes actual species keys.
+    return {
+      ...selected,
+      speciesKey: item.speciesKey as NpcSymbiontInput['speciesKey'],
+      currentOE: integer(item.currentOE, 0, 'currentOE'),
+    };
   });
+  const buildChanges = array(row.buildChanges, 'buildChanges').map(build);
   const currentOeChanges = array(row.currentOeChanges, 'currentOeChanges').map((raw) => {
     const item = exact(raw, 'symbiontInstanceId currentOE', 'current OE change');
     return {
@@ -336,15 +360,51 @@ function normalizeFact(current: State, value: unknown): NpcOrdinaryCompositionFa
   // An explicit OE edit may accompany a build edit: validate it against the resulting native max.
   return freeze(
     structuredClone({
-      ...identity,
-      kind: 'APPLY_COMPOSITION_EDIT',
-      raceCode: selectedRace.raceCode,
+      raceCode: row.raceCode,
       removals,
       additions,
       buildChanges,
       currentOeChanges,
     }),
   );
+}
+
+/** Structural grammar only; does not authenticate a journal or any source result. */
+export function readNpcOrdinaryCompositionFact(value: unknown): NpcOrdinaryCompositionFact {
+  const row = exact(
+    value,
+    'factId journalId ordinal kind raceCode removals additions buildChanges currentOeChanges',
+    'fact',
+  );
+  if (row.kind !== 'APPLY_COMPOSITION_EDIT') return fail('unknown fact kind');
+  const { factId, journalId, ordinal, kind: _kind, ...edit } = row;
+  return freeze({
+    factId: uuid(factId, 'factId'),
+    journalId: uuid(journalId, 'journalId'),
+    ordinal: integer(ordinal, 1, 'ordinal'),
+    kind: 'APPLY_COMPOSITION_EDIT',
+    ...readNpcOrdinaryCompositionEdit(edit),
+  });
+}
+function normalizeEdit(current: State, value: unknown): NpcOrdinaryCompositionEdit {
+  const input = readNpcOrdinaryCompositionEdit(value);
+  const selectedRace = current.context.symbionts.races.find(
+    (race) => race.raceCode === input.raceCode,
+  );
+  if (selectedRace === undefined) return fail('unknown selected race');
+  for (const addition of input.additions) {
+    const { currentOE, ...nativeInput } = addition;
+    const profile = deriveNpcSymbiontNativeProfile(current.context.native, nativeInput);
+    validateNpcNativeCurrentOe(profile, currentOE);
+  }
+  return input;
+}
+function normalizeFact(current: State, value: unknown): NpcOrdinaryCompositionFact {
+  const input = readNpcOrdinaryCompositionFact(value);
+  if (input.journalId !== current.binding.journalId) return fail('foreign journal binding');
+  const { factId: _fact, journalId: _journal, ordinal: _ordinal, kind: _kind, ...edit } = input;
+  normalizeEdit(current, edit);
+  return input;
 }
 
 /** Exact replay returns its original receipt beside the current view; no rollback or re-execution. */
@@ -368,6 +428,44 @@ export function applyNpcOrdinaryCompositionFact(
     )
   )
     return fail('empty edit');
+  const result = applyStructuralEdit(current, input, input.factId);
+  const { selectedBinding, pending, choices, consequences } = result;
+  const instances: NpcOrdinaryCompositionInstance[] = result.instances.map((row) => {
+    if (row.acquisitionFactId === null)
+      return fail('committed specimen requires real acquisition fact');
+    return { ...row, acquisitionFactId: row.acquisitionFactId };
+  });
+  const nextView = view(current.context, selectedBinding, input.ordinal, instances, pending);
+  const receipt = freeze({
+    factId: input.factId,
+    ordinal: input.ordinal,
+    input,
+    consequences,
+    view: nextView,
+  });
+  const next = Object.freeze({}) as NpcOrdinaryCompositionState;
+  states.set(next, {
+    context: current.context,
+    binding: current.binding,
+    instances: nextView.instances,
+    pending: nextView.pendingRequirements,
+    choices: freeze(choices),
+    receipts: Object.freeze([...current.receipts, receipt]),
+    view: nextView,
+  });
+  return Object.freeze({ state: next, receipt });
+}
+
+type RequirementIntent = NpcCompositionPendingRequirement extends infer R
+  ? R extends NpcCompositionPendingRequirement
+    ? Omit<R, 'causedByFactId'>
+    : never
+  : never;
+function applyStructuralEdit(
+  current: State,
+  input: NpcOrdinaryCompositionEdit,
+  causeFactId: string | null,
+) {
   const selectedBinding: NpcCompositionBinding = {
     journalId: current.binding.journalId,
     raceCode: input.raceCode,
@@ -379,23 +477,26 @@ export function applyNpcOrdinaryCompositionFact(
   const requirePresent = (id: string): MutableInstance =>
     instances.find((row) => row.symbiontInstanceId === id && present(row)) ??
     fail('missing present instance');
-  const need = (requirement: NpcCompositionPendingRequirement) => {
+  const previewRequirements: RequirementIntent[] = [];
+  const need = (intent: RequirementIntent) => {
+    const matches = (old: NpcCompositionPendingRequirement | RequirementIntent) =>
+      old.kind === intent.kind &&
+      (intent.kind === 'GROSS_SKILL_GRANT' ||
+        !('symbiontInstanceId' in intent) ||
+        ('symbiontInstanceId' in old && old.symbiontInstanceId === intent.symbiontInstanceId));
     const same = pending.some(
       (old) =>
-        old.kind === requirement.kind &&
-        (requirement.kind === 'GROSS_SKILL_GRANT' ||
-          !('symbiontInstanceId' in requirement) ||
-          ('symbiontInstanceId' in old &&
-            old.symbiontInstanceId === requirement.symbiontInstanceId)) &&
-        (requirement.kind !== 'TROGR_PERMANENT_STAT_CLOSURE' ||
-          old.causedByFactId === requirement.causedByFactId),
+        matches(old) &&
+        (intent.kind !== 'TROGR_PERMANENT_STAT_CLOSURE' || old.causedByFactId === causeFactId),
     );
-    if (!same) pending.push(requirement);
+    if (same) return;
+    if (causeFactId === null) {
+      if (!previewRequirements.some(matches)) previewRequirements.push(intent);
+    } else pending.push({ ...intent, causedByFactId: causeFactId });
   };
   const trogrClosure = (row: MutableInstance) =>
     need({
       kind: 'TROGR_PERMANENT_STAT_CLOSURE',
-      causedByFactId: input.factId,
       symbiontInstanceId: row.symbiontInstanceId,
       sourceRuleIds: ['SYM-076', 'AQ2-022', 'SYM-185'],
     });
@@ -461,27 +562,30 @@ export function applyNpcOrdinaryCompositionFact(
     const species = current.context.symbionts.species.find(
       (row) => row.speciesKey === item.speciesKey,
     );
-    if (species === undefined || species.kind !== 'ORDINARY')
-      return fail('outside ordinary composition scope');
+    if (species === undefined) return fail('unrecognized composition species');
+    if (species.kind === 'SYMBIOTIC_MONSTER') {
+      const catalog =
+        current.context.initialMonsters ?? fail('initial monster source catalog required');
+      deriveNpcInitialMonsterProfile(catalog, { raceCode: input.raceCode, symbiont: item });
+    } else if (species.kind !== 'ORDINARY') return fail('unrecognized composition species kind');
     if (!species.allowedRaceCodes.includes(input.raceCode))
       return fail('species is not eligible for bound race');
     const row: MutableInstance = {
       ...item,
-      speciesKey: species.speciesKey as Core169SpeciesKey,
+      speciesKey: species.speciesKey,
       status: 'ACTIVE',
       slotCost: species.slotCost,
       nativeMaxOE: 0,
       effectsEnabled: true,
       suppressedAbilities: [],
       absorbedSpeciesKeys: [],
-      acquisitionFactId: input.factId,
+      acquisitionFactId: causeFactId,
     };
     updateBuild(row, item);
     instances.push(row);
     if (row.speciesKey === 'ADVISER')
       need({
         kind: 'ADVISER_CARD_AND_SKILLS',
-        causedByFactId: input.factId,
         symbiontInstanceId: row.symbiontInstanceId,
         sourceRuleIds: ['AQA-006', 'AQ2-023'],
       });
@@ -541,7 +645,6 @@ export function applyNpcOrdinaryCompositionFact(
     if (trogr.learnedNodeRefs.includes('SYM-079'))
       need({
         kind: 'GROSS_SKILL_GRANT',
-        causedByFactId: input.factId,
         symbiontInstanceId: trogr.symbiontInstanceId,
         sourceRuleIds: ['SYM-079', 'SYM-185'],
       });
@@ -598,7 +701,6 @@ export function applyNpcOrdinaryCompositionFact(
     if (suppressed && row.speciesKey === 'ADVISER')
       need({
         kind: 'ADVISER_SUPPRESSION_ROLL',
-        causedByFactId: input.factId,
         symbiontInstanceId: row.symbiontInstanceId,
         sourceRuleIds: ['SYM-075', 'Q-SYM-073'],
       });
@@ -626,6 +728,29 @@ export function applyNpcOrdinaryCompositionFact(
   }
   if (new Set(living.map((row) => row.speciesKey)).size !== living.length)
     return fail('duplicate surviving species');
+  const monsters = living.filter(
+    (row) =>
+      current.context.symbionts.species.find((source) => source.speciesKey === row.speciesKey)
+        ?.kind === 'SYMBIOTIC_MONSTER',
+  );
+  if (monsters.length > 1) return fail('one symbiotic monster may occupy the base slots');
+  for (const monster of monsters) {
+    const catalog =
+      current.context.initialMonsters ?? fail('initial monster source catalog required');
+    deriveNpcInitialMonsterProfile(catalog, {
+      raceCode: input.raceCode,
+      symbiont: {
+        symbiontInstanceId: monster.symbiontInstanceId,
+        speciesKey: monster.speciesKey,
+        targetLevel: monster.targetLevel,
+        learnedNodeRefs: monster.learnedNodeRefs,
+        binding: monster.binding,
+        currentOE: monster.currentOE,
+      },
+    });
+    if (living.length !== 1)
+      return fail('initial monster has no confirmed additional slots for ordinary symbionts');
+  }
   const occupied = living.reduce((sum, row) => sum + row.slotCost, 0),
     capacity = sourceCapacity(current.context, selectedBinding);
   if (occupied > capacity) {
@@ -633,29 +758,45 @@ export function applyNpcOrdinaryCompositionFact(
       return fail('final composition exceeds source slot capacity');
     need({
       kind: 'FREE_EXTRA_SLOT_ROLL_AND_STAT_CONSEQUENCE',
-      causedByFactId: input.factId,
       sourceRuleIds: ['AQ2-015'],
     });
   }
-  const nextView = view(current.context, selectedBinding, input.ordinal, instances, pending);
-  const receipt = freeze({
-    factId: input.factId,
-    ordinal: input.ordinal,
-    input,
-    consequences,
-    view: nextView,
+  return { selectedBinding, instances, pending, choices, consequences, previewRequirements };
+}
+
+/** Candidate mechanics only: no fact identity, new ordinal, receipt, state token or history is minted. */
+export function previewNpcOrdinaryCompositionEdit(
+  previous: NpcOrdinaryCompositionState,
+  value: unknown,
+) {
+  const current = state(previous),
+    input = normalizeEdit(current, value);
+  if (
+    input.raceCode === current.view.raceCode &&
+    ![input.removals, input.additions, input.buildChanges, input.currentOeChanges].some(
+      (edits) => edits.length,
+    )
+  )
+    return freeze({
+      kind: 'UNCOMMITTED' as const,
+      instances: current.instances.map(({ acquisitionFactId: _acquisition, ...row }) => row),
+      consequences: [] as NpcCompositionConsequence[],
+      occupiedSlots: current.view.occupiedSlots,
+      sourceSlotCapacity: sourceCapacity(current.context, {
+        journalId: current.binding.journalId,
+        raceCode: current.view.raceCode,
+      }),
+      requiredSourceContinuations: [] as RequirementIntent[],
+    });
+  const result = applyStructuralEdit(current, input, null);
+  return freeze({
+    kind: 'UNCOMMITTED' as const,
+    instances: result.instances.map(({ acquisitionFactId: _acquisition, ...row }) => row),
+    consequences: result.consequences,
+    occupiedSlots: result.instances.filter(present).reduce((sum, row) => sum + row.slotCost, 0),
+    sourceSlotCapacity: sourceCapacity(current.context, result.selectedBinding),
+    requiredSourceContinuations: result.previewRequirements,
   });
-  const next = Object.freeze({}) as NpcOrdinaryCompositionState;
-  states.set(next, {
-    context: current.context,
-    binding: current.binding,
-    instances: nextView.instances,
-    pending: nextView.pendingRequirements,
-    choices: freeze(choices),
-    receipts: Object.freeze([...current.receipts, receipt]),
-    view: nextView,
-  });
-  return Object.freeze({ state: next, receipt });
 }
 
 export function readNpcOrdinaryComposition(

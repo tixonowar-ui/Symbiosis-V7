@@ -7,6 +7,12 @@ import {
   type NpcPneumoniaHistoryAnchor,
 } from './periodic-disease-effects.js';
 import type { NpcDiseaseEffectContext } from './untimed-disease-effects.js';
+import { readNpcEquipmentStatBasis } from './equipment-profile.js';
+import { readNpcHpModeStatProfile, type NpcHpModeStatProfile } from './combined-hp-modes.js';
+import {
+  applyNpcEffectiveStatLimits,
+  type NpcEffectiveStatLimits,
+} from './ordinary-stat-profile.js';
 
 const STATS = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
 const ALGORITHM =
@@ -72,6 +78,13 @@ function effectiveStats(value: unknown): Readonly<Record<StatCode, number>> {
     result[stat] = number;
   }
   return Object.freeze(result);
+}
+function permanentStats(value: unknown): Readonly<Record<StatCode, number>> {
+  const permanent = effectiveStats(value);
+  for (const stat of STATS)
+    if (!Number.isSafeInteger(permanent[stat]) || permanent[stat] < 1)
+      return fail('permanent stats must be safe integers at least one');
+  return permanent;
 }
 declare const issued: unique symbol;
 export interface NpcDiseaseUnconsciousnessCatalog {
@@ -223,26 +236,67 @@ export interface NpcDiseaseStatContribution {
 export function deriveNpcDiseaseStatContribution(
   catalog: NpcDiseaseUnconsciousnessCatalog,
   candidate: unknown,
+  hpModeStatProfile: NpcHpModeStatProfile | null = null,
+  effectiveLimits: NpcEffectiveStatLimits | null = null,
 ): NpcDiseaseStatContribution {
   const diseases = contexts.get(catalog) ?? fail('issued source catalog required');
   const input = record(candidate, ['effects', 'permanentStats', 'scope', 'histories']);
-  const permanent = effectiveStats(input.permanentStats);
-  for (const stat of STATS)
-    if (!Number.isSafeInteger(permanent[stat]) || permanent[stat] < 1)
-      return fail('permanent stats must be safe integers at least one');
+  const permanent = permanentStats(input.permanentStats);
   const checked = validateNpcDiseaseEffects(
     diseases,
     input.effects,
     input.scope as NpcDiseaseEffectContext,
     input.histories as readonly NpcPneumoniaHistoryAnchor[],
   );
-  return statContribution(checked, permanent);
+  return statContribution(
+    checked,
+    permanent,
+    permanent,
+    modeMultiplier(hpModeStatProfile, record(input.scope).targetActorId),
+    effectiveLimits,
+  );
+}
+/** Only issued equipment can supply a raw temporary basis below one; permanent input stays strict. */
+export function deriveNpcDiseaseEquippedStatContribution(
+  catalog: NpcDiseaseUnconsciousnessCatalog,
+  candidate: unknown,
+  hpModeStatProfile: NpcHpModeStatProfile | null = null,
+): NpcDiseaseStatContribution {
+  const diseases = contexts.get(catalog) ?? fail('issued source catalog required');
+  const input = record(candidate, ['effects', 'equipmentProfile', 'scope', 'histories']);
+  const basis = readNpcEquipmentStatBasis(input.equipmentProfile);
+  if (record(input.scope).targetActorId !== basis.npcUuid)
+    return fail('equipment profile belongs to another NPC');
+  const permanent = permanentStats(basis.permanentStats);
+  const checked = validateNpcDiseaseEffects(
+    diseases,
+    input.effects,
+    input.scope as NpcDiseaseEffectContext,
+    input.histories as readonly NpcPneumoniaHistoryAnchor[],
+  );
+  return statContribution(
+    checked,
+    permanent,
+    basis.rawEquippedStats,
+    modeMultiplier(hpModeStatProfile, basis.npcUuid),
+    basis.effectiveLimitsOrNull,
+  );
+}
+function modeMultiplier(profile: NpcHpModeStatProfile | null, npcUuid?: unknown): 1 | 2 {
+  if (profile === null) return 1;
+  const actual = readNpcHpModeStatProfile(profile);
+  if (npcUuid !== undefined && actual.source.npcUuid !== npcUuid)
+    return fail('mode stat profile belongs to another NPC');
+  return actual.hungerStatMultiplier;
 }
 function statContribution(
   checked: readonly DiseaseModifiers[],
   permanent: Readonly<Record<StatCode, number>>,
+  rawBasis: Readonly<Record<StatCode, number>> = permanent,
+  hungerMultiplier: 1 | 2 = 1,
+  effectiveLimits: NpcEffectiveStatLimits | null = null,
 ): NpcDiseaseStatContribution {
-  const raw = { ...permanent };
+  const raw = { ...rawBasis };
   const checkModifiers: Array<NpcDiseaseStatContribution['checkModifiers'][number]> = [];
   for (const effect of checked) {
     for (const modifier of effect.payload.modifierComponents) {
@@ -262,7 +316,16 @@ function statContribution(
       }
     }
   }
-  const rawFinalStats = Object.freeze(raw);
+  // MON-023 / CORE-079: multiply only S,D,M,Z after temporary additions;
+  // MON-075 then sees these raw values before CORE-078's computational floor.
+  for (const stat of ['S', 'D', 'M', 'Z'] as const) {
+    raw[stat] *= hungerMultiplier;
+    if (!Number.isSafeInteger(raw[stat])) return fail('mode stat multiplication overflow');
+  }
+  const rawFinalStats =
+    effectiveLimits === null
+      ? Object.freeze(raw)
+      : applyNpcEffectiveStatLimits(effectiveLimits, raw);
   const result: Record<StatCode, number> = { ...rawFinalStats };
   for (const stat of STATS) result[stat] = Math.max(1, result[stat]);
   checkModifiers.sort((a, b) =>
@@ -293,14 +356,48 @@ export interface NpcPreparedDiseaseContribution {
 export function previewNpcDiseaseStatContribution(
   catalog: NpcDiseaseUnconsciousnessCatalog,
   candidate: unknown,
+  hpModeStatProfile: NpcHpModeStatProfile | null = null,
+  effectiveLimits: NpcEffectiveStatLimits | null = null,
 ): NpcPreparedDiseaseContribution {
   const diseases = contexts.get(catalog) ?? fail('issued source catalog required');
   const input = record(candidate, ['assignments', 'permanentStats']);
-  const permanent = effectiveStats(input.permanentStats);
-  for (const stat of STATS)
-    if (!Number.isSafeInteger(permanent[stat]) || permanent[stat] < 1)
-      return fail('permanent stats must be safe integers at least one');
-  const checked = rows(input.assignments).map((value) => {
+  const permanent = permanentStats(input.permanentStats);
+  return previewContribution(
+    diseases,
+    input.assignments,
+    permanent,
+    permanent,
+    modeMultiplier(hpModeStatProfile),
+    effectiveLimits,
+  );
+}
+/** Equipment-only computational floors must not erase the later MON-075 raw threshold. */
+export function previewNpcDiseaseEquippedStatContribution(
+  catalog: NpcDiseaseUnconsciousnessCatalog,
+  candidate: unknown,
+  hpModeStatProfile: NpcHpModeStatProfile | null = null,
+): NpcPreparedDiseaseContribution {
+  const diseases = contexts.get(catalog) ?? fail('issued source catalog required');
+  const input = record(candidate, ['assignments', 'equipmentProfile']);
+  const basis = readNpcEquipmentStatBasis(input.equipmentProfile);
+  return previewContribution(
+    diseases,
+    input.assignments,
+    permanentStats(basis.permanentStats),
+    basis.rawEquippedStats,
+    modeMultiplier(hpModeStatProfile, basis.npcUuid),
+    basis.effectiveLimitsOrNull,
+  );
+}
+function previewContribution(
+  diseases: NpcDiseaseCodecCatalog,
+  assignments: unknown,
+  permanent: Readonly<Record<StatCode, number>>,
+  rawBasis: Readonly<Record<StatCode, number>> = permanent,
+  hungerMultiplier: 1 | 2 = 1,
+  effectiveLimits: NpcEffectiveStatLimits | null = null,
+): NpcPreparedDiseaseContribution {
+  const checked = rows(assignments).map((value) => {
     const r = record(value, ['effectInstanceId', 'diseaseId']);
     if (
       typeof r.effectInstanceId !== 'string' ||
@@ -338,6 +435,6 @@ export function previewNpcDiseaseStatContribution(
         Object.freeze({ effectInstanceId: e.effectInstanceId, diseaseId: e.payload.diseaseId }),
       ),
     ),
-    contribution: statContribution(checked, permanent),
+    contribution: statContribution(checked, permanent, rawBasis, hungerMultiplier, effectiveLimits),
   });
 }

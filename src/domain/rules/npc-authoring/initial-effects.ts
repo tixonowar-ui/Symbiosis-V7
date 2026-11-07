@@ -11,6 +11,7 @@ import type {
 
 export interface NpcDiseaseDefinition {
   readonly diseaseId: DiseaseId;
+  readonly nameRu: string;
   readonly status: 'ACTIVE' | 'TRACE_ONLY';
   readonly modifiers: readonly NpcModifierComponent[];
   readonly dailyDamageOrNull: number | null;
@@ -42,6 +43,25 @@ export type NpcNewAlcoholParameters =
       durationUnit: 'HOUR';
       remainingExact: string;
       blocker: 'FIRST_TICK_ANCHOR_NOT_YET_PROVEN';
+    }>;
+
+/** ADR 0082 / #224 closes the period origin only for this CORE-110 variant. */
+export type NpcNewAlcoholSchedule =
+  | Extract<NpcNewAlcoholParameters, { kind: 'NO_EFFECT' }>
+  | Readonly<{
+      kind: 'ACTIVE_PARAMETERS';
+      payload: NpcPoisonPayload;
+      magnitude: number;
+      startsAt: NpcCalendarInstant;
+      expiresAt: NpcCalendarInstant;
+      durationUnit: 'HOUR';
+      remainingExact: string;
+      tickSchedule: Readonly<{
+        phase: 'COSTS_AND_TICKS';
+        period: Readonly<{ amount: 1; unit: 'HOUR' }>;
+        nextTickAt: NpcCalendarInstant;
+      }>;
+      lastTickAt: null;
     }>;
 
 type Row = Readonly<Record<string, unknown>>;
@@ -181,6 +201,7 @@ export function createNpcInitialEffectCatalog(
     return fail('diseases', 'closed disease catalogue differs');
   const diseases = DISEASE_IDS.map((diseaseId): NpcDiseaseDefinition => {
     const row = one(diseaseRows, 'DiseaseID', diseaseId, 'diseases');
+    const nameRu = text(row['Название'], diseaseId + '.nameRu');
     assertEqual(row['Effect family'], 'DISEASE', diseaseId);
     assertEqual(row['Is poison'], 'false', diseaseId);
     const status = row.Status;
@@ -193,7 +214,13 @@ export function createNpcInitialEffectCatalog(
       ...modifiers(row['Check modifiers JSON'], 'CHECK', diseaseId),
     ]);
     if (status === 'TRACE_ONLY')
-      return Object.freeze({ diseaseId, status, modifiers: components, dailyDamageOrNull: null });
+      return Object.freeze({
+        diseaseId,
+        nameRu,
+        status,
+        modifiers: components,
+        dailyDamageOrNull: null,
+      });
     assertEqual(row.Assignment, 'GM_ASSIGN_REMOVE', diseaseId);
     assertEqual(row.Duration, 'UNTIL_GM_REMOVE_OR_SPECIFIC_CURE', diseaseId);
     assertEqual(row.Stacking, 'NO_STACK_SAME_ID', diseaseId);
@@ -203,7 +230,7 @@ export function createNpcInitialEffectCatalog(
       if (periodic === null) return fail(diseaseId, 'unknown full-day damage grammar');
       dailyDamageOrNull = integer(Number(periodic[1]), 1, diseaseId);
     } else assertEqual(row.Periodic, 'NONE', diseaseId);
-    return Object.freeze({ diseaseId, status, modifiers: components, dailyDamageOrNull });
+    return Object.freeze({ diseaseId, nameRu, status, modifiers: components, dailyDamageOrNull });
   });
   const timers = sourceRows(sources.timerPolicies, 'timers');
   assertEqual(one(timers, 'PolicyID', 'TIME-005', 'timers').Code, 'FULL_DAY_TICK', 'TIME-005');
@@ -326,6 +353,30 @@ export function prepareNewNpcAlcoholParameters(
     durationUnit: 'HOUR',
     remainingExact: String(duration),
     blocker: 'FIRST_TICK_ANCHOR_NOT_YET_PROVEN',
+  });
+}
+
+/** Formula-only compatibility above stays unchanged; this explicit new branch applies ADR 0082. */
+export function prepareNewNpcAlcoholSchedule(
+  catalog: NpcInitialEffectCatalog,
+  input: Readonly<{ kind: 'ALCOHOL'; effectiveZ: number; assignment: NpcNewAlcoholAssignment }>,
+): NpcNewAlcoholSchedule {
+  const prepared = prepareNewNpcAlcoholParameters(catalog, input);
+  if (prepared.kind === 'NO_EFFECT') return prepared;
+  return Object.freeze({
+    kind: 'ACTIVE_PARAMETERS',
+    payload: prepared.payload,
+    magnitude: prepared.magnitude,
+    startsAt: prepared.startsAt,
+    expiresAt: prepared.expiresAt,
+    durationUnit: prepared.durationUnit,
+    remainingExact: prepared.remainingExact,
+    tickSchedule: Object.freeze({
+      phase: 'COSTS_AND_TICKS',
+      period: Object.freeze({ amount: 1, unit: 'HOUR' }),
+      nextTickAt: plusMinutes(prepared.startsAt, MINUTES_PER_HOUR),
+    }),
+    lastTickAt: null,
   });
 }
 

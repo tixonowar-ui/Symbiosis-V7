@@ -9,6 +9,8 @@ import {
   createNpcOrdinaryComposition,
   readNpcOrdinaryComposition as read,
   restoreNpcOrdinaryComposition,
+  previewNpcOrdinaryCompositionEdit,
+  readNpcOrdinaryCompositionFact,
 } from './ordinary-composition.js';
 import type { NpcOrdinaryCompositionFact } from './ordinary-composition-types.js';
 import type { NpcSymbiontInput } from './types.js';
@@ -66,6 +68,145 @@ function fact(
 }
 
 describe('NPC-013 source-backed ordinary composition', () => {
+  it('confirms each closed initial monster with explicit zero OE and exact restart/replay', () => {
+    for (const key of ['CHIMERA', 'PUPPETEER', 'PLAGUE_DOCTOR']) {
+      const input = fact(1, { additions: [specimen(key, 80, 0)] });
+      const first = apply(start(), input);
+      const view = read(first.state);
+      expect(view.kind).toBe('INITIAL_MONSTER_STRUCTURAL_COMPOSITION_ONLY');
+      expect(view.occupiedSlots).toBe(4);
+      expect(view.confirmedSlotCapacity).toBe(4);
+      expect(view.pendingRequirements).toEqual([]);
+      expect(view.instances[0]).toMatchObject({
+        currentOE: 0,
+        nativeMaxOE: 400,
+        effectsEnabled: true,
+      });
+      expect(apply(first.state, input)).toEqual({ state: first.state, receipt: first.receipt });
+      const restored = restoreNpcOrdinaryComposition(catalog.ordinaryComposition, binding, [input]);
+      expect(read(restored)).toEqual(view);
+      expect(() => apply(first.state, { ...input, raceCode: 'FREE' })).toThrow('changed fact');
+    }
+  });
+  it('rejects inferred extra slots, multiple monsters and foreign race without writing a receipt', () => {
+    const state = start();
+    const initial = read(state);
+    for (const key of ['CHIMERA', 'PUPPETEER', 'PLAGUE_DOCTOR']) {
+      expect(() =>
+        apply(
+          state,
+          fact(1, {
+            additions: [specimen(key, 80, 0), specimen('ARMADILLO', 81, 0)],
+          }),
+        ),
+      ).toThrow('no confirmed additional slots');
+      expect(() =>
+        apply(
+          state,
+          fact(1, {
+            raceCode: 'FREE',
+            additions: [specimen(key, 80, 0)],
+          }),
+        ),
+      ).toThrow('UNITED');
+      expect(() =>
+        apply(
+          state,
+          fact(1, {
+            additions: [specimen(key, 80, 401)],
+          }),
+        ),
+      ).toThrow();
+    }
+    expect(() =>
+      apply(
+        state,
+        fact(1, {
+          additions: [specimen('CHIMERA', 80, 0), specimen('PUPPETEER', 81, 0)],
+        }),
+      ),
+    ).toThrow('one symbiotic monster');
+    expect(read(state)).toBe(initial);
+  });
+  it('previews actual absorption/level consequences without minting a fact, receipt or state', () => {
+    const state = start(),
+      before = read(state);
+    const input = fact(1, {
+      additions: [specimen('TROGR', 1, 0), specimen('DOLPHIN', 2, 0), specimen('TEACHER', 3, 0)],
+    });
+    const { factId: _id, ordinal: _ordinal, journalId: _journal, kind: _kind, ...edit } = input;
+    const preview = previewNpcOrdinaryCompositionEdit(state, edit);
+    expect(Object.keys(preview).sort()).toEqual([
+      'consequences',
+      'instances',
+      'kind',
+      'occupiedSlots',
+      'requiredSourceContinuations',
+      'sourceSlotCapacity',
+    ]);
+    expect(preview.kind).toBe('UNCOMMITTED');
+    expect(read(state)).toBe(before);
+    expect(preview.instances.every((i) => !Object.hasOwn(i, 'acquisitionFactId'))).toBe(true);
+    expect(
+      preview.requiredSourceContinuations.every((r) => !Object.hasOwn(r, 'causedByFactId')),
+    ).toBe(true);
+    const committed = apply(state, input);
+    expect(preview.consequences).toEqual(committed.receipt.consequences);
+    expect(preview.instances).toEqual(
+      read(committed.state).instances.map(({ acquisitionFactId: _fact, ...row }) => row),
+    );
+    expect(previewNpcOrdinaryCompositionEdit(state, edit)).toEqual(preview);
+    expect(apply(committed.state, input).state).toBe(committed.state);
+    expect(() => previewNpcOrdinaryCompositionEdit(state, input)).toThrow('fields');
+  });
+  it('closed structural reader is not a catalog validator and preview keeps original no-op state', () => {
+    const input = fact(1, { additions: [specimen('OWL', 1, 0)] });
+    const hostile = {
+      ...input,
+      additions: [{ ...input.additions[0], speciesKey: 'NOT_A_SOURCE_SPECIES' }],
+    };
+    expect(readNpcOrdinaryCompositionFact(hostile).additions[0]?.speciesKey).toBe(
+      'NOT_A_SOURCE_SPECIES',
+    );
+    expect(() => apply(start(), hostile)).toThrow();
+    let reads = 0;
+    expect(() =>
+      readNpcOrdinaryCompositionFact({
+        ...input,
+        additions: [
+          {
+            ...input.additions[0],
+            binding: {
+              kind: 'OWL_EYE',
+              get side() {
+                reads++;
+                return 'LEFT';
+              },
+            },
+          },
+        ],
+      }),
+    ).toThrow('binding');
+    expect(reads).toBe(0);
+    const state = start(),
+      before = read(state);
+    expect(
+      previewNpcOrdinaryCompositionEdit(state, {
+        raceCode: 'UNITED',
+        removals: [],
+        additions: [],
+        buildChanges: [],
+        currentOeChanges: [],
+      }),
+    ).toMatchObject({
+      kind: 'UNCOMMITTED',
+      instances: [],
+      consequences: [],
+      requiredSourceContinuations: [],
+    });
+    expect(read(state)).toBe(before);
+    expect(() => apply(state, fact(1, {}))).toThrow('empty edit');
+  });
   it('keeps empty slots and every ordinary source species without importing PC starting-count rules', () => {
     expect(read(start()).instances).toEqual([]);
     const ordinary = catalog.symbionts.species.filter((row) => row.kind === 'ORDINARY');

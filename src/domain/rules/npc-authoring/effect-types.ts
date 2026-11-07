@@ -1,5 +1,10 @@
 import type { DiseaseId, PoisonProfileId } from '@generated/types/effects.js';
 import type { StatCode } from '@generated/types/character.js';
+import type { NpcAlcoholEffectInstance } from './alcohol-effects.js';
+import type { NpcHpModeEffectInstance } from './combined-hp-modes.js';
+import type { NpcFormalControlEffectInstance } from './formal-control-effects.js';
+import type { NpcFormalDeathTimer } from './formal-life-state.js';
+import type { NpcFormalWeaverEffectInstance } from './formal-weaver-effects.js';
 
 /** Technical representation of the two exact DiseaseDefinition modifier maps. */
 export type NpcModifierComponent =
@@ -22,7 +27,13 @@ export interface NpcCalendarInstant {
 }
 
 /** Implemented branches only; this is not a prohibition of other modeled families. */
-export type NpcEffectInstance = NpcDiseaseEffectInstance;
+export type NpcEffectInstance =
+  | NpcDiseaseEffectInstance
+  | NpcAlcoholEffectInstance
+  | NpcHpModeEffectInstance
+  | NpcFormalControlEffectInstance
+  | NpcFormalDeathTimer
+  | NpcFormalWeaverEffectInstance;
 export type NpcUntimedDiseaseId = Exclude<DiseaseId, 'DIS-PNEUMONIA' | 'DIS-PESTILENCE'>;
 export type NpcUntimedDiseasePayload = Readonly<{
   diseaseId: NpcUntimedDiseaseId;

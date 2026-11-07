@@ -1,5 +1,20 @@
 # Состояние модулей
 
+## Чистая модель NPC #187 — поддерживающая часть A
+
+Добавлена источниковая основа ordinary composition/skill history,
+equipment/item publication, formal initial effects/life и poison mode/coating.
+Подготовительные tokens и внешние history contexts отделяют ещё не
+опубликованное состояние от immutable опубликованных версий. Неподтверждённые
+источники, чужие identities и изменённые snapshots отвергаются; старые поля
+ABSENT сохраняются.
+
+Это не готовый NPC workflow: owning journal/SQLite, GM projection и реальные
+controls поставляются следующими частями. Существующая граница supported
+workflows остаётся закрытой для новой функциональности. #187 не закрывается
+этой зависимостью. Проверки окончательного SHA фиксируются в PR и внешних
+журналах; изменение этой записи после каждого прогона не требуется.
+
 ## Source #240 — 2026-11-07
 
 Atlas 1.19/B14 и [ADR 0087](../adr/0087-initial-taipan-poison-and-coatings.md) определяют

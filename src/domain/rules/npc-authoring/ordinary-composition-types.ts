@@ -1,5 +1,5 @@
 import type { RaceCode } from '@generated/types/character.js';
-import type { SymbiontBinding, Core169SpeciesKey } from '../symbiont-stage/catalog.js';
+import type { SymbiontBinding, SymbiontSpeciesKey } from '../symbiont-stage/catalog.js';
 import type { NpcSymbiontInput } from './types.js';
 
 export interface NpcCompositionBinding {
@@ -27,7 +27,7 @@ export interface NpcOrdinaryCompositionFact extends FactIdentity {
   readonly currentOeChanges: readonly Readonly<{ symbiontInstanceId: string; currentOE: number }>[];
 }
 export interface NpcOrdinaryCompositionInstance extends NpcSymbiontInput {
-  readonly speciesKey: Core169SpeciesKey;
+  readonly speciesKey: SymbiontSpeciesKey;
   readonly status: 'ACTIVE' | 'SUPPRESSED' | 'ABSORBED' | 'DESTROYED' | 'REMOVED';
   readonly slotCost: number;
   readonly nativeMaxOE: number;
@@ -111,7 +111,8 @@ export type NpcCompositionPendingRequirement =
     };
 
 export interface NpcOrdinaryCompositionView extends NpcCompositionBinding {
-  readonly kind: 'ORDINARY_STRUCTURAL_COMPOSITION_ONLY';
+  readonly kind:
+    'ORDINARY_STRUCTURAL_COMPOSITION_ONLY' | 'INITIAL_MONSTER_STRUCTURAL_COMPOSITION_ONLY';
   readonly lastOrdinal: number;
   readonly instances: readonly NpcOrdinaryCompositionInstance[];
   readonly occupiedSlots: number;

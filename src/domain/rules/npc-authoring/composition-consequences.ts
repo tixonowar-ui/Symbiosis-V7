@@ -9,13 +9,15 @@ import {
   createNpcOrdinaryComposition,
   applyNpcOrdinaryCompositionFact,
   readNpcOrdinaryComposition,
+  readNpcOrdinaryCompositionFact,
   type NpcOrdinaryCompositionCatalog,
 } from './ordinary-composition.js';
 import type {
   NpcCompositionPendingRequirement,
   NpcOrdinaryCompositionReceipt,
 } from './ordinary-composition-types.js';
-import { evaluateNpcSkills } from './skill-evaluation.js';
+import { evaluateNpcSkills, readNpcSkillProof } from './skill-evaluation.js';
+import { foldNpcSkillChargeFacts, readNpcSkillAccountingFact } from './skill-accounting.js';
 import type { NpcAdvisorCard, NpcLifetimeFacts, NpcRollFact } from './types.js';
 import type {
   NpcCompositionConfirmation,
@@ -36,12 +38,18 @@ const contexts = new WeakMap<NpcCompositionConsequenceCatalog, Context>();
 const STATS = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
 const COMMON = 'kind factId ordinal compositionOrdinal causedByFactId';
 const FIELDS = {
+  TROGR_PERMANENT_STAT_CLOSURE: 'symbiontInstanceId beforeRemovalOrNull',
   FREE_SLOT_ROLL: 'statContextFactId permanentStatsBefore roll',
   ADVISER_IW_ROLLS: 'symbiontInstanceId cardId rolls',
   ADVISER_SKILLS: 'symbiontInstanceId bodyContextFactId bodyStats selectedSkills',
   ADVISER_SUPPRESSION_ROLL: 'symbiontInstanceId roll',
   GROSS_SKILL_GRANT: 'symbiontInstanceId skillProof',
 } as const;
+function resolutionFields(value: object, kind: keyof typeof FIELDS): string {
+  return kind === 'GROSS_SKILL_GRANT' && Object.hasOwn(value, 'initialGrant')
+    ? 'symbiontInstanceId initialGrant'
+    : FIELDS[kind];
+}
 function fail(detail: string): never {
   throw new Error(`NPC composition consequences: ${detail}`);
 }
@@ -99,9 +107,10 @@ function number(value: unknown, minimum = 0): number {
 function statBlock<const T extends readonly StatCode[]>(
   value: unknown,
   codes: T,
+  minimum = 1,
 ): Record<T[number], number> {
   const row = record(value, codes.join(' '));
-  return Object.fromEntries(codes.map((key) => [key, number(row[key], 1)])) as Record<
+  return Object.fromEntries(codes.map((key) => [key, number(row[key], minimum)])) as Record<
     T[number],
     number
   >;
@@ -126,6 +135,124 @@ function canonical(value: unknown): string {
     );
   const encoded = JSON.stringify(value);
   return typeof encoded === 'string' ? encoded : fail('non-JSON value');
+}
+
+function readRecordedRoll(value: unknown, sides: 6 | 20): NpcRecordedCompositionRoll {
+  const row = record(
+    value,
+    'factId rollRequestId rollReceiptId originatingCommandId modeSnapshot mechanical',
+  );
+  if (row.modeSnapshot !== 'AUTO' && row.modeSnapshot !== 'MANUAL')
+    return fail('unknown recorded dice mode');
+  const mechanical = record(row.mechanical, 'dieSides rawFace');
+  const rawFace = number(mechanical.rawFace, 1);
+  if (mechanical.dieSides !== sides || rawFace > sides) return fail('wrong mechanical die/face');
+  return freeze({
+    factId: ref(row.factId),
+    rollRequestId: ref(row.rollRequestId),
+    rollReceiptId: ref(row.rollReceiptId),
+    originatingCommandId: ref(row.originatingCommandId),
+    modeSnapshot: row.modeSnapshot,
+    mechanical: { dieSides: sides, rawFace },
+  });
+}
+
+/** Closed storage grammar only; source composition and real command/roll binding remain mandatory. */
+export function readNpcCompositionConfirmation(value: unknown): NpcCompositionConfirmation {
+  const row = record(value, 'input confirmationCommandId diceModeSnapshot');
+  if (row.diceModeSnapshot !== 'AUTO' && row.diceModeSnapshot !== 'MANUAL')
+    return fail('unknown confirmed dice mode');
+  return freeze({
+    input: readNpcOrdinaryCompositionFact(row.input),
+    confirmationCommandId: ref(row.confirmationCommandId),
+    diceModeSnapshot: row.diceModeSnapshot,
+  });
+}
+
+/** Does not prove any obligation, source result, skill history, command or random receipt. */
+export function readNpcCompositionResolution(value: unknown): NpcCompositionResolution {
+  const d =
+    value !== null && typeof value === 'object'
+      ? Object.getOwnPropertyDescriptor(value, 'kind')
+      : undefined;
+  const kind: unknown = d !== undefined && Object.hasOwn(d, 'value') ? d.value : undefined;
+  if (typeof kind !== 'string' || !Object.hasOwn(FIELDS, kind))
+    return fail('unknown resolution kind');
+  const row = record(
+    value,
+    COMMON + ' ' + resolutionFields(value as object, kind as keyof typeof FIELDS),
+  );
+  const common = {
+    factId: ref(row.factId),
+    ordinal: number(row.ordinal, 1),
+    compositionOrdinal: number(row.compositionOrdinal, 1),
+    causedByFactId: ref(row.causedByFactId),
+  };
+  if (kind === 'FREE_SLOT_ROLL')
+    return freeze({
+      ...common,
+      kind,
+      statContextFactId: ref(row.statContextFactId),
+      permanentStatsBefore: statBlock(row.permanentStatsBefore, STATS),
+      roll: readRecordedRoll(row.roll, 6),
+    });
+  const symbiontInstanceId = ref(row.symbiontInstanceId);
+  if (kind === 'TROGR_PERMANENT_STAT_CLOSURE') {
+    const before =
+      row.beforeRemovalOrNull === null
+        ? null
+        : record(row.beforeRemovalOrNull, 'statContextFactId nonTrogrBasis permanentStats');
+    return freeze({
+      ...common,
+      kind,
+      symbiontInstanceId,
+      beforeRemovalOrNull:
+        before === null
+          ? null
+          : {
+              statContextFactId: ref(before.statContextFactId),
+              nonTrogrBasis: statBlock(before.nonTrogrBasis, STATS, Number.MIN_SAFE_INTEGER),
+              permanentStats: statBlock(before.permanentStats, STATS),
+            },
+    });
+  }
+  if (kind === 'ADVISER_IW_ROLLS') {
+    const rolls = array(row.rolls);
+    if (rolls.length !== 2) return fail('Advisor requires I then W');
+    return freeze({
+      ...common,
+      kind,
+      symbiontInstanceId,
+      cardId: ref(row.cardId),
+      rolls: [readRecordedRoll(rolls[0], 20), readRecordedRoll(rolls[1], 20)] as const,
+    });
+  }
+  if (kind === 'ADVISER_SKILLS')
+    return freeze({
+      ...common,
+      kind,
+      symbiontInstanceId,
+      bodyContextFactId: ref(row.bodyContextFactId),
+      bodyStats: statBlock(row.bodyStats, ['S', 'D', 'M', 'Z', 'C'] as const),
+      selectedSkills: array(row.selectedSkills).map((value) => {
+        const selected = record(value, 'skillKey targetBonus');
+        return { skillKey: ref(selected.skillKey), targetBonus: number(selected.targetBonus, 1) };
+      }),
+    });
+  if (kind === 'ADVISER_SUPPRESSION_ROLL')
+    return freeze({ ...common, kind, symbiontInstanceId, roll: readRecordedRoll(row.roll, 20) });
+  if (Object.hasOwn(row, 'initialGrant')) {
+    const initialGrant = readNpcSkillAccountingFact(row.initialGrant);
+    if (initialGrant.kind !== 'TROGR_GROSS_GRANT')
+      return fail('initial GROSS requires its exact grant leaf');
+    return freeze({ ...common, kind: 'GROSS_SKILL_GRANT', symbiontInstanceId, initialGrant });
+  }
+  return freeze({
+    ...common,
+    kind: 'GROSS_SKILL_GRANT',
+    symbiontInstanceId,
+    skillProof: readNpcSkillProof(row.skillProof),
+  });
 }
 function source(rules: unknown, id: string, witness: string): void {
   if (!Array.isArray(rules)) return fail('missing imported Rules');
@@ -156,6 +283,8 @@ export function createNpcCompositionConsequenceCatalog(
   source(rules, 'AQA-006', 'сначала I, затем W; к каждому прибавляется 8');
   source(rules, 'AQ2-023', 'Новый Советник получает новые броски и новую карточку');
   source(rules, 'SYM-185', 'Уже выданное постоянное повышение навыка SYM-079 повторно не выдаётся');
+  source(rules, 'SYM-076', 'за каждый L добавить +6 к S,D,M,Z');
+  source(rules, 'SYM-076', 'уменьшить I,W,C на 6L');
   const result = Object.freeze({}) as NpcCompositionConsequenceCatalog;
   contexts.set(result, { composition, skills: structuredClone(skills) });
   return result;
@@ -163,14 +292,36 @@ export function createNpcCompositionConsequenceCatalog(
 function key(r: NpcCompositionPendingRequirement): string {
   return `${r.kind}/${r.causedByFactId}/${'symbiontInstanceId' in r ? r.symbiontInstanceId : ''}`;
 }
+
+/** SYM-076 raw strength only; actual caps/minima and removal snapshots are distinct. */
+export function npcTrogrRawStatDelta(level: number): Readonly<Record<StatCode, number>> {
+  number(level);
+  const amount = 6 * level;
+  if (!Number.isSafeInteger(amount)) return fail('Trogr raw strength overflow');
+  return freeze({ S: amount, D: amount, M: amount, Z: amount, I: -amount, W: -amount, C: -amount });
+}
+function advanceTrogrStrength(
+  previous: NpcLifetimeFacts['trogrStrengthAndLegacyOrNull'],
+  currentLevel: number,
+): NonNullable<NpcLifetimeFacts['trogrStrengthAndLegacyOrNull']> {
+  const reachedLevel = Math.max(previous?.reachedLevel ?? 0, currentLevel);
+  return {
+    sourceRuleId: 'SYM-076',
+    reachedLevel,
+    reachedRawDelta: npcTrogrRawStatDelta(reachedLevel),
+    includedLevel: previous?.includedLevel ?? 0,
+    includedRawDelta: previous?.includedRawDelta ?? npcTrogrRawStatDelta(0),
+    legacyOrNull: previous?.legacyOrNull ?? null,
+  };
+}
 function fold(context: Context, value: unknown): NpcCompositionConsequenceResult {
   const raw = record(value, 'identityKey binding confirmations resolutions');
   const identityKey = ref(raw.identityKey),
     binding = record(raw.binding, 'journalId raceCode');
   let structural = createNpcOrdinaryComposition(context.composition, binding);
   const initial = readNpcOrdinaryComposition(structural);
-  const rawConfirmations = array(raw.confirmations),
-    rawResolutions = array(raw.resolutions);
+  const rawConfirmations = array(raw.confirmations).map(readNpcCompositionConfirmation),
+    rawResolutions = array(raw.resolutions).map(readNpcCompositionResolution);
   const confirmations: NpcCompositionConfirmation[] = [],
     resolutions: NpcCompositionResolution[] = [];
   const receipts: NpcOrdinaryCompositionReceipt[] = [];
@@ -186,6 +337,7 @@ function fold(context: Context, value: unknown): NpcCompositionConsequenceResult
   >();
   let free: NpcLifetimeFacts['freeExtraSlot'] = { kind: 'NOT_UNLOCKED' };
   let gross: NpcLifetimeFacts['grossGrant'] = { kind: 'NOT_ISSUED' };
+  let trogrLedger: NpcLifetimeFacts['trogrStrengthAndLegacyOrNull'] = undefined;
   let resolutionIndex = 0;
   const findRequirement = (
     kind: NpcCompositionPendingRequirement['kind'],
@@ -255,6 +407,7 @@ function fold(context: Context, value: unknown): NpcCompositionConsequenceResult
     const row = record(candidate, 'input confirmationCommandId diceModeSnapshot');
     if (row.diceModeSnapshot !== 'AUTO' && row.diceModeSnapshot !== 'MANUAL')
       return fail('unknown confirmed dice mode');
+    const beforeComposition = readNpcOrdinaryComposition(structural);
     const next = applyNpcOrdinaryCompositionFact(structural, row.input);
     if (next.state === structural || next.receipt.ordinal !== index + 1)
       return fail('duplicate/reordered composition confirmation');
@@ -280,7 +433,10 @@ function fold(context: Context, value: unknown): NpcCompositionConsequenceResult
       const kind: unknown = kindDescriptor.value;
       if (typeof kind !== 'string' || !Object.hasOwn(FIELDS, kind))
         return fail('unknown resolution kind');
-      const r = record(candidate, COMMON + ' ' + FIELDS[kind as keyof typeof FIELDS]);
+      const r = record(
+        candidate,
+        COMMON + ' ' + resolutionFields(candidate as object, kind as keyof typeof FIELDS),
+      );
       const compositionOrdinal = number(r.compositionOrdinal, 1);
       if (compositionOrdinal > index + 1) break;
       if (compositionOrdinal !== index + 1)
@@ -303,7 +459,74 @@ function fold(context: Context, value: unknown): NpcCompositionConsequenceResult
         causedByFactId: cause,
       };
       let normalized: NpcCompositionResolution;
-      if (kind === 'FREE_SLOT_ROLL') {
+      if (kind === 'TROGR_PERMANENT_STAT_CLOSURE') {
+        const instance = ref(r.symbiontInstanceId);
+        const required = findRequirement('TROGR_PERMANENT_STAT_CLOSURE', cause, instance);
+        const current = next.receipt.view.instances.find((i) => i.symbiontInstanceId === instance);
+        if (current === undefined || current.speciesKey !== 'TROGR')
+          return fail('Trogr closure lacks its actual specimen');
+        const present = current.status === 'ACTIVE' || current.status === 'SUPPRESSED';
+        const previous = beforeComposition.instances.find((i) => i.symbiontInstanceId === instance);
+        const reachedLevel = Math.max(trogrLedger?.reachedLevel ?? 0, current.targetLevel);
+        const reachedRawDelta = npcTrogrRawStatDelta(reachedLevel);
+        if (present) {
+          if (r.beforeRemovalOrNull !== null)
+            return fail('present Trogr cannot invent removal snapshot');
+          trogrLedger = advanceTrogrStrength(trogrLedger, current.targetLevel);
+          normalized = { ...common, kind, symbiontInstanceId: instance, beforeRemovalOrNull: null };
+        } else if (
+          previous === undefined &&
+          current.status === 'DESTROYED' &&
+          confirmation.input.additions.some((i) => i.symbiontInstanceId === instance)
+        ) {
+          // Owner decision #234: the duel precedes active stat composition. A new
+          // specimen destroyed in this confirmation never creates a stat context
+          // or advances SYM-076; independent absorption/SYM-079 facts still apply.
+          if (r.beforeRemovalOrNull !== null)
+            return fail('newly destroyed Trogr cannot invent a pre-death stat snapshot');
+          normalized = { ...common, kind, symbiontInstanceId: instance, beforeRemovalOrNull: null };
+        } else {
+          if (
+            previous === undefined ||
+            (previous.status !== 'ACTIVE' && previous.status !== 'SUPPRESSED')
+          )
+            return fail('Trogr removal lacks its actual preceding active specimen');
+          const before = record(
+            r.beforeRemovalOrNull,
+            'statContextFactId nonTrogrBasis permanentStats',
+          );
+          const nonTrogrBasis = statBlock(before.nonTrogrBasis, STATS, Number.MIN_SAFE_INTEGER);
+          const permanentStats = statBlock(before.permanentStats, STATS);
+          const statContextFactId = ref(before.statContextFactId);
+          const signedSnapshot = Object.fromEntries(
+            STATS.map((stat) => {
+              const delta = permanentStats[stat] - nonTrogrBasis[stat];
+              if (!Number.isSafeInteger(delta)) return fail('Trogr signed snapshot overflow');
+              return [stat, delta];
+            }),
+          ) as Record<StatCode, number>;
+          trogrLedger = {
+            sourceRuleId: 'SYM-076',
+            reachedLevel,
+            reachedRawDelta,
+            includedLevel: reachedLevel,
+            includedRawDelta: reachedRawDelta,
+            legacyOrNull: {
+              removalFactId: cause,
+              statContextFactId,
+              nonTrogrBasis,
+              signedSnapshot,
+            },
+          };
+          normalized = {
+            ...common,
+            kind,
+            symbiontInstanceId: instance,
+            beforeRemovalOrNull: { statContextFactId, nonTrogrBasis, permanentStats },
+          };
+        }
+        resolved.add(key(required));
+      } else if (kind === 'FREE_SLOT_ROLL') {
         const required = findRequirement('FREE_EXTRA_SLOT_ROLL_AND_STAT_CONSEQUENCE', cause);
         if (free.kind !== 'NOT_UNLOCKED' || next.receipt.view.raceCode !== 'FREE')
           return fail('FREE lifetime penalty already issued or wrong race');
@@ -407,35 +630,55 @@ function fold(context: Context, value: unknown): NpcCompositionConsequenceResult
         const instance = ref(r.symbiontInstanceId),
           required = findRequirement('GROSS_SKILL_GRANT', cause, instance);
         if (gross.kind !== 'NOT_ISSUED') return fail('GROSS lifetime grant repeated');
-        // Full proof is re-evaluated, not a caller-supplied computed before/after or success flag.
-        const result = evaluateNpcSkills(context.skills, {
-          mode: 'CREATE_V1',
-          identityKey,
-          previousConfirmedProofOrNull: null,
-          proof: r.skillProof,
-        });
-        const sources = result.proof.contexts.filter(
-          (c) =>
-            c.grossGrantSourceOrNull?.sourceAcquisitionFactId === cause &&
-            c.grossGrantSourceOrNull.symbiontInstanceId === instance,
-        );
-        const leaves = sources
-          .flatMap((c) => c.facts)
-          .filter((f) => f.kind === 'TROGR_GROSS_GRANT' && f.symbiontAcquisitionFactId === cause);
-        if (
-          result.grossGrant.kind !== 'ISSUED' ||
-          leaves.length !== 1 ||
-          leaves[0]?.factId !== result.grossGrant.acquisitionFactId
-        )
-          return fail('GROSS receipt lacks exact learned-node acquisition leaf');
-        gross = result.grossGrant;
-        resolved.add(key(required));
-        normalized = {
-          ...common,
-          kind: 'GROSS_SKILL_GRANT',
-          symbiontInstanceId: instance,
-          skillProof: result.proof,
-        };
+        if (Object.hasOwn(r, 'initialGrant')) {
+          const leaf = readNpcSkillAccountingFact(r.initialGrant);
+          if (
+            leaf.kind !== 'TROGR_GROSS_GRANT' ||
+            leaf.ordinal !== 1 ||
+            leaf.bonusBefore !== 0 ||
+            leaf.symbiontAcquisitionFactId !== cause
+          )
+            return fail('initial GROSS must bind actual first 0-to-3 acquisition');
+          const result = foldNpcSkillChargeFacts(context.skills, [leaf]);
+          gross = result.grossGrant;
+          resolved.add(key(required));
+          normalized = {
+            ...common,
+            kind: 'GROSS_SKILL_GRANT',
+            symbiontInstanceId: instance,
+            initialGrant: leaf,
+          };
+        } else {
+          // Full proof is re-evaluated, not a caller-supplied computed before/after or success flag.
+          const result = evaluateNpcSkills(context.skills, {
+            mode: 'CREATE_V1',
+            identityKey,
+            previousConfirmedProofOrNull: null,
+            proof: r.skillProof,
+          });
+          const sources = result.proof.contexts.filter(
+            (c) =>
+              c.grossGrantSourceOrNull?.sourceAcquisitionFactId === cause &&
+              c.grossGrantSourceOrNull.symbiontInstanceId === instance,
+          );
+          const leaves = sources
+            .flatMap((c) => c.facts)
+            .filter((f) => f.kind === 'TROGR_GROSS_GRANT' && f.symbiontAcquisitionFactId === cause);
+          if (
+            result.grossGrant.kind !== 'ISSUED' ||
+            leaves.length !== 1 ||
+            leaves[0]?.factId !== result.grossGrant.acquisitionFactId
+          )
+            return fail('GROSS receipt lacks exact learned-node acquisition leaf');
+          gross = result.grossGrant;
+          resolved.add(key(required));
+          normalized = {
+            ...common,
+            kind: 'GROSS_SKILL_GRANT',
+            symbiontInstanceId: instance,
+            skillProof: result.proof,
+          };
+        }
       }
       resolutions.push(normalized);
       resolutionIndex++;
@@ -488,6 +731,7 @@ function fold(context: Context, value: unknown): NpcCompositionConsequenceResult
       grossGrant: gross,
       advisorCards: currentCards,
       absorptionFacts,
+      ...(trogrLedger === undefined ? {} : { trogrStrengthAndLegacyOrNull: trogrLedger }),
     },
     advisorContinuations: [...cards.values()].filter((card) =>
       present.has(card.symbiontInstanceId),
@@ -529,4 +773,179 @@ export function evaluateNpcCompositionConsequences(
     }
   }
   return result;
+}
+
+/** Closed DTO grammar only; the owning composition replay must prove every recorded result. */
+export function readNpcOrdinaryLifetimeFacts(value: unknown): NpcLifetimeFacts {
+  const fields = 'freeExtraSlot trogrLegacy grossGrant advisorCards absorptionFacts';
+  const row = record(
+    value,
+    fields +
+      (value !== null &&
+      typeof value === 'object' &&
+      Object.hasOwn(value, 'trogrStrengthAndLegacyOrNull')
+        ? ' trogrStrengthAndLegacyOrNull'
+        : ''),
+  );
+  const kind = (v: unknown): unknown => {
+    const d =
+      v !== null && typeof v === 'object' ? Object.getOwnPropertyDescriptor(v, 'kind') : undefined;
+    return d !== undefined && Object.hasOwn(d, 'value')
+      ? d.value
+      : fail('missing data discriminant');
+  };
+  const literal = <T extends string>(v: unknown, expected: T): T =>
+    v === expected ? expected : fail('unknown lifetime source literal');
+  const roll = <T extends 6 | 20>(v: unknown, die: T): NpcRollFact<T> => {
+    const r = record(v, 'factId sourceRuleId roll'),
+      m = record(r.roll, 'dieSides rawFace');
+    const rawFace = number(m.rawFace, 1);
+    if (m.dieSides !== die || rawFace > die) return fail('wrong lifetime mechanical roll');
+    return {
+      factId: ref(r.factId),
+      sourceRuleId: ref(r.sourceRuleId),
+      roll: { dieSides: die, rawFace },
+    };
+  };
+  let freeExtraSlot: NpcLifetimeFacts['freeExtraSlot'];
+  if (kind(row.freeExtraSlot) === 'NOT_UNLOCKED') {
+    record(row.freeExtraSlot, 'kind');
+    freeExtraSlot = { kind: 'NOT_UNLOCKED' };
+  } else {
+    const free = record(
+      row.freeExtraSlot,
+      'kind sourceRuleId rollFact permanentStatConsequence acquisitionFactId',
+    );
+    freeExtraSlot = {
+      kind: literal(free.kind, 'UNLOCKED'),
+      sourceRuleId: literal(free.sourceRuleId, 'AQ2-015'),
+      rollFact: roll(free.rollFact, 6),
+      permanentStatConsequence: statBlock(
+        free.permanentStatConsequence,
+        STATS,
+        Number.MIN_SAFE_INTEGER,
+      ),
+      acquisitionFactId: ref(free.acquisitionFactId),
+    };
+  }
+  let grossGrant: NpcLifetimeFacts['grossGrant'];
+  if (kind(row.grossGrant) === 'NOT_ISSUED') {
+    record(row.grossGrant, 'kind');
+    grossGrant = { kind: 'NOT_ISSUED' };
+  } else {
+    const gross = record(
+      row.grossGrant,
+      'kind sourceRuleId bonusBefore bonusAfter acquisitionFactId',
+    );
+    grossGrant = {
+      kind: literal(gross.kind, 'ISSUED'),
+      sourceRuleId: literal(gross.sourceRuleId, 'SYM-079'),
+      bonusBefore: number(gross.bonusBefore),
+      bonusAfter: number(gross.bonusAfter),
+      acquisitionFactId: ref(gross.acquisitionFactId),
+    };
+  }
+  const advisorCards = array(row.advisorCards).map((value): NpcAdvisorCard => {
+    const card = record(
+      value,
+      'cardId symbiontInstanceId acquisitionFactId iwRollFacts iw skills suppression',
+    );
+    const rolls = array(card.iwRollFacts);
+    if (rolls.length !== 2) return fail('expected exact I/W roll pair');
+    const iw = record(card.iw, 'I W');
+    const stat = (v: unknown) => {
+      const s = record(v, 'rawFace value');
+      return { rawFace: number(s.rawFace, 1), value: number(s.value, 1) };
+    };
+    let suppression: NpcAdvisorCard['suppression'];
+    if (kind(card.suppression) === 'NOT_TRIGGERED') {
+      record(card.suppression, 'kind');
+      suppression = { kind: 'NOT_TRIGGERED' };
+    } else {
+      const s = record(card.suppression, 'kind rollFact bonus');
+      suppression = {
+        kind: literal(s.kind, 'RESOLVED'),
+        rollFact: roll(s.rollFact, 20),
+        bonus: number(s.bonus),
+      };
+    }
+    return {
+      cardId: ref(card.cardId),
+      symbiontInstanceId: ref(card.symbiontInstanceId),
+      acquisitionFactId: ref(card.acquisitionFactId),
+      iwRollFacts: [roll(rolls[0], 20), roll(rolls[1], 20)],
+      iw: { I: stat(iw.I), W: stat(iw.W) },
+      skills: array(card.skills).map((v) => {
+        const s = record(v, 'skillKey bonus slotCost');
+        return {
+          skillKey: ref(s.skillKey) as NpcAdvisorCard['skills'][number]['skillKey'],
+          bonus: number(s.bonus, 1),
+          slotCost: number(s.slotCost),
+        };
+      }),
+      suppression,
+    };
+  });
+  const trogrLegacy = array(row.trogrLegacy).map((value) => {
+    const legacy = record(value, 'sourceRuleId reachedStatContributions acquisitionFactId');
+    return {
+      sourceRuleId: literal(legacy.sourceRuleId, 'SYM-076'),
+      reachedStatContributions: statBlock(
+        legacy.reachedStatContributions,
+        STATS,
+        Number.MIN_SAFE_INTEGER,
+      ),
+      acquisitionFactId: ref(legacy.acquisitionFactId),
+    };
+  });
+  const absorptionFacts = array(row.absorptionFacts).map(
+    (value): NpcLifetimeFacts['absorptionFacts'][number] => {
+      const a = record(
+        value,
+        'compositionConsequenceFactId sourceRuleId sourceQuestionId absorberInstanceId absorberSpeciesKey absorbedInstanceId absorbedSpeciesKey',
+      );
+      if (a.absorbedSpeciesKey !== 'TEACHER' && a.absorbedSpeciesKey !== 'DOLPHIN')
+        return fail('unknown absorbed source species');
+      return {
+        compositionConsequenceFactId: ref(a.compositionConsequenceFactId),
+        sourceRuleId: literal(a.sourceRuleId, 'SYM-075'),
+        sourceQuestionId: literal(a.sourceQuestionId, 'Q-SYM-031'),
+        absorberInstanceId: ref(a.absorberInstanceId),
+        absorberSpeciesKey: literal(a.absorberSpeciesKey, 'TROGR'),
+        absorbedInstanceId: ref(a.absorbedInstanceId),
+        absorbedSpeciesKey: a.absorbedSpeciesKey,
+      };
+    },
+  );
+  const base = { freeExtraSlot, grossGrant, advisorCards, trogrLegacy, absorptionFacts };
+  if (!Object.hasOwn(row, 'trogrStrengthAndLegacyOrNull')) return freeze(base);
+  if (row.trogrStrengthAndLegacyOrNull === null)
+    return freeze({ ...base, trogrStrengthAndLegacyOrNull: null });
+  const t = record(
+    row.trogrStrengthAndLegacyOrNull,
+    'sourceRuleId reachedLevel reachedRawDelta includedLevel includedRawDelta legacyOrNull',
+  );
+  const legacy =
+    t.legacyOrNull === null
+      ? null
+      : record(t.legacyOrNull, 'removalFactId statContextFactId nonTrogrBasis signedSnapshot');
+  return freeze({
+    ...base,
+    trogrStrengthAndLegacyOrNull: {
+      sourceRuleId: literal(t.sourceRuleId, 'SYM-076'),
+      reachedLevel: number(t.reachedLevel),
+      reachedRawDelta: statBlock(t.reachedRawDelta, STATS, Number.MIN_SAFE_INTEGER),
+      includedLevel: number(t.includedLevel),
+      includedRawDelta: statBlock(t.includedRawDelta, STATS, Number.MIN_SAFE_INTEGER),
+      legacyOrNull:
+        legacy === null
+          ? null
+          : {
+              removalFactId: ref(legacy.removalFactId),
+              statContextFactId: ref(legacy.statContextFactId),
+              nonTrogrBasis: statBlock(legacy.nonTrogrBasis, STATS, Number.MIN_SAFE_INTEGER),
+              signedSnapshot: statBlock(legacy.signedSnapshot, STATS, Number.MIN_SAFE_INTEGER),
+            },
+    },
+  });
 }

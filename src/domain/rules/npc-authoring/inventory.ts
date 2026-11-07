@@ -4,6 +4,7 @@ import {
   deriveMasterWeaponProfile,
   type MasterWeaponProfileInput,
   type StagedWeaponProfile,
+  type MasterWeaponBaseProfile,
 } from '../item-stage/master-weapon-profile.js';
 import {
   STARTING_WEAPON_VARIANTS,
@@ -42,8 +43,98 @@ export type NpcItemProfileRequest =
       canReceiveFlammableCoating: boolean;
     }>;
 
+export type NpcStructuredCustomProfile = Extract<
+  NpcItemProfileRequest,
+  { kind: 'STRUCTURED_CUSTOM' }
+>;
+/** ADR 0084: these are host reservations, not a claim that a complete profile is committed. */
+export interface NpcCustomProfileVersionReference {
+  readonly profileId: string;
+  readonly profileVersionId: string;
+  readonly version: number;
+  readonly reservationOperationId: string;
+}
+export interface NpcCampaignCustomProfileReference extends NpcCustomProfileVersionReference {
+  readonly kind: 'CAMPAIGN_CUSTOM_PROFILE';
+}
+export interface NpcCatalogueCustomModifierReference extends NpcCustomProfileVersionReference {
+  readonly kind: 'CATALOG_CUSTOM_MODIFIER';
+}
+export type NpcCustomBonusContainerBinding =
+  | Readonly<{ kind: 'NOT_APPLICABLE' }>
+  | Readonly<{ kind: 'OUTSIDE_BACKPACK' }>
+  | Readonly<{ kind: 'BACKPACK'; backpackItemInstanceId: string }>;
+/** A catalogue modifier is separate: it cannot replace the original checked profile. */
+export interface NpcCatalogueCustomModifierRequest {
+  readonly reference: NpcCatalogueCustomModifierReference;
+  readonly profile: NpcStructuredCustomProfile;
+  readonly bonusContainerBinding: NpcCustomBonusContainerBinding;
+  readonly reason: string;
+}
+export interface NpcCustomProfileContent {
+  readonly profile: NpcStructuredCustomProfile;
+  readonly reason: string;
+}
+export function readNpcCustomProfileContent(value: unknown): NpcCustomProfileContent {
+  const row = object(value, ['profile', 'reason'], 'custom.content');
+  return freeze({
+    profile: readNpcStructuredCustomProfile(row['profile']),
+    reason: text(row['reason'], 'custom.reason'),
+  });
+}
+/** Item Registry QUALITY dictionary; these names identify the GM's final choice, not a roll. */
+export const NPC_ITEM_QUALITY_TIERS = [
+  'MISSING_OR_UNFIT',
+  'POOR',
+  'ORDINARY',
+  'GOOD',
+  'EXCEPTIONAL',
+  'RARE',
+] as const;
+export type NpcItemQualityTier = (typeof NPC_ITEM_QUALITY_TIERS)[number];
+export interface NpcClothingProperties {
+  readonly coveredRegionIds: readonly ArmorBodyZone[];
+  readonly hermetic: boolean | 'UNKNOWN';
+  readonly flammability: 'COMBUSTIBLE' | 'NONCOMBUSTIBLE' | 'UNKNOWN';
+}
+export interface NpcInventoryMetadata {
+  readonly qualityTier?: NpcItemQualityTier | null;
+  readonly clothingProperties?: NpcClothingProperties;
+}
+export function readNpcItemQualityTier(value: unknown): NpcItemQualityTier | null {
+  return nullable(value, (v) => choice(v, NPC_ITEM_QUALITY_TIERS, 'qualityTier'));
+}
+export function readNpcClothingProperties(value: unknown): NpcClothingProperties {
+  const row = object(value, ['coveredRegionIds', 'hermetic', 'flammability'], 'clothingProperties');
+  return freeze<NpcClothingProperties>({
+    coveredRegionIds: uniqueStrings(
+      row['coveredRegionIds'],
+      'clothingProperties.coveredRegionIds',
+    ).map((v) => choice(v, ARMOR_BODY_ZONES, 'clothing region')),
+    hermetic:
+      row['hermetic'] === 'UNKNOWN'
+        ? 'UNKNOWN'
+        : boolean(row['hermetic'], 'clothingProperties.hermetic'),
+    flammability: choice(
+      row['flammability'],
+      ['COMBUSTIBLE', 'NONCOMBUSTIBLE', 'UNKNOWN'],
+      'clothingProperties.flammability',
+    ),
+  });
+}
+/** Preserve historical absence; an explicit null quality is a different GM decision. */
+export function npcInventoryMetadata(value: NpcInventoryMetadata): NpcInventoryMetadata {
+  return {
+    ...(Object.hasOwn(value, 'qualityTier')
+      ? { qualityTier: readNpcItemQualityTier(value.qualityTier) }
+      : {}),
+    ...(Object.hasOwn(value, 'clothingProperties')
+      ? { clothingProperties: readNpcClothingProperties(value.clothingProperties) }
+      : {}),
+  };
+}
 /** Immutable physical identity is assigned by the host's attempt, then echoed by the editor. */
-export interface NpcInventoryRequestEntry {
+export interface NpcCatalogueInventoryRequestEntry extends NpcInventoryMetadata {
   readonly itemInstanceId: string;
   readonly itemTypeId: string;
   readonly quantity: number;
@@ -61,7 +152,21 @@ export interface NpcInventoryRequestEntry {
   readonly qualityRoll: number | null;
   readonly coatingInstanceIds: readonly string[];
   readonly issueReason: string;
+  /** Absence is the exact historical catalogue shape, never an implicit new modifier. */
+  readonly customModifier?: NpcCatalogueCustomModifierRequest;
 }
+export interface NpcCampaignCustomInventoryRequestEntry extends Omit<
+  NpcCatalogueInventoryRequestEntry,
+  'itemTypeId' | 'profile' | 'customModifier'
+> {
+  readonly itemTypeId: null;
+  readonly itemTypeReference: NpcCampaignCustomProfileReference;
+  readonly profile: NpcStructuredCustomProfile;
+  readonly bonusContainerBinding: NpcCustomBonusContainerBinding;
+  readonly customProfileReason: string;
+}
+export type NpcInventoryRequestEntry =
+  NpcCatalogueInventoryRequestEntry | NpcCampaignCustomInventoryRequestEntry;
 
 function fail(path: string, detail: string): never {
   throw new Error(`NPC inventory ${path}: ${detail}`);
@@ -334,10 +439,80 @@ function profile(value: unknown, path: string): NpcItemProfileRequest {
   };
 }
 
-/** Shape, local consistency and detached bytes only; owning attempt and source catalog are separate guards. */
-export function readNpcInventoryRequest(value: unknown): readonly NpcInventoryRequestEntry[] {
+export function readNpcCustomProfileReference<
+  K extends 'CAMPAIGN_CUSTOM_PROFILE' | 'CATALOG_CUSTOM_MODIFIER',
+>(value: unknown, kind: K): Readonly<NpcCustomProfileVersionReference & { kind: K }> {
+  const row = object(
+    value,
+    ['kind', 'profileId', 'profileVersionId', 'version', 'reservationOperationId'],
+    'custom.reference',
+  );
+  if (row['kind'] !== kind) fail('custom.reference', 'wrong profile purpose');
+  const result = {
+    kind,
+    profileId: uuid(row['profileId'], 'custom.profileId'),
+    profileVersionId: uuid(row['profileVersionId'], 'custom.profileVersionId'),
+    version: number(row['version'], 1, true, 'custom.version'),
+    reservationOperationId: uuid(row['reservationOperationId'], 'custom.reservationOperationId'),
+  };
+  if (
+    new Set([result.profileId, result.profileVersionId, result.reservationOperationId]).size !== 3
+  )
+    fail('custom.reference', 'identity domains overlap');
+  return freeze(result);
+}
+export function readNpcCustomBonusContainerBinding(value: unknown): NpcCustomBonusContainerBinding {
+  if (value === null || typeof value !== 'object')
+    fail('custom.container', 'typed binding required');
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'kind');
+  const kind: unknown =
+    descriptor !== undefined && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+  if (kind === 'NOT_APPLICABLE' || kind === 'OUTSIDE_BACKPACK') {
+    object(value, ['kind'], 'custom.container');
+    return Object.freeze({ kind });
+  }
+  const row = object(value, ['kind', 'backpackItemInstanceId'], 'custom.container');
+  if (row['kind'] !== 'BACKPACK') fail('custom.container', 'unknown binding kind');
+  return Object.freeze({
+    kind: 'BACKPACK',
+    backpackItemInstanceId: uuid(
+      row['backpackItemInstanceId'],
+      'custom.container.backpackItemInstanceId',
+    ),
+  });
+}
+export function readNpcStructuredCustomProfile(value: unknown): NpcStructuredCustomProfile {
+  const result = profile(value, 'custom.profile');
+  if (result.kind !== 'STRUCTURED_CUSTOM')
+    return fail('custom.profile', 'structured profile required');
+  return freeze(result);
+}
+function customModifier(value: unknown): NpcCatalogueCustomModifierRequest {
+  const row = object(
+    value,
+    ['reference', 'profile', 'bonusContainerBinding', 'reason'],
+    'custom.modifier',
+  );
+  return {
+    reference: readNpcCustomProfileReference(row['reference'], 'CATALOG_CUSTOM_MODIFIER'),
+    profile: readNpcStructuredCustomProfile(row['profile']),
+    bonusContainerBinding: readNpcCustomBonusContainerBinding(row['bonusContainerBinding']),
+    reason: text(row['reason'], 'custom.modifier.reason'),
+  };
+}
+function readInventoryRequest(
+  value: unknown,
+  scope: 'COMPLETE_INVENTORY' | 'RESTORED_GROUP',
+): readonly NpcInventoryRequestEntry[] {
   const entries = array(value, '$').map((value, index): NpcInventoryRequestEntry => {
     const path = `$[${String(index)}]`;
+    const arbitrary =
+      value !== null && typeof value === 'object' && Object.hasOwn(value, 'itemTypeReference');
+    const modifier =
+      !arbitrary &&
+      value !== null &&
+      typeof value === 'object' &&
+      Object.hasOwn(value, 'customModifier');
     const row = object(
       value,
       [
@@ -358,6 +533,19 @@ export function readNpcInventoryRequest(value: unknown): readonly NpcInventoryRe
         'qualityRoll',
         'coatingInstanceIds',
         'issueReason',
+        ...(value !== null && typeof value === 'object' && Object.hasOwn(value, 'qualityTier')
+          ? ['qualityTier']
+          : []),
+        ...(value !== null &&
+        typeof value === 'object' &&
+        Object.hasOwn(value, 'clothingProperties')
+          ? ['clothingProperties']
+          : []),
+        ...(arbitrary
+          ? ['itemTypeReference', 'bonusContainerBinding', 'customProfileReason']
+          : modifier
+            ? ['customModifier']
+            : []),
       ],
       path,
     );
@@ -370,11 +558,9 @@ export function readNpcInventoryRequest(value: unknown): readonly NpcInventoryRe
     );
     if (qualityRoll !== null && qualityRoll > 20)
       fail(path, 'quality recommendation face outside R20');
-    return {
+    const common = {
       itemInstanceId: uuid(row['itemInstanceId'], `${path}.itemInstanceId`),
-      itemTypeId: text(row['itemTypeId'], `${path}.itemTypeId`),
       quantity: number(row['quantity'], 1, true, `${path}.quantity`),
-      profile: profile(row['profile'], `${path}.profile`),
       equipped,
       equippedSlots,
       bodyZone: nullable(row['bodyZone'], (v) => choice(v, ARMOR_BODY_ZONES, `${path}.bodyZone`)),
@@ -400,6 +586,38 @@ export function readNpcInventoryRequest(value: unknown): readonly NpcInventoryRe
         uuid,
       ),
       issueReason: text(row['issueReason'], `${path}.issueReason`),
+      ...(Object.hasOwn(row, 'qualityTier')
+        ? { qualityTier: readNpcItemQualityTier(row['qualityTier']) }
+        : {}),
+      ...(Object.hasOwn(row, 'clothingProperties')
+        ? { clothingProperties: readNpcClothingProperties(row['clothingProperties']) }
+        : {}),
+    };
+    if (
+      Object.hasOwn(common, 'clothingProperties') &&
+      (arbitrary || row['itemTypeId'] !== 'RES-EQP-001')
+    )
+      return fail(path, 'clothing properties require the actual clothing catalogue identity');
+    if (arbitrary) {
+      if (row['itemTypeId'] !== null)
+        return fail(path, 'campaign custom item has no catalogue identity');
+      return {
+        ...common,
+        itemTypeId: null,
+        itemTypeReference: readNpcCustomProfileReference(
+          row['itemTypeReference'],
+          'CAMPAIGN_CUSTOM_PROFILE',
+        ),
+        profile: readNpcStructuredCustomProfile(row['profile']),
+        bonusContainerBinding: readNpcCustomBonusContainerBinding(row['bonusContainerBinding']),
+        customProfileReason: text(row['customProfileReason'], `${path}.customProfileReason`),
+      };
+    }
+    return {
+      ...common,
+      itemTypeId: text(row['itemTypeId'], `${path}.itemTypeId`),
+      profile: profile(row['profile'], `${path}.profile`),
+      ...(modifier ? { customModifier: customModifier(row['customModifier']) } : {}),
     };
   });
   if (new Set(entries.map((entry) => entry.itemInstanceId)).size !== entries.length)
@@ -407,7 +625,82 @@ export function readNpcInventoryRequest(value: unknown): readonly NpcInventoryRe
   const coatingIds = entries.flatMap((entry) => entry.coatingInstanceIds);
   if (new Set(coatingIds).size !== coatingIds.length)
     fail('$', 'coating cannot belong to two items');
+  const custom: readonly Readonly<{
+    item: NpcInventoryRequestEntry;
+    reference: NpcCustomProfileVersionReference;
+    profile: NpcStructuredCustomProfile;
+    container: NpcCustomBonusContainerBinding;
+  }>[] = entries.flatMap(
+    (
+      entry,
+    ): Readonly<{
+      item: NpcInventoryRequestEntry;
+      reference: NpcCustomProfileVersionReference;
+      profile: NpcStructuredCustomProfile;
+      container: NpcCustomBonusContainerBinding;
+    }>[] =>
+      entry.itemTypeId === null
+        ? [
+            {
+              item: entry,
+              reference: entry.itemTypeReference,
+              profile: entry.profile,
+              container: entry.bonusContainerBinding,
+            },
+          ]
+        : entry.customModifier === undefined
+          ? []
+          : [
+              {
+                item: entry,
+                reference: entry.customModifier.reference,
+                profile: entry.customModifier.profile,
+                container: entry.customModifier.bonusContainerBinding,
+              },
+            ],
+  );
+  const identities = [
+    ...entries.map((entry) => entry.itemInstanceId),
+    ...custom.flatMap((entry) => [entry.reference.profileId, entry.reference.profileVersionId]),
+  ];
+  if (new Set(identities).size !== identities.length)
+    fail('$', 'custom profile identity reused across physical items');
+  for (const entry of custom) {
+    if (entry.profile.customBonusOrNull === null) {
+      if (entry.container.kind !== 'NOT_APPLICABLE')
+        fail('$', 'absent bonus needs NOT_APPLICABLE container');
+    } else {
+      if (entry.item.quantity !== 1) fail('$', 'a bonus belongs to one physical item, not a stack');
+      if (entry.container.kind === 'NOT_APPLICABLE')
+        fail('$', 'bonus needs an explicit backpack or outside choice');
+      if (entry.container.kind === 'BACKPACK') {
+        const backpackItemInstanceId = entry.container.backpackItemInstanceId;
+        const backpack = entries.find((item) => item.itemInstanceId === backpackItemInstanceId);
+        // A selected historical group may refer to a backpack restored separately.
+        // Keep the exact reference in the editor; full inventory validation still
+        // requires the real selected backpack before any contribution/publication.
+        if (backpack === undefined && scope === 'RESTORED_GROUP') continue;
+        if (
+          backpack === undefined ||
+          backpack.itemTypeId !== 'RES-CON-001' ||
+          backpack.itemInstanceId === entry.item.itemInstanceId
+        )
+          fail('$', 'bonus container must be a different real selected backpack of this NPC');
+      }
+    }
+  }
   return freeze(entries);
+}
+
+/** Shape, local consistency and detached bytes only; owning attempt and source catalog are separate guards. */
+export function readNpcInventoryRequest(value: unknown): readonly NpcInventoryRequestEntry[] {
+  return readInventoryRequest(value, 'COMPLETE_INVENTORY');
+}
+/** Closed historical row grammar, not a valid complete inventory or authorization to restore it. */
+export function readNpcInventoryRestorationRows(
+  value: unknown,
+): readonly NpcInventoryRequestEntry[] {
+  return readInventoryRequest(value, 'RESTORED_GROUP');
 }
 
 /** CORE-187–190: source protected fields are rebuilt, not accepted as staged client truth. */
@@ -416,6 +709,7 @@ export function resolveNpcWeaponProfiles(
   itemTypeId: string,
   rawVariants: readonly StartingWeaponVariant[],
   rawRequest: Exclude<NpcItemProfileRequest, { kind: 'STRUCTURED_CUSTOM' }>,
+  priorProfiles: readonly MasterWeaponBaseProfile[] = [],
 ): readonly StagedWeaponProfile[] {
   const requestedVariants = array(rawVariants, 'weapon.variants').map((value) =>
     choice(value, STARTING_WEAPON_VARIANTS, 'weapon.variant'),
@@ -443,7 +737,11 @@ export function resolveNpcWeaponProfiles(
         return stageValidatedWeaponProfile(canonicalFixedWeaponProfile(catalog, selection));
       const input = request.inputs.find((entry) => entry.weaponVariantId === weaponVariant);
       if (input === undefined) return fail('weapon', 'missing profile variant');
-      return deriveMasterWeaponProfile(catalog, selection, input, null);
+      const previous = priorProfiles.filter(
+        (entry) => entry.weaponTypeId === itemTypeId && entry.weaponVariantId === weaponVariant,
+      );
+      if (previous.length > 1) return fail('weapon', 'ambiguous previous physical profile');
+      return deriveMasterWeaponProfile(catalog, selection, input, previous[0] ?? null);
     }),
   );
 }
@@ -473,6 +771,207 @@ export interface NpcInventoryDefinition {
 export interface NpcInventoryCatalog {
   readonly definitions: readonly NpcInventoryDefinition[];
   readonly weapons: WeaponProfileCatalog;
+}
+export interface NpcInventoryMetadataChoices {
+  readonly qualityTiers: readonly Readonly<{ value: NpcItemQualityTier; label: string }>[];
+  readonly clothingRegions: readonly ArmorBodyZone[];
+  readonly clothingHermetic: readonly (boolean | 'UNKNOWN')[];
+  readonly clothingFlammability: readonly NpcClothingProperties['flammability'][];
+}
+const metadataCatalogs = new WeakMap<NpcInventoryCatalog, NpcInventoryMetadataChoices>();
+export function npcInventoryMetadataChoices(
+  catalog: NpcInventoryCatalog,
+): NpcInventoryMetadataChoices | null {
+  return metadataCatalogs.get(catalog) ?? null;
+}
+function readMetadataSource(
+  catalog: NpcInventoryCatalog,
+  value: unknown,
+): NpcInventoryMetadataChoices {
+  const source = object(value, ['instanceModel', 'dictionaries'], 'metadata.source');
+  const seals = [
+    {
+      'Data type': 'ENUM',
+      Field: 'qualityTier',
+      Purpose: 'Качество',
+      Required: false,
+      Scope: 'ITEM_INSTANCE',
+      'Validation / constraint': 'По шкале PDF; финализирует мастер',
+    },
+    {
+      'Data type': 'ARRAY<ENUM>',
+      Default: '[]',
+      Field: 'equippedSlots',
+      Purpose: 'Занятые слоты',
+      Required: false,
+      Scope: 'EQUIPMENT',
+      'Validation / constraint': 'Руки или зоны тела',
+    },
+    {
+      'Data type': 'ENUM',
+      Field: 'bodyZone',
+      Purpose: 'Зона брони',
+      Required: false,
+      Scope: 'EQUIPMENT',
+      'Validation / constraint': 'HEAD|TORSO|ARM_L|ARM_R|LEG_L|LEG_R',
+    },
+    {
+      'Data type': 'BOOLEAN',
+      Field: 'sealed',
+      Purpose: 'Герметичность',
+      Required: false,
+      Scope: 'ITEM_STATE',
+      'Validation / constraint': 'Только Нэйт; true при выдаче',
+    },
+  ];
+  const rows = array(source['instanceModel'], 'metadata.instanceModel');
+  for (const seal of seals) {
+    const found = rows.filter(
+      (row) =>
+        row !== null && typeof row === 'object' && 'Field' in row && row.Field === seal.Field,
+    );
+    if (found.length !== 1) fail('metadata.source', 'missing exact instance field');
+    const actual = object(found[0], Object.keys(seal), 'metadata.instanceField');
+    if (Object.entries(seal).some(([key, value]) => actual[key] !== value))
+      fail('metadata.source', 'changed instance field contract');
+  }
+  const definitions = [
+    ['1–4', 'Отсутствует/непригоден', 'MISSING_OR_UNFIT'],
+    ['5–9', 'Плохое', 'POOR'],
+    ['10–14', 'Обычное', 'ORDINARY'],
+    ['15–18', 'Хорошее', 'GOOD'],
+    ['19', 'Исключительное', 'EXCEPTIONAL'],
+    ['20', 'Редкое', 'RARE'],
+  ] as const;
+  const quality = array(source['dictionaries'], 'metadata.dictionaries').filter(
+    (row) =>
+      row !== null &&
+      typeof row === 'object' &&
+      'Dictionary' in row &&
+      row.Dictionary === 'QUALITY',
+  );
+  if (quality.length !== definitions.length) fail('metadata.source', 'changed QUALITY dictionary');
+  const qualityTiers = definitions.map(([code, label, tier]) => {
+    const found = quality.filter(
+      (row) => object(row, ['Code', 'Dictionary', 'Meaning'], 'metadata.quality')['Code'] === code,
+    );
+    if (
+      found.length !== 1 ||
+      object(found[0], ['Code', 'Dictionary', 'Meaning'], 'metadata.quality')['Meaning'] !== label
+    )
+      fail('metadata.source', 'changed QUALITY tier');
+    return { value: tier, label };
+  });
+  const clothing = catalog.definitions.find((row) => row.itemTypeId === 'RES-EQP-001');
+  if (
+    clothing === undefined ||
+    clothing.inventoryAllowed !== true ||
+    !clothing.equippable ||
+    clothing.category !== 'Экипировка' ||
+    clothing.armorOrNull !== null ||
+    clothing.composite ||
+    clothing.catalogueSource['Rule ID'] !== 'CORE-112; MON-072' ||
+    clothing.catalogueSource['Примечание'] !==
+      'Общий тип; зоны, герметичность и горючесть задаются экземпляром/мастером.'
+  )
+    fail('metadata.source', 'changed explicit clothing source');
+  return freeze<NpcInventoryMetadataChoices>({
+    qualityTiers,
+    clothingRegions: ARMOR_BODY_ZONES,
+    clothingHermetic: [true, false, 'UNKNOWN'],
+    clothingFlammability: ['COMBUSTIBLE', 'NONCOMBUSTIBLE', 'UNKNOWN'],
+  });
+}
+export function validateNpcInventoryMetadata(
+  catalog: NpcInventoryCatalog,
+  request: NpcInventoryRequestEntry,
+): void {
+  if (
+    (Object.hasOwn(request, 'qualityTier') || Object.hasOwn(request, 'clothingProperties')) &&
+    !metadataCatalogs.has(catalog)
+  )
+    fail('metadata', 'source-bound quality/clothing capability is unavailable');
+  if (request.itemTypeId !== 'RES-EQP-001') return;
+  const properties = request.clothingProperties;
+  if (request.equipped && (properties === undefined || properties.coveredRegionIds.length === 0))
+    fail('clothing', 'equipped clothing requires explicit physical coverage/properties');
+  // Items 07 permits body regions as equipment placement. Clothing coverage is
+  // declarative metadata, not an armor layer or hand occupancy; the source does
+  // not impose exclusivity between clothes or between clothes and armor.
+  const expected = request.equipped ? (properties?.coveredRegionIds ?? []) : [];
+  if (
+    request.equippedSlots.length !== expected.length ||
+    expected.some((zone) => !request.equippedSlots.includes(zone))
+  )
+    fail('clothing', 'slots differ from exact declared coverage');
+  if (request.bodyZone !== null || request.sealed !== null)
+    fail('clothing', 'clothing metadata cannot claim armor zone or Nate sealed protection');
+}
+/** Complete source description of a carried catalogue item; PARTIAL does not invent later use mechanics. */
+export interface NpcCatalogueItemProfile {
+  readonly itemTypeId: string;
+  readonly name: string;
+  readonly category: string;
+  readonly completeness: 'FULL' | 'PARTIAL';
+  readonly catalogueSource: NpcInventoryDefinition['catalogueSource'];
+  readonly mechanicsSourceOrNull: NpcInventoryDefinition['profileSource'];
+}
+/** CORE-047's shield is a physical component; it has no supplied attack variant. */
+export interface NpcNonattackingShieldProfile {
+  readonly itemTypeId: 'ITM-WPN-026';
+  readonly sourceRuleId: 'CORE-047';
+  readonly componentRole: 'SHIELD';
+  readonly shieldMaxHP: number;
+  readonly statRequirements: StagedWeaponProfile['statRequirements'];
+  readonly sourceProperties: StagedWeaponProfile['properties'];
+}
+export function resolveNpcNonattackingShieldProfile(
+  catalog: NpcInventoryCatalog,
+  itemTypeId: string,
+): NpcNonattackingShieldProfile {
+  const definition = catalog.definitions.find((row) => row.itemTypeId === itemTypeId);
+  const shield = definition?.components.find((part) => part.role === 'SHIELD');
+  if (
+    itemTypeId !== 'ITM-WPN-026' ||
+    definition?.catalogueSource['Rule ID'] !== 'CORE-047' ||
+    shield === undefined ||
+    shield.attackVariants.length !== 0 ||
+    shield.shieldMaxHPOrNull === null
+  )
+    fail('shield.profile', 'expected the source nonattacking shield component');
+  const source = catalog.weapons.entries.find(
+    (entry) => entry.weaponTypeId === itemTypeId && entry.weaponVariant === 'SWORD',
+  );
+  if (source === undefined) fail('shield.profile', 'missing protected complete-set properties');
+  return freeze({
+    itemTypeId: 'ITM-WPN-026',
+    sourceRuleId: 'CORE-047',
+    componentRole: 'SHIELD',
+    shieldMaxHP: shield.shieldMaxHPOrNull,
+    statRequirements: source.template.statRequirements,
+    sourceProperties: source.template.properties,
+  });
+}
+export function resolveNpcCatalogueItemProfile(
+  catalog: NpcInventoryCatalog,
+  itemTypeId: string,
+): NpcCatalogueItemProfile {
+  const definition = catalog.definitions.find((item) => item.itemTypeId === itemTypeId);
+  if (
+    definition === undefined ||
+    definition.inventoryAllowed !== true ||
+    definition.category === 'Оружие' ||
+    definition.category === 'Броня'
+  )
+    return fail('catalogue profile', 'carried nonweapon source item required');
+  return freeze({
+    itemTypeId: definition.itemTypeId,
+    name: definition.name,
+    category: definition.category,
+    completeness: definition.completeness,
+    catalogueSource: definition.catalogueSource,
+    mechanicsSourceOrNull: definition.profileSource,
+  });
 }
 function sourceRow(
   value: unknown,
@@ -506,6 +1005,7 @@ export function createNpcInventoryCatalog(
   armorProfiles: unknown,
   pharmaceuticals: unknown,
   weapons: WeaponProfileCatalog,
+  metadataSource?: Readonly<{ instanceModel: unknown; dictionaries: unknown }>,
 ): NpcInventoryCatalog {
   const catalogueFields = [
     'Единица',
@@ -724,6 +1224,10 @@ export function createNpcInventoryCatalog(
         entries.some((entry) => !expectedVariants.includes(entry.weaponVariant))
       )
         fail(itemTypeId, 'composite attack variants differ from source');
+      // CORE-177 describes the complete own pair as two hands. Component holding
+      // slots may split that pair only while this protected whole-set fact holds.
+      if (entries.some((entry) => entry.template.properties['Руки'] !== '2'))
+        fail(itemTypeId, 'composite complete-set hand count differs from source');
       const hp = entries.map((entry) => entry.template.properties['Shield max HP']);
       if (new Set(hp).size !== 1 || typeof hp[0] !== 'string' || !/^[1-9]\d*$/u.test(hp[0]))
         fail(itemTypeId, 'missing protected shield profile');
@@ -784,7 +1288,10 @@ export function createNpcInventoryCatalog(
     )
       fail('catalogue', 'orphan weapon profile');
   }
-  return freeze({ definitions, weapons });
+  const catalog = freeze({ definitions, weapons });
+  if (metadataSource !== undefined)
+    metadataCatalogs.set(catalog, readMetadataSource(catalog, metadataSource));
+  return catalog;
 }
 
 /** Item-instance bounds, not armor aggregation, hand availability or ownership authorization. */
@@ -792,8 +1299,12 @@ export function validateNpcCatalogueItemState(
   definition: NpcInventoryDefinition,
   input: NpcInventoryRequestEntry,
   weaponProfiles: readonly StagedWeaponProfile[],
+  inventoryContext: readonly NpcInventoryRequestEntry[] = [input],
 ): void {
-  const entry = readNpcInventoryRequest([input])[0]!;
+  const entry = readNpcInventoryRequest([
+    input,
+    ...inventoryContext.filter((item) => item.itemInstanceId !== input.itemInstanceId),
+  ])[0]!;
   if (entry.itemTypeId !== definition.itemTypeId || definition.inventoryAllowed !== true)
     fail('itemTypeId', 'unknown or unavailable inventory type');
   if (entry.profile.kind === 'STRUCTURED_CUSTOM')

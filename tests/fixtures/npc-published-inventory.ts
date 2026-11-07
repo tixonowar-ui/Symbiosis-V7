@@ -1,4 +1,4 @@
-import type { NpcInventoryRequestEntry } from '../../src/domain/rules/npc-authoring/inventory.js';
+import type { NpcCatalogueInventoryRequestEntry } from '../../src/domain/rules/npc-authoring/inventory.js';
 import {
   buildNpcInventoryPublication,
   type NpcInventoryPublicationCatalog,
@@ -8,7 +8,7 @@ import type { NpcCleanHumanoidBuildInput } from '../../src/domain/rules/npc-auth
 import type { NpcHumanoidBuildInput } from '../../src/domain/rules/npc-authoring/npc-humanoid-sheet.js';
 
 /** The real source Kensi is an explicit fixture, not the complete inventory feature's allowlist. */
-export function npcKensiRequest(itemInstanceId: string): NpcInventoryRequestEntry {
+export function npcKensiRequest(itemInstanceId: string): NpcCatalogueInventoryRequestEntry {
   return {
     itemInstanceId,
     itemTypeId: 'ITM-WPN-003',

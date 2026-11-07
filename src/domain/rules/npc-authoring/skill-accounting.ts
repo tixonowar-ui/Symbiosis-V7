@@ -16,9 +16,16 @@ export type NpcSkillAccountingFact =
         skillKey: SkillKey;
         bonusBefore: number;
         bonusAfter: number;
-        pool: 'START' | 'TRAINING';
         chargedSlotCost: number;
-      }>)
+      }> &
+      (
+        | Readonly<{ pool: 'START' | 'TRAINING' }>
+        | Readonly<{
+            pool: 'SYM-166';
+            symbiontInstanceId: string;
+            nodeRef: 'SYM-166';
+          }>
+      ))
   | (FactIdentity &
       Readonly<{
         kind: 'TROGR_GROSS_GRANT';
@@ -37,7 +44,9 @@ export type NpcSkillAccountingFact =
 export interface NpcSkillAccounting {
   readonly learnedSkills: readonly NpcLearnedSkill[];
   readonly grossGrant: NpcGrossGrant;
-  readonly usedSlots: Readonly<Record<'START' | 'TRAINING', number>>;
+  readonly usedSlots: Readonly<
+    Record<'START' | 'TRAINING', number> & Partial<Record<'SYM-166', number>>
+  >;
 }
 
 export class NpcSkillAccountingError extends Error {
@@ -118,8 +127,87 @@ function skill(catalog: SkillStageCatalog, value: unknown): SkillKey {
 
 const COMMON = ['kind', 'factId', 'ordinal', 'contextFactId'] as const;
 const PAID = [...COMMON, 'skillKey', 'bonusBefore', 'bonusAfter', 'pool', 'chargedSlotCost'];
+const PAID_SYM166 = [...PAID, 'symbiontInstanceId', 'nodeRef'];
 const GRANT = [...COMMON, 'sourceRuleId', 'symbiontAcquisitionFactId', 'bonusBefore', 'bonusAfter'];
 const LOSS = [...COMMON, 'sourceRuleId', 'skillKey'];
+
+/** Closed leaf grammar, without catalog recognition or any affordability/history assertion. */
+export function readNpcSkillAccountingFact(value: unknown): NpcSkillAccountingFact {
+  const d =
+    value !== null && typeof value === 'object'
+      ? Object.getOwnPropertyDescriptor(value, 'kind')
+      : undefined;
+  if (d === undefined || !Object.hasOwn(d, 'value')) fail('fact.kind: expected own data field');
+  const kind: unknown = d.value;
+  const poolField =
+    value !== null && typeof value === 'object'
+      ? Object.getOwnPropertyDescriptor(value, 'pool')
+      : undefined;
+  const sym166 =
+    poolField !== undefined && Object.hasOwn(poolField, 'value') && poolField.value === 'SYM-166';
+  const fields =
+    kind === 'PAID_ACQUISITION'
+      ? sym166
+        ? PAID_SYM166
+        : PAID
+      : kind === 'TROGR_GROSS_GRANT'
+        ? GRANT
+        : kind === 'PERMANENT_REQUIREMENT_LOSS'
+          ? LOSS
+          : null;
+  if (fields === null) fail('unknown skill fact kind');
+  const row = exact(value, fields, 'fact');
+  const common = {
+    factId: id(row.factId, 'factId'),
+    ordinal: integer(row.ordinal, 1, 'ordinal'),
+    contextFactId: id(row.contextFactId, 'contextFactId'),
+  };
+  if (kind === 'PERMANENT_REQUIREMENT_LOSS') {
+    if (row.sourceRuleId !== 'CORE-166') fail('permanent loss requires CORE-166');
+    return Object.freeze({
+      ...common,
+      kind,
+      sourceRuleId: 'CORE-166',
+      skillKey: id(row.skillKey, 'skillKey') as SkillKey,
+    });
+  }
+  const endpoints = {
+    bonusBefore: integer(row.bonusBefore, 0, 'bonusBefore'),
+    bonusAfter: integer(row.bonusAfter, 1, 'bonusAfter'),
+  };
+  if (kind === 'TROGR_GROSS_GRANT') {
+    if (row.sourceRuleId !== 'SYM-079') fail('GROSS grant requires SYM-079');
+    return Object.freeze({
+      ...common,
+      ...endpoints,
+      kind,
+      sourceRuleId: 'SYM-079',
+      symbiontAcquisitionFactId: id(row.symbiontAcquisitionFactId, 'symbiontAcquisitionFactId'),
+    });
+  }
+  if (row.pool === 'SYM-166') {
+    if (row.nodeRef !== 'SYM-166') fail('SYM-166 charge requires exact learned node');
+    return Object.freeze({
+      ...common,
+      ...endpoints,
+      kind: 'PAID_ACQUISITION',
+      skillKey: id(row.skillKey, 'skillKey') as SkillKey,
+      pool: row.pool,
+      nodeRef: 'SYM-166',
+      symbiontInstanceId: id(row.symbiontInstanceId, 'symbiontInstanceId'),
+      chargedSlotCost: integer(row.chargedSlotCost, 1, 'chargedSlotCost'),
+    });
+  }
+  if (row.pool !== 'START' && row.pool !== 'TRAINING') fail('unknown skill slot pool');
+  return Object.freeze({
+    ...common,
+    ...endpoints,
+    kind: 'PAID_ACQUISITION',
+    skillKey: id(row.skillKey, 'skillKey') as SkillKey,
+    pool: row.pool,
+    chargedSlotCost: integer(row.chargedSlotCost, 1, 'chargedSlotCost'),
+  });
+}
 
 /**
  * Arithmetic fold of a complete ordered leaf-fact history (technical ordinals 1..N).
@@ -133,9 +221,9 @@ export function foldNpcSkillChargeFacts(
 ): NpcSkillAccounting {
   const learned = new Map<SkillKey, NpcLearnedSkill>();
   const seen = new Set<string>();
-  const used = { START: 0, TRAINING: 0 };
+  const used = { START: 0, TRAINING: 0, 'SYM-166': 0 };
   let grossGrant: NpcGrossGrant = Object.freeze({ kind: 'NOT_ISSUED' });
-  const facts = factsArray(orderedFacts);
+  const facts = factsArray(orderedFacts).map(readNpcSkillAccountingFact);
   for (const [index, candidate] of facts.entries()) {
     const descriptor =
       candidate !== null && typeof candidate === 'object'
@@ -146,7 +234,9 @@ export function foldNpcSkillChargeFacts(
     const kind: unknown = descriptor.value;
     const fields =
       kind === 'PAID_ACQUISITION'
-        ? PAID
+        ? candidate.kind === 'PAID_ACQUISITION' && candidate.pool === 'SYM-166'
+          ? PAID_SYM166
+          : PAID
         : kind === 'TROGR_GROSS_GRANT'
           ? GRANT
           : kind === 'PERMANENT_REQUIREMENT_LOSS'
@@ -202,7 +292,8 @@ export function foldNpcSkillChargeFacts(
 
     if (after <= before) fail('paid acquisition must increase the current bonus');
     const pool = fact['pool'];
-    if (pool !== 'START' && pool !== 'TRAINING') fail('unknown skill slot pool');
+    if (pool !== 'START' && pool !== 'TRAINING' && pool !== 'SYM-166')
+      fail('unknown skill slot pool');
     const cost = integer(fact['chargedSlotCost'], 1, 'chargedSlotCost');
     // Zero denotes proven absence; the existing CORE-165 positive-cost primitive never receives 0.
     const expected =
@@ -212,12 +303,23 @@ export function foldNpcSkillChargeFacts(
     if (!Number.isSafeInteger(total)) fail('occupied pool cost overflows safe integer');
     used[pool] = total;
     // paidBonus is this referenced event's target bonus, not a separately purchased increment.
-    const charge: NpcSkillCharge = Object.freeze({
+    const commonCharge = {
       pool,
       paidBonus: after,
       chargedSlotCost: cost,
       acquisitionFactId: factId,
-    });
+    };
+    const charge: NpcSkillCharge =
+      pool === 'SYM-166'
+        ? Object.freeze({
+            ...commonCharge,
+            pool,
+            bonusBefore: before,
+            bonusAfter: after,
+            symbiontInstanceId: id(fact.symbiontInstanceId, 'symbiontInstanceId'),
+            nodeRef: 'SYM-166',
+          })
+        : Object.freeze({ ...commonCharge, pool });
     learned.set(
       key,
       Object.freeze({
@@ -230,6 +332,12 @@ export function foldNpcSkillChargeFacts(
   return Object.freeze({
     learnedSkills: Object.freeze([...learned.values()]),
     grossGrant,
-    usedSlots: Object.freeze(used),
+    usedSlots: Object.freeze({
+      START: used.START,
+      TRAINING: used.TRAINING,
+      ...(facts.some((f) => f.kind === 'PAID_ACQUISITION' && f.pool === 'SYM-166')
+        ? { 'SYM-166': used['SYM-166'] }
+        : {}),
+    }),
   });
 }

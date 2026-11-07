@@ -15,8 +15,14 @@ import {
   evaluateNpcDiseaseUnconsciousness,
   deriveNpcDiseaseStatContribution,
   previewNpcDiseaseStatContribution,
+  deriveNpcDiseaseEquippedStatContribution,
+  previewNpcDiseaseEquippedStatContribution,
   type NpcDiseaseUnconsciousnessCatalog,
 } from './disease-unconsciousness.js';
+import { deriveNpcEquipmentProfile } from './equipment-profile.js';
+import { buildNpcInventoryPreview } from './inventory-publication.js';
+import { npcKensiRequest } from '../../../../tests/fixtures/npc-published-inventory.js';
+import type { NpcInventoryRequestEntry } from './inventory.js';
 const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const read = (p: string): unknown =>
   JSON.parse(readFileSync(`${ROOT}/generated/spec/${p}.json`, 'utf8')) as unknown;
@@ -53,6 +59,149 @@ const evaluate = (
     scope,
     histories,
   });
+
+describe('CORE-078 issued equipment raw basis before MON-075', () => {
+  const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  function gear(M: number, npcUuid = actorId) {
+    const pieces = ['TORSO', 'HEAD', 'ARM_L'].map((zone, index): NpcInventoryRequestEntry => ({
+      ...npcKensiRequest(id(50 + index)),
+      itemTypeId: 'ITM-ARM-002',
+      currentAmmo: null,
+      bodyZone: zone as NpcInventoryRequestEntry['bodyZone'],
+      profile: { kind: 'CATALOG' },
+      equipped: true,
+      equippedSlots: [zone],
+      sealed: null,
+    }));
+    return deriveNpcEquipmentProfile(source.equipment, {
+      npcUuid,
+      statInput: {
+        schema: {
+          raceCode: 'UNITED',
+          pureClassOrNull: null,
+          anatomyProfileId: 'STANDARD_HUMANOID',
+          sex: 'MALE',
+          massKg: 75,
+        },
+        // CORE-001 manual UNITED subtracts ten from M and Z before equipment/effects.
+        baseStats: { ...stats, M: M + 10, Z: 12, S: 20, D: 20 },
+        compositionProof: {
+          identityKey: npcUuid,
+          binding: { journalId: id(70), raceCode: 'UNITED' },
+          confirmations: [],
+          resolutions: [],
+        },
+      },
+      inventoryPreview: buildNpcInventoryPreview(source.inventoryPublication, pieces),
+      compatibilityProofOrNull: null,
+    });
+  }
+  it.each([1, 3])(
+    'retains raw armor M from permanent %s through the disease threshold before computational one',
+    (M) => {
+      const equipmentProfile = gear(M),
+        effect = disease('DIS-RHINITIS');
+      const before = JSON.stringify({ equipmentProfile, effect });
+      expect(equipmentProfile.rawEquippedStats.M).toBe(M - 3);
+      expect(equipmentProfile.equippedStats.M).toBe(1);
+      const input = { effects: [effect], equipmentProfile, scope, histories: [] };
+      const result = deriveNpcDiseaseEquippedStatContribution(catalog, input);
+      expect(result.permanentStats.M).toBe(M);
+      expect(result.rawFinalStats.M).toBe(M - 5);
+      expect(result.effectiveStats.M).toBe(1);
+      expect(result.unconsciousness.triggers).toEqual([
+        {
+          effectInstanceId: effectId,
+          diseaseId: 'DIS-RHINITIS',
+          stat: 'M',
+          effectiveStat: M - 5,
+          effectiveZ: 2,
+          sum: M - 3,
+        },
+      ]);
+      const preview = previewNpcDiseaseEquippedStatContribution(catalog, {
+        assignments: [{ effectInstanceId: effectId, diseaseId: 'DIS-RHINITIS' }],
+        equipmentProfile,
+      });
+      expect(preview.contribution).toEqual(result);
+      expect(deriveNpcDiseaseEquippedStatContribution(catalog, input)).toEqual(result);
+      expect(JSON.stringify({ equipmentProfile, effect })).toBe(before);
+    },
+  );
+  it('keeps armor-only computational floor separate from disease consequences and respects the exact boundary', () => {
+    const equipmentProfile = gear(4),
+      effect = disease('DIS-RHINITIS');
+    const result = deriveNpcDiseaseEquippedStatContribution(catalog, {
+      effects: [effect],
+      equipmentProfile,
+      scope,
+      histories: [],
+    });
+    expect(result.rawFinalStats.M).toBe(-1);
+    expect(result.unconsciousness.triggers).toEqual([]);
+    expect(
+      deriveNpcDiseaseEquippedStatContribution(catalog, {
+        effects: [],
+        equipmentProfile: gear(1),
+        scope,
+        histories: [],
+      }),
+    ).toMatchObject({
+      permanentStats: { M: 1 },
+      rawFinalStats: { M: -2 },
+      effectiveStats: { M: 1 },
+      unconsciousness: { triggers: [] },
+    });
+  });
+  it('refuses cloned, forged and foreign raw equipment without relaxing the old permanent reader', () => {
+    const equipmentProfile = gear(1),
+      effect = disease('DIS-RHINITIS');
+    for (const forged of [
+      structuredClone(equipmentProfile),
+      { ...equipmentProfile, rawEquippedStats: { ...stats, M: -100 } },
+    ]) {
+      expect(() =>
+        deriveNpcDiseaseEquippedStatContribution(catalog, {
+          effects: [effect],
+          equipmentProfile: forged,
+          scope,
+          histories: [],
+        }),
+      ).toThrow();
+      expect(() =>
+        previewNpcDiseaseEquippedStatContribution(catalog, {
+          assignments: [],
+          equipmentProfile: forged,
+        }),
+      ).toThrow();
+    }
+    expect(() =>
+      deriveNpcDiseaseEquippedStatContribution(catalog, {
+        effects: [effect],
+        equipmentProfile: gear(1, id(99)),
+        scope,
+        histories: [],
+      }),
+    ).toThrow('another NPC');
+    expect(() =>
+      deriveNpcDiseaseStatContribution(catalog, {
+        effects: [effect],
+        permanentStats: equipmentProfile.rawEquippedStats,
+        scope,
+        histories: [],
+      }),
+    ).toThrow('permanent stats');
+    expect(() =>
+      deriveNpcDiseaseEquippedStatContribution(catalog, {
+        effects: [effect],
+        equipmentProfile,
+        scope,
+        histories: [],
+        skipValidation: true,
+      }),
+    ).toThrow();
+  });
+});
 
 describe('MON-075/Q-MON-039 disease-only unconsciousness contribution', () => {
   it('uses final X+final Z below one, with no second disease subtraction or base clamp', () => {
