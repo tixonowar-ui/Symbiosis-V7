@@ -35,7 +35,8 @@ export type BaselineFixtureRelease =
   | 'B10'
   | 'B11'
   | 'B12'
-  | 'B13';
+  | 'B13'
+  | 'B14';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
@@ -54,6 +55,7 @@ const npcRulesPatchPath = fileURLToPath(new URL('./atlas-232-lineage.patch', imp
 const freshTrogrPatchPath = fileURLToPath(new URL('./atlas-234-lineage.patch', import.meta.url));
 const customItemPatchPath = fileURLToPath(new URL('./atlas-236-lineage.patch', import.meta.url));
 const initialLifePatchPath = fileURLToPath(new URL('./atlas-237-lineage.patch', import.meta.url));
+const initialPoisonPatchPath = fileURLToPath(new URL('./atlas-240-lineage.patch', import.meta.url));
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
 );
@@ -93,6 +95,7 @@ export const BASELINE_FIXTURE_IDS = {
   B11: BASELINE_LINEAGE_SEALS.freshTrogrBaselineVersion,
   B12: BASELINE_LINEAGE_SEALS.customItemBaselineVersion,
   B13: BASELINE_LINEAGE_SEALS.initialLifeBaselineVersion,
+  B14: BASELINE_LINEAGE_SEALS.initialPoisonBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
@@ -109,6 +112,7 @@ const releaseAtlas = {
   B11: BASELINE_LINEAGE_SEALS.freshTrogrAtlas,
   B12: BASELINE_LINEAGE_SEALS.customItemAtlas,
   B13: BASELINE_LINEAGE_SEALS.initialLifeAtlas,
+  B14: BASELINE_LINEAGE_SEALS.initialPoisonAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -128,7 +132,8 @@ export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer
     release === 'B10' ||
     release === 'B11' ||
     release === 'B12' ||
-    release === 'B13'
+    release === 'B13' ||
+    release === 'B14'
   ) {
     const entries = text.trimEnd().split('\n');
     entries.push(
@@ -167,6 +172,7 @@ export function applyBaselineFixtureRelease(
     'B11',
     'B12',
     'B13',
+    'B14',
   ] as const;
   // These private bytes cannot change during the synchronous release lookup.
   // Hash each once instead of rehashing the same JSON for every older release.
@@ -192,6 +198,7 @@ export function applyBaselineFixtureRelease(
         readFileSync(freshTrogrPatchPath),
         readFileSync(customItemPatchPath),
         readFileSync(initialLifePatchPath),
+        readFileSync(initialPoisonPatchPath),
       ]),
     );
   const patchSha256 = patchSeal();
@@ -257,7 +264,9 @@ export function applyBaselineFixtureRelease(
                                   ? freshTrogrPatchPath
                                   : edge === 11
                                     ? customItemPatchPath
-                                    : initialLifePatchPath,
+                                    : edge === 12
+                                      ? initialLifePatchPath
+                                      : initialPoisonPatchPath,
           ),
           reverse,
         );
@@ -301,7 +310,8 @@ export function applyBaselineFixtureRelease(
       release === 'B10' ||
       release === 'B11' ||
       release === 'B12' ||
-      release === 'B13'
+      release === 'B13' ||
+      release === 'B14'
     ) {
       const supplied = readFileSync(join(sourceRoot, 'artifacts', path));
       assert.equal(sha(supplied), digest, 'supplied GM source bytes differ');
@@ -312,7 +322,7 @@ export function applyBaselineFixtureRelease(
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0–B13 sources use thirteen reviewed Atlas patches and the three sealed B5–B13 art paths. */
+/** Exact B0–B14 sources use fourteen reviewed Atlas patches and the three sealed B5–B14 art paths. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

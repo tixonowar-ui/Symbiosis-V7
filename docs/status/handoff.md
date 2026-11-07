@@ -1,5 +1,23 @@
 # Передача контекста — 2026-11-06
 
+## Источник #240: режим Тайпана и приготовленные покрытия
+
+Владелец принял предложение целиком вместе с Atlas/ADR/CHECKSUMS.
+Atlas 1.19/B14 и [ADR 0087](../adr/0087-initial-taipan-poison-and-coatings.md) продолжают B13.
+Новый Тайпан требует явный learned initial mode даже без покрытия; retained
+active/pending mode и таймер не меняются через OPEN/N+1. Новая доза требует
+actual active source mode, один доказанный carrier/surface, причину и T.
+Current L отделён от original source snapshot; freeze допускается лишь на
+последнем доказанном доступном значении после гибели/удаления/нечитаемости.
+Нет target rolls, fake expiry, ranged currentAmmo identity, скрытого split
+или replay consumption. Controls и actual immutable origins остаются в #187.
+
+B13 manifest фиксируется отдельно; B14 добавляет точные forward пары
+и identity по ADR 0071. Старые ADR, snapshots/FINAL/receipts, предметные XLSX,
+Runtime Pack и non-Atlas артефакты неизменны. Generated создаётся импортом.
+Source review, author verify, независимый clean5 и точный CI фиксируются
+отдельно; эта запись не утверждает успех ещё не выполненных проверок.
+
 ## Источники #237/#239: исходная жизнь и formal состояния Ткача
 
 Владелец принял явный остаток вместе с Atlas/ADR/CHECKSUMS. Поставка

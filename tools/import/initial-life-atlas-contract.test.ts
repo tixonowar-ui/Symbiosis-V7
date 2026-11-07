@@ -74,8 +74,15 @@ describe('ADR 0085 explicit initial life state source boundary', () => {
   ])('refuses changing the accepted life clause: %s', (before, after) => {
     const { root, form } = editedForm('NPC-016');
     const clauses = form['acceptanceCriteria'] as string[];
-    expect(clauses.filter((line) => line.includes(before))).toHaveLength(1);
-    form['acceptanceCriteria'] = clauses.map((line) => line.replace(before, after));
+    const targets = clauses.filter(
+      (line) => /^ADR0085(?: |:)/u.test(line) && line.includes(before),
+    );
+    expect(targets).toHaveLength(1);
+    const changed = clauses.map((line) =>
+      line === targets[0] ? line.replace(before, after) : line,
+    );
+    expect(changed.filter((line, index) => line !== clauses[index])).toHaveLength(1);
+    form['acceptanceCriteria'] = changed;
     expect(() => assertAdr0085InitialLife(root)).toThrow('NPC-016');
   });
   it('keeps life fields conditional and does not roll for ALIVE or DEAD', () => {

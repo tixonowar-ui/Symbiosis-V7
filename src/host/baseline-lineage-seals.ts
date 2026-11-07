@@ -117,6 +117,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '81d4c0ed98f9401bc0c814581f36237be4df0bb0e61c8b43a9b4ab35dfc6b36e',
   },
+  // ADR 0087 / #240: exact initial Taipan mode/coating source; prior receipts stay sealed.
+  initialPoisonBaselineVersion:
+    'sha256:8392aa86593d840d51d450e1d1ee440c4ea27f322b8974f28b50ce51812c8a1e',
+  initialPoisonAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '693165a14d3dc84442ab6e6320186e01362fad1e31d7d18f9e84f34ca9128e08',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '9771735fcbeec028012e09185a78af3fe89529e400a2c35ea9bf836730822bd8',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',

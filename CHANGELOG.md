@@ -9,6 +9,13 @@
 
 ### Добавлено
 
+- **2026-11-07, source #240:** Atlas 1.19 и ADR 0087 задают явный initial mode
+  нового Тайпана и formal prepared dose на одной доказанной физической
+  поверхности. Retained mode/pending timer сохраняются; original source snapshot
+  отделён от current/last-proven L по CQA-002. Нет target rolls, fake expiry,
+  ranged currentAmmo identity или played delivery. B14 продолжает точную
+  совместимость; runtime controls и owning history остаются в #187.
+
 - **2026-11-06, source #237/#239:** Atlas 1.18 и ADR 0085 задают явный исходный
   life state NPC, настоящий host D6 и отдельно введённый точный остаток
   тяжёлого ранения с доказанным дублем. DEAD терминален; retained timer,
