@@ -289,6 +289,18 @@ export interface NpcHumanoidSourceControlState {
   readonly automaticAdviserOrNull: NpcFormalControlComposition['automaticAdviserOrNull'];
 }
 
+/** Explicit guards narrow the generic wrapper without changing either original shape test. */
+function isNpcHumanoidPreview(
+  value: NpcHumanoidSnapshot | NpcHumanoidPreview,
+): value is NpcHumanoidPreview {
+  return 'kind' in value;
+}
+function isNpcHumanoidSnapshot(
+  value: NpcHumanoidSnapshot | NpcHumanoidPreview,
+): value is NpcHumanoidSnapshot {
+  return 'format' in value;
+}
+
 /** The supported whole sheet proves physical state; a source override never accepts a caller flag. */
 function applySourceControl<T extends NpcHumanoidSnapshot | NpcHumanoidPreview>(
   catalog: NpcHumanoidCatalog,
@@ -300,8 +312,8 @@ function applySourceControl<T extends NpcHumanoidSnapshot | NpcHumanoidPreview>(
     (() => {
       throw new Error('NPC humanoid: source catalog required');
     })();
-  const preview = 'kind' in snapshot ? snapshot : null;
-  const saved = 'format' in snapshot ? snapshot : null;
+  const preview = isNpcHumanoidPreview(snapshot) ? snapshot : null;
+  const saved = isNpcHumanoidSnapshot(snapshot) ? snapshot : null;
   const effects =
     preview?.sheet.preparedRuntimeState?.effects ??
     snapshot.sheet.input.initialState.effectInstances;
