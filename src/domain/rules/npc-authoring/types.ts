@@ -1,4 +1,17 @@
-import type { NpcPublishedWeaponItem } from './inventory-publication.js';
+import type { NpcCompositionConsequence } from './ordinary-composition-types.js';
+import type { NpcFormalLifeState } from './formal-life-state.js';
+import type { NpcInitialTaipanModeState } from './taipan-mode-state.js';
+import type { NpcPublishedInventoryItem } from './inventory-publication.js';
+import type {
+  NpcArmorProfile,
+  NpcCatalogueItemProfile,
+  NpcNonattackingShieldProfile,
+  NpcCatalogueCustomModifierRequest,
+  NpcCampaignCustomProfileReference,
+  NpcStructuredCustomProfile,
+  NpcCustomBonusContainerBinding,
+  NpcInventoryMetadata,
+} from './inventory.js';
 import type { ClassCode, RaceCode, StatCode } from '@generated/types/character.js';
 
 import type { MechanicalRoll } from '../../entities/roll-request/roll-model.js';
@@ -54,12 +67,21 @@ export interface NpcRollFact<
   readonly roll: MechanicalRoll & Readonly<{ dieSides: DieSides }>;
 }
 
-export interface NpcSkillCharge {
-  readonly pool: 'START' | 'TRAINING';
-  readonly paidBonus: number;
-  readonly chargedSlotCost: number;
-  readonly acquisitionFactId: string;
-}
+export type NpcSkillCharge = Readonly<{
+  paidBonus: number;
+  chargedSlotCost: number;
+  acquisitionFactId: string;
+}> &
+  (
+    | Readonly<{ pool: 'START' | 'TRAINING' }>
+    | Readonly<{
+        pool: 'SYM-166';
+        bonusBefore: number;
+        bonusAfter: number;
+        symbiontInstanceId: string;
+        nodeRef: 'SYM-166';
+      }>
+  );
 
 export interface NpcLearnedSkill {
   readonly skillKey: SkillKey;
@@ -77,6 +99,21 @@ export interface NpcFixedSkill {
 
 /** CORE-081: basis and issued history survive a change in current W. */
 export interface NpcSkillLedger {
+  readonly sym166Pool?: Readonly<{
+    capacity: number;
+    used: number;
+    available: number;
+    overfill: number;
+    charges: readonly Readonly<{
+      skillKey: string;
+      bonusBefore: number;
+      bonusAfter: number;
+      chargedSlotCost: number;
+      acquisitionFactId: string;
+      symbiontInstanceId: string;
+      nodeRef: 'SYM-166';
+    }>[];
+  }>;
   readonly startBasis: Readonly<{ skillStageStats: StatBlock; confirmationFactId: string }>;
   readonly training: CreationTrainingSlotLedger & Readonly<{ basisFactId: string }>;
   readonly learnedSkills: readonly NpcLearnedSkill[];
@@ -124,6 +161,19 @@ export interface NpcTrogrAbsorptionFact {
 }
 
 export interface NpcLifetimeFacts {
+  readonly trogrStrengthAndLegacyOrNull?: Readonly<{
+    sourceRuleId: 'SYM-076';
+    reachedLevel: number;
+    reachedRawDelta: StatBlock;
+    includedLevel: number;
+    includedRawDelta: StatBlock;
+    legacyOrNull: Readonly<{
+      removalFactId: string;
+      statContextFactId: string;
+      nonTrogrBasis: StatBlock;
+      signedSnapshot: StatBlock;
+    }> | null;
+  }> | null;
   readonly freeExtraSlot:
     | Readonly<{ kind: 'NOT_UNLOCKED' }>
     | Readonly<{
@@ -158,6 +208,9 @@ export interface NpcDerivedSymbiont extends NpcSymbiontInput {
 
 export type NpcItemProfileInput =
   | Readonly<{ kind: 'CATALOG'; profileVersion: string }>
+  | Readonly<{ kind: 'ITEM_CATALOG'; sourceProfile: NpcCatalogueItemProfile }>
+  | Readonly<{ kind: 'SHIELD_COMPONENT'; sourceProfile: NpcNonattackingShieldProfile }>
+  | Readonly<{ kind: 'ARMOR_CATALOG'; sourceRuleId: string; sourceProfile: NpcArmorProfile }>
   | Readonly<{
       kind: 'MASTER_WEAPON';
       profileVersion: string;
@@ -187,7 +240,7 @@ export type NpcEquipmentState =
   | Readonly<{ equipped: true; equippedSlots: readonly string[] }>;
 
 /** The item editor binds the owner's identity at publication, without inventing a battle scene. */
-export interface NpcInventoryItemInput {
+export interface NpcCatalogueInventoryItemInput extends NpcInventoryMetadata {
   readonly itemInstanceId: string;
   readonly itemTypeId: string;
   readonly quantity: number;
@@ -204,13 +257,30 @@ export interface NpcInventoryItemInput {
   readonly qualityRoll: number | null;
   readonly coatings: readonly NpcPreparedCoatingInstance[];
   readonly issueReason: string;
+  readonly customModifier?: NpcCatalogueCustomModifierRequest;
 }
+export interface NpcCampaignCustomInventoryItemInput extends Omit<
+  NpcCatalogueInventoryItemInput,
+  'itemTypeId' | 'profile' | 'customModifier'
+> {
+  readonly itemTypeId: null;
+  readonly itemTypeReference: NpcCampaignCustomProfileReference;
+  readonly profile: NpcStructuredCustomProfile;
+  readonly bonusContainerBinding: NpcCustomBonusContainerBinding;
+  readonly customProfileReason: string;
+}
+export type NpcInventoryItemInput =
+  NpcCatalogueInventoryItemInput | NpcCampaignCustomInventoryItemInput;
 
 /** Unfinished codecs are explicit. They cannot be substituted with arbitrary JSON. */
-export type NpcResolvedItemProfile = NpcPublishedWeaponItem;
+export type NpcResolvedItemProfile = NpcPublishedInventoryItem;
 // TODO(M3): complete the source-specific initial-state and interaction codecs in issue #187.
-export type NpcSourceSpecificInitialState = never;
-export type NpcResolvedSymbiontInteraction = never;
+export type NpcSourceSpecificInitialState = NpcFormalLifeState | NpcInitialTaipanModeState;
+export type NpcResolvedSymbiontInteraction = Readonly<{
+  compositionFactId: string;
+  consequenceIndex: number;
+  consequence: NpcCompositionConsequence;
+}>;
 
 export interface NpcInitialStateInput {
   readonly currentHP: number;

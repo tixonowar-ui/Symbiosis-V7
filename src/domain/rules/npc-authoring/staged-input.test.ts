@@ -1,4 +1,15 @@
-import { readNpcInventoryRequest, type NpcInventoryRequestEntry } from './inventory.js';
+import {
+  createEmptyNpcTraumaEditorRow,
+  readNpcTraumaEditorRow,
+  projectNpcInitialTraumaInput,
+  type NpcTraumaEditorRow,
+} from './staged-input.js';
+import {
+  readNpcInventoryRequest,
+  type NpcInventoryRequestEntry,
+  type NpcCatalogueInventoryRequestEntry,
+  type NpcCampaignCustomProfileReference,
+} from './inventory.js';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -8,10 +19,17 @@ import {
 import {
   applyNpcStageInput,
   createEmptyNpcEditorDraft,
+  createEmptyNpcSymbiontEditorRow,
+  projectNpcSymbiontInputs,
   createEmptyNpcInventoryEditorRow,
   readNpcInventoryEditorInput,
   projectNpcInventoryRequest,
-  type NpcInventoryEditorRow,
+  type NpcCatalogueInventoryEditorRow,
+  createEmptyNpcCampaignCustomInventoryEditorRow,
+  addEmptyNpcCatalogueCustomModifier,
+  replaceNpcInventoryCustomProfileVersion,
+  restoreNpcInventoryEditorRows,
+  replaceNpcInventoryCoatingSelection,
   type NpcItemProfileEditor,
   readNpcEditorDraft,
   readNpcStageInput,
@@ -23,7 +41,11 @@ beforeAll(async () => {
   source = await loadNpcAuthoringSourceCatalog(
     fileURLToPath(new URL('../../../../', import.meta.url)),
   );
-  catalog = { skills: source.skills, development: source.development };
+  catalog = {
+    skills: source.skills,
+    development: source.development,
+    composition: [{ symbiontInstanceId: id, speciesKeyOrNull: null, retired: false }],
+  };
 });
 const unset = Object.freeze({ kind: 'UNSET' as const });
 const entered = <T>(value: T) => ({ kind: 'ENTERED' as const, value });
@@ -170,7 +192,7 @@ function inventoryCatalog(): NpcEditorCatalog {
     },
   };
 }
-function completeInput(): NpcInventoryEditorRow['input'] {
+function completeInput(): NpcCatalogueInventoryEditorRow['input'] {
   return {
     itemTypeId: entered('ITM-WPN-003'),
     quantity: entered(1),
@@ -189,12 +211,14 @@ function completeInput(): NpcInventoryEditorRow['input'] {
     issueReason: entered('Имущество НПС'),
   };
 }
-function fullRow(profile: NpcItemProfileEditor = { kind: 'CATALOG' }): NpcInventoryEditorRow {
+function fullRow(
+  profile: NpcItemProfileEditor = { kind: 'CATALOG' },
+): NpcCatalogueInventoryEditorRow {
   return { itemInstanceId: id, input: completeInput(), profile: entered(profile) };
 }
 function expectedRequest(
   profile: NpcInventoryRequestEntry['profile'] = { kind: 'CATALOG' },
-): NpcInventoryRequestEntry {
+): NpcCatalogueInventoryRequestEntry {
   return {
     itemInstanceId: id,
     itemTypeId: 'ITM-WPN-003',
@@ -265,6 +289,307 @@ function completeCustom(): Extract<NpcItemProfileEditor, { kind: 'STRUCTURED_CUS
   };
 }
 const restart = (value: unknown): unknown => JSON.parse(JSON.stringify(value)) as unknown;
+
+describe('explicit historical item restoration into an owning editor context', () => {
+  it('restores exact master inputs while leaving a different incomplete current row unchanged', () => {
+    const own = inventoryCatalog();
+    const master = completeMaster();
+    const request = projectNpcInventoryRequest(
+      own,
+      entered([
+        {
+          ...fullRow(master),
+          input: { ...completeInput(), currentAmmo: entered(0), broken: entered(true) },
+        },
+      ]),
+    )[0]!;
+    const partial = createEmptyNpcInventoryEditorRow(own, itemB);
+    const current = entered([partial]);
+    const before = JSON.stringify({ current, request });
+    const restored = restoreNpcInventoryEditorRows(own, current, [request]);
+    if (restored.kind !== 'ENTERED') throw Error('Expected restored editor rows');
+    expect(restored.value).toHaveLength(2);
+    expect(restored.value[0]).toEqual(partial);
+    expect(restored.value[0]?.input.quantity).toEqual(unset);
+    expect(projectNpcInventoryRequest(own, entered([restored.value[1]!]))).toEqual([request]);
+    expect(restored.value[1]?.profile).toEqual(entered(master));
+    expect(JSON.stringify({ current, request })).toBe(before);
+  });
+  it('refuses current/foreign identities and unrelated choices without changing the draft', () => {
+    const own = inventoryCatalog();
+    const current = entered([fullRow()]);
+    const before = JSON.stringify(current);
+    expect(() => restoreNpcInventoryEditorRows(own, current, [expectedRequest()])).toThrow(
+      'currently selected',
+    );
+    expect(() =>
+      restoreNpcInventoryEditorRows(own, entered([]), [
+        { ...expectedRequest(), itemInstanceId: foreignId },
+      ]),
+    ).toThrow('foreign or unallocated');
+    expect(() => restoreNpcInventoryEditorRows(own, entered([]), [])).toThrow('explicit');
+    expect(() =>
+      restoreNpcInventoryEditorRows(own, entered([]), [
+        expectedRequest(),
+        { ...expectedRequest(), itemInstanceId: itemB },
+      ]),
+    ).toThrow('unrelated');
+    expect(JSON.stringify(current)).toBe(before);
+  });
+  it('restores a whole actual source pair atomically and refuses a selected secondary part', () => {
+    const own: NpcEditorCatalog = {
+      ...inventoryCatalog(),
+      inventory: {
+        ...inventoryCatalog().inventory!,
+        linkedSets: [
+          {
+            linkedSetInstanceId: setId,
+            itemTypeId: 'ITM-WPN-026',
+            components: [
+              { itemInstanceId: id, componentRole: 'SWORD' },
+              { itemInstanceId: itemB, componentRole: 'SHIELD' },
+            ],
+          },
+        ],
+      },
+    };
+    const pair: NpcInventoryRequestEntry[] = [
+      {
+        ...expectedRequest(),
+        itemTypeId: 'ITM-WPN-026',
+        linkedSetInstanceId: setId,
+        componentRole: 'SWORD',
+      },
+      {
+        ...expectedRequest(),
+        itemInstanceId: itemB,
+        itemTypeId: 'ITM-WPN-026',
+        linkedSetInstanceId: setId,
+        componentRole: 'SHIELD',
+        shieldCurrentHP: 350,
+      },
+    ];
+    const restored = restoreNpcInventoryEditorRows(own, entered([]), pair);
+    expect(projectNpcInventoryRequest(own, restored)).toEqual(pair);
+    expect(() => restoreNpcInventoryEditorRows(own, entered([]), [pair[0]!])).toThrow(
+      'whole actual source composite',
+    );
+    const partial = entered([createEmptyNpcInventoryEditorRow(own, itemB)]);
+    expect(() => restoreNpcInventoryEditorRows(own, partial, pair)).toThrow('currently selected');
+  });
+});
+
+describe('host-reserved custom profile editor identity and immutable versions', () => {
+  const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const reference = (): NpcCampaignCustomProfileReference => ({
+    kind: 'CAMPAIGN_CUSTOM_PROFILE',
+    profileId: uuid(70),
+    profileVersionId: uuid(71),
+    version: 1,
+    reservationOperationId: uuid(72),
+  });
+  const own = (): NpcEditorCatalog => {
+    const current = inventoryCatalog();
+    return {
+      ...current,
+      inventory: {
+        ...current.inventory!,
+        customProfiles: [
+          { itemInstanceId: id, reference: reference(), confirmedContentOrNull: null },
+        ],
+      },
+    };
+  };
+  const complete = () => ({
+    ...createEmptyNpcCampaignCustomInventoryEditorRow(own(), id, reference()),
+    input: { ...completeInput(), itemTypeId: entered(null) },
+    profile: entered(completeCustom()),
+    bonusContainerBinding: entered({ kind: 'OUTSIDE_BACKPACK' as const }),
+    customProfileReason: entered('Основание профиля'),
+  });
+  it('accepts only actual reserved references and starts every physical/profile choice unset', () => {
+    const row = createEmptyNpcCampaignCustomInventoryEditorRow(own(), id, reference());
+    expect(row.itemTypeReference).toEqual(entered(reference()));
+    expect(row.input.itemTypeId).toEqual(entered(null));
+    expect(row.input.quantity).toEqual(unset);
+    expect(row.bonusContainerBinding).toEqual(unset);
+    expect(row.customProfileReason).toEqual(unset);
+    expect(row.profile).toMatchObject({
+      kind: 'ENTERED',
+      value: { input: { name: unset, massKg: unset }, customBonusOrNull: unset },
+    });
+    expect(() => projectNpcInventoryRequest(own(), entered([row]))).toThrow('UNSET');
+    expect(() =>
+      createEmptyNpcCampaignCustomInventoryEditorRow(own(), id, {
+        ...reference(),
+        profileVersionId: uuid(99),
+      }),
+    ).toThrow('actual host reservation');
+    expect(() => createEmptyNpcInventoryEditorRow(own(), id)).toThrow('identity is immutable');
+    const value = entered([complete()]);
+    expect(readNpcInventoryEditorInput(own(), restart(value))).toEqual(value);
+    expect(projectNpcInventoryRequest(own(), value)[0]).toMatchObject({
+      itemTypeId: null,
+      itemTypeReference: reference(),
+      customProfileReason: 'Основание профиля',
+      issueReason: 'Имущество НПС',
+    });
+  });
+  it('separates immutable version reason/content from a current container move', () => {
+    const row = complete(),
+      request = projectNpcInventoryRequest(own(), entered([row]))[0]!;
+    if (request.itemTypeId !== null) throw Error('custom fixture');
+    const context = own();
+    const committed = {
+      ...context,
+      inventory: {
+        ...context.inventory!,
+        customProfiles: [
+          {
+            itemInstanceId: id,
+            reference: reference(),
+            confirmedContentOrNull: {
+              profile: request.profile,
+              reason: request.customProfileReason,
+            },
+          },
+        ],
+      },
+    };
+    expect(projectNpcInventoryRequest(committed, entered([row]))[0]).toEqual(request);
+    const historical = {
+      ...request,
+      bonusContainerBinding: { kind: 'BACKPACK' as const, backpackItemInstanceId: itemB },
+    };
+    const restored = restoreNpcInventoryEditorRows(committed, entered([]), [historical]);
+    expect(() => projectNpcInventoryRequest(committed, restored)).toThrow('real selected backpack');
+    if (restored.kind !== 'ENTERED') throw Error('Expected restored custom row');
+    expect(restored.value.map((item) => item.itemInstanceId)).toEqual([id]);
+    expect(restored.value[0]).toMatchObject({
+      bonusContainerBinding: entered(historical.bonusContainerBinding),
+    });
+    expect(() =>
+      restoreNpcInventoryEditorRows(committed, entered([]), [
+        { ...historical, customProfileReason: 'Подмена подтверждённого основания' },
+      ]),
+    ).toThrow('immutable');
+    expect(() =>
+      projectNpcInventoryRequest(
+        committed,
+        entered([{ ...row, customProfileReason: entered('Изменение без новой версии') }]),
+      ),
+    ).toThrow('immutable');
+    const backpack = {
+      ...fullRow(),
+      itemInstanceId: itemB,
+      input: { ...completeInput(), itemTypeId: entered('RES-CON-001') },
+    };
+    const moved = {
+      ...row,
+      bonusContainerBinding: entered({ kind: 'BACKPACK' as const, backpackItemInstanceId: itemB }),
+    };
+    expect(
+      projectNpcInventoryRequest(committed, entered([...restored.value, backpack]))[0],
+    ).toEqual(historical);
+    expect(projectNpcInventoryRequest(committed, entered([moved, backpack]))[0]).toMatchObject({
+      bonusContainerBinding: { kind: 'BACKPACK', backpackItemInstanceId: itemB },
+      customProfileReason: request.customProfileReason,
+    });
+    const next = {
+      ...reference(),
+      profileVersionId: uuid(73),
+      reservationOperationId: uuid(74),
+      version: 2,
+    };
+    const nextCatalog = {
+      ...committed,
+      inventory: {
+        ...committed.inventory,
+        customProfiles: [
+          ...committed.inventory.customProfiles,
+          { itemInstanceId: id, reference: next, confirmedContentOrNull: null },
+        ],
+      },
+    };
+    const editable = replaceNpcInventoryCustomProfileVersion(nextCatalog, row, next);
+    expect('itemTypeReference' in editable && editable.itemTypeReference).toEqual(entered(next));
+    expect(editable.input.issueReason).toEqual(row.input.issueReason);
+    expect(() =>
+      replaceNpcInventoryCustomProfileVersion(nextCatalog, row, { ...next, version: 3 }),
+    ).toThrow('next version');
+  });
+  it('adds a separate modifier while preserving the entire catalogue row and base profile', () => {
+    const old = fullRow(completeMaster()),
+      current = inventoryCatalog(),
+      modifierReference = { ...reference(), kind: 'CATALOG_CUSTOM_MODIFIER' as const };
+    const context = {
+      ...current,
+      inventory: {
+        ...current.inventory!,
+        customProfiles: [
+          { itemInstanceId: id, reference: modifierReference, confirmedContentOrNull: null },
+        ],
+      },
+    };
+    const updated = addEmptyNpcCatalogueCustomModifier(context, old, modifierReference);
+    expect(updated.input).toEqual(old.input);
+    expect(updated.profile).toEqual(old.profile);
+    expect(updated.customModifier).toMatchObject({
+      reference: entered(modifierReference),
+      reason: unset,
+      bonusContainerBinding: unset,
+    });
+    expect(() => addEmptyNpcCatalogueCustomModifier(context, updated, modifierReference)).toThrow(
+      'already has',
+    );
+    expect(() =>
+      readNpcInventoryEditorInput(
+        context,
+        entered([{ ...updated, itemTypeReference: entered(reference()) }]),
+      ),
+    ).toThrow();
+    const completed = {
+      ...updated,
+      customModifier: {
+        reference: entered(modifierReference),
+        profile: entered(completeCustom()),
+        bonusContainerBinding: entered({ kind: 'OUTSIDE_BACKPACK' as const }),
+        reason: entered('Подтверждённый отдельный профиль'),
+      },
+    };
+    const checked = projectNpcInventoryRequest(context, entered([completed]))[0]!;
+    if (checked.itemTypeId === null || checked.customModifier === undefined)
+      throw Error('catalogue modifier fixture required');
+    const committed = {
+      ...context,
+      inventory: {
+        ...context.inventory,
+        customProfiles: [
+          {
+            itemInstanceId: id,
+            reference: modifierReference,
+            confirmedContentOrNull: {
+              profile: checked.customModifier.profile,
+              reason: checked.customModifier.reason,
+            },
+          },
+        ],
+      },
+    };
+    expect(projectNpcInventoryRequest(committed, entered([completed]))).toEqual([checked]);
+    expect(
+      projectNpcInventoryRequest(
+        committed,
+        restoreNpcInventoryEditorRows(committed, entered([]), [checked]),
+      ),
+    ).toEqual([checked]);
+    expect(() => readNpcInventoryEditorInput(committed, entered([old]))).toThrow(
+      'confirmed custom modifier cannot be removed',
+    );
+    expect(projectNpcInventoryRequest(committed, entered([]))).toEqual([]);
+    expect(readNpcInventoryEditorInput(context, entered([old]))).toEqual(entered([old]));
+  });
+});
 
 describe('NPC-015 durable partial inventory input and explicit completion', () => {
   it('creates only technical absence and restores the complete empty draft without game defaults', () => {
@@ -631,5 +956,477 @@ describe('NPC-015 durable partial inventory input and explicit completion', () =
       ),
     ).toThrow();
     expect(calls).toBe(0);
+  });
+});
+
+describe('NPC016 selected effects require exact scoped host bindings', () => {
+  const first = '00000000-0000-4000-8000-000000000090',
+    second = '00000000-0000-4000-8000-000000000091';
+  const bound = (): NpcEditorCatalog => ({
+    ...catalog,
+    effects: [
+      { effectInstanceId: first, diseaseId: 'DIS-RHINITIS' },
+      { effectInstanceId: second, diseaseId: 'DIS-POISONING' },
+    ],
+  });
+  const input = (ids: readonly string[]) => ({
+    input: { ...draft().initialState, effectInstanceIds: entered(ids) },
+    currentOeChanges: [],
+  });
+  it('preserves optional initial Taipan mode anchors without allowing generic NPC016 assignment or removal', () => {
+    const legacy = readNpcEditorDraft(catalog, draft());
+    expect(Object.hasOwn(legacy.initialState, 'poisonModeFactIds')).toBe(false);
+    expect(JSON.stringify(legacy)).toBe(JSON.stringify(draft()));
+    const owned = readNpcEditorDraft(catalog, {
+      ...legacy,
+      initialState: { ...legacy.initialState, poisonModeFactIds: entered([first]) },
+    });
+    const changed = applyNpcStageInput(catalog, owned, 'NPC-016', {
+      input: { ...owned.initialState, currentHP: entered(1) },
+      currentOeChanges: [],
+    });
+    expect(changed.initialState.poisonModeFactIds).toEqual(entered([first]));
+    for (const replacement of [
+      legacy.initialState,
+      { ...owned.initialState, poisonModeFactIds: entered([]) },
+      { ...owned.initialState, poisonModeFactIds: entered([second]) },
+    ])
+      expect(() =>
+        applyNpcStageInput(catalog, owned, 'NPC-016', {
+          input: replacement,
+          currentOeChanges: [],
+        }),
+      ).toThrow('read-only');
+    expect(() =>
+      applyNpcStageInput(catalog, legacy, 'NPC-016', {
+        input: owned.initialState,
+        currentOeChanges: [],
+      }),
+    ).toThrow('read-only');
+  });
+  it('preserves absent or owning Weaver anchors and refuses changing them through generic NPC016 input', () => {
+    const legacy = readNpcEditorDraft(catalog, draft());
+    expect(JSON.stringify(legacy)).toBe(JSON.stringify(draft()));
+    expect(Object.hasOwn(legacy.initialState, 'weaverEffectInstanceIds')).toBe(false);
+    const owned = readNpcEditorDraft(catalog, {
+      ...legacy,
+      initialState: { ...legacy.initialState, weaverEffectInstanceIds: entered([first]) },
+    });
+    const bytes = JSON.stringify(owned);
+    const unchanged = applyNpcStageInput(catalog, owned, 'NPC-016', {
+      input: { ...owned.initialState, currentHP: entered(1) },
+      currentOeChanges: [],
+    });
+    expect(unchanged.initialState.weaverEffectInstanceIds).toEqual(entered([first]));
+    expect(unchanged.initialState.currentHP).toEqual(entered(1));
+    for (const initialState of [
+      legacy.initialState,
+      { ...owned.initialState, weaverEffectInstanceIds: entered([]) },
+      { ...owned.initialState, weaverEffectInstanceIds: entered([second]) },
+      { ...owned.initialState, weaverEffectInstanceIds: entered([first, second]) },
+    ])
+      expect(() =>
+        applyNpcStageInput(catalog, owned, 'NPC-016', {
+          input: initialState,
+          currentOeChanges: [],
+        }),
+      ).toThrow('Weaver state selection is read-only');
+    expect(() =>
+      applyNpcStageInput(catalog, legacy, 'NPC-016', {
+        input: owned.initialState,
+        currentOeChanges: [],
+      }),
+    ).toThrow('Weaver state selection is read-only');
+    expect(JSON.stringify(owned)).toBe(bytes);
+  });
+  it('selects only provided prepared IDs while retaining explicit empty/UNSET without context', () => {
+    expect(
+      readNpcStageInput(bound(), 'NPC-016', input([first, second])).input.effectInstanceIds,
+    ).toEqual(entered([first, second]));
+    expect(readNpcStageInput(catalog, 'NPC-016', input([])).input.effectInstanceIds).toEqual(
+      entered([]),
+    );
+    expect(readNpcEditorDraft(catalog, draft()).initialState.effectInstanceIds).toEqual(unset);
+  });
+  it('rejects missing, foreign or ambiguous bindings and duplicate active diseases', () => {
+    expect(() => readNpcStageInput(catalog, 'NPC-016', input([first]))).toThrow('bindings');
+    expect(() => readNpcStageInput(bound(), 'NPC-016', input([id]))).toThrow('binding');
+    expect(() =>
+      readNpcStageInput(
+        {
+          ...bound(),
+          effects: [
+            { effectInstanceId: first, diseaseId: 'DIS-RHINITIS' },
+            { effectInstanceId: first, diseaseId: 'DIS-POISONING' },
+          ],
+        },
+        'NPC-016',
+        input([first]),
+      ),
+    ).toThrow('binding');
+    expect(() =>
+      readNpcStageInput(
+        {
+          ...bound(),
+          effects: [
+            { effectInstanceId: first, diseaseId: 'DIS-RHINITIS' },
+            { effectInstanceId: second, diseaseId: 'DIS-RHINITIS' },
+          ],
+        },
+        'NPC-016',
+        input([first, second]),
+      ),
+    ).toThrow('duplicate selected');
+  });
+  it('applies the same check to durable editor readback rather than accepting unowned references', () => {
+    const saved = { ...draft(), initialState: input([first]).input };
+    expect(() => readNpcEditorDraft(catalog, saved)).toThrow();
+    expect(readNpcEditorDraft(bound(), saved).initialState.effectInstanceIds).toEqual(
+      entered([first]),
+    );
+  });
+  it('selects actual formal controls by kind without invented symbiont source identities', () => {
+    const formal: NpcEditorCatalog = {
+      ...catalog,
+      effects: [
+        { effectInstanceId: first, sourceKind: 'FORMAL_CONTROL', controlKind: 'SLEEP' },
+        { effectInstanceId: second, sourceKind: 'FORMAL_CONTROL', controlKind: 'PARALYSIS' },
+      ],
+    };
+    expect(
+      readNpcStageInput(formal, 'NPC-016', input([first, second])).input.effectInstanceIds,
+    ).toEqual(entered([first, second]));
+    expect(() =>
+      readNpcStageInput(
+        {
+          ...formal,
+          effects: [
+            { effectInstanceId: first, sourceKind: 'FORMAL_CONTROL', controlKind: 'SLEEP' },
+            { effectInstanceId: second, sourceKind: 'FORMAL_CONTROL', controlKind: 'SLEEP' },
+          ],
+        },
+        'NPC-016',
+        input([first, second]),
+      ),
+    ).toThrow('duplicate selected');
+  });
+});
+
+describe('source-bound partial initial trauma input', () => {
+  const traumaId = '00000000-0000-4000-8000-000000000061';
+  function owner(retainedRowOrNull: NpcTraumaEditorRow | null = null): NpcEditorCatalog {
+    return {
+      ...catalog,
+      traumas: {
+        catalog: source.initialTrauma,
+        bindings: [{ traumaInstanceId: traumaId, retainedRowOrNull }],
+      },
+    };
+  }
+  function head(remainingMinutes = '0.1000000000000000001'): NpcTraumaEditorRow {
+    return {
+      traumaInstanceId: traumaId,
+      input: {
+        regionId: entered('HEAD'),
+        traumaValue: entered(7),
+        reason: entered('Исходное состояние'),
+      },
+      head: entered({
+        penalty: entered('CONSUMED'),
+        stun: entered({ status: 'ACTIVE', remainingMinutes: entered(remainingMinutes) }),
+      }),
+    };
+  }
+  function input(row: NpcTraumaEditorRow) {
+    return {
+      ...createEmptyNpcEditorDraft().initialState,
+      traumaInstanceIds: entered([traumaId]),
+      traumaInputs: entered([row]),
+    };
+  }
+  it('preserves legacy absence and empty selection bytes without inventing the optional field', () => {
+    for (const initialState of [
+      createEmptyNpcEditorDraft().initialState,
+      { ...createEmptyNpcEditorDraft().initialState, traumaInstanceIds: entered([]) },
+    ]) {
+      const value = { ...createEmptyNpcEditorDraft(), initialState };
+      expect(JSON.stringify(readNpcEditorDraft(catalog, value))).toBe(JSON.stringify(value));
+      expect(Object.hasOwn(readNpcEditorDraft(catalog, value).initialState, 'traumaInputs')).toBe(
+        false,
+      );
+    }
+  });
+  it('restores a host-reserved UNSET row from serialized draft without manufacturing an entity', () => {
+    const row = createEmptyNpcTraumaEditorRow(traumaId),
+      value = { ...createEmptyNpcEditorDraft(), initialState: input(row) };
+    const restored = readNpcEditorDraft(owner(), JSON.parse(JSON.stringify(value)));
+    expect(restored.initialState.traumaInputs).toEqual(entered([row]));
+    expect(row.input).toEqual({ regionId: unset, traumaValue: unset, reason: unset });
+    expect(row.head).toEqual(unset);
+    expect(() => projectNpcInitialTraumaInput(owner(), restored.initialState)).toThrow();
+    expect(Object.isFrozen(restored.initialState.traumaInputs)).toBe(true);
+  });
+  it('preserves exact decimal text and finite-invalid input until explicit source completion', () => {
+    const value = input(head()),
+      checked = projectNpcInitialTraumaInput(owner(), value);
+    expect(checked.choices[0]?.consequence).toEqual({
+      kind: 'HEAD',
+      penalty: 'CONSUMED',
+      stun: { status: 'ACTIVE', remainingMinutes: '0.1000000000000000001' },
+    });
+    for (const remaining of ['0', '5.0000000000000000001', '0.5\n']) {
+      const row = head(remaining);
+      expect(readNpcTraumaEditorRow(row)).toEqual(row);
+      expect(() => projectNpcInitialTraumaInput(owner(), input(row))).toThrow();
+    }
+    const row = { ...head(), input: { ...head().input, traumaValue: entered(-3) } };
+    expect(readNpcTraumaEditorRow(row).input.traumaValue).toEqual(entered(-3));
+    expect(() => projectNpcInitialTraumaInput(owner(), input(row))).toThrow();
+  });
+  it('rejects client identity, unknown proof fields, hidden ABSENT timer and incomplete HEAD choices', () => {
+    expect(() =>
+      readNpcEditorDraft(catalog, { ...createEmptyNpcEditorDraft(), initialState: input(head()) }),
+    ).toThrow();
+    expect(() => readNpcTraumaEditorRow({ ...head(), valid: true })).toThrow();
+    expect(() =>
+      readNpcTraumaEditorRow({
+        ...head(),
+        head: entered({
+          penalty: entered('PENDING'),
+          stun: entered({ status: 'ABSENT', remainingMinutes: entered('1') }),
+        }),
+      }),
+    ).toThrow();
+    expect(() =>
+      projectNpcInitialTraumaInput(owner(), input({ ...head(), head: unset })),
+    ).toThrow();
+    const torso = {
+      ...head(),
+      input: { ...head().input, regionId: entered('TORSO' as const) },
+      head: unset,
+    };
+    expect(projectNpcInitialTraumaInput(owner(), input(torso)).choices[0]?.consequence).toEqual({
+      kind: 'TORSO',
+      hpInterpretation: 'CURRENT_HP_ALREADY_FINAL',
+    });
+  });
+  it('keeps the complete retained row immutable while allowing deselection', () => {
+    const row = head(),
+      bound = owner(row),
+      original = { ...createEmptyNpcEditorDraft(), initialState: input(row) };
+    expect(readNpcEditorDraft(bound, original)).toEqual(original);
+    for (const changed of [
+      head('1'),
+      { ...head(), input: { ...head().input, reason: entered('Changed') } },
+    ])
+      expect(() =>
+        readNpcEditorDraft(bound, { ...original, initialState: input(changed) }),
+      ).toThrow();
+    expect(
+      projectNpcInitialTraumaInput(bound, { ...input(row), traumaInstanceIds: entered([]) }),
+    ).toEqual({ currentTraumas: [], choices: [] });
+  });
+});
+
+describe('NPC013 host-bound partial symbiont rows', () => {
+  it('preserves UNSET/finite invalid choices through readback without allocating or completing anything', () => {
+    const row = createEmptyNpcSymbiontEditorRow(catalog, id);
+    expect(row).toEqual({
+      symbiontInstanceId: id,
+      input: fields('speciesKey targetLevel learnedNodeRefs binding currentOE'),
+    });
+    expect(() => projectNpcSymbiontInputs(catalog, entered([row]))).toThrow('UNSET');
+    const partial = {
+      ...row,
+      input: { ...row.input, targetLevel: entered(-2), currentOE: entered(-0.5) },
+    };
+    const restored = readNpcStageInput(
+      catalog,
+      'NPC-013',
+      JSON.parse(JSON.stringify(entered([partial]))),
+    );
+    expect(restored).toEqual(entered([partial]));
+    expect(() => projectNpcSymbiontInputs(catalog, restored)).toThrow('UNSET');
+  });
+  it('requires unique host binding and refuses retired or foreign identities', () => {
+    const row = createEmptyNpcSymbiontEditorRow(catalog, id);
+    expect(() =>
+      readNpcStageInput(
+        { skills: source.skills, development: source.development },
+        'NPC-013',
+        entered([row]),
+      ),
+    ).toThrow('checked host bindings');
+    expect(() => createEmptyNpcSymbiontEditorRow(catalog, foreignId)).toThrow('unique binding');
+    expect(() =>
+      readNpcStageInput(
+        {
+          ...catalog,
+          composition: [{ symbiontInstanceId: id, speciesKeyOrNull: null, retired: true }],
+        },
+        'NPC-013',
+        entered([row]),
+      ),
+    ).toThrow('retired');
+    expect(() =>
+      readNpcStageInput(
+        {
+          ...catalog,
+          composition: [
+            { symbiontInstanceId: id, speciesKeyOrNull: null, retired: false },
+            { symbiontInstanceId: id, speciesKeyOrNull: null, retired: false },
+          ],
+        },
+        'NPC-013',
+        entered([row]),
+      ),
+    ).toThrow('unique binding');
+  });
+  it('locks confirmed species but keeps explicit learned/current OE edits distinct', () => {
+    const blank = createEmptyNpcSymbiontEditorRow(catalog, id);
+    const row = {
+      ...blank,
+      input: { ...blank.input, speciesKey: entered('OWL'), currentOE: entered(0) },
+    };
+    const bound: NpcEditorCatalog = {
+      ...catalog,
+      composition: [{ symbiontInstanceId: id, speciesKeyOrNull: 'OWL', retired: false }],
+    };
+    expect(readNpcStageInput(bound, 'NPC-013', entered([row]))).toEqual(entered([row]));
+    expect(() =>
+      readNpcStageInput(
+        bound,
+        'NPC-013',
+        entered([{ ...row, input: { ...row.input, speciesKey: entered('TEACHER') } }]),
+      ),
+    ).toThrow('species is immutable');
+    expect(() =>
+      readNpcStageInput(bound, 'NPC-013', entered([{ ...row, confirmed: true }])),
+    ).toThrow('unexpected');
+  });
+});
+
+describe('NPC-015 explicit quality/clothing metadata inputs', () => {
+  it('changes coating selection only through the owning preparation factory and keeps whole-item removal possible', () => {
+    const scope = inventoryCatalog();
+    const empty = entered([fullRow()]);
+    const selected = replaceNpcInventoryCoatingSelection(scope, empty, id, [], [coatingId]);
+    expect(projectNpcInventoryRequest(scope, selected)[0]?.coatingInstanceIds).toEqual([coatingId]);
+    const current = readNpcEditorDraft(scope, { ...draft(), inventory: selected });
+    expect(() => applyNpcStageInput(scope, current, 'NPC-015', empty)).toThrow('read-only');
+    const unselected = readNpcEditorDraft(scope, { ...draft(), inventory: empty });
+    expect(() => applyNpcStageInput(scope, unselected, 'NPC-015', selected)).toThrow('read-only');
+    expect(() => replaceNpcInventoryCoatingSelection(scope, selected, id, [], [])).toThrow();
+    expect(() =>
+      replaceNpcInventoryCoatingSelection(scope, empty, itemB, [], [coatingId]),
+    ).toThrow();
+    expect(() => replaceNpcInventoryCoatingSelection(scope, empty, id, [], [foreignId])).toThrow();
+    expect(replaceNpcInventoryCoatingSelection(scope, selected, id, [coatingId], [])).toEqual(
+      empty,
+    );
+    expect(applyNpcStageInput(scope, current, 'NPC-015', entered([])).inventory).toEqual(
+      entered([]),
+    );
+    expect(empty.value[0]?.input.coatingInstanceIds).toEqual(entered([]));
+  });
+  it('preserves legacy absence and explicit no-quality without a quality roll or allocated quality receipt', () => {
+    const scope = inventoryCatalog();
+    const legacy = projectNpcInventoryRequest(scope, entered([fullRow()]));
+    expect(Object.hasOwn(legacy[0]!, 'qualityTier')).toBe(false);
+    const row = { ...fullRow(), qualityTier: entered(null) };
+    expect(projectNpcInventoryRequest(scope, entered([row]))[0]).toMatchObject({
+      qualityTier: null,
+      qualityRoll: null,
+    });
+    expect(() =>
+      projectNpcInventoryRequest(scope, entered([{ ...row, qualityTier: unset }])),
+    ).toThrow('UNSET');
+    expect(() =>
+      readNpcInventoryEditorInput(scope, entered([{ ...row, qualityTier: entered('LEGENDARY') }])),
+    ).toThrow();
+    expect(() =>
+      readNpcInventoryEditorInput(
+        scope,
+        entered([{ ...fullRow(), input: { ...completeInput(), qualityTier: entered('GOOD') } }]),
+      ),
+    ).toThrow();
+  });
+  it('requires actual clothing identity and explicit editable properties, with no inferred sealed flag', () => {
+    const scope = inventoryCatalog();
+    const properties = {
+      coveredRegionIds: entered(['TORSO']),
+      hermetic: entered('UNKNOWN'),
+      flammability: entered('UNKNOWN'),
+    };
+    const row = {
+      ...fullRow(),
+      input: {
+        ...completeInput(),
+        itemTypeId: entered('RES-EQP-001'),
+        equipped: entered(true),
+        equippedSlots: entered(['TORSO']),
+      },
+      clothingProperties: entered(properties),
+    };
+    const request = projectNpcInventoryRequest(scope, entered([row]))[0];
+    expect(request).toMatchObject({
+      bodyZone: null,
+      sealed: null,
+      clothingProperties: {
+        coveredRegionIds: ['TORSO'],
+        hermetic: 'UNKNOWN',
+        flammability: 'UNKNOWN',
+      },
+    });
+    expect(() =>
+      projectNpcInventoryRequest(
+        scope,
+        entered([{ ...row, clothingProperties: entered({ ...properties, hermetic: unset }) }]),
+      ),
+    ).toThrow('UNSET');
+    expect(() =>
+      readNpcInventoryEditorInput(scope, entered([{ ...row, input: completeInput() }])),
+    ).toThrow('clothing');
+    expect(() =>
+      readNpcInventoryEditorInput(
+        scope,
+        entered([
+          {
+            ...row,
+            clothingProperties: entered({ ...properties, coveredRegionIds: entered(['HAND_R']) }),
+          },
+        ]),
+      ),
+    ).toThrow();
+  });
+  it('restores exact historical GM metadata while leaving an unrelated incomplete row unchanged', () => {
+    const scope = inventoryCatalog();
+    const historical: NpcCatalogueInventoryRequestEntry = {
+      ...expectedRequest(),
+      itemTypeId: 'RES-EQP-001',
+      qualityTier: 'RARE',
+      equipped: true,
+      equippedSlots: ['TORSO', 'ARM_L'],
+      clothingProperties: {
+        coveredRegionIds: ['TORSO', 'ARM_L'],
+        hermetic: false,
+        flammability: 'COMBUSTIBLE',
+      },
+    };
+    const untouched = createEmptyNpcInventoryEditorRow(scope, itemB);
+    const current = entered([untouched]);
+    const restored = restoreNpcInventoryEditorRows(scope, current, [historical]);
+    if (restored.kind !== 'ENTERED') throw new Error('expected restored rows');
+    expect(restored.value[0]).toEqual(untouched);
+    expect(restored.value[1]?.qualityTier).toEqual(entered('RARE'));
+    expect(restored.value[1]?.clothingProperties).toEqual(
+      entered({
+        coveredRegionIds: entered(['TORSO', 'ARM_L']),
+        hermetic: entered(false),
+        flammability: entered('COMBUSTIBLE'),
+      }),
+    );
+    expect(projectNpcInventoryRequest(scope, entered([restored.value[1]]))).toEqual([historical]);
+    expect(current).toEqual(entered([untouched]));
   });
 });

@@ -7,7 +7,7 @@ import {
   readNpcInventoryRequest,
   resolveNpcWeaponProfiles,
   validateNpcCatalogueItemState,
-  type NpcInventoryRequestEntry,
+  type NpcCatalogueInventoryRequestEntry,
   type NpcItemProfileRequest,
 } from './inventory.js';
 
@@ -23,7 +23,7 @@ const catalog = createNpcInventoryCatalog(
   weapons,
 );
 const id = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-function item(itemTypeId = 'ITM-WPN-003'): NpcInventoryRequestEntry {
+function item(itemTypeId = 'ITM-WPN-003'): NpcCatalogueInventoryRequestEntry {
   return {
     itemInstanceId: id(1),
     itemTypeId,
@@ -89,8 +89,10 @@ describe('NPC-015 inventory inputs and immutable source profiles', () => {
     expect(actual).toEqual(entries);
     expect(actual).not.toBe(entries);
     expect(Object.isFrozen(actual[0]?.profile)).toBe(true);
-    for (const entry of actual)
+    for (const entry of actual) {
+      if (entry.itemTypeId === null) throw new Error('Expected catalogue currency fixture');
       validateNpcCatalogueItemState(definition(entry.itemTypeId), entry, []);
+    }
   });
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
     'rejects invalid quantity %s',
@@ -252,9 +254,11 @@ describe('NPC-015 inventory inputs and immutable source profiles', () => {
       ],
     };
     const entry = readNpcInventoryRequest([{ ...item(), profile: request }])[0]!;
+    const itemTypeId = entry.itemTypeId;
+    if (itemTypeId === null) throw new Error('Expected catalogue weapon fixture');
     if (entry.profile.kind !== 'MASTER_WEAPON') throw new Error('Unexpected profile');
     const masterProfile = entry.profile;
-    const result = resolveNpcWeaponProfiles(weapons, entry.itemTypeId, ['DEFAULT'], masterProfile);
+    const result = resolveNpcWeaponProfiles(weapons, itemTypeId, ['DEFAULT'], masterProfile);
     expect(result[0]?.damageDefinition.sourceNotation).toBe('R20*2+100000');
     expect(result[0]?.statRequirements).toEqual({});
     expect(result[0]?.properties['Ёмкость']).toBe('8');
@@ -268,9 +272,9 @@ describe('NPC-015 inventory inputs and immutable source profiles', () => {
         { ...item(), profile: { ...request, properties: { Ёмкость: 900 } } },
       ]),
     ).toThrow('unexpected');
-    expect(() =>
-      resolveNpcWeaponProfiles(weapons, entry.itemTypeId, ['SHIELD'], masterProfile),
-    ).toThrow('host-bound');
+    expect(() => resolveNpcWeaponProfiles(weapons, itemTypeId, ['SHIELD'], masterProfile)).toThrow(
+      'host-bound',
+    );
     expect(() =>
       resolveNpcWeaponProfiles(weapons, 'ITM-WPN-001', ['DEFAULT'], {
         kind: 'CATALOG',

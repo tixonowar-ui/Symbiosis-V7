@@ -15,6 +15,10 @@ import {
   type NpcSkillEvaluation,
 } from './skill-evaluation.js';
 import { readNpcInventoryRequest } from './inventory.js';
+import {
+  assertNpcHumanoidLifeBoundary,
+  type NpcHumanoidLifeBoundary,
+} from './humanoid-life-boundary.js';
 import type {
   NpcDerivedSheet,
   NpcIdentityInput,
@@ -485,6 +489,7 @@ function commonSheet(
   owningControllerId: string,
   inputValue: unknown,
   compositionProof: unknown,
+  lifeBoundary: NpcHumanoidLifeBoundary | null = null,
 ): Readonly<{ compositionProof: NpcCompositionConsequenceProof; sheet: CleanCommonSheet }> {
   const input = record(inputValue, [
     'identity',
@@ -539,13 +544,22 @@ function commonSheet(
     'sourceSpecificStates',
     'deathTimerRollFactOrNull',
   ]);
+  const life =
+    lifeBoundary === null
+      ? null
+      : assertNpcHumanoidLifeBoundary(lifeBoundary, {
+          npcUuid,
+          compositionProof: composition.proof,
+          currentHP: initial.currentHP,
+          dead: initial.dead,
+        });
   if (
     typeof initial.currentHP !== 'number' ||
     !Number.isSafeInteger(initial.currentHP) ||
-    initial.currentHP <= 0
+    initial.currentHP < (life === null || life.lifeKind === 'ALIVE' ? 1 : 0)
   )
     return unsupported('NPC-016: this branch requires explicit positive integer currentHP');
-  if (initial.dead !== false || initial.deathTimerRollFactOrNull !== null)
+  if (initial.dead !== (life?.dead ?? false) || initial.deathTimerRollFactOrNull !== null)
     return unsupported('NPC-016: death/consequence state');
   empty(initial.currentTraumas, 'NPC-016/CORE-119: trauma');
   empty(initial.currentWounds, 'NPC-016/CORE-118: wound');
@@ -565,7 +579,7 @@ function commonSheet(
         inventory: [],
         initialState: {
           currentHP: initial.currentHP,
-          dead: false,
+          dead: life?.dead ?? false,
           currentTraumas: [],
           currentWounds: [],
           effectInstances: [],
@@ -584,11 +598,23 @@ function commonSheet(
       itemProfiles: [],
       maxHP: hp.subtotalHP,
       capabilities: {
-        canPhysicalAct: true,
-        canMentalAct: true,
-        canReact: true,
-        canActiveDefend: true,
-        effectiveControllerId: owningControllerId,
+        canPhysicalAct:
+          life?.restrictionOrNull === null ||
+          life === null ||
+          life.restrictionOrNull.physicalActions === 'YES',
+        canMentalAct:
+          life?.restrictionOrNull === null ||
+          life === null ||
+          life.restrictionOrNull.mentalActions === 'YES',
+        canReact:
+          life?.restrictionOrNull === null ||
+          life === null ||
+          life.restrictionOrNull.reactions === 'YES',
+        canActiveDefend:
+          life?.restrictionOrNull === null ||
+          life === null ||
+          life.restrictionOrNull.activeDefense === 'YES',
+        effectiveControllerId: life?.dead === true ? null : owningControllerId,
         regionPenaltyById: {},
       },
       requiresCampaignTime: false,
@@ -610,6 +636,7 @@ function orderedSkills<T>(input: CleanCommonSheet['input'], skills: T) {
 export function buildNpcCleanHumanoidSnapshot(
   catalog: NpcCleanHumanoidCatalog,
   value: unknown,
+  lifeBoundary: NpcHumanoidLifeBoundary | null = null,
 ): NpcCleanHumanoidSnapshot {
   const components = catalogs.get(catalog) ?? fail('expected issued source catalog');
   const request = record(value, [
@@ -627,6 +654,7 @@ export function buildNpcCleanHumanoidSnapshot(
     owningControllerId,
     request.input,
     request.compositionProof,
+    lifeBoundary,
   );
   const skills = evaluateNpcSkills(components.skills, {
     mode: 'CREATE_V1',
@@ -678,6 +706,7 @@ export function buildNpcCleanHumanoidSnapshot(
 export function previewNpcCleanHumanoid(
   catalog: NpcCleanHumanoidCatalog,
   value: unknown,
+  lifeBoundary: NpcHumanoidLifeBoundary | null = null,
 ): NpcCleanHumanoidPreview {
   const components = catalogs.get(catalog) ?? fail('expected issued source catalog');
   const request = record(value, ['npcUuid', 'owningControllerId', 'input', 'compositionProof']);
@@ -689,6 +718,7 @@ export function previewNpcCleanHumanoid(
     owningControllerId,
     request.input,
     request.compositionProof,
+    lifeBoundary,
   );
   const person = common.sheet.input.identity;
   const { selected } = initialSelection(components, {

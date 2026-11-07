@@ -8,6 +8,7 @@ import {
   assertNpcSkillSnapshot,
   evaluateNpcSkills,
   evaluateNpcCurrentSkillAvailability,
+  previewNpcSkills,
   type NpcSkillContext,
   type NpcSkillProof,
 } from './skill-evaluation.js';
@@ -33,7 +34,7 @@ function paid(
   after: number,
   cost: number,
   pool: 'START' | 'TRAINING' = 'START',
-): NpcSkillAccountingFact {
+): Extract<NpcSkillAccountingFact, { kind: 'PAID_ACQUISITION' }> {
   return {
     kind: 'PAID_ACQUISITION',
     factId: `fact-${ordinal}`,
@@ -74,7 +75,213 @@ const evaluate = (value: NpcSkillProof, previous: NpcSkillProof | null = null) =
     proof: value,
   });
 
+describe('ADR0082 one lifetime SYM-166 pool', () => {
+  const source = { symbiontInstanceId: 'dolphin-original', nodeRef: 'SYM-166' as const };
+  const selectedKey = (value: 'STEALTH' | 'ACROBATICS') => {
+    const selected = catalog.skills.skills.find((s) => s.skillKey === value);
+    if (selected === undefined) throw new Error('Missing actual source skill');
+    return selected.skillKey;
+  };
+  const charge = (
+    ordinal: number,
+    skillKey: 'STEALTH' | 'ACROBATICS',
+    bonus: number,
+    contextOrdinal = 1,
+    instance = source.symbiontInstanceId,
+  ): Extract<NpcSkillAccountingFact, { kind: 'PAID_ACQUISITION'; pool: 'SYM-166' }> => ({
+    kind: 'PAID_ACQUISITION',
+    factId: `fact-${ordinal}`,
+    ordinal,
+    contextFactId: `context-${contextOrdinal}`,
+    skillKey: selectedKey(skillKey),
+    bonusBefore: 0,
+    bonusAfter: bonus,
+    pool: 'SYM-166',
+    chargedSlotCost: bonus,
+    symbiontInstanceId: instance,
+    nodeRef: 'SYM-166',
+  });
+  const acquired = () =>
+    context(1, {
+      sym166SourceOrNull: source,
+      facts: [paid(1, 1, 0, 4, 4), charge(2, 'STEALTH', 2), charge(3, 'ACROBATICS', 3)],
+    });
+  it('keeps W/START/TRAINING independent and records exact source and endpoints per paid step', () => {
+    const result = evaluate(proof(acquired()));
+    expect(result.pools).toEqual({
+      START: { capacity: 4, used: 4, available: 0, overfill: 0 },
+      TRAINING: { capacity: 4, used: 0, available: 4, overfill: 0 },
+      'SYM-166': { capacity: 5, used: 5, available: 0, overfill: 0 },
+    });
+    expect(result.ledger.training).toEqual({
+      maxPermanentWisdom: 8,
+      everIssued: 4,
+      basisFactId: 'context-1',
+    });
+    expect(result.ledger.sym166Pool?.charges).toEqual([
+      {
+        skillKey: 'STEALTH',
+        bonusBefore: 0,
+        bonusAfter: 2,
+        chargedSlotCost: 2,
+        acquisitionFactId: 'fact-2',
+        ...source,
+      },
+      {
+        skillKey: 'ACROBATICS',
+        bonusBefore: 0,
+        bonusAfter: 3,
+        chargedSlotCost: 3,
+        acquisitionFactId: 'fact-3',
+        ...source,
+      },
+    ]);
+  });
+  it('removal keeps charges and skills; another Dolphin restores the same exhausted pool', () => {
+    const original = proof(acquired());
+    const removed = context(2, { sym166SourceOrNull: null });
+    const result = evaluate(proof(acquired(), removed), original);
+    expect(result.pools['SYM-166']).toEqual({ capacity: 0, used: 5, available: 0, overfill: 5 });
+    expect(result.disabledSkillKeys).toEqual([]);
+    expect(result.ledger.learnedSkills).toEqual(evaluate(original).ledger.learnedSkills);
+    const regained = context(3, {
+      sym166SourceOrNull: { ...source, symbiontInstanceId: 'new-dolphin' },
+    });
+    const next = evaluate(proof(acquired(), removed, regained), original);
+    expect(next.pools['SYM-166']).toEqual({ capacity: 5, used: 5, available: 0, overfill: 0 });
+    expect(next.ledger.sym166Pool?.charges).toEqual(result.ledger.sym166Pool?.charges);
+    expect(() =>
+      evaluate(
+        proof(acquired(), removed, {
+          ...regained,
+          facts: [
+            { ...charge(4, 'STEALTH', 3, 3, 'new-dolphin'), bonusBefore: 2, chargedSlotCost: 1 },
+          ],
+        }),
+      ),
+    ).toThrow('insufficient current capacity');
+  });
+  it('temporary requirement loss disables without release; permanent loss frees only actual original charges', () => {
+    const original = proof(acquired());
+    const temporary = evaluateNpcCurrentSkillAvailability(catalog.skills, {
+      identityKey: original.identityKey,
+      proof: original,
+      effectiveStats: { ...stats, I: 4 },
+      sym166SourceOrNull: null,
+    });
+    expect(temporary.disabledSkillKeys).toEqual(['STEALTH']);
+    expect(temporary.pools['SYM-166']).toEqual({ capacity: 0, used: 5, available: 0, overfill: 5 });
+    const loss: NpcSkillAccountingFact = {
+      kind: 'PERMANENT_REQUIREMENT_LOSS',
+      sourceRuleId: 'CORE-166',
+      factId: 'fact-4',
+      ordinal: 4,
+      contextFactId: 'context-2',
+      skillKey: selectedKey('STEALTH'),
+    };
+    const low = context(2, {
+      sym166SourceOrNull: null,
+      permanentStats: { ...stats, I: 4 },
+      effectiveStats: { ...stats, I: 4 },
+      facts: [loss],
+    });
+    const restored = context(3, { sym166SourceOrNull: source });
+    const result = evaluate(proof(acquired(), low, restored), original);
+    expect(result.pools['SYM-166']).toEqual({ capacity: 5, used: 3, available: 2, overfill: 0 });
+    expect(result.pools.START.used).toBe(4);
+    expect(result.ledger.sym166Pool?.charges.map((c) => c.acquisitionFactId)).toEqual(['fact-3']);
+    const reused = evaluate(
+      proof(acquired(), low, { ...restored, facts: [charge(5, 'STEALTH', 2, 3)] }),
+      original,
+    );
+    expect(reused.pools['SYM-166']?.available).toBe(0);
+    expect(reused.ledger.sym166Pool?.charges.map((c) => c.acquisitionFactId)).toEqual([
+      'fact-3',
+      'fact-5',
+    ]);
+  });
+  it('allows unused SYM-166 capacity but cannot replace mandatory START or invent source/basis', () => {
+    const result = evaluate(proof({ ...first(), sym166SourceOrNull: source }));
+    expect(result.pools['SYM-166']).toEqual({ capacity: 5, used: 0, available: 5, overfill: 0 });
+    expect(() =>
+      evaluate(proof(context(1, { sym166SourceOrNull: source, facts: [charge(1, 'STEALTH', 2)] }))),
+    ).toThrow('fill every initial START');
+    expect(() => evaluate(proof({ ...acquired(), sym166SourceOrNull: null }))).toThrow(
+      'exact active learned source',
+    );
+    expect(() =>
+      evaluate(
+        proof({ ...acquired(), sym166SourceOrNull: { ...source, symbiontInstanceId: 'foreign' } }),
+      ),
+    ).toThrow('exact active learned source');
+    expect(() => evaluate(proof(acquired(), context(2)))).toThrow('explicit current source');
+    expect(() =>
+      evaluateNpcCurrentSkillAvailability(catalog.skills, {
+        identityKey: 'npc-identity',
+        proof: proof(first()),
+        effectiveStats: stats,
+        sym166SourceOrNull: source,
+      }),
+    ).toThrow('cannot invent');
+  });
+});
+
 describe('NPC-014 confirmed skill consequences', () => {
+  it('binds an actual pre-START GROSS grant without manufacturing paid selections or W issuance', () => {
+    const grant: NpcSkillAccountingFact = {
+      kind: 'TROGR_GROSS_GRANT',
+      sourceRuleId: 'SYM-079',
+      factId: 'fact-1',
+      ordinal: 1,
+      contextFactId: 'context-1',
+      symbiontAcquisitionFactId: 'actual-composition-confirmation',
+      bonusBefore: 0,
+      bonusAfter: 3,
+    };
+    const pre = context(1, {
+      stage: 'COMPOSITION_BEFORE_START',
+      permanentStats: { ...stats, W: 20 },
+      effectiveStats: { ...stats, W: 20 },
+      grossGrantSourceOrNull: {
+        sourceRuleId: 'SYM-079',
+        symbiontInstanceId: 'trogr-original',
+        sourceAcquisitionFactId: 'actual-composition-confirmation',
+      },
+      facts: [grant],
+    });
+    const stealth = catalog.skills.skills.find((s) => s.skillKey === 'STEALTH');
+    if (stealth === undefined) throw new Error('Missing source STEALTH');
+    const paidStealth: NpcSkillAccountingFact = {
+      ...paid(2, 3, 0, 2, 2),
+      skillKey: stealth.skillKey,
+    };
+    const selected = context(2, {
+      stage: 'START_SELECTION',
+      facts: [paid(2, 2, 3, 5, 2), paidStealth],
+    });
+    const result = evaluate(proof(pre, selected));
+    expect(result.grossGrant).toEqual({
+      kind: 'ISSUED',
+      sourceRuleId: 'SYM-079',
+      bonusBefore: 0,
+      bonusAfter: 3,
+      acquisitionFactId: 'fact-1',
+    });
+    expect(result.ledger.startBasis.confirmationFactId).toBe('context-2');
+    expect(result.ledger.training).toEqual({
+      maxPermanentWisdom: 8,
+      everIssued: 4,
+      basisFactId: 'context-2',
+    });
+    expect(result.pools.START).toEqual({ capacity: 4, used: 4, available: 0, overfill: 0 });
+    expect(() => evaluate(proof(pre))).toThrow('start basis');
+    expect(() => evaluate(proof(pre, { ...selected, facts: [] }))).toThrow(
+      'fill every initial START',
+    );
+    expect(() =>
+      evaluate(proof({ ...pre, facts: [grant, paid(1, 2, 3, 5, 2)] }, selected)),
+    ).toThrow('no paid acquisition');
+  });
   it('CORE-081 requires initial START fill and derives a separate training pool', () => {
     const result = evaluate(proof(first()));
     expect(result.pools).toEqual({
@@ -96,7 +303,7 @@ describe('NPC-014 confirmed skill consequences', () => {
       expect(() =>
         evaluate(
           proof(
-            context(1, { skillStageStats: { ...stats, ...patch }, facts: [paid(1, 1, 0, 4, 4)] }),
+            context(1, { effectiveStats: { ...stats, ...patch }, facts: [paid(1, 1, 0, 4, 4)] }),
           ),
         ),
       ).toThrow('RequirementID');
@@ -348,5 +555,152 @@ describe('NPC current skill availability without invented confirmation facts', (
         effectiveStats: { ...input.effectiveStats, hidden: 1 },
       }),
     ).toThrow('unexpected');
+  });
+});
+
+describe('ordinary skill preview without prospective history', () => {
+  const source = { symbiontInstanceId: 'dolphin-source', nodeRef: 'SYM-166' as const };
+  const profile = (contextFactId: string, changes: Record<string, unknown> = {}) => ({
+    contextFactId,
+    raceCode: 'FREE',
+    classCode: null,
+    skillStageStats: stats,
+    permanentStats: stats,
+    effectiveStats: stats,
+    grossGrant: { kind: 'NOT_ISSUED' },
+    sym166SourceOrNull: source,
+    ...changes,
+  });
+  const preview = (
+    contexts: unknown[],
+    selections: unknown[],
+    previousConfirmedProofOrNull: unknown = null,
+  ) =>
+    previewNpcSkills(catalog.skills, {
+      identityKey: 'npc-identity',
+      contexts,
+      selections,
+      previousConfirmedProofOrNull,
+    });
+  it('uses START before TRAINING/SYM-166, with independent pools and no invented fact IDs', () => {
+    const result = preview(
+      [profile('actual-stage')],
+      [
+        { skillKey: 'GROSS', targetBonus: 4, pool: 'START' },
+        { skillKey: 'STEALTH', targetBonus: 2, pool: 'SYM-166' },
+        { skillKey: 'ACROBATICS', targetBonus: 3, pool: 'SYM-166' },
+        { skillKey: 'GROSS', targetBonus: 6, pool: 'TRAINING' },
+      ],
+    );
+    expect(result.pools).toEqual({
+      START: { capacity: 4, used: 4, available: 0, overfill: 0 },
+      TRAINING: { capacity: 4, used: 3, available: 1, overfill: 0 },
+      'SYM-166': { capacity: 5, used: 5, available: 0, overfill: 0 },
+    });
+    expect(result.pendingCharges.map((c) => c.slotCost)).toEqual([4, 2, 3, 3]);
+    expect(JSON.stringify(result)).not.toMatch(
+      /"(?:factId|acquisitionFactId|confirmationFactId|commitOperationId)":/,
+    );
+    expect(Object.isFrozen(result.pendingCharges[0])).toBe(true);
+    expect(() =>
+      preview(
+        [profile('actual-stage')],
+        [{ skillKey: 'STEALTH', targetBonus: 2, pool: 'SYM-166' }],
+      ),
+    ).toThrow('fill every START');
+  });
+  it('uses actual resolved initial GROSS endpoints, not a fabricated paid grant', () => {
+    const grossGrant = {
+      kind: 'ISSUED',
+      sourceRuleId: 'SYM-079',
+      bonusBefore: 0,
+      bonusAfter: 3,
+      acquisitionFactId: 'real-gross-leaf',
+    };
+    const result = preview(
+      [profile('actual-grant', { grossGrant })],
+      [
+        { skillKey: 'GROSS', targetBonus: 5, pool: 'START' },
+        { skillKey: 'STEALTH', targetBonus: 2, pool: 'START' },
+      ],
+    );
+    expect(
+      result.pendingCharges.map((c) => [c.skillKey, c.bonusBefore, c.bonusAfter, c.slotCost]),
+    ).toEqual([
+      ['GROSS', 3, 5, 2],
+      ['STEALTH', 0, 2, 2],
+    ]);
+    expect(() =>
+      preview([profile('actual-grant', { grossGrant: { ...grossGrant, bonusAfter: 4 } })], []),
+    ).toThrow('actual endpoints');
+  });
+  it('preserves original spent costs and permanent loss through lowering then restoring a stat', () => {
+    const stealth = catalog.skills.skills.find((s) => s.skillKey === 'STEALTH')?.skillKey;
+    if (stealth === undefined) throw Error('source');
+    const acquisition: NpcSkillAccountingFact = {
+      kind: 'PAID_ACQUISITION',
+      factId: 'fact-2',
+      ordinal: 2,
+      contextFactId: 'context-1',
+      skillKey: stealth,
+      bonusBefore: 0,
+      bonusAfter: 2,
+      chargedSlotCost: 2,
+      pool: 'SYM-166',
+      ...source,
+    };
+    const old = proof(
+      context(1, { sym166SourceOrNull: source, facts: [paid(1, 1, 0, 4, 4), acquisition] }),
+    );
+    const bytes = JSON.stringify(old);
+    const result = preview(
+      [
+        profile('actual-loss', {
+          permanentStats: { ...stats, I: 4 },
+          effectiveStats: { ...stats, I: 4 },
+          sym166SourceOrNull: null,
+        }),
+        profile('actual-restored'),
+      ],
+      [],
+      old,
+    );
+    expect(result.permanentLosses).toEqual([{ contextFactId: 'actual-loss', skillKey: 'STEALTH' }]);
+    expect(result.learnedSkills.map((s) => s.skillKey)).not.toContain('STEALTH');
+    expect(result.pools['SYM-166']).toEqual({ capacity: 5, used: 0, available: 5, overfill: 0 });
+    expect(result.pools.START.used).toBe(4);
+    const temp = preview(
+      [profile('temporary', { effectiveStats: { ...stats, I: 4 }, sym166SourceOrNull: null })],
+      [],
+      old,
+    );
+    expect(temp.permanentLosses).toEqual([]);
+    expect(temp.disabledSkillKeys).toEqual(['STEALTH']);
+    expect(temp.pools['SYM-166']).toEqual({ capacity: 0, used: 2, available: 0, overfill: 2 });
+    expect(JSON.stringify(old)).toBe(bytes);
+  });
+  it('NPC requirements use actual permanent/effective stats while START keeps its earlier W basis', () => {
+    const low = { ...stats, I: 4 };
+    const result = preview(
+      [profile('after-dolphin', { skillStageStats: low })],
+      [{ skillKey: 'STEALTH', targetBonus: 4, pool: 'START' }],
+    );
+    expect(result.pools.START.used).toBe(4);
+    expect(() =>
+      preview(
+        [profile('temporary-block', { skillStageStats: low, effectiveStats: low })],
+        [{ skillKey: 'STEALTH', targetBonus: 4, pool: 'START' }],
+      ),
+    ).toThrow('REQ-');
+    const key = catalog.skills.skills.find((s) => s.skillKey === 'STEALTH')?.skillKey;
+    if (key === undefined) throw Error('source');
+    const f = { ...paid(1, 1, 0, 4, 4), skillKey: key };
+    expect(
+      evaluate(proof(context(1, { skillStageStats: low, facts: [f] }))).ledger.learnedSkills[0]
+        ?.skillKey,
+    ).toBe('STEALTH');
+    expect(() =>
+      evaluate(proof(context(1, { skillStageStats: low, effectiveStats: low, facts: [f] }))),
+    ).toThrow('REQ-');
   });
 });

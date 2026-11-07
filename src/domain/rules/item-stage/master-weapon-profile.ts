@@ -38,6 +38,12 @@ export interface StagedWeaponProfile extends Omit<
   readonly penetrationDefinition: StagedWeaponCombatDefinition;
   readonly accuracyBonus?: number;
 }
+/** CORE-187: a later master edit retains the actual prior immutable effective profile. */
+export type MasterWeaponBaseProfile = Omit<WeaponEffectiveProfile, 'statSource'> &
+  Readonly<{
+    statSource: WeaponEffectiveProfile['statSource'] | 'MASTER_OVERRIDE';
+    accuracyBonus?: number;
+  }>;
 function fail(detail: string): never {
   throw new Error(`master weapon profile: ${detail}`);
 }
@@ -90,7 +96,7 @@ function stageDefinition(value: WeaponCombatDefinition): StagedWeaponCombatDefin
     resolvedResultPersistence: value.resolvedResultPersistence,
   };
 }
-export function stageValidatedWeaponProfile(profile: WeaponEffectiveProfile): StagedWeaponProfile {
+export function stageValidatedWeaponProfile(profile: MasterWeaponBaseProfile): StagedWeaponProfile {
   return freeze({
     weaponTypeId: profile.weaponTypeId,
     weaponVariantId: profile.weaponVariantId,
@@ -103,6 +109,7 @@ export function stageValidatedWeaponProfile(profile: WeaponEffectiveProfile): St
     statRequirements: { ...profile.statRequirements },
     ...(profile.instanceDamage === undefined ? {} : { instanceDamage: profile.instanceDamage }),
     ...(profile.rangeMeters === undefined ? {} : { rangeMeters: profile.rangeMeters }),
+    ...(profile.accuracyBonus === undefined ? {} : { accuracyBonus: profile.accuracyBonus }),
     properties: { ...profile.properties },
   });
 }
@@ -180,7 +187,7 @@ function same(a: unknown, b: unknown): boolean {
 }
 
 function propertiesWithRequirements(
-  base: WeaponEffectiveProfile,
+  base: MasterWeaponBaseProfile,
   updated: Readonly<Partial<Record<StatCode, number>>>,
 ): WeaponEffectiveProfile['properties'] {
   const properties = { ...base.properties },
@@ -204,7 +211,7 @@ export function deriveMasterWeaponProfile(
   catalog: WeaponProfileCatalog,
   selection: StartingWeaponSelection,
   input: MasterWeaponProfileInput,
-  validatedRequestProfileOrNull: WeaponEffectiveProfile | null,
+  validatedRequestProfileOrNull: MasterWeaponBaseProfile | null,
 ): StagedWeaponProfile {
   exact(input, [
     'weaponVariantId',

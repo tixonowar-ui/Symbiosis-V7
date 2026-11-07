@@ -204,13 +204,21 @@ export function createNpcLifeStateCatalog(
  * It must resolve source-specific extensions before publishing an active death timer.
  * This pure step neither allocates IDs nor rolls, consumes OE, ticks, or creates a death event.
  */
+export function npcBasePeaceDeathTimerMinutes(
+  catalog: NpcLifeStateCatalog,
+  rollFact: unknown,
+): number {
+  requireCatalog(catalog);
+  // CORE-153/TIME-006 are sealed by the issued catalog, including the peace factor.
+  return roll(rollFact).roll.rawFace * 5;
+}
 export function prepareNpcBasePeaceDeathTimer(
   catalog: NpcLifeStateCatalog,
   input: unknown,
 ): NpcBasePeaceDeathTimerContribution {
   requireCatalog(catalog);
   const origin = anchor(input),
-    baseDurationMinutes = origin.rollFact.roll.rawFace * 5;
+    baseDurationMinutes = npcBasePeaceDeathTimerMinutes(catalog, origin.rollFact);
   const deadline = origin.startsAt.campaignTimestamp + baseDurationMinutes;
   if (!Number.isSafeInteger(deadline))
     return fail('base timer deadline exceeds exact minute range');
