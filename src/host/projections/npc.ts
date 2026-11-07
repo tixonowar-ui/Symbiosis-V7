@@ -2,7 +2,7 @@ import {
   npcCompositionContinuations,
   npcCompositionCurrentSkillInventory,
   type NpcCompositionAuthoringState,
-  previewNpcCompositionCandidate,
+  type previewNpcCompositionCandidate,
 } from '../npc-composition-preparation.js';
 import type { NpcAvailableContinuation } from '@shared/npc-presentation.js';
 import type { NpcEquipmentCompatibilityPreparation } from '@shared/npc-presentation.js';
@@ -55,6 +55,16 @@ import {
   type NpcProjectionContentByForm,
   type NpcWireSections,
   type NpcWireSheet,
+  type NpcCustomInventoryPreparation,
+  type NpcItemRestorePreparation,
+  type NpcFormalControlPreparation,
+  type NpcLifeStatePreparation,
+  type NpcWeaverStatePreparation,
+  type NpcWeaverCurrentState,
+  type NpcPoisonModePreparation,
+  type NpcPoisonModeState,
+  type NpcPoisonCoatingPreparation,
+  type NpcPoisonCoatingState,
 } from '@shared/npc-presentation.js';
 import { npcGmProjectionValue } from '@shared/npc-presentation-codec.js';
 import type { NpcAuthoringSourceCatalog } from '../npc-catalog.js';
@@ -143,28 +153,25 @@ export function npcEditorPresentation(input: {
   readonly inventoryOrNull: NpcProjectionContentByForm['NPC-015'] | null;
   readonly equipmentCompatibilityPreparationOrNull?: NpcEquipmentCompatibilityPreparation | null;
   readonly compositePreparationOrNull?: NpcCompositeItemPreparation | null;
-  readonly customPreparationOrNull?:
-    import('@shared/npc-presentation.js').NpcCustomInventoryPreparation | null;
-  readonly restorePreparationOrNull?:
-    import('@shared/npc-presentation.js').NpcItemRestorePreparation | null;
+  readonly customPreparationOrNull?: NpcCustomInventoryPreparation | null;
+  readonly restorePreparationOrNull?: NpcItemRestorePreparation | null;
   readonly compositeSets?: NpcAttemptReadContext['linkedSets'];
   readonly runtimePreparationOrNull?: Readonly<{
     alcohol: NpcAlcoholPreparation;
     hpModes: readonly NpcHpModePreparation[];
-    formalControls?: readonly import('@shared/npc-presentation.js').NpcFormalControlPreparation[];
+    formalControls?: readonly NpcFormalControlPreparation[];
   }> | null;
   readonly runtimeEffectBindings?: NpcAttemptReadContext['runtimeEffectBindings'];
-  readonly lifeStatePreparationOrNull?:
-    import('@shared/npc-presentation.js').NpcLifeStatePreparation | null;
+  readonly lifeStatePreparationOrNull?: NpcLifeStatePreparation | null;
   readonly weaverPreparationOrNull?: Readonly<{
-    preparations: readonly import('@shared/npc-presentation.js').NpcWeaverStatePreparation[];
-    states: readonly import('@shared/npc-presentation.js').NpcWeaverCurrentState[];
+    preparations: readonly NpcWeaverStatePreparation[];
+    states: readonly NpcWeaverCurrentState[];
   }> | null;
   readonly poisonPreparationOrNull?: Readonly<{
-    modePreparations: readonly import('@shared/npc-presentation.js').NpcPoisonModePreparation[];
-    modeStates: readonly import('@shared/npc-presentation.js').NpcPoisonModeState[];
-    coatingPreparations: readonly import('@shared/npc-presentation.js').NpcPoisonCoatingPreparation[];
-    coatingStates: readonly import('@shared/npc-presentation.js').NpcPoisonCoatingState[];
+    modePreparations: readonly NpcPoisonModePreparation[];
+    modeStates: readonly NpcPoisonModeState[];
+    coatingPreparations: readonly NpcPoisonCoatingPreparation[];
+    coatingStates: readonly NpcPoisonCoatingState[];
   }> | null;
   readonly traumaPreparationOrNull?: Readonly<{
     traumaBindings: NpcAttemptReadContext['traumaBindings'];
