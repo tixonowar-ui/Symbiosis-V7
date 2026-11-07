@@ -1,3 +1,5 @@
+import { NPC_TABLES } from './migrations/0015-persistent-npc.js';
+import { npcIdentityInUse } from './npc-identities.js';
 import { CAMPAIGN_LIFECYCLE_TABLES } from './migrations/0014-campaign-lifecycle.js';
 import { CAMPAIGN_LOBBY_TABLES } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
@@ -368,6 +370,8 @@ export function readPostSaveHead(db: Database.Database, scope: PostSaveScope): P
   return head;
 }
 const writeHead = (db: Database.Database, head: PostSaveHead): void => {
+  if (npcIdentityInUse(db, head.scope.scopeId))
+    return fail('scope ID already belongs to a persistent NPC or its technical history');
   db.prepare(
     `INSERT INTO local_character_post_save_head
     (scope_id, entity_kind, entity_id, owner_device_id, owner_context, base_snapshot_sha256, scope_json,
@@ -509,7 +513,7 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     return fail('restore cursor retirement requires the checkpoint transaction');
   const schema = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
   const version = schema['version'];
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 14)
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 19)
     return fail('unknown schema version for restore cursor retirement');
   // Versions 1..5 predate this aggregate. A version-6 database must have its actual tables.
   if (version < 6) return;
@@ -528,17 +532,46 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
   if (version >= 10)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (version === 11 || version === 12 || version === 13 || version === 14)
+  if (
+    version === 11 ||
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+  )
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (version === 12 || version === 13 || version === 14)
+  if (
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+  )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (version === 13 || version === 14)
+  if (
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+  )
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
     for (const table of CAMPAIGN_LIFECYCLE_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (version === 15 || version === 16 || version === 17 || version === 18 || version === 19)
+    for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (
     db
       .prepare(
@@ -758,6 +791,8 @@ export function readPostSaveCommandById(
   return { command, head };
 }
 const assertUnusedId = (db: Database.Database, id: string): void => {
+  if (npcIdentityInUse(db, id))
+    return fail('ID already belongs to a persistent NPC or its technical history');
   stringAt(id, 'new ID');
   const used = db
     .prepare(

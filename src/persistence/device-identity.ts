@@ -1,3 +1,4 @@
+import { assertNpcIdentityUnused } from './npc-identities.js';
 import { randomUUID } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
@@ -104,6 +105,7 @@ export const bootstrapDeviceIdentity = (database: Database.Database): DeviceId =
       }
 
       const deviceId = deviceIdFrom(randomUUID(), 'node:crypto randomUUID()');
+      assertNpcIdentityUnused(database, deviceId);
       const result = database
         .prepare(
           `UPDATE device_identity

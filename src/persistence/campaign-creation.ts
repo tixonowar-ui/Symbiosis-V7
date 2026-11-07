@@ -1,3 +1,45 @@
+import type {
+  NpcItemReservationApply,
+  NpcArtPreparationApply,
+  NpcCompositeItemReservationApply,
+  NpcDiseaseReservationApply,
+  NpcTraumaReservationApply,
+  NpcSymbiontReservationApply,
+  NpcCompositionAuthoringApply,
+  NpcWoundPreparationApply,
+} from './npc-gm-source.js';
+import { npcIdentityInUse } from './npc-identities.js';
+import type {
+  NpcAttemptPreparationContext,
+  NpcCommitPreparationContext,
+} from './npc-library-store.js';
+import { NPC_NAV_TARGETS, type NpcSelectionReplaceRequest } from '@shared/npc-command.js';
+import {
+  NPC_SOURCE_FORMS,
+  type NpcAttemptEvent,
+  type NpcHistoricalSourceEntry,
+  type NpcOperation,
+} from './npc-library-records.js';
+import {
+  captureNpcGmSource,
+  npcContextAfterNavigation,
+  npcGmContextValue,
+  npcSelectionValue,
+  npcSourceCauseValue,
+  npcSourceEventId,
+  readNpcGmPrimitiveCause,
+  withNpcGmPrimitiveReadSession,
+  type NpcGmPrimitiveReadSession,
+  reduceNpcSelection,
+  reduceNpcSource,
+  validateNpcHistoricalGmSource,
+  validateNpcGmPreparation,
+  validateNpcGmCommitPreparation,
+  verifyNpcGmMirrorCoverage,
+  type NpcGmContext,
+  type NpcSourceCause,
+  type NpcStageApply,
+} from './npc-gm-source.js';
 import { readCampaignLifecycleClientBinding } from './campaign-lifecycle-state.js';
 import {
   CAMPAIGN_LIFECYCLE_NAV_TARGETS,
@@ -86,7 +128,12 @@ export type CampaignCreationCursor = {
   | { readonly kind: 'CAMPAIGN'; readonly formId: 'CMP-006'; readonly targetId: string }
   | {
       readonly kind: 'QUEUE';
-      readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm | CampaignLifecycleForm;
+      readonly formId:
+        | 'NET-017'
+        | 'CMP-006'
+        | CampaignLobbyGmForm
+        | CampaignLifecycleForm
+        | (typeof NPC_SOURCE_FORMS)[number];
       readonly targetId: string;
     }
   | {
@@ -559,6 +606,7 @@ export function createLocalGmContext(
 }
 
 function assertUnusedId(db: Database.Database, id: string): void {
+  if (npcIdentityInUse(db, id)) return fail('IDEMPOTENCY_CONFLICT');
   text(id);
   if (id === loadDeviceId(db)) return fail('IDEMPOTENCY_CONFLICT');
   for (const [table, column] of [
@@ -579,7 +627,16 @@ function assertUnusedId(db: Database.Database, id: string): void {
   ];
   // An older campaign writer must not reuse identities already committed by a network family.
   const network =
-    version === 10 || version === 11 || version === 12 || version === 13 || version === 14
+    version === 10 ||
+    version === 11 ||
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -591,7 +648,15 @@ function assertUnusedId(db: Database.Database, id: string): void {
         ] as const)
       : [];
   const review =
-    version === 11 || version === 12 || version === 13 || version === 14
+    version === 11 ||
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -600,8 +665,25 @@ function assertUnusedId(db: Database.Database, id: string): void {
         ] as const)
       : [];
   const admission =
-    version === 12 || version === 13 || version === 14 ? CAMPAIGN_ADMISSION_IDENTITIES : [];
-  if (version === 13 || version === 14)
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+      ? CAMPAIGN_ADMISSION_IDENTITIES
+      : [];
+  if (
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+  )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
       ...(db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() === undefined
@@ -1827,8 +1909,14 @@ export interface GmRequestReviewDraftRequest {
   readonly values: NetworkGmRequestDraftValues;
 }
 export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTriple {
+  readonly npc?: NpcGmContext;
   readonly schemaVersion: 1;
-  readonly formId: 'NET-017' | 'CMP-006' | CampaignLobbyGmForm | CampaignLifecycleForm;
+  readonly formId:
+    | 'NET-017'
+    | 'CMP-006'
+    | CampaignLobbyGmForm
+    | CampaignLifecycleForm
+    | (typeof NPC_SOURCE_FORMS)[number];
   readonly requestQueueRevision: number;
   readonly values: NetworkGmRequestDraftValues;
   readonly returnContext: Extract<NetworkGmRequestReturnContext, { originFormId: 'CMP-006' }>;
@@ -2002,6 +2090,9 @@ function queueNavigationTarget(request: FormActionIntentV2Message): GmRequestRev
     return 'NET-017';
   if (request.actionKey === 'NET-017::CTA::009' && request.sourceFormId === 'NET-017')
     return 'CMP-006';
+  const npcKey = request.actionKey as keyof typeof NPC_NAV_TARGETS;
+  if (Object.hasOwn(NPC_NAV_TARGETS, npcKey) && npcKey.split('::')[0] === request.sourceFormId)
+    return NPC_NAV_TARGETS[npcKey];
   const lifecycleKey = request.actionKey as keyof typeof CAMPAIGN_LIFECYCLE_NAV_TARGETS;
   if (
     Object.hasOwn(CAMPAIGN_LIFECYCLE_NAV_TARGETS, lifecycleKey) &&
@@ -2047,6 +2138,8 @@ function verifyLifecycleCause(
   };
 }
 export type GmRequestReviewMutation =
+  | { readonly kind: 'NPC_SOURCE'; readonly cause: NpcSourceCause }
+  | { readonly kind: 'NPC_SELECTION'; readonly request: NpcSelectionReplaceRequest }
   | { readonly kind: 'LIFECYCLE_SOURCE'; readonly cause: GmLobbySourceCause }
   | { readonly kind: 'LOBBY_SOURCE'; readonly cause: GmLobbySourceCause }
   | { readonly kind: 'SOURCE_ADVANCE'; readonly cause: GmAdmissionSourceCause }
@@ -2241,6 +2334,14 @@ function queueDraft(value: unknown): GmRequestReviewDraftRequest {
 }
 function queueMutation(value: unknown): GmRequestReviewMutation {
   const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'NPC_SOURCE') {
+    const row = queueObject(value, ['kind', 'cause']);
+    return { kind: 'NPC_SOURCE', cause: npcSourceCauseValue(row['cause']) };
+  }
+  if (record['kind'] === 'NPC_SELECTION') {
+    const row = queueObject(value, ['kind', 'request']);
+    return { kind: 'NPC_SELECTION', request: npcSelectionValue(row['request']) };
+  }
   if (record['kind'] === 'LIFECYCLE_SOURCE') {
     const row = queueObject(value, ['kind', 'cause']);
     return { kind: 'LIFECYCLE_SOURCE', cause: lobbyCause(row['cause']) };
@@ -2313,6 +2414,14 @@ function queueView(
     )
   )
     return fail('FOREIGN_OWNER');
+  if (Object.hasOwn(value, 'npc')) {
+    if (!same(npcGmContextValue(value.npc), value.npc)) return fail();
+    if (
+      value.npc?.initialTimeReturnContextOrNull !== null &&
+      value.npc?.initialTimeReturnContextOrNull.campaignId !== scope.campaignId
+    )
+      return fail();
+  } else if (NPC_SOURCE_FORMS.some((form) => form === value.formId)) return fail();
   return { ...value, snapshotSha256: campaignCreationHash(value) };
 }
 function queueViewDocument(
@@ -2427,12 +2536,17 @@ interface QueueReduced {
   readonly changed: boolean;
 }
 /** Read proofs live only for this synchronous reduction; no proof crosses a write or callback. */
-function queueSourceProofs(db: Database.Database, scope: GmRequestReviewScope) {
+function queueSourceProofs(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  npcSession?: NpcGmPrimitiveReadSession,
+) {
   let lobby: ReturnType<typeof readCampaignLobbyLedger> | undefined;
   let lifecycle: ReturnType<typeof readCampaignLifecycleLedger> | undefined;
   const lobbyEvents = () => (lobby ??= readCampaignLobbyLedger(db, scope.campaignId));
   const lifecycleEvents = () => (lifecycle ??= readCampaignLifecycleLedger(db, scope.campaignId));
   return {
+    npcSession,
     lobbyEvents,
     lifecycleEvents,
     lobby: (cause: GmLobbySourceCause) => verifyLobbyCause(db, scope, cause, lobbyEvents()),
@@ -2453,20 +2567,22 @@ export function readGmRequestReviewStructureInTransaction(
 ): { state: GmRequestReviewViewState; cursor: CampaignCreationCursor } {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const scope = queueScope(value);
-  let queue: GmRequestReviewViewState | undefined;
-  let admission: ReturnType<typeof readAdmissionViewState> | undefined;
-  const reads: GmStructuralRead = {
-    scope,
-    proofs: queueSourceProofs(db, scope),
-    queue: () => (queue ??= readQueueViewState(db, scope, undefined, reads)),
-    admission: () => (admission ??= readAdmissionViewState(db, scope, undefined, reads)),
-  };
-  const state = reads.queue();
-  if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined) {
-    reads.admission();
-    verifyAdmissionSourceMirrors(db, scope, reads);
-  }
-  return { state, cursor: readCreationCursor(db, scope.gmLocalContextId, reads) };
+  return withNpcGmPrimitiveReadSession(db, scope, (session) => {
+    let queue: GmRequestReviewViewState | undefined;
+    let admission: ReturnType<typeof readAdmissionViewState> | undefined;
+    const reads: GmStructuralRead = {
+      scope,
+      proofs: queueSourceProofs(db, scope, session),
+      queue: () => (queue ??= readQueueViewState(db, scope, undefined, reads)),
+      admission: () => (admission ??= readAdmissionViewState(db, scope, undefined, reads)),
+    };
+    const state = reads.queue();
+    if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined) {
+      reads.admission();
+      verifyAdmissionSourceMirrors(db, scope, reads);
+    }
+    return { state, cursor: readCreationCursor(db, scope.gmLocalContextId, reads) };
+  });
 }
 function reduceQueue(
   db: Database.Database,
@@ -2506,7 +2622,31 @@ function reduceQueue(
   let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
   let document = queueViewDocument(old);
   let changed = true;
-  if (mutation.kind === 'LIFECYCLE_SOURCE') {
+  if (mutation.kind === 'NPC_SOURCE') {
+    const result = reduceNpcSource(db, scope, old, state.events, mutation.cause, proofs.npcSession);
+    document = {
+      ...document,
+      ...result,
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+    };
+  } else if (mutation.kind === 'NPC_SELECTION') {
+    const npc = reduceNpcSelection(
+      db,
+      scope,
+      old,
+      state.events,
+      mutation.request,
+      proofs.npcSession,
+    );
+    changed = !same(npc, old.npc);
+    document = {
+      ...document,
+      npc,
+      stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
+      projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+    };
+  } else if (mutation.kind === 'LIFECYCLE_SOURCE') {
     const proof = proofs.lifecycle(mutation.cause);
     if (
       old.formId !== proof.sourceFormId ||
@@ -2523,6 +2663,8 @@ function reduceQueue(
     };
   } else if (mutation.kind === 'LOBBY_SOURCE') {
     const proof = proofs.lobby(mutation.cause);
+    if (proof.actorVisibilityChanged && old.npc?.initialTimeReturnContextOrNull != null)
+      return fail('DRAFT_UNAVAILABLE');
     document = {
       ...document,
       formId: proof.actorVisibilityChanged ? 'GM-001' : old.formId,
@@ -2568,8 +2710,18 @@ function reduceQueue(
     );
     if (started && (target === 'CMP-006' || target === 'NET-016' || target === 'NET-017'))
       return fail('DRAFT_UNAVAILABLE');
+    const npc = npcContextAfterNavigation(
+      db,
+      scope,
+      old,
+      state.events,
+      mutation.request,
+      target,
+      proofs.npcSession,
+    );
     document = {
       ...document,
+      ...(npc === undefined ? {} : { npc }),
       formId: target,
       projectionRevision: next(old.projectionRevision),
     };
@@ -2634,12 +2786,26 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 11 &&
     row['version'] !== 12 &&
     row['version'] !== 13 &&
-    row['version'] !== 14
+    row['version'] !== 14 &&
+    row['version'] !== 15 &&
+    row['version'] !== 16 &&
+    row['version'] !== 17 &&
+    row['version'] !== 18 &&
+    row['version'] !== 19
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 12 || row['version'] === 13 || row['version'] === 14)
+  if (
+    row['version'] === 12 ||
+    row['version'] === 13 ||
+    row['version'] === 14 ||
+    row['version'] === 15 ||
+    row['version'] === 16 ||
+    row['version'] === 17 ||
+    row['version'] === 18 ||
+    row['version'] === 19
+  )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -2656,7 +2822,13 @@ function readQueueViewState(
   value: GmRequestReviewScope,
   pendingAdmissionReturnId?: string,
   reads?: GmStructuralRead,
+  pendingNpcSource?: NpcSourceCause,
+  npcSession?: NpcGmPrimitiveReadSession,
 ): GmRequestReviewViewState {
+  if (reads === undefined && npcSession === undefined)
+    return withNpcGmPrimitiveReadSession(db, queueScope(value), (session) =>
+      readQueueViewState(db, value, pendingAdmissionReturnId, undefined, pendingNpcSource, session),
+    );
   queueSchema(db);
   const scope = queueScope(value);
   owner(db, scope.ownerDeviceId);
@@ -2676,7 +2848,7 @@ function readQueueViewState(
     events: [],
   };
   const events: StoredGmRequestQueueEvent[] = [];
-  const proofs = reads?.proofs ?? queueSourceProofs(db, scope);
+  const proofs = reads?.proofs ?? queueSourceProofs(db, scope, npcSession);
   for (const [eventIndex, row] of rows.entries()) {
     const saved = queueObject(checkedJson(row), [
       'schemaVersion',
@@ -2704,6 +2876,8 @@ function readQueueViewState(
     if (
       (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
       (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
+      (mutation.kind === 'NPC_SELECTION' && eventId !== mutation.request.operationId) ||
+      (mutation.kind === 'NPC_SOURCE' && eventId !== npcSourceEventId(scope, mutation.cause)) ||
       (mutation.kind === 'REQUEST_REFRESH' &&
         eventId !==
           gmRequestReviewRefreshEventId(scope, mutation.causeCommandId, mutation.causeReceiptId))
@@ -2752,6 +2926,7 @@ function readQueueViewState(
     !same(checkedJson(head), state.viewOrNull)
   )
     return fail();
+  verifyNpcGmMirrorCoverage(db, scope, events, pendingNpcSource, proofs.npcSession);
   return state;
 }
 export function gmRequestReviewRefreshEventId(
@@ -2819,6 +2994,22 @@ function verifyAdmissionSourceMirrors(
         if (lobby.receipt.campaignRevision !== next(checkpointRevision)) return fail();
         checkpointRevision = lobby.receipt.campaignRevision;
       }
+      continue;
+    }
+    if (event.mutation.kind === 'NPC_SOURCE') {
+      const npc = readNpcGmPrimitiveCause(
+        db,
+        scope,
+        event.mutation.cause,
+        reads?.proofs.npcSession,
+      ).operation;
+      if (
+        npc.beforeCheckpoint.stateRevision !== checkpointRevision ||
+        npc.afterCheckpoint.stateRevision !==
+          (npc.versionOrNull === null ? checkpointRevision : next(checkpointRevision))
+      )
+        return fail();
+      checkpointRevision = npc.afterCheckpoint.stateRevision;
       continue;
     }
     if (event.mutation.kind !== 'SOURCE_ADVANCE') continue;
@@ -2933,15 +3124,25 @@ export function appendGmRequestReviewEventInTransaction(
   if (
     (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
     (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
+    (mutation.kind === 'NPC_SELECTION' && eventId !== mutation.request.operationId) ||
+    (mutation.kind === 'NPC_SOURCE' && eventId !== npcSourceEventId(scope, mutation.cause)) ||
     (mutation.kind === 'REQUEST_REFRESH' &&
       eventId !==
         gmRequestReviewRefreshEventId(scope, mutation.causeCommandId, mutation.causeReceiptId))
   )
     return fail('INVALID_INPUT');
-  const state = readGmRequestReviewViewStateInTransaction(
+  // Only this private append read may tolerate its exact newly written NPC cause.
+  const pendingNpcSource =
+    mutation.kind === 'NPC_SOURCE' &&
+    db.prepare('SELECT 1 FROM gm_request_queue_event WHERE event_id=?').get(eventId) === undefined
+      ? mutation.cause
+      : undefined;
+  const state = readQueueViewState(
     db,
     scope,
     mutation.kind === 'ADMISSION_RETURN' ? mutation.viewEventId : undefined,
+    undefined,
+    pendingNpcSource,
   );
   const known = state.events.find((event) => event.eventId === eventId);
   if (known !== undefined) {
@@ -2952,15 +3153,28 @@ export function appendGmRequestReviewEventInTransaction(
     db.prepare('SELECT 1 FROM gm_request_queue_event WHERE event_id=?').get(eventId) !== undefined
   )
     return fail('IDEMPOTENCY_CONFLICT');
+  let pendingAdmission: ReturnType<typeof readAdmissionViewState> | undefined;
+  const pendingReads: GmStructuralRead = {
+    scope,
+    proofs: queueSourceProofs(db, scope),
+    queue: () => state,
+    admission: () =>
+      (pendingAdmission ??= readAdmissionViewState(db, scope, undefined, pendingReads)),
+  };
   const cursor =
     mutation.kind === 'ADMISSION_RETURN'
       ? admissionReturnCursor(db, scope, mutation)
-      : readCampaignCreationCursor(db, scope.gmLocalContextId);
+      : pendingNpcSource === undefined
+        ? readCampaignCreationCursor(db, scope.gmLocalContextId)
+        : readCreationCursor(db, scope.gmLocalContextId, pendingReads);
   const initial = queueBase(db, scope);
   if (state.viewOrNull === null) {
     if (!same(cursor, initial.cursor)) return fail('STALE_REVISION');
   } else if (
-    (mutation.kind === 'NAV' || mutation.kind === 'DRAFT') &&
+    (mutation.kind === 'NAV' ||
+      mutation.kind === 'DRAFT' ||
+      mutation.kind === 'NPC_SELECTION' ||
+      mutation.kind === 'NPC_SOURCE') &&
     !same(cursor, queueCursor(state.viewOrNull))
   )
     return fail('DRAFT_UNAVAILABLE');
@@ -2976,6 +3190,7 @@ export function appendGmRequestReviewEventInTransaction(
     return fail('INVALID_INPUT');
   if (mutation.kind === 'LOBBY_SOURCE' && eventId !== lobbyCauseEventId(scope, mutation.cause))
     return fail('INVALID_INPUT');
+  if (mutation.kind === 'NPC_SELECTION') assertUnusedId(db, eventId);
   const admissionBefore =
     (mutation.kind === 'SOURCE_ADVANCE' ||
       mutation.kind === 'REQUEST_REFRESH' ||
@@ -3042,6 +3257,134 @@ export function appendGmRequestReviewEventInTransaction(
   )
     return fail('SOURCE_CHANGED');
   return { event, view: reduced.view, rowWrites };
+}
+
+/** Existing authenticated caller owns the IMMEDIATE transaction and authority recheck. */
+export function appendNpcSelectionInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  value: NpcSelectionReplaceRequest,
+) {
+  const request = npcSelectionValue(value);
+  return appendGmRequestReviewEventInTransaction(db, scope, {
+    eventId: request.operationId,
+    mutation: { kind: 'NPC_SELECTION', request },
+  });
+}
+/** Sole owning NPC store mirror, called after its primitive operation row has been written. */
+export function appendNpcGmSourceInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  operation: NpcOperation,
+): void {
+  const cause = {
+    operationId: operation.operationId,
+    recordSha256: campaignCreationHash(operation),
+  };
+  if (!same(readNpcGmPrimitiveCause(db, scope, cause).operation, operation)) return fail();
+  appendGmRequestReviewEventInTransaction(db, scope, {
+    eventId: npcSourceEventId(scope, cause),
+    mutation: { kind: 'NPC_SOURCE', cause },
+  });
+}
+export function readNpcGmSourceInTransaction(db: Database.Database, scope: GmRequestReviewScope) {
+  const { state, cursor } = readGmRequestReviewStructureInTransaction(db, scope);
+  const view = state.viewOrNull ?? fail();
+  if (!same(cursor, queueCursor(view))) return fail('DRAFT_UNAVAILABLE');
+  return captureNpcGmSource(view, state.events);
+}
+/** Same checked QUEUE/cursor used by the writer; performs no primitive NPC write. */
+export function validateNpcPreparationInTransaction(
+  db: Database.Database,
+  input: NpcAttemptPreparationContext,
+): void {
+  const { state, cursor } = readGmRequestReviewStructureInTransaction(db, input.boundary.scope);
+  const view = state.viewOrNull ?? fail();
+  if (!same(cursor, queueCursor(view))) return fail('DRAFT_UNAVAILABLE');
+  validateNpcGmPreparation(view, state.events, input);
+}
+/** Same checked current QUEUE, without allocating or appending a speculative COMMIT. */
+export function validateNpcCommitPreparationInTransaction(
+  db: Database.Database,
+  input: NpcCommitPreparationContext,
+): void {
+  const { state, cursor } = readGmRequestReviewStructureInTransaction(db, input.boundary.scope);
+  const view = state.viewOrNull ?? fail();
+  if (!same(cursor, queueCursor(view))) return fail('DRAFT_UNAVAILABLE');
+  validateNpcGmCommitPreparation(view, state.events, input);
+}
+export function validateNpcHistoricalGmSourceInTransaction(
+  db: Database.Database,
+  operation: NpcOperation,
+  event: NpcAttemptEvent,
+  previous: NpcAttemptEvent | null,
+  applyEditorStage: NpcStageApply,
+): void {
+  const state = readGmRequestReviewViewStateInTransaction(db, operation.scope);
+  validateNpcHistoricalGmSource(db, state.events, operation, event, previous, applyEditorStage);
+}
+
+/** One synchronous NPC closure read; no proof or cache survives this invocation. */
+export function validateNpcHistoricalGmSourcesInTransaction(
+  db: Database.Database,
+  entries: readonly NpcHistoricalSourceEntry[],
+  applyEditorStage: NpcStageApply,
+  reserveItem?: NpcItemReservationApply,
+  applyArt?: NpcArtPreparationApply,
+  reserveDisease?: NpcDiseaseReservationApply,
+  reserveTrauma?: NpcTraumaReservationApply,
+  reserveSymbiont?: NpcSymbiontReservationApply,
+  applyComposition?: NpcCompositionAuthoringApply,
+  applyWound?: NpcWoundPreparationApply,
+  applyEquipment?: NpcArtPreparationApply,
+  applyComposite?: NpcCompositeItemReservationApply,
+  applyRuntimeEffect?: NpcCompositionAuthoringApply,
+  applyCustomItem?: NpcCompositionAuthoringApply,
+  applyLifeState?: NpcCompositionAuthoringApply,
+  applyItemRestore?: NpcCompositionAuthoringApply,
+  applyWeaverState?: NpcCompositionAuthoringApply,
+  applyPoison?: NpcCompositionAuthoringApply,
+): void {
+  const rawEntries: unknown = entries;
+  if (!db.inTransaction || !Array.isArray(rawEntries)) return fail('INVALID_INPUT');
+  const states = new Map<string, GmRequestReviewViewState>();
+  for (const entry of entries) {
+    object(entry, ['operation', 'event', 'previous', 'readContext', 'previousReadContextOrNull']);
+    const scope = queueScope(entry.operation.scope),
+      key = canonical(scope);
+    let state = states.get(key);
+    if (state === undefined) {
+      // Includes complete head/row checks and both directions of NPC mirror coverage.
+      state = readGmRequestReviewViewStateInTransaction(db, scope);
+      states.set(key, state);
+    }
+    validateNpcHistoricalGmSource(
+      db,
+      state.events,
+      entry.operation,
+      entry.event,
+      entry.previous,
+      applyEditorStage,
+      reserveItem !== undefined && entry.previousReadContextOrNull !== null
+        ? { previousContext: entry.previousReadContextOrNull, apply: reserveItem }
+        : undefined,
+      entry.previousReadContextOrNull,
+      applyArt,
+      reserveDisease,
+      reserveTrauma,
+      reserveSymbiont,
+      applyComposition,
+      applyWound,
+      applyEquipment,
+      applyComposite,
+      applyRuntimeEffect,
+      applyCustomItem,
+      applyLifeState,
+      applyItemRestore,
+      applyWeaverState,
+      applyPoison,
+    );
+  }
 }
 
 export interface GmAdmissionView extends GmRequestReviewScope, RevisionTriple {

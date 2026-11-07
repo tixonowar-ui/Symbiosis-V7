@@ -1,3 +1,5 @@
+import { NPC_TABLES } from './migrations/0015-persistent-npc.js';
+import { npcIdentityInUse } from './npc-identities.js';
 import {
   CAMPAIGN_LIFECYCLE_TABLES,
   CAMPAIGN_LIFECYCLE_IDENTITIES,
@@ -736,18 +738,33 @@ function object(value: unknown, keys?: readonly string[]): Row {
   }
   return value as Row;
 }
-// A synchronous store operation repeatedly encodes and hashes the same immutable strings.
-// Exact primitive keys reuse only these pure calculations, never objects or proof results.
-// Both maps share a 16 MiB string budget, discarded before control returns to a caller.
+// A synchronous store operation repeatedly validates, encodes and hashes immutable strings.
+// Exact primitive keys reuse only pure text calculations, never parsed objects or row/domain proofs.
+// All entries share a 16 MiB string budget, discarded before control returns to a caller.
 let canonicalStrings: {
   values: Map<string, string>;
   hashes: Map<string, string>;
+  canonicalObjectTexts: Set<string>;
   remaining: number;
 } | null = null;
 function canonical(value: unknown): string {
   const parts: string[] = [];
   appendCanonical(value, parts);
   return parts.join('');
+}
+/** The helper owns every parse; a caller cannot lend a mutable object a cached text result. */
+function parseCanonicalObject(value: string): Row {
+  const json = text(value);
+  const record = object(JSON.parse(json) as unknown);
+  const cache = canonicalStrings;
+  if (cache?.canonicalObjectTexts.has(json)) return record;
+  if (canonical(record) !== json) return fail();
+  const bytes = json.length * 2;
+  if (cache !== null && json.length >= 1024 && bytes <= cache.remaining) {
+    cache.canonicalObjectTexts.add(json);
+    cache.remaining -= bytes;
+  }
+  return record;
 }
 // Joining each complete subtree repeatedly copies its already encoded descendants.
 // This buffer belongs to one call; descriptor checks still precede value reads.
@@ -855,17 +872,30 @@ const zero = (): RevisionTriple => ({
 });
 const increment = (value: number): number =>
   value < Number.MAX_SAFE_INTEGER ? value + 1 : fail('REVISION_OVERFLOW');
-function safe<T>(body: () => T): T {
+/** Internal synchronous scope; it changes neither exceptions nor SQL/validation ownership. */
+function withCanonicalCalculations<T>(body: () => T): T {
   const outer = canonicalStrings;
-  canonicalStrings ??= { values: new Map(), hashes: new Map(), remaining: 16 * 1024 * 1024 };
+  canonicalStrings ??= {
+    values: new Map(),
+    hashes: new Map(),
+    canonicalObjectTexts: new Set(),
+    remaining: 16 * 1024 * 1024,
+  };
   try {
     return body();
-  } catch (error: unknown) {
-    if (error instanceof NetworkApplicationStoreError) throw error;
-    return fail();
   } finally {
     canonicalStrings = outer;
   }
+}
+function safe<T>(body: () => T): T {
+  return withCanonicalCalculations(() => {
+    try {
+      return body();
+    } catch (error: unknown) {
+      if (error instanceof NetworkApplicationStoreError) throw error;
+      return fail();
+    }
+  });
 }
 function input<T>(body: () => T): T {
   try {
@@ -881,25 +911,60 @@ function schema(db: Database.Database): void {
     row['version'] !== 11 &&
     row['version'] !== 12 &&
     row['version'] !== 13 &&
-    row['version'] !== 14
+    row['version'] !== 14 &&
+    row['version'] !== 15 &&
+    row['version'] !== 16 &&
+    row['version'] !== 17 &&
+    row['version'] !== 18 &&
+    row['version'] !== 19
   )
     return fail();
-  if (row['version'] === 13 || row['version'] === 14)
+  if (
+    row['version'] === 13 ||
+    row['version'] === 14 ||
+    row['version'] === 15 ||
+    row['version'] === 16 ||
+    row['version'] === 17 ||
+    row['version'] === 18 ||
+    row['version'] === 19
+  )
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
     for (const table of CAMPAIGN_LIFECYCLE_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (
+    row['version'] === 15 ||
+    row['version'] === 16 ||
+    row['version'] === 17 ||
+    row['version'] === 18 ||
+    row['version'] === 19
+  )
+    for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   for (const table of NETWORK_APPLICATION_TABLES)
     db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (
     row['version'] === 11 ||
     row['version'] === 12 ||
     row['version'] === 13 ||
-    row['version'] === 14
+    row['version'] === 14 ||
+    row['version'] === 15 ||
+    row['version'] === 16 ||
+    row['version'] === 17 ||
+    row['version'] === 18 ||
+    row['version'] === 19
   )
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row['version'] === 12 || row['version'] === 13 || row['version'] === 14)
+  if (
+    row['version'] === 12 ||
+    row['version'] === 13 ||
+    row['version'] === 14 ||
+    row['version'] === 15 ||
+    row['version'] === 16 ||
+    row['version'] === 17 ||
+    row['version'] === 18 ||
+    row['version'] === 19
+  )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -907,9 +972,30 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version !== 10 && version !== 11 && version !== 12 && version !== 13 && version !== 14)
+  if (
+    version !== 10 &&
+    version !== 11 &&
+    version !== 12 &&
+    version !== 13 &&
+    version !== 14 &&
+    version !== 15 &&
+    version !== 16 &&
+    version !== 17 &&
+    version !== 18 &&
+    version !== 19
+  )
     return fail();
-  return version === 11 || version === 12 || version === 13 || version === 14;
+  return (
+    version === 11 ||
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+  );
 }
 function owner(db: Database.Database, id: string): void {
   uuid(id);
@@ -2328,7 +2414,17 @@ function readHistory(
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (version === 11 || version === 12 || version === 13 || version === 14) {
+  if (
+    version === 11 ||
+    version === 12 ||
+    version === 13 ||
+    version === 14 ||
+    version === 15 ||
+    version === 16 ||
+    version === 17 ||
+    version === 18 ||
+    version === 19
+  ) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
       ['local_network_request_current', review.currents, 'request_id'],
@@ -2663,6 +2759,11 @@ export function readLocalNetworkShellExitByNavigationId(
   });
 }
 function assertUnused(db: Database.Database, id: string): void {
+  if (npcIdentityInUse(db, id)) return fail('IDEMPOTENCY_CONFLICT');
+  assertUnusedOutsideNpc(db, id);
+}
+/** Existing non-NPC namespace checks, shared with immutable NPC child recovery. */
+function assertUnusedOutsideNpc(db: Database.Database, id: string): void {
   if (id === loadDeviceId(db)) return fail('IDEMPOTENCY_CONFLICT');
   for (const [table, columns] of [
     ['local_gm_profile', ['profile_id']],
@@ -3317,6 +3418,8 @@ export const networkApplicationStorage = {
   fail,
   object,
   canonical,
+  parseCanonicalObject,
+  withCanonicalCalculations,
   sha,
   same,
   text,
@@ -3343,5 +3446,6 @@ export const networkApplicationStorage = {
   candidate,
   batch,
   assertUnused,
+  assertUnusedOutsideNpc,
   semanticBody,
 };

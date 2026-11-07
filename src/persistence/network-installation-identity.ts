@@ -1,3 +1,4 @@
+import { NPC_TABLES } from './migrations/0015-persistent-npc.js';
 import { CAMPAIGN_LIFECYCLE_TABLES } from './migrations/0014-campaign-lifecycle.js';
 import { CAMPAIGN_LOBBY_TABLES } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
@@ -148,7 +149,12 @@ function requireSchema(db: Database.Database): void {
     row?.version !== 11 &&
     row?.version !== 12 &&
     row?.version !== 13 &&
-    row?.version !== 14
+    row?.version !== 14 &&
+    row?.version !== 15 &&
+    row?.version !== 16 &&
+    row?.version !== 17 &&
+    row?.version !== 18 &&
+    row?.version !== 19
   )
     return fail('CORRUPT_STORAGE');
   if (row.version >= 9) {
@@ -158,17 +164,52 @@ function requireSchema(db: Database.Database): void {
   if (row.version >= 10)
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 11 || row.version === 12 || row.version === 13 || row.version === 14)
+  if (
+    row.version === 11 ||
+    row.version === 12 ||
+    row.version === 13 ||
+    row.version === 14 ||
+    row.version === 15 ||
+    row.version === 16 ||
+    row.version === 17 ||
+    row.version === 18 ||
+    row.version === 19
+  )
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 12 || row.version === 13 || row.version === 14)
+  if (
+    row.version === 12 ||
+    row.version === 13 ||
+    row.version === 14 ||
+    row.version === 15 ||
+    row.version === 16 ||
+    row.version === 17 ||
+    row.version === 18 ||
+    row.version === 19
+  )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  if (row.version === 13 || row.version === 14)
+  if (
+    row.version === 13 ||
+    row.version === 14 ||
+    row.version === 15 ||
+    row.version === 16 ||
+    row.version === 17 ||
+    row.version === 18 ||
+    row.version === 19
+  )
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
     for (const table of CAMPAIGN_LIFECYCLE_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+  if (
+    row.version === 15 ||
+    row.version === 16 ||
+    row.version === 17 ||
+    row.version === 18 ||
+    row.version === 19
+  )
+    for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
 function read(
   db: Database.Database,

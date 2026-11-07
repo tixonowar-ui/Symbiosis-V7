@@ -16,6 +16,11 @@ import { migration0011 } from './0011-device-request-review.js';
 import { migration0012 } from './0012-campaign-admission.js';
 import { migration0013 } from './0013-campaign-lobby.js';
 import { migration0014 } from './0014-campaign-lifecycle.js';
+import { migration0015 } from './0015-persistent-npc.js';
+import { migration0016 } from './0016-npc-wound-identities.js';
+import { migration0017 } from './0017-npc-linked-sets.js';
+import { migration0018 } from './0018-npc-custom-profile-identities.js';
+import { migration0019 } from './0019-npc-poison-coating-identities.js';
 
 interface SchemaObjectRow {
   name: string;
@@ -45,6 +50,11 @@ const MIGRATIONS: readonly Migration[] = [
   migration0012,
   migration0013,
   migration0014,
+  migration0015,
+  migration0016,
+  migration0017,
+  migration0018,
+  migration0019,
 ];
 
 const CREATE_MIGRATION_REGISTRY_SQL = `CREATE TABLE schema_migration (

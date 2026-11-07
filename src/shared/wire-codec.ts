@@ -613,6 +613,7 @@ export const wireCodecPrimitives = {
   abortInvalid,
   abortUnrecognized,
   capabilityId,
+  decodeValue,
   encode,
   exact,
   json,
