@@ -218,4 +218,8 @@ player ACCEPT. Затем каждое Ready → unready → Ready провер�
 строке того же устройства на экране GM. Полученный сетевой кадр сам по себе
 не доказывает, что клиент уже применил проекцию. Исходные gameplay/restart/replay
 assertions, revision guards, workers, retries и timeout остаются прежними.
+Отдельные случаи в `device-admission-candidate.test.ts` проверяют stale NAV и
+RETURN на настоящем admission writer: SQLite, cursor и проекция dialog остаются
+точно прежними, а изменение только ожидаемой ревизии позволяет запросу пройти.
+Это проверка общего guard, а не имитация Ready push или доставки в браузер.
 Точный разбор и сохранённые хеши evidence — [issue #245](https://github.com/tixonowar-ui/Symbiosis-V7/issues/245).

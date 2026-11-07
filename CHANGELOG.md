@@ -359,6 +359,8 @@
   Это устраняет отправку возврата с ревизией, устаревшей из-за чужого Ready;
   исходные controls, assertions и все бюджеты сохранены. Production guards
   не меняются; неудачная первая CI-попытка сохранена в диагностике issue.
+  Отдельные NAV/RETURN регрессии проверяют отказ устаревшей ревизии без
+  изменения SQLite, cursor и dialog; тот же запрос с текущей ревизией проходит.
 
 - **2026-10-30, issue #191:** 19 сравнений полного SQLite snapshot в тестах
   current campaign и installation identity используют native `Buffer.equals`.

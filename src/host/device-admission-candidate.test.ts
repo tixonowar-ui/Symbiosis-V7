@@ -1074,6 +1074,70 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         expect(guard).not.toHaveBeenCalled();
         expect(f.db.serialize().equals(before)).toBe(true);
       });
+      it.each([
+        { kind: 'NAV', returnToQueue: false },
+        { kind: 'RETURN', returnToQueue: true },
+      ])(
+        'refuses stale NET-021 $kind without changing storage, cursor or dialog',
+        ({ returnToQueue }) => {
+          nav('NET-018::CTA::004');
+          const actionKey = returnToQueue ? 'NET-021::CTA::001' : 'NET-021::CTA::002',
+            request = navigation(actionKey);
+          // Leave and re-enter the same dialog so only the captured revision is stale.
+          nav('NET-021::CTA::002');
+          nav('NET-022::CTA::001');
+          const current = state(),
+            view = current.viewOrNull,
+            cursor = readCampaignCreationCursor(f.db, f.scope.gmLocalContextId),
+            projection = project(),
+            guard = vi.fn();
+          if (view === null) throw new Error('missing admission view');
+          expect(view.formId).toBe(request.sourceFormId);
+          expect(request.expectedProjectionRevision).toBeLessThan(view.projectionRevision);
+          expect(cursor).toMatchObject({ kind: 'ADMISSION', formId: 'NET-021' });
+          expect(projection.base.formId).toBe('NET-018');
+          expect(projection.layers.map((layer) => layer.formId)).toEqual(['NET-021']);
+          expect(projection.layers.at(-1)?.availableActionKeys).toContain(actionKey);
+          const before = f.db.serialize();
+          expect(() =>
+            commitAdmissionViewNavigation(
+              f.db,
+              f.scope,
+              request,
+              returnToQueue,
+              f.allow,
+              service.rules,
+              guard,
+            ),
+          ).toThrow();
+          // The source preflight is allowed; the rejected request never reaches its post-write guard.
+          expect(guard).toHaveBeenCalledTimes(1);
+          expect(state()).toEqual(current);
+          expect(readCampaignCreationCursor(f.db, f.scope.gmLocalContextId)).toEqual(cursor);
+          expect(project()).toEqual(projection);
+          expect(f.db.serialize().equals(before)).toBe(true);
+
+          const fresh = { ...request, expectedProjectionRevision: view.projectionRevision };
+          const saved = commitAdmissionViewNavigation(
+            f.db,
+            f.scope,
+            fresh,
+            returnToQueue,
+            f.allow,
+            service.rules,
+            f.allow,
+          );
+          expect(saved.replayed).toBe(false);
+          expect(saved.event.mutation).toMatchObject({
+            kind: returnToQueue ? 'RETURN' : 'NAV',
+            request: fresh,
+          });
+          expect(readCampaignCreationCursor(f.db, f.scope.gmLocalContextId)).toMatchObject({
+            kind: returnToQueue ? 'QUEUE' : 'ADMISSION',
+            formId: returnToQueue ? 'NET-017' : 'NET-022',
+          });
+        },
+      );
       it('projects the source and its rolls without exposing private replay history or allocating identities', () => {
         const before = f.db.serialize(),
           p = project();
