@@ -24,6 +24,7 @@ import {
   gmRequestReviewRefreshEventId,
   type GmRequestReviewScope,
   type GmRequestReviewView,
+  type GmRequestReviewViewState,
   type GmRequestQueueEvidence,
   type GmRequestReviewDraftRequest,
   type StoredGmRequestQueueEvent,
@@ -262,7 +263,17 @@ function legacyReceipt(record: Omit<HostedNetworkCommand, 'current'>): LegacyReq
 function reviewSchema(db: Database.Database): void {
   s.schema(db);
   const r = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
-  if (r['version'] !== 11 && r['version'] !== 12 && r['version'] !== 13 && r['version'] !== 14)
+  if (
+    r['version'] !== 11 &&
+    r['version'] !== 12 &&
+    r['version'] !== 13 &&
+    r['version'] !== 14 &&
+    r['version'] !== 15 &&
+    r['version'] !== 16 &&
+    r['version'] !== 17 &&
+    r['version'] !== 18 &&
+    r['version'] !== 19
+  )
     return s.fail();
 }
 function rawDecision(
@@ -523,6 +534,13 @@ function gmSource(
   value: GmRequestReviewScope,
   validate: CampaignPrivateOwnerValidator,
 ): GmRequestReviewSource {
+  return gmSourceAndState(db, value, validate).source;
+}
+function gmSourceAndState(
+  db: Database.Database,
+  value: GmRequestReviewScope,
+  validate: CampaignPrivateOwnerValidator,
+): { source: GmRequestReviewSource; state: GmRequestReviewViewState } {
   reviewSchema(db);
   const scope = gmScope(value);
   s.owner(db, scope.ownerDeviceId);
@@ -591,16 +609,29 @@ function gmSource(
   if (state.queueOrNull !== null && !s.same(state.queueOrNull, queueEvidence(queue)))
     return s.fail();
   return {
-    scope,
-    context,
-    privateOwner,
-    creationOrigin,
-    currentCampaign,
-    cursor,
-    viewOrNull: state.viewOrNull,
-    connectionFactsSha256OrNull: state.connectionFactsSha256OrNull,
-    queue,
+    source: {
+      scope,
+      context,
+      privateOwner,
+      creationOrigin,
+      currentCampaign,
+      cursor,
+      viewOrNull: state.viewOrNull,
+      connectionFactsSha256OrNull: state.connectionFactsSha256OrNull,
+      queue,
+    },
+    state,
   };
+}
+function immutableReviewState(state: GmRequestReviewViewState): GmRequestReviewViewState {
+  const copy = structuredClone(state);
+  const freeze = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return;
+    for (const child of Object.values(value as Readonly<Record<string, unknown>>)) freeze(child);
+    Object.freeze(value);
+  };
+  freeze(copy);
+  return copy;
 }
 /** One verified read for synchronous projection/guard work; never retain it across await or writes. */
 export function readGmRequestReviewSource(
@@ -615,10 +646,10 @@ export function readGmRequestReviewSourceWith<T>(
   db: Database.Database,
   scope: GmRequestReviewScope,
   validate: CampaignPrivateOwnerValidator,
-  observe: (source: GmRequestReviewSource) => T,
+  observe: (source: GmRequestReviewSource, checkedReviewState: GmRequestReviewViewState) => T,
 ): { source: GmRequestReviewSource; observed: T } {
   return s.read(db, scope.ownerDeviceId, () => {
-    const source = gmSource(db, scope, validate);
+    const { source, state } = gmSourceAndState(db, scope, validate);
     const stamp = () =>
       [
         s.changes(db),
@@ -626,7 +657,8 @@ export function readGmRequestReviewSourceWith<T>(
         db.pragma('user_version', { simple: true }),
       ].join('/');
     const before = stamp(),
-      observed = observe(source);
+      // Detached immutable state belongs only to this synchronous fenced observation.
+      observed = observe(source, immutableReviewState(state));
     if (types.isPromise(observed)) {
       void Promise.prototype.then.call(
         observed,
@@ -1577,7 +1609,12 @@ export function commitHostedNetworkCommand(
               (schemaVersion === 11 ||
                 schemaVersion === 12 ||
                 schemaVersion === 13 ||
-                schemaVersion === 14) &&
+                schemaVersion === 14 ||
+                schemaVersion === 15 ||
+                schemaVersion === 16 ||
+                schemaVersion === 17 ||
+                schemaVersion === 18 ||
+                schemaVersion === 19) &&
               i.batch.schemaVersion !== 2
             )
               return s.fail('INVALID_INPUT');
@@ -1593,7 +1630,16 @@ export function commitHostedNetworkCommand(
               return s.fail('INVALID_INPUT');
             let occupied = campaign.activePcCount;
             const released = new Set<string>();
-            if (schemaVersion === 12 || schemaVersion === 13 || schemaVersion === 14) {
+            if (
+              schemaVersion === 12 ||
+              schemaVersion === 13 ||
+              schemaVersion === 14 ||
+              schemaVersion === 15 ||
+              schemaVersion === 16 ||
+              schemaVersion === 17 ||
+              schemaVersion === 18 ||
+              schemaVersion === 19
+            ) {
               if (admissionRules === undefined) assertNoCampaignAdmissionEvidence(db);
               else {
                 const origin = readHostedCampaignCreationOrigin(
@@ -1640,7 +1686,12 @@ export function commitHostedNetworkCommand(
                 schemaVersion === 11 ||
                 schemaVersion === 12 ||
                 schemaVersion === 13 ||
-                schemaVersion === 14
+                schemaVersion === 14 ||
+                schemaVersion === 15 ||
+                schemaVersion === 16 ||
+                schemaVersion === 17 ||
+                schemaVersion === 18 ||
+                schemaVersion === 19
                   ? !released.has(r.requestId) &&
                     ['PENDING', 'IN_REVIEW'].includes(
                       readCurrentRequest(db, p, r.requestId).requestStatus,

@@ -54,7 +54,7 @@ export interface CampaignLobbyState {
 
 /** The source is already mechanically rebuilt by the admission verifier, including every ACTIVE copy. */
 export function campaignLobbyCopies(
-  history: AdmissionHistory,
+  history: Pick<AdmissionHistory, 'decisions' | 'controllers' | 'groups'>,
   revision: number,
 ): CampaignLobbyCopy[] {
   const copies: CampaignLobbyCopy[] = [];
@@ -150,6 +150,26 @@ export function campaignStartCheckpoint(
   };
 }
 
+function lobbyRevision(
+  includedCopies: readonly CampaignLobbyCopy[],
+  initialTime: InitialCampaignTime | null,
+  timeRevision: number,
+): string {
+  return s.sha(s.canonical({ includedCopies, initialTime, timeRevision }));
+}
+/** Same Ready hash at an already-verified historical checkpoint and exact processed lobby prefix. */
+export function campaignLobbySnapshotRevision(
+  history: Pick<AdmissionHistory, 'decisions' | 'controllers' | 'groups'>,
+  revision: number,
+  initialTime: InitialCampaignTime | null,
+  timeRevision: number,
+): string {
+  const includedCopies = campaignLobbyCopies(history, revision).filter(
+    (copy) => copy.lifecycleState === 'ACTIVE',
+  );
+  return lobbyRevision(includedCopies, initialTime, timeRevision);
+}
+
 function projection(
   history: AdmissionHistory,
   checkpoint: CampaignCheckpoint,
@@ -164,7 +184,7 @@ function projection(
   const copies = campaignLobbyCopies(history, revision);
   const includedCopies = copies.filter((copy) => copy.lifecycleState === 'ACTIVE');
   // Only exact included mechanics/bindings/assignments and time invalidate a proof, not another Ready.
-  const lobbySnapshotRevision = s.sha(s.canonical({ includedCopies, initialTime, timeRevision }));
+  const lobbySnapshotRevision = lobbyRevision(includedCopies, initialTime, timeRevision);
   const includedDevices = [
     ...new Set(includedCopies.map((copy) => copy.controller.deviceId)),
   ].sort();

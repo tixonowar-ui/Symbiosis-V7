@@ -967,6 +967,116 @@ describe('local network application/outbox aggregate', () => {
     });
     expect(s.canonical({ witness })).toBe(canonical({ witness }));
   });
+  it('returns fresh canonical object graphs after a caller changes an earlier parse', () => {
+    const s = networkApplicationStorage;
+    const witness = 'independent nested value '.repeat(100);
+    const expected = { nested: { value: witness }, rows: [{ value: witness }] };
+    const json = canonical(expected);
+    s.withCanonicalCalculations(() => {
+      const first = s.parseCanonicalObject(json);
+      expect(first).toEqual(expected);
+      const nested = s.object(first['nested']);
+      const rows = first['rows'];
+      if (!Array.isArray(rows)) throw new Error('fixture rows are not an array');
+      Object.assign(nested, { value: 'changed by caller' });
+      Object.assign(s.object(rows[0]), { value: 'changed array child' });
+      Object.defineProperty(first, 'untrusted', { get: () => 'not part of the stored text' });
+      const second = s.parseCanonicalObject(json);
+      expect(second).toEqual(expected);
+      expect(second).not.toBe(first);
+      expect(second['nested']).not.toBe(nested);
+      expect(second['rows']).not.toBe(rows);
+      expect(s.parseCanonicalObject(canonical({ nested: { value: 'new text' } }))).toEqual({
+        nested: { value: 'new text' },
+      });
+    });
+    expect(s.parseCanonicalObject(json)).toEqual(expected);
+  });
+  it('refuses equivalent noncanonical text and non-object roots after warming exact text', () => {
+    const s = networkApplicationStorage;
+    const witness = 'canonical text '.repeat(100);
+    const encoded = JSON.stringify(witness);
+    const original = `{"a":${encoded},"z":0}`;
+    const expected = { a: witness, z: 0 };
+    const alternatives = [
+      original + ' ',
+      `{"z":0,"a":${encoded}}`,
+      `{"a":${encoded},"a":${encoded},"z":0}`,
+      `{"a":${encoded},"z":-0}`,
+      `{"a":${encoded.replace('c', '\\u0063')},"z":0}`,
+    ];
+    s.withCanonicalCalculations(() => {
+      expect(s.parseCanonicalObject(original)).toEqual(expected);
+      for (const text of alternatives) {
+        // The parsed meaning is insufficient: the persisted canonical bytes must be exact.
+        const parsed: unknown = JSON.parse(text);
+        const normalized: unknown = JSON.parse(JSON.stringify(parsed));
+        expect(normalized).toEqual(expected);
+        expect(() => s.parseCanonicalObject(text)).toThrow('CORRUPT_STORAGE');
+      }
+      for (const text of ['null', 'true', '42', encoded, `[${original}]`])
+        expect(() => s.parseCanonicalObject(text)).toThrow('CORRUPT_STORAGE');
+      expect(() => s.parseCanonicalObject(original.slice(0, -1))).toThrow(SyntaxError);
+      expect(s.parseCanonicalObject(original)).toEqual(expected);
+    });
+  });
+  it('preserves returns and thrown identity across nested calculation scopes and safe translation', () => {
+    const s = networkApplicationStorage;
+    const expected = { value: 'scope-owned immutable input '.repeat(100) };
+    const json = canonical(expected);
+    const sentinel = new Error('original calculation failure');
+    const returned = { result: 'original return object' };
+    expect(
+      s.withCanonicalCalculations(() => {
+        expect(s.parseCanonicalObject(json)).toEqual(expected);
+        let caught: unknown;
+        try {
+          s.withCanonicalCalculations(() => {
+            expect(s.parseCanonicalObject(json)).toEqual(expected);
+            throw sentinel;
+          });
+        } catch (error: unknown) {
+          caught = error;
+        }
+        expect(caught).toBe(sentinel);
+        expect(s.parseCanonicalObject(json)).toEqual(expected);
+        expect(() =>
+          s.safe(() => {
+            throw sentinel;
+          }),
+        ).toThrow('CORRUPT_STORAGE');
+        return returned;
+      }),
+    ).toBe(returned);
+    let escaped: unknown;
+    try {
+      s.withCanonicalCalculations(() => {
+        expect(s.parseCanonicalObject(json)).toEqual(expected);
+        throw sentinel;
+      });
+    } catch (error: unknown) {
+      escaped = error;
+    }
+    expect(escaped).toBe(sentinel);
+    let knownStorageError: unknown;
+    try {
+      s.fail('INVALID_INPUT');
+    } catch (error: unknown) {
+      knownStorageError = error;
+    }
+    expect(knownStorageError).toBeInstanceOf(Error);
+    let preservedStorageError: unknown;
+    try {
+      s.safe(() => {
+        throw knownStorageError;
+      });
+    } catch (error: unknown) {
+      preservedStorageError = error;
+    }
+    expect(preservedStorageError).toBe(knownStorageError);
+    expect(s.withCanonicalCalculations(() => s.parseCanonicalObject(json))).toEqual(expected);
+    expect(() => s.parseCanonicalObject(json + ' ')).toThrow('CORRUPT_STORAGE');
+  });
   it.each(['mutation', 'ownerDeviceId', 'kind'] as const)(
     'refuses a %s accessor before either mutation entry point reads it',
     (field) => {
@@ -1377,6 +1487,10 @@ describe('local network application/outbox aggregate', () => {
       readOwnedLocalNetworkTab(p.db, p.scope.ownerDeviceId, p.scope.networkScopeId)?.lifecycleState,
     ).toBe('UNBOUND');
     const before = p.db.serialize();
+    // Migration 19 must retain the same unresolved-outbox close guard.
+    expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+      version: 19,
+    });
     expect(() => close(p, sent.current)).toThrow('CLOSE_UNAVAILABLE');
     expect(p.db.serialize().equals(before)).toBe(true);
     expect(readLocalNetworkOutbox(p.db, p.scope, commandId)).toMatchObject({

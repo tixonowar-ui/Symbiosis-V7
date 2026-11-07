@@ -1,3 +1,5 @@
+import { readNpcCampaignCheckpointLedgerInTransaction } from './npc-campaign-checkpoints.js';
+import { campaignParts } from './npc-library-records.js';
 import { campaignSettingsValue } from '@shared/campaign-lifecycle.js';
 import { readCampaignLifecycleLedger } from './campaign-lifecycle-ledger.js';
 import {
@@ -104,6 +106,9 @@ function header(
     origin.command.request.payload.gmLocalContextId,
     campaignId,
   );
+  const npc = readNpcCampaignCheckpointLedgerInTransaction(db, campaignId);
+  if (!s.same(campaignParts(checkpoint).anchor, npc.anchorOrNull)) return fail();
+  const npcAware = npc.commits.length !== 0;
   const lifecycleEvents = readCampaignLifecycleLedger(db, campaignId);
   let lifecycle = initialCampaignLifecycleState(origin.payload, owner.verifier);
   let expectedPayload: unknown = origin.payload;
@@ -116,6 +121,12 @@ function header(
       )
     : undefined;
   const changes = [
+    ...npc.commits.map((event) => ({
+      kind: 'NPC' as const,
+      revision: event.operation.afterCheckpoint.stateRevision,
+      before: event.operation.beforeCheckpoint,
+      event,
+    })),
     ...lifecycleEvents.map((event) => ({
       kind: 'LIFECYCLE' as const,
       revision: event.receipt.campaignRevision,
@@ -134,7 +145,8 @@ function header(
   ].sort((a, b) => a.revision - b.revision);
   // With lifecycle evidence, every intervening revision must have an actual checkpoint event.
   // Mechanics and predecessor hashes are independently rebuilt by the authoritative full fold.
-  if (lifecycleEvents.length !== 0) {
+  const admissionRevisions = new Set<number>();
+  if (lifecycleEvents.length !== 0 || npcAware) {
     const admissionRows = db
       .prepare(
         'SELECT * FROM campaign_admission_checkpoint_event WHERE campaign_id=? ORDER BY state_revision',
@@ -149,7 +161,9 @@ function header(
         (start !== undefined && s.integer(row['state_revision']) > start.campaignRevision)
       )
         return fail();
-      revisions.push(s.integer(row['state_revision']));
+      const revision = s.integer(row['state_revision']);
+      admissionRevisions.add(revision);
+      revisions.push(revision);
     }
     revisions.sort((a, b) => a - b);
     if (
@@ -158,14 +172,33 @@ function header(
     )
       return fail();
   }
+  let coveredRevision = 0;
+  let expectedRevisions: RevisionTriple = {
+    stateRevision: 0,
+    projectionRevision: 0,
+    actorVisibilityRevision: 0,
+  };
+  const verifyAdmissionGap = (before: typeof checkpoint): void => {
+    const gap = before.stateRevision - coveredRevision;
+    if (gap < 0) return fail();
+    for (let revision = coveredRevision + 1; revision <= before.stateRevision; revision += 1)
+      if (!admissionRevisions.has(revision)) return fail();
+    if (
+      before.projectionRevision !== expectedRevisions.projectionRevision + gap ||
+      before.actorVisibilityRevision !== expectedRevisions.actorVisibilityRevision + gap
+    )
+      return fail();
+  };
   for (const change of changes) {
     const before = change.before;
     const parts = campaignCheckpointParts(before);
+    if (npcAware) verifyAdmissionGap(before);
     if (
       before.campaignId !== campaignId ||
       before.stateRevision + 1 !== change.revision ||
-      before.projectionRevision !== before.stateRevision ||
-      before.actorVisibilityRevision !== before.stateRevision ||
+      (!npcAware &&
+        (before.projectionRevision !== before.stateRevision ||
+          before.actorVisibilityRevision !== before.stateRevision)) ||
       !s.same(parts.payload, expectedPayload) ||
       parts.campaign['lifecycleState'] !== expectedStatus
     )
@@ -176,7 +209,10 @@ function header(
         ((started || before.stateRevision === previous.stateRevision) && !s.same(before, previous)))
     )
       return fail();
-    if (change.kind === 'START') {
+    if (change.kind === 'NPC') {
+      // The primitive ledger proves this exact anchor-only transition, not the NPC mechanics.
+      previous = change.event.operation.afterCheckpoint;
+    } else if (change.kind === 'START') {
       if (started) return fail();
       previous = readCampaignStartHeaderCheckpoint(db, campaignId, expectedPayload) ?? fail();
       started = true;
@@ -205,10 +241,13 @@ function header(
       lifecycle = replay.state;
       previous = replay.checkpoint;
     }
+    coveredRevision = previous.stateRevision;
+    expectedRevisions = previous;
     const after = campaignCheckpointParts(previous);
     expectedPayload = after.payload;
     expectedStatus = after.campaign['lifecycleState'] as 'PAUSED' | 'HOSTING';
   }
+  if (npcAware) verifyAdmissionGap(checkpoint);
   if (
     status !== expectedStatus ||
     !s.same(JSON.parse(text(campaign['payloadJson'])) as unknown, expectedPayload)

@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import {
   campaignLobbyCommandValue,
+  initialCampaignTimeValue,
   type CampaignLobbyCommand,
   campaignPeaceSceneValue,
 } from '@shared/campaign-lobby.js';
@@ -10,7 +11,7 @@ import {
 } from './campaign-admission-decision.js';
 import {
   appendGmLobbySourceInTransaction,
-  readCampaignCreationCursor,
+  readGmRequestReviewStructureInTransaction,
   type CampaignPrivateOwnerValidator,
   type GmRequestReviewScope,
 } from './campaign-creation.js';
@@ -29,6 +30,7 @@ import {
 } from './network-local-application.js';
 import { advanceRevisions, commitCampaignCheckpoint, type CampaignCheckpoint } from './store.js';
 import { type AdmissionHistory } from './campaign-admission-player.js';
+import { readNpcCampaignCheckpointLedgerInTransaction } from './npc-campaign-checkpoints.js';
 
 export interface CampaignLobbyGuardSource {
   readonly campaignId: string;
@@ -99,15 +101,31 @@ export function commitCampaignLobbyCommand(
       const history = admissionDecisionStorage.readHistory(db, scope, validate, rules);
       const before = history.lobbyOrNull ?? s.fail('UNAVAILABLE');
       if (authority.kind === 'GM') {
-        const cursor = readCampaignCreationCursor(db, scope.gmLocalContextId);
+        const { state, cursor } = readGmRequestReviewStructureInTransaction(db, scope);
         if (
           cursor.kind !== 'QUEUE' ||
           cursor.targetId !== scope.campaignId ||
-          cursor.formId !== 'NET-016'
+          cursor.formId !== 'NET-016' ||
+          (request.workflowCommandId === 'UI-CMD-CAMPAIGN-START' &&
+            state.viewOrNull?.npc?.initialTimeReturnContextOrNull != null)
         )
           return s.fail('UNAVAILABLE');
       }
       s.guarded(db, guard, guardSource(before), 'APPLY');
+      if (request.workflowCommandId === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET') {
+        const lock = readNpcCampaignCheckpointLedgerInTransaction(db, scope.campaignId).commits.at(
+          -1,
+        )?.block.initialTimeLockOrNull;
+        if (
+          lock != null &&
+          initialCampaignTimeValue({
+            dayNumber: request.dayNumber,
+            hour: request.hour,
+            minute: request.minute,
+          }).campaignTimestamp !== lock.campaignTimestamp
+        )
+          return s.fail('UNAVAILABLE');
+      }
       const event = planCampaignLobbyEvent(
         scope,
         history,

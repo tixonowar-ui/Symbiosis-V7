@@ -1,3 +1,4 @@
+import { assertNpcIdentityUnused } from './npc-identities.js';
 import { createHash } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
@@ -181,6 +182,7 @@ const writeLocalCharacterCreate = (
   lifecycleState: LocalCharacterLifecycleState,
   payloadJson: string,
 ): LocalCharacter => {
+  assertNpcIdentityUnused(database, localCharacterId);
   const label = localCharacterLabel(localCharacterId);
   const row = database
     .prepare<
@@ -610,6 +612,7 @@ export const commitNewLocalCharacterCheckpoint = <T>(
   return database
     .transaction(() => {
       const previousRow = resolveDraftCheckpointRow(database, localCharacterId, checkpointId);
+      if (previousRow === undefined) assertNpcIdentityUnused(database, checkpointId);
       if (previousRow !== undefined) {
         throw new Error(
           `${localCharacterLabel(localCharacterId)} already has checkpoint ${JSON.stringify(previousRow.checkpoint_id)}; cannot create first checkpoint`,
@@ -749,6 +752,7 @@ export const commitLocalCharacterCheckpoint = <T>(
   return database
     .transaction(() => {
       const previousRow = resolveDraftCheckpointRow(database, localCharacterId, checkpointId);
+      if (previousRow === undefined) assertNpcIdentityUnused(database, checkpointId);
       const before = buildDraftSnapshot(database, localCharacterId);
       const previous =
         previousRow === undefined ? undefined : validateStoredDraftCheckpoint(previousRow, before);
@@ -876,6 +880,7 @@ export const commitNewCampaignCheckpoint = <T>(
           undefined
       )
         throw new Error(`${label} already exists; cannot create first checkpoint`);
+      assertNpcIdentityUnused(database, campaignId);
       let creatorActive = true;
       let creatorFailure: { cause: unknown } | undefined;
       let expected: CampaignCheckpoint | undefined;

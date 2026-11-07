@@ -1,3 +1,23 @@
+import { campaignLobbySnapshotRevision } from './campaign-lobby-state.js';
+import type { InitialCampaignTime } from '@shared/campaign-lobby.js';
+import {
+  readNpcCampaignCheckpointLedgerInTransaction,
+  verifyNpcCampaignCheckpointHistory,
+  verifyNpcInitialTimeHistory,
+} from './npc-campaign-checkpoints.js';
+import { verifyCurrentNpcAnchor } from './npc-library-store.js';
+import {
+  NPC_SOURCE_FORMS,
+  npcCalendarReadContextValue,
+  npcGmSourceValue,
+  type NpcCalendarClock,
+  type NpcCalendarReadContext,
+} from './npc-library-records.js';
+import type {
+  NpcDomainReaders,
+  NpcRequestReader,
+  NpcHistoricalSourceReader,
+} from './npc-library-records.js';
 import {
   initialCampaignLifecycleState,
   replayCampaignLifecycleEvent,
@@ -104,6 +124,8 @@ export interface AdmissionDecisionRead {
   readonly playerDecisionOrNull: StoredAdmissionPlayerDecision | null;
 }
 export interface AdmissionPublicationRules extends AdmissionReviewRules {
+  /** Required once a committed NPC exists; no generic JSON or identity-reader fallback. */
+  readonly npc?: NpcDomainReaders & NpcRequestReader & NpcHistoricalSourceReader;
   readonly lifecycle?: CampaignLifecycleRules;
   /** Null IDs request a preview. Non-null IDs publish the same complete reviewed sheets. */
   readonly buildProposal: (
@@ -628,6 +650,30 @@ function rebuildCampaignHistory(
   source: GmRequestReviewSource,
   rules: AdmissionPublicationRules,
 ): AdmissionHistory {
+  const { history, npc } = rebuildCampaignStructure(db, source, rules);
+  if (npc.commits.length !== 0 && rules.npc === undefined) return s.fail('UNAVAILABLE');
+  if (rules.npc !== undefined) {
+    const closure = verifyCurrentNpcAnchor(db, history.checkpoint, rules.npc);
+    if (
+      !s.same(
+        [...closure.operations].sort((a, b) => a.operationId.localeCompare(b.operationId)),
+        [...npc.operations].sort((a, b) => a.operationId.localeCompare(b.operationId)),
+      )
+    )
+      return s.fail();
+  }
+  return history;
+}
+/** Private phase 0: all existing mechanics/ledger checks, with NPC domain verification performed by the public wrapper. */
+function rebuildCampaignStructure(
+  db: Database.Database,
+  source: GmRequestReviewSource,
+  rules: AdmissionPublicationRules,
+): {
+  history: AdmissionHistory;
+  npc: ReturnType<typeof readNpcCampaignCheckpointLedgerInTransaction>;
+  checkpoints: ReadonlyMap<number, CampaignCheckpoint>;
+} {
   const verified = new Map<string, AdmissionDecisionRead>();
   let checkpoint: CampaignCheckpoint = {
     campaignId: source.scope.campaignId,
@@ -644,35 +690,57 @@ function rebuildCampaignHistory(
     actorVisibilityRevision: 0,
   };
   const admissionCheckpoints = new Map([[0, checkpoint]]);
+  const npc = readNpcCampaignCheckpointLedgerInTransaction(db, source.scope.campaignId);
   const lifecycleEvents = readCampaignLifecycleLedger(db, source.scope.campaignId);
   verifyCampaignLifecycleMirrors(db, source.scope, lifecycleEvents);
   let lifecycle = initialCampaignLifecycleState(
     source.creationOrigin.payload,
     source.privateOwner.verifier,
   );
-  let lifecycleIndex = 0;
+  const changes = [
+    ...lifecycleEvents.map((event) => ({
+      kind: 'LIFECYCLE' as const,
+      revision: event.receipt.campaignRevision,
+      event,
+    })),
+    ...npc.commits.map((event) => ({
+      kind: 'NPC' as const,
+      revision: event.operation.afterCheckpoint.stateRevision,
+      event,
+    })),
+  ].sort((a, b) => a.revision - b.revision);
+  if (
+    changes.some((change, index) => index > 0 && change.revision === changes[index - 1]!.revision)
+  )
+    return s.fail();
+  let changeIndex = 0;
   const start = hasCampaignLobbySchema(db)
     ? readCampaignLobbyLedger(db, source.scope.campaignId).find(
         (e) => e.request.workflowCommandId === 'UI-CMD-CAMPAIGN-START',
       )
     : undefined;
-  const advanceLifecycleBefore = (revision: number): void => {
-    while (lifecycleIndex < lifecycleEvents.length) {
-      const event = lifecycleEvents[lifecycleIndex]!;
-      if (event.receipt.campaignRevision >= revision) break;
-      if (event.receipt.campaignRevision !== s.increment(checkpoint.stateRevision)) return s.fail();
-      const replay = replayCampaignLifecycleEvent(
-        source.scope,
-        checkpoint,
-        lifecycle,
-        event,
-        rules.lifecycle ?? s.fail(),
-      );
-      lifecycle = replay.state;
-      checkpoint = replay.checkpoint;
+  const advanceNonAdmissionBefore = (revision: number): void => {
+    while (changeIndex < changes.length) {
+      const change = changes[changeIndex]!;
+      if (change.revision >= revision) break;
+      if (change.revision !== s.increment(checkpoint.stateRevision)) return s.fail();
+      if (change.kind === 'NPC') {
+        if (!s.same(change.event.operation.beforeCheckpoint, checkpoint)) return s.fail();
+        checkpoint = change.event.operation.afterCheckpoint;
+      } else {
+        const replay = replayCampaignLifecycleEvent(
+          source.scope,
+          checkpoint,
+          lifecycle,
+          change.event,
+          rules.lifecycle ?? s.fail(),
+        );
+        lifecycle = replay.state;
+        checkpoint = replay.checkpoint;
+      }
       history.checkpoint = checkpoint;
       admissionCheckpoints.set(checkpoint.stateRevision, checkpoint);
-      lifecycleIndex += 1;
+      changeIndex += 1;
     }
   };
   const events = db
@@ -701,7 +769,7 @@ function rebuildCampaignHistory(
   for (const row of events) {
     const revision = s.integer(row['state_revision']);
     if (start !== undefined && revision > start.campaignRevision) return s.fail();
-    advanceLifecycleBefore(revision);
+    advanceNonAdmissionBefore(revision);
     const batchId = s.uuid(row['admission_batch_id']);
     if (row['state_revision'] !== s.increment(checkpoint.stateRevision)) return s.fail();
     let next: CampaignCheckpoint;
@@ -741,7 +809,7 @@ function rebuildCampaignHistory(
     history.checkpoint = next;
     admissionCheckpoints.set(next.stateRevision, next);
   }
-  advanceLifecycleBefore(start === undefined ? Infinity : s.increment(start.campaignRevision));
+  advanceNonAdmissionBefore(start === undefined ? Infinity : s.increment(start.campaignRevision));
   if (hasCampaignLobbySchema(db)) {
     history.lobbyOrNull = readCampaignLobbyContinuation(
       db,
@@ -751,13 +819,169 @@ function rebuildCampaignHistory(
     );
     checkpoint = history.lobbyOrNull.checkpoint;
     history.checkpoint = checkpoint;
+    admissionCheckpoints.set(checkpoint.stateRevision, checkpoint);
   }
-  advanceLifecycleBefore(Infinity);
+  advanceNonAdmissionBefore(Infinity);
   if (history.lobbyOrNull !== null) history.lobbyOrNull = { ...history.lobbyOrNull, checkpoint };
   history.lifecycleOrNull = lifecycle;
   if (!s.same(checkpoint, loadCampaignCheckpoint(db, source.scope.campaignId))) return s.fail();
+  verifyNpcCampaignCheckpointHistory(npc, admissionCheckpoints, checkpoint);
+  verifyNpcInitialTimeHistory(npc, history.lobbyOrNull?.events ?? []);
   player.verifyLedger(db, source.scope.campaignId, history);
-  return history;
+  return { history, npc, checkpoints: admissionCheckpoints };
+}
+
+/**
+ * Checked calendar evidence before any NPC snapshot reader. This never exports the partially
+ * composed AdmissionHistory and never calls the NPC domain closure recursively.
+ */
+export function readNpcCalendarContextInTransaction(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  validateOwner: CampaignPrivateOwnerValidator,
+  rules: Omit<AdmissionPublicationRules, 'npc'>,
+): NpcCalendarReadContext {
+  if (!db.inTransaction) return s.fail('INVALID_INPUT');
+  const { observed } = readGmRequestReviewSourceWith(db, scope, validateOwner, (source, queue) => {
+    const { history, npc, checkpoints } = rebuildCampaignStructure(db, source, rules);
+    // Pending/rejected batches and orphan terminal rows are outside checkpoint replay.
+    // The same closed availability checks must precede any use of this phase-0 evidence.
+    readAvailabilityFromHistory(db, source.scope, source, rules, history);
+    const lobby = history.lobbyOrNull;
+    const lobbyEvents = new Map(
+      (lobby?.events ?? []).map((event) => [event.request.commandId, event]),
+    );
+    let initialTime: InitialCampaignTime | null = null;
+    let timeRevision = 0;
+    let clock: NpcCalendarClock = {
+      phase: 'PRE_START',
+      campaignTimestampOrNull: null,
+      sourceOrNull: null,
+    };
+    const prefixes = new Map<
+      string,
+      {
+        source: NpcCalendarReadContext['operations'][number]['beforeGmSource'];
+        clock: NpcCalendarClock;
+        initialTime: InitialCampaignTime | null;
+        timeRevision: number;
+      }
+    >();
+    for (const event of queue.events) {
+      if (event.mutation.kind === 'LOBBY_SOURCE') {
+        const cause = event.mutation.cause,
+          saved = lobbyEvents.get(cause.commandId) ?? s.fail();
+        if (cause.recordSha256 !== s.sha(s.canonical(saved))) return s.fail();
+        const receipt = saved.receipt;
+        if (receipt.workflowCommandId === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET') {
+          if (clock.phase !== 'PRE_START') return s.fail();
+          if (!s.same(initialTime, receipt.initialCampaignTime))
+            timeRevision = s.increment(timeRevision);
+          initialTime = receipt.initialCampaignTime;
+          clock = {
+            phase: 'PRE_START',
+            campaignTimestampOrNull: receipt.initialCampaignTime.campaignTimestamp,
+            sourceOrNull: {
+              kind: 'INITIAL_TIME',
+              commandId: cause.commandId,
+              recordSha256: cause.recordSha256,
+            },
+          };
+        } else if (receipt.workflowCommandId === 'UI-CMD-CAMPAIGN-START') {
+          if (
+            clock.phase !== 'PRE_START' ||
+            clock.campaignTimestampOrNull !== receipt.scene.campaignTimestamp
+          )
+            return s.fail();
+          clock = {
+            phase: 'POST_START',
+            campaignTimestampOrNull: receipt.scene.campaignTimestamp,
+            sourceOrNull: {
+              kind: 'START',
+              commandId: cause.commandId,
+              recordSha256: cause.recordSha256,
+            },
+          };
+        }
+        lobbyEvents.delete(cause.commandId);
+      }
+      // Only NPC source prefixes are representable as NpcGmSource; all other events still advance the clock.
+      if ((NPC_SOURCE_FORMS as readonly string[]).includes(event.view.formId)) {
+        const proof = npcGmSourceValue({
+          sourceFormId: event.view.formId,
+          revisions: s.vectorOf(event.view),
+          sourceSnapshotSha256: event.view.snapshotSha256,
+          queuePrefix: { eventId: event.eventId, recordSha256: event.recordSha256 },
+        });
+        prefixes.set(event.eventId, { source: proof, clock, initialTime, timeRevision });
+      }
+    }
+    if (lobbyEvents.size !== 0) return s.fail();
+    if (
+      clock.campaignTimestampOrNull !==
+      (lobby?.sceneOrNull?.campaignTimestamp ??
+        lobby?.initialCampaignTimeOrNull?.campaignTimestamp ??
+        null)
+    )
+      return s.fail();
+    const operations = npc.operations
+      .map((operation) => {
+        if (!s.same(operation.scope, scope)) return s.fail('FOREIGN_OWNER');
+        const prefix = prefixes.get(operation.beforeGmSource.queuePrefix.eventId) ?? s.fail();
+        if (
+          !s.same(prefix.source, operation.beforeGmSource) ||
+          !s.same(
+            checkpoints.get(operation.beforeCheckpoint.stateRevision),
+            operation.beforeCheckpoint,
+          )
+        )
+          return s.fail();
+        return {
+          operationId: operation.operationId,
+          operationSha256: s.sha(s.canonical(operation)),
+          beforeCheckpointSha256: s.sha(s.canonical(operation.beforeCheckpoint)),
+          beforeGmSource: operation.beforeGmSource,
+          kind: operation.kind,
+          committedAt: operation.committedAt,
+          versionOrNull: operation.versionOrNull,
+          clock: {
+            ...prefix.clock,
+            lobbySnapshotRevisionOrNull:
+              prefix.clock.phase === 'PRE_START'
+                ? campaignLobbySnapshotRevision(
+                    history,
+                    operation.beforeCheckpoint.stateRevision,
+                    prefix.initialTime,
+                    prefix.timeRevision,
+                  )
+                : null,
+          },
+        };
+      })
+      .sort((a, b) => a.operationId.localeCompare(b.operationId));
+    const last = queue.events.at(-1);
+    return npcCalendarReadContextValue({
+      format: 'NPC_CALENDAR_READ_V1',
+      scope,
+      checkpoint: history.checkpoint,
+      currentQueuePrefixOrNull:
+        last === undefined ? null : { eventId: last.eventId, recordSha256: last.recordSha256 },
+      currentClock: {
+        ...clock,
+        lobbySnapshotRevisionOrNull:
+          clock.phase === 'PRE_START'
+            ? campaignLobbySnapshotRevision(
+                history,
+                history.checkpoint.stateRevision,
+                initialTime,
+                timeRevision,
+              )
+            : null,
+      },
+      operations,
+    });
+  });
+  return observed;
 }
 
 export function readAdmissionDecision(
@@ -891,51 +1115,75 @@ export function readCampaignAdmissionAvailability(
         importedSources: [] as { sourceUuid: string; ownerDeviceId: string }[],
       };
     }
-    if (version !== 12 && version !== 13 && version !== 14) return s.fail();
+    if (
+      version !== 12 &&
+      version !== 13 &&
+      version !== 14 &&
+      version !== 15 &&
+      version !== 16 &&
+      version !== 17 &&
+      version !== 18 &&
+      version !== 19
+    )
+      return s.fail();
     const source = readGmRequestReviewSource(db, scope, validate),
-      history = verifyCampaignHistory(db, source, rules),
-      releasedRequestIds: string[] = [];
-    const batches = db
-      .prepare(
-        `SELECT admission_batch_id FROM campaign_admission_batch
-      WHERE campaign_id=? OR json_extract(record_json,'$.scope.campaignId')=?`,
-      )
-      .all(scope.campaignId, scope.campaignId) as Row[];
-    const seen = new Set<string>();
-    for (const row of batches) {
-      const id = s.uuid(row['admission_batch_id']);
-      if (seen.has(id)) return s.fail();
-      seen.add(id);
-      const current =
-        history.decisions.get(id) ??
-        readDecision(db, working.readInTransaction(db, source, id, rules), rules);
-      if (
-        current.gmDecisionOrNull?.request.decision === 'REJECT' ||
-        current.playerDecisionOrNull?.request.decision === 'DECLINE'
-      )
-        releasedRequestIds.push(current.review.current.requestId);
-    }
-    // A missing batch must not hide a terminal refusal or manufacture release from an unverified row.
-    const terminals = db
-      .prepare(
-        `SELECT admission_batch_id FROM campaign_admission_gm_decision
-      WHERE campaign_id=? OR json_extract(record_json,'$.scope.campaignId')=?`,
-      )
-      .all(scope.campaignId, scope.campaignId) as Row[];
-    if (terminals.some((row) => !seen.has(s.uuid(row['admission_batch_id'])))) return s.fail();
-    return {
-      campaignRevision: history.checkpoint.stateRevision,
-      occupiedCampaignPlaceCount: history.occupiedCampaignPlaceCount,
-      activePcCount: history.activePcCount,
-      releasedRequestIds,
-      importedSources: [...history.decisions.values()].flatMap((current) =>
-        current.gmDecisionOrNull!.copies.map((copy) => ({
-          sourceUuid: copy.sourceUuid,
-          ownerDeviceId: copy.ownerDeviceId,
-        })),
-      ),
-    };
+      history = verifyCampaignHistory(db, source, rules);
+    return readAvailabilityFromHistory(db, scope, source, rules, history);
   });
+}
+
+/** Private structural data only: the public caller still proves the complete NPC closure. */
+function readAvailabilityFromHistory(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  source: GmRequestReviewSource,
+  rules: AdmissionPublicationRules,
+  history: Pick<
+    AdmissionHistory,
+    'checkpoint' | 'decisions' | 'occupiedCampaignPlaceCount' | 'activePcCount'
+  >,
+) {
+  const releasedRequestIds: string[] = [];
+  const batches = db
+    .prepare(
+      `SELECT admission_batch_id FROM campaign_admission_batch
+      WHERE campaign_id=? OR json_extract(record_json,'$.scope.campaignId')=?`,
+    )
+    .all(scope.campaignId, scope.campaignId) as Row[];
+  const seen = new Set<string>();
+  for (const row of batches) {
+    const id = s.uuid(row['admission_batch_id']);
+    if (seen.has(id)) return s.fail();
+    seen.add(id);
+    const current =
+      history.decisions.get(id) ??
+      readDecision(db, working.readInTransaction(db, source, id, rules), rules);
+    if (
+      current.gmDecisionOrNull?.request.decision === 'REJECT' ||
+      current.playerDecisionOrNull?.request.decision === 'DECLINE'
+    )
+      releasedRequestIds.push(current.review.current.requestId);
+  }
+  // A missing batch must not hide a terminal refusal or manufacture release from an unverified row.
+  const terminals = db
+    .prepare(
+      `SELECT admission_batch_id FROM campaign_admission_gm_decision
+      WHERE campaign_id=? OR json_extract(record_json,'$.scope.campaignId')=?`,
+    )
+    .all(scope.campaignId, scope.campaignId) as Row[];
+  if (terminals.some((row) => !seen.has(s.uuid(row['admission_batch_id'])))) return s.fail();
+  return {
+    campaignRevision: history.checkpoint.stateRevision,
+    occupiedCampaignPlaceCount: history.occupiedCampaignPlaceCount,
+    activePcCount: history.activePcCount,
+    releasedRequestIds,
+    importedSources: [...history.decisions.values()].flatMap((current) =>
+      current.gmDecisionOrNull!.copies.map((copy) => ({
+        sourceUuid: copy.sourceUuid,
+        ownerDeviceId: copy.ownerDeviceId,
+      })),
+    ),
+  };
 }
 
 /** A single publication freezes the whole working prefix; no source row is ever updated. */

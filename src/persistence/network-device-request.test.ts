@@ -332,7 +332,15 @@ function submission(
     }
   ).version;
   const batch = withBatchHash({
-    ...(schemaVersion === 11 || schemaVersion === 12 || schemaVersion === 13 || schemaVersion === 14
+    ...(schemaVersion === 11 ||
+    schemaVersion === 12 ||
+    schemaVersion === 13 ||
+    schemaVersion === 14 ||
+    schemaVersion === 15 ||
+    schemaVersion === 16 ||
+    schemaVersion === 17 ||
+    schemaVersion === 18 ||
+    schemaVersion === 19
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -797,13 +805,42 @@ describe('synchronous GM source composition', () => {
       scope = gmScope(p),
       expected = readGmRequestReviewSource(p.db, scope, allow);
     const before = p.db.serialize();
-    const result = readGmRequestReviewSourceWith(p.db, scope, allow, (source) => {
+    const result = readGmRequestReviewSourceWith(p.db, scope, allow, (source, state) => {
       expect(p.db.inTransaction).toBe(true);
       expect(source).toEqual(expected);
+      expect(state.events).toEqual([]);
+      expect(Object.isFrozen(state)).toBe(true);
+      expect(Object.isFrozen(state.events)).toBe(true);
       return source.queue.requests.length;
     });
     expect(result).toEqual({ source: expected, observed: expected.queue.requests.length });
     expect(p.db.serialize().equals(before)).toBe(true);
+  });
+  it('provides detached immutable checked review state and rebuilds it after each write', () => {
+    const p = setup(),
+      scope = gmScope(p);
+    enterQueue(p);
+    const before = p.db.serialize();
+    const first = readGmRequestReviewSourceWith(p.db, scope, allow, (source, state) => {
+      expect(state.events.length).toBeGreaterThan(0);
+      expect(state.viewOrNull).toEqual(source.viewOrNull);
+      expect(state.viewOrNull).not.toBe(source.viewOrNull);
+      expect(Object.isFrozen(state.events[0]!.view)).toBe(true);
+      expect(Reflect.set(state.events[0]!.view, 'projectionRevision', 99)).toBe(false);
+      return state;
+    });
+    const second = readGmRequestReviewSourceWith(p.db, scope, allow, (_source, state) => state);
+    expect(second.observed).toEqual(first.observed);
+    expect(second.observed).not.toBe(first.observed);
+    expect(p.db.serialize().equals(before)).toBe(true);
+    p.db.prepare('UPDATE gm_request_queue_view SET record_sha256=?').run('0'.repeat(64));
+    const corrupt = p.db.serialize(),
+      observe = vi.fn(() => null);
+    expect(() => readGmRequestReviewSourceWith(p.db, scope, allow, observe)).toThrow(
+      'CORRUPT_STORAGE',
+    );
+    expect(observe).not.toHaveBeenCalled();
+    expect(p.db.serialize().equals(corrupt)).toBe(true);
   });
   it.each(['DML', 'DDL', 'PRAGMA', 'PROMISE'] as const)(
     'refuses and rolls back a %s observer',
@@ -2196,12 +2233,12 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it('rejects a v1 batch on schema 14 without writes', () => {
+  it('rejects a v1 batch on schema 19 without writes', () => {
     const p = setup(),
       opening = connect(p),
       request = submission(p, opening);
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 14,
+      version: 19,
     });
     const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
     const before = p.db.serialize();
@@ -2216,7 +2253,7 @@ describe('hosted network session and addressed request journal', () => {
     ).toThrow('INVALID_INPUT');
     expect(p.db.serialize().equals(before)).toBe(true);
   });
-  it('allows a replacement submission after a reviewed rejection on schema 14', () => {
+  it('allows a replacement submission after a reviewed rejection on schema 15', () => {
     const p = setup(),
       opening = connect(p),
       original = submission(p, opening);
