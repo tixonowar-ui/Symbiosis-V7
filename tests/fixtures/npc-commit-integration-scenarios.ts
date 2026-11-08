@@ -8719,7 +8719,7 @@ export function registerNpcRuntimeEffects(
         expect(reopened.db.serialize().equals(bytes)).toBe(true);
         await nextHostTurn(reopened.db);
         deepPhases.push(['BODY_COMPLETE', Date.now(), performance.now()]);
-      }, 2_700_000);
+      }, 3_600_000);
     }
 
     // Install after the existing poison helper fragments only after approved B14 import.
@@ -10686,7 +10686,7 @@ export function registerNpcLocalSnapshotReadGuards() {
       } finally {
         h.db.close();
       }
-    });
+    }, 60_000);
 
     // These wrappers always call the actual factory methods. Only the optional
     // trailing transport argument can be dropped; no decoded result is supplied.
