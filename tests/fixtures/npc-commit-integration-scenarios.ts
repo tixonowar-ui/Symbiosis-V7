@@ -11374,7 +11374,7 @@ export function registerNpcLocalSnapshotReadGuards() {
       } finally {
         recovered.restore();
       }
-    });
+    }, 60_000);
 
     function standaloneHistorySnapshot() {
       const seed = seeds.validateVersion;
