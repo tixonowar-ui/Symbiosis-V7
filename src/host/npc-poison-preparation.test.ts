@@ -851,6 +851,10 @@ describe('actual-source poison preparation adapter boundaries', () => {
     const h = harness({ dose: true }),
       request = h.removeRequest(),
       before = basisBytes(h.basis);
+    expect(h.api.inspect(h.attempt, h.calendar)?.coatingStates[0]).toMatchObject({
+      canRemove: true,
+      errors: [],
+    });
     const result = h.api.prepare(request, h.context(request), h.allocate, stamp);
     expect(result.childAllocations).toEqual([]);
     expect(h.issued).toBe(1);
@@ -873,6 +877,8 @@ describe('actual-source poison preparation adapter boundaries', () => {
       coatingInstanceId: id(85),
       targetItemInstanceId: id(84),
       canRemove: true,
+      errors: ['Подтверждение времени изменилось; исходная доза не переподтверждена.'],
+      explanation: 'Подтверждение времени изменилось; исходная доза не переподтверждена.',
     });
     const rows = view?.coatingStates[0]?.derivedRows ?? [];
     expect(rows).toContainEqual({ label: 'Исходная минута подготовки', value: '37' });

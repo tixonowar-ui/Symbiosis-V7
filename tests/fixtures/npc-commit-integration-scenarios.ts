@@ -3,6 +3,7 @@ import * as npcGmSourceModule from '../../src/persistence/npc-gm-source.js';
 import * as npcHumanoidSheetModule from '../../src/domain/rules/npc-authoring/npc-humanoid-sheet.js';
 import * as npcLibraryStoreModule from '../../src/persistence/npc-library-store.js';
 import * as npcPoisonReadersModule from '../../src/host/npc-poison-readers.js';
+import * as npcDomainReadersModule from '../../src/host/npc-domain-readers.js';
 import { readNpcPoisonCoatingContribution } from '../../src/domain/rules/npc-authoring/formal-poison-coating.js';
 import {
   createEmptyNpcTraumaEditorRow,
@@ -7718,6 +7719,187 @@ export function registerNpcRuntimeEffects(
         }
         expect(inspectSaved()).toEqual(checkedSaved);
         expect(h.db.serialize().equals(savedBytes)).toBe(true);
+        // Saved validation owns its actual committed attempt and persisted child graph. Observe
+        // that path separately from inspectStoredSnapshot, using the real host read above SQLite.
+        {
+          const factory = npcPoisonReadersModule.createNpcPoisonReaders;
+          const domainFactory = npcDomainReadersModule.createNpcOrdinaryDomainReaders;
+          let validationRefusal: unknown;
+          const issuedReaders: Array<ReturnType<typeof factory>> = [];
+          const factorySpy = vi
+            .spyOn(npcPoisonReadersModule, 'createNpcPoisonReaders')
+            .mockImplementation((options) => {
+              const actual = factory(options);
+              issuedReaders.push(actual);
+              return actual;
+            });
+          const domainFactorySpy = vi
+            .spyOn(npcDomainReadersModule, 'createNpcOrdinaryDomainReaders')
+            .mockImplementation((...args) => {
+              const actual = domainFactory(...args);
+              // Store guarded() normalizes a thrown validator error to INVALID_INPUT.
+              // Observe and rethrow the actual cause before that public boundary.
+              return {
+                ...actual,
+                validateVersion(...values: Parameters<typeof actual.validateVersion>) {
+                  try {
+                    return actual.validateVersion(...values);
+                  } catch (error) {
+                    validationRefusal = error;
+                    throw error;
+                  }
+                },
+              };
+            });
+          const observedApp = (() => {
+            try {
+              return connect(h);
+            } finally {
+              domainFactorySpy.mockRestore();
+              factorySpy.mockRestore();
+            }
+          })();
+          expect(issuedReaders).toHaveLength(1);
+          const issued = issuedReaders[0] ?? unavailable();
+          const contextReader = issued.context;
+          const builder = npcHumanoidSheetModule.buildNpcHumanoidSnapshot;
+          const evidenceReader = npcGmSourceModule.readNpcVersionDerivationEvidenceInTransaction;
+          const stableBytes = h.db.serialize();
+          function stack() {
+            const limit = Error.stackTraceLimit;
+            try {
+              Error.stackTraceLimit = Math.max(limit, 100);
+              return new Error().stack ?? '';
+            } finally {
+              Error.stackTraceLimit = limit;
+            }
+          }
+          const resolvedPath = (text: string) =>
+            /\bat poisonState \([^\r\n]*\)\r?\n\s*at resolve \([^\r\n]*\)\r?\n\s*at (?:Object\.)?validateVersion \(/.test(
+              text,
+            );
+          const builderPath = (text: string) =>
+            /\bat derive \([^\r\n]*\)\r?\n\s*at resolve \([^\r\n]*\)\r?\n\s*at (?:Object\.)?validateVersion \(/.test(
+              text,
+            );
+          const graphPath = (text: string) =>
+            /\bat snapshotPoisonState \([^\r\n]*\)\r?\n\s*at pendingInventoryGraph \([^\r\n]*\)\r?\n\s*at snapshotChildGraph \([^\r\n]*\)\r?\n\s*at (?:Object\.)?validateVersion \(/.test(
+              text,
+            );
+          for (const fault of ['BUILDER', 'GRAPH_SQL', null] as const) {
+            validationRefusal = undefined;
+            let resolvedChild: object | undefined;
+            let poisonChild: object | undefined;
+            let originalMinute: unknown;
+            let resolvedContexts = 0;
+            let completedBuilders = 0;
+            let repeatedContext = 0;
+            let freshSql = 0;
+            let mutations = 0;
+            let changed = false;
+            let sameContext = false;
+            let observedDose: string | undefined;
+            function mutate(child: object) {
+              originalMinute = Reflect.get(child, 'campaignTimestamp');
+              mutations++;
+              changed = Reflect.set(child, 'campaignTimestamp', Number(originalMinute) + 1);
+              changed &&= !Object.is(Reflect.get(child, 'campaignTimestamp'), originalMinute);
+            }
+            const contextSpy = vi.spyOn(issued, 'context').mockImplementation((...args) => {
+              const actual = contextReader(...args);
+              if (actual !== null && args[2]?.operationId === version.operationId) {
+                const trace = stack();
+                if (resolvedPath(trace)) {
+                  resolvedContexts++;
+                  // Resolve builds the owning current snapshot before reconstructing historical V1.
+                  // That later context can share its operation ID but is not the graph witness.
+                  if (resolvedContexts === 1)
+                    resolvedChild = actual.context.coatingContext ?? undefined;
+                }
+                if (graphPath(trace)) repeatedContext++;
+              }
+              return actual;
+            });
+            const builderSpy = vi
+              .spyOn(npcHumanoidSheetModule, 'buildNpcHumanoidSnapshot')
+              .mockImplementation((...args) => {
+                const actual = builder(...args);
+                const proof = s.object(args[1])['initialPoisonProof'];
+                if (
+                  proof !== undefined &&
+                  s.object(proof)['commitOperationId'] === version.operationId &&
+                  builderPath(stack())
+                ) {
+                  completedBuilders++;
+                  const child = args[9]?.coatingContext;
+                  if (completedBuilders === 1 && child != null) {
+                    poisonChild = child;
+                    sameContext = child === resolvedChild;
+                    const contribution = child.contributions[0];
+                    if (contribution !== undefined)
+                      observedDose = readNpcPoisonCoatingContribution(child.catalog, contribution)
+                        .coating.coatingInstanceId;
+                    if (fault === 'BUILDER' && mutations === 0) mutate(child);
+                  }
+                }
+                return actual;
+              });
+            const evidenceSpy = vi
+              .spyOn(npcGmSourceModule, 'readNpcVersionDerivationEvidenceInTransaction')
+              .mockImplementation((...args) => {
+                const actual = evidenceReader(...args);
+                if (
+                  poisonChild !== undefined &&
+                  args[0] === h.db &&
+                  args[1].commitOperationId === version.operationId &&
+                  graphPath(stack())
+                ) {
+                  freshSql++;
+                  if (fault === 'GRAPH_SQL' && mutations === 0) mutate(poisonChild);
+                }
+                return actual;
+              });
+            try {
+              if (fault === null) {
+                expect(observedApp.read().closure.versions).toEqual([version]);
+                expect(validationRefusal).toBeUndefined();
+              } else {
+                let refusal: unknown;
+                try {
+                  observedApp.read();
+                } catch (error) {
+                  refusal = error;
+                }
+                expect(refusal).toBeInstanceOf(NetworkApplicationStoreError);
+                expect((refusal as NetworkApplicationStoreError).code).toBe('INVALID_INPUT');
+                expect(validationRefusal).toBeInstanceOf(NetworkApplicationStoreError);
+                expect((validationRefusal as NetworkApplicationStoreError).code).toBe(
+                  'SOURCE_CHANGED',
+                );
+              }
+              expect(resolvedContexts).toBeGreaterThan(0);
+              expect(completedBuilders).toBeGreaterThan(0);
+              expect(sameContext).toBe(true);
+              expect(poisonChild).toBe(resolvedChild);
+              expect(observedDose).toBe(dose.id);
+              if (fault === 'BUILDER') expect(freshSql).toBe(0);
+              else expect(freshSql).toBeGreaterThan(0);
+              // The actual resolved context was observed; its direct graph must still cross SQL
+              // without running that context again. Other historical readers remain delegated.
+              expect(repeatedContext).toBe(0);
+              expect(mutations).toBe(fault === null ? 0 : 1);
+              expect(changed).toBe(fault !== null);
+              expect(h.db.inTransaction).toBe(false);
+              expect(h.db.serialize().equals(stableBytes)).toBe(true);
+            } finally {
+              evidenceSpy.mockRestore();
+              builderSpy.mockRestore();
+              contextSpy.mockRestore();
+              if (poisonChild !== undefined && mutations !== 0)
+                Reflect.set(poisonChild, 'campaignTimestamp', originalMinute);
+            }
+          }
+        }
         const bytes = h.db.serialize(),
           reopened = fixture({ bytes, scope: h.scope, profileId: h.profileId }),
           restored = connect(reopened);
@@ -8580,12 +8762,22 @@ export function registerNpcRuntimeEffects(
       it('archives an omitted replacement preparation and assigns its original COMMIT only on first selected publication', async () => {
         const p = preparedIndividualDose(),
           { x, h, app } = p;
+        // Real UI commands have separate turns; preserve each synchronous command and
+        // let native finalizers run only after navigation or workflow has returned.
+        async function commitReplacementVersion() {
+          x.next('NPC-016::CTA::001');
+          await nextPoisonHostTurn(h.db);
+          const command = h.commitWorkflowRequest(x.attempt());
+          app.workflow(command);
+          await nextPoisonHostTurn(h.db);
+          return { command, version: app.read().closure.versions.at(-1) ?? unavailable() };
+        }
         await nextPoisonHostTurn(h.db);
         x.next('NPC-015::CTA::001');
         await nextPoisonHostTurn(h.db);
         x.alive();
         await nextPoisonHostTurn(h.db);
-        const first = x.commit(),
+        const first = await commitReplacementVersion(),
           firstBytes = s.canonical(first.version);
         await nextPoisonHostTurn(h.db);
         await openPoisonInventory(x, first.version);
@@ -8624,7 +8816,7 @@ export function registerNpcRuntimeEffects(
         await nextPoisonHostTurn(h.db);
         x.next('NPC-015::CTA::001');
         await nextPoisonHostTurn(h.db);
-        const second = x.commit(),
+        const second = await commitReplacementVersion(),
           secondBytes = s.canonical(second.version);
         expect(second.version.snapshot).toMatchObject({
           derivation: {
@@ -8656,7 +8848,7 @@ export function registerNpcRuntimeEffects(
         await nextPoisonHostTurn(h.db);
         x.next('NPC-015::CTA::001');
         await nextPoisonHostTurn(h.db);
-        const third = x.commit();
+        const third = await commitReplacementVersion();
         expect(third.version.version).toBe(3);
         const actual = publishedIndividualDose(third.version, p.item.id);
         expect(actual.doses).toMatchObject([
@@ -8705,7 +8897,7 @@ export function registerNpcRuntimeEffects(
         expect(recovered.workflow(third.command)).toMatchObject({ replayed: true });
         expect(reopened.db.serialize().equals(bytes)).toBe(true);
         await nextPoisonHostTurn(reopened.db);
-      }, 1_800_000);
+      }, 5_400_000);
     }
 
     // Install after the three poison helper fragments and archive fragment after approved B14 import.

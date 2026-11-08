@@ -525,7 +525,7 @@ export function createNpcPoisonPreparation(
             targetItemInstanceId: coating.carrier.itemInstanceId,
             targetLabel: coating.carrier.label,
             canRemove: true,
-            errors: [],
+            errors: [explanation],
             explanation,
             derivedRows: [
               {

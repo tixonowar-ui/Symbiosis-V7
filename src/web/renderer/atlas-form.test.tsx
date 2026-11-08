@@ -23,6 +23,17 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Exact literals are intentional: applied traceability requires every implemented form in a test. */
 const TEST_IMPLEMENTED_FORM_IDS = [
+  'NPC-001',
+  'NPC-002',
+  'NPC-003',
+  'NPC-007',
+  'NPC-011',
+  'NPC-012',
+  'NPC-013',
+  'NPC-014',
+  'NPC-015',
+  'NPC-016',
+  'NPC-017',
   'NET-008',
   'NET-009',
   'NET-010',
@@ -254,7 +265,8 @@ describe('atlas implemented-form renderer', () => {
     }
 
     // #174 adds CMP-008/016 and NET-008/009/010 screens, plus CMP-014/015/NET-023 dialogs.
-    expect(screens).toBe(74);
+    // #187 adds the eleven source-defined NPC screens; no dialog is added.
+    expect(screens).toBe(85);
     expect(dialogs).toBe(10);
   });
 

@@ -5388,13 +5388,21 @@ export function createNpcOrdinaryDomainReaders(
     pending: NpcPendingCommitEvidence | null,
     initialInventory?: NpcInitialInventoryPreparation,
     candidate: NpcVersion | null = null,
+    captureSavedPoison = false,
   ): {
     prepared: NpcOrdinaryPreparedVersion;
     evidence: NpcVersionDerivationEvidence;
     derivedSnapshot: ReturnType<typeof readSnapshot>;
     previousSnapshot: ReturnType<typeof readSnapshot> | null;
+    completedSavedPoison?: CompletedSavedPoisonRead;
   } {
     requireCalendar(calendar, attempt.scope);
+    const poisonGuard =
+      captureSavedPoison && pending === null ? capturePriorLifeReadGuard(calendar) : null;
+    const poisonRequest =
+      poisonGuard === null ? undefined : priorLifeCallable(NPC_GM_REQUEST_READERS, 'request');
+    const poisonContext =
+      poisonGuard === null ? undefined : priorLifeCallable(poisonReaders, 'context');
     if (attempt.status !== 'OPEN' || attempt.stage !== 'NPC-017')
       return fail('closed/open final attempt required');
     const target: NpcDerivationTarget = {
@@ -5480,6 +5488,13 @@ export function createNpcOrdinaryDomainReaders(
           ? previousSnapshot
           : readSnapshot(initial.record['snapshot'], calendar);
     const poison = poisonState(evidence, calendar, pending);
+    // A later graph may reuse only this completed saved result. Capture mutable children
+    // before derive and historical callbacks, rather than blessing their later state.
+    const savedPoison = poisonGuard !== null && poison !== null ? { ...poison, evidence } : null;
+    const poisonNodes =
+      savedPoison === null
+        ? undefined
+        : captureReadGraph([{ value: poison }, { value: savedPoison }]);
     let publication = inventoryProof(
       evidence,
       current,
@@ -5567,6 +5582,20 @@ export function createNpcOrdinaryDomainReaders(
       life,
       poison,
     );
+    const completedSavedPoison: CompletedSavedPoisonRead | undefined =
+      poisonGuard === null || savedPoison === null || poisonNodes === undefined
+        ? undefined
+        : {
+            snapshot,
+            poison: savedPoison,
+            calendar,
+            guard: poisonGuard,
+            request: poisonRequest,
+            poisonContext,
+            nodes: [...poisonNodes, ...captureReadGraph([{ value: snapshot }])],
+          };
+    if (completedSavedPoison !== undefined)
+      assertCompletedSavedPoisonRead(completedSavedPoison, snapshot, calendar, pending);
     if (evidence.initialOrNull !== null) {
       const first = evidence.initialOrNull;
       const firstEvidence = readNpcVersionDerivationEvidenceInTransaction(db, {
@@ -5705,10 +5734,11 @@ export function createNpcOrdinaryDomainReaders(
           'retained lifetime',
         );
     }
-    return {
+    const result = {
       evidence,
       derivedSnapshot: snapshot,
       previousSnapshot,
+      ...(completedSavedPoison === undefined ? {} : { completedSavedPoison }),
       prepared: {
         snapshot: json(snapshot),
         lifetimeFacts: json(snapshot.sheet.input.lifetimeFacts),
@@ -5720,6 +5750,9 @@ export function createNpcOrdinaryDomainReaders(
             : null,
       },
     };
+    if (completedSavedPoison !== undefined)
+      assertCompletedSavedPoisonRead(completedSavedPoison, snapshot, calendar, pending);
+    return result;
   }
   function snapshotRequiredPreStartTime(
     snapshot: ReturnType<typeof readSnapshot>,
@@ -6945,6 +6978,7 @@ export function createNpcOrdinaryDomainReaders(
         evidence,
         derivedSnapshot,
         previousSnapshot,
+        completedSavedPoison,
       } = resolve(
         { ...committed, status: 'OPEN', revision: committed.revision - 1 },
         version.operationId,
@@ -6953,6 +6987,7 @@ export function createNpcOrdinaryDomainReaders(
         pending,
         undefined,
         version,
+        storedChildGraphOrNull !== null && pending === null,
       );
       if (evidence.committedOrNull !== null)
         equal(version, evidence.committedOrNull.record, 'stored version bytes');
@@ -6975,12 +7010,17 @@ export function createNpcOrdinaryDomainReaders(
       );
       equal(version.snapshot, expected.snapshot, 'confirmed snapshot');
       // Resolve already derived this snapshot from the real history; do not decode it again.
-      if (storedChildGraphOrNull !== null)
+      if (storedChildGraphOrNull !== null) {
+        if (completedSavedPoison !== undefined)
+          assertCompletedSavedPoisonRead(completedSavedPoison, derivedSnapshot, calendar, pending);
         equal(
           storedChildGraphOrNull,
-          snapshotChildGraph(derivedSnapshot, calendar, pending),
+          snapshotChildGraph(derivedSnapshot, calendar, pending, completedSavedPoison),
           'confirmed stored child graph',
         );
+        if (completedSavedPoison !== undefined)
+          assertCompletedSavedPoisonRead(completedSavedPoison, derivedSnapshot, calendar, pending);
+      }
       equal(version.lifetimeFacts, expected.lifetimeFacts, 'confirmed lifetime');
       equal(
         version.art,
