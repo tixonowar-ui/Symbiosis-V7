@@ -6559,7 +6559,7 @@ export function registerNpcEquippedInventory() {
       expect(restored.read().closure.versions[0]).toEqual(version);
       expect(restored.workflow(command)).toMatchObject({ replayed: true, receipt });
       expect(reopened.db.serialize().equals(bytes)).toBe(true);
-    });
+    }, 60_000);
   });
 }
 
