@@ -1,3 +1,6 @@
+import { npcTechnicalRequestValue, npcTechnicalResponseValue } from './npc-command.js';
+import { npcArtReadMessageValue, NpcProjectionDecodeError } from './npc-presentation-codec.js';
+import type { NpcArtReadRequest, NpcArtReadResult, NpcArtReadRefusal } from './npc-presentation.js';
 import { campaignPeerControlValue, campaignPeerStateValue } from './campaign-lifecycle.js';
 import { wireCodecPrimitives } from './wire-codec.js';
 import { admissionGmClientValue, admissionGmHostValue } from './campaign-admission-review.js';
@@ -299,7 +302,10 @@ const identityDraftRefusal = (value: unknown, path: string): IdentityDraftRefusa
   const code = text(shape['code'], `${path}.code`);
   if (code === 'INVALID_FIELD') {
     const object = exact(value, 'code error', path);
-    return { code, error: identityDraftFieldError(object['error'], `${path}.error`) };
+    return {
+      code,
+      error: identityDraftFieldError(object['error'], `${path}.error`),
+    };
   }
   if (code === 'STALE_DRAFT') {
     const object = exact(value, 'actual code expected', path);
@@ -421,7 +427,47 @@ const identityDraftRefusalMessage = (value: unknown): IdentityDraftRefusalV3Mess
   return validated(value);
 };
 
+function isNpcArt(value: unknown, host: boolean): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'messageType');
+  if (descriptor !== undefined && !Object.hasOwn(descriptor, 'value'))
+    return invalid('$.messageType', 'own data discriminator', null);
+  const kind: unknown = descriptor?.value;
+  return host
+    ? kind === 'network.npc-art.result' || kind === 'network.npc-art.refusal'
+    : kind === 'network.npc-art.read';
+}
+function npcArtWireValue(value: unknown, host: false): NpcArtReadRequest;
+function npcArtWireValue(value: unknown, host: true): NpcArtReadResult | NpcArtReadRefusal;
+function npcArtWireValue(value: unknown, host: boolean) {
+  try {
+    const result = npcArtReadMessageValue(value);
+    if ((result.messageType !== 'network.npc-art.read') !== host)
+      return invalid('$.messageType', 'NPC art direction', null);
+    return result;
+  } catch (error) {
+    if (error instanceof NpcProjectionDecodeError)
+      return invalid('$.npcArt', 'closed NPC art message', null);
+    throw error;
+  }
+}
+function isNpcTechnicalInput(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'messageType');
+  if (descriptor !== undefined && !Object.hasOwn(descriptor, 'value'))
+    return invalid('$.messageType', 'own data discriminator', null);
+  const messageType: unknown = descriptor?.value;
+  return (
+    messageType === 'network.npc-selection.replace' ||
+    messageType === 'network.npc-editor.replace' ||
+    messageType === 'network.npc-preparation.request'
+  );
+}
+
 const clientValue = (value: unknown): ClientToHostV3Message => {
+  if (isNpcArt(value, false)) return npcArtWireValue(value, false);
+  // A malformed NPC header must reach the closed reader before generic JSON diagnostics.
+  if (isNpcTechnicalInput(value)) return npcTechnicalRequestValue(value);
   const object = base(value);
   if (object['messageType'] === 'network.peer-control') return campaignPeerControlValue(value);
   if (
@@ -441,7 +487,23 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
   return unrecognized('$.messageType', text(object['messageType'], '$.messageType'));
 };
 
+function isNpcTechnicalResponseInput(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'messageType');
+  if (descriptor !== undefined && !Object.hasOwn(descriptor, 'value'))
+    return invalid('$.messageType', 'own data discriminator', null);
+  const messageType: unknown = descriptor?.value;
+  return (
+    messageType === 'network.npc-editor.result' ||
+    messageType === 'network.npc-selection.result' ||
+    messageType === 'network.npc-editor.refusal' ||
+    messageType === 'network.npc-selection.refusal'
+  );
+}
+
 const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3Message => {
+  if (isNpcArt(value, true)) return npcArtWireValue(value, true);
+  if (isNpcTechnicalResponseInput(value)) return npcTechnicalResponseValue(value);
   const object = base(value);
   if (object['messageType'] === 'network.peer-state') return campaignPeerStateValue(value);
   if (
@@ -484,11 +546,38 @@ export const encodeClientMessageV3 = (
   value: ClientToHostV3Message,
   _vocabulary: WireV3Vocabulary,
 ): EncodeResult => {
-  const result = encode(value, clientValue);
+  // NPC input is closed own data. The generic JSON normalizer must not read its getters first.
+  const checked = wireCodecPrimitives.decodeValue(() =>
+    isNpcArt(value, false)
+      ? npcArtWireValue(value, false)
+      : isNpcTechnicalInput(value)
+        ? npcTechnicalRequestValue(value)
+        : value,
+  );
+  // The art reader already returned detached closed JSON. Generic encode creates null-prototype
+  // objects, which this strict reader intentionally does not accept as external values.
+  const result = checked.ok
+    ? isNpcArt(checked.value, false)
+      ? { ok: true as const, text: JSON.stringify(checked.value) }
+      : encode(checked.value, clientValue)
+    : checked;
   return result.ok ? result : { ok: false, refusal: redactProtocolInputRefusal(result.refusal) };
 };
 
 export const encodeHostMessageV3 = (
   value: HostToClientV3Message,
   vocabulary: WireV3Vocabulary,
-): EncodeResult => encode(value, (candidate) => hostValue(candidate, vocabulary));
+): EncodeResult => {
+  const checked = wireCodecPrimitives.decodeValue(() =>
+    isNpcArt(value, true)
+      ? npcArtWireValue(value, true)
+      : isNpcTechnicalResponseInput(value)
+        ? npcTechnicalResponseValue(value)
+        : value,
+  );
+  return checked.ok
+    ? isNpcArt(checked.value, true)
+      ? { ok: true, text: JSON.stringify(checked.value) }
+      : encode(checked.value, (candidate) => hostValue(candidate, vocabulary))
+    : checked;
+};

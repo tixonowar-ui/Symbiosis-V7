@@ -704,6 +704,32 @@ describe('actual-source poison preparation adapter boundaries', () => {
     expect(h.issued).toBe(0);
     expect(h.candidates).toEqual([]);
   });
+  it('preserves saved legacy absence without exposing poison controls and rejects an explicit unset selection', () => {
+    const h = harness({ stage: 'NPC-016', mode: 'NONE', time: null });
+    const initialState = Object.fromEntries(
+      Object.entries(h.basis.draft.initialState).filter(([key]) => key !== 'poisonModeFactIds'),
+    );
+    const legacyDraft = readNpcEditorDraft(h.basis.editor, { ...h.basis.draft, initialState });
+    const legacy = { ...h.attempt, values: json(legacyDraft) };
+    h.setBasis({ ...h.basis, draft: legacyDraft, attempt: legacy });
+    const before = basisBytes(h.basis);
+    expect(h.api.inspect(legacy, h.calendar)).toBeNull();
+    expect(basisBytes(h.basis)).toBe(before);
+
+    const pendingDraft = readNpcEditorDraft(h.basis.editor, {
+      ...legacyDraft,
+      initialState: { ...initialState, poisonModeFactIds: { kind: 'UNSET' } },
+    });
+    const pending = { ...h.attempt, values: json(pendingDraft) };
+    h.setBasis({ ...h.basis, draft: pendingDraft, attempt: pending });
+    const pendingBytes = basisBytes(h.basis);
+    expect(() => h.api.inspect(pending, h.calendar)).toThrow(
+      /explicit owning mode selection required/,
+    );
+    expect(basisBytes(h.basis)).toBe(pendingBytes);
+    expect(h.issued).toBe(0);
+    expect(h.candidates).toEqual([]);
+  });
   it('prepares an explicit learned mode without a clock and preserves unentered controls', () => {
     const h = harness({ stage: 'NPC-016', mode: 'NONE', time: null }),
       before = basisBytes(h.basis);

@@ -1,4 +1,51 @@
 import {
+  type NpcPoisonModeSetRequestInput,
+  type NpcPoisonCoatingPreparationRequestInput,
+  type NpcPoisonCoatingRemovalRequestInput,
+  npcPoisonModeSetRequestInputValue,
+  npcPoisonCoatingPreparationRequestInputValue,
+  npcPoisonCoatingRemovalRequestInputValue,
+  NPC_WORKFLOW_COMMAND_IDS,
+  NPC_NAV_TARGETS,
+  type NpcWorkflowCommandRequest,
+  type NpcTechnicalRequest,
+  type NpcCompositionContinuationInput,
+  type NpcWoundPreparationRequestInput,
+  npcWoundPreparationRequestInputValue,
+  type NpcAlcoholPreparationRequestInput,
+  type NpcHpModePreparationRequestInput,
+  type NpcFormalControlPreparationRequestInput,
+  type NpcWeaverStatePreparationRequestInput,
+  type NpcWeaverStateRemovalRequestInput,
+  npcWeaverStatePreparationRequestInputValue,
+  npcWeaverStateRemovalRequestInputValue,
+  type NpcLifeStateRollRequestInput,
+  type NpcLifeStateSetRequestInput,
+  npcLifeStateRollRequestInputValue,
+  npcLifeStateSetRequestInputValue,
+  npcAlcoholPreparationRequestInputValue,
+  npcHpModePreparationRequestInputValue,
+  npcFormalControlPreparationRequestInputValue,
+  equipmentCompatibilityPreparationRequestInputValue,
+  npcCompositeItemReservationInputValue,
+  type NpcCompositeItemTypeId,
+} from '@shared/npc-command.js';
+import type { NpcGmProjection, NpcPreparedDiseaseId } from '@shared/npc-presentation.js';
+import type { NpcArtEdit } from './forms/npc/npc-presentation.js';
+import {
+  NpcBrowserSession,
+  isNpcControlForm,
+  decodeNpcProjection,
+  npcAvailableActions,
+  npcBrowserWorkflow,
+  npcBrowserReceipt,
+  npcBrowserDestination,
+  npcPortraitRequests,
+  type NpcControlPresentation,
+  type NpcInputBufferState,
+  type NpcStageEdit,
+} from './forms/npc/npc-application.js';
+import {
   campaignPeerMatchesSnapshot,
   campaignConnectionStatusFollows,
   type CampaignPeerControlV3Message,
@@ -540,7 +587,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
         UUID_PATTERN.test(bindings[0].value)
       );
     }
-    if (isCampaignLobbyGmForm(formId) || formId === 'PLY-001')
+    if (isNpcControlForm(formId) || isCampaignLobbyGmForm(formId) || formId === 'PLY-001')
       return (
         bindings.length === (formId === 'PLY-001' ? 2 : 1) &&
         bindings.every(
@@ -604,6 +651,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    NPC_WORKFLOW_COMMAND_IDS.some((id) => id === value) ||
     isCampaignLifecycleWorkflow(value) ||
     (CAMPAIGN_LOBBY_WORKFLOW_IDS as readonly string[]).includes(value) ||
     value === 'UI-CMD-ADMISSION-PLAYER-DECIDE' ||
@@ -1981,6 +2029,54 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  replaceNpcStage(edit: NpcStageEdit): FormActionRequestResult;
+  stageNpcInput(edit: NpcStageEdit): FormActionRequestResult;
+  applyNpcInput(): FormActionRequestResult;
+  discardNpcInput(): FormActionRequestResult;
+  selectNpc(npcUuidOrNull: string | null): FormActionRequestResult;
+  selectNpcHistory(version: number): FormActionRequestResult;
+  reserveNpcSymbiont(): FormActionRequestResult;
+  prepareNpcAlcohol(
+    capabilityKey: string,
+    input: NpcAlcoholPreparationRequestInput,
+  ): FormActionRequestResult;
+  prepareNpcHpMode(input: NpcHpModePreparationRequestInput): FormActionRequestResult;
+  prepareNpcFormalControl(input: NpcFormalControlPreparationRequestInput): FormActionRequestResult;
+  prepareNpcWeaverState(input: NpcWeaverStatePreparationRequestInput): FormActionRequestResult;
+  setNpcPoisonMode(input: NpcPoisonModeSetRequestInput): FormActionRequestResult;
+  prepareNpcPoisonCoating(input: NpcPoisonCoatingPreparationRequestInput): FormActionRequestResult;
+  removeNpcPoisonCoating(input: NpcPoisonCoatingRemovalRequestInput): FormActionRequestResult;
+  removeNpcWeaverState(input: NpcWeaverStateRemovalRequestInput): FormActionRequestResult;
+  prepareNpcLifeRoll(input: NpcLifeStateRollRequestInput): FormActionRequestResult;
+  prepareNpcLifeState(input: NpcLifeStateSetRequestInput): FormActionRequestResult;
+  prepareNpcWound(
+    capabilityKey: string,
+    input: NpcWoundPreparationRequestInput,
+  ): FormActionRequestResult;
+  confirmNpcComposition(capabilityKey: string): FormActionRequestResult;
+  resolveNpcComposition(
+    capabilityKey: string,
+    input: NpcCompositionContinuationInput,
+  ): FormActionRequestResult;
+  reserveNpcItem(): FormActionRequestResult;
+  reserveNpcCustomItem(capabilityKey: string): FormActionRequestResult;
+  reserveNpcCustomModifier(capabilityKey: string, itemInstanceId: string): FormActionRequestResult;
+  reserveNpcCustomProfileVersion(
+    capabilityKey: string,
+    itemInstanceId: string,
+    profileId: string,
+    expectedProfileVersionId: string,
+  ): FormActionRequestResult;
+  reserveNpcCompositeItem(itemTypeId: NpcCompositeItemTypeId): FormActionRequestResult;
+  restoreNpcItem(capabilityKey: string, itemInstanceId: string): FormActionRequestResult;
+  confirmNpcEquipmentCompatibility(capabilityKey: string, reason: string): FormActionRequestResult;
+  reserveNpcTrauma(capabilityKey: string): FormActionRequestResult;
+  reserveNpcDisease(
+    capabilityKey: string,
+    diseaseId: NpcPreparedDiseaseId,
+  ): FormActionRequestResult;
+  replaceNpcArt(bindingKey: string, edit: NpcArtEdit): FormActionRequestResult;
+  setNpcInputPending(bindingKey: string, pending: boolean): void;
   requestCampaignPeerAction(
     actionKey: string,
     endpoint: { readonly hostAddress: string; readonly hostPort: number } | null,
@@ -4305,6 +4401,7 @@ function decodeConfirmedSnapshot(
   let currentCampaignLifecycle: CampaignLifecycleGmAnchor | undefined;
   const raw = inputMessage.presentation.base;
   const campaignContext =
+    isNpcControlForm(raw.formId) ||
     raw.formId === 'CMP-006' ||
     raw.formId === 'NET-017' ||
     isAdmissionGmForm(raw.formId) ||
@@ -4348,6 +4445,12 @@ function decodeConfirmedSnapshot(
             currentCampaignLifecycle.firstStartCompleted)
       )
         return unrecognized('$.currentCampaignLifecycle', null);
+      if (
+        isNpcControlForm(raw.formId) &&
+        (payload['campaignStatus'] !== currentCampaignLifecycle.campaignStatus ||
+          (payload['campaignPhase'] === 'STARTED') !== currentCampaignLifecycle.firstStartCompleted)
+      )
+        return unrecognized('$.currentCampaignLifecycle', null);
       message = {
         ...inputMessage,
         presentation: {
@@ -4363,7 +4466,8 @@ function decodeConfirmedSnapshot(
   const expectedRole =
     base.formId === 'APP-001'
       ? null
-      : base.formId === 'NET-017' ||
+      : isNpcControlForm(base.formId) ||
+          base.formId === 'NET-017' ||
           isCampaignCreationForm(base.formId) ||
           isAdmissionGmForm(base.formId) ||
           isCampaignLobbyGmForm(base.formId) ||
@@ -4380,6 +4484,7 @@ function decodeConfirmedSnapshot(
     message.projectionRole !== 'gm' &&
     (executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
       [
+        ...NPC_WORKFLOW_COMMAND_IDS,
         ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
         ...ADMISSION_GM_WORKFLOW_IDS,
         ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
@@ -4389,7 +4494,25 @@ function decodeConfirmedSnapshot(
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (isCampaignLifecycleForm(base.formId)) {
+  if (isNpcControlForm(base.formId)) {
+    const p = checkedNpc(base.formId, base.roleFilteredPayload, message.revisions);
+    if (
+      p === null ||
+      message.presentation.layers.length !== 0 ||
+      base.routeBindings.length !== 1 ||
+      base.routeBindings[0]?.parameterIndex !== 0 ||
+      base.routeBindings[0].source !== 'inherited' ||
+      base.routeBindings[0].value !== p.campaignId
+    )
+      return unrecognized('$.presentation', null);
+    const actions = exactSymbiontActionKeys(
+      base.availableActionKeys,
+      npcAvailableActions(p, executableWorkflowCommandIds),
+      '$.presentation.base.availableActionKeys',
+    );
+    if (!actions.ok) return actions;
+    projection = { ok: true, value: p as unknown as JsonObject };
+  } else if (isCampaignLifecycleForm(base.formId)) {
     try {
       const p = campaignLifecycleGmProjectionValue(base.roleFilteredPayload);
       const layers = message.presentation.layers;
@@ -5905,6 +6028,18 @@ function decodeFormActionSnapshot(
     if (
       activePresentedForm(previous).formId !== pending.sourceFormId ||
       activePresentedForm(decoded.value).formId !== target ||
+      !gmQueueMonotonic(decoded.value, previous) ||
+      decoded.value.revisions.projectionRevision < previous.revisions.projectionRevision + 1
+    )
+      return unrecognized('$.presentation', null);
+    return decoded;
+  }
+  if (Object.hasOwn(NPC_NAV_TARGETS, pending.actionKey)) {
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    if (
+      previous.formId !== pending.sourceFormId ||
+      decoded.value.formId !== NPC_NAV_TARGETS[pending.actionKey as keyof typeof NPC_NAV_TARGETS] ||
       !gmQueueMonotonic(decoded.value, previous) ||
       decoded.value.revisions.projectionRevision < previous.revisions.projectionRevision + 1
     )
@@ -8853,6 +8988,7 @@ type NetworkGmDecisionRequest =
     >
   | WorkflowCommandRequestMessage<'UI-CMD-DEVICE-REQUEST-REJECT', NetworkGmRejectRequestPayload>;
 type GmBrowserRequest =
+  | NpcWorkflowCommandRequest
   | NetworkGmDecisionRequest
   | AdmissionBrowserRequest
   | CampaignLobbyGmRequest
@@ -8901,6 +9037,25 @@ function expectedGmRequestActions(
     'NET-017::CTA::009',
   ];
 }
+function checkedNpc(
+  formId: string,
+  value: JsonObject,
+  revisions: RevisionVector,
+): NpcGmProjection | null {
+  if (
+    !isNpcControlForm(formId) ||
+    typeof value['contextId'] !== 'string' ||
+    typeof value['campaignId'] !== 'string'
+  )
+    return null;
+  const decoded = decodeNpcProjection(formId, value, {
+    projectionRole: 'gm',
+    contextId: value['contextId'],
+    campaignId: value['campaignId'],
+    ...revisions,
+  });
+  return decoded.ok ? decoded.value : null;
+}
 function gmQueueScope(
   s: ConfirmedProjectionSnapshot,
 ): { contextId: string; campaignId: string } | null {
@@ -8908,6 +9063,7 @@ function gmQueueScope(
     s.formId === 'NET-017' ||
     isAdmissionGmForm(s.formId) ||
     isCampaignLobbyGmForm(s.formId) ||
+    isNpcControlForm(s.formId) ||
     isCampaignLifecycleForm(s.formId)
       ? s.projection['contextId']
       : s.formId === 'CMP-006'
@@ -8950,8 +9106,10 @@ function gmQueueMonotonic(
     (isAdmissionGmForm(next.formId) ||
       isAdmissionGmForm(previous.formId) ||
       isCampaignLobbyGmForm(next.formId) ||
+      isNpcControlForm(next.formId) ||
       isCampaignLifecycleForm(next.formId) ||
       isCampaignLobbyGmForm(previous.formId) ||
+      isNpcControlForm(previous.formId) ||
       isCampaignLifecycleForm(previous.formId)) &&
     sameCampaignRevisions(next.revisions, previous.revisions) &&
     (next.formId !== previous.formId ||
@@ -9020,6 +9178,15 @@ function gmDecisionReceipt(
   request: GmBrowserRequest,
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<CommandReceipt> {
+  if (NPC_WORKFLOW_COMMAND_IDS.some((id) => id === request.workflowCommandId)) {
+    const p = checkedNpc(source.formId, source.projection, source.revisions);
+    if (p === null) return unrecognized('$.receipt', null);
+    try {
+      return { ok: true, value: npcBrowserReceipt(value, request as NpcWorkflowCommandRequest, p) };
+    } catch {
+      return unrecognized('$.receipt', null);
+    }
+  }
   if (isCampaignLifecycleWorkflow(request.workflowCommandId)) {
     try {
       return {
@@ -9105,6 +9272,15 @@ export function gmDecisionDestination(
   replay: boolean,
 ): boolean {
   const workflow = receipt.result['workflowCommandId'];
+  if (NPC_WORKFLOW_COMMAND_IDS.some((id) => id === workflow))
+    return (
+      gmQueueMonotonic(next, source) &&
+      npcBrowserDestination(
+        checkedNpc(next.formId, next.projection, next.revisions),
+        receipt,
+        next.revisions,
+      )
+    );
   if (typeof workflow === 'string' && isCampaignLifecycleWorkflow(workflow)) {
     if (next.currentCampaignLifecycle === undefined) return false;
     const active = activePresentedForm(next);
@@ -9329,6 +9505,10 @@ export function connectProjection(
   onNetworkDraft: (value: NetworkDraftClientState | null) => void = () => {},
   onNetworkGmRequestDraft: (value: NetworkGmRequestDraftClientState | null) => void = () => {},
   onCampaignPeerState?: (value: CampaignPeerStateV3Message | null) => void,
+  onNpcControls: (
+    value: NpcControlPresentation | null,
+    buffer: NpcInputBufferState | null,
+  ) => void = () => {},
 ): ProjectionConnection {
   let deviceId: string | null = null;
   let disposed = false;
@@ -9342,6 +9522,7 @@ export function connectProjection(
     source: ConfirmedProjectionSnapshot;
     receipt: CommandReceipt | null;
   } | null = null;
+  const npc = new NpcBrowserSession();
   let gmEdit: NetworkGmRequestDraftValues | null = null;
   let pendingAdmissionDraft: {
     request: AdmissionGmClientV3Message;
@@ -9713,7 +9894,10 @@ export function connectProjection(
     return { ok: true };
   }
 
-  const commandPending = () =>
+  const commandPending = (ignoreLocalNpcInput = false) =>
+    (!ignoreLocalNpcInput && npc.dirty) ||
+    npc.pending ||
+    npc.busy ||
     pendingOwnerCommand !== null ||
     pendingAdmissionDraft !== null ||
     pendingGmDraft !== null ||
@@ -9756,6 +9940,7 @@ export function connectProjection(
       isAdmissionGmForm(snapshot.formId) ||
       isCampaignOwnerForm(snapshot.formId) ||
       isCampaignLobbyGmForm(snapshot.formId) ||
+      isNpcControlForm(snapshot.formId) ||
       isCampaignLifecycleForm(snapshot.formId)
     )
       return {
@@ -9796,6 +9981,129 @@ export function connectProjection(
             ? visible.availableActionKeys.filter((key) => key !== continueKey)
             : visible.availableActionKeys,
     };
+  };
+  const publishNpc = () => {
+    const externalPending = commandPending(true) && !npc.busy;
+    onNpcControls(npc.controls(externalPending), npc.inputBuffer(externalPending));
+  };
+  const loadNpcPortraits = () => {
+    const p = npc.projection;
+    if (p === null || socket?.readyState !== WebSocket.OPEN) return;
+    for (const request of npcPortraitRequests(p, npc.art, createNetworkCommandId)) {
+      const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) {
+        npc.art.fail(request.requestId);
+        continue;
+      }
+      try {
+        socket.send(encoded.text);
+      } catch {
+        npc.art.fail(request.requestId);
+      }
+    }
+    publishNpc();
+  };
+  const dispatchNpc = (
+    begin: () => NpcTechnicalRequest,
+    fromLocalInput = false,
+  ): FormActionRequestResult => {
+    if (
+      disposed ||
+      terminal ||
+      lastSnapshot === null ||
+      socket?.readyState !== WebSocket.OPEN ||
+      commandPending(fromLocalInput) ||
+      pendingFormAction !== null ||
+      pendingAddressableRoute !== null ||
+      gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId
+    )
+      return {
+        ok: false,
+        detail: 'Дождитесь подтверждения предыдущего ввода НПС или восстановите соединение.',
+      };
+    try {
+      const request = begin(),
+        encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
+      if (!encoded.ok) {
+        failUnexpected('$.npc', null, 'NPC request failed checked encoding.');
+        return { ok: false, detail: 'Ввод НПС не прошёл проверку.' };
+      }
+      try {
+        socket.send(encoded.text);
+      } catch {
+        socket.close(1000, 'NPC delivery interrupted');
+      }
+      publishNpc();
+      notifyReady();
+      return { ok: true };
+    } catch {
+      return { ok: false, detail: 'Ввод НПС не соответствует текущей форме и попытке.' };
+    }
+  };
+  const sendNpc = (value: unknown): FormActionRequestResult => dispatchNpc(() => npc.begin(value));
+  const npcEnvelope = () => {
+    const p = npc.projection,
+      operationId = createNetworkCommandId();
+    if (p === null || operationId === null) throw new Error('NPC request unavailable');
+    return {
+      protocolVersion: 3,
+      operationId,
+      campaignId: p.campaignId,
+      sourceFormId: p.formId,
+      expectedRevisions: {
+        stateRevision: p.stateRevision,
+        projectionRevision: p.projectionRevision,
+        actorVisibilityRevision: p.actorVisibilityRevision,
+      },
+    };
+  };
+  type CustomInventoryReservation =
+    | { kind: 'CUSTOM_ITEM_RESERVE' }
+    | { kind: 'CUSTOM_MODIFIER_RESERVE'; itemInstanceId: string }
+    | {
+        kind: 'CUSTOM_PROFILE_VERSION_RESERVE';
+        itemInstanceId: string;
+        profileId: string;
+        expectedProfileVersionId: string;
+      };
+  const reserveNpcCustom = (
+    capabilityKey: string,
+    intent: CustomInventoryReservation,
+  ): FormActionRequestResult => {
+    try {
+      const p = npc.projection,
+        attempt = p?.attemptOrNull;
+      if (p?.formId !== 'NPC-015' || attempt == null)
+        return { ok: false, detail: 'Редактирование произвольного предмета недоступно.' };
+      const capability = p.content.customPreparationOrNull;
+      if (capability == null || capability.capabilityKey !== capabilityKey)
+        return { ok: false, detail: 'Предмет или доступные действия изменились.' };
+      const offered =
+        intent.kind === 'CUSTOM_ITEM_RESERVE'
+          ? capability.canAdd
+          : intent.kind === 'CUSTOM_MODIFIER_RESERVE'
+            ? capability.modifierTargets.some(
+                (target) => target.itemInstanceId === intent.itemInstanceId,
+              )
+            : capability.versionTargets.some(
+                (target) =>
+                  target.itemInstanceId === intent.itemInstanceId &&
+                  target.profileId === intent.profileId &&
+                  target.profileVersionId === intent.expectedProfileVersionId,
+              );
+      if (!offered)
+        return { ok: false, detail: 'Выбранный предмет или версия недоступны для изменения.' };
+      return sendNpc({
+        ...npcEnvelope(),
+        messageType: 'network.npc-preparation.request',
+        sourceFormId: 'NPC-015',
+        npcDraftId: attempt.npcDraftId,
+        expectedAttemptRevision: attempt.attemptRevision,
+        preparation: { ...intent, values: p.content.input },
+      });
+    } catch {
+      return { ok: false, detail: 'Подготовка произвольного предмета недоступна.' };
+    }
   };
   const publishCampaignDraft = () =>
     onCampaignDraft(
@@ -9975,6 +10283,8 @@ export function connectProjection(
   const failProtocol = (refusal: DecodeRefusal, detail: string) => {
     if (disposed || terminal) return;
     terminal = true;
+    npc.dispose();
+    onNpcControls(null, null);
     pendingOwnerCommand = null;
     pendingAdmissionDraft = null;
     clearGmDraft();
@@ -10215,16 +10525,19 @@ export function connectProjection(
       next.formId === 'NET-017' ||
       isAdmissionGmForm(next.formId) ||
       isCampaignLobbyGmForm(next.formId) ||
+      isNpcControlForm(next.formId) ||
       isCampaignLifecycleForm(next.formId)
     ) {
       const p =
         next.formId === 'NET-017'
           ? gmRequestProjection(next.projection)
-          : isCampaignLifecycleForm(next.formId)
-            ? campaignLifecycleGmProjectionValue(next.projection)
-            : isCampaignLobbyGmForm(next.formId)
-              ? campaignLobbyGmProjectionValue(next.projection)
-              : admissionGmProjectionValue(next.formId, next.projection);
+          : isNpcControlForm(next.formId)
+            ? checkedNpc(next.formId, next.projection, next.revisions)
+            : isCampaignLifecycleForm(next.formId)
+              ? campaignLifecycleGmProjectionValue(next.projection)
+              : isCampaignLobbyGmForm(next.formId)
+                ? campaignLobbyGmProjectionValue(next.projection)
+                : admissionGmProjectionValue(next.formId, next.projection);
       if (p === null || p.contextId !== gmLocalContextId) {
         failUnexpected('$.contextId', null, 'GM queue changed the owned ticket.');
         return;
@@ -10257,6 +10570,9 @@ export function connectProjection(
         ? checkpointResult.compositionDraftRevision
         : undefined;
     lastSnapshot = next;
+    npc.adopt(checkedNpc(next.formId, next.projection, next.revisions), gmQueueScope(next));
+    publishNpc();
+    loadNpcPortraits();
     if (pendingCheckpoint !== null) pendingCheckpoint = null;
     if (pendingSetDecision !== null) pendingSetDecision = null;
     if (pendingRollCommit !== null) pendingRollCommit = null;
@@ -10325,6 +10641,10 @@ export function connectProjection(
       const oldSocket = socket;
       openTransport(deviceId);
       oldSocket?.close(1000, 'launch capability negotiation');
+    } else if (reconnect && npc.request !== null && socket?.readyState === WebSocket.OPEN) {
+      const encoded = encodeClientMessageV3(npc.request, WEB_PROTOCOL_VOCABULARY);
+      if (encoded.ok) socket.send(encoded.text);
+      else failUnexpected('$.npc', null, 'Original NPC request could not be replayed.');
     } else if (
       reconnect &&
       pendingAdmissionDraft !== null &&
@@ -10894,6 +11214,46 @@ export function connectProjection(
           );
           return;
         }
+        if (
+          message.messageType === 'network.npc-art.result' ||
+          message.messageType === 'network.npc-art.refusal'
+        ) {
+          try {
+            npc.art.accept(message);
+            publishNpc();
+          } catch {
+            failUnexpected('$.npc.art', null, 'NPC portrait changed its checked binding.');
+          }
+          return;
+        }
+        if (
+          message.messageType === 'network.npc-editor.result' ||
+          message.messageType === 'network.npc-editor.refusal' ||
+          message.messageType === 'network.npc-selection.result' ||
+          message.messageType === 'network.npc-selection.refusal'
+        ) {
+          if (!npc.pending) {
+            failUnexpected('$.messageType', null, 'Unsolicited NPC response.');
+            return;
+          }
+          try {
+            const outcome = npc.accept(message);
+            publishNpc();
+            notifyReady();
+            if (outcome === 'REFUSAL' && deviceId !== null) {
+              const old = socket;
+              openTransport(deviceId);
+              old?.close(1000, 'refresh NPC refusal');
+            }
+          } catch {
+            failUnexpected(
+              '$.npc',
+              null,
+              'NPC response changed its pending correlation or applied facts.',
+            );
+          }
+          return;
+        }
         if (message.messageType === 'network.peer-state') {
           acceptPeerState(message);
           return;
@@ -11285,6 +11645,14 @@ export function connectProjection(
           sendIdentity(next);
           return;
         }
+        if (message.messageType !== 'character.identity-draft.refusal') {
+          failUnexpected(
+            '$.messageType',
+            null,
+            'Host sent an NPC response without a pending NPC request.',
+          );
+          return;
+        }
         if (identity === null || lastSnapshot === null) return;
         const next = identity.receiveRefusal(message);
         onIdentityDraft(identity.state);
@@ -11370,10 +11738,12 @@ export function connectProjection(
             (lastSnapshot.formId === 'NET-017' ||
               isAdmissionGmForm(lastSnapshot.formId) ||
               isCampaignLobbyGmForm(lastSnapshot.formId) ||
+              isNpcControlForm(lastSnapshot.formId) ||
               isCampaignLifecycleForm(lastSnapshot.formId)) &&
             (candidate.value.formId === 'NET-017' ||
               isAdmissionGmForm(candidate.value.formId) ||
               isCampaignLobbyGmForm(candidate.value.formId) ||
+              isNpcControlForm(candidate.value.formId) ||
               isCampaignLifecycleForm(candidate.value.formId)) &&
             /^network-gm-view:[0-9a-f]{64}$/u.test(message.presentation.assignment.correlationId) &&
             ownGmQueue(candidate.value) &&
@@ -11483,6 +11853,7 @@ export function connectProjection(
             (snapshot.value.formId === 'NET-017' ||
               isAdmissionGmForm(snapshot.value.formId) ||
               isCampaignLobbyGmForm(snapshot.value.formId) ||
+              isNpcControlForm(snapshot.value.formId) ||
               isCampaignLifecycleForm(snapshot.value.formId)) &&
             !ownGmQueue(snapshot.value)
           )
@@ -11496,6 +11867,21 @@ export function connectProjection(
             !gmQueueMonotonic(snapshot.value, lastSnapshot)
           )
             snapshot = unrecognized('$.revisions', null);
+          if (snapshot.ok && npc.pending) {
+            try {
+              const scope = gmQueueScope(snapshot.value);
+              if (
+                scope === null ||
+                !ownGmQueue(snapshot.value) ||
+                lastSnapshot === null ||
+                !gmQueueMonotonic(snapshot.value, lastSnapshot)
+              )
+                throw new Error('NPC replay scope');
+              npc.assertReconnectScope(snapshot.value.revisions, scope.contextId, scope.campaignId);
+            } catch {
+              snapshot = unrecognized('$.npc.reconnect', null);
+            }
+          }
           if (
             snapshot.ok &&
             (pendingGmCommand !== null || pendingGmRefusal !== null || pendingGmDraft !== null)
@@ -11638,6 +12024,31 @@ export function connectProjection(
                 pendingRollCommit.receipt,
                 pendingRollCommit.sourceSnapshot,
               );
+            }
+          }
+        } else if (npc.pending) {
+          snapshot = decodeConfirmedSnapshot(message, lastSnapshot!.executableWorkflowCommandIds);
+          if (snapshot.ok) {
+            try {
+              if (
+                message.presentation.assignment.reason !== 'FORM_ACTION' ||
+                !ownGmQueue(snapshot.value) ||
+                !gmQueueMonotonic(snapshot.value, lastSnapshot!)
+              )
+                throw new Error('NPC current view scope');
+              npc.confirm(
+                checkedNpc(
+                  snapshot.value.formId,
+                  snapshot.value.projection,
+                  snapshot.value.revisions,
+                ),
+                snapshot.value.revisions,
+                snapshot.value.projection['contextId'],
+                snapshot.value.projection['campaignId'],
+                message.presentation.assignment.correlationId,
+              );
+            } catch {
+              snapshot = unrecognized('$.npc', null);
             }
           }
         } else if (pendingOwnerCommand !== null) {
@@ -11985,6 +12396,8 @@ export function connectProjection(
       discardDisconnectedCampaignInput();
       discardDisconnectedNetworkInput();
       discardDisconnectedGmInput();
+      npc.suspend();
+      publishNpc();
       onState({
         code: null,
         detail: 'WebSocket transport reported an error.',
@@ -12002,6 +12415,8 @@ export function connectProjection(
       discardDisconnectedCampaignInput();
       discardDisconnectedNetworkInput();
       discardDisconnectedGmInput();
+      npc.suspend();
+      publishNpc();
       const reason = event.reason.length === 0 ? 'no close reason' : event.reason;
       onState({
         code: event.code,
@@ -12013,6 +12428,10 @@ export function connectProjection(
   };
 
   const openTransport = (currentDeviceId: string): void => {
+    // Refusal refresh may reconnect without a preceding close event. NPC input stays
+    // readonly until this transport delivers the checked capabilities/projection pair.
+    npc.suspend();
+    publishNpc();
     retiredPeerSubscriptions.clear();
     peerSubscription = null;
     peerState = null;
@@ -12071,6 +12490,7 @@ export function connectProjection(
             knownRevisions: reconnect.knownRevisions,
             supportedWorkflowCommandIds: [
               CAMPAIGN_CREATE_COMMAND_ID,
+              ...NPC_WORKFLOW_COMMAND_IDS,
               ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
               ...ADMISSION_GM_WORKFLOW_IDS,
               ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
@@ -12157,6 +12577,7 @@ export function connectProjection(
 
   const notifyReady = (): void => {
     if (lastSnapshot === null) return;
+    publishNpc();
     onState({
       kind: 'ready',
       snapshot: visibleSnapshotBase(
@@ -12282,6 +12703,735 @@ export function connectProjection(
       terminal = false;
       openTransport(deviceId);
       return { ok: true };
+    },
+    stageNpcInput: (edit) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot === null ||
+        socket?.readyState !== WebSocket.OPEN ||
+        commandPending(true) ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null ||
+        gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId
+      )
+        return { ok: false, detail: 'Ввод НПС сейчас недоступен.' };
+      try {
+        npc.stage(edit);
+        publishNpc();
+        notifyReady();
+        return { ok: true };
+      } catch {
+        return {
+          ok: false,
+          detail: 'Форма или попытка изменилась. Отмените локальный ввод перед продолжением.',
+        };
+      }
+    },
+    applyNpcInput: () =>
+      dispatchNpc(() => {
+        if (npc.controls()?.editBuffer?.canApply !== true)
+          throw new Error('NPC local input unavailable');
+        const operationId = createNetworkCommandId();
+        if (operationId === null) throw new Error('NPC request identity unavailable');
+        return npc.apply(operationId);
+      }, true),
+    discardNpcInput: () => {
+      try {
+        npc.discard();
+        publishNpc();
+        if (!disposed && !terminal && npc.connected && socket?.readyState === WebSocket.OPEN)
+          notifyReady();
+        return { ok: true };
+      } catch {
+        return { ok: false, detail: 'Отправленный ввод ещё ожидает подтверждения хоста.' };
+      }
+    },
+    replaceNpcStage: (edit) => {
+      try {
+        const p = npc.projection,
+          a = p?.attemptOrNull;
+        if (p === null || a === null || a === undefined || p.formId !== edit.formId)
+          return { ok: false, detail: 'Форма НПС изменилась.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-editor.replace',
+          npcDraftId: a.npcDraftId,
+          expectedAttemptRevision: a.attemptRevision,
+          values: edit.values,
+        });
+      } catch {
+        return { ok: false, detail: 'Идентификатор запроса НПС недоступен.' };
+      }
+    },
+    selectNpc: (npcUuidOrNull) => {
+      try {
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-selection.replace',
+          sourceFormId: 'NPC-001',
+          npcUuidOrNull,
+        });
+      } catch {
+        return { ok: false, detail: 'Список НПС недоступен.' };
+      }
+    },
+    selectNpcHistory: (version) => {
+      try {
+        const p = npc.projection;
+        if (p?.formId !== 'NPC-007') return { ok: false, detail: 'История НПС недоступна.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-selection.replace',
+          npcUuid: p.content.npcUuid,
+          version,
+        });
+      } catch {
+        return { ok: false, detail: 'История НПС недоступна.' };
+      }
+    },
+    reserveNpcSymbiont: () => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-013' || attempt == null || !p.content.canAdd)
+          return { ok: false, detail: 'Добавление симбионта сейчас недоступно.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-013',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'SYMBIONT_RESERVE', values: p.content.input },
+        });
+      } catch {
+        return { ok: false, detail: 'Подготовка симбионта недоступна.' };
+      }
+    },
+    confirmNpcComposition: (capabilityKey) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (
+          p?.formId !== 'NPC-013' ||
+          attempt == null ||
+          !p.content.continuations.some(
+            (capability) =>
+              capability.capabilityKey === capabilityKey &&
+              capability.kind === 'CONFIRM_COMPOSITION',
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Подтверждение состава относится к прежней форме или недоступно.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-013',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'COMPOSITION_CONFIRM', values: p.content.input },
+        });
+      } catch {
+        return { ok: false, detail: 'Подтверждение состава недоступно.' };
+      }
+    },
+    resolveNpcComposition: (capabilityKey, input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (
+          p?.formId !== 'NPC-013' ||
+          attempt == null ||
+          !p.content.continuations.some(
+            (capability) =>
+              capability.capabilityKey === capabilityKey && capability.kind === input.kind,
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Продолжение состава относится к прежней форме или недоступно.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-013',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'COMPOSITION_RESOLVE', capabilityKey, input },
+        });
+      } catch {
+        return { ok: false, detail: 'Продолжение состава недоступно.' };
+      }
+    },
+    reserveNpcItem: () => {
+      try {
+        const p = npc.projection,
+          a = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-015' || a == null)
+          return { ok: false, detail: 'Инвентарь НПС недоступен.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          npcDraftId: a.npcDraftId,
+          expectedAttemptRevision: a.attemptRevision,
+          preparation: { kind: 'ITEM_RESERVE', values: p.content.input },
+        });
+      } catch {
+        return { ok: false, detail: 'Подготовка предмета недоступна.' };
+      }
+    },
+    reserveNpcCustomItem: (capabilityKey) =>
+      reserveNpcCustom(capabilityKey, { kind: 'CUSTOM_ITEM_RESERVE' }),
+    reserveNpcCustomModifier: (capabilityKey, itemInstanceId) =>
+      reserveNpcCustom(capabilityKey, { kind: 'CUSTOM_MODIFIER_RESERVE', itemInstanceId }),
+    reserveNpcCustomProfileVersion: (
+      capabilityKey,
+      itemInstanceId,
+      profileId,
+      expectedProfileVersionId,
+    ) =>
+      reserveNpcCustom(capabilityKey, {
+        kind: 'CUSTOM_PROFILE_VERSION_RESERVE',
+        itemInstanceId,
+        profileId,
+        expectedProfileVersionId,
+      }),
+    restoreNpcItem: (capabilityKey, itemInstanceId) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-015' || attempt?.editMode !== 'APPEND_N_PLUS_ONE')
+          return { ok: false, detail: 'Возврат предмета доступен при создании новой версии НПС.' };
+        const capability = p.content.restorePreparationOrNull;
+        if (
+          capability == null ||
+          capability.capabilityKey !== capabilityKey ||
+          !capability.canSubmit ||
+          !capability.choices.some((choice) => choice.value === itemInstanceId)
+        )
+          return { ok: false, detail: 'Предмет из истории больше недоступен для возврата.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-015',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: {
+            kind: 'ITEM_RESTORE',
+            capabilityKey,
+            itemInstanceId,
+            values: p.content.input,
+          },
+        });
+      } catch {
+        return { ok: false, detail: 'Возврат предмета из истории недоступен.' };
+      }
+    },
+    reserveNpcCompositeItem: (itemTypeId) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-015' || attempt == null)
+          return { ok: false, detail: 'Создание составного набора недоступно.' };
+        const preparation = p.content.compositePreparationOrNull;
+        if (
+          preparation == null ||
+          !preparation.canSubmit ||
+          !preparation.choices.some((choice) => choice.value === itemTypeId)
+        )
+          return { ok: false, detail: 'Выбранный составной набор недоступен.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-015',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: {
+            kind: 'COMPOSITE_ITEM_RESERVE',
+            input: npcCompositeItemReservationInputValue({ itemTypeId }),
+          },
+        });
+      } catch {
+        return { ok: false, detail: 'Подготовка составного набора недоступна.' };
+      }
+    },
+    confirmNpcEquipmentCompatibility: (capabilityKey, reason) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-015' || attempt == null)
+          return { ok: false, detail: 'Подтверждение экипировки недоступно.' };
+        const capability = p.content.compatibilityPreparationOrNull;
+        if (
+          capability == null ||
+          capability.capabilityKey !== capabilityKey ||
+          !capability.canSubmit
+        )
+          return { ok: false, detail: 'Состав экипировки изменился или подтверждение недоступно.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-015',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: {
+            kind: 'EQUIPMENT_COMPATIBILITY_CONFIRM',
+            input: equipmentCompatibilityPreparationRequestInputValue({ capabilityKey, reason }),
+          },
+        });
+      } catch {
+        return { ok: false, detail: 'Введите обоснование физической совместимости экипировки.' };
+      }
+    },
+    prepareNpcAlcohol: (capabilityKey, input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-016' || attempt == null)
+          return { ok: false, detail: 'Назначение алкогольного отравления недоступно.' };
+        const capability = p.content.alcoholPreparationOrNull;
+        if (
+          capability == null ||
+          capability.capabilityKey !== capabilityKey ||
+          !capability.canSubmit
+        )
+          return {
+            ok: false,
+            detail: 'Назначение алкогольного отравления относится к прежней форме или недоступно.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: {
+            kind: 'ALCOHOL_PREPARE',
+            input: npcAlcoholPreparationRequestInputValue(input),
+          },
+        });
+      } catch {
+        return { ok: false, detail: 'Введите причину назначения алкогольного отравления.' };
+      }
+    },
+    prepareNpcHpMode: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        const checked = npcHpModePreparationRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          !p.content.hpModePreparations?.some(
+            (entry) => entry.capabilityKey === checked.capabilityKey && entry.canSubmit,
+          )
+        )
+          return { ok: false, detail: 'Исходный режим относится к прежней форме или недоступен.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'HP_MODE_PREPARE', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail: 'Введите причину и точный положительный остаток режима в минутах.',
+        };
+      }
+    },
+    prepareNpcFormalControl: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        const checked = npcFormalControlPreparationRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          !p.content.formalControlPreparations?.some(
+            (entry) =>
+              entry.capabilityKey === checked.capabilityKey &&
+              entry.controlKind === checked.controlKind &&
+              entry.canSubmit,
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Исходное состояние относится к прежней форме или недоступно.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'FORMAL_CONTROL_SET', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail: 'Выберите предложенное состояние, укажите причину и точный остаток срока.',
+        };
+      }
+    },
+    prepareNpcWeaverState: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcWeaverStatePreparationRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          !p.content.temporaryWeaverStatePreparations?.some(
+            (entry) =>
+              entry.capabilityKey === checked.capabilityKey &&
+              entry.sourceInstanceId === checked.sourceInstanceId &&
+              entry.canSubmit &&
+              entry.branchChoices.some((choice) => choice.value === checked.branch),
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Состояние Ткача относится к прежней форме или недоступному источнику.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'WEAVER_STATE_PREPARE', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail: 'Выберите источник и вариант состояния Ткача, введите точный остаток и причину.',
+        };
+      }
+    },
+    setNpcPoisonMode: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcPoisonModeSetRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          !p.content.poisonModePreparations?.some(
+            (entry) =>
+              entry.capabilityKey === checked.capabilityKey &&
+              entry.sourceInstanceId === checked.sourceInstanceId &&
+              entry.canSubmit &&
+              entry.profileChoices.some((choice) => choice.value === checked.poisonProfileId),
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Выбор режима яда относится к прежней форме или недоступному источнику.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'POISON_MODE_SET', input: checked },
+        });
+      } catch {
+        return { ok: false, detail: 'Выберите предложенный вид исходного яда и укажите причину.' };
+      }
+    },
+    prepareNpcPoisonCoating: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcPoisonCoatingPreparationRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-015' ||
+          attempt == null ||
+          !checked.surfaceConfirmed ||
+          (checked.replacesCoatingIdOrNull !== null
+            ? !checked.replaceConfirmed
+            : checked.replaceConfirmed) ||
+          !p.content.poisonCoatingPreparations?.some(
+            (entry) =>
+              entry.capabilityKey === checked.capabilityKey &&
+              entry.sourceInstanceId === checked.sourceInstanceId &&
+              entry.targetItemInstanceId === checked.targetItemInstanceId &&
+              entry.replacesCoatingIdOrNull === checked.replacesCoatingIdOrNull &&
+              entry.canSubmit,
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Проверьте источник, поверхность и явное подтверждение замены текущей дозы.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-015',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'POISON_COATING_PREPARE', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail:
+            'Выберите предложенный носитель, подтвердите поверхность и укажите причину покрытия.',
+        };
+      }
+    },
+    removeNpcPoisonCoating: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcPoisonCoatingRemovalRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-015' ||
+          attempt == null ||
+          !p.content.poisonCoatings?.some(
+            (entry) =>
+              entry.capabilityKey === checked.capabilityKey &&
+              entry.coatingInstanceId === checked.coatingInstanceId &&
+              entry.canRemove,
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Снятие покрытия относится к прежней форме или недоступной дозе.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-015',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'POISON_COATING_REMOVE', input: checked },
+        });
+      } catch {
+        return { ok: false, detail: 'Выберите текущее покрытие и укажите причину снятия.' };
+      }
+    },
+    removeNpcWeaverState: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcWeaverStateRemovalRequestInputValue(input);
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          !p.content.temporaryWeaverStates?.some(
+            (entry) =>
+              entry.capabilityKey === checked.capabilityKey &&
+              entry.effectInstanceId === checked.effectInstanceId &&
+              entry.canRemove,
+          )
+        )
+          return {
+            ok: false,
+            detail: 'Снятие состояния Ткача относится к прежней форме или недоступному состоянию.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'WEAVER_STATE_REMOVE', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail: 'Выберите текущее состояние Ткача и явно укажите причину снятия.',
+        };
+      }
+    },
+    prepareNpcLifeRoll: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcLifeStateRollRequestInputValue(input);
+        const cap = p?.formId === 'NPC-016' ? p.content.lifeStatePreparationOrNull : null;
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          cap == null ||
+          !cap.canRoll ||
+          cap.rollOrNull !== null ||
+          cap.retainedTimer ||
+          cap.capabilityKey !== checked.capabilityKey ||
+          !cap.lifeChoices.some((c) => c.value === 'SEVERELY_WOUNDED') ||
+          (cap.diceMode === 'AUTO'
+            ? checked.manualFaceOrNull !== null
+            : checked.manualFaceOrNull === null)
+        )
+          return { ok: false, detail: 'Подготовка D6 относится к прежней форме или недоступна.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'LIFE_STATE_ROLL', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail: 'Укажите причину и действительный результат D6 в ручном режиме.',
+        };
+      }
+    },
+    prepareNpcLifeState: (input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull,
+          checked = npcLifeStateSetRequestInputValue(input);
+        const cap = p?.formId === 'NPC-016' ? p.content.lifeStatePreparationOrNull : null;
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          cap == null ||
+          !cap.canSubmit ||
+          cap.capabilityKey !== checked.capabilityKey ||
+          !cap.lifeChoices.some((c) => c.value === checked.lifeKind) ||
+          (checked.lifeKind === 'SEVERELY_WOUNDED' &&
+            (cap.retainedTimer
+              ? checked.remainingMinutesOrNull !== null
+              : cap.rollOrNull === null ||
+                cap.maximumRemainingMinutesOrNull === null ||
+                checked.remainingMinutesOrNull === null))
+        )
+          return {
+            ok: false,
+            detail: 'Подтверждение состояния относится к прежней форме или неполно.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'LIFE_STATE_SET', input: checked },
+        });
+      } catch {
+        return {
+          ok: false,
+          detail: 'Выберите состояние, укажите причину и точный остаток нового таймера.',
+        };
+      }
+    },
+    prepareNpcWound: (capabilityKey, input) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-016' || attempt == null)
+          return { ok: false, detail: 'Назначение раны недоступно.' };
+        const capability = p.content.woundPreparationOrNull;
+        const checked = npcWoundPreparationRequestInputValue(input);
+        if (
+          capability === null ||
+          capability.capabilityKey !== capabilityKey ||
+          !capability.canSubmit ||
+          !capability.typeChoices.some((choice) => choice.value === checked.woundType) ||
+          !capability.regionChoices.some((choice) => choice.value === checked.regionId)
+        )
+          return { ok: false, detail: 'Назначение раны относится к прежней форме или недоступно.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'WOUND_PREPARE', input: checked },
+        });
+      } catch {
+        return { ok: false, detail: 'Параметры назначения раны недоступны или некорректны.' };
+      }
+    },
+    reserveNpcTrauma: (capabilityKey) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (
+          p?.formId !== 'NPC-016' ||
+          attempt == null ||
+          p.content.traumaPreparationOrNull === null ||
+          p.content.traumaPreparationOrNull.capabilityKey !== capabilityKey ||
+          !p.content.traumaPreparationOrNull.canSubmit
+        )
+          return {
+            ok: false,
+            detail: 'Подготовка травмы относится к прежней форме или недоступна.',
+          };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'TRAUMA_RESERVE' },
+        });
+      } catch {
+        return { ok: false, detail: 'Подготовка травмы недоступна.' };
+      }
+    },
+    reserveNpcDisease: (capabilityKey, diseaseId) => {
+      try {
+        const p = npc.projection,
+          attempt = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-016' || attempt == null)
+          return { ok: false, detail: 'Исходное состояние НПС недоступно.' };
+        const preparation = p.content.diseasePreparationOrNull;
+        if (
+          preparation === null ||
+          preparation.capabilityKey !== capabilityKey ||
+          !preparation.canSubmit ||
+          !preparation.choices.some((choice) => choice.value === diseaseId)
+        )
+          return { ok: false, detail: 'Выбор болезни относится к прежней форме или недоступен.' };
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          sourceFormId: 'NPC-016',
+          npcDraftId: attempt.npcDraftId,
+          expectedAttemptRevision: attempt.attemptRevision,
+          preparation: { kind: 'DISEASE_RESERVE', diseaseId },
+        });
+      } catch {
+        return { ok: false, detail: 'Подготовка болезни недоступна.' };
+      }
+    },
+    replaceNpcArt: (bindingKey, edit) => {
+      try {
+        const p = npc.projection,
+          a = p?.attemptOrNull;
+        if (p?.formId !== 'NPC-002' || a == null || npc.bindingKey !== bindingKey)
+          return { ok: false, detail: 'Арт относится к прежней попытке НПС.' };
+        npc.setBusy(bindingKey, false);
+        return sendNpc({
+          ...npcEnvelope(),
+          messageType: 'network.npc-preparation.request',
+          npcDraftId: a.npcDraftId,
+          expectedAttemptRevision: a.attemptRevision,
+          preparation:
+            edit.kind === 'CLEAR' ? { kind: 'ART_CLEAR' } : { kind: 'ART_UPLOAD', file: edit.file },
+        });
+      } catch {
+        return { ok: false, detail: 'Подготовка арта недоступна.' };
+      }
+    },
+    setNpcInputPending: (key, pending) => {
+      npc.setBusy(key, pending);
+      publishNpc();
+      // FileReader cleanup also runs when readonly/disconnected fields unmount.
+      // Clearing local busy state must not turn a lost transport back into a ready App.
+      if (!disposed && !terminal && npc.connected && socket?.readyState === WebSocket.OPEN)
+        notifyReady();
     },
     replaceAdmissionDraft: (edit) => {
       if (
@@ -12494,6 +13644,8 @@ export function connectProjection(
     disconnect: () => {
       if (disposed) return;
       disposed = true;
+      npc.dispose();
+      onNpcControls(null, null);
       clearGmDraft();
       pendingGmCommand = null;
       pendingGmRefusal = null;
@@ -13291,6 +14443,35 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (isNpcControlForm(activeForm.formId)) {
+        const p = checkedNpc(activeForm.formId, activeForm.projection, lastSnapshot.revisions),
+          commandId = createNetworkCommandId();
+        if (
+          p === null ||
+          commandId === null ||
+          gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId
+        )
+          return { ok: false, detail: 'Текущий GM-контекст НПС недоступен.' };
+        try {
+          const request = npcBrowserWorkflow(p, actionKey, commandId);
+          if (request !== null) {
+            if (!lastSnapshot.executableWorkflowCommandIds.includes(request.workflowCommandId))
+              return { ok: false, detail: 'Команда НПС недоступна.' };
+            const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+            if (!encoded.ok) return { ok: false, detail: 'Команда НПС не прошла проверку.' };
+            pendingGmCommand = { request, receipt: null, source: lastSnapshot, replay: false };
+            try {
+              socket.send(encoded.text);
+            } catch {
+              socket.close(1000, 'NPC command interrupted');
+            }
+            notifyReady();
+            return { ok: true };
+          }
+        } catch {
+          return { ok: false, detail: 'Проверьте текущую попытку и полную проверку НПС.' };
+        }
       }
       if (
         isCampaignLifecycleForm(activeForm.formId) &&
@@ -14804,11 +15985,17 @@ export function connectProjection(
         });
         return { ok: true };
       }
+      // CREATE binds its operation to the composition journal, whose domain reader requires UUID.
+      const navigationRequestId = Object.hasOwn(NPC_NAV_TARGETS, actionKey)
+        ? createNetworkCommandId()
+        : createRequestId('navigation');
+      if (navigationRequestId === null)
+        return { ok: false, detail: 'Не удалось создать идентификатор перехода НПС.' };
       const request = {
         actionKey,
         expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
         messageType: 'navigation.form-action',
-        navigationRequestId: createRequestId('navigation'),
+        navigationRequestId,
         protocolVersion: WIRE_PROTOCOL_V2_VERSION,
         sourceFormId: activeForm.formId,
       } as const satisfies FormActionIntentV2Message;

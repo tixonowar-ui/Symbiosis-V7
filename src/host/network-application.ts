@@ -1,3 +1,11 @@
+import { type createNpcHostSupport, NpcApplicationPublicationError } from './npc-application.js';
+import {
+  NPC_NAV_TARGETS,
+  NPC_TECHNICAL_REFUSAL_CODES,
+  npcTechnicalResponseValue,
+} from '../shared/npc-command.js';
+import { NPC_CONTROL_FORM_IDS, type NpcGmProjection } from '../shared/npc-presentation.js';
+import { npcArtReadMessageValue } from '../shared/npc-presentation-codec.js';
 import { campaignConnectionGate } from '@shared/campaign-lifecycle.js';
 import {
   campaignPeerSnapshotId,
@@ -3842,6 +3850,7 @@ import type { PresentedLayerForm } from '../shared/wire-v2-protocol.js';
 /** Local GM authority and technical QUEUE heads remain separate from campaign birth/checkpoints. */
 export function createGmNetworkRuntime(d: {
   readonly database: Database.Database;
+  readonly npc?: ReturnType<typeof createNpcHostSupport>;
   readonly gmScheduler?: CampaignGmScheduler;
   readonly config: NetworkApplicationConfig;
   readonly baseline: LocalCharacterExportBaseline;
@@ -3906,7 +3915,7 @@ export function createGmNetworkRuntime(d: {
     return own;
   };
   const admissionService = () =>
-    createCampaignAdmissionRules(d.baseline, d.config.transfer.maxWitnessBytes);
+    createCampaignAdmissionRules(d.baseline, d.config.transfer.maxWitnessBytes, d.npc?.readers);
   type GmPresentation = {
     base: PresentedBaseForm;
     layers?: readonly PresentedLayerForm[];
@@ -4033,6 +4042,7 @@ export function createGmNetworkRuntime(d: {
           conflictingOperationPending:
             pendingOperations(source.scope.campaignId).pendingOperationCount > 0,
           supported: c.executableReview ?? [],
+          ...(d.npc === undefined ? {} : { npcFields: npcApplication(c).lobbyFields() }),
         });
       })
       .deferred();
@@ -4119,12 +4129,56 @@ export function createGmNetworkRuntime(d: {
     verifiedQueue(source.queue);
     return source;
   };
+  const npcForm = (form: string) => (NPC_CONTROL_FORM_IDS as readonly string[]).includes(form);
+  const npcWorkflows = ['UI-CMD-NPC-COMMIT-V1', 'UI-CMD-NPC-NEW-VERSION'] as const;
+  const npcRelevant = (m: LocalNetworkClientMessage) =>
+    m.messageType === 'network.npc-art.read' ||
+    m.messageType === 'network.npc-editor.replace' ||
+    m.messageType === 'network.npc-selection.replace' ||
+    m.messageType === 'network.npc-preparation.request' ||
+    (m.messageType === 'navigation.form-action' && Object.hasOwn(NPC_NAV_TARGETS, m.actionKey)) ||
+    (m.messageType === 'command.request' &&
+      m.commandKind === 'workflow-command' &&
+      npcWorkflows.some((id) => id === m.workflowCommandId));
+  function npcApplication(c: CampaignConnection) {
+    const support = d.npc ?? unavailable(),
+      own = scope(c);
+    return support.connect(
+      own,
+      () => verifiedSource(c),
+      (checkpoint, checkedClosure) => {
+        exact(authorityScope(c), own);
+        if (!db.inTransaction) return unavailable();
+        // The owning NPC reader/writer checked this closure in the current SQL phase.
+        // Its calendar fold includes pending/rejected admissions and orphan terminals.
+        const calendar = checkedClosure.calendarContext ?? unavailable();
+        exact(checkedClosure.campaignId, own.campaignId);
+        exact(calendar.scope, own);
+        exact(calendar.checkpoint, checkpoint);
+      },
+      validateOwner,
+    );
+  }
+  function npcPresentation(
+    c: CampaignConnection,
+    history?: ReturnType<typeof admissionDecisionStorage.readHistory>,
+  ): GmPresentation {
+    return db
+      .transaction(() => {
+        const own = scope(c),
+          checked =
+            history ??
+            admissionDecisionStorage.readHistory(db, own, validateOwner, admissionService().rules);
+        return npcApplication(c).project(checked, c.executableReview ?? []);
+      })
+      .deferred();
+  }
   const sourceForPresentation = (c: CampaignConnection, includeHistory = true) =>
     admissionDecisionStorage.readSourceAndHistory(db, scope(c), validateOwner, (source) => {
       verifiedQueue(source.queue);
       return includeHistory &&
         source.viewOrNull !== null &&
-        campaignPanelForm(source.viewOrNull.formId)
+        (campaignPanelForm(source.viewOrNull.formId) || npcForm(source.viewOrNull.formId))
         ? admissionService().rules
         : null;
     });
@@ -4175,6 +4229,10 @@ export function createGmNetworkRuntime(d: {
     return db
       .transaction(() => {
         const own = scope(c);
+        const npcSource = readGmRequestReviewViewStateInTransaction(db, own).events.some(
+          (e) => e.mutation.kind === 'NPC_SOURCE' && e.mutation.cause.operationId === id,
+        );
+        if (npcSource) return npcApplication(c).receipt(id);
         const lifecycleSource = readGmRequestReviewViewStateInTransaction(db, own).events.find(
           (event) =>
             event.mutation.kind === 'LIFECYCLE_SOURCE' && event.mutation.cause.commandId === id,
@@ -4330,6 +4388,11 @@ export function createGmNetworkRuntime(d: {
   const project = async (c: CampaignConnection): Promise<GmPresentation> => {
     if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
     const { source, historyOrNull } = sourceForPresentation(c);
+    if (source.viewOrNull !== null && npcForm(source.viewOrNull.formId))
+      return withLifecycle(c, npcPresentation(c, historyOrNull ?? undefined), {
+        source,
+        history: historyOrNull ?? unavailable(),
+      });
     if (source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId))
       return withLifecycle(
         c,
@@ -4540,6 +4603,11 @@ export function createGmNetworkRuntime(d: {
   const publication = (c: CampaignConnection): GmPresentation | Promise<GmPresentation> => {
     const { source, facts, historyOrNull } = connectionSource(c);
     if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
+    if (source.viewOrNull !== null && npcForm(source.viewOrNull.formId))
+      return withLifecycle(c, npcPresentation(c, historyOrNull ?? undefined), {
+        source,
+        history: historyOrNull ?? unavailable(),
+      });
     if (source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId))
       return withLifecycle(
         c,
@@ -4577,16 +4645,19 @@ export function createGmNetworkRuntime(d: {
   ): Promise<void> {
     const { source, facts, historyOrNull } = connectionSource(c);
     const lobby = source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId);
-    if (facts === null && !lobby) return Promise.resolve();
-    const base = lobby
-      ? campaignPanelPresentation(c, source, historyOrNull ?? unavailable())
-      : inAdmission(c)
-        ? admissionPresentation(c)
-        : queuePresentation(c, source, facts ?? undefined);
+    const npc = source.viewOrNull !== null && npcForm(source.viewOrNull.formId);
+    if (facts === null && !lobby && !npc) return Promise.resolve();
+    const base = npc
+      ? npcPresentation(c, historyOrNull ?? undefined)
+      : lobby
+        ? campaignPanelPresentation(c, source, historyOrNull ?? unavailable())
+        : inAdmission(c)
+          ? admissionPresentation(c)
+          : queuePresentation(c, source, facts ?? undefined);
     const p = withLifecycle(
       c,
       base,
-      lobby
+      lobby || npc
         ? {
             source,
             history: historyOrNull ?? unavailable(),
@@ -4927,11 +4998,166 @@ export function createGmNetworkRuntime(d: {
     }
     return true;
   }
+  async function handleNpc(
+    m: LocalNetworkClientMessage,
+    c: CampaignConnection,
+    send: (m: LocalNetworkHostMessage) => void,
+  ): Promise<boolean> {
+    if (!npcRelevant(m)) return false;
+    let committed = false;
+    try {
+      const own = scope(c);
+      if (!npcWorkflows.every((id) => (c.executableReview ?? []).includes(id))) unavailable();
+      const app = npcApplication(c);
+      if (m.messageType === 'network.npc-art.read') {
+        const result = app.readArt(
+          m,
+          () => npcPresentation(c).base.roleFilteredPayload as unknown as NpcGmProjection,
+        );
+        send(result);
+        return true;
+      }
+      watchers.set(c, { send, lastHash: watchers.get(c)?.lastHash ?? '' });
+      if (m.messageType === 'navigation.form-action') {
+        app.navigation(m);
+        committed = true;
+        await sendNavigationSnapshot(c, own, send, m.navigationRequestId);
+      } else if (
+        m.messageType === 'network.npc-editor.replace' ||
+        m.messageType === 'network.npc-preparation.request'
+      ) {
+        const result =
+          m.messageType === 'network.npc-preparation.request' ? app.prepare(m) : app.replace(m);
+        committed = true;
+        send(
+          npcTechnicalResponseValue({
+            messageType: 'network.npc-editor.result',
+            protocolVersion: 3,
+            projectionRole: 'gm',
+            operationId: m.operationId,
+            campaignId: m.campaignId,
+            sourceFormId: m.sourceFormId,
+            npcDraftId: m.npcDraftId,
+            appliedAttemptRevision: result.appliedAttemptRevision,
+            appliedRevisions: result.appliedRevisions,
+          }),
+        );
+        await sendNavigationSnapshot(c, own, send, m.operationId);
+      } else if (m.messageType === 'network.npc-selection.replace') {
+        const result = app.select(m);
+        committed = true;
+        send(
+          npcTechnicalResponseValue({
+            messageType: 'network.npc-selection.result',
+            protocolVersion: 3,
+            projectionRole: 'gm',
+            operationId: m.operationId,
+            campaignId: m.campaignId,
+            sourceFormId: m.sourceFormId,
+            appliedRevisions: result.appliedRevisions,
+            ...(m.sourceFormId === 'NPC-001'
+              ? { npcUuidOrNull: m.npcUuidOrNull }
+              : { npcUuid: m.npcUuid, version: m.version }),
+          }),
+        );
+        await sendNavigationSnapshot(c, own, send, m.operationId);
+      } else if (m.messageType === 'command.request' && m.commandKind === 'workflow-command') {
+        const result = app.workflow(m);
+        committed = true;
+        const destination = await snapshot(c, m.commandId, 'COMMAND_DESTINATION');
+        send(
+          result.replayed
+            ? {
+                messageType: 'command.replay',
+                protocolVersion: 1,
+                lifecycleState: 'IDEMPOTENT_REPLAY',
+                receipt: result.receipt,
+              }
+            : {
+                messageType: 'command.result',
+                protocolVersion: 1,
+                lifecycleState: 'COMMITTED',
+                receipt: result.receipt,
+              },
+        );
+        sendSnapshot(c, send, destination);
+      } else unavailable();
+    } catch (error) {
+      if (committed || error instanceof NpcApplicationPublicationError)
+        throw new LocalNetworkPublicationError(error);
+      const code = error instanceof NetworkApplicationStoreError ? error.code : 'UNAVAILABLE';
+      if (m.messageType === 'network.npc-art.read') {
+        const { messageType: _type, ...binding } = m;
+        const refusal = npcArtReadMessageValue({
+          ...binding,
+          messageType: 'network.npc-art.refusal',
+          code: code === 'STALE_REVISION' ? 'STALE_REQUEST' : 'NOT_AVAILABLE',
+        });
+        if (refusal.messageType !== 'network.npc-art.refusal')
+          throw Error('Invalid art refusal', { cause: error });
+        send(refusal);
+      } else if (
+        m.messageType === 'network.npc-editor.replace' ||
+        m.messageType === 'network.npc-selection.replace' ||
+        m.messageType === 'network.npc-preparation.request'
+      ) {
+        send(
+          npcTechnicalResponseValue({
+            protocolVersion: 3,
+            projectionRole: 'gm',
+            operationId: m.operationId,
+            campaignId: m.campaignId,
+            sourceFormId: m.sourceFormId,
+            presentationUnchanged: true,
+            refusal: {
+              code: NPC_TECHNICAL_REFUSAL_CODES.some((c) => c === code) ? code : 'UNAVAILABLE',
+            },
+            ...(m.messageType === 'network.npc-selection.replace'
+              ? { messageType: 'network.npc-selection.refusal' }
+              : { messageType: 'network.npc-editor.refusal', npcDraftId: m.npcDraftId }),
+          }),
+        );
+      } else {
+        // No current head is disclosed to a lost/foreign authority.
+        const revisions = { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 };
+        if (m.messageType === 'navigation.form-action')
+          send({
+            messageType: 'navigation.form-action.refusal',
+            protocolVersion: 2,
+            navigationRequestId: m.navigationRequestId,
+            revisions,
+            presentationUnchanged: true,
+            refusal:
+              code === 'IDEMPOTENCY_CONFLICT'
+                ? { code: 'IDEMPOTENCY_CONFLICT', detail: 'PAYLOAD_MISMATCH' }
+                : { code: 'NAVIGATION_UNAVAILABLE' },
+          });
+        if (m.messageType === 'command.request')
+          send({
+            messageType: 'command.refusal',
+            protocolVersion: 1,
+            commandId: m.commandId,
+            lastLifecycleState: null,
+            revisions,
+            refusal:
+              code === 'IDEMPOTENCY_CONFLICT'
+                ? {
+                    code: 'IDEMPOTENCY_CONFLICT',
+                    commandId: m.commandId,
+                    detail: 'PAYLOAD_MISMATCH',
+                  }
+                : { code: 'GUARD_REJECTED' },
+          });
+      }
+    }
+    return true;
+  }
   async function handle(
     m: LocalNetworkClientMessage,
     c: CampaignConnection,
     send: (m: LocalNetworkHostMessage) => void,
   ): Promise<boolean> {
+    if (await handleNpc(m, c, send)) return true;
     if (await handleAdmission(m, c, send)) return true;
     if (
       m.messageType === 'command.request' &&
@@ -5427,6 +5653,7 @@ export function createGmNetworkRuntime(d: {
       send: (m: LocalNetworkHostMessage) => void,
     ) {
       const relevant =
+        npcRelevant(m) ||
         (m.messageType === 'command.request' &&
           m.commandKind === 'workflow-command' &&
           CAMPAIGN_LIFECYCLE_WORKFLOW_IDS.some((id) => id === m.workflowCommandId)) ||

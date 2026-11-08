@@ -1,11 +1,18 @@
 import { npcAttemptReadContext, type NpcChildAllocation } from './npc-child-identities.js';
 import Database from 'better-sqlite3';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import type { FormActionIntentV2Message } from '@shared/wire-v2-protocol.js';
 import type { NpcSelectionReplaceRequest } from '@shared/npc-command.js';
-import { networkApplicationStorage as s } from './network-local-application.js';
+import {
+  networkApplicationStorage as s,
+  NetworkApplicationStoreError,
+} from './network-local-application.js';
 import type { GmRequestReviewView, StoredGmRequestQueueEvent } from './campaign-creation.js';
+import {
+  npcFrozenAttemptEventEnvelopeText,
+  withNpcAttemptEnvelopeCalculations,
+} from './npc-library-records.js';
 import type {
   NpcAttemptEvent,
   NpcOperation,
@@ -20,6 +27,8 @@ import {
   npcGmContextValue,
   npcSourceEventId,
   readNpcGmPrimitiveCause,
+  readNpcCompositionDerivationEvidenceInTransaction,
+  readNpcEffectAllocationInTransaction,
   withNpcGmPrimitiveReadSession,
   type NpcGmPrimitiveReadSession,
   reduceNpcSelection,
@@ -213,6 +222,240 @@ describe('NPC GM primitive source and existing QUEUE bridge', () => {
     putOperation(o);
     return { e, o, cause: { operationId, recordSha256: hash(o) }, events };
   }
+  describe('invocation-owned intrinsic attempt envelopes', () => {
+    function derivationFixture() {
+      const saved = save({
+        old: view('NPC-001', empty),
+        values: { nested: { list: ['opaque-domain-data'] } },
+      });
+      // Actual auxiliary rows required by the public primitive derivation reader.
+      const profile = {
+        masterProfileId: id(80),
+        ownerDeviceId: scope.ownerDeviceId,
+        masterAuthorityRevision: 0,
+      };
+      const gm = {
+        gmLocalContextId: scope.gmLocalContextId,
+        masterProfileId: id(80),
+        ownerDeviceId: scope.ownerDeviceId,
+        stateRevision: 0,
+        projectionRevision: 0,
+        actorVisibilityRevision: 0,
+      };
+      db.exec(`CREATE TABLE device_identity(identity_slot INTEGER,device_id TEXT,initialized INTEGER);
+        CREATE TABLE local_gm_profile(profile_id TEXT,owner_device_id TEXT,record_json TEXT,record_sha256 TEXT);
+        CREATE TABLE local_gm_context(context_id TEXT,profile_id TEXT,record_json TEXT,record_sha256 TEXT);
+        CREATE TABLE npc_identity_reservation(campaign_id TEXT,draft_id TEXT,candidate_npc_uuid TEXT,create_operation_id TEXT);`);
+      db.prepare('INSERT INTO device_identity VALUES (1,?,1)').run(scope.ownerDeviceId);
+      db.prepare('INSERT INTO local_gm_profile VALUES (?,?,?,?)').run(
+        id(80),
+        scope.ownerDeviceId,
+        s.canonical(profile),
+        hash(profile),
+      );
+      db.prepare('INSERT INTO local_gm_context VALUES (?,?,?,?)').run(
+        scope.gmLocalContextId,
+        id(80),
+        s.canonical(gm),
+        hash(gm),
+      );
+      db.prepare('INSERT INTO npc_identity_reservation VALUES (?,?,?,?)').run(
+        scope.campaignId,
+        saved.e.attempt.npcDraftId,
+        saved.e.attempt.candidateNpcUuid,
+        saved.e.operationId,
+      );
+      return {
+        ...saved,
+        read: () => readNpcCompositionDerivationEvidenceInTransaction(db, saved.e.attempt),
+      };
+    }
+
+    it('shares only frozen envelope data while the public derivation and request reader run again', () => {
+      const saved = derivationFixture(),
+        before = db.serialize();
+      const request = vi.spyOn(NPC_GM_REQUEST_READERS, 'request');
+      try {
+        const first = withNpcAttemptEnvelopeCalculations(() => {
+          const a = saved.read(),
+            calls = request.mock.calls.length;
+          expect(calls).toBeGreaterThan(0);
+          const b = saved.read();
+          expect(request.mock.calls.length).toBeGreaterThan(calls);
+          expect(b).toEqual(a);
+          expect(b).not.toBe(a);
+          expect(b.current.openAttempt.values).toBe(a.current.openAttempt.values);
+          const nested = s.object(a.current.openAttempt.values['nested']);
+          expect(Object.isFrozen(a.current.openAttempt.values)).toBe(true);
+          expect(Object.isFrozen(nested)).toBe(true);
+          expect(Object.isFrozen(nested['list'])).toBe(true);
+          expect(() => {
+            nested['list'] = [];
+          }).toThrow(TypeError);
+          return a;
+        });
+        const independent = saved.read();
+        expect(independent).toEqual(first);
+        expect(independent.current.openAttempt.values).not.toBe(first.current.openAttempt.values);
+        expect(db.serialize().equals(before)).toBe(true);
+      } finally {
+        request.mockRestore();
+      }
+    });
+
+    it('shares nested calls but discards the scope after a throwing outer call', () => {
+      const saved = derivationFixture();
+      let escaped: JsonObject | undefined;
+      expect(() =>
+        withNpcAttemptEnvelopeCalculations(() => {
+          escaped = saved.read().current.openAttempt.values;
+          expect(() =>
+            withNpcAttemptEnvelopeCalculations(() => {
+              expect(saved.read().current.openAttempt.values).toBe(escaped);
+              throw Error('nested failure');
+            }),
+          ).toThrow('nested failure');
+          expect(saved.read().current.openAttempt.values).toBe(escaped);
+          throw Error('outer failure');
+        }),
+      ).toThrow('outer failure');
+      const fresh = withNpcAttemptEnvelopeCalculations(
+        () => saved.read().current.openAttempt.values,
+      );
+      expect(fresh).toEqual(escaped);
+      expect(fresh).not.toBe(escaped);
+    });
+
+    it.each(['hash', 'raw', 'row', 'scope'] as const)(
+      'rechecks current %s after an envelope hit and recovers after rollback',
+      (fault) => {
+        const saved = derivationFixture();
+        withNpcAttemptEnvelopeCalculations(() => {
+          const first = saved.read(),
+            before = db.serialize();
+          db.exec('SAVEPOINT envelope_fault');
+          try {
+            if (fault === 'hash') {
+              expect(
+                db.prepare('UPDATE npc_attempt_event SET record_sha256=?').run('0'.repeat(64))
+                  .changes,
+              ).toBe(1);
+            } else if (fault === 'raw') {
+              const changed = { ...saved.e, unexpected: true };
+              expect(
+                db
+                  .prepare('UPDATE npc_attempt_event SET record_json=?,record_sha256=?')
+                  .run(s.canonical(changed), hash(changed)).changes,
+              ).toBe(1);
+            } else if (fault === 'row') {
+              expect(db.prepare('UPDATE npc_attempt_event SET revision=1').run().changes).toBe(1);
+            }
+            const changedBytes = db.serialize();
+            expect(() =>
+              fault === 'scope'
+                ? readNpcCompositionDerivationEvidenceInTransaction(db, {
+                    ...saved.e.attempt,
+                    scope: { ...scope, ownerDeviceId: id(81) },
+                  })
+                : saved.read(),
+            ).toThrow(NetworkApplicationStoreError);
+            expect(db.serialize().equals(changedBytes)).toBe(true);
+          } finally {
+            db.exec('ROLLBACK TO envelope_fault; RELEASE envelope_fault');
+          }
+          expect(db.serialize().equals(before)).toBe(true);
+          expect(saved.read()).toEqual(first);
+        });
+      },
+    );
+
+    it('decodes a new valid event text and preserves fresh request refusal after warm lookup', () => {
+      const saved = derivationFixture();
+      withNpcAttemptEnvelopeCalculations(() => {
+        const first = saved.read();
+        const changed = { ...saved.e, attempt: { ...saved.e.attempt, values: { changed: true } } };
+        const operation = { ...saved.o, attemptEventSha256: hash(changed) };
+        expect(
+          db
+            .prepare('UPDATE npc_attempt_event SET record_json=?,record_sha256=?')
+            .run(s.canonical(changed), hash(changed)).changes,
+        ).toBe(1);
+        expect(
+          db
+            .prepare('UPDATE npc_operation SET record_json=?,record_sha256=?')
+            .run(s.canonical(operation), hash(operation)).changes,
+        ).toBe(1);
+        const read = () => readNpcCompositionDerivationEvidenceInTransaction(db, changed.attempt);
+        const second = read();
+        expect(second.current.openAttempt.values).toEqual({ changed: true });
+        expect(second.current.openAttempt.values).not.toBe(first.current.openAttempt.values);
+        const before = db.serialize();
+        const request = vi
+          .spyOn(NPC_GM_REQUEST_READERS, 'request')
+          .mockImplementation(() => s.fail('SOURCE_CHANGED'));
+        try {
+          expect(read).toThrow(new NetworkApplicationStoreError('SOURCE_CHANGED'));
+          expect(request).toHaveBeenCalled();
+          expect(db.serialize().equals(before)).toBe(true);
+        } finally {
+          request.mockRestore();
+        }
+        expect(read()).toEqual(second);
+      });
+    });
+
+    it('keeps actual operation revalidation after SQL write-and-restore within the envelope scope', () => {
+      const saved = derivationFixture();
+      withNpcAttemptEnvelopeCalculations(() => {
+        const first = saved.read(),
+          before = db.serialize();
+        const request = vi.spyOn(NPC_GM_REQUEST_READERS, 'request');
+        try {
+          expect(db.prepare('UPDATE npc_operation SET kind=?').run('CANCEL').changes).toBe(1);
+          expect(saved.read).toThrow(NetworkApplicationStoreError);
+          expect(db.prepare('UPDATE npc_operation SET kind=?').run(saved.o.kind).changes).toBe(1);
+          const calls = request.mock.calls.length;
+          expect(saved.read()).toEqual(first);
+          expect(request.mock.calls.length).toBeGreaterThan(calls);
+          expect(db.serialize().equals(before)).toBe(true);
+        } finally {
+          request.mockRestore();
+        }
+      });
+    });
+
+    it('fully decodes over-capacity inputs and never admits a failed envelope', () => {
+      const saved = save({ old: view('NPC-001', empty) });
+      withNpcAttemptEnvelopeCalculations(() => {
+        const admitted = npcFrozenAttemptEventEnvelopeText(s.canonical(saved.e));
+        for (let n = 1; n < 256; n++) {
+          const text = s.canonical({ ...saved.e, operationId: `bounded-envelope-${n}` });
+          expect(npcFrozenAttemptEventEnvelopeText(text).operationId).toBe(`bounded-envelope-${n}`);
+        }
+        const text = s.canonical({ ...saved.e, operationId: 'over-capacity' });
+        const a = npcFrozenAttemptEventEnvelopeText(text),
+          b = npcFrozenAttemptEventEnvelopeText(text);
+        expect(a).toEqual(b);
+        expect(a).not.toBe(b);
+        expect(npcFrozenAttemptEventEnvelopeText(s.canonical(saved.e))).toBe(admitted);
+        const invalid = s.canonical({ ...saved.e, unexpected: true });
+        expect(() => npcFrozenAttemptEventEnvelopeText(invalid)).toThrow(
+          NetworkApplicationStoreError,
+        );
+      });
+      withNpcAttemptEnvelopeCalculations(() => {
+        const text = s.canonical({
+          ...saved.e,
+          attempt: { ...saved.e.attempt, values: { opaque: 'x'.repeat(1024 * 1024) } },
+        });
+        const a = npcFrozenAttemptEventEnvelopeText(text),
+          b = npcFrozenAttemptEventEnvelopeText(text);
+        expect(a).toEqual(b);
+        expect(a).not.toBe(b);
+      });
+    });
+  });
+
   function context(e: NpcAttemptEvent): NpcGmContext {
     const { npcDraftId, candidateNpcUuid, revision, mode, targetOrNull, stage } = e.attempt;
     return {
@@ -1230,5 +1473,242 @@ describe('NPC GM primitive source and existing QUEUE bridge', () => {
         version: 1,
       }),
     );
+  });
+
+  describe('reused SQL statements retain fresh primitive rows and lazy integer modes', () => {
+    function statementHistory() {
+      const created = save({ old: view('NPC-001', empty) });
+      let previous = created.e;
+      let lastNavigation = created;
+      const stages = [
+        'NPC-002',
+        'NPC-011',
+        'NPC-012',
+        'NPC-013',
+        'NPC-014',
+        'NPC-015',
+        'NPC-016',
+        'NPC-017',
+      ] as const;
+      for (let i = 0; i < stages.length - 1; i++) {
+        const form = stages[i]!,
+          operationId = id(70 + i);
+        lastNavigation = save({
+          old: view(form, context(previous)),
+          kind: 'REPLACE',
+          previous,
+          stage: stages[i + 1]!,
+          operationId,
+          request: nav(form, '001', operationId) as unknown as JsonObject,
+        });
+        previous = lastNavigation.e;
+      }
+      const committed = save({
+        old: view('NPC-017', context(previous)),
+        kind: 'COMMIT_V1',
+        previous,
+        operationId: id(80),
+        request: command('COMMIT_V1', id(80), previous),
+      });
+      return { created, lastNavigation, committed };
+    }
+
+    it('keeps a warmed session mode while new factories observe true and then false', () => {
+      const { committed } = statementHistory();
+      const before = db.serialize();
+      withNpcGmPrimitiveReadSession(db, scope, (session) => {
+        const first = readNpcGmPrimitiveCause(db, scope, committed.cause, session);
+        expect(first.operation).toEqual(committed.o);
+        db.defaultSafeIntegers(true);
+        try {
+          expect(readNpcGmPrimitiveCause(db, scope, committed.cause, session)).toBe(first);
+          expect(() => readNpcGmPrimitiveCause(db, scope, committed.cause)).toThrow(
+            NetworkApplicationStoreError,
+          );
+          expect(readNpcGmPrimitiveCause(db, scope, committed.cause, session)).toBe(first);
+        } finally {
+          db.defaultSafeIntegers(false);
+        }
+        expect(readNpcGmPrimitiveCause(db, scope, committed.cause)).toEqual(first);
+      });
+      expect(db.serialize().equals(before)).toBe(true);
+    });
+
+    it.each([true, false])(
+      'observes the actual request callback changing defaultSafeIntegers from %s before event',
+      (initialMode) => {
+        const { committed } = statementHistory();
+        const readRequest = NPC_GM_REQUEST_READERS.request.bind(NPC_GM_REQUEST_READERS);
+        const callback = vi
+          .spyOn(NPC_GM_REQUEST_READERS, 'request')
+          .mockImplementation((kind, value) => {
+            const request = readRequest(kind, value);
+            db.defaultSafeIntegers(!initialMode);
+            return request;
+          });
+        const before = db.serialize();
+        db.defaultSafeIntegers(initialMode);
+        try {
+          if (initialMode) {
+            expect(readNpcGmPrimitiveCause(db, scope, committed.cause).operation).toEqual(
+              committed.o,
+            );
+          } else {
+            expect(() => readNpcGmPrimitiveCause(db, scope, committed.cause)).toThrow(
+              NetworkApplicationStoreError,
+            );
+          }
+          expect(callback).toHaveBeenCalledTimes(1);
+          expect(db.serialize().equals(before)).toBe(true);
+        } finally {
+          callback.mockRestore();
+          db.defaultSafeIntegers(false);
+        }
+        expect(readNpcGmPrimitiveCause(db, scope, committed.cause).operation).toEqual(committed.o);
+      },
+    );
+
+    it.each(['previous', 'version'] as const)(
+      'captures the %s mode at its own first use, after earlier queries were warmed',
+      (kind) => {
+        const { created, lastNavigation, committed } = statementHistory();
+        const before = db.serialize();
+        withNpcGmPrimitiveReadSession(db, scope, (session) => {
+          const warm = kind === 'previous' ? created : lastNavigation;
+          expect(readNpcGmPrimitiveCause(db, scope, warm.cause, session).operation).toEqual(warm.o);
+          db.defaultSafeIntegers(true);
+          try {
+            expect(() => readNpcGmPrimitiveCause(db, scope, committed.cause, session)).toThrow(
+              NetworkApplicationStoreError,
+            );
+          } finally {
+            db.defaultSafeIntegers(false);
+          }
+          // The failed read still prepared that local query in true mode, as before reuse.
+          expect(() => readNpcGmPrimitiveCause(db, scope, committed.cause, session)).toThrow(
+            NetworkApplicationStoreError,
+          );
+          expect(readNpcGmPrimitiveCause(db, scope, committed.cause).operation).toEqual(
+            committed.o,
+          );
+        });
+        expect(db.serialize().equals(before)).toBe(true);
+      },
+    );
+
+    it('rereads hash-valid changed SQL after warm validation and recovers after rollback', () => {
+      const { committed } = statementHistory();
+      withNpcGmPrimitiveReadSession(db, scope, (session) => {
+        const first = readNpcGmPrimitiveCause(db, scope, committed.cause, session);
+        const before = db.serialize();
+        db.exec('SAVEPOINT changed_source');
+        try {
+          const changed = { ...committed.o, scope: { ...scope, ownerDeviceId: id(89) } };
+          expect(
+            db
+              .prepare(
+                'UPDATE npc_operation SET record_json=?,record_sha256=? WHERE operation_id=?',
+              )
+              .run(s.canonical(changed), hash(changed), changed.operationId).changes,
+          ).toBe(1);
+          const changedBytes = db.serialize();
+          expect(() =>
+            readNpcGmPrimitiveCause(
+              db,
+              scope,
+              {
+                operationId: changed.operationId,
+                recordSha256: hash(changed),
+              },
+              session,
+            ),
+          ).toThrow(NetworkApplicationStoreError);
+          expect(db.serialize().equals(changedBytes)).toBe(true);
+        } finally {
+          db.exec('ROLLBACK TO changed_source; RELEASE changed_source');
+        }
+        expect(db.serialize().equals(before)).toBe(true);
+        expect(readNpcGmPrimitiveCause(db, scope, committed.cause, session)).toEqual(first);
+      });
+    });
+
+    it('reads fresh effect-origin hashes through mutation, rollback, close and reopen', () => {
+      const created = save({ old: view('NPC-001', empty) });
+      const previous: NpcAttemptEvent = {
+        operationId: 'effect-stage-16',
+        previousSha256OrNull: hash(created.e),
+        attempt: { ...created.e.attempt, revision: 1, stage: 'NPC-016' },
+      };
+      putEvent(previous);
+      const allocation: NpcChildAllocation = {
+        kind: 'EFFECT_INSTANCE',
+        id: id(61),
+        diseaseId: 'DIS-FEVER',
+      };
+      const saved = save({
+        old: view('NPC-016', context(previous)),
+        kind: 'REPLACE',
+        previous,
+        operationId: id(60),
+        childAllocations: [allocation],
+        request: {
+          messageType: 'network.npc-preparation.request',
+          protocolVersion: 3,
+          operationId: id(60),
+          campaignId: scope.campaignId,
+          sourceFormId: 'NPC-016',
+          npcDraftId: previous.attempt.npcDraftId,
+          expectedAttemptRevision: previous.attempt.revision,
+          expectedRevisions: vector,
+          preparation: { kind: 'DISEASE_RESERVE', diseaseId: 'DIS-FEVER' },
+        },
+      });
+      db.exec(`CREATE TABLE npc_child_identity(child_id TEXT PRIMARY KEY,campaign_id TEXT,owner_npc_uuid TEXT,
+        kind TEXT,ordinal INTEGER,item_instance_id TEXT,weapon_variant_id TEXT,origin_operation_id TEXT,origin_draft_id TEXT)`);
+      db.prepare('INSERT INTO npc_child_identity VALUES (?,?,?,?,?,?,?,?,?)').run(
+        id(61),
+        scope.campaignId,
+        id(10),
+        'EFFECT_INSTANCE',
+        1,
+        null,
+        null,
+        id(60),
+        previous.attempt.npcDraftId,
+      );
+      const read = () => readNpcEffectAllocationInTransaction(db, scope, id(10), id(61));
+      expect(read()).toEqual(allocation);
+      const before = db.serialize();
+      db.exec('SAVEPOINT origin_hash');
+      try {
+        const changed = { ...saved.o, committedAt: '2026-11-06T00:00:01.000Z' };
+        expect(
+          db
+            .prepare('UPDATE npc_operation SET record_json=?,record_sha256=? WHERE operation_id=?')
+            .run(s.canonical(changed), hash(changed), changed.operationId).changes,
+        ).toBe(1);
+        // A cached hash would reject this valid replacement instead of reading its current value.
+        expect(read()).toEqual(allocation);
+        expect(
+          db.prepare('DELETE FROM npc_operation WHERE operation_id=?').run(saved.o.operationId)
+            .changes,
+        ).toBe(1);
+        expect(read).toThrow(NetworkApplicationStoreError);
+      } finally {
+        db.exec('ROLLBACK TO origin_hash; RELEASE origin_hash');
+      }
+      expect(db.serialize().equals(before)).toBe(true);
+      expect(read()).toEqual(allocation);
+      db.exec('COMMIT');
+      const bytes = db.serialize(),
+        closed = db;
+      db.close();
+      db = new Database(bytes);
+      db.exec('BEGIN IMMEDIATE');
+      expect(() => readNpcEffectAllocationInTransaction(closed, scope, id(10), id(61))).toThrow(
+        NetworkApplicationStoreError,
+      );
+      expect(read()).toEqual(allocation);
+    });
   });
 });

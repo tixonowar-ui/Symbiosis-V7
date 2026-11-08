@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   deriveNpcBaseStatLayers,
+  npcMassBounds,
   validateNpcSchema,
 } from '../domain/rules/npc-authoring/base-stats.js';
 import { prepareNewNpcAlcoholParameters } from '../domain/rules/npc-authoring/initial-effects.js';
@@ -146,7 +147,39 @@ describe('NPC-011–016 actual source components', () => {
       validateNpcSchema(catalog.baseStats, { ...schema, anatomyProfileId: 'INVENTED' }),
     ).toThrow();
     expect(() => validateNpcSchema(catalog.baseStats, { ...schema, sex: 'UNKNOWN' })).toThrow();
+    expect(() =>
+      validateNpcSchema(catalog.baseStats, { ...schema, raceCode: 'UNKNOWN' }),
+    ).toThrow();
   });
+  // Independent acceptance values from ADR 0077 A, not the implementation's bounds table.
+  it.each([
+    ['PURE', 'MALE', 60, 400],
+    ['PURE', 'FEMALE', 40, 350],
+    ['UNITED', 'MALE', 30, 150],
+    ['UNITED', 'FEMALE', 25, 120],
+    ['FREE', 'MALE', 40, 200],
+    ['FREE', 'FEMALE', 30, 160],
+  ] as const)(
+    'enforces ADR 0077 %s/%s mass interval [%i, %i]',
+    (raceCode, sex, minimum, maximum) => {
+      const schema = {
+        raceCode,
+        sex,
+        pureClassOrNull: raceCode === 'PURE' ? 'SEEKER' : null,
+        anatomyProfileId: 'STANDARD_HUMANOID',
+      };
+      expect(npcMassBounds(catalog.baseStats, raceCode, sex)).toEqual({ minimum, maximum });
+      for (const massKg of [minimum, maximum, (minimum * 10 + 1) / 10])
+        expect(validateNpcSchema(catalog.baseStats, { ...schema, massKg })).toEqual({
+          ...schema,
+          massKg,
+        });
+      for (const massKg of [(minimum * 10 - 1) / 10, (maximum * 10 + 1) / 10, minimum + 0.01])
+        expect(() => validateNpcSchema(catalog.baseStats, { ...schema, massKg })).toThrow(
+          'NPC schema.massKg',
+        );
+    },
+  );
   it('derives every actual L1 native profile without refilling current OE and keeps sided choices explicit', () => {
     for (const species of catalog.symbionts.species) {
       const learnedNodeRefs = catalog.development.nodes

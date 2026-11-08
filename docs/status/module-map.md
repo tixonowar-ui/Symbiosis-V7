@@ -1,5 +1,32 @@
 # Состояние модулей
 
+## NPC runtime #187
+
+Поверх A/B/C подключены owning application/readers, dispatcher/server/WS,
+wire v3 и controls всех 11 NPC-форм. GM получает библиотеку, полный лист,
+историю, V1/N+1 и приватный арт. PAUSED ingress не выполняет Start.
+Клиент передаёт намерение; host проверяет полномочия, очередь, ревизии,
+календарь и identities. Pending/read-only/несохранённый ввод блокируют
+изменения, сохраняя исторический readback.
+
+Состав/навыки, inventory/custom profiles, эффекты, life/Weaver и покрытия
+сохраняют происхождение. Legacy-отсутствие не становится подтверждением.
+ITEM_RESTORE сохраняет identities/profile/createdAt; updatedAt относится
+к новому COMMIT. Старые snapshots и receipts неизменны. Завершённые prefix
+проверяют полную связь предшественников, свежий SQL и исходные
+calendar/source/callable/result witnesses. Отдельно повторно используется
+только неизменяемая каноническая структура attempt внутри синхронного вызова;
+hash, SQL/scope, request и domain-проверки остаются обязательными. Кодирование
+коротких строк переиспользуется в пределах вызова; это не кеш SQL-строк
+или изменяемых объектов.
+
+Owning/UI проверки охватывают механики и mass boundaries; production E2E —
+V1/N+1, lost reply, reconnect, restart, историю и отдельный PLAYER
+payload/DOM/a11y, включая private art/navigation refusal. Независимое ревью
+фиксирует прочитанные участки и поздние дельты. Итоговый committed SHA,
+полный clean5/CI и результаты производительности фиксируются в PR;
+squash и проверка main tree завершают приёмку.
+
 ## Подготовка и GM-проекции NPC #187 — поддерживающая часть C
 
 Host-адаптеры подготавливают состав, предметы/custom profiles, восстановление,

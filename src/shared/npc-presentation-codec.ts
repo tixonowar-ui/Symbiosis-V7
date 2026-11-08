@@ -1295,7 +1295,16 @@ function verifyLinks(p: NpcGmProjection): void {
             !entry.profileChoices.some((choice) => choice.value === selected.value)
           )
             bad('$.poisonModePreparations.input.poisonProfileId');
-          if (!c.symbionts.some((source) => source.symbiontInstanceId === entry.sourceInstanceId))
+          // A removed draft source can still own a proven PREPARED mode before its first COMMIT.
+          if (
+            !c.symbionts.some((source) => source.symbiontInstanceId === entry.sourceInstanceId) &&
+            !c.poisonModeStates?.some(
+              (state) =>
+                state.sourceInstanceId === entry.sourceInstanceId &&
+                selected.kind === 'ENTERED' &&
+                state.poisonProfileId === selected.value,
+            )
+          )
             bad('$.poisonModePreparations.sourceInstanceId');
         }
       }

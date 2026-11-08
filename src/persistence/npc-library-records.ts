@@ -238,6 +238,7 @@ export interface NpcDomainReaders {
     previousVersionOrNull: NpcVersion | null,
     calendar: NpcCalendarReadContext | null,
     pending: NpcPendingCommitEvidence | null,
+    storedChildGraphOrNull: NpcPublishedChildGraph | null,
   ) => void;
 }
 export interface NpcArtBlob {
@@ -957,6 +958,38 @@ export function npcAttemptEventEnvelopeValue(value: unknown): NpcAttemptEvent {
           : {}),
       }
     : common;
+}
+// Only intrinsic storage grammar is reusable. SQL, scope, causes and domain readers stay fresh.
+let attemptEnvelopeCalculations: {
+  values: Map<string, NpcAttemptEvent>;
+  remaining: number;
+} | null = null;
+/** Share completed immutable envelopes only within an existing synchronous NPC store call. */
+export function withNpcAttemptEnvelopeCalculations<T>(body: () => T): T {
+  const outer = attemptEnvelopeCalculations;
+  // Technical retention limits, not NPC rules; full decoding remains valid on a capacity miss.
+  attemptEnvelopeCalculations ??= { values: new Map(), remaining: 2 * 1024 * 1024 };
+  try {
+    return s.withCanonicalCalculations(body);
+  } finally {
+    attemptEnvelopeCalculations = outer;
+  }
+}
+/** Callers must check the current SQL text/hash before lookup and row/scope after lookup. */
+export function npcFrozenAttemptEventEnvelopeText(value: string): NpcAttemptEvent {
+  const text = s.text(value),
+    calculations = attemptEnvelopeCalculations,
+    cached = calculations?.values.get(text);
+  if (cached !== undefined) return cached;
+  const envelope = freezeNpcReadEvidence(
+    npcAttemptEventEnvelopeValue(s.parseCanonicalObject(text)),
+  );
+  const bytes = text.length * 2;
+  if (calculations !== null && calculations.values.size < 256 && bytes <= calculations.remaining) {
+    calculations.values.set(text, envelope);
+    calculations.remaining -= bytes;
+  }
+  return envelope;
 }
 export function npcAttemptEventValue(
   value: unknown,

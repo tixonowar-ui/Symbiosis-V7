@@ -481,6 +481,82 @@ describe('closed current NPC GM display contract (shape fixtures, not full-domai
     c.poisonModeStates = [{ ...state, sourcePrivateHistory: [] }];
     expect(() => decode(p)).toThrow();
   });
+  it('links a removed draft source mode control to its selected historical state without accepting orphan references', () => {
+    const p = payload('NPC-016'),
+      c = content(p),
+      input = (c.input as Record<string, unknown>).input as Record<string, unknown>;
+    const state = {
+      sourceInstanceId: id(71),
+      modeFactId: id(72),
+      sourceLabel: 'Removed Taipan',
+      poisonProfileId: 'POI-TAIPAN-DEADLY',
+      explanation: 'Actual prepared mode before its first COMMIT',
+      derivedRows: [],
+    };
+    const mode = {
+      capabilityKey: 'prepared-mode',
+      sourceInstanceId: id(71),
+      sourceLabel: 'Removed Taipan',
+      profileChoices: [{ value: 'POI-TAIPAN-DEADLY', label: 'Deadly' }],
+      input: { poisonProfileId: entered('POI-TAIPAN-DEADLY'), reason: unset() },
+      canSubmit: true,
+      errors: {},
+      explanation: 'Initial-state correction, not a played mode switch',
+      derivedRows: [],
+    };
+    input.poisonModeFactIds = entered([id(72)]);
+    c.poisonModeStates = [state];
+    c.poisonModePreparations = [mode];
+    expect(c.symbionts).toEqual([]);
+    expect((c.input as Record<string, unknown>).currentOeChanges).toEqual([]);
+    expect(decode(p)).toEqual(p);
+
+    for (const change of [
+      { poisonModeStates: [] },
+      { poisonModeStates: [{ ...state, sourceInstanceId: id(73) }] },
+      {
+        poisonModePreparations: [{ ...mode, input: { ...mode.input, poisonProfileId: unset() } }],
+      },
+      {
+        poisonModePreparations: [
+          {
+            ...mode,
+            profileChoices: [
+              ...mode.profileChoices,
+              { value: 'POI-TAIPAN-PARALYTIC', label: 'Paralytic' },
+            ],
+            input: { ...mode.input, poisonProfileId: entered('POI-TAIPAN-PARALYTIC') },
+          },
+        ],
+      },
+    ]) {
+      const changed = structuredClone(p);
+      Object.assign(content(changed), change);
+      let caught: unknown;
+      try {
+        decode(changed);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({
+        name: 'NpcProjectionDecodeError',
+        path: '$.poisonModePreparations.sourceInstanceId',
+      });
+    }
+    input.poisonModeFactIds = entered([id(73)]);
+    let caught: unknown;
+    try {
+      decode(p);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({
+      name: 'NpcProjectionDecodeError',
+      path: '$.poisonModeStates.selected',
+    });
+    input.poisonModeFactIds = entered([id(72)]);
+    expect(decode(p)).toEqual(p);
+  });
   it('does not offer a poison carrier that is absent from the current inventory', () => {
     const p = payload('NPC-015'),
       c = content(p);

@@ -1,3 +1,4 @@
+import type { AdmissionPublicationRules } from '../persistence/campaign-admission-decision.js';
 import type { Server } from 'node:http';
 import type Database from 'better-sqlite3';
 import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
@@ -41,6 +42,7 @@ const validateOwner = (owner: CampaignPrivateOwner) => {
 export function createCampaignNetworkRuntime(d: {
   readonly database: Database.Database;
   readonly baseline: LocalCharacterExportBaseline;
+  readonly npc?: AdmissionPublicationRules['npc'];
   readonly bind: CampaignBindManager;
   readonly shellServer: Server;
   readonly config: NetworkApplicationConfig;
@@ -53,6 +55,7 @@ export function createCampaignNetworkRuntime(d: {
   const receiver = createDeviceAdmissionPeerRuntime({
     database: d.database,
     baseline: d.baseline,
+    ...(d.npc === undefined ? {} : { npc: d.npc }),
     executor,
     limits: d.config.transfer,
   });

@@ -766,27 +766,25 @@ function parseCanonicalObject(value: string): Row {
   }
   return record;
 }
+// Keys and short IDs repeat too; cap their entry count as well as the shared byte budget.
+function encodedCanonicalString(value: string): string {
+  const cache = canonicalStrings;
+  if (cache === null) return JSON.stringify(value);
+  const known = cache.values.get(value);
+  if (known !== undefined) return known;
+  const encoded = JSON.stringify(value);
+  const bytes = (value.length + encoded.length) * 2;
+  if (cache.values.size < 8192 && bytes <= cache.remaining) {
+    cache.values.set(value, encoded);
+    cache.remaining -= bytes;
+  }
+  return encoded;
+}
 // Joining each complete subtree repeatedly copies its already encoded descendants.
 // This buffer belongs to one call; descriptor checks still precede value reads.
 function appendCanonical(value: unknown, parts: string[]): void {
   if (typeof value === 'string') {
-    const cache = canonicalStrings;
-    if (cache === null || value.length < 1024) {
-      parts.push(JSON.stringify(value));
-      return;
-    }
-    const known = cache.values.get(value);
-    if (known !== undefined) {
-      parts.push(known);
-      return;
-    }
-    const encoded = JSON.stringify(value);
-    const bytes = (value.length + encoded.length) * 2;
-    if (bytes <= cache.remaining) {
-      cache.values.set(value, encoded);
-      cache.remaining -= bytes;
-    }
-    parts.push(encoded);
+    parts.push(encodedCanonicalString(value));
     return;
   }
   if (value === null || typeof value === 'boolean') {
@@ -821,7 +819,7 @@ function appendCanonical(value: unknown, parts: string[]): void {
   parts.push('{');
   for (const [index, key] of keys.entries()) {
     if (index !== 0) parts.push(',');
-    parts.push(JSON.stringify(key), ':');
+    parts.push(encodedCanonicalString(key), ':');
     appendCanonical(row[key], parts);
   }
   parts.push('}');
@@ -904,6 +902,12 @@ function input<T>(body: () => T): T {
     return fail('INVALID_INPUT');
   }
 }
+// Separate scalar subqueries still read every table when an earlier table is empty.
+function probeSchemaTables(db: Database.Database, tables: readonly string[]): void {
+  db.prepare(
+    `SELECT ${tables.map((table) => `(SELECT 1 FROM ${table} LIMIT 1)`).join(', ')}`,
+  ).get();
+}
 function schema(db: Database.Database): void {
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
   if (
@@ -928,10 +932,9 @@ function schema(db: Database.Database): void {
     row['version'] === 18 ||
     row['version'] === 19
   )
-    for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+    probeSchemaTables(db, CAMPAIGN_LOBBY_TABLES);
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
-    for (const table of CAMPAIGN_LIFECYCLE_TABLES)
-      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+    probeSchemaTables(db, CAMPAIGN_LIFECYCLE_TABLES);
   if (
     row['version'] === 15 ||
     row['version'] === 16 ||
@@ -939,9 +942,8 @@ function schema(db: Database.Database): void {
     row['version'] === 18 ||
     row['version'] === 19
   )
-    for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
-  for (const table of NETWORK_APPLICATION_TABLES)
-    db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+    probeSchemaTables(db, NPC_TABLES);
+  probeSchemaTables(db, NETWORK_APPLICATION_TABLES);
   if (
     row['version'] === 11 ||
     row['version'] === 12 ||
@@ -953,8 +955,7 @@ function schema(db: Database.Database): void {
     row['version'] === 18 ||
     row['version'] === 19
   )
-    for (const table of DEVICE_REQUEST_REVIEW_TABLES)
-      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+    probeSchemaTables(db, DEVICE_REQUEST_REVIEW_TABLES);
   if (
     row['version'] === 12 ||
     row['version'] === 13 ||
@@ -965,8 +966,7 @@ function schema(db: Database.Database): void {
     row['version'] === 18 ||
     row['version'] === 19
   )
-    for (const table of CAMPAIGN_ADMISSION_TABLES)
-      db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
+    probeSchemaTables(db, CAMPAIGN_ADMISSION_TABLES);
 }
 function hasRequestReviewSchema(db: Database.Database): boolean {
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[

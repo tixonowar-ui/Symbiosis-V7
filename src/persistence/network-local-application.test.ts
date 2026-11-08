@@ -967,6 +967,69 @@ describe('local network application/outbox aggregate', () => {
     });
     expect(s.canonical({ witness })).toBe(canonical({ witness }));
   });
+  it.each(['', 'короткий\u0000"\\\n\ud800', '🙂__proto__'])(
+    'reuses exact short text %j for both keys and values',
+    (value) => {
+      const s = networkApplicationStorage;
+      const expected = `{${JSON.stringify(value)}:${JSON.stringify(value)}}`;
+      const stringify = vi.spyOn(JSON, 'stringify');
+      let first = '',
+        second = '',
+        calls: number;
+      try {
+        s.withCanonicalCalculations(() => {
+          first = s.canonical({ [value]: value });
+          second = s.canonical({ [value]: value });
+        });
+        calls = stringify.mock.calls.filter(([input]) => input === value).length;
+      } finally {
+        stringify.mockRestore();
+      }
+      expect(first).toBe(expected);
+      expect(second).toBe(expected);
+      expect(calls).toBe(1);
+      expect(s.canonical({ [value]: value })).toBe(expected);
+    },
+  );
+  it('rechecks mutable descriptors and array holes after short key and value encoding is warm', () => {
+    const s = networkApplicationStorage;
+    const row = { key: 'value' },
+      array = ['value'];
+    const getter = vi.fn(() => 'value');
+    s.withCanonicalCalculations(() => {
+      expect(s.canonical(row)).toBe('{"key":"value"}');
+      expect(s.canonical(array)).toBe('["value"]');
+      row.key = 'changed';
+      expect(s.canonical(row)).toBe('{"key":"changed"}');
+      Object.defineProperty(row, 'key', { get: getter, enumerable: true });
+      expect(() => s.canonical(row)).toThrow('CORRUPT_STORAGE');
+      array.length = 2;
+      expect(() => s.canonical(array)).toThrow('CORRUPT_STORAGE');
+      expect(getter).not.toHaveBeenCalled();
+    });
+  });
+  it('keeps exact output when the finite short-string entry capacity is exhausted', () => {
+    const s = networkApplicationStorage;
+    const overflow = 'after-entry-cap\u0000\ud800';
+    const expected = JSON.stringify(overflow);
+    s.withCanonicalCalculations(() => {
+      for (let i = 0; i < 8192; i++) s.canonical(`entry-${i}`);
+      const stringify = vi.spyOn(JSON, 'stringify');
+      let first: string, second: string, calls: number;
+      try {
+        first = s.canonical(overflow);
+        second = s.canonical(overflow);
+        calls = stringify.mock.calls.filter(([input]) => input === overflow).length;
+      } finally {
+        stringify.mockRestore();
+      }
+      expect(first).toBe(expected);
+      expect(second).toBe(expected);
+      expect(calls).toBe(2);
+      expect(s.canonical('entry-0')).toBe('"entry-0"');
+    });
+  });
+
   it('returns fresh canonical object graphs after a caller changes an earlier parse', () => {
     const s = networkApplicationStorage;
     const witness = 'independent nested value '.repeat(100);

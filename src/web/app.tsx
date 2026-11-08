@@ -1,3 +1,26 @@
+import {
+  isNpcControlForm,
+  type NpcControlPresentation,
+  type NpcInputBufferState,
+} from './forms/npc/npc-application.js';
+import {
+  NpcIdentityFields,
+  NpcSchemaFields,
+  NpcStatsFields,
+  NpcSymbiontsFields,
+  NpcSkillsFields,
+  NpcInventoryFields,
+  NpcInitialStateFields,
+} from './forms/npc/npc-editor-fields.js';
+import type { NpcContinuationDraft } from './forms/npc/npc-presentation.js';
+import { NpcEffectPreparationFields } from './forms/npc/npc-effect-preparation-fields.js';
+import { NpcPoisonModeFields, NpcPoisonCoatingFields } from './forms/npc/npc-poison-fields.js';
+import {
+  NpcLibraryContent,
+  NpcSheetContent,
+  NpcHistoryContent,
+  NpcFinalReviewContent,
+} from './forms/npc/npc-library-content.js';
 import { isCampaignOwnerForm } from './forms/net/admission-client.js';
 import { CampaignPeerConnection } from './forms/net/campaign-peer-connection.js';
 import type { CampaignPeerStateV3Message } from '@shared/campaign-lifecycle.js';
@@ -253,6 +276,7 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     (snapshot.formId === 'CHR-001' && Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
+    isNpcControlForm(snapshot.formId) ||
     snapshot.formId === 'NET-017' ||
     isCampaignLobbyGmForm(snapshot.formId) ||
     isCampaignLifecycleForm(snapshot.formId) ||
@@ -2229,9 +2253,416 @@ function AbandonmentDialogFields({
   );
 }
 
+function NpcInputBufferControls(props: {
+  readonly buffer: NpcInputBufferState | null;
+  readonly connection: () => ProjectionConnection | null;
+  readonly notice: (value: string | null) => void;
+}) {
+  const buffer = props.buffer;
+  const report = (value: ReturnType<ProjectionConnection['applyNpcInput']> | undefined) =>
+    props.notice(value?.ok ? null : (value?.detail ?? 'Соединение НПС недоступно.'));
+  return (
+    <>
+      {buffer !== null && (
+        <section aria-label="Локальный ввод НПС">
+          <p role={buffer.conflict ? 'alert' : 'status'}>
+            {buffer.conflict
+              ? 'Хост изменил форму или попытку. Локальный ввод сохранён, но не переносится на новое состояние. Отмените ввод, чтобы продолжить.'
+              : 'Изменения пока находятся в этом окне. Подтвердите ввод перед переходом к следующему этапу.'}
+          </p>
+          <button
+            type="button"
+            disabled={!buffer.canApply}
+            onClick={() => report(props.connection()?.applyNpcInput())}
+          >
+            Подтвердить ввод
+          </button>
+          <button
+            type="button"
+            disabled={!buffer.canDiscard}
+            onClick={() => report(props.connection()?.discardNpcInput())}
+          >
+            Отменить ввод
+          </button>
+        </section>
+      )}
+    </>
+  );
+}
+function NpcContent({
+  control,
+  connection,
+  notice,
+}: {
+  readonly control: NpcControlPresentation;
+  readonly connection: () => ProjectionConnection | null;
+  readonly notice: (value: string | null) => void;
+}) {
+  type DiseaseInput = NonNullable<
+    Extract<
+      NpcControlPresentation,
+      { formId: 'NPC-016' }
+    >['presentation']['diseasePreparationOrNull']
+  >['input'];
+  const [diseaseChoice, setDiseaseChoice] = useState<{
+    capabilityKey: string;
+    input: DiseaseInput;
+  } | null>(null);
+  const [continuationDraft, setContinuationDraft] = useState<NpcContinuationDraft | null>(null);
+  type WoundInput = NonNullable<
+    Extract<NpcControlPresentation, { formId: 'NPC-016' }>['presentation']['woundPreparationOrNull']
+  >['input'];
+  const [woundChoice, setWoundChoice] = useState<{
+    capabilityKey: string;
+    input: WoundInput;
+  } | null>(null);
+  const result = (value: ReturnType<ProjectionConnection['replaceNpcStage']> | undefined) =>
+    notice(value?.ok ? null : (value?.detail ?? 'Соединение НПС недоступно.'));
+  switch (control.formId) {
+    case 'NPC-001':
+      return (
+        <NpcLibraryContent
+          presentation={control.presentation}
+          onSelect={(id) => result(connection()?.selectNpc(id))}
+        />
+      );
+    case 'NPC-002':
+      return (
+        <NpcIdentityFields
+          presentation={control.presentation}
+          onChange={(values) => result(connection()?.stageNpcInput({ formId: 'NPC-002', values }))}
+          onArtBusy={(key, busy) => connection()?.setNpcInputPending(key, busy)}
+          onArtEdit={(key, edit) => result(connection()?.replaceNpcArt(key, edit))}
+        />
+      );
+    case 'NPC-003':
+      return <NpcSheetContent sheet={control.presentation} />;
+    case 'NPC-007':
+      return (
+        <NpcHistoryContent
+          presentation={control.presentation}
+          onSelect={(version) => result(connection()?.selectNpcHistory(version))}
+        />
+      );
+    case 'NPC-011':
+      return (
+        <NpcSchemaFields
+          presentation={control.presentation}
+          onChange={(values) => result(connection()?.stageNpcInput({ formId: 'NPC-011', values }))}
+        />
+      );
+    case 'NPC-012':
+      return (
+        <NpcStatsFields
+          presentation={control.presentation}
+          onChange={(values) => result(connection()?.stageNpcInput({ formId: 'NPC-012', values }))}
+        />
+      );
+    case 'NPC-013':
+      return (
+        <NpcSymbiontsFields
+          presentation={control.presentation}
+          onChange={(values) => result(connection()?.stageNpcInput({ formId: 'NPC-013', values }))}
+          onAdd={() => result(connection()?.reserveNpcSymbiont())}
+          continuationDraft={continuationDraft}
+          onContinuation={(intent) => {
+            const capability = control.presentation.continuations.find(
+              (entry) => entry.capabilityKey === intent.capabilityKey,
+            );
+            if (capability === undefined) {
+              notice('Продолжение состава изменилось. Используйте текущую форму.');
+              return;
+            }
+            if (intent.kind !== 'SUBMIT') {
+              setContinuationDraft((previous) => {
+                const current: NpcContinuationDraft =
+                  previous?.capabilityKey === intent.capabilityKey
+                    ? previous
+                    : {
+                        capabilityKey: intent.capabilityKey,
+                        manualFaces: {},
+                        selectedSkills: null,
+                      };
+                return intent.kind === 'SET_MANUAL_FACE'
+                  ? {
+                      ...current,
+                      manualFaces: { ...current.manualFaces, [intent.rollKey]: intent.input },
+                    }
+                  : { ...current, selectedSkills: intent.input };
+              });
+              notice(null);
+              return;
+            }
+            const local =
+              continuationDraft?.capabilityKey === capability.capabilityKey
+                ? continuationDraft
+                : null;
+            if (capability.kind === 'CONFIRM_COMPOSITION') {
+              result(connection()?.confirmNpcComposition(capability.capabilityKey));
+              return;
+            }
+            if (capability.kind === 'ADVISER_SKILLS') {
+              const selected =
+                local?.selectedSkills ??
+                capability.skills.selected.map((entry) => ({
+                  skillKey: { kind: 'ENTERED' as const, value: entry.skillKey },
+                  targetBonus: { kind: 'ENTERED' as const, value: entry.targetBonus },
+                }));
+              const selectedSkills: { skillKey: string; targetBonus: number }[] = [];
+              for (const row of selected) {
+                if (row.skillKey.kind !== 'ENTERED' || row.targetBonus.kind !== 'ENTERED') {
+                  notice('Выберите навык и его бонус в каждой строке Советника.');
+                  return;
+                }
+                selectedSkills.push({
+                  skillKey: row.skillKey.value,
+                  targetBonus: row.targetBonus.value,
+                });
+              }
+              result(
+                connection()?.resolveNpcComposition(capability.capabilityKey, {
+                  kind: 'ADVISER_SKILLS',
+                  selectedSkills,
+                }),
+              );
+              return;
+            }
+            if (
+              capability.kind === 'GROSS_SKILL_GRANT' ||
+              capability.kind === 'TROGR_STAT_CLOSURE'
+            ) {
+              result(
+                connection()?.resolveNpcComposition(capability.capabilityKey, {
+                  kind: capability.kind,
+                }),
+              );
+              return;
+            }
+            const manualFaces: number[] = [];
+            if (capability.diceMode === 'MANUAL') {
+              for (const roll of capability.rolls) {
+                const input = local?.manualFaces[roll.key] ?? roll.input;
+                if (
+                  input.kind !== 'ENTERED' ||
+                  !Number.isInteger(input.value) ||
+                  input.value < 1 ||
+                  input.value > roll.dieSides
+                ) {
+                  notice(`Введите результат для «${roll.label}» от 1 до ${roll.dieSides}.`);
+                  return;
+                }
+                manualFaces.push(input.value);
+              }
+            } else if (capability.diceMode !== 'AUTO') {
+              notice('Хост не предоставил режим броска для этого продолжения.');
+              return;
+            }
+            result(
+              connection()?.resolveNpcComposition(capability.capabilityKey, {
+                kind: capability.kind,
+                manualFaces: capability.diceMode === 'MANUAL' ? manualFaces : null,
+              }),
+            );
+          }}
+        />
+      );
+    case 'NPC-014':
+      return (
+        <NpcSkillsFields
+          presentation={control.presentation}
+          onChange={(values) => result(connection()?.stageNpcInput({ formId: 'NPC-014', values }))}
+        />
+      );
+    case 'NPC-015':
+      return (
+        <>
+          <NpcInventoryFields
+            presentation={control.presentation}
+            onChange={(values) =>
+              result(connection()?.stageNpcInput({ formId: 'NPC-015', values }))
+            }
+            onAdd={() => result(connection()?.reserveNpcItem())}
+            onRestore={(key, itemInstanceId) =>
+              result(connection()?.restoreNpcItem(key, itemInstanceId))
+            }
+            onReserveCustomItem={(key) => result(connection()?.reserveNpcCustomItem(key))}
+            onReserveCustomModifier={(key, itemInstanceId) =>
+              result(connection()?.reserveNpcCustomModifier(key, itemInstanceId))
+            }
+            onReserveCustomProfileVersion={(key, itemInstanceId, profileId, profileVersionId) =>
+              result(
+                connection()?.reserveNpcCustomProfileVersion(
+                  key,
+                  itemInstanceId,
+                  profileId,
+                  profileVersionId,
+                ),
+              )
+            }
+            onReserveComposite={(itemTypeId) =>
+              result(connection()?.reserveNpcCompositeItem(itemTypeId))
+            }
+            onConfirmCompatibility={(key, reason) =>
+              result(connection()?.confirmNpcEquipmentCompatibility(key, reason))
+            }
+          />
+          <NpcPoisonCoatingFields
+            presentation={control.presentation}
+            onSubmit={(input) => result(connection()?.prepareNpcPoisonCoating(input))}
+            onRemove={(input) => result(connection()?.removeNpcPoisonCoating(input))}
+          />
+        </>
+      );
+    case 'NPC-016': {
+      const preparation = control.presentation.diseasePreparationOrNull;
+      const woundPreparation = control.presentation.woundPreparationOrNull;
+      const woundInput =
+        woundPreparation !== null && woundChoice?.capabilityKey === woundPreparation.capabilityKey
+          ? woundChoice.input
+          : woundPreparation?.input;
+      const woundComplete =
+        woundInput !== undefined &&
+        woundInput.woundType.kind === 'ENTERED' &&
+        woundInput.regionId.kind === 'ENTERED' &&
+        (woundInput.woundType.value === 'GENERIC' ||
+          (woundInput.damagePerTick.kind === 'ENTERED' &&
+            Number.isFinite(woundInput.damagePerTick.value) &&
+            woundInput.damagePerTick.value >= 0));
+      const selected =
+        preparation !== null && diseaseChoice?.capabilityKey === preparation.capabilityKey
+          ? diseaseChoice.input
+          : (preparation?.input ?? { kind: 'UNSET' as const });
+      return (
+        <>
+          <NpcInitialStateFields
+            presentation={{
+              ...control.presentation,
+              woundPreparationOrNull:
+                woundPreparation === null || woundInput === undefined
+                  ? null
+                  : {
+                      ...woundPreparation,
+                      input: woundInput,
+                      canSubmit: woundPreparation.canSubmit && woundComplete,
+                    },
+              diseasePreparationOrNull:
+                preparation === null
+                  ? null
+                  : {
+                      ...preparation,
+                      input: selected,
+                      canSubmit: preparation.canSubmit && selected.kind === 'ENTERED',
+                    },
+            }}
+            onChange={(values) =>
+              result(connection()?.stageNpcInput({ formId: 'NPC-016', values }))
+            }
+            onPreparation={(intent) => {
+              const state = control.presentation.state;
+              if (
+                preparation === null ||
+                intent.capabilityKey !== preparation.capabilityKey ||
+                state.readOnly ||
+                state.pending ||
+                state.dirty ||
+                state.localEditDirty === true
+              ) {
+                notice('Подготовка болезни недоступна для текущей формы.');
+                return;
+              }
+              if (intent.kind === 'SET_DISEASE') {
+                const input = intent.input;
+                if (
+                  input.kind === 'ENTERED' &&
+                  !preparation.choices.some((choice) => choice.value === input.value)
+                ) {
+                  notice('Неизвестная болезнь.');
+                  return;
+                }
+                setDiseaseChoice({ capabilityKey: preparation.capabilityKey, input: intent.input });
+                notice(null);
+                return;
+              }
+              if (selected.kind !== 'ENTERED') {
+                notice('Выберите болезнь для подготовки.');
+                return;
+              }
+              result(connection()?.reserveNpcDisease(preparation.capabilityKey, selected.value));
+            }}
+            onTraumaPreparation={(capabilityKey) =>
+              result(connection()?.reserveNpcTrauma(capabilityKey))
+            }
+            onWoundPreparation={(intent) => {
+              const state = control.presentation.state;
+              if (
+                woundPreparation === null ||
+                intent.capabilityKey !== woundPreparation.capabilityKey ||
+                !woundPreparation.canSubmit ||
+                state.readOnly ||
+                state.pending ||
+                state.dirty ||
+                state.localEditDirty === true
+              ) {
+                notice('Назначение раны недоступно для текущей формы.');
+                return;
+              }
+              if (intent.kind === 'SET_INPUT') {
+                setWoundChoice({ capabilityKey: intent.capabilityKey, input: intent.input });
+                notice(null);
+                return;
+              }
+              if (
+                woundInput === undefined ||
+                !woundComplete ||
+                woundInput.woundType.kind !== 'ENTERED' ||
+                woundInput.regionId.kind !== 'ENTERED'
+              ) {
+                notice('Выберите вид и область раны, а для кровотечения введите урон за тик.');
+                return;
+              }
+              if (woundInput.woundType.value === 'GENERIC')
+                result(
+                  connection()?.prepareNpcWound(woundPreparation.capabilityKey, {
+                    woundType: 'GENERIC',
+                    regionId: woundInput.regionId.value,
+                  }),
+                );
+              else if (woundInput.damagePerTick.kind === 'ENTERED')
+                result(
+                  connection()?.prepareNpcWound(woundPreparation.capabilityKey, {
+                    woundType: 'BLEEDING',
+                    regionId: woundInput.regionId.value,
+                    damagePerTick: woundInput.damagePerTick.value,
+                  }),
+                );
+            }}
+          />
+          <NpcEffectPreparationFields
+            presentation={control.presentation}
+            onAlcohol={(key, input) => result(connection()?.prepareNpcAlcohol(key, input))}
+            onHpMode={(input) => result(connection()?.prepareNpcHpMode(input))}
+            onFormalControl={(input) => result(connection()?.prepareNpcFormalControl(input))}
+            onLifeRoll={(input) => result(connection()?.prepareNpcLifeRoll(input))}
+            onLifeState={(input) => result(connection()?.prepareNpcLifeState(input))}
+            onWeaverState={(input) => result(connection()?.prepareNpcWeaverState(input))}
+            onWeaverRemove={(input) => result(connection()?.removeNpcWeaverState(input))}
+          />
+          <NpcPoisonModeFields
+            presentation={control.presentation}
+            onSubmit={(input) => result(connection()?.setNpcPoisonMode(input))}
+          />
+        </>
+      );
+    }
+    case 'NPC-017':
+      return <NpcFinalReviewContent presentation={control.presentation} />;
+  }
+}
 export function App(): ReactElement {
   const [state, setState] = useState<WebClientState>({ kind: 'connecting' });
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [npcControls, setNpcControls] = useState<NpcControlPresentation | null>(null);
+  const [npcInputBuffer, setNpcInputBuffer] = useState<NpcInputBufferState | null>(null);
   const [identityDraft, setIdentityDraft] = useState<IdentityDraftClientState | null>(null);
   const [campaignDraft, setCampaignDraft] = useState<CampaignDraftClientState | null>(null);
   const [networkDraft, setNetworkDraft] = useState<NetworkDraftClientState | null>(null);
@@ -2302,6 +2733,10 @@ export function App(): ReactElement {
       setNetworkDraft,
       setGmRequestDraft,
       setCampaignPeerState,
+      (controls, buffer) => {
+        setNpcControls(controls);
+        setNpcInputBuffer(buffer);
+      },
     );
     connectionRef.current = connection;
     return () => {
@@ -2422,6 +2857,21 @@ export function App(): ReactElement {
             disabled={!interactive || peerBlocked || layers.length > 0 || networkImageReadPending}
           >
             <legend>AtlasForm {snapshot.formId}</legend>
+            <NpcInputBufferControls
+              buffer={npcInputBuffer}
+              connection={() => connectionRef.current}
+              notice={setActionNotice}
+            />
+            {isNpcControlForm(snapshot.formId) && npcControls?.formId === snapshot.formId ? (
+              <NpcContent
+                key={
+                  npcControls.formId === 'NPC-013' ? npcControls.presentation.bindingKey : undefined
+                }
+                control={npcControls}
+                connection={() => connectionRef.current}
+                notice={setActionNotice}
+              />
+            ) : null}
             {isCampaignLifecycleForm(snapshot.formId) ? (
               <CampaignLifecycleFields
                 key={
@@ -2962,6 +3412,7 @@ export function App(): ReactElement {
                   Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
+                isNpcControlForm(snapshot.formId) ||
                 snapshot.formId === 'NET-017' ||
                 isCampaignLobbyGmForm(snapshot.formId) ||
                 isCampaignLifecycleForm(snapshot.formId) ||
