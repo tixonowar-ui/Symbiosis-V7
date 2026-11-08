@@ -84,8 +84,38 @@ network timeouts, workers, retries и общий CI deadline остаются п
 
 ## Общий бюджет Windows job
 
-`jobs.verify.timeout-minutes` равен **60 минутам** для PR и push в main.
-Состав и последовательность шагов единого Windows job остаются прежними.
+`jobs.verify.timeout-minutes` равен **150 минутам** для PR и push в main.
+Меняется только общий deadline: состав и последовательность шагов, assertions,
+индивидуальные test/hook/poll budgets, workers, retries, required checks и
+загрузка E2E-диагностик сохраняются.
+
+Владелец явно согласовал 150 минут отдельным процессным PR 2026-11-08,
+см. [issue #253](https://github.com/tixonowar-ui/Symbiosis-V7/issues/253).
+[Run 42501900864, попытка 1](https://github.com/tixonowar-ui/Symbiosis-V7/actions/runs/42501900864/attempts/1)
+для PR #252 был отменён по прежнему пределу: GitHub записал
+`The job has exceeded the maximum execution time of 1h0m0s`.
+Job `verify` шёл 16:50:15–17:50:21 UTC; Tests отменён, последующие validation,
+E2E и upload пропущены, артефактов нет. Отмена не является PASS.
+
+Основание для конечного запаса — полный локальный clean04 кандидата #187
+`c4427834fc8741c996d9d9f8bcb2c7f69f4f0ed9`: около 122 минут от начала runner
+до завершения всех пяти этапов. Verify занял 95 мин 24,687 с
+(7182 теста в 285 файлах), production E2E — 24 мин 34,641 с
+(45 сценариев, без повторов и отказов); воспроизводимость импорта прошла.
+150 минут оставляют около 28 минут относительно этого наблюдения. Это не
+точный прогноз GitHub runner и не доказательство достаточности нового лимита.
+
+Глобальный CI-бюджет согласуется владельцем отдельно от делегированных
+локальных бюджетов по [ADR 0088](../adr/0088-verification-throughput-and-integration-budgets.md);
+изменение поставляется отдельным process PR. Больше времени не исправляет
+функциональные ошибки, зависания или рост ресурсов и не превращает прерванный
+CI в PASS. Нужен полный успешный CI точного итогового кандидата; автоматического
+дальнейшего повышения лимита нет.
+
+## История предыдущего бюджета: 30 → 60 минут
+
+Ранее `jobs.verify.timeout-minutes` составлял **60 минут** для PR и push в main.
+Состав и последовательность шагов единого Windows job оставались прежними.
 
 Основание — [run 41643613044, попытка 1](https://github.com/tixonowar-ui/Symbiosis-V7/actions/runs/41643613044/attempts/1)
 для кандидата #174: общий предел 30 минут прервал ещё шаг Tests. Job шёл
@@ -149,7 +179,7 @@ assertions и сетевых операций, workers, retry policy и сост
 `createNetworkBrowserScenario`, чтобы специальный бюджет действовал уже
 во время запуска процессов. Остальные явные test/hook/poll budgets,
 assertions, workers, retries, shutdown и production network timeouts
-сохранены. Общий CI-бюджет остаётся 60 минут.
+сохранены. В том решении общий CI-бюджет оставался 60 минут.
 
 Основание — сохранённые отказы setup/restart, initial-time poll и IPC READY.
 Clean09 на exact1092 завершился двумя beforeEach timeout по 10 секунд;
