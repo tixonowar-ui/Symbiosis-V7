@@ -17,6 +17,7 @@ import type {
 } from '@shared/campaign-creation.js';
 import { ADMISSION_GM_WORKFLOW_IDS } from '@shared/campaign-admission-presentation.js';
 import { CAMPAIGN_LIFECYCLE_WORKFLOW_IDS } from '@shared/campaign-lifecycle.js';
+import { NPC_WORKFLOW_COMMAND_IDS } from '@shared/npc-command.js';
 import { App } from '../../app.js';
 import {
   connectProjection,
@@ -850,9 +851,11 @@ describe('campaign draft transport', () => {
       );
       let s = Socket.instances.at(-1)!;
       expect(s).not.toBe(h.socket);
-      const capabilities = withLifecycle
-        ? [...CAPABILITIES, ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS]
-        : CAPABILITIES;
+      const capabilities = [
+        ...CAPABILITIES,
+        ...NPC_WORKFLOW_COMMAND_IDS,
+        ...(withLifecycle ? CAMPAIGN_LIFECYCLE_WORKFLOW_IDS : []),
+      ];
       reconnect(s, 'APP-011', menu, menuRevisions, capabilities);
       expect(h.states.at(-1)).toMatchObject({
         kind: 'ready',
@@ -861,6 +864,10 @@ describe('campaign draft transport', () => {
       expect(lastFrame<{ messageType: string }>(s).messageType).toBe(
         'campaign.local-context.resume',
       );
+      expect(
+        lastFrame<{ supportedWorkflowCommandIds: readonly string[] }>(s)
+          .supportedWorkflowCommandIds,
+      ).toEqual(expect.arrayContaining([...NPC_WORKFLOW_COMMAND_IDS]));
       expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBe(CONTEXT);
       h.connection.requestFormAction('APP-011::CTA::006');
       nav = lastFrame(s);
@@ -890,6 +897,11 @@ describe('campaign draft transport', () => {
           'FORM_ACTION',
         ),
       );
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { formId: 'APP-001', executableWorkflowCommandIds: [] },
+      });
+      expect(Socket.instances.at(-1)).not.toBe(s);
       expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBeNull();
       s = Socket.instances.at(-1)!;
       reconnect(s, 'APP-001', shell, { ...ZERO, stateRevision: 8, projectionRevision: 15 });
