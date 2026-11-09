@@ -5845,8 +5845,9 @@ export function registerNpcEquippedInventory() {
       expect(
         closure.children.filter((child) => child.allocation.kind === 'WEAPON_PROFILE_VERSION'),
       ).toHaveLength(1);
-      const bytes = h.db.serialize(),
-        reopened = fixture({ bytes, scope: h.scope, profileId: h.profileId }),
+      const bytes = h.db.serialize();
+      h.db.close();
+      const reopened = fixture({ bytes, scope: h.scope, profileId: h.profileId }),
         restored = connect(reopened);
       expect(restored.read().closure).toEqual(closure);
       expect(restored.prepare(restore)).toEqual({ ...result, replayed: true });

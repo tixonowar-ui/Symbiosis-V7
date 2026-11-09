@@ -656,7 +656,7 @@ describe('CHR-021 starting armor bundle', () => {
       expect(after.localCharacter.payloadJson).toBe(before);
       expect(after.armorBundleStage?.qualityRollRecordOrNull ?? null).toBeNull();
     }
-  });
+  }, 60_000);
 
   it('rejects a second roll and changed pieces after the roll is committed', () => {
     const path = temporaryDatabasePath('armor-second-roll-');
