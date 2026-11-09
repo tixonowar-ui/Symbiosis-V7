@@ -1,4 +1,4 @@
-# Symbiosis V7 — Web UI Screen Atlas v1.19
+# Symbiosis V7 — Web UI Screen Atlas v1.20
 
 > Нормативный человекочитаемый атлас локального web-приложения. Поля `graphDigest` и `contentDigest` сохраняют идентичность author-supplied base-v1.2 по ADR 0037/0049: алгоритмы semantic digest не поставлены. Целостность текущих JSON/Markdown байтов проверяется по `artifacts/CHECKSUMS.sha256`. Старый PDF не нужен для реализации; его страницы приведены только для трассировки.
 
@@ -7,8 +7,8 @@
 | Поле | Значение |
 | --- | --- |
 | Версия схемы | 1.2.0 |
-| Версия атласа | 1.19 |
-| Дата | 2026-11-06 |
+| Версия атласа | 1.20 |
+| Дата | 2026-11-09 |
 | Статус | APPROVED_BASELINE_DERIVATIVE_NO_OPEN_UX_QUESTIONS |
 | Формы | 376 |
 | Сохранено исходных ID | 355 |
@@ -30177,9 +30177,6 @@ stateDiagram-v2
 - stateRevision
 - projectionRevision
 - systemTemplateArtAssetKey(read-only; pinned Runtime Pack)
-- groupId
-- location/subLocation
-- markerRevision
 - campaignId
 - campaignStatus
 
@@ -30297,6 +30294,11 @@ stateDiagram-v2
 - Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.
 
 - Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют.
+
+- SYSTEM_LIBRARY — read-only контекст фактически выбранного системного шаблона из закреплённой в настоящей кампании версии каталога; доступен в PAUSED до первого Start через существующий CMP-007 → GM-001 → ENM-001 → ENM-003 без создания размещённого экземпляра.
+- В SYSTEM_LIBRARY groupId, location/subLocation и markerRevision ABSENT: нет группы, размещения, координат, marker или combat state; нули, пустые UUID, фиктивная сцена и иные fake values не подставляются.
+- Host подтверждает contextId, actual selected systemTemplateId/catalogVersion и art identity, campaignId/campaignStatus, sole current GM и актуальные stateRevision/projectionRevision. Missing, foreign или corrupt source identity и stale authority/revisions дают отказ без default; SYSTEM_LIBRARY не является template.status или runtime actor.
+- 44 системных мыслящих используют только исходный арт закреплённого Runtime Pack по настоящей привязке шаблона; payloads, hashes и NO_XP_PROGRESSION неизменны. Existing ENM-001 → ENM-003 и единственный CTA ENM-003::CTA::001 → ENM-001 сохранены; просмотр/Back/reconnect не создают template, version, runtime clone, RNG или placement.
 
 **QA-сценарии:**
 
@@ -71647,7 +71649,7 @@ stateDiagram-v2
 | QA-CHANGE-NPC-010 | NPC-010 | Регрессионно проверить новую/переопределённую семантику «Удалить неиспользованный НПС», включая superseded negative-space, exact operations и все специальные states. | Старый противоречащий текст, CTA, component или переход отсутствует; эффективны только purpose/components/actions/states текущей записи. |
 | QA-FORM-ENM-001 | ENM-001 | Проверить буквальное назначение ENM-001: 44 системных мыслящих, 16 видов/17 статблоков канонического бестиария и версионные кампанийные шаблоны. Поля: contextId, stateRevision, projectionRevision, campaignId, campaignStatus. CTA: Открыть «Фильтры справочника», Открыть «Карточка системного шаблона», Открыть «Враг-мыслящий: идентичность и арт», Открыть «Инстанцирование системного шаблона», Открыть «Системный шаблон неизменяем», Открыть «История версий пользовательского шаблона», Открыть «Новая версия пользовательского шаблона», Открыть «Каталог заблокирован активным боем», Открыть «Удаление или архивирование шаблона запрещено», Создать произвольного монстра, Сгенерировать группу противников, Вернуться на главный экран мастера. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |
 | QA-FORM-ENM-002 | ENM-002 | Проверить буквальное назначение ENM-002: Происхождение, раса/вид, роль, угроза, симбионты и текущая версия шаблона. Поля: contextId, stateRevision, projectionRevision, symbiontInstanceId, currentOE, maxOE(read-only). CTA: Вернуться к «Справочник врагов кампании». | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |
-| QA-FORM-ENM-003 | ENM-003 | Проверить буквальное назначение ENM-003: Read-only данные из закреплённой в кампании версии каталога; изменение, скрытие, архивирование и удаление недоступны. Поля: contextId, stateRevision, projectionRevision, systemTemplateArtAssetKey(read-only; pinned Runtime Pack), groupId, location/subLocation, markerRevision, campaignId, campaignStatus. CTA: Вернуться к «Справочник врагов кампании». | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют. |
+| QA-FORM-ENM-003 | ENM-003 | Проверить буквальное назначение ENM-003: Read-only данные из закреплённой в кампании версии каталога; изменение, скрытие, архивирование и удаление недоступны. Поля: contextId, stateRevision, projectionRevision, systemTemplateArtAssetKey(read-only; pinned Runtime Pack), campaignId, campaignStatus. CTA: Вернуться к «Справочник врагов кампании». SYSTEM_LIBRARY — read-only контекст фактически выбранного системного шаблона из закреплённой в настоящей кампании версии каталога; доступен в PAUSED до первого Start через существующий CMP-007 → GM-001 → ENM-001 → ENM-003 без создания размещённого экземпляра. В SYSTEM_LIBRARY groupId, location/subLocation и markerRevision ABSENT: нет группы, размещения, координат, marker или combat state; нули, пустые UUID, фиктивная сцена и иные fake values не подставляются. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют. Host подтверждает contextId, actual selected systemTemplateId/catalogVersion и art identity, campaignId/campaignStatus, sole current GM и актуальные stateRevision/projectionRevision. Missing, foreign или corrupt source identity и stale authority/revisions дают отказ без default; SYSTEM_LIBRARY не является template.status или runtime actor. 44 системных мыслящих используют только исходный арт закреплённого Runtime Pack по настоящей привязке шаблона; payloads, hashes и NO_XP_PROGRESSION неизменны. Existing ENM-001 → ENM-003 и единственный CTA ENM-003::CTA::001 → ENM-001 сохранены; просмотр/Back/reconnect не создают template, version, runtime clone, RNG или placement. |
 | QA-FORM-ENM-004 | ENM-004 | Проверить буквальное назначение ENM-004: Системный шаблон только создаёт независимый runtime-экземпляр с provenance; кампанийный шаблон меняется полным N+1, а delete/archive/in-place patch запрещены. Поля: contextId, stateRevision, projectionRevision, campaignId, campaignStatus. CTA: Открыть «Добавление противников и НПС», Открыть «Проверка создаваемых экземпляров», Вернуться к «Справочник врагов кампании». | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. |
 | QA-FORM-ENM-005 | ENM-005 | Проверить буквальное назначение ENM-005: Задать идентичность врага-мыслящего, происхождение, обязательную массу 30..500kg с точным шагом 0.1kg, обычную анатомию и optional art до характеристик; пол не задаётся. Поля: enemyDraftId, name, description, origin, massKg(number; 30..500 inclusive; step=0.1), anatomyProfileId=ORDINARY_SENTIENT, artAssetKey(optional), affiliation, draftRevision, commandId. CTA: Сохранить идентичность и продолжить, Отменить черновик. | Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. Только пользовательский SENTIENT: massKg=30..500kg включительно, точный шаг 0.1kg, независимо от расы; поле sex отсутствует. Системные 44 шаблона из Runtime Pack остаются побайтово неизменными. SENTIENT art: собственный валидный арт имеет приоритет; при отсутствии выбора успешное сохранение v1 или N+1 закрепляет единственную заглушку sentient-enemy из согласованной поставки. Пол не вводится; существующий выбранный арт не заменяется при просмотре или reconnect. |
 | QA-CHANGE-ENM-005 | ENM-005 | Регрессионно проверить новую/переопределённую семантику «Враг-мыслящий: идентичность и арт», включая superseded negative-space, exact operations и все специальные states. | Старый противоречащий текст, CTA, component или переход отсутствует; эффективны только purpose/components/actions/states текущей записи. |

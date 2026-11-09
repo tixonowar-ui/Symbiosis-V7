@@ -126,6 +126,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '9771735fcbeec028012e09185a78af3fe89529e400a2c35ea9bf836730822bd8',
   },
+  // ADR 0089 / #244: exact SYSTEM_LIBRARY source successor; no placement or payload change.
+  systemLibraryBaselineVersion:
+    'sha256:1edfa7ba69d281082f8343b68e9f901cf3cd9cac19535eb73f5145ef94a838a2',
+  systemLibraryAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '3467da5467bf69ac5ad20054dd426d92f67f2ef985c19734db894e58c7bcd25c',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '3a9a4b1b80574982934bf7a6b7ac12e5d45f058bc8716e276bfe8689c28c7226',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',

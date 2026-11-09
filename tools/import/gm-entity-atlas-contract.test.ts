@@ -55,6 +55,69 @@ describe('ADR 0077 complete GM source closure', () => {
     expect(() => assertAdr0049MissingChannels(source)).not.toThrow();
     expect(() => assertAdr0071Admission(source)).not.toThrow();
   });
+  it.each(['groupId', 'location/subLocation', 'markerRevision'])(
+    'rejects restored mandatory placement field %s on SYSTEM_LIBRARY ENM-003',
+    (field) => {
+      const { root, row } = changed('forms', 'ENM-003');
+      (row['requiredFields'] as string[]).push(field);
+      expect(() => assertAdr0077GmSources(root)).toThrow('ENM-003');
+    },
+  );
+  it.each([
+    'contextId',
+    'stateRevision',
+    'projectionRevision',
+    'systemTemplateArtAssetKey(read-only; pinned Runtime Pack)',
+    'campaignId',
+    'campaignStatus',
+  ])('preserves non-placement required field %s on ENM-003', (field) => {
+    const { root, row } = changed('forms', 'ENM-003');
+    expect(row['requiredFields']).toContain(field);
+    row['requiredFields'] = (row['requiredFields'] as string[]).filter((x) => x !== field);
+    expect(() => assertAdr0077GmSources(root)).toThrow('ENM-003');
+  });
+  it('rejects replacing pinned system art or adding a second card CTA', () => {
+    const art = changed('forms', 'ENM-003');
+    art.row['requiredFields'] = (art.row['requiredFields'] as string[]).map((x) =>
+      x.startsWith('systemTemplateArtAssetKey') ? 'customPortraitAssetKey' : x,
+    );
+    expect(() => assertAdr0077GmSources(art.root)).toThrow('ENM-003');
+    const action = changed('forms', 'ENM-003');
+    (record(action.row['actions'])['ctaAvailabilityByAction'] as JsonObject[]).push({
+      actionKey: 'ENM-003::CTA::002',
+      targetFormId: 'ENM-021',
+      guard: 'true',
+    });
+    expect(() => assertAdr0077GmSources(action.root)).toThrow('ENM-003');
+  });
+  it('rejects changing the sole card return target or weakening actual selected identity', () => {
+    const action = changed('forms', 'ENM-003');
+    (record(action.row['actions'])['ctaAvailabilityByAction'] as JsonObject[])[0]!['targetFormId'] =
+      'GM-001';
+    expect(() => assertAdr0077GmSources(action.root)).toThrow('ENM-003');
+    const identity = changed('forms', 'ENM-003');
+    identity.row['acceptanceCriteria'] = (identity.row['acceptanceCriteria'] as string[]).map((x) =>
+      x.replace(
+        'Missing, foreign или corrupt source identity и stale authority/revisions дают отказ без default',
+        'default identity allowed',
+      ),
+    );
+    expect(() => assertAdr0077GmSources(identity.root)).toThrow('ENM-003');
+  });
+  it.each(['### ENM-003 —', '| QA-FORM-ENM-003 | ENM-003 |'])(
+    'seals independent SYSTEM_LIBRARY Markdown witness %s',
+    (anchor) => {
+      const offset = markdown.indexOf(anchor);
+      expect(offset).toBeGreaterThanOrEqual(0);
+      const altered =
+        markdown.slice(0, offset) +
+        markdown
+          .slice(offset)
+          .replace('groupId, location/subLocation и markerRevision ABSENT', 'groupId required');
+      expect(altered).not.toBe(markdown);
+      expect(() => assertAdr0077GmSourcesMarkdown(altered)).toThrow(anchor);
+    },
+  );
   it.each(formIds)(
     'seals full binding/authority/fields on %s without duplicate required fields',
     (id) => {

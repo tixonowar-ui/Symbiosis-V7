@@ -1,5 +1,14 @@
 # Состояние модулей
 
+## Source #244 — SYSTEM_LIBRARY
+
+Atlas 1.20/B15 и ADR 0089 задают read-only ENM-003 из настоящей PAUSED кампании
+до Start без placement. Убраны ровно три requiredFields; ABSENT явно закреплён
+в acceptance/QA/Markdown. Реальные selected template/catalog/art, campaign и
+GM/revision проверки, существующие CTA/переходы сохранены. Guards и точные
+B0–B14→B15 пары не разрешают менять non-Atlas, Runtime Pack или payloads.
+Runtime #255 ещё не реализован; full #188/#113 остаётся незавершённым.
+
 ## NPC runtime #187
 
 Поверх A/B/C подключены owning application/readers, dispatcher/server/WS,

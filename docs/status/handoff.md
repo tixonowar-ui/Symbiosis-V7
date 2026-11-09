@@ -1,4 +1,23 @@
-# Передача контекста — 2026-11-08
+# Передача контекста — 2026-11-09
+
+## Source #244 — кандидат Atlas 1.20/B15
+
+Изолированный checkout issue-244, ветка codex/244-system-library-source от
+main 5fd0cb5fc0898ed42c02ea0af6c6d7311f003db7. Согласованная поставка:
+ADR 0089, два Atlas-файла/QA/MD, whole-object/literal guards, CHECKSUMS,
+вывод официального import и exact B15 lineage с immutable B14 manifest.
+ENM-003 SYSTEM_LIBRARY не требует group/location/marker до Start; фактический
+selected template/catalog/art, campaign и GM/revision guards сохраняются.
+CTA/routes/transitions, 44 payloads/арты и все 23 non-Atlas bytes неизменны.
+
+Целевые авторские проверки и их dirty state фиксируются вне Git в
+соседнем evidence-244; окончательный SHA и результаты независимого ревью,
+чистого npm ci → import → verify → import:verify → test:e2e и полного CI
+принадлежат внешнему журналу кандидата/PR. Эти полные gates здесь не объявлены
+пройденными. Source не поставляет runtime #255 и не закрывает #188/#113.
+После merge и acceptance #244 следующая порученная задача — #255;
+#188/#113 остаются открытыми до общей приёмки.
+Исторические снимки ниже относятся к прежним кандидатам.
 
 ## Общий бюджет добавлений кода — 2026-11-08
 

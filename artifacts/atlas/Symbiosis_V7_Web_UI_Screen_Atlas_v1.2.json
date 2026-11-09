@@ -1,10 +1,10 @@
 {
   "$schema": "urn:symbiosis:v7:web-ui-screen-atlas:1.2",
   "schemaVersion": "1.2.0",
-  "atlasVersion": "1.19",
+  "atlasVersion": "1.20",
   "title": "Symbiosis V7 Web UI Screen Atlas",
   "language": "ru-RU",
-  "releaseDate": "2026-11-06",
+  "releaseDate": "2026-11-09",
   "normativeStatus": "APPROVED_BASELINE_DERIVATIVE_NO_OPEN_UX_QUESTIONS",
   "sourceRefs": [
     {
@@ -120038,9 +120038,6 @@
         "stateRevision",
         "projectionRevision",
         "systemTemplateArtAssetKey(read-only; pinned Runtime Pack)",
-        "groupId",
-        "location/subLocation",
-        "markerRevision",
         "campaignId",
         "campaignStatus"
       ],
@@ -120287,7 +120284,11 @@
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Read-only данные из закреплённой в кампании версии каталога; изменение, скрытие, архивирование и удаление недоступны.",
         "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
-        "Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют."
+        "Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют.",
+        "SYSTEM_LIBRARY — read-only контекст фактически выбранного системного шаблона из закреплённой в настоящей кампании версии каталога; доступен в PAUSED до первого Start через существующий CMP-007 → GM-001 → ENM-001 → ENM-003 без создания размещённого экземпляра.",
+        "В SYSTEM_LIBRARY groupId, location/subLocation и markerRevision ABSENT: нет группы, размещения, координат, marker или combat state; нули, пустые UUID, фиктивная сцена и иные fake values не подставляются.",
+        "Host подтверждает contextId, actual selected systemTemplateId/catalogVersion и art identity, campaignId/campaignStatus, sole current GM и актуальные stateRevision/projectionRevision. Missing, foreign или corrupt source identity и stale authority/revisions дают отказ без default; SYSTEM_LIBRARY не является template.status или runtime actor.",
+        "44 системных мыслящих используют только исходный арт закреплённого Runtime Pack по настоящей привязке шаблона; payloads, hashes и NO_XP_PROGRESSION неизменны. Existing ENM-001 → ENM-003 и единственный CTA ENM-003::CTA::001 → ENM-001 сохранены; просмотр/Back/reconnect не создают template, version, runtime clone, RNG или placement."
       ],
       "qaScenarioIds": [
         "QA-FORM-ENM-003"
@@ -234843,8 +234844,8 @@
     {
       "qaId": "QA-FORM-ENM-003",
       "scope": "ENM-003",
-      "scenario": "Проверить буквальное назначение ENM-003: Read-only данные из закреплённой в кампании версии каталога; изменение, скрытие, архивирование и удаление недоступны. Поля: contextId, stateRevision, projectionRevision, systemTemplateArtAssetKey(read-only; pinned Runtime Pack), groupId, location/subLocation, markerRevision, campaignId, campaignStatus. CTA: Вернуться к «Справочник врагов кампании».",
-      "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют."
+      "scenario": "Проверить буквальное назначение ENM-003: Read-only данные из закреплённой в кампании версии каталога; изменение, скрытие, архивирование и удаление недоступны. Поля: contextId, stateRevision, projectionRevision, systemTemplateArtAssetKey(read-only; pinned Runtime Pack), campaignId, campaignStatus. CTA: Вернуться к «Справочник врагов кампании». SYSTEM_LIBRARY — read-only контекст фактически выбранного системного шаблона из закреплённой в настоящей кампании версии каталога; доступен в PAUSED до первого Start через существующий CMP-007 → GM-001 → ENM-001 → ENM-003 без создания размещённого экземпляра. В SYSTEM_LIBRARY groupId, location/subLocation и markerRevision ABSENT: нет группы, размещения, координат, marker или combat state; нули, пустые UUID, фиктивная сцена и иные fake values не подставляются.",
+      "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют. Host подтверждает contextId, actual selected systemTemplateId/catalogVersion и art identity, campaignId/campaignStatus, sole current GM и актуальные stateRevision/projectionRevision. Missing, foreign или corrupt source identity и stale authority/revisions дают отказ без default; SYSTEM_LIBRARY не является template.status или runtime actor. 44 системных мыслящих используют только исходный арт закреплённого Runtime Pack по настоящей привязке шаблона; payloads, hashes и NO_XP_PROGRESSION неизменны. Existing ENM-001 → ENM-003 и единственный CTA ENM-003::CTA::001 → ENM-001 сохранены; просмотр/Back/reconnect не создают template, version, runtime clone, RNG или placement."
     },
     {
       "qaId": "QA-FORM-ENM-004",

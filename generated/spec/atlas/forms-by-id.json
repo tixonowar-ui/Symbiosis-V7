@@ -80842,7 +80842,11 @@
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Read-only данные из закреплённой в кампании версии каталога; изменение, скрытие, архивирование и удаление недоступны.",
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
-      "Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют."
+      "Системная карточка читает только арт закреплённого Runtime Pack; file picker, пользовательская заглушка и изменение системного шаблона отсутствуют.",
+      "SYSTEM_LIBRARY — read-only контекст фактически выбранного системного шаблона из закреплённой в настоящей кампании версии каталога; доступен в PAUSED до первого Start через существующий CMP-007 → GM-001 → ENM-001 → ENM-003 без создания размещённого экземпляра.",
+      "В SYSTEM_LIBRARY groupId, location/subLocation и markerRevision ABSENT: нет группы, размещения, координат, marker или combat state; нули, пустые UUID, фиктивная сцена и иные fake values не подставляются.",
+      "Host подтверждает contextId, actual selected systemTemplateId/catalogVersion и art identity, campaignId/campaignStatus, sole current GM и актуальные stateRevision/projectionRevision. Missing, foreign или corrupt source identity и stale authority/revisions дают отказ без default; SYSTEM_LIBRARY не является template.status или runtime actor.",
+      "44 системных мыслящих используют только исходный арт закреплённого Runtime Pack по настоящей привязке шаблона; payloads, hashes и NO_XP_PROGRESSION неизменны. Existing ENM-001 → ENM-003 и единственный CTA ENM-003::CTA::001 → ENM-001 сохранены; просмотр/Back/reconnect не создают template, version, runtime clone, RNG или placement."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -81074,9 +81078,6 @@
       "stateRevision",
       "projectionRevision",
       "systemTemplateArtAssetKey(read-only; pinned Runtime Pack)",
-      "groupId",
-      "location/subLocation",
-      "markerRevision",
       "campaignId",
       "campaignStatus"
     ],
