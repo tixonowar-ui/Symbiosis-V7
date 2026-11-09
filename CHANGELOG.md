@@ -9,6 +9,12 @@
 
 ### Добавлено
 
+- **2026-11-09, source #244:** Atlas 1.20/B15 и ADR 0089 разрешают read-only
+  ENM-003 SYSTEM_LIBRARY в настоящей PAUSED кампании до Start без обязательных
+  group/location/marker. Реальные selected template/catalog/art и GM/revision
+  guards сохраняются. QA/Markdown, guards, import и точная baseline-совместимость
+  согласованы; runtime #255 и полный #188/#113 этой поставкой не завершены.
+
 - **2026-11-08, CI #253:** по явному решению владельца общий бюджет Windows
   verify job повышен с 60 до 150 минут после подтверждённой отмены CI #187
   по часовому deadline; состав проверок, workers, retries и локальные бюджеты

@@ -13,6 +13,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 // Intersecting witnesses include the accepted initial life source clarification in ADR 0085.
 // Intersecting witnesses include the accepted formal Weaver source clarification in ADR 0086.
 // Intersecting witnesses include the accepted initial poison source clarification in ADR 0087.
+// ENM-003 SYSTEM_LIBRARY/ABSENT is amended by ADR 0089 / #244.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -42,7 +43,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'ENM-003',
-    sha256: '83644c8c00fe209c92241581604782e97af03e2acbe94d8ceffdb6506cc4a880',
+    sha256: '859aa67cd4a3502631ade617d1210d8c56f7a9c160ba84a5a5bad7cdcb252107',
   },
   {
     target: 'forms',
@@ -246,7 +247,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-ENM-003',
-    sha256: '5a66a141b05b1eeb4b21effd57ff237683be9a8b3257e6fb8243e261521b0d56',
+    sha256: 'f28483b3c720af38519d54a3b7a944f37c21e93d5154e85f77e462f8a45ef6b0',
   },
   {
     target: 'qaScenarios',
@@ -438,11 +439,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'atlasVersion',
-    sha256: '72286d2748963bbe0ca521bf438012620bbf9d96d196d3fd679047c0132e80c5',
+    sha256: 'c6c8b62a661fbde356147a070da7207352241528753db3756aa2efef8e59aac8',
   },
   {
     key: 'releaseDate',
-    sha256: 'ef377f09672f97eabd3eae1845ca914d09ce06c3700a844e9eaa63779780fe96',
+    sha256: 'dd627efcb5b4f7a56b1dc2259533f08f93d260f95f32f227670084204b3069ef',
   },
   {
     key: 'counts',
@@ -480,7 +481,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### ENM-003 —',
-    sha256: '337948db1c07d9a8e85bcbefa113534c989feb1b52c866977cd6ff9b7e5009bb',
+    sha256: '2939f23fe651dd4bc455b5fff799714fc27be31f205fc1943b08697c35da7b53',
   },
   {
     prefix: '### ENM-005 —',
@@ -619,7 +620,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-ENM-003 | ENM-003 |',
-    sha256: 'ac8485bd9aa25dc3a48f461a08d8729ee879661e8ce28d7c84683e39e3efdc56',
+    sha256: 'a1d9e6791f78f591b5ccccf9828810d4ba50a3a1add6af568c2778d09cc81476',
   },
   {
     prefix: '| QA-FORM-ENM-005 | ENM-005 |',

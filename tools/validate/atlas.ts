@@ -61,21 +61,21 @@ const NO_SECTION = ['', ''] as const;
 export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.19',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.20',
     retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.19 |',
+    current: '| Версия атласа | 1.20 |',
     retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-11-06 |',
+    current: '| Дата | 2026-11-09 |',
     retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: NO_SECTION,
@@ -593,21 +593,21 @@ export const ATLAS_MARKDOWN_ADR0049_LITERALS = [
 export const ATLAS_MARKDOWN_ADR0052_LITERALS = [
   {
     id: 'atlas-heading',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.19',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.20',
     retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-version',
-    current: '| Версия атласа | 1.19 |',
+    current: '| Версия атласа | 1.20 |',
     retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: NO_SECTION,
   },
   {
     id: 'atlas-date',
-    current: '| Дата | 2026-11-06 |',
+    current: '| Дата | 2026-11-09 |',
     retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: NO_SECTION,
@@ -2347,7 +2347,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-59-0',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.19',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.20',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2355,7 +2355,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-59-0',
-    current: '# Symbiosis V7 — Web UI Screen Atlas v1.19',
+    current: '# Symbiosis V7 — Web UI Screen Atlas v1.20',
     retired: '# Symbiosis V7 — Web UI Screen Atlas v1.5',
     expected: 1,
     section: ['', ''],
@@ -2363,7 +2363,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-60-0',
-    current: '| Версия атласа | 1.19 |',
+    current: '| Версия атласа | 1.20 |',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2371,7 +2371,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-60-0',
-    current: '| Версия атласа | 1.19 |',
+    current: '| Версия атласа | 1.20 |',
     retired: '| Версия атласа | 1.5 |',
     expected: 1,
     section: ['', ''],
@@ -2379,7 +2379,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-61-0',
-    current: '| Дата | 2026-11-06 |',
+    current: '| Дата | 2026-11-09 |',
     retired: '',
     expected: 1,
     section: ['', ''],
@@ -2387,7 +2387,7 @@ export const ATLAS_MARKDOWN_ADR0069_LITERALS = [
   },
   {
     id: 'request-review-retired-61-0',
-    current: '| Дата | 2026-11-06 |',
+    current: '| Дата | 2026-11-09 |',
     retired: '| Дата | 2026-10-26 |',
     expected: 1,
     section: ['', ''],

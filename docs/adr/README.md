@@ -120,6 +120,7 @@
 | [0086](0086-formal-npc-weaver-states.md)                             | Формальные текущие состояния Ткача у NPC; общая поставка Atlas 1.18/B13 | принято владельцем, #239                    |
 | [0087](0087-initial-taipan-poison-and-coatings.md)                   | Исходный режим Тайпана и приготовленные покрытия NPC; Atlas 1.19/B14    | принято владельцем, #240                    |
 | [0088](0088-verification-throughput-and-integration-budgets.md)      | Один чистый локальный gate, бюджеты сценариев и задержки первого релиза | принято владельцем                          |
+| [0089](0089-system-library-without-placement.md)                     | Read-only SYSTEM_LIBRARY без placement; Atlas 1.20/B15                  | принято владельцем, source #244             |
 
 ## Перенос решений аудита
 

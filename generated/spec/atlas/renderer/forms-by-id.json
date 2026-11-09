@@ -10693,9 +10693,6 @@
       "stateRevision",
       "projectionRevision",
       "systemTemplateArtAssetKey(read-only; pinned Runtime Pack)",
-      "groupId",
-      "location/subLocation",
-      "markerRevision",
       "campaignId",
       "campaignStatus"
     ],
