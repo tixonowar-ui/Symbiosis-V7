@@ -83,6 +83,7 @@ export const campaignLifecycleReplayRules: CampaignLifecycleRules = {
 export function createCampaignAdmissionRules(
   baseline: LocalCharacterExportBaseline,
   maxWitnessBytes: number,
+  npc?: AdmissionPublicationRules['npc'],
 ) {
   const catalogs = {
     baseline,
@@ -113,6 +114,7 @@ export function createCampaignAdmissionRules(
     return result;
   };
   const rules: AdmissionPublicationRules = {
+    ...(npc === undefined ? {} : { npc }),
     lifecycle: campaignLifecycleReplayRules,
     verifyInitial: (request, state) => verifyInitialAdmissionReviewState(state, sources(request)),
     reduce: (request, before, mutation, receiptId) =>

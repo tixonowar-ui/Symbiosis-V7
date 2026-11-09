@@ -1651,7 +1651,10 @@ describe('NET-017 actual GM client transport family', () => {
       messageType: 'campaign.local-context.resume',
       gmLocalContextId: CONTEXT,
       supportedWorkflowCommandIds: [
-        ...GM_CAPS.slice(0, 7),
+        ...GM_CAPS.slice(0, 1),
+        'UI-CMD-NPC-COMMIT-V1',
+        'UI-CMD-NPC-NEW-VERSION',
+        ...GM_CAPS.slice(1, 7),
         'UI-CMD-CAMPAIGN-SETTINGS-SET',
         'UI-CMD-CAMPAIGN-CAPACITY-SET',
         'UI-CMD-MASTER-PASSWORD-CHANGE',
@@ -2492,3 +2495,47 @@ function connectedPeer(
     diagnosticOrNull: null,
   });
 }
+
+describe('NPC acknowledgement isolation at existing browser connections', () => {
+  it.each([
+    ['GM', 'network.npc-editor.result'],
+    ['GM', 'network.npc-selection.result'],
+    ['GM', 'network.npc-editor.refusal'],
+    ['GM', 'network.npc-selection.refusal'],
+    ['PLAYER', 'network.npc-editor.result'],
+    ['PLAYER', 'network.npc-selection.result'],
+    ['PLAYER', 'network.npc-editor.refusal'],
+    ['PLAYER', 'network.npc-selection.refusal'],
+  ] as const)('refuses unsolicited %s %s without adopting a view', async (role, messageType) => {
+    const f = role === 'GM' ? await gmStart() : await start('NET-001', discovery());
+    const readyCount = f.states.filter((state) => state.kind === 'ready').length;
+    const sentCount = f.socket.sent.length;
+    const editor = messageType.startsWith('network.npc-editor.');
+    const result = messageType.endsWith('.result');
+    f.socket.message({
+      protocolVersion: 3,
+      messageType,
+      operationId: REQUEST,
+      campaignId: CAMPAIGN,
+      projectionRole: 'gm',
+      sourceFormId: editor ? 'NPC-002' : 'NPC-001',
+      ...(editor ? { npcDraftId: ATTEMPT } : {}),
+      ...(result
+        ? {
+            appliedRevisions: ZERO,
+            ...(editor ? { appliedAttemptRevision: 1 } : { npcUuidOrNull: null }),
+          }
+        : { presentationUnchanged: true, refusal: { code: 'UNAVAILABLE' } }),
+    });
+    expect(f.states.at(-1)).toMatchObject({ kind: 'protocol-error', refusal: { value: null } });
+    expect(f.states.filter((state) => state.kind === 'ready')).toHaveLength(readyCount);
+    expect(f.socket.sent).toHaveLength(sentCount + 1);
+    expect(JSON.parse(f.socket.sent[sentCount]!) as unknown).toEqual({
+      messageType: 'protocol.refusal',
+      protocolVersion: 1,
+      refusal: { code: 'UNRECOGNIZED', path: '$.messageType', value: null },
+      relatedCommandId: null,
+    });
+    expect(f.socket.readyState).toBe(Socket.CLOSED);
+  });
+});

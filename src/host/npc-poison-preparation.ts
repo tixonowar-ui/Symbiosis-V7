@@ -384,6 +384,9 @@ export function createNpcPoisonPreparation(
       coatingStates: readonly NpcPoisonCoatingState[];
     }> | null {
       if (options.source === null || options.catalog === null) return null;
+      // ADR0087 preserves saved legacy absence; it cannot issue current poison capabilities.
+      if (!Object.hasOwn(s.object(s.object(attempt.values)['initialState']), 'poisonModeFactIds'))
+        return null;
       const poisonSource = options.source;
       const current = read(attempt, calendar);
       return {
@@ -522,7 +525,7 @@ export function createNpcPoisonPreparation(
             targetItemInstanceId: coating.carrier.itemInstanceId,
             targetLabel: coating.carrier.label,
             canRemove: true,
-            errors: [],
+            errors: [explanation],
             explanation,
             derivedRows: [
               {

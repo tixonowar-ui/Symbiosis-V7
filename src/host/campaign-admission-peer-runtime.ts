@@ -1,3 +1,4 @@
+import type { AdmissionPublicationRules } from '../persistence/campaign-admission-decision.js';
 import {
   encodeCampaignLobbyCheckResponse,
   type CampaignLobbyCheckCommand,
@@ -70,6 +71,7 @@ interface Connection {
 interface Options<C extends Connection> {
   readonly database: Database.Database;
   readonly baseline: LocalCharacterExportBaseline;
+  readonly npc?: AdmissionPublicationRules['npc'];
   readonly executor: ReturnType<typeof createCampaignNetworkExecutor>;
   readonly limits: AdmissionPeerLimits & {
     readonly maxWitnessBytes: number;
@@ -161,7 +163,7 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
       campaignId: campaign.campaignId,
       gmLocalContextId: origin.command.request.payload.gmLocalContextId,
     };
-    const { rules } = createCampaignAdmissionRules(d.baseline, d.limits.maxWitnessBytes);
+    const { rules } = createCampaignAdmissionRules(d.baseline, d.limits.maxWitnessBytes, d.npc);
     const delivery = readAdmissionDecisionDeliveryByRequest(
       d.database,
       scope,
@@ -639,7 +641,7 @@ export function createCampaignAdmissionPeerRuntime<C extends Connection>(d: Opti
             gmLocalContextId: origin.command.request.payload.gmLocalContextId,
           },
           d.validateOwner,
-          createCampaignAdmissionRules(d.baseline, d.limits.maxWitnessBytes).rules,
+          createCampaignAdmissionRules(d.baseline, d.limits.maxWitnessBytes, d.npc).rules,
         );
       if (
         availability.campaignRevision !== campaign.stateRevision ||

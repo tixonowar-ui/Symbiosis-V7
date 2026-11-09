@@ -1,3 +1,4 @@
+import { NPC_CONTROL_FORM_IDS } from '@shared/npc-presentation.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
 import type { CampaignGmScheduler } from './campaign-network-executor.js';
 import { readOwnedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
@@ -101,6 +102,7 @@ interface Dependencies {
   readonly bind: ReturnType<typeof createCampaignBindManager>;
   /** The application composition publishes the saved bind on the actual private listener. */
   readonly requestReview?: {
+    readonly npcEnabled?: boolean;
     readonly project: (c: CampaignConnection) => Promise<{
       base: PresentedBaseForm;
       layers?: readonly PresentedLayerForm[];
@@ -366,6 +368,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       cursor.kind === 'ADMISSION' ||
       (cursor.kind === 'QUEUE' &&
         (cursor.formId === 'NET-017' ||
+          (NPC_CONTROL_FORM_IDS as readonly string[]).includes(cursor.formId) ||
           isCampaignLobbyGmForm(cursor.formId) ||
           isCampaignLifecycleForm(cursor.formId)))
     ) {
@@ -1050,6 +1053,8 @@ export function createCampaignCreationRuntime(d: Dependencies) {
               ? []
               : message.supportedWorkflowCommandIds.filter(
                   (id) =>
+                    (d.requestReview?.npcEnabled === true &&
+                      (id === 'UI-CMD-NPC-COMMIT-V1' || id === 'UI-CMD-NPC-NEW-VERSION')) ||
                     id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||
                     id === 'UI-CMD-DEVICE-REQUEST-REJECT' ||
                     id === 'UI-CMD-ADMISSION-REVIEW-OPEN' ||

@@ -218,6 +218,15 @@ export interface NpcAttemptReadContext {
   readonly revision: number;
   readonly operationId: string;
   readonly inheritedVersionOrNull: NpcVersionRef | null;
+  /** Selected checked history only; absent for ordinary inheritance or new allocation. */
+  readonly restoredWeaponProfiles?: readonly Readonly<{
+    itemInstanceId: string;
+    weaponProfileVersionId: string;
+    weaponVariantId: StartingWeaponVariant;
+    originOperationId: string;
+    originDraftId: string;
+    originEventSha256: string;
+  }>[];
   readonly itemBindings: readonly Readonly<{
     itemInstanceId: string;
     originOperationId: string;
@@ -1268,6 +1277,46 @@ export function npcAttemptReadContext(
       ) ?? s.fail();
     if (!owned.includes(source)) owned.push(source);
   }
+  const restoredWeaponProfiles: NonNullable<
+    NpcAttemptReadContext['restoredWeaponProfiles']
+  >[number][] = [];
+  const restoredProfileIds = new Set<string>(),
+    restoredProfileVariants = new Set<string>();
+  for (const item of restoredInventory?.items ?? []) {
+    for (const profile of item.profileVersions) {
+      if (inherited === null || a.mode !== 'APPEND_N_PLUS_ONE') return s.fail();
+      const itemInstanceId = s.uuid(item.itemInstanceId),
+        weaponProfileVersionId = s.uuid(profile.weaponProfileVersionId),
+        weaponVariantId = variant(profile.weaponVariantId),
+        variantKey = s.canonical([itemInstanceId, weaponVariantId]);
+      const fact =
+        children.find((child) => child.allocation.id === weaponProfileVersionId) ?? s.fail();
+      if (
+        fact.allocation.kind !== 'WEAPON_PROFILE_VERSION' ||
+        !s.same(fact.scope, a.scope) ||
+        fact.ownerNpcUuid !== a.candidateNpcUuid ||
+        fact.allocation.itemInstanceId !== itemInstanceId ||
+        fact.allocation.weaponVariantId !== weaponVariantId ||
+        fact.originOperationId === operationId ||
+        fact.originDraftId === a.npcDraftId ||
+        restoredProfileIds.has(weaponProfileVersionId) ||
+        restoredProfileVariants.has(variantKey)
+      )
+        return s.fail();
+      restoredProfileIds.add(weaponProfileVersionId);
+      restoredProfileVariants.add(variantKey);
+      restoredWeaponProfiles.push(
+        Object.freeze({
+          itemInstanceId,
+          weaponProfileVersionId,
+          weaponVariantId,
+          originOperationId: fact.originOperationId,
+          originDraftId: fact.originDraftId,
+          originEventSha256: fact.originEventSha256,
+        }),
+      );
+    }
+  }
   if (pendingItemId !== null && owned.some((c) => c.allocation.id === pendingItemId))
     return s.fail();
   const ownedEffects = children.filter(
@@ -1558,6 +1607,9 @@ export function npcAttemptReadContext(
   )
     return s.fail();
   const context: NpcAttemptReadContext = {
+    ...(restoredWeaponProfiles.length === 0
+      ? {}
+      : { restoredWeaponProfiles: Object.freeze(restoredWeaponProfiles) }),
     ...(ownedCoatings.length === 0
       ? {}
       : {
@@ -2098,6 +2150,18 @@ export function verifyNpcPublishedChildren(
     )
       return s.fail();
   }
+  const restoredProfiles = new Map<
+    string,
+    NonNullable<NpcAttemptReadContext['restoredWeaponProfiles']>[number]
+  >();
+  const restoredVariants = new Set<string>();
+  for (const binding of context.restoredWeaponProfiles ?? []) {
+    const variantKey = s.canonical([binding.itemInstanceId, binding.weaponVariantId]);
+    if (restoredProfiles.has(binding.weaponProfileVersionId) || restoredVariants.has(variantKey))
+      return s.fail();
+    restoredProfiles.set(binding.weaponProfileVersionId, binding);
+    restoredVariants.add(variantKey);
+  }
   const expectedNew: string[] = [];
   for (const item of graph.items) {
     if (!context.itemBindings.some((c) => c.itemInstanceId === item.itemInstanceId))
@@ -2113,9 +2177,25 @@ export function verifyNpcPublishedChildren(
         fact.allocation.weaponVariantId !== profile.weaponVariantId
       )
         return s.fail();
-      const prior = oldProfiles.get(profile.weaponProfileVersionId);
+      const prior = oldProfiles.get(profile.weaponProfileVersionId),
+        restored = restoredProfiles.get(profile.weaponProfileVersionId);
       if (prior !== undefined) equal(prior, { itemInstanceId: item.itemInstanceId, ...profile });
-      else {
+      else if (restored !== undefined) {
+        // The immediate predecessor can omit an explicitly restored historical item.
+        // Reuse only its checked selected edge, never any same-owner allocated profile.
+        equal(restored, {
+          itemInstanceId: item.itemInstanceId,
+          ...profile,
+          originOperationId: fact.originOperationId,
+          originDraftId: fact.originDraftId,
+          originEventSha256: fact.originEventSha256,
+        });
+        if (
+          fact.originOperationId === version.operationId ||
+          fact.originDraftId === version.npcDraftId
+        )
+          return s.fail();
+      } else {
         if (
           fact.originOperationId !== version.operationId ||
           fact.originDraftId !== version.npcDraftId

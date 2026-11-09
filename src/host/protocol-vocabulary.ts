@@ -1,4 +1,5 @@
 import { CAMPAIGN_PEER_FORMS, isCampaignLifecycleForm } from '../shared/campaign-lifecycle.js';
+import { NPC_CONTROL_FORM_IDS } from '../shared/npc-presentation.js';
 import { isCampaignLobbyGmForm } from '../shared/campaign-lobby.js';
 import { join } from 'node:path';
 
@@ -26,6 +27,17 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'NPC-001',
+  'NPC-002',
+  'NPC-003',
+  'NPC-007',
+  'NPC-011',
+  'NPC-012',
+  'NPC-013',
+  'NPC-014',
+  'NPC-015',
+  'NPC-016',
+  'NPC-017',
   'CMP-008',
   'CMP-014',
   'CMP-015',
@@ -284,6 +296,7 @@ export async function loadProtocolVocabulary(
         return false;
       if (
         isCampaignLifecycleForm(formId) ||
+        (NPC_CONTROL_FORM_IDS as readonly string[]).includes(formId) ||
         (CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)
       ) {
         if (formType === 'dialog') return bindings.length === 0;

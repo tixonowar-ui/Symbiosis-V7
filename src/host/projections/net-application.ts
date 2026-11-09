@@ -1,3 +1,4 @@
+import type { NpcLobbyProjectionFields } from '../../shared/npc-presentation.js';
 import {
   campaignLifecycleGmProjectionValue,
   campaignLifecycleGmActions,
@@ -1124,6 +1125,7 @@ const routes: Readonly<Record<CampaignLobbyGmForm, string>> = {
 /** The existing GM view owns navigation/revisions; these panels add no context or authority. */
 export function projectGmCampaignLobby(input: {
   readonly currentCampaign: CurrentPausedCampaignHeader;
+  readonly npcFields?: NpcLobbyProjectionFields;
   readonly view: GmRequestReviewView;
   readonly history: AdmissionHistory;
   readonly origin: CampaignCreationOrigin;
@@ -1164,6 +1166,7 @@ export function projectGmCampaignLobby(input: {
     }));
   const art = origin.payload.metadata.art;
   const payload: CampaignLobbyGmProjection = {
+    ...(input.npcFields ?? {}),
     contextId: view.gmLocalContextId,
     campaignId: view.campaignId,
     stateRevision: view.stateRevision,

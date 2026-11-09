@@ -1189,7 +1189,7 @@ export function npcCompositionInventoryStats(
   equal(input, projectNpcInventoryRequest(currentEditor, state.draft.inventory));
   const last = confirmedOrdinaryProof.statContexts.at(-1) ?? s.fail('INVALID_INPUT');
   const before = { ...state, ordinaryProof: confirmedOrdinaryProof };
-  if (s.same(last.equippedInventory, input)) return profile(sources, before);
+  if (s.same(last.equippedInventory ?? [], input)) return profile(sources, before);
   if (
     npcOrdinaryInventoryIsStatNeutral(sources.inventoryPublication, last.equippedInventory ?? []) &&
     npcOrdinaryInventoryIsStatNeutral(sources.inventoryPublication, input)

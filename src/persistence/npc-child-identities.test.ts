@@ -9,6 +9,7 @@ import {
   type NpcChildAllocation,
   type NpcChildIdentity,
   type NpcCustomProfileBinding,
+  type NpcRestoredInventoryGraph,
 } from './npc-child-identities.js';
 import {
   npcAttemptEventEnvelopeValue,
@@ -365,6 +366,252 @@ describe('NPC publication identity edges after the separate full sheet recomputa
     expect(() =>
       verifyNpcPublishedChildren(later, graph, graph, [item, profile], context),
     ).toThrow();
+  });
+  const omittedVersion: NpcVersion = {
+    ...version(8),
+    operationId: id(30),
+    version: 2,
+    libraryRevision: 2,
+    previousVersionSha256OrNull: hash(version()),
+  };
+  const restoredVersion: NpcVersion = {
+    ...version(9),
+    operationId: id(31),
+    version: 3,
+    libraryRevision: 3,
+    previousVersionSha256OrNull: hash(omittedVersion),
+  };
+  const omittedGraph = { ...graph, items: [] };
+  const restoringAttempt: NpcAttempt = {
+    ...attempt(9, 5),
+    mode: 'APPEND_N_PLUS_ONE',
+    targetOrNull: { npcUuid: id(5), expectedCurrentVersion: 2 },
+    stage: 'NPC-017',
+    status: 'COMMITTED',
+  };
+  const restoreContext = (
+    selected: NpcRestoredInventoryGraph | null = { items: graph.items },
+    identities: readonly NpcChildIdentity[] = [item, profile],
+    current: NpcAttempt = restoringAttempt,
+  ) =>
+    npcAttemptReadContext(
+      current,
+      restoredVersion.operationId,
+      identities,
+      { version: omittedVersion, graph: omittedGraph },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      selected,
+    );
+  it('accepts a selected V1 weapon profile after V2 omission without allocating it again in V3', () => {
+    const firstContext = npcAttemptReadContext(
+      { ...attempt(), revision: 5 },
+      id(20),
+      [item, profile],
+      null,
+    );
+    verifyNpcPublishedChildren(version(), graph, null, [item, profile], firstContext);
+    const omittedContext = npcAttemptReadContext(
+      {
+        ...restoringAttempt,
+        npcDraftId: id(8),
+        targetOrNull: { npcUuid: id(5), expectedCurrentVersion: 1 },
+      },
+      omittedVersion.operationId,
+      [item, profile],
+      { version: version(), graph },
+    );
+    verifyNpcPublishedChildren(
+      omittedVersion,
+      omittedGraph,
+      graph,
+      [item, profile],
+      omittedContext,
+    );
+    const context = restoreContext(),
+      before = s.canonical({ graph, item, profile, omittedVersion });
+    expect(context.restoredWeaponProfiles).toEqual([
+      {
+        itemInstanceId: id(10),
+        weaponProfileVersionId: id(12),
+        weaponVariantId: 'DEFAULT',
+        originOperationId: id(20),
+        originDraftId: id(4),
+        originEventSha256: 'f'.repeat(64),
+      },
+    ]);
+    expect(Object.isFrozen(context.restoredWeaponProfiles)).toBe(true);
+    expect(Object.isFrozen(context.restoredWeaponProfiles?.[0])).toBe(true);
+    expect(() =>
+      verifyNpcPublishedChildren(restoredVersion, graph, omittedGraph, [item, profile], context),
+    ).not.toThrow();
+    expect(s.canonical({ graph, item, profile, omittedVersion })).toBe(before);
+    expect(Object.hasOwn(omittedContext, 'restoredWeaponProfiles')).toBe(false);
+  });
+  it('refuses an unselected profile even when the same physical item is restored', () => {
+    const context = restoreContext({ items: [{ itemInstanceId: id(10), profileVersions: [] }] });
+    expect(context.itemBindings.map((binding) => binding.itemInstanceId)).toEqual([id(10)]);
+    expect(Object.hasOwn(context, 'restoredWeaponProfiles')).toBe(false);
+    expect(() =>
+      verifyNpcPublishedChildren(restoredVersion, graph, omittedGraph, [item, profile], context),
+    ).toThrow();
+    const checked = restoreContext();
+    const forgedInput = restoreContext(null, [item, profile], {
+      ...restoringAttempt,
+      values: {
+        restoredWeaponProfiles: (checked.restoredWeaponProfiles ?? []).map((binding) => ({
+          ...binding,
+        })),
+      },
+    });
+    expect(Object.hasOwn(forgedInput, 'restoredWeaponProfiles')).toBe(false);
+    expect(() =>
+      verifyNpcPublishedChildren(
+        restoredVersion,
+        graph,
+        omittedGraph,
+        [item, profile],
+        forgedInput,
+      ),
+    ).toThrow();
+    const otherProfile: NpcChildIdentity = {
+      ...profile,
+      allocation: { ...profile.allocation, id: id(13) },
+      originOperationId: id(21),
+      originDraftId: id(6),
+    };
+    expect(() =>
+      verifyNpcPublishedChildren(
+        restoredVersion,
+        {
+          ...graph,
+          items: [
+            {
+              itemInstanceId: id(10),
+              profileVersions: [{ weaponProfileVersionId: id(13), weaponVariantId: 'DEFAULT' }],
+            },
+          ],
+        },
+        omittedGraph,
+        [item, profile, otherProfile],
+        checked,
+      ),
+    ).toThrow();
+  });
+  it('refuses foreign, cross-item, changed-variant and new-origin restored profile proofs', () => {
+    for (const changed of [
+      { ...profile, scope: { ...scope, campaignId: id(99) } },
+      { ...profile, ownerNpcUuid: id(99) },
+      { ...profile, allocation: { ...profile.allocation, itemInstanceId: id(99) } },
+      { ...profile, allocation: { ...profile.allocation, weaponVariantId: 'TWO_HAND' } },
+      { ...profile, originOperationId: restoredVersion.operationId },
+      { ...profile, originDraftId: restoredVersion.npcDraftId },
+    ] as NpcChildIdentity[])
+      expect(() => restoreContext({ items: graph.items }, [item, changed])).toThrow();
+    const context = restoreContext();
+    for (const changed of [
+      { ...profile, originOperationId: id(99) },
+      { ...profile, originDraftId: id(99) },
+      { ...profile, originEventSha256: '0'.repeat(64) },
+    ])
+      expect(() =>
+        verifyNpcPublishedChildren(restoredVersion, graph, omittedGraph, [item, changed], context),
+      ).toThrow();
+    expect(() =>
+      verifyNpcPublishedChildren(
+        restoredVersion,
+        {
+          ...graph,
+          items: [
+            {
+              itemInstanceId: id(10),
+              profileVersions: [{ weaponProfileVersionId: id(12), weaponVariantId: 'TWO_HAND' }],
+            },
+          ],
+        },
+        omittedGraph,
+        [item, profile],
+        context,
+      ),
+    ).toThrow();
+  });
+  it('rejects duplicate or conflicting restored edges and unused current allocations', () => {
+    expect(() => restoreContext({ items: [...graph.items, ...graph.items] })).toThrow();
+    const conflict: NpcChildIdentity = {
+      ...profile,
+      allocation: { ...profile.allocation, id: id(13) },
+    };
+    expect(() =>
+      restoreContext(
+        {
+          items: [
+            {
+              itemInstanceId: id(10),
+              profileVersions: [
+                ...graph.items[0].profileVersions,
+                { weaponProfileVersionId: id(13), weaponVariantId: 'DEFAULT' },
+              ],
+            },
+          ],
+        },
+        [item, profile, conflict],
+      ),
+    ).toThrow();
+    const context = restoreContext(),
+      bindings = context.restoredWeaponProfiles ?? [];
+    expect(() =>
+      verifyNpcPublishedChildren(restoredVersion, graph, omittedGraph, [item, profile], {
+        ...context,
+        restoredWeaponProfiles: [...bindings, ...bindings],
+      }),
+    ).toThrow();
+    const unused: NpcChildIdentity = {
+      ...profile,
+      allocation: { ...profile.allocation, id: id(14) },
+      originOperationId: restoredVersion.operationId,
+      originDraftId: restoredVersion.npcDraftId,
+    };
+    expect(() =>
+      verifyNpcPublishedChildren(
+        restoredVersion,
+        graph,
+        omittedGraph,
+        [item, profile, unused],
+        context,
+      ),
+    ).toThrow();
+  });
+  it('keeps a new V3 profile allocation separate from the selected historical V1 edge', () => {
+    const context = restoreContext();
+    const allocated: NpcChildIdentity = {
+      ...profile,
+      allocation: { ...profile.allocation, id: id(14) },
+      originOperationId: restoredVersion.operationId,
+      originDraftId: restoredVersion.npcDraftId,
+    };
+    expect(() =>
+      verifyNpcPublishedChildren(
+        restoredVersion,
+        {
+          ...graph,
+          items: [
+            {
+              itemInstanceId: id(10),
+              profileVersions: [{ weaponProfileVersionId: id(14), weaponVariantId: 'DEFAULT' }],
+            },
+          ],
+        },
+        omittedGraph,
+        [item, profile, allocated],
+        context,
+      ),
+    ).not.toThrow();
   });
   it('refuses cross-owner, cross-item, variant, operation and unused allocation changes', () => {
     const context = npcAttemptReadContext(

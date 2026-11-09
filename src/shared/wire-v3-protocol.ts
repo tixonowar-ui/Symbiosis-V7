@@ -1,3 +1,5 @@
+import type { NpcTechnicalRequest, NpcTechnicalResponse } from './npc-command.js';
+import type { NpcArtReadRequest, NpcArtReadResult, NpcArtReadRefusal } from './npc-presentation.js';
 import type {
   CampaignPeerControlV3Message,
   CampaignPeerStateV3Message,
@@ -91,7 +93,10 @@ export type IdentityDraftFieldError =
         | 'TOO_LONG'
         | 'UNPAIRED_SURROGATE';
     }
-  | { readonly field: 'description'; readonly reason: 'EMPTY_NOT_NULL' | 'TOO_LONG' }
+  | {
+      readonly field: 'description';
+      readonly reason: 'EMPTY_NOT_NULL' | 'TOO_LONG';
+    }
   | {
       readonly field: 'artAssetKeyOrLocalFile';
       readonly reason:
@@ -101,17 +106,27 @@ export type IdentityDraftFieldError =
         | 'MEDIA_SIGNATURE_MISMATCH'
         | 'NON_CANONICAL_BASE64';
     }
-  | { readonly field: 'massKg'; readonly reason: 'NOT_POSITIVE' | 'STEP_MISMATCH' };
+  | {
+      readonly field: 'massKg';
+      readonly reason: 'NOT_POSITIVE' | 'STEP_MISMATCH';
+    };
 
 export type IdentityDraftRefusal =
   | { readonly code: 'INVALID_FIELD'; readonly error: IdentityDraftFieldError }
-  | { readonly code: 'STALE_DRAFT'; readonly expected: number; readonly actual: number }
+  | {
+      readonly code: 'STALE_DRAFT';
+      readonly expected: number;
+      readonly actual: number;
+    }
   | {
       readonly code: 'STALE_REVISION';
       readonly expected: RevisionVector;
       readonly actual: RevisionVector;
     }
-  | { readonly code: 'IDEMPOTENCY_CONFLICT'; readonly detail: 'PAYLOAD_MISMATCH' }
+  | {
+      readonly code: 'IDEMPOTENCY_CONFLICT';
+      readonly detail: 'PAYLOAD_MISMATCH';
+    }
   | { readonly code: 'DRAFT_UNAVAILABLE' }
   | {
       readonly code: 'REVISION_OVERFLOW';
@@ -127,6 +142,8 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
 }
 
 export type ClientToHostV3Message =
+  | NpcArtReadRequest
+  | NpcTechnicalRequest
   | CampaignPeerControlV3Message
   | AdmissionGmClientV3Message
   | IdentityDraftReplaceV3Message
@@ -135,6 +152,9 @@ export type ClientToHostV3Message =
   | CampaignDraftReplaceV3Message
   | CampaignLocalContextResumeV3Message;
 export type HostToClientV3Message =
+  | NpcArtReadResult
+  | NpcArtReadRefusal
+  | NpcTechnicalResponse
   | CampaignPeerStateV3Message
   | AdmissionGmHostV3Message
   | IdentityDraftRefusalV3Message

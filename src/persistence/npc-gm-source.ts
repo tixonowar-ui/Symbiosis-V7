@@ -30,6 +30,7 @@ import {
   NPC_STAGES,
   npcGmSourceValue,
   npcAttemptEventEnvelopeValue,
+  npcFrozenAttemptEventEnvelopeText,
   npcEventOrdinaryFact,
   npcEventLifeStateFact,
   verifyNpcOrdinaryFactBinding,
@@ -60,6 +61,17 @@ import type {
 } from './npc-library-store.js';
 
 type Row = Record<string, unknown>;
+const operationHashStatements = new WeakMap<Database.Database, Database.Statement>();
+/** Only TEXT hashes: connection integer defaults cannot alter a valid result. Rows remain fresh. */
+function operationHashStatement(db: Database.Database): Database.Statement {
+  let statement = operationHashStatements.get(db);
+  // Preserve the native prepare error before evaluating a get argument on a closed connection.
+  if (statement === undefined || !db.open) {
+    statement = db.prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?');
+    operationHashStatements.set(db, statement);
+  }
+  return statement;
+}
 const digest = (value: unknown) => s.sha(s.canonical(value));
 const equal = (a: unknown, b: unknown): void => {
   if (!s.same(a, b)) return s.fail();
@@ -273,14 +285,20 @@ interface AttemptHeader {
   readonly values: JsonObject;
   readonly sha256: string;
 }
-function checked(row: Row | undefined): Row {
+function checkedText(row: Row | undefined): string {
   if (row === undefined) return s.fail('NOT_FOUND');
   const text = s.text(row['record_json']);
   if (s.sha(text) !== s.hash(row['record_sha256'])) return s.fail();
-  return s.parseCanonicalObject(text);
+  return text;
 }
-function attemptHeader(row: Row | undefined, scope: NpcScope): AttemptHeader {
-  const envelope = npcAttemptEventEnvelopeValue(checked(row));
+function checked(row: Row | undefined): Row {
+  return s.parseCanonicalObject(checkedText(row));
+}
+function attemptHeader(
+  row: Row | undefined,
+  scope: NpcScope,
+  envelope = npcAttemptEventEnvelopeValue(checked(row)),
+): AttemptHeader {
   const e = s.object(envelope);
   const a = s.object(e['attempt'], [
     'scope',
@@ -324,6 +342,30 @@ function attemptHeader(row: Row | undefined, scope: NpcScope): AttemptHeader {
     sha256: s.hash(row?.['record_sha256']),
   };
 }
+interface CheckedAttemptRow {
+  readonly row: Row;
+  readonly envelope: NpcAttemptEvent;
+  readonly header: AttemptHeader;
+}
+function checkedAttemptRow(row: Row, scope: NpcScope): CheckedAttemptRow {
+  const envelope = npcFrozenAttemptEventEnvelopeText(checkedText(row));
+  return freezeEvidence({ row: { ...row }, envelope, header: attemptHeader(row, scope, envelope) });
+}
+function liveAttemptHeader(
+  row: Row | undefined,
+  scope: NpcScope,
+  checkedRow: CheckedAttemptRow | null | undefined,
+): AttemptHeader {
+  // A parsed header is reusable only when every freshly read SQL column still matches.
+  if (
+    checkedRow !== null &&
+    checkedRow !== undefined &&
+    samePrimitiveRow(row, checkedRow.row) &&
+    s.same(scope, checkedRow.header.scope)
+  )
+    return checkedRow.header;
+  return attemptHeader(row, scope);
+}
 type NpcGmPrimitiveProof = {
   operation: NpcOperation;
   event: AttemptHeader;
@@ -335,6 +377,51 @@ interface PrimitiveCauseRows {
   previous: Row | undefined;
   version: Row | undefined;
 }
+/** A read-only calculation may reuse a private result only inside an unchanged transaction. */
+export function readNpcCalculationMutationStamp(db: Database.Database): string {
+  if (!db.inTransaction) return s.fail('INVALID_INPUT');
+  const changes = s.integer(s.object(db.prepare('SELECT total_changes() AS n').get())['n']);
+  return (
+    String(changes) +
+    '/' +
+    String(db.pragma('schema_version', { simple: true })) +
+    '/' +
+    String(db.pragma('user_version', { simple: true }))
+  );
+}
+const NUMERIC_CAUSE_SQL = {
+  event: 'SELECT * FROM npc_attempt_event WHERE operation_id=?',
+  previous: 'SELECT * FROM npc_attempt_event WHERE campaign_id=? AND draft_id=? AND revision=?',
+  version: 'SELECT * FROM npc_version WHERE campaign_id=? AND npc_uuid=? AND version=?',
+} as const;
+type NumericCauseQuery = keyof typeof NUMERIC_CAUSE_SQL;
+type NumericCauseSlots = Record<
+  NumericCauseQuery,
+  [Database.Statement | undefined, Database.Statement | undefined]
+>;
+const numericCauseStatements = new WeakMap<Database.Database, NumericCauseSlots>();
+function numericCauseStatement(db: Database.Database, kind: NumericCauseQuery): Database.Statement {
+  // Each local lazy query observes the current connection default at its first use.
+  // Request decoding may change that default between the operation and event reads.
+  const witness = s.object(db.prepare('SELECT 1 AS n').get())['n'];
+  if (witness !== 1 && witness !== 1n) return s.fail();
+  const mode = witness === 1n ? 1 : 0;
+  let slots = numericCauseStatements.get(db);
+  if (slots === undefined) {
+    slots = {
+      event: [undefined, undefined],
+      previous: [undefined, undefined],
+      version: [undefined, undefined],
+    };
+    numericCauseStatements.set(db, slots);
+  }
+  let statement = slots[kind][mode];
+  if (statement === undefined) {
+    statement = db.prepare(NUMERIC_CAUSE_SQL[kind]).safeIntegers(mode === 1);
+    slots[kind][mode] = statement;
+  }
+  return statement;
+}
 function causeQueries(db: Database.Database) {
   const statements = new Map<string, Database.Statement>();
   const row = (sql: string, ...args: (string | number)[]): Row | undefined => {
@@ -345,23 +432,19 @@ function causeQueries(db: Database.Database) {
     }
     return statement.get(...args) as Row | undefined;
   };
+  let eventQuery: Database.Statement | undefined;
+  let previousQuery: Database.Statement | undefined;
+  let versionQuery: Database.Statement | undefined;
   return {
     operation: (id: string) => row('SELECT * FROM npc_operation WHERE operation_id=?', id),
-    event: (id: string) => row('SELECT * FROM npc_attempt_event WHERE operation_id=?', id),
+    event: (id: string) =>
+      (eventQuery ??= numericCauseStatement(db, 'event')).get(id) as Row | undefined,
     previous: (campaign: string, draft: string, revision: number) =>
-      row(
-        'SELECT * FROM npc_attempt_event WHERE campaign_id=? AND draft_id=? AND revision=?',
-        campaign,
-        draft,
-        revision,
-      ),
+      (previousQuery ??= numericCauseStatement(db, 'previous')).get(campaign, draft, revision) as
+        Row | undefined,
     version: (campaign: string, npc: string, version: number) =>
-      row(
-        'SELECT * FROM npc_version WHERE campaign_id=? AND npc_uuid=? AND version=?',
-        campaign,
-        npc,
-        version,
-      ),
+      (versionQuery ??= numericCauseStatement(db, 'version')).get(campaign, npc, version) as
+        Row | undefined,
   };
 }
 function samePrimitiveRow(a: Row | undefined, b: Row | undefined): boolean {
@@ -520,6 +603,7 @@ function verifyNpcGmPrimitiveCause(
   scope: NpcScope,
   cause: NpcSourceCause,
   queries: ReturnType<typeof causeQueries>,
+  checkedEvents?: Readonly<{ current: CheckedAttemptRow; previous: CheckedAttemptRow | null }>,
 ) {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   const c = npcSourceCauseValue(cause),
@@ -538,7 +622,7 @@ function verifyNpcGmPrimitiveCause(
     [own.campaignId, operation.kind, operation.receiptId, c.recordSha256, c.operationId, own],
   );
   const eventRow = queries.event(c.operationId);
-  const event = attemptHeader(eventRow, own);
+  const event = liveAttemptHeader(eventRow, own, checkedEvents?.current);
   equal(event.sha256, operation.attemptEventSha256);
   verifyNpcOrdinaryFactBinding(event.ordinaryFactOrNull, operation, {
     stage: event.ref.stage,
@@ -552,7 +636,8 @@ function verifyNpcGmPrimitiveCause(
     event.ref.revision === 0
       ? undefined
       : queries.previous(own.campaignId, event.ref.npcDraftId, event.ref.revision - 1);
-  const previous = event.ref.revision === 0 ? null : attemptHeader(previousRow, own);
+  const previous =
+    event.ref.revision === 0 ? null : liveAttemptHeader(previousRow, own, checkedEvents?.previous);
   let versionRow: Row | undefined;
   equal(event.previousSha256OrNull, previous?.sha256 ?? null);
   if (previous !== null) {
@@ -1928,9 +2013,7 @@ export function readNpcDiseaseReservationEvidenceInTransaction(
   );
   const reservationId = s.uuid(row['origin_operation_id']),
     draftId = s.uuid(row['origin_draft_id']);
-  const operationRow = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(reservationId) as Row | undefined;
+  const operationRow = operationHashStatement(db).get(reservationId) as Row | undefined;
   const reservation = readNpcGmPrimitiveCause(db, own, {
     operationId: reservationId,
     recordSha256: s.hash(operationRow?.['record_sha256']),
@@ -1984,9 +2067,7 @@ export function readNpcDiseaseReservationEvidenceInTransaction(
     return s.fail();
   let originTarget: NpcDerivationTarget;
   if (head.status === 'COMMITTED') {
-    const finalRow = db
-      .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-      .get(head.operationId) as Row | undefined;
+    const finalRow = operationHashStatement(db).get(head.operationId) as Row | undefined;
     const final = readNpcGmPrimitiveCause(db, own, {
       operationId: head.operationId,
       recordSha256: s.hash(finalRow?.['record_sha256']),
@@ -2096,9 +2177,7 @@ function readNpcReservedChildOrigin(
   );
   const reservationId = s.uuid(row['origin_operation_id']),
     draftId = s.uuid(row['origin_draft_id']);
-  const operationRow = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(reservationId) as Row | undefined;
+  const operationRow = operationHashStatement(db).get(reservationId) as Row | undefined;
   const reservation = readNpcGmPrimitiveCause(db, own, {
     operationId: reservationId,
     recordSha256: s.hash(operationRow?.['record_sha256']),
@@ -2183,9 +2262,7 @@ function readNpcReservedChildOrigin(
     return s.fail();
   let originTarget: NpcDerivationTarget;
   if (head.status === 'COMMITTED') {
-    const finalRow = db
-      .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-      .get(head.operationId) as Row | undefined;
+    const finalRow = operationHashStatement(db).get(head.operationId) as Row | undefined;
     const final = readNpcGmPrimitiveCause(db, own, {
       operationId: head.operationId,
       recordSha256: s.hash(finalRow?.['record_sha256']),
@@ -2363,9 +2440,7 @@ export function readNpcEffectAllocationInTransaction(
     [id, own.campaignId, owner, 'EFFECT_INSTANCE', 1, null, null],
   );
   const operationId = s.uuid(row['origin_operation_id']);
-  const operation = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(operationId) as Row | undefined;
+  const operation = operationHashStatement(db).get(operationId) as Row | undefined;
   const cause = readNpcGmPrimitiveCause(db, own, {
     operationId,
     recordSha256: s.hash(operation?.['record_sha256']),
@@ -2399,9 +2474,7 @@ export function readNpcCustomProfileReservationEvidenceInTransaction(
       db.prepare('SELECT * FROM npc_child_identity WHERE child_id=?').get(s.uuid(id)),
     );
     const operationId = s.uuid(row['origin_operation_id']),
-      operation = db
-        .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-        .get(operationId) as Row | undefined;
+      operation = operationHashStatement(db).get(operationId) as Row | undefined;
     const cause = readNpcGmPrimitiveCause(db, own, {
         operationId,
         recordSha256: s.hash(operation?.['record_sha256']),
@@ -2698,19 +2771,21 @@ function readDerivationPrefix(
     [];
   const runtimeEffectOperations: string[] = [];
   const poisonOperations: Array<NpcDerivationPrefix['poisonOperations'][number]> = [];
-  // Reuse statements only in this prefix; every event still rereads and validates its rows.
+  // The two parsed event witnesses live only in this call; cause verification still rereads SQL.
   const queries = causeQueries(db);
+  let previousCheckedRow: CheckedAttemptRow | null = null;
   let operationHashQuery: Database.Statement | undefined;
   for (const [revision, row] of rows.entries()) {
-    const event = attemptHeader(row, t.scope);
+    const checkedRow = checkedAttemptRow(row, t.scope);
+    const event = checkedRow.header;
     equal(
       [event.ref.npcDraftId, event.ref.candidateNpcUuid, event.ref.revision, event.status],
       [t.npcDraftId, t.npcUuid, revision, 'OPEN'],
     );
     equal(event.previousSha256OrNull, last?.sha256 ?? null);
-    const operationRow = (operationHashQuery ??= db.prepare(
-      'SELECT record_sha256 FROM npc_operation WHERE operation_id=?',
-    )).get(event.operationId) as Row | undefined;
+    const operationRow = (operationHashQuery ??= operationHashStatement(db)).get(
+      event.operationId,
+    ) as Row | undefined;
     const cause = verifyNpcGmPrimitiveCause(
       db,
       t.scope,
@@ -2719,13 +2794,16 @@ function readDerivationPrefix(
         recordSha256: s.hash(operationRow?.['record_sha256']),
       },
       queries,
+      { current: checkedRow, previous: previousCheckedRow },
     ).proof;
-    equal(cause.event, event);
+    // An identical deeply frozen header already passed the fresh SQL row and scope check.
+    // A separately decoded header still requires the original complete equality check.
+    if (cause.event !== event) equal(cause.event, event);
     if (event.ordinaryFactOrNull !== null) {
       if (last === null) return s.fail();
       ordinaryFacts.push({
         operation: cause.operation,
-        event: npcAttemptEventEnvelopeValue(checked(row)),
+        event: checkedRow.envelope,
         previous: headerAttempt(last),
         baseStatsConfirmation: baseStatsConfirmationOrNull,
         fact: event.ordinaryFactOrNull,
@@ -2735,7 +2813,7 @@ function readDerivationPrefix(
       if (last === null || lifeStateRollFacts.length !== 0) return s.fail();
       lifeStateRollFacts.push({
         operation: cause.operation,
-        event: npcAttemptEventEnvelopeValue(checked(row)),
+        event: checkedRow.envelope,
         previous: headerAttempt(last),
         fact: event.lifeStateFactOrNull,
       });
@@ -2751,7 +2829,7 @@ function readDerivationPrefix(
         if (last === null) return s.fail();
         poisonOperations.push({
           operation: cause.operation,
-          event: npcAttemptEventEnvelopeValue(checked(row)),
+          event: checkedRow.envelope,
           previous: headerAttempt(last),
         });
       }
@@ -2775,7 +2853,7 @@ function readDerivationPrefix(
         if (last === null) return s.fail();
         lifeStateOperations.push({
           operation: cause.operation,
-          event: npcAttemptEventEnvelopeValue(checked(row)),
+          event: checkedRow.envelope,
           previous: headerAttempt(last),
         });
       }
@@ -2787,7 +2865,7 @@ function readDerivationPrefix(
           return s.fail();
         itemRestorations.push({
           operation: cause.operation,
-          event: npcAttemptEventEnvelopeValue(checked(row)),
+          event: checkedRow.envelope,
           previous: headerAttempt(last),
           previousOperationId: last.operationId,
         });
@@ -2957,6 +3035,7 @@ function readDerivationPrefix(
           eventSha256: event.sha256,
         });
     last = event;
+    previousCheckedRow = checkedRow;
   }
   if (root === null || last === null || last.ref.stage !== expectedStage) return s.fail();
   equal(
@@ -3011,9 +3090,7 @@ export function readNpcEquipmentCompatibilityEvidenceInTransaction(
   operationId: string,
 ) {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
-  const row = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(s.uuid(operationId)) as Row | undefined;
+  const row = operationHashStatement(db).get(s.uuid(operationId)) as Row | undefined;
   const cause = readNpcGmPrimitiveCause(db, npcScopeValue(scope), {
     operationId,
     recordSha256: s.hash(row?.['record_sha256']),
@@ -3074,9 +3151,7 @@ export function readNpcLifeStatePreparationEvidenceInTransaction(
   const scope = npcScopeValue(scopeValue),
     npcUuid = s.uuid(npcUuidValue),
     operationId = s.uuid(operationIdValue);
-  const row = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(operationId) as Row | undefined;
+  const row = operationHashStatement(db).get(operationId) as Row | undefined;
   const cause = readNpcGmPrimitiveCause(db, scope, {
     operationId,
     recordSha256: s.hash(row?.['record_sha256']),
@@ -3122,9 +3197,7 @@ export function readNpcWeaverStatePreparationEvidenceInTransaction(
   const scope = npcScopeValue(scopeValue),
     npcUuid = s.uuid(npcUuidValue),
     operationId = s.uuid(operationIdValue);
-  const row = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(operationId) as Row | undefined;
+  const row = operationHashStatement(db).get(operationId) as Row | undefined;
   const cause = readNpcGmPrimitiveCause(db, scope, {
     operationId,
     recordSha256: s.hash(row?.['record_sha256']),
@@ -3168,9 +3241,7 @@ export function readNpcPoisonPreparationEvidenceInTransaction(
   const scope = npcScopeValue(scopeValue),
     npcUuid = s.uuid(npcUuidValue),
     operationId = s.uuid(operationIdValue);
-  const row = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(operationId) as Row | undefined;
+  const row = operationHashStatement(db).get(operationId) as Row | undefined;
   const cause = readNpcGmPrimitiveCause(db, scope, {
     operationId,
     recordSha256: s.hash(row?.['record_sha256']),
@@ -3215,9 +3286,7 @@ function storedDerivationVersion(
     .prepare('SELECT * FROM npc_version WHERE campaign_id=? AND npc_uuid=? AND version=?')
     .get(scope.campaignId, npcUuid, version) as Row | undefined;
   const record = checked(row);
-  const op = db
-    .prepare('SELECT record_sha256 FROM npc_operation WHERE operation_id=?')
-    .get(record['operationId']) as Row | undefined;
+  const op = operationHashStatement(db).get(record['operationId']) as Row | undefined;
   const cause = readNpcGmPrimitiveCause(db, scope, {
     operationId: s.uuid(record['operationId']),
     recordSha256: s.hash(op?.['record_sha256']),

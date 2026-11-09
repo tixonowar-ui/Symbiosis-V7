@@ -192,6 +192,26 @@ export async function createNetworkBrowserProcess(finalCount: number) {
           db.close();
         }
       },
+      inspectNpc() {
+        const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          const documents = (table: string) =>
+            db
+              .prepare<[], { record_json: string }>(
+                `SELECT record_json FROM ${table} ORDER BY rowid`,
+              )
+              .all()
+              .map((row) => row.record_json);
+          return {
+            versions: documents('npc_version'),
+            operations: documents('npc_operation'),
+            checkpoints: documents('npc_library_checkpoint'),
+            heads: db.prepare('SELECT * FROM npc_current_head ORDER BY rowid').all(),
+          };
+        } finally {
+          db.close();
+        }
+      },
       async restart() {
         await stop();
         await start();
@@ -213,7 +233,7 @@ export async function createNetworkBrowserProcess(finalCount: number) {
   }
 }
 
-async function disposeNetworkResources(
+export async function disposeNetworkResources(
   resources: readonly (() => Promise<unknown>)[],
   originalError?: unknown,
 ) {

@@ -704,6 +704,32 @@ describe('actual-source poison preparation adapter boundaries', () => {
     expect(h.issued).toBe(0);
     expect(h.candidates).toEqual([]);
   });
+  it('preserves saved legacy absence without exposing poison controls and rejects an explicit unset selection', () => {
+    const h = harness({ stage: 'NPC-016', mode: 'NONE', time: null });
+    const initialState = Object.fromEntries(
+      Object.entries(h.basis.draft.initialState).filter(([key]) => key !== 'poisonModeFactIds'),
+    );
+    const legacyDraft = readNpcEditorDraft(h.basis.editor, { ...h.basis.draft, initialState });
+    const legacy = { ...h.attempt, values: json(legacyDraft) };
+    h.setBasis({ ...h.basis, draft: legacyDraft, attempt: legacy });
+    const before = basisBytes(h.basis);
+    expect(h.api.inspect(legacy, h.calendar)).toBeNull();
+    expect(basisBytes(h.basis)).toBe(before);
+
+    const pendingDraft = readNpcEditorDraft(h.basis.editor, {
+      ...legacyDraft,
+      initialState: { ...initialState, poisonModeFactIds: { kind: 'UNSET' } },
+    });
+    const pending = { ...h.attempt, values: json(pendingDraft) };
+    h.setBasis({ ...h.basis, draft: pendingDraft, attempt: pending });
+    const pendingBytes = basisBytes(h.basis);
+    expect(() => h.api.inspect(pending, h.calendar)).toThrow(
+      /explicit owning mode selection required/,
+    );
+    expect(basisBytes(h.basis)).toBe(pendingBytes);
+    expect(h.issued).toBe(0);
+    expect(h.candidates).toEqual([]);
+  });
   it('prepares an explicit learned mode without a clock and preserves unentered controls', () => {
     const h = harness({ stage: 'NPC-016', mode: 'NONE', time: null }),
       before = basisBytes(h.basis);
@@ -825,6 +851,10 @@ describe('actual-source poison preparation adapter boundaries', () => {
     const h = harness({ dose: true }),
       request = h.removeRequest(),
       before = basisBytes(h.basis);
+    expect(h.api.inspect(h.attempt, h.calendar)?.coatingStates[0]).toMatchObject({
+      canRemove: true,
+      errors: [],
+    });
     const result = h.api.prepare(request, h.context(request), h.allocate, stamp);
     expect(result.childAllocations).toEqual([]);
     expect(h.issued).toBe(1);
@@ -847,6 +877,8 @@ describe('actual-source poison preparation adapter boundaries', () => {
       coatingInstanceId: id(85),
       targetItemInstanceId: id(84),
       canRemove: true,
+      errors: ['Подтверждение времени изменилось; исходная доза не переподтверждена.'],
+      explanation: 'Подтверждение времени изменилось; исходная доза не переподтверждена.',
     });
     const rows = view?.coatingStates[0]?.derivedRows ?? [];
     expect(rows).toContainEqual({ label: 'Исходная минута подготовки', value: '37' });

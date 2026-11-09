@@ -1,5 +1,15 @@
+import { loadNpcAuthoringSourceCatalog } from './npc-catalog.js';
+import { loadNpcArtCatalog } from './npc-art.js';
+import { createNpcHostSupport } from './npc-application.js';
 import { createCampaignGmScheduler } from './campaign-network-executor.js';
-import { readCampaignCreationCursor } from '../persistence/campaign-creation.js';
+import {
+  readCampaignCreationCursor,
+  readHostedCampaignCreationOrigin,
+  readCampaignOwnerBinding,
+} from '../persistence/campaign-creation.js';
+import { readNpcCalendarContextInTransaction } from '../persistence/campaign-admission-decision.js';
+import { createCampaignAdmissionRules } from './campaign-admission-service.js';
+import { validateMasterSecretVerifier } from './campaign-secret.js';
 import {
   commitCreationFinalization,
   preflightCreationFinalization,
@@ -6900,6 +6910,37 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     creationSkillCatalog,
   );
 
+  const [npcCatalog, npcArt] = await Promise.all([
+    loadNpcAuthoringSourceCatalog(projectRoot),
+    loadNpcArtCatalog(projectRoot),
+  ]);
+  const npc = createNpcHostSupport(config.database, npcCatalog, npcArt, (campaignId) => {
+    // This structural read also serves recovery without an attached browser. It grants no connection authority.
+    const validateOwner = (owner: ReturnType<typeof readCampaignOwnerBinding>): void => {
+      validateMasterSecretVerifier(owner.verifier);
+    };
+    const origin = readHostedCampaignCreationOrigin(config.database, campaignId, validateOwner);
+    const owner = readCampaignOwnerBinding(
+      config.database,
+      origin.command.request.payload.gmLocalContextId,
+      campaignId,
+    );
+    if (owner.ownerDeviceId !== loadDeviceId(config.database))
+      throw new Error('NPC calendar: foreign persisted owner');
+    return readNpcCalendarContextInTransaction(
+      config.database,
+      {
+        campaignId: owner.campaignId,
+        gmLocalContextId: owner.gmLocalContextId,
+        ownerDeviceId: owner.ownerDeviceId,
+      },
+      validateOwner,
+      createCampaignAdmissionRules(
+        localCharacterExportBaseline,
+        networkConfig.transfer.maxWitnessBytes,
+      ).rules,
+    );
+  });
   const app = Fastify({ logger: false });
   const readShellListener = (): { address: string; port: number } | null => {
     const listener = app.server.address();
@@ -6909,6 +6950,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   };
   const campaignBind = createCampaignBindManager({ readShellListener });
   const campaignNetwork = createCampaignNetworkRuntime({
+    npc: npc.readers,
     database: config.database,
     baseline: localCharacterExportBaseline,
     bind: campaignBind,
@@ -6966,6 +7008,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     bind: campaignBind,
     publishCampaign: campaignNetwork.publishCampaign,
     requestReview: {
+      npcEnabled: true,
       withLifecycle: (c, view) => gmNetwork.withLifecycle(c, view),
       project: (c) => gmNetwork.project(c),
       refreshConnectionPresentation: (c) => gmNetwork.refreshConnectionPresentation(c),
@@ -6973,6 +7016,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     },
   });
   const gmNetwork = createGmNetworkRuntime({
+    npc,
     gmScheduler,
     config: networkConfig,
     database: config.database,

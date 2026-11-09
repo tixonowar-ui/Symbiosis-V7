@@ -1,3 +1,4 @@
+import type { AdmissionPublicationRules } from '../persistence/campaign-admission-decision.js';
 import {
   decodeCampaignLobbyCheckCommand,
   encodeCampaignLobbyCheckResponse,
@@ -116,6 +117,7 @@ export interface DeviceAdmissionPeerRuntimeLimits extends DeviceAdmissionPeerCom
 export interface DeviceAdmissionPeerRuntimeOptions {
   readonly database: Database.Database;
   readonly baseline: LocalCharacterExportBaseline;
+  readonly npc?: AdmissionPublicationRules['npc'];
   readonly executor: ReturnType<typeof createCampaignNetworkExecutor>;
   readonly limits: DeviceAdmissionPeerRuntimeLimits;
 }
@@ -267,6 +269,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
   const admission = createCampaignAdmissionPeerRuntime({
     database: d.database,
     baseline: d.baseline,
+    ...(d.npc === undefined ? {} : { npc: d.npc }),
     executor: d.executor,
     limits: admissionLimits,
     validateOwner,
@@ -332,7 +335,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
       scope,
       principal,
       validateOwner,
-      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes, d.npc).rules,
     );
   }
   function currentGate(c: Connection): string | null {
@@ -368,7 +371,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         { commandId: command.commandId, disconnectCommandId: command.disconnectCommandId },
         new Date().toISOString(),
         validateOwner,
-        createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+        createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes, d.npc).rules,
         () => {
           if (closed || c.channel.closed || !same(authenticatedPrincipal(c), principal))
             fail('UNAVAILABLE');
@@ -437,7 +440,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         gmLocalContextId: origin.command.request.payload.gmLocalContextId,
       },
       validateOwner,
-      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes, d.npc).rules,
     );
   }
   function acknowledged(
@@ -617,7 +620,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         verified.response = response;
       }),
       validateCandidateBaseline,
-      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes, d.npc).rules,
     );
     if (
       verified.response === undefined ||
@@ -655,7 +658,7 @@ export function createDeviceAdmissionPeerRuntime(d: DeviceAdmissionPeerRuntimeOp
         }
       }),
       validateCandidateBaseline,
-      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes).rules,
+      createCampaignAdmissionRules(d.baseline, limits.maxWitnessBytes, d.npc).rules,
     );
     if (
       verified.response === undefined ||

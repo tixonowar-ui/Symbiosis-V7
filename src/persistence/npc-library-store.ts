@@ -54,6 +54,7 @@ import {
   npcOperationValue,
   npcGmSourceValue,
   npcSynchronousValidator,
+  withNpcAttemptEnvelopeCalculations,
   verifyNpcRequestBinding,
   npcScopeValue,
   npcTimeLockValue,
@@ -97,6 +98,11 @@ export interface NpcRecoveryClosure {
   readonly art: readonly NpcArtBlob[];
   readonly operations: readonly NpcOperation[];
   readonly anchorOrNull: NpcAnchor | null;
+}
+/** Ephemeral selectors from the same complete read; never persist or reuse after a write. */
+export interface NpcRecoveryRead {
+  readonly closure: NpcRecoveryClosure;
+  readonly attemptReadContexts: readonly NpcAttemptReadContext[];
 }
 export interface NpcBoundary {
   readonly scope: NpcScope;
@@ -639,6 +645,7 @@ function readClosure(
   db: Database.Database,
   campaignId: string,
   readers: Readers,
+  contexts: Map<string, NpcAttemptReadContext>,
 ): NpcRecoveryClosure {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   if (!schema(db))
@@ -759,7 +766,6 @@ function readClosure(
   if (operations.length !== attempts.length) return s.fail();
   const children = npcChildIdentities(attempts, operations);
   verifyNpcChildIndex(db, campaignId, children);
-  const contexts = new Map<string, NpcAttemptReadContext>();
   const currentAttempts = new Map<string, NpcAttemptEvent>();
   const historicalSources: NpcHistoricalSourceEntry[] = [];
   for (const e of attempts) {
@@ -855,18 +861,27 @@ function readClosure(
     }
     equal(o.versionOrNull, ref(v));
     if (o.committedAt !== v.committedAt) return s.fail();
+    const storedChildGraph = graphs.get(v.operationId) ?? s.fail();
     s.guarded(
       db,
       () => {
         const validate = npcSynchronousValidator(readers.validateVersion);
-        return validate.call(readers, v, a, previous ?? null, calendarContext, null);
+        return validate.call(
+          readers,
+          v,
+          a,
+          previous ?? null,
+          calendarContext,
+          null,
+          storedChildGraph,
+        );
       },
-      { version: v, attempt: a, previous: previous ?? null },
+      { version: v, attempt: a, previous: previous ?? null, storedChildGraph },
       'APPLY',
     );
     verifyNpcPublishedChildren(
       v,
-      graphs.get(v.operationId) ?? s.fail(),
+      storedChildGraph,
       previous === undefined ? null : (graphs.get(previous.operationId) ?? s.fail()),
       children,
       contexts.get(v.operationId) ?? s.fail(),
@@ -999,15 +1014,28 @@ function readClosure(
   };
 }
 
+function readRecoveryState(
+  db: Database.Database,
+  campaignId: string,
+  readers: Readers,
+): NpcRecoveryRead {
+  return withNpcAttemptEnvelopeCalculations(() => {
+    const read = () => {
+      const contexts = new Map<string, NpcAttemptReadContext>();
+      const closure = guardedValue(db, () =>
+        readClosure(db, s.uuid(campaignId), readers, contexts),
+      );
+      return { closure, attemptReadContexts: Object.freeze([...contexts.values()]) };
+    };
+    return db.inTransaction ? read() : db.transaction(read).deferred();
+  });
+}
 export function readNpcRecoveryClosure(
   db: Database.Database,
   campaignId: string,
   readers: Readers,
 ): NpcRecoveryClosure {
-  return s.withCanonicalCalculations(() => {
-    const read = () => guardedValue(db, () => readClosure(db, s.uuid(campaignId), readers));
-    return db.inTransaction ? read() : db.transaction(read).deferred();
-  });
+  return readRecoveryState(db, campaignId, readers).closure;
 }
 /** Mandatory for the current campaign reader, including absent-anchor/orphan detection. */
 export function verifyCurrentNpcAnchor(
@@ -1015,9 +1043,17 @@ export function verifyCurrentNpcAnchor(
   checkpoint: CampaignCheckpoint,
   readers: Readers,
 ): NpcRecoveryClosure {
-  const closure = readNpcRecoveryClosure(db, checkpoint.campaignId, readers);
-  equal(campaignParts(checkpoint).anchor, closure.anchorOrNull);
-  return closure;
+  return verifyCurrentNpcRead(db, checkpoint, readers).closure;
+}
+/** The closure and attempt contexts share one checked SQL frontier and must travel together. */
+export function verifyCurrentNpcRead(
+  db: Database.Database,
+  checkpoint: CampaignCheckpoint,
+  readers: Readers,
+): NpcRecoveryRead {
+  const read = readRecoveryState(db, checkpoint.campaignId, readers);
+  equal(campaignParts(checkpoint).anchor, read.closure.anchorOrNull);
+  return read;
 }
 /** Historical replay resolves its own immutable library prefix; later heads are not substituted. */
 export function resolveNpcHistoricalPrefix(
@@ -1848,7 +1884,7 @@ export function saveNpcAttempt(
   readers: Readers,
   integration: NpcTransactionIntegration,
 ) {
-  return s.withCanonicalCalculations(() => {
+  return withNpcAttemptEnvelopeCalculations(() => {
     return originalWriteResult(
       saveAttempt(
         db,
@@ -1882,7 +1918,7 @@ export function saveNpcAttemptPreparedWithEvidence(
   readers: Readers,
   integration: NpcPreparationIntegration,
 ) {
-  return s.withCanonicalCalculations(() => {
+  return withNpcAttemptEnvelopeCalculations(() => {
     return saveAttempt(
       db,
       boundary,
@@ -2248,7 +2284,7 @@ export function commitNpcVersion(
   readers: Readers,
   integration: NpcTransactionIntegration,
 ) {
-  return s.withCanonicalCalculations(() => {
+  return withNpcAttemptEnvelopeCalculations(() => {
     return originalWriteResult(
       commitNpcVersionInternal(db, boundary, { kind: 'EAGER', value: input }, readers, integration),
     );
@@ -2276,7 +2312,7 @@ export function commitNpcVersionPreparedWithEvidence(
   readers: Readers,
   integration: NpcCommitPreparationIntegration,
 ) {
-  return s.withCanonicalCalculations(() => {
+  return withNpcAttemptEnvelopeCalculations(() => {
     return commitNpcVersionInternal(
       db,
       boundary,
@@ -2482,6 +2518,7 @@ function commitNpcVersionInternal(
           oldVersion ?? null,
           closure.calendarContext,
           pendingCommit,
+          null,
         );
       },
       { version, attempt, previous: oldVersion ?? null },

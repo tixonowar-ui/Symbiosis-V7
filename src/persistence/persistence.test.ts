@@ -15,11 +15,17 @@ import { migration0006 } from './migrations/0006-local-character-post-save.js';
 import { migration0007 } from './migrations/0007-campaign-creation.js';
 import { migration0008 } from './migrations/0008-network-installation-identity.js';
 import { migration0009 } from './migrations/0009-device-admission.js';
-import { migration0010 } from './migrations/0010-network-application.js';
-import { migration0011 } from './migrations/0011-device-request-review.js';
-import { migration0012 } from './migrations/0012-campaign-admission.js';
-import { migration0013 } from './migrations/0013-campaign-lobby.js';
-import { migration0014 } from './migrations/0014-campaign-lifecycle.js';
+import {
+  migration0010,
+  NETWORK_APPLICATION_TABLES,
+} from './migrations/0010-network-application.js';
+import {
+  migration0011,
+  DEVICE_REQUEST_REVIEW_TABLES,
+} from './migrations/0011-device-request-review.js';
+import { migration0012, CAMPAIGN_ADMISSION_TABLES } from './migrations/0012-campaign-admission.js';
+import { migration0013, CAMPAIGN_LOBBY_TABLES } from './migrations/0013-campaign-lobby.js';
+import { migration0014, CAMPAIGN_LIFECYCLE_TABLES } from './migrations/0014-campaign-lifecycle.js';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
@@ -1215,6 +1221,100 @@ describe('migration 15 closed compatibility', () => {
     expect(() =>
       db.transaction(() => retirePostSaveRestoreCursor(db, 'unused')).immediate(),
     ).toThrow();
+    expect(db.serialize().equals(before)).toBe(true);
+  });
+});
+
+describe('network schema probes against live SQLite', () => {
+  const tables = [
+    ...CAMPAIGN_LOBBY_TABLES,
+    ...CAMPAIGN_LIFECYCLE_TABLES,
+    ...NPC_TABLES,
+    ...NETWORK_APPLICATION_TABLES,
+    ...DEVICE_REQUEST_REVIEW_TABLES,
+    ...CAMPAIGN_ADMISSION_TABLES,
+  ];
+  it.each([10, 11, 12, 13, 14, 19])(
+    'accepts the actual empty migration %s prefix without adding state',
+    (version) => {
+      const db = new Database(':memory:');
+      databases.push(db);
+      db.pragma('foreign_keys=ON');
+      if (version === 19) expect(applyMigrations(db)).toBe(version);
+      else expect(applyMigrationSequence(db, legacyMigrations14.slice(0, version))).toBe(version);
+      const present = new Set(allTableNames(db));
+      for (const table of tables.filter((name) => present.has(name)))
+        expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
+      const before = db.serialize();
+      expect(() => networkApplicationStorage.schema(db)).not.toThrow();
+      expect(() =>
+        db.transaction(() => networkApplicationStorage.schema(db)).deferred(),
+      ).not.toThrow();
+      expect(db.serialize().equals(before)).toBe(true);
+      expect(db.inTransaction).toBe(false);
+    },
+  );
+  it('refuses every missing current table, preserves damaged bytes and reads again after rollback', () => {
+    const db = memoryDatabase(),
+      original = db.serialize(),
+      rollback = new Error('rollback schema damage');
+    expect(new Set(tables).size).toBe(tables.length);
+    for (const table of tables) {
+      expect(() =>
+        db.transaction(() => {
+          db.exec(`DROP TABLE ${table}`);
+          const damaged = db.serialize();
+          expect(() => networkApplicationStorage.schema(db)).toThrow(`no such table: ${table}`);
+          expect(db.serialize().equals(damaged)).toBe(true);
+          throw rollback;
+        })(),
+      ).toThrow(rollback);
+      expect(db.serialize().equals(original)).toBe(true);
+      expect(() => networkApplicationStorage.schema(db)).not.toThrow();
+    }
+  });
+  it('steps a late table probe even when earlier tables are empty and propagates the real read error', () => {
+    const db = memoryDatabase(),
+      failure = new Error('schema probe execution failure');
+    let reads = 0;
+    db.function('schema_probe_read_failure', () => {
+      reads++;
+      throw failure;
+    });
+    // This intentionally damaged view distinguishes stepping the SELECT from preparing its names.
+    db.exec('DROP TABLE gm_admission_view_event');
+    db.exec(
+      'CREATE VIEW gm_admission_view_event AS SELECT 1 AS value WHERE schema_probe_read_failure()',
+    );
+    const before = db.serialize();
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      expect(() => networkApplicationStorage.schema(db)).toThrow(failure);
+      expect(reads).toBe(attempt);
+      expect(db.serialize().equals(before)).toBe(true);
+    }
+    db.function('schema_probe_read_failure', () => {
+      reads++;
+      return 1;
+    });
+    expect(() => networkApplicationStorage.schema(db)).not.toThrow();
+    expect(reads).toBe(3);
+    expect(db.serialize().equals(before)).toBe(true);
+  });
+  it('keeps consumed metadata numeric checks and does not carry a schema result to another database', () => {
+    const db = memoryDatabase();
+    expect(() => networkApplicationStorage.schema(db)).not.toThrow();
+    const before = db.serialize();
+    db.defaultSafeIntegers(true);
+    expect(() => networkApplicationStorage.schema(db)).toThrow();
+    db.defaultSafeIntegers(false);
+    expect(() => networkApplicationStorage.schema(db)).not.toThrow();
+    expect(db.serialize().equals(before)).toBe(true);
+    const other = memoryDatabase();
+    other.exec('DROP TABLE npc_art');
+    const damaged = other.serialize();
+    expect(() => networkApplicationStorage.schema(other)).toThrow('no such table: npc_art');
+    expect(other.serialize().equals(damaged)).toBe(true);
+    expect(() => networkApplicationStorage.schema(db)).not.toThrow();
     expect(db.serialize().equals(before)).toBe(true);
   });
 });
