@@ -189,6 +189,7 @@ it.each([
         result = receipt['result'] as Record<string, JsonValue>;
       expect(result['campaignBirthSchemaVersion']).toBe(2);
       expect(result['defaultSentientCatalogVersion']).toBe(catalog.catalogVersion);
+      if (fault === 'FOREIGN_BOTH_PINS') f.nav('ENM-001::CTA::013');
       if (fault === 'MISSING_PAYLOAD_PIN') delete payload['defaultSentientCatalogVersion'];
       if (fault === 'MISSING_RESULT_PIN') delete result['defaultSentientCatalogVersion'];
       if (fault === 'FOREIGN_PAYLOAD_PIN' || fault === 'FOREIGN_BOTH_PINS')
@@ -214,6 +215,14 @@ it.each([
         expect(f.readCurrent().creationOrigin.payload.defaultSentientCatalogVersion).toBe(
           'foreign-catalog',
         );
+      if (fault === 'FOREIGN_BOTH_PINS') {
+        expect(f.readCurrent().viewOrNull!.formId).toBe('GM-001');
+        expect(() =>
+          f.readCurrent((source, state) =>
+            validateEnemyLibrarySource(source, state, catalog, baseline),
+          ),
+        ).toThrow('SOURCE_CHANGED');
+      }
       expect(() => f.app().project()).toThrow();
       expect(f.db.serialize().equals(damaged)).toBe(true);
     } finally {
@@ -322,6 +331,80 @@ it.each(
           actionKey: key === 'ENM-001::CTA::002' ? 'ENM-001::CTA::004' : 'ENM-001::CTA::002',
         }),
       ).toThrow();
+      expect(f.db.serialize().equals(before)).toBe(true);
+    } finally {
+      f.close();
+    }
+  },
+);
+
+it('avoids catalog file reads outside ENM with no selection history but checks the first tentative entry and rolls back a source fault', () => {
+  let calls = 0,
+    fault = false;
+  const observedCatalog = {
+    ...catalog,
+    assertCurrent() {
+      calls++;
+      if (fault) throw Error('catalog source fault');
+      catalog.assertCurrent();
+    },
+  };
+  const f = createEnemyLibraryFixture(observedCatalog, baseline);
+  const observe = () =>
+    f.readCurrent((source, state) =>
+      validateEnemyLibrarySource(source, state, observedCatalog, baseline),
+    );
+  try {
+    f.nav('ENM-001::CTA::013');
+    expect(f.readCurrent().viewOrNull!.formId).toBe('GM-001');
+    calls = 0;
+    fault = true;
+    expect(observe).not.toThrow();
+    expect(calls).toBe(0);
+    const before = f.db.serialize();
+    expect(() => f.nav('GM-001::CTA::005')).toThrow();
+    expect(calls).toBe(1);
+    expect(f.db.serialize().equals(before)).toBe(true);
+    expect(f.readCurrent().viewOrNull!.formId).toBe('GM-001');
+    fault = false;
+    f.nav('GM-001::CTA::005');
+    calls = 0;
+    fault = true;
+    expect(() => f.app().project()).toThrow();
+    expect(calls).toBe(1);
+  } finally {
+    f.close();
+  }
+});
+it.each([false, true])(
+  'rechecks file freshness outside ENM after a historical selection, including null (%s)',
+  (nullSelection) => {
+    let calls = 0,
+      fault = false;
+    const observedCatalog = {
+      ...catalog,
+      assertCurrent() {
+        calls++;
+        if (fault) throw Error('catalog source fault');
+        catalog.assertCurrent();
+      },
+    };
+    const f = createEnemyLibraryFixture(observedCatalog, baseline);
+    try {
+      const request = selection(f);
+      f.app().select(nullSelection ? { ...request, selectionOrNull: null } : request);
+      f.nav('ENM-001::CTA::013');
+      f.restart();
+      expect(f.readCurrent().viewOrNull!.formId).toBe('GM-001');
+      calls = 0;
+      fault = true;
+      const before = f.db.serialize();
+      expect(() =>
+        f.readCurrent((source, state) =>
+          validateEnemyLibrarySource(source, state, observedCatalog, baseline),
+        ),
+      ).toThrow('CORRUPT_STORAGE');
+      expect(calls).toBe(1);
       expect(f.db.serialize().equals(before)).toBe(true);
     } finally {
       f.close();

@@ -146,10 +146,19 @@ export function validateEnemyLibrarySource(
     return s.fail('FOREIGN_OWNER');
   const birth = source.creationOrigin.payload;
   resolveStoredLocalCharacterExportBaseline(baseline, birth.baselineVersion);
-  catalog.assertCurrent();
   // The exact trusted lineage proves the legacy birth's frozen pack bytes, not a version guess.
   if (birth.schemaVersion === 2 && birth.defaultSentientCatalogVersion !== catalog.catalogVersion)
     return s.fail('SOURCE_CHANGED');
+  const context = source.viewOrNull?.enemyLibrary;
+  // Ordinary GM/NPC reads have no catalog facts until entry or an enemy-selection prefix.
+  // Keep freshness on every relevant observation, including history after leaving ENM.
+  if (
+    source.viewOrNull?.formId === 'ENM-001' ||
+    source.viewOrNull?.formId === 'ENM-003' ||
+    context?.selectedOrNull != null ||
+    state.events.some((event) => event.mutation.kind === 'ENEMY_SELECTION')
+  )
+    catalog.assertCurrent();
   for (const event of state.events) {
     if (
       event.mutation.kind === 'ENEMY_SELECTION' &&
@@ -157,6 +166,5 @@ export function validateEnemyLibrarySource(
     )
       catalog.resolve(event.mutation.request.selectionOrNull);
   }
-  const context = source.viewOrNull?.enemyLibrary;
   if (context?.selectedOrNull != null) catalog.resolve(context.selectedOrNull);
 }

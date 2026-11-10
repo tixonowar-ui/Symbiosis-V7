@@ -38,6 +38,16 @@ import:verify → test:e2e окончательного committed SHA и CI вы
 merge/acceptance #255; #188/#113 остаются открытыми до общей приёмки.
 Исторические снимки ниже относятся к прежним кандидатам.
 
+Первый clean verify fdc8378 остановлен root после двух NPC failures с reported
+62603/61631 мс при case budget 60000; detailed exceptions до остановки не
+напечатаны. Оба неизменённых isolated case прошли. Валидированный внешний
+профиль обнаружил 201 catalog read/3,49 ГБ/9,275 с read/hash и менее 0,1 с
+clone/freeze. Scope freshness сужен до current ENM/selection или исторического
+ENEMY_SELECTION; owner/baseline/pin, every-history resolution и immutable fence
+сохраняются. Бюджеты/worker/retry/config не менялись. Исходные failed/interrupted
+и profiling evidence сохранены в evidence-255 и clean-evidence255. Новая
+приёмка требует нового committed SHA, повторного root review и clean cycle.
+
 ## Source #244 — кандидат Atlas 1.20/B15
 
 Изолированный checkout issue-244, ветка codex/244-system-library-source от

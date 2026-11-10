@@ -15,6 +15,11 @@ baseline без перезаписи старых birth/FINAL/snapshots/receipts
 добавляет только формы и ENEMY_SELECTION в прежние CHECK/QUEUE. Общий GM
 source observer проверяет весь prefix, включая скрытые поздним выбором
 чужие identities; exact NAV replay использует исторические предпосылки.
+Owner/baseline/pin проверяются всегда, а catalog file freshness — при текущем
+ENM/выборе или любом историческом ENEMY_SELECTION, даже null. Первый вход
+проверяет tentative NAV с rollback; обычный NPC prefix без enemy facts не
+перечитывает 17 МБ pack на каждом guard. Измеренный исходный V1-профиль дал
+201 повторение/3,49 ГБ/9,275 с read/hash; immutable observation сохранено.
 
 Wire v3 и закрытый decoder связывают ACK с correlated source projection;
 ACK сам по себе не подтверждает UI. Русская карточка показывает навыки,

@@ -19,6 +19,10 @@
   19→20 без изменения старых квитанций. GM source observer проверяет каждый
   исторический выбор; PLAYER не получает каталог или приватные identities.
   Карточка показывает русские игровые факты без технического payload dump.
+  Полный source file freshness проверяется при текущем ENM/выборе или enemy
+  history; ordinary GM/NPC сохраняет owner/baseline/pin без повторного чтения
+  pack. Every-history resolution, первый вход с rollback и immutable observer
+  сохранены; измеренный исходный read/hash cost — 9,275 с на NPC V1.
   Artifacts/CHECKSUMS неизменны; placement, создание врагов, RNG, версии и бой
   не добавлены. Полная приёмка точного SHA и #188/#113 остаются открытыми.
 
