@@ -48,6 +48,15 @@ ENEMY_SELECTION; owner/baseline/pin, every-history resolution и immutable fence
 и profiling evidence сохранены в evidence-255 и clean-evidence255. Новая
 приёмка требует нового committed SHA, повторного root review и clean cycle.
 
+Clean verify следующего 5f3cb5 сообщил два web failures; root сохранил evidence
+и прервал известный red набор. Неизменённый atlas-form suite воспроизвёл оба:
+независимый точный TEST roster пропускал ENM-001/003 в equality и тексте boundary.
+Добавлены два настоящих screen literals и точное число screens 87 вместо 85;
+equality и NET-028 boundary assertions сохранены, production не менялся.
+Этот существующий renderer suite был пропущен ранним targeted выбором; новая
+проверка охватывает весь web project. Прежние failed/interrupted логи сохранены;
+новый committed SHA требует root re-review и полного clean exact-SHA цикла.
+
 ## Source #244 — кандидат Atlas 1.20/B15
 
 Изолированный checkout issue-244, ветка codex/244-system-library-source от
