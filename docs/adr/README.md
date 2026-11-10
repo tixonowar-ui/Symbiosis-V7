@@ -122,6 +122,7 @@
 | [0088](0088-verification-throughput-and-integration-budgets.md)      | Один чистый локальный gate, бюджеты сценариев и задержки первого релиза | принято владельцем                          |
 | [0089](0089-system-library-without-placement.md)                     | Read-only SYSTEM_LIBRARY без placement; Atlas 1.20/B15                  | принято владельцем, source #244             |
 | [0090](0090-campaign-enemy-library-cursor-and-pin.md)                | Pin при CREATE и прежний GM cursor библиотеки врагов                    | техническая реализация CORE-191, #255       |
+| [0091](0091-sentient-enemy-v1.md)                                    | Попытка, полный лист и атомарная V1 мыслящего врага                     | техническая реализация #256                 |
 
 ## Перенос решений аудита
 

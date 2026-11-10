@@ -21,29 +21,31 @@ import { migration0017 } from '../../src/persistence/migrations/0017-npc-linked-
 import { migration0018 } from '../../src/persistence/migrations/0018-npc-custom-profile-identities.js';
 import { migration0019 } from '../../src/persistence/migrations/0019-npc-poison-coating-identities.js';
 
+export const LEGACY_SCHEMA_19_MIGRATIONS = [
+  migration0001,
+  migration0002,
+  migration0003,
+  migration0004,
+  migration0005,
+  migration0006,
+  migration0007,
+  migration0008,
+  migration0009,
+  migration0010,
+  migration0011,
+  migration0012,
+  migration0013,
+  migration0014,
+  migration0015,
+  migration0016,
+  migration0017,
+  migration0018,
+  migration0019,
+] as const;
+
 export function openLegacySchema19Database(path = ':memory:') {
   const db = new Database(path);
   configurePersistenceDatabase(db);
-  applyMigrationSequence(db, [
-    migration0001,
-    migration0002,
-    migration0003,
-    migration0004,
-    migration0005,
-    migration0006,
-    migration0007,
-    migration0008,
-    migration0009,
-    migration0010,
-    migration0011,
-    migration0012,
-    migration0013,
-    migration0014,
-    migration0015,
-    migration0016,
-    migration0017,
-    migration0018,
-    migration0019,
-  ]);
+  applyMigrationSequence(db, LEGACY_SCHEMA_19_MIGRATIONS);
   return db;
 }

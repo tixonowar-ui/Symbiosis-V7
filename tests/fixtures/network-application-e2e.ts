@@ -192,6 +192,21 @@ export async function createNetworkBrowserProcess(finalCount: number) {
           db.close();
         }
       },
+      inspectEnemy() {
+        const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          const rows = (table: string) =>
+            db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all() as Record<string, unknown>[];
+          return {
+            templates: rows('campaign_enemy_template'),
+            versions: rows('campaign_enemy_version'),
+            history: rows('campaign_enemy_history'),
+            pointers: rows('campaign_enemy_current_version'),
+          };
+        } finally {
+          db.close();
+        }
+      },
       inspectNpc() {
         const db = new Database(databasePath, { readonly: true, fileMustExist: true });
         try {

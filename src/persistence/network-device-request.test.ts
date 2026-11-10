@@ -341,7 +341,8 @@ function submission(
     schemaVersion === 17 ||
     schemaVersion === 18 ||
     schemaVersion === 19 ||
-    schemaVersion === 20
+    schemaVersion === 20 ||
+    schemaVersion === 21
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -2234,12 +2235,12 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it('rejects a v1 batch on schema 20 without writes', () => {
+  it('rejects a v1 batch on schema 21 without writes', () => {
     const p = setup(),
       opening = connect(p),
       request = submission(p, opening);
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 20,
+      version: 21,
     });
     const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
     const before = p.db.serialize();

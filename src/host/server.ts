@@ -1,4 +1,5 @@
 import { loadEnemySourceCatalog } from './enemy-catalog.js';
+import { loadEnemyAuthoringSourceCatalog } from './enemy-authoring-catalog.js';
 import { loadNpcAuthoringSourceCatalog } from './npc-catalog.js';
 import { loadNpcArtCatalog } from './npc-art.js';
 import { createNpcHostSupport } from './npc-application.js';
@@ -6916,6 +6917,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     loadNpcAuthoringSourceCatalog(projectRoot),
     loadNpcArtCatalog(projectRoot),
   ]);
+  const enemyAuthoring = loadEnemyAuthoringSourceCatalog(projectRoot, npcCatalog);
   const npc = createNpcHostSupport(config.database, npcCatalog, npcArt, (campaignId) => {
     // This structural read also serves recovery without an attached browser. It grants no connection authority.
     const validateOwner = (owner: ReturnType<typeof readCampaignOwnerBinding>): void => {
@@ -7013,6 +7015,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     publishCampaign: campaignNetwork.publishCampaign,
     requestReview: {
       npcEnabled: true,
+      enemyAuthoringEnabled: true,
       withLifecycle: (c, view) => gmNetwork.withLifecycle(c, view),
       project: (c) => gmNetwork.project(c),
       refreshConnectionPresentation: (c) => gmNetwork.refreshConnectionPresentation(c),
@@ -7021,6 +7024,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   });
   const gmNetwork = createGmNetworkRuntime({
     enemyCatalog,
+    enemyAuthoring,
     npc,
     gmScheduler,
     config: networkConfig,

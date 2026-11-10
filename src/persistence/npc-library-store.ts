@@ -1,3 +1,4 @@
+import { migration0021 } from './migrations/0021-sentient-enemy-v1.js';
 import { migration0020 } from './migrations/0020-enemy-library.js';
 import type { DiseaseId } from '@generated/types/effects.js';
 import type Database from 'better-sqlite3';
@@ -148,7 +149,8 @@ function schema(db: Database.Database): boolean {
     version !== 17 &&
     version !== 18 &&
     version !== 19 &&
-    version !== 20
+    version !== 20 &&
+    version !== 21
   )
     return s.fail();
   const expectedMigration =
@@ -162,7 +164,9 @@ function schema(db: Database.Database): boolean {
             ? migration0018
             : version === 19
               ? migration0019
-              : migration0020;
+              : version === 20
+                ? migration0020
+                : migration0021;
   const row = db
     .prepare(
       'SELECT version,name,checksum_sha256 FROM schema_migration ORDER BY version DESC LIMIT 1',

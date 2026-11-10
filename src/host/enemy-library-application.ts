@@ -23,6 +23,7 @@ import {
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import type { EnemySourceCatalog } from './enemy-catalog.js';
+import type { EnemyUserEntry } from '@shared/enemy-authoring.js';
 
 /** Own current GM scope is supplied by the existing campaign runtime on every call. */
 export function createEnemyLibraryApplication(d: {
@@ -31,6 +32,7 @@ export function createEnemyLibraryApplication(d: {
   catalog: EnemySourceCatalog;
   baseline: LocalCharacterExportBaseline;
   validateOwner: CampaignPrivateOwnerValidator;
+  readUsers?: () => readonly EnemyUserEntry[];
   readCurrent: (
     observe: (source: GmRequestReviewSource, state: GmRequestReviewViewState) => void,
   ) => GmRequestReviewSource;
@@ -60,7 +62,8 @@ export function createEnemyLibraryApplication(d: {
           catalogBaselineVersion: source.creationOrigin.payload.baselineVersion,
           systemTemplates: d.catalog.systemTemplates,
           canonicalTemplates: d.catalog.canonicalTemplates,
-          currentUserTemplates: [],
+          currentUserTemplates:
+            context.activeTab === 'SENTIENT_ENEMIES' ? (d.readUsers?.() ?? []) : [],
           ...(view.formId === 'ENM-003'
             ? { systemTemplateArtAssetKey: context.selectedOrNull?.artAssetKey }
             : {}),
@@ -128,8 +131,18 @@ export function createEnemyLibraryApplication(d: {
           enemyLibraryContextValue({
             activeTab: request.activeTab,
             selectedOrNull: request.selectionOrNull,
+            ...(Object.hasOwn(request, 'userSelectionOrNull')
+              ? { userSelectionOrNull: request.userSelectionOrNull }
+              : {}),
           });
           if (request.selectionOrNull !== null) d.catalog.resolve(request.selectionOrNull);
+          if (
+            request.userSelectionOrNull != null &&
+            !(d.readUsers?.() ?? []).some(({ displayName: _label, ...identity }) =>
+              s.same(identity, request.userSelectionOrNull),
+            )
+          )
+            return s.fail('FOREIGN_OWNER');
         },
       );
     },

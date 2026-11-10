@@ -82,8 +82,9 @@ test('GM browses separate immutable enemy catalogs, retains selection/art across
     await expect(
       page.getByText('Сохранённых пользовательских шаблонов нет.', { exact: true }),
     ).toBeVisible();
-    for (const key of ['001', '003', '005', '006', '007', '008', '009', '010', '011', '012'])
+    for (const key of ['001', '005', '006', '007', '008', '009', '010', '011', '012'])
       await expect(page.locator(`[data-atlas-action-key="ENM-001::CTA::${key}"]`)).toHaveCount(0);
+    await expect(page.locator('[data-atlas-action-key="ENM-001::CTA::003"]')).toBeVisible();
     await page.getByRole('tab', { name: 'Монстры', exact: true }).click();
     await expect(page.locator('[data-enemy-template]')).toHaveCount(17);
     await expect(page.getByText('16 видов · 17 статблоков', { exact: true })).toBeVisible();

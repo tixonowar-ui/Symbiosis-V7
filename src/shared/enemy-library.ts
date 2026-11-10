@@ -1,4 +1,9 @@
 import type { ActionKey } from '@generated/types/atlas.js';
+import {
+  enemyVersionIdentityValue,
+  type EnemyVersionIdentity,
+  type EnemyUserEntry,
+} from './enemy-authoring.js';
 import { admissionJsonEqual, admissionCodecReaders as r } from './campaign-admission-codec.js';
 import { wireCodecPrimitives as w } from './wire-codec.js';
 import type { JsonValue, RevisionVector } from './wire-protocol.js';
@@ -10,12 +15,14 @@ export const ENEMY_LIBRARY_NAV_TARGETS = {
   'GM-001::CTA::005': 'ENM-001',
   'ENM-001::CTA::002': 'ENM-003',
   'ENM-001::CTA::004': 'ENM-003',
+  'ENM-001::CTA::007': 'ENM-020',
   'ENM-001::CTA::013': 'GM-001',
   'ENM-003::CTA::001': 'ENM-001',
 } as const;
 export const ENEMY_LIBRARY_TABS = ['SENTIENT_ENEMIES', 'MONSTERS'] as const;
 export type EnemyLibraryTab = (typeof ENEMY_LIBRARY_TABS)[number];
 export interface EnemyLibraryContext {
+  readonly userSelectionOrNull?: EnemyVersionIdentity | null;
   readonly activeTab: EnemyLibraryTab;
   readonly selectedOrNull: EnemyLibrarySelection | null;
 }
@@ -43,6 +50,7 @@ export interface EnemyLibraryCard {
 }
 /** Technical library cursor only: never an enemy actor, draft, version or placement. */
 export interface EnemyLibraryProjection extends RevisionVector {
+  readonly userSelectionOrNull?: EnemyVersionIdentity | null;
   readonly systemTemplateArtAssetKey?: string;
   readonly activeTab: EnemyLibraryTab;
   readonly kind: 'SYSTEM_LIBRARY';
@@ -54,11 +62,12 @@ export interface EnemyLibraryProjection extends RevisionVector {
   readonly catalogBaselineVersion: string;
   readonly systemTemplates: readonly EnemyCatalogEntry[];
   readonly canonicalTemplates: readonly EnemyCatalogEntry[];
-  readonly currentUserTemplates: readonly never[];
+  readonly currentUserTemplates: readonly EnemyUserEntry[];
   readonly selectedOrNull: EnemyLibrarySelection | null;
   readonly cardOrNull: EnemyLibraryCard | null;
 }
 export interface EnemyLibrarySelectionRequest {
+  readonly userSelectionOrNull?: EnemyVersionIdentity | null;
   readonly messageType: 'network.enemy-selection.replace';
   readonly protocolVersion: 3;
   readonly operationId: string;
@@ -85,9 +94,11 @@ export function enemyLibrarySelectionValue(value: unknown): EnemyLibrarySelectio
   return w.validated(row);
 }
 export function enemyLibrarySelectionRequestValue(value: unknown): EnemyLibrarySelectionRequest {
+  const raw = w.record(value, '$');
   const row = r.exact(
     value,
-    'messageType protocolVersion operationId contextId campaignId sourceFormId expectedRevisions selectionOrNull activeTab',
+    'messageType protocolVersion operationId contextId campaignId sourceFormId expectedRevisions selectionOrNull activeTab' +
+      (Object.hasOwn(raw, 'userSelectionOrNull') ? ' userSelectionOrNull' : ''),
     '$',
   );
   w.literal(row['messageType'], 'network.enemy-selection.replace', '$.messageType');
@@ -103,6 +114,15 @@ export function enemyLibrarySelectionRequestValue(value: unknown): EnemyLibraryS
   for (const key of Object.keys(revisions))
     r.integer(revisions[key], '$.expectedRevisions.' + key, 0);
   if (row['selectionOrNull'] !== null) enemyLibrarySelectionValue(row['selectionOrNull']);
+  if (row['userSelectionOrNull'] != null) {
+    const user = enemyVersionIdentityValue(row['userSelectionOrNull']);
+    if (
+      user.campaignId !== row['campaignId'] ||
+      row['activeTab'] !== 'SENTIENT_ENEMIES' ||
+      row['selectionOrNull'] !== null
+    )
+      r.invalid('$.userSelectionOrNull', 'own campaign SENTIENT selection', null);
+  }
   return w.validated(row);
 }
 export function enemyLibrarySelectionResponseValue(value: unknown): EnemyLibrarySelectionResponse {
@@ -121,7 +141,8 @@ export function enemyLibraryProjectionValue(value: unknown): EnemyLibraryProject
   const row = r.exact(
     value,
     (raw['formId'] === 'ENM-003' ? 'systemTemplateArtAssetKey ' : '') +
-      'activeTab kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision defaultSentientCatalogVersion catalogBaselineVersion systemTemplates canonicalTemplates currentUserTemplates selectedOrNull cardOrNull',
+      'activeTab kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision defaultSentientCatalogVersion catalogBaselineVersion systemTemplates canonicalTemplates currentUserTemplates selectedOrNull cardOrNull' +
+      (Object.hasOwn(raw, 'userSelectionOrNull') ? ' userSelectionOrNull' : ''),
     '$.enemyLibrary',
   );
   w.literal(row['kind'], 'SYSTEM_LIBRARY', '$.kind');
@@ -165,12 +186,36 @@ export function enemyLibraryProjectionValue(value: unknown): EnemyLibraryProject
     )
       r.invalid('$.' + key, 'distinct source-bound entries', null);
   }
-  if (r.list(row['currentUserTemplates'], '$.currentUserTemplates').length !== 0)
-    r.invalid('$.currentUserTemplates', 'no user authoring capability in this release', null);
+  const users = r.list(row['currentUserTemplates'], '$.currentUserTemplates').map((value) => {
+    const entry = r.exact(
+      value,
+      'campaignId templateId versionId version kind artAssetKey artSha256 displayName',
+      '$.userEntry',
+    );
+    const { displayName, ...identity } = entry;
+    r.text(displayName, '$.displayName');
+    const version = enemyVersionIdentityValue(identity);
+    if (version.campaignId !== row['campaignId']) r.invalid('$.userEntry', 'own campaign', null);
+    return { ...version, displayName };
+  });
+  if (new Set(users.map((user) => user.templateId)).size !== users.length)
+    r.invalid('$.currentUserTemplates', 'distinct templates', null);
+  if (row['activeTab'] === 'MONSTERS' && users.length !== 0)
+    r.invalid('$.currentUserTemplates', 'no SENTIENT entries in MONSTERS', null);
   const context = enemyLibraryContextValue({
     activeTab: row['activeTab'],
     selectedOrNull: row['selectedOrNull'],
+    ...(Object.hasOwn(row, 'userSelectionOrNull')
+      ? { userSelectionOrNull: row['userSelectionOrNull'] }
+      : {}),
   });
+  if (
+    context.userSelectionOrNull != null &&
+    !users.some(({ displayName: _label, ...identity }) =>
+      admissionJsonEqual(identity, context.userSelectionOrNull),
+    )
+  )
+    r.invalid('$.userSelectionOrNull', 'actual own current template version/art', null);
   if (context.selectedOrNull !== null) {
     const list = r
       .list(
@@ -349,8 +394,19 @@ export function enemyLibraryProjectionValue(value: unknown): EnemyLibraryProject
 }
 
 export function enemyLibraryContextValue(value: unknown): EnemyLibraryContext {
-  const row = r.exact(value, 'activeTab selectedOrNull', '$.enemyLibraryContext');
+  const raw = w.record(value, '$.enemyLibraryContext');
+  const row = r.exact(
+    value,
+    'activeTab selectedOrNull' +
+      (Object.hasOwn(raw, 'userSelectionOrNull') ? ' userSelectionOrNull' : ''),
+    '$.enemyLibraryContext',
+  );
   r.oneOf(row['activeTab'], ENEMY_LIBRARY_TABS, '$.activeTab');
+  if (row['userSelectionOrNull'] != null) {
+    enemyVersionIdentityValue(row['userSelectionOrNull']);
+    if (row['activeTab'] !== 'SENTIENT_ENEMIES' || row['selectedOrNull'] !== null)
+      r.invalid('$.userSelectionOrNull', 'exclusive SENTIENT user selection', null);
+  }
   if (row['selectedOrNull'] !== null) {
     const selected = enemyLibrarySelectionValue(row['selectedOrNull']);
     if (
@@ -369,5 +425,7 @@ export function enemyLibraryActions(p: EnemyLibraryProjection): readonly ActionK
       ? ['ENM-001::CTA::002' as const, 'ENM-001::CTA::004' as const]
       : []),
     'ENM-001::CTA::013',
+    ...(p.activeTab === 'SENTIENT_ENEMIES' ? ['ENM-001::CTA::003' as const] : []),
+    ...(p.userSelectionOrNull != null ? ['ENM-001::CTA::007' as const] : []),
   ];
 }

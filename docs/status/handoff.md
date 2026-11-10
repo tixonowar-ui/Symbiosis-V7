@@ -1,5 +1,88 @@
 # Передача контекста — 2026-11-10
 
+## Runtime #256 — авторская реализация, приёмка ожидается
+
+Изолированная ветка codex/256-sentient-enemy-v1 основана на фактическом main
+efeb31a46b79f6c2842356abd4366159bcb29847 после squash PR #282. #255 закрыта;
+её проверенное дерево 3f9b76609ee89a3ee9ef411ffbed9a71cad3f0ae сохраняется.
+Ни старый checkout, ни внешние evidence #255 не меняются. Исторические заметки
+о кандидатах #255 ниже не являются текущим состоянием #256.
+
+ENM-005–010/020 создают только V1 SENTIENT с явной пустой композицией и
+закреплённой заглушкой. Собственная sexless identity/ORDINARY_SENTIENT не
+заимствует NPC lifetime/identity. Общие source-backed arithmetic/item validators
+дают полный preview до атомарного COMMIT. Существующий GM ingress/QUEUE,
+immutable receipts и snapshots сохраняются; ADR 0091 описывает source/audit
+closure и миграцию 20→21. Пользовательская версия отделена от 44/канонических
+источников, открывается через 020; 003 остаётся Runtime Pack-only.
+
+Внешний evidence-256 сохраняет started/result/log и dirty fingerprints всех
+авторских проверок, включая failures. Первый browser-v1-first01 отказал на
+неверно выбранном label locator; host подтвердил ENM-007, исправлен настоящий
+accessible combobox selector без ослабления assertions. Архивный second02
+прошёл один production case за 40,2 с: lost COMMIT reply, reconnect, отдельный
+PLAYER-сеанс той же установки, физический host/SQLite restart, поздний exact
+replay и все шесть финальных assertions 202–207. Root независимо проверил
+HTML, IDs и source hash: 12 errors внутри семи успешных poll groups, ноль
+outside/errors/retry/skip; это dirty evidence ДО последующих CORE-214,
+namespace и clothing изменений, не финальная проверка новых bytes.
+
+Актуальные авторские targeted результаты (dirty source, не clean HEAD gate):
+
+| Evidence                          | Область                                                                                  | Результат                                       |
+| --------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| final-node-boundaries01           | Семь целых affected host/allocator/QUEUE/transport suites, штатные четыре workers        | 276 PASS, 130,01 с Vitest Duration              |
+| web-project-final03               | Весь web project, включая независимый literal roster и настоящий ws-client с mock Socket | 909 PASS / 32 файла, 31,09 с                    |
+| schema21-fixture-corrections04    | Whole request/persistence/device suites после исправления latest fixtures                | 127 PASS / 3 файла, 25,21 с; предшествует R11   |
+| typecheck-final04 / lint-scoped05 | Node+web types; все изменённые TS/TSX по неизменным ESLint rules                         | exit 0 / exit 0                                 |
+| e2e-roster01                      | Только discovery, без запуска полного E2E                                                | 47 случаев / 18 spec                            |
+| browser-final03                   | Production build и ровно два ENM spec, настоящий Chrome/WS/SQLite                        | 2 PASS, 32,8/44,1 с case; обе попытки без retry |
+
+Уникальные browser-final03-report/artifacts/source и strict audit сохранены
+внешне. HTML SHA256:
+826eb313595d8e4ad569b83fd2e480d86760308b6b16be8c18ddccac0eb050cf.
+Audit связывает точные два spec/title/testId, source SHA и две попытки;
+все финальные assertions 180–185 и 318–323 выполнены. Двадцать промежуточных
+error steps находятся в одиннадцати успешных poll-группах; outside, attempt/
+global errors, retry/flaky/skip — ноль. Новый случай проходит explicit clothing/
+quality preview, PLAYER forged PATCH/COMMIT/NAV, потерянный COMMIT reply,
+пользовательский выбор через вкладки/CTA007, физический restart и поздний
+exact replay без второй V1. Это авторский scoped dirty proof, не полный E2E.
+
+R11 проверен реальными allocator paths для сохранённых и отменённых enemy IDs:
+local character/checkpoint/campaign, post-save scope/command/receipt, network
+tab command/receipt и device bootstrap. Collision categories точные, callback
+записи не вызывается; fresh export/tab/device controls успешны. Device fault
+подменяет только технический UUID, не source/hash/authority. Общий guard
+остаётся совместимым с legacy prefixes; исторические NPC child IDs также
+проверяются против enemy namespace. R12 меняет настоящий persisted active GM
+context после подготовки PATCH/COMMIT/known replay: validator фиксирует отказ,
+наружный owning wrapper возвращает CORRUPT_STORAGE без квитанции и записей.
+
+R6 client proof — unit ws-client с mock Socket, не настоящий сетевой peer:
+корректный полный preview одежды отображает качество, а packet без выбранной
+quality option отвергается до render и сохраняет прежний view. Настоящие WS,
+lost COMMIT reply и process/SQLite restart относятся к production browser.
+
+Все ранние failures сохранены: неправильный cancel test literal CTA001 вместо
+поставленного CTA004; stale capability/latest-table/batch fixtures; закрытые
+schema-prefix omissions в entry/exit/admission; первоначальный legacy-20 opener,
+который пытался повторно применить prefix-19; lint/type failures. Исправления
+сохраняют equality, historical prefix-20 и отказ future-22. Первый R11 focused
+run дал BODY timeout30s с reported case101545/43110 мс; побайтный deep matcher
+полных SQLite Buffer заменён native Buffer.equals. Усиленные пять случаев
+прошли за 14,35 с tests / 17,81 с run при прежних бюджетах. Это наблюдение
+о тестовой проверке bytes, не измерение production latency и не новый SLA.
+
+Окончательные SHA/tree и результаты root acceptance фиксируются внешне после
+commit; новые source/test bytes потребуют свежего clean цикла. Полный clean
+npm ci → import → verify → import:verify → test:e2e на окончательном committed
+SHA выполняет root отдельно после независимого ревью; затем exact CI и
+защищённый merge. Здесь ни полный gate, ни CI/merge/closure #256 не заявлены.
+#188/#113 остаются открытыми. Следующий #257 не реализуется до фактической
+приёмки/merge/closure #256. Artifacts/CHECKSUMS/generated source не меняются;
+конфигурация gates, workers/retries и общие активные hook budgets сохранены.
+
 ## Runtime #255 — авторский кандидат
 
 Текущее author browser evidence — внешние cleanup-affected-browser01 и его

@@ -1,6 +1,50 @@
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { migration0015, NPC_TABLES } from './migrations/0015-persistent-npc.js';
+import { migration0021 } from './migrations/0021-sentient-enemy-v1.js';
+
+/** The original allocators also see enemy template and cancelled-attempt reservations. */
+export function campaignEnemyIdentityInUse(db: Database.Database, id: string): boolean {
+  const migration = db
+    .prepare('SELECT name,checksum_sha256 FROM schema_migration WHERE version=21')
+    .get() as { name: string; checksum_sha256: string } | undefined;
+  if (migration === undefined) {
+    if (
+      [
+        'campaign_enemy_template',
+        'campaign_enemy_version',
+        'campaign_enemy_history',
+        'campaign_enemy_current_version',
+      ].some(
+        (table) => db.prepare('SELECT 1 FROM sqlite_schema WHERE name=?').get(table) !== undefined,
+      )
+    )
+      throw Error('Enemy identities exist without migration21');
+    return false;
+  }
+  if (
+    migration.name !== migration0021.name ||
+    migration.checksum_sha256 !== createHash('sha256').update(migration0021.sql).digest('hex')
+  )
+    throw Error('Enemy identity migration differs');
+  for (const [table, column] of [
+    ['campaign_enemy_template', 'template_id'],
+    ['campaign_enemy_version', 'version_id'],
+    ['campaign_enemy_history', 'history_id'],
+  ] as const)
+    if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined) return true;
+  return (
+    db
+      .prepare(
+        `SELECT 1 FROM gm_request_queue_event e WHERE e.kind='ENEMY_AUTHORING' AND (
+    json_extract(e.record_json,'$.mutation.cause.receiptId')=? OR
+    EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.itemTemplateKeys') WHERE value=?) OR
+    EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.request.payload.data.inventoryItems') WHERE json_extract(value,'$.linkedSetInstanceId')=?)
+  ) LIMIT 1`,
+      )
+      .get(id, id, id) !== undefined
+  );
+}
 
 /** An older allocator must see technical reservations even after cancellation. */
 export function npcIdentityInUse(db: Database.Database, id: string): boolean {
@@ -51,6 +95,11 @@ export function npcIdentityInUse(db: Database.Database, id: string): boolean {
 export function assertNpcIdentityUnused(db: Database.Database, id: string): void {
   if (npcIdentityInUse(db, id))
     throw new Error('identity already belongs to a persistent NPC or its technical history');
+  // Keep this established allocator entry point shared by device/store writers.
+  if (campaignEnemyIdentityInUse(db, id))
+    throw new Error(
+      'identity already belongs to an enemy template/version or its technical history',
+    );
 }
 
 /** Complements the existing network guard when allocating an NPC identity. */
