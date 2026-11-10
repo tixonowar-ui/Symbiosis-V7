@@ -95,6 +95,8 @@ export interface CampaignConnection {
   readonly trusted: () => boolean;
 }
 interface Dependencies {
+  readonly defaultSentientCatalogVersion?: string;
+  readonly assertEnemyCatalogCurrent?: () => void;
   readonly gmScheduler?: CampaignGmScheduler;
   readonly database: Database.Database;
   readonly projectRoot: string;
@@ -495,6 +497,14 @@ export function createCampaignCreationRuntime(d: Dependencies) {
             artAssetChecksumOrNull: artChecksum(draft),
           },
           baselineVersion: d.baseline.baselineVersion,
+          ...(d.defaultSentientCatalogVersion === undefined
+            ? {}
+            : {
+                enemyCatalogPin: {
+                  schemaVersion: 2,
+                  defaultSentientCatalogVersion: d.defaultSentientCatalogVersion,
+                },
+              }),
           catalogCompatibility: {
             status: compatible ? 'PASS' : 'FAIL',
             registryVersion: d.baseline.registryVersion,
@@ -906,6 +916,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
         !d.bind.validate(request.payload.preflightLeaseId, draft.campaignDraftId, draft.values.host)
       )
         unavailable();
+      d.assertEnemyCatalogCurrent?.();
       const campaignId = randomUUID(),
         receiptId = randomUUID();
       const result = commitCampaignCreation(
@@ -921,6 +932,9 @@ export function createCampaignCreationRuntime(d: Dependencies) {
             campaignId,
           ),
           baselineVersion: d.baseline.baselineVersion,
+          ...(d.defaultSentientCatalogVersion === undefined
+            ? {}
+            : { defaultSentientCatalogVersion: d.defaultSentientCatalogVersion }),
         },
         (current, owner, phase) => {
           guard(c)(current, owner, phase);

@@ -1,5 +1,30 @@
 # Состояние модулей
 
+## Каталог врагов runtime #255
+
+Прежний GM ingress и cursor подключают ENM-001/003, без новой оболочки GM.
+Host loader сверяет 44 sentient payloads/арты с Runtime Pack и отдельные
+канонические 16 видов/17 статблоков с их явными mappings. Две настоящие вкладки
+сохраняют source selection. ENM-003 открывается только для выбранного
+SYSTEM_DEFAULT_SENTIENT; MONSTERS показывает канонические строки и их факты,
+не подменяя их арт/identity системными. Пользовательские шаблоны пока пусты.
+
+CORE-191 pin записывается при CREATE в закрытую birth-v2/result и проверяется
+CMP-005 receipt decoder. Legacy-v1 восстанавливается через точный исходный
+baseline без перезаписи старых birth/FINAL/snapshots/receipts. Миграция 0020
+добавляет только формы и ENEMY_SELECTION в прежние CHECK/QUEUE. Общий GM
+source observer проверяет весь prefix, включая скрытые поздним выбором
+чужие identities; exact NAV replay использует исторические предпосылки.
+
+Wire v3 и закрытый decoder связывают ACK с correlated source projection;
+ACK сам по себе не подтверждает UI. Русская карточка показывает навыки,
+экипировку, характеристики, уровни и ОЭ без clone/provenance/runtime полей.
+Source/host/codec tests и scoped production browser проверяют restart, art,
+потерю ACK и PLAYER payload/DOM/a11y privacy. Авторские targeted результаты
+принадлежат dirty evidence-255; окончательные SHA, clean gate и CI фиксируются
+отдельно по ADR 0088. Это не полное завершение #188/#113 или очереди #256+.
+Placement/создание/версии/генератор/RNG/группы/карта/бой отсутствуют.
+
 ## Source #244 — SYSTEM_LIBRARY
 
 Atlas 1.20/B15 и ADR 0089 задают read-only ENM-003 из настоящей PAUSED кампании
@@ -7,7 +32,8 @@ Atlas 1.20/B15 и ADR 0089 задают read-only ENM-003 из настояще�
 в acceptance/QA/Markdown. Реальные selected template/catalog/art, campaign и
 GM/revision проверки, существующие CTA/переходы сохранены. Guards и точные
 B0–B14→B15 пары не разрешают менять non-Atlas, Runtime Pack или payloads.
-Runtime #255 ещё не реализован; full #188/#113 остаётся незавершённым.
+Source acceptance #244 завершена на main; runtime #255 описан выше.
+Full #188/#113 остаётся незавершённым.
 
 ## NPC runtime #187
 

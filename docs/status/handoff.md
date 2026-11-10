@@ -1,4 +1,42 @@
-# Передача контекста — 2026-11-09
+# Передача контекста — 2026-11-10
+
+## Runtime #255 — авторский кандидат
+
+Изолированный checkout issue-255, ветка codex/255-enemy-catalog от
+main 1c3c27a073fcbcaea57edf538e30664528715a9a. Source #244 принят:
+PR #281, main tree 0d38d4d5b3e5a3bf4a3dd89b4729aec358ccb900.
+Повторная source-поставка не нужна; artifacts/CHECKSUMS и generated/spec
+этим runtime не меняются. ADR 0090 фиксирует технические birth-v2/pin,
+legacy-v1 exact proof и общий GM cursor/source observer.
+
+Реальный CMP-007 → GM-001::CTA005 → ENM-001 показывает SENTIENT_ENEMIES
+(44 + пустые campaign-owned) и MONSTERS (16 видов/17 статблоков + пустые
+campaign-owned). Выбор принадлежит вкладке и сохраняется в прежнем QUEUE.
+Обе CTA002/004 открывают ENM-003 только для 44 SYSTEM_DEFAULT_SENTIENT;
+canonical CBT/SPC/ART-CB остаются отдельными настоящими строками MONSTERS.
+Back003→001→GM001, reconnect и process/SQLite restart сохраняют контекст,
+pin/selected identity и исходный системный PNG. Русская карточка содержит
+игровые факты, без raw clone/provenance/initial-runtime machinery.
+
+Новые CREATE имеют обязательный campaign.defaultSentientCatalogVersion
+в закрытой schemaVersion2 и bound result; source CMP-005 проверяется браузером.
+Legacy-v1 не дополняется: точный исходный baseline удостоверяет его каталог.
+Все consumers immutable birth используют исходную квитанцию. Миграция19→20
+сохраняет старые таблицы/JSON/hash/receipts. Общие GM readers и writer guards
+проверяют каждый исторический selection через immutable observer; NAV REPLAY
+не требует, чтобы нынешний выбор совпадал с историческим. PLAYER authority
+отказывает до публикации каталога. Placement поля отсутствуют в DTO/DOM/a11y.
+
+Внешний evidence-255 сохраняет started/result/log каждого авторского targeted
+прогона, включая отказы и dirty-state hashes. Они не являются проверкой HEAD.
+До передачи root выполняются target source/host/codec/migration/privacy checks,
+production build и scoped ENM E2E. Полный clean npm ci → import → verify →
+import:verify → test:e2e окончательного committed SHA и CI выполняет root
+после независимого ревью. Здесь полный gate/merge не объявляется пройденным.
+#255 не реализует ENM-002/004 instantiation, authoring/versions, archive/delete,
+генератор, группы, карту или бой. Следующая порученная задача — #256 после
+merge/acceptance #255; #188/#113 остаются открытыми до общей приёмки.
+Исторические снимки ниже относятся к прежним кандидатам.
 
 ## Source #244 — кандидат Atlas 1.20/B15
 

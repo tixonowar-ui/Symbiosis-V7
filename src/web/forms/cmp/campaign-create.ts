@@ -266,6 +266,12 @@ export function decodeCampaignProjection(
     case 'CMP-005':
       valid = object(value, {
         ...draft,
+        ...(record(value) && Object.hasOwn(value, 'enemyCatalogPin')
+          ? {
+              enemyCatalogPin: (v: unknown) =>
+                object(v, { schemaVersion: (v) => v === 2, defaultSentientCatalogVersion: text }),
+            }
+          : {}),
         fullDraftSummary: (v) =>
           object(v, {
             metadata: (m) => object(m, metadata),
@@ -481,6 +487,14 @@ export function decodeCampaignCreateReceipt(
   source: JsonObject,
 ): DecodeResult<CommandReceipt<CampaignCreateResult>> {
   if (
+    Object.hasOwn(source, 'enemyCatalogPin') &&
+    !object(source['enemyCatalogPin'], {
+      schemaVersion: (v) => v === 2,
+      defaultSentientCatalogVersion: text,
+    })
+  )
+    return failed('$.source.enemyCatalogPin');
+  if (
     !object(value, {
       commandId: text,
       receiptId: text,
@@ -488,6 +502,12 @@ export function decodeCampaignCreateReceipt(
       result: (v) =>
         object(v, {
           stage: (s) => s === 'CAMPAIGN_CREATE',
+          ...(Object.hasOwn(source, 'enemyCatalogPin')
+            ? {
+                campaignBirthSchemaVersion: (v: unknown) => v === 2,
+                defaultSentientCatalogVersion: text,
+              }
+            : {}),
           gmLocalContextId: uuid,
           campaignDraftId: uuid,
           campaignId: uuid,
@@ -533,6 +553,10 @@ export function decodeCampaignCreateReceipt(
     result.activePlayerCapacity !== configuredHost['activePlayerCapacity'] ||
     result.defaultFutureRollMode !== summary['defaultFutureRollMode'] ||
     result.baselineVersion !== source['baselineVersion'] ||
+    (Object.hasOwn(source, 'enemyCatalogPin') &&
+      (result.campaignBirthSchemaVersion !== 2 ||
+        result.defaultSentientCatalogVersion !==
+          (source['enemyCatalogPin'] as JsonObject)['defaultSentientCatalogVersion'])) ||
     !qrMatches(result)
   )
     return failed('$.receipt.result');

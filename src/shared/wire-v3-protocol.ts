@@ -1,3 +1,7 @@
+import type {
+  EnemyLibrarySelectionRequest,
+  EnemyLibrarySelectionResponse,
+} from './enemy-library.js';
 import type { NpcTechnicalRequest, NpcTechnicalResponse } from './npc-command.js';
 import type { NpcArtReadRequest, NpcArtReadResult, NpcArtReadRefusal } from './npc-presentation.js';
 import type {
@@ -142,6 +146,7 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
 }
 
 export type ClientToHostV3Message =
+  | EnemyLibrarySelectionRequest
   | NpcArtReadRequest
   | NpcTechnicalRequest
   | CampaignPeerControlV3Message
@@ -152,6 +157,7 @@ export type ClientToHostV3Message =
   | CampaignDraftReplaceV3Message
   | CampaignLocalContextResumeV3Message;
 export type HostToClientV3Message =
+  | EnemyLibrarySelectionResponse
   | NpcArtReadResult
   | NpcArtReadRefusal
   | NpcTechnicalResponse

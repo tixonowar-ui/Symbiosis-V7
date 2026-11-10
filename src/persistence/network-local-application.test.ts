@@ -1550,9 +1550,9 @@ describe('local network application/outbox aggregate', () => {
       readOwnedLocalNetworkTab(p.db, p.scope.ownerDeviceId, p.scope.networkScopeId)?.lifecycleState,
     ).toBe('UNBOUND');
     const before = p.db.serialize();
-    // Migration 19 must retain the same unresolved-outbox close guard.
+    // Migration 20 must retain the same unresolved-outbox close guard.
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 19,
+      version: 20,
     });
     expect(() => close(p, sent.current)).toThrow('CLOSE_UNAVAILABLE');
     expect(p.db.serialize().equals(before)).toBe(true);

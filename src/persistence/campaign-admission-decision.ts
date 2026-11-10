@@ -1,3 +1,4 @@
+import type { GmRequestReviewViewState } from './campaign-creation.js';
 import { campaignLobbySnapshotRevision } from './campaign-lobby-state.js';
 import type { InitialCampaignTime } from '@shared/campaign-lobby.js';
 import {
@@ -1123,7 +1124,8 @@ export function readCampaignAdmissionAvailability(
       version !== 16 &&
       version !== 17 &&
       version !== 18 &&
-      version !== 19
+      version !== 19 &&
+      version !== 20
     )
       return s.fail();
     const source = readGmRequestReviewSource(db, scope, validate),
@@ -1453,12 +1455,20 @@ export const admissionDecisionStorage = {
     db: Database.Database,
     scope: GmRequestReviewScope,
     validate: CampaignPrivateOwnerValidator,
-    rulesFor: (source: GmRequestReviewSource) => AdmissionPublicationRules | null,
+    rulesFor: (
+      source: GmRequestReviewSource,
+      state: GmRequestReviewViewState,
+    ) => AdmissionPublicationRules | null,
   ): { source: GmRequestReviewSource; historyOrNull: AdmissionHistory | null } {
-    const { source, observed } = readGmRequestReviewSourceWith(db, scope, validate, (current) => {
-      const rules = rulesFor(current);
-      return rules === null ? null : verifyCampaignHistory(db, current, rules);
-    });
+    const { source, observed } = readGmRequestReviewSourceWith(
+      db,
+      scope,
+      validate,
+      (current, state) => {
+        const rules = rulesFor(current, state);
+        return rules === null ? null : verifyCampaignHistory(db, current, rules);
+      },
+    );
     return { source, historyOrNull: observed };
   },
   readHistory(

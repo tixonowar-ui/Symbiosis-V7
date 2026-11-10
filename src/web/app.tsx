@@ -1,3 +1,5 @@
+import { EnemyLibraryContent } from './forms/enm/enemy-library-content.js';
+import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import {
   isNpcControlForm,
   type NpcControlPresentation,
@@ -2862,6 +2864,15 @@ export function App(): ReactElement {
               connection={() => connectionRef.current}
               notice={setActionNotice}
             />
+            {isEnemyLibraryForm(snapshot.formId) ? (
+              <EnemyLibraryContent
+                projection={snapshot.projection}
+                onSelect={(tab, selection) => {
+                  const result = connectionRef.current?.selectEnemyLibrary(tab, selection);
+                  setActionNotice(result?.ok ? null : (result?.detail ?? 'Каталог недоступен.'));
+                }}
+              />
+            ) : null}
             {isNpcControlForm(snapshot.formId) && npcControls?.formId === snapshot.formId ? (
               <NpcContent
                 key={
@@ -3412,6 +3423,7 @@ export function App(): ReactElement {
                   Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
+                isEnemyLibraryForm(snapshot.formId) ||
                 isNpcControlForm(snapshot.formId) ||
                 snapshot.formId === 'NET-017' ||
                 isCampaignLobbyGmForm(snapshot.formId) ||

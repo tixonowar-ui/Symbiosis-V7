@@ -272,7 +272,8 @@ function reviewSchema(db: Database.Database): void {
     r['version'] !== 16 &&
     r['version'] !== 17 &&
     r['version'] !== 18 &&
-    r['version'] !== 19
+    r['version'] !== 19 &&
+    r['version'] !== 20
   )
     return s.fail();
 }
@@ -1614,7 +1615,8 @@ export function commitHostedNetworkCommand(
                 schemaVersion === 16 ||
                 schemaVersion === 17 ||
                 schemaVersion === 18 ||
-                schemaVersion === 19) &&
+                schemaVersion === 19 ||
+                schemaVersion === 20) &&
               i.batch.schemaVersion !== 2
             )
               return s.fail('INVALID_INPUT');
@@ -1638,7 +1640,8 @@ export function commitHostedNetworkCommand(
               schemaVersion === 16 ||
               schemaVersion === 17 ||
               schemaVersion === 18 ||
-              schemaVersion === 19
+              schemaVersion === 19 ||
+              schemaVersion === 20
             ) {
               if (admissionRules === undefined) assertNoCampaignAdmissionEvidence(db);
               else {
@@ -1691,7 +1694,8 @@ export function commitHostedNetworkCommand(
                 schemaVersion === 16 ||
                 schemaVersion === 17 ||
                 schemaVersion === 18 ||
-                schemaVersion === 19
+                schemaVersion === 19 ||
+                schemaVersion === 20
                   ? !released.has(r.requestId) &&
                     ['PENDING', 'IN_REVIEW'].includes(
                       readCurrentRequest(db, p, r.requestId).requestStatus,

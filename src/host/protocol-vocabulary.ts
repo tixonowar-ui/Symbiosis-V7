@@ -1,3 +1,4 @@
+import { isEnemyLibraryForm } from '../shared/enemy-library.js';
 import { CAMPAIGN_PEER_FORMS, isCampaignLifecycleForm } from '../shared/campaign-lifecycle.js';
 import { NPC_CONTROL_FORM_IDS } from '../shared/npc-presentation.js';
 import { isCampaignLobbyGmForm } from '../shared/campaign-lobby.js';
@@ -27,6 +28,8 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'ENM-001',
+  'ENM-003',
   'NPC-001',
   'NPC-002',
   'NPC-003',
@@ -295,6 +298,7 @@ export async function loadProtocolVocabulary(
       if (form === undefined || form.type !== formType || form.route !== routeTemplate)
         return false;
       if (
+        isEnemyLibraryForm(formId) ||
         isCampaignLifecycleForm(formId) ||
         (NPC_CONTROL_FORM_IDS as readonly string[]).includes(formId) ||
         (CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)
