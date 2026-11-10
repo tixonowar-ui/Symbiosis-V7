@@ -1,3 +1,11 @@
+import {
+  ENEMY_LIBRARY_FORMS,
+  ENEMY_LIBRARY_NAV_TARGETS,
+  enemyLibraryContextValue,
+  enemyLibrarySelectionRequestValue,
+  type EnemyLibraryContext,
+  type EnemyLibrarySelectionRequest,
+} from '@shared/enemy-library.js';
 import type {
   NpcItemReservationApply,
   NpcArtPreparationApply,
@@ -133,7 +141,8 @@ export type CampaignCreationCursor = {
         | 'CMP-006'
         | CampaignLobbyGmForm
         | CampaignLifecycleForm
-        | (typeof NPC_SOURCE_FORMS)[number];
+        | (typeof NPC_SOURCE_FORMS)[number]
+        | (typeof ENEMY_LIBRARY_FORMS)[number];
       readonly targetId: string;
     }
   | {
@@ -201,7 +210,8 @@ export interface StoredCampaignCancellation {
 }
 export interface StoredPausedCampaign extends JsonObject {
   readonly kind: 'PAUSED_CAMPAIGN';
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
+  readonly defaultSentientCatalogVersion?: string;
   readonly campaignId: string;
   readonly sourceCampaignDraftId: string;
   readonly metadata: CampaignMetadataValues & { readonly title: string };
@@ -220,6 +230,7 @@ export interface StoredPausedCampaign extends JsonObject {
   readonly creationReceiptId: string;
 }
 export interface CampaignCreationInput {
+  readonly defaultSentientCatalogVersion?: string;
   readonly request: CampaignCreateRequest;
   readonly campaignId: string;
   readonly receiptId: string;
@@ -636,7 +647,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 16 ||
     version === 17 ||
     version === 18 ||
-    version === 19
+    version === 19 ||
+    version === 20
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -656,7 +668,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 16 ||
     version === 17 ||
     version === 18 ||
-    version === 19
+    version === 19 ||
+    version === 20
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -672,7 +685,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 16 ||
     version === 17 ||
     version === 18 ||
-    version === 19
+    version === 19 ||
+    version === 20
       ? CAMPAIGN_ADMISSION_IDENTITIES
       : [];
   if (
@@ -682,7 +696,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 16 ||
     version === 17 ||
     version === 18 ||
-    version === 19
+    version === 19 ||
+    version === 20
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -1401,8 +1416,22 @@ function createRequest(value: unknown): CampaignCreateRequest {
   count(payload['draftRevision']);
   return parse(canonical(request)) as unknown as CampaignCreateRequest;
 }
+function campaignBirthFieldsFromResult(result: Row): Row {
+  if (Object.hasOwn(result, 'campaignBirthSchemaVersion')) {
+    if (result['campaignBirthSchemaVersion'] !== 2) return fail();
+    return {
+      schemaVersion: 2,
+      defaultSentientCatalogVersion: text(result['defaultSentientCatalogVersion']),
+    };
+  }
+  if (Object.hasOwn(result, 'defaultSentientCatalogVersion')) return fail();
+  return { schemaVersion: 1 };
+}
 function pausedPayload(value: unknown): StoredPausedCampaign {
+  const raw = object(value);
+  const v2 = raw['schemaVersion'] === 2;
   const parsed = object(value, [
+    ...(v2 ? ['defaultSentientCatalogVersion'] : []),
     'kind',
     'schemaVersion',
     'campaignId',
@@ -1419,10 +1448,11 @@ function pausedPayload(value: unknown): StoredPausedCampaign {
   ]);
   if (
     parsed['kind'] !== 'PAUSED_CAMPAIGN' ||
-    parsed['schemaVersion'] !== 1 ||
+    (parsed['schemaVersion'] !== 1 && parsed['schemaVersion'] !== 2) ||
     parsed['status'] !== 'PAUSED'
   )
     return fail();
+  if (v2) text(parsed['defaultSentientCatalogVersion']);
   const values = publicValues({
     metadata: parsed['metadata'],
     host: parsed['host'],
@@ -1660,7 +1690,7 @@ function creationOrigin(
   // a later campaign vector or roster. Settings changes require a future explicit contract.
   const payload = pausedPayload({
     kind: 'PAUSED_CAMPAIGN',
-    schemaVersion: 1,
+    ...campaignBirthFieldsFromResult(result),
     campaignId,
     sourceCampaignDraftId: draft.campaignDraftId,
     ...draft.values,
@@ -1731,6 +1761,12 @@ function createResult(
 ): CampaignCreateResult {
   return {
     stage: 'CAMPAIGN_CREATE',
+    ...(payload.schemaVersion === 2
+      ? {
+          campaignBirthSchemaVersion: 2,
+          defaultSentientCatalogVersion: text(payload.defaultSentientCatalogVersion),
+        }
+      : {}),
     gmLocalContextId: request.payload.gmLocalContextId,
     campaignDraftId: request.payload.campaignDraftId,
     campaignId: payload.campaignId,
@@ -1803,7 +1839,12 @@ export function commitCampaignCreation(
         for (const id of ids) assertUnusedId(db, id);
         const payload = pausedPayload({
           kind: 'PAUSED_CAMPAIGN',
-          schemaVersion: 1,
+          ...(input.defaultSentientCatalogVersion === undefined
+            ? { schemaVersion: 1 }
+            : {
+                schemaVersion: 2,
+                defaultSentientCatalogVersion: text(input.defaultSentientCatalogVersion),
+              }),
           campaignId: input.campaignId,
           sourceCampaignDraftId: draft.campaignDraftId,
           ...draft.values,
@@ -1910,13 +1951,15 @@ export interface GmRequestReviewDraftRequest {
 }
 export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTriple {
   readonly npc?: NpcGmContext;
+  readonly enemyLibrary?: EnemyLibraryContext;
   readonly schemaVersion: 1;
   readonly formId:
     | 'NET-017'
     | 'CMP-006'
     | CampaignLobbyGmForm
     | CampaignLifecycleForm
-    | (typeof NPC_SOURCE_FORMS)[number];
+    | (typeof NPC_SOURCE_FORMS)[number]
+    | (typeof ENEMY_LIBRARY_FORMS)[number];
   readonly requestQueueRevision: number;
   readonly values: NetworkGmRequestDraftValues;
   readonly returnContext: Extract<NetworkGmRequestReturnContext, { originFormId: 'CMP-006' }>;
@@ -2090,6 +2133,12 @@ function queueNavigationTarget(request: FormActionIntentV2Message): GmRequestRev
     return 'NET-017';
   if (request.actionKey === 'NET-017::CTA::009' && request.sourceFormId === 'NET-017')
     return 'CMP-006';
+  const enemyKey = request.actionKey as keyof typeof ENEMY_LIBRARY_NAV_TARGETS;
+  if (
+    Object.hasOwn(ENEMY_LIBRARY_NAV_TARGETS, enemyKey) &&
+    enemyKey.split('::')[0] === request.sourceFormId
+  )
+    return ENEMY_LIBRARY_NAV_TARGETS[enemyKey];
   const npcKey = request.actionKey as keyof typeof NPC_NAV_TARGETS;
   if (Object.hasOwn(NPC_NAV_TARGETS, npcKey) && npcKey.split('::')[0] === request.sourceFormId)
     return NPC_NAV_TARGETS[npcKey];
@@ -2138,6 +2187,7 @@ function verifyLifecycleCause(
   };
 }
 export type GmRequestReviewMutation =
+  | { readonly kind: 'ENEMY_SELECTION'; readonly request: EnemyLibrarySelectionRequest }
   | { readonly kind: 'NPC_SOURCE'; readonly cause: NpcSourceCause }
   | { readonly kind: 'NPC_SELECTION'; readonly request: NpcSelectionReplaceRequest }
   | { readonly kind: 'LIFECYCLE_SOURCE'; readonly cause: GmLobbySourceCause }
@@ -2334,6 +2384,10 @@ function queueDraft(value: unknown): GmRequestReviewDraftRequest {
 }
 function queueMutation(value: unknown): GmRequestReviewMutation {
   const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'ENEMY_SELECTION') {
+    const row = queueObject(value, ['kind', 'request']);
+    return { kind: 'ENEMY_SELECTION', request: enemyLibrarySelectionRequestValue(row['request']) };
+  }
   if (record['kind'] === 'NPC_SOURCE') {
     const row = queueObject(value, ['kind', 'cause']);
     return { kind: 'NPC_SOURCE', cause: npcSourceCauseValue(row['cause']) };
@@ -2414,6 +2468,13 @@ function queueView(
     )
   )
     return fail('FOREIGN_OWNER');
+  if (Object.hasOwn(value, 'enemyLibrary')) enemyLibraryContextValue(value.enemyLibrary);
+  else if (ENEMY_LIBRARY_FORMS.some((form) => form === value.formId)) return fail();
+  if (
+    value.formId === 'ENM-003' &&
+    value.enemyLibrary?.selectedOrNull?.origin !== 'SYSTEM_DEFAULT_SENTIENT'
+  )
+    return fail();
   if (Object.hasOwn(value, 'npc')) {
     if (!same(npcGmContextValue(value.npc), value.npc)) return fail();
     if (
@@ -2450,7 +2511,7 @@ function queueBase(
   const result = object(receipt.result);
   const payload = pausedPayload({
     kind: 'PAUSED_CAMPAIGN',
-    schemaVersion: 1,
+    ...campaignBirthFieldsFromResult(result),
     campaignId: scope.campaignId,
     sourceCampaignDraftId: draft.campaignDraftId,
     ...draft.values,
@@ -2622,7 +2683,27 @@ function reduceQueue(
   let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
   let document = queueViewDocument(old);
   let changed = true;
-  if (mutation.kind === 'NPC_SOURCE') {
+  if (mutation.kind === 'ENEMY_SELECTION') {
+    const request = mutation.request;
+    if (
+      old.formId !== 'ENM-001' ||
+      request.contextId !== scope.gmLocalContextId ||
+      request.campaignId !== scope.campaignId
+    )
+      return fail('FOREIGN_OWNER');
+    if (!same(request.expectedRevisions, presentationRevisions(old))) return fail('STALE_REVISION');
+    const enemyLibrary = enemyLibraryContextValue({
+      activeTab: request.activeTab,
+      selectedOrNull: request.selectionOrNull,
+    });
+    changed = !same(enemyLibrary, old.enemyLibrary);
+    document = {
+      ...document,
+      enemyLibrary,
+      stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
+      projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+    };
+  } else if (mutation.kind === 'NPC_SOURCE') {
     const result = reduceNpcSource(db, scope, old, state.events, mutation.cause, proofs.npcSession);
     document = {
       ...document,
@@ -2710,6 +2791,17 @@ function reduceQueue(
     );
     if (started && (target === 'CMP-006' || target === 'NET-016' || target === 'NET-017'))
       return fail('DRAFT_UNAVAILABLE');
+    const enemyLibrary =
+      old.enemyLibrary ??
+      (target === 'ENM-001'
+        ? { activeTab: 'SENTIENT_ENEMIES' as const, selectedOrNull: null }
+        : undefined);
+    if (
+      target === 'ENM-003' &&
+      (enemyLibrary?.activeTab !== 'SENTIENT_ENEMIES' ||
+        enemyLibrary.selectedOrNull?.origin !== 'SYSTEM_DEFAULT_SENTIENT')
+    )
+      return fail('DRAFT_UNAVAILABLE');
     const npc = npcContextAfterNavigation(
       db,
       scope,
@@ -2722,6 +2814,7 @@ function reduceQueue(
     document = {
       ...document,
       ...(npc === undefined ? {} : { npc }),
+      ...(enemyLibrary === undefined ? {} : { enemyLibrary }),
       formId: target,
       projectionRevision: next(old.projectionRevision),
     };
@@ -2791,7 +2884,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 16 &&
     row['version'] !== 17 &&
     row['version'] !== 18 &&
-    row['version'] !== 19
+    row['version'] !== 19 &&
+    row['version'] !== 20
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -2804,7 +2898,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 16 ||
     row['version'] === 17 ||
     row['version'] === 18 ||
-    row['version'] === 19
+    row['version'] === 19 ||
+    row['version'] === 20
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -2876,7 +2971,8 @@ function readQueueViewState(
     if (
       (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
       (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
-      (mutation.kind === 'NPC_SELECTION' && eventId !== mutation.request.operationId) ||
+      ((mutation.kind === 'NPC_SELECTION' || mutation.kind === 'ENEMY_SELECTION') &&
+        eventId !== mutation.request.operationId) ||
       (mutation.kind === 'NPC_SOURCE' && eventId !== npcSourceEventId(scope, mutation.cause)) ||
       (mutation.kind === 'REQUEST_REFRESH' &&
         eventId !==
@@ -3124,7 +3220,8 @@ export function appendGmRequestReviewEventInTransaction(
   if (
     (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
     (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
-    (mutation.kind === 'NPC_SELECTION' && eventId !== mutation.request.operationId) ||
+    ((mutation.kind === 'NPC_SELECTION' || mutation.kind === 'ENEMY_SELECTION') &&
+      eventId !== mutation.request.operationId) ||
     (mutation.kind === 'NPC_SOURCE' && eventId !== npcSourceEventId(scope, mutation.cause)) ||
     (mutation.kind === 'REQUEST_REFRESH' &&
       eventId !==
@@ -3174,6 +3271,7 @@ export function appendGmRequestReviewEventInTransaction(
     (mutation.kind === 'NAV' ||
       mutation.kind === 'DRAFT' ||
       mutation.kind === 'NPC_SELECTION' ||
+      mutation.kind === 'ENEMY_SELECTION' ||
       mutation.kind === 'NPC_SOURCE') &&
     !same(cursor, queueCursor(state.viewOrNull))
   )
@@ -3190,7 +3288,8 @@ export function appendGmRequestReviewEventInTransaction(
     return fail('INVALID_INPUT');
   if (mutation.kind === 'LOBBY_SOURCE' && eventId !== lobbyCauseEventId(scope, mutation.cause))
     return fail('INVALID_INPUT');
-  if (mutation.kind === 'NPC_SELECTION') assertUnusedId(db, eventId);
+  if (mutation.kind === 'NPC_SELECTION' || mutation.kind === 'ENEMY_SELECTION')
+    assertUnusedId(db, eventId);
   const admissionBefore =
     (mutation.kind === 'SOURCE_ADVANCE' ||
       mutation.kind === 'REQUEST_REFRESH' ||

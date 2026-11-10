@@ -1,3 +1,10 @@
+import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
+import { ENEMY_LIBRARY_NAV_TARGETS, isEnemyLibraryForm } from '../shared/enemy-library.js';
+import {
+  createEnemyLibraryApplication,
+  validateEnemyLibrarySource,
+} from './enemy-library-application.js';
+import type { EnemySourceCatalog } from './enemy-catalog.js';
 import { type createNpcHostSupport, NpcApplicationPublicationError } from './npc-application.js';
 import {
   NPC_NAV_TARGETS,
@@ -3797,7 +3804,6 @@ import {
   type GmRequestReviewScope,
 } from '../persistence/campaign-creation.js';
 import {
-  readGmRequestReviewSource,
   readGmDeviceRequestQueue,
   readGmDeviceRequestDecision,
   commitGmRequestReviewNavigation,
@@ -3849,6 +3855,7 @@ import type { PresentedLayerForm } from '../shared/wire-v2-protocol.js';
 
 /** Local GM authority and technical QUEUE heads remain separate from campaign birth/checkpoints. */
 export function createGmNetworkRuntime(d: {
+  readonly enemyCatalog?: EnemySourceCatalog;
   readonly database: Database.Database;
   readonly npc?: ReturnType<typeof createNpcHostSupport>;
   readonly gmScheduler?: CampaignGmScheduler;
@@ -4036,6 +4043,7 @@ export function createGmNetworkRuntime(d: {
         if (view === null || !isCampaignLobbyGmForm(view.formId)) unavailable();
         return projectGmCampaignLobby({
           currentCampaign: source.currentCampaign,
+          enemyLibraryAvailable: d.enemyCatalog !== undefined,
           view,
           origin: source.creationOrigin,
           history,
@@ -4125,10 +4133,31 @@ export function createGmNetworkRuntime(d: {
     return queue;
   };
   const verifiedSource = (c: CampaignConnection): GmRequestReviewSource => {
-    const source = readGmRequestReviewSource(db, scope(c), validateOwner);
-    verifiedQueue(source.queue);
-    return source;
+    return readGmRequestReviewSourceWith(db, scope(c), validateOwner, (source, state) => {
+      verifiedQueue(source.queue);
+      if (d.enemyCatalog !== undefined)
+        validateEnemyLibrarySource(source, state, d.enemyCatalog, d.baseline);
+    }).source;
   };
+  const enemyRelevant = (m: LocalNetworkClientMessage) =>
+    m.messageType === 'network.enemy-selection.replace' ||
+    (m.messageType === 'navigation.form-action' &&
+      (Object.hasOwn(ENEMY_LIBRARY_NAV_TARGETS, m.actionKey) ||
+        isEnemyLibraryForm(m.sourceFormId)));
+  function enemyApplication(c: CampaignConnection) {
+    return createEnemyLibraryApplication({
+      database: db,
+      scope: scope(c),
+      catalog: d.enemyCatalog ?? unavailable(),
+      baseline: d.baseline,
+      validateOwner,
+      readCurrent: (observe) =>
+        readGmRequestReviewSourceWith(db, scope(c), validateOwner, (source, state) => {
+          verifiedQueue(source.queue);
+          observe(source, state);
+        }).source,
+    });
+  }
   const npcForm = (form: string) => (NPC_CONTROL_FORM_IDS as readonly string[]).includes(form);
   const npcWorkflows = ['UI-CMD-NPC-COMMIT-V1', 'UI-CMD-NPC-NEW-VERSION'] as const;
   const npcRelevant = (m: LocalNetworkClientMessage) =>
@@ -4174,11 +4203,15 @@ export function createGmNetworkRuntime(d: {
       .deferred();
   }
   const sourceForPresentation = (c: CampaignConnection, includeHistory = true) =>
-    admissionDecisionStorage.readSourceAndHistory(db, scope(c), validateOwner, (source) => {
+    admissionDecisionStorage.readSourceAndHistory(db, scope(c), validateOwner, (source, state) => {
       verifiedQueue(source.queue);
+      if (d.enemyCatalog !== undefined)
+        validateEnemyLibrarySource(source, state, d.enemyCatalog, d.baseline);
       return includeHistory &&
         source.viewOrNull !== null &&
-        (campaignPanelForm(source.viewOrNull.formId) || npcForm(source.viewOrNull.formId))
+        (campaignPanelForm(source.viewOrNull.formId) ||
+          npcForm(source.viewOrNull.formId) ||
+          isEnemyLibraryForm(source.viewOrNull.formId))
         ? admissionService().rules
         : null;
     });
@@ -4190,6 +4223,7 @@ export function createGmNetworkRuntime(d: {
     return (source: GmRequestReviewSource): void => {
       exact(scope(c), bound);
       exact(source.scope, bound);
+      exact(verifiedSource(c), source);
       if (source.context.masterProfileId !== source.privateOwner.masterProfileId) unavailable();
       // This runs both before and after the tentative SQL write. Encoding failure rolls the transaction back.
       const view = source.viewOrNull;
@@ -4386,8 +4420,13 @@ export function createGmNetworkRuntime(d: {
     };
   }
   const project = async (c: CampaignConnection): Promise<GmPresentation> => {
-    if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
     const { source, historyOrNull } = sourceForPresentation(c);
+    if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
+    if (source.viewOrNull !== null && isEnemyLibraryForm(source.viewOrNull.formId))
+      return withLifecycle(c, enemyApplication(c).project(), {
+        source,
+        history: historyOrNull ?? unavailable(),
+      });
     if (source.viewOrNull !== null && npcForm(source.viewOrNull.formId))
       return withLifecycle(c, npcPresentation(c, historyOrNull ?? undefined), {
         source,
@@ -4603,6 +4642,11 @@ export function createGmNetworkRuntime(d: {
   const publication = (c: CampaignConnection): GmPresentation | Promise<GmPresentation> => {
     const { source, facts, historyOrNull } = connectionSource(c);
     if (inAdmission(c)) return withLifecycle(c, admissionPresentation(c));
+    if (source.viewOrNull !== null && isEnemyLibraryForm(source.viewOrNull.formId))
+      return withLifecycle(c, enemyApplication(c).project(), {
+        source,
+        history: historyOrNull ?? unavailable(),
+      });
     if (source.viewOrNull !== null && npcForm(source.viewOrNull.formId))
       return withLifecycle(c, npcPresentation(c, historyOrNull ?? undefined), {
         source,
@@ -4646,18 +4690,21 @@ export function createGmNetworkRuntime(d: {
     const { source, facts, historyOrNull } = connectionSource(c);
     const lobby = source.viewOrNull !== null && campaignPanelForm(source.viewOrNull.formId);
     const npc = source.viewOrNull !== null && npcForm(source.viewOrNull.formId);
-    if (facts === null && !lobby && !npc) return Promise.resolve();
-    const base = npc
-      ? npcPresentation(c, historyOrNull ?? undefined)
-      : lobby
-        ? campaignPanelPresentation(c, source, historyOrNull ?? unavailable())
-        : inAdmission(c)
-          ? admissionPresentation(c)
-          : queuePresentation(c, source, facts ?? undefined);
+    const enemy = source.viewOrNull !== null && isEnemyLibraryForm(source.viewOrNull.formId);
+    if (facts === null && !lobby && !npc && !enemy) return Promise.resolve();
+    const base = enemy
+      ? enemyApplication(c).project()
+      : npc
+        ? npcPresentation(c, historyOrNull ?? undefined)
+        : lobby
+          ? campaignPanelPresentation(c, source, historyOrNull ?? unavailable())
+          : inAdmission(c)
+            ? admissionPresentation(c)
+            : queuePresentation(c, source, facts ?? undefined);
     const p = withLifecycle(
       c,
       base,
-      lobby || npc
+      lobby || npc || enemy
         ? {
             source,
             history: historyOrNull ?? unavailable(),
@@ -4998,6 +5045,51 @@ export function createGmNetworkRuntime(d: {
     }
     return true;
   }
+  async function handleEnemy(
+    m: LocalNetworkClientMessage,
+    c: CampaignConnection,
+    send: (m: LocalNetworkHostMessage) => void,
+  ): Promise<boolean> {
+    if (!enemyRelevant(m)) return false;
+    let committed = false;
+    try {
+      const own = scope(c),
+        app = enemyApplication(c);
+      watchers.set(c, { send, lastHash: watchers.get(c)?.lastHash ?? '' });
+      if (m.messageType === 'navigation.form-action') {
+        app.navigation(m);
+        committed = true;
+        await sendNavigationSnapshot(c, own, send, m.navigationRequestId);
+      } else if (m.messageType === 'network.enemy-selection.replace') {
+        app.select(m);
+        committed = true;
+        send({
+          messageType: 'network.enemy-selection.result',
+          protocolVersion: 3,
+          operationId: m.operationId,
+        });
+        await sendNavigationSnapshot(c, own, send, m.operationId);
+      } else unavailable();
+    } catch (error) {
+      if (committed) throw error;
+      if (m.messageType === 'navigation.form-action')
+        send({
+          messageType: 'navigation.form-action.refusal',
+          protocolVersion: 2,
+          navigationRequestId: m.navigationRequestId,
+          presentationUnchanged: true,
+          revisions: { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 },
+          refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        });
+      else if (m.messageType === 'network.enemy-selection.replace')
+        send({
+          messageType: 'network.enemy-selection.refusal',
+          protocolVersion: 3,
+          operationId: m.operationId,
+        });
+    }
+    return true;
+  }
   async function handleNpc(
     m: LocalNetworkClientMessage,
     c: CampaignConnection,
@@ -5157,6 +5249,7 @@ export function createGmNetworkRuntime(d: {
     c: CampaignConnection,
     send: (m: LocalNetworkHostMessage) => void,
   ): Promise<boolean> {
+    if (await handleEnemy(m, c, send)) return true;
     if (await handleNpc(m, c, send)) return true;
     if (await handleAdmission(m, c, send)) return true;
     if (
@@ -5653,6 +5746,7 @@ export function createGmNetworkRuntime(d: {
       send: (m: LocalNetworkHostMessage) => void,
     ) {
       const relevant =
+        enemyRelevant(m) ||
         npcRelevant(m) ||
         (m.messageType === 'command.request' &&
           m.commandKind === 'workflow-command' &&

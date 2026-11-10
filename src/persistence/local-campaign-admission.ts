@@ -1339,7 +1339,7 @@ export function assertLocalAdmissionTabMutable(db: Database.Database, tab: Local
   const version = (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
     'version'
   ];
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 19)
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 20)
     return s.fail();
   if (version < 12) return;
   const entry = tabs.entryAnchor(db, tab.ownerDeviceId, tab.entryCommandId) ?? s.fail();

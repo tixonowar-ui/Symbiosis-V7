@@ -1,3 +1,7 @@
+import {
+  enemyLibrarySelectionRequestValue,
+  enemyLibrarySelectionResponseValue,
+} from './enemy-library.js';
 import { npcTechnicalRequestValue, npcTechnicalResponseValue } from './npc-command.js';
 import { npcArtReadMessageValue, NpcProjectionDecodeError } from './npc-presentation-codec.js';
 import type { NpcArtReadRequest, NpcArtReadResult, NpcArtReadRefusal } from './npc-presentation.js';
@@ -469,6 +473,8 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
   // A malformed NPC header must reach the closed reader before generic JSON diagnostics.
   if (isNpcTechnicalInput(value)) return npcTechnicalRequestValue(value);
   const object = base(value);
+  if (object['messageType'] === 'network.enemy-selection.replace')
+    return enemyLibrarySelectionRequestValue(value);
   if (object['messageType'] === 'network.peer-control') return campaignPeerControlValue(value);
   if (
     object['messageType'] === 'network.admission-review.edit' ||
@@ -505,6 +511,11 @@ const hostValue = (value: unknown, vocabulary: WireV3Vocabulary): HostToClientV3
   if (isNpcArt(value, true)) return npcArtWireValue(value, true);
   if (isNpcTechnicalResponseInput(value)) return npcTechnicalResponseValue(value);
   const object = base(value);
+  if (
+    object['messageType'] === 'network.enemy-selection.result' ||
+    object['messageType'] === 'network.enemy-selection.refusal'
+  )
+    return enemyLibrarySelectionResponseValue(value);
   if (object['messageType'] === 'network.peer-state') return campaignPeerStateValue(value);
   if (
     object['messageType'] === 'network.admission-draft.result' ||

@@ -1,3 +1,4 @@
+import { ENEMY_LIBRARY_FORMS } from '@shared/enemy-library.js';
 import { NPC_CONTROL_FORM_IDS } from '@shared/npc-presentation.js';
 import { CAMPAIGN_PEER_FORMS } from '@shared/campaign-lifecycle.js';
 import { CAMPAIGN_LIFECYCLE_FORMS } from '@shared/campaign-lifecycle.js';
@@ -18,6 +19,7 @@ import {
 } from '@shared/network-application.js';
 
 export const IMPLEMENTED_FORM_IDS = [
+  ...ENEMY_LIBRARY_FORMS,
   ...NPC_CONTROL_FORM_IDS,
   ...CAMPAIGN_PEER_FORMS,
   ...CAMPAIGN_LOBBY_GM_FORMS,
@@ -32,6 +34,7 @@ export const IMPLEMENTED_FORM_IDS = [
   'NET-017',
 ] as const;
 export type ImplementedFormId =
+  | (typeof ENEMY_LIBRARY_FORMS)[number]
   | (typeof NPC_CONTROL_FORM_IDS)[number]
   | (typeof CAMPAIGN_PEER_FORMS)[number]
   | (typeof CAMPAIGN_LOBBY_GM_FORMS)[number]
@@ -45,6 +48,7 @@ export type ImplementedFormId =
   | NetworkApplicationFormId
   | 'NET-017';
 export type SupportedPresentationFormId =
+  | (typeof ENEMY_LIBRARY_FORMS)[number]
   | (typeof NPC_CONTROL_FORM_IDS)[number]
   | (typeof CAMPAIGN_PEER_FORMS)[number]
   | (typeof CAMPAIGN_LOBBY_GM_FORMS)[number]
@@ -105,6 +109,7 @@ export type SupportedPresentationFormId =
 
 const IMPLEMENTED = new Set<string>(IMPLEMENTED_FORM_IDS);
 const SUPPORTED = new Set<FormId>([
+  ...ENEMY_LIBRARY_FORMS,
   ...NPC_CONTROL_FORM_IDS,
   ...CAMPAIGN_LOBBY_GM_FORMS,
   ...CAMPAIGN_LIFECYCLE_FORMS,

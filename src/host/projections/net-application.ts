@@ -1126,6 +1126,7 @@ const routes: Readonly<Record<CampaignLobbyGmForm, string>> = {
 export function projectGmCampaignLobby(input: {
   readonly currentCampaign: CurrentPausedCampaignHeader;
   readonly npcFields?: NpcLobbyProjectionFields;
+  readonly enemyLibraryAvailable?: boolean;
   readonly view: GmRequestReviewView;
   readonly history: AdmissionHistory;
   readonly origin: CampaignCreationOrigin;
@@ -1167,6 +1168,7 @@ export function projectGmCampaignLobby(input: {
   const art = origin.payload.metadata.art;
   const payload: CampaignLobbyGmProjection = {
     ...(input.npcFields ?? {}),
+    ...(input.enemyLibraryAvailable === true ? { enemyLibraryAvailable: true as const } : {}),
     contextId: view.gmLocalContextId,
     campaignId: view.campaignId,
     stateRevision: view.stateRevision,

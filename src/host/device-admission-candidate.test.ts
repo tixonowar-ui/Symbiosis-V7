@@ -3478,6 +3478,8 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
     });
   });
   describe('three real FINALs from one owning installation', () => {
+    const OWNER_RETURN_ROLLBACK_CASE =
+      'rolls back extra closures and both journals if the final owner guard fails';
     const sources: Source[] = [];
     let filename: string,
       f: ReturnType<typeof playerDecisionFixture>,
@@ -3516,8 +3518,23 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
       );
       admissionDatabases.push(ownerPreparation.db);
     });
-    beforeEach(() => {
+    let ownerSubmitCalls = 0;
+    const submitOwner = () => {
+      ownerSubmitCalls += 1;
       owner = ownerPreparation.submit();
+    };
+    beforeEach(({ task }) => {
+      ownerSubmitCalls = 0;
+      // Other cases retain their actual submit work in the original 30s hook.
+      if (task.name !== OWNER_RETURN_ROLLBACK_CASE) submitOwner();
+    });
+    beforeEach(({ task }) => {
+      // ADR 0088: only this named case gets 60s after CI's 30s submit-hook timeout.
+      if (task.name === OWNER_RETURN_ROLLBACK_CASE) submitOwner();
+    }, 60_000);
+    beforeEach(() => {
+      // Neither a stale prior owner nor duplicate submission may reach publication/preparation.
+      expect(ownerSubmitCalls).toBe(1);
     });
     beforeEach(() => {
       const gm = f.published.gmDecisionOrNull!,
@@ -3642,7 +3659,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
           expect(reopened.serialize().equals(before)).toBe(true);
         });
       });
-      it('rolls back extra closures and both journals if the final owner guard fails', () => {
+      it(OWNER_RETURN_ROLLBACK_CASE, () => {
         const before = owner.db.serialize(),
           phases: boolean[] = [];
         expect(() =>

@@ -59,7 +59,14 @@ function schema(db: Database.Database): boolean {
         return s.fail();
     return false;
   }
-  if (version !== 15 && version !== 16 && version !== 17 && version !== 18 && version !== 19)
+  if (
+    version !== 15 &&
+    version !== 16 &&
+    version !== 17 &&
+    version !== 18 &&
+    version !== 19 &&
+    version !== 20
+  )
     return s.fail();
   const row = db
     .prepare('SELECT name,checksum_sha256 FROM schema_migration WHERE version=15')

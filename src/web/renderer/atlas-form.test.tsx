@@ -23,6 +23,8 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Exact literals are intentional: applied traceability requires every implemented form in a test. */
 const TEST_IMPLEMENTED_FORM_IDS = [
+  'ENM-001',
+  'ENM-003',
   'NPC-001',
   'NPC-002',
   'NPC-003',
@@ -266,7 +268,8 @@ describe('atlas implemented-form renderer', () => {
 
     // #174 adds CMP-008/016 and NET-008/009/010 screens, plus CMP-014/015/NET-023 dialogs.
     // #187 adds the eleven source-defined NPC screens; no dialog is added.
-    expect(screens).toBe(85);
+    // #255 adds the two read-only ENM catalog/card screens; no dialog is added.
+    expect(screens).toBe(87);
     expect(dialogs).toBe(10);
   });
 

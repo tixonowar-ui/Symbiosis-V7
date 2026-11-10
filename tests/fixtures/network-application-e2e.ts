@@ -233,6 +233,11 @@ export async function createNetworkBrowserProcess(finalCount: number) {
   }
 }
 
+/** Preserve caught unknown values; wrapping would replace the original failure identity. */
+function rethrowScenarioError(error: unknown): never {
+  throw error;
+}
+
 export async function disposeNetworkResources(
   resources: readonly (() => Promise<unknown>)[],
   originalError?: unknown,
@@ -250,6 +255,7 @@ export async function disposeNetworkResources(
       originalError === undefined ? failures : [originalError, ...failures],
       'Network test resource cleanup failed',
     );
+  if (originalError !== undefined) rethrowScenarioError(originalError);
 }
 
 export async function createNetworkBrowserScenario(browser: Browser, finalCount: number) {

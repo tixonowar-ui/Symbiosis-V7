@@ -1,3 +1,4 @@
+import { loadEnemySourceCatalog } from './enemy-catalog.js';
 import { loadNpcAuthoringSourceCatalog } from './npc-catalog.js';
 import { loadNpcArtCatalog } from './npc-art.js';
 import { createNpcHostSupport } from './npc-application.js';
@@ -6910,6 +6911,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     creationSkillCatalog,
   );
 
+  const enemyCatalog = loadEnemySourceCatalog(projectRoot, localCharacterExportBaseline);
   const [npcCatalog, npcArt] = await Promise.all([
     loadNpcAuthoringSourceCatalog(projectRoot),
     loadNpcArtCatalog(projectRoot),
@@ -7001,6 +7003,8 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     } // The normal handler produces the existing closed authority refusal.
   });
   const campaignCreation = createCampaignCreationRuntime({
+    defaultSentientCatalogVersion: enemyCatalog.catalogVersion,
+    assertEnemyCatalogCurrent: enemyCatalog.assertCurrent,
     gmScheduler,
     database: config.database,
     projectRoot,
@@ -7016,6 +7020,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     },
   });
   const gmNetwork = createGmNetworkRuntime({
+    enemyCatalog,
     npc,
     gmScheduler,
     config: networkConfig,

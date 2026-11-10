@@ -1,3 +1,8 @@
+import { openLegacySchema19Database } from '../../tests/fixtures/legacy-schema-19.js';
+import { applyMigrations } from './migrations/index.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readNpcCalendarContextInTransaction } from './campaign-admission-decision.js';
 import { npcAttemptReadContext } from './npc-child-identities.js';
 import {
@@ -114,9 +119,13 @@ function navValue(value: unknown): FormActionIntentV2Message {
 }
 
 /** Actual campaign birth and GM queue; no opaque replacement source/mirror tables. */
-function fixture(restored?: { bytes: Buffer; scope: NpcScope; profileId: string }) {
+function fixture(
+  restored?: { bytes: Buffer; scope: NpcScope; profileId: string },
+  initialDatabase?: Database.Database,
+) {
   const db =
-    restored === undefined ? openPersistenceDatabase(':memory:') : new Database(restored.bytes);
+    initialDatabase ??
+    (restored === undefined ? openPersistenceDatabase(':memory:') : new Database(restored.bytes));
   databases.push(db);
   if (restored !== undefined) configurePersistenceDatabase(db);
   const ownerDeviceId = bootstrapDeviceIdentity(db),
@@ -455,6 +464,69 @@ function fixture(restored?: { bytes: Buffer; scope: NpcScope; profileId: string 
 }
 
 describe('technical NPC attempt and actual GM queue transaction integration', () => {
+  it('upgrades a populated legacy-v1 schema19 campaign, NPC/QUEUE history and exact receipts to20 without rewriting old bytes, then reopens the file', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'enemy-library-migration-'));
+    try {
+      const path = join(directory, 'legacy.sqlite'),
+        f = fixture(undefined, openLegacySchema19Database(path));
+      expect(f.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+        version: 19,
+      });
+      const created = f.create(),
+        input = readNpcEditorDraft(catalog, created.attempt.values).identity;
+      const edit = f.replace(
+        created.attempt,
+        json({ ...input, name: { kind: 'ENTERED', value: 'Legacy19 NPC' } }),
+      );
+      const edited = f.save(edit.boundary, edit.attempt);
+      const tables = (
+        f.db
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'schema_migration' ORDER BY name",
+          )
+          .all() as { name: string }[]
+      ).map((x) => x.name);
+      const rows = (db: Database.Database) =>
+        Object.fromEntries(
+          tables.map((table) => [
+            table,
+            db.prepare('SELECT * FROM ' + table + ' ORDER BY rowid').all(),
+          ]),
+        );
+      const before = rows(f.db),
+        registry = f.db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
+      const source = readNpcRecoveryClosure(f.db, f.scope.campaignId, f.readers),
+        viewBefore = f.view();
+      expect(applyMigrations(f.db)).toBe(20);
+      expect(rows(f.db)).toEqual(before);
+      expect(
+        f.db.prepare('SELECT * FROM schema_migration WHERE version<=19 ORDER BY version').all(),
+      ).toEqual(registry);
+      expect(f.db.pragma('foreign_key_check')).toEqual([]);
+      const bytes = f.db.serialize();
+      f.db.close();
+      const reopened = fixture(
+        { bytes, scope: f.scope, profileId: f.profileId },
+        openPersistenceDatabase(path),
+      );
+      expect(readNpcRecoveryClosure(reopened.db, f.scope.campaignId, reopened.readers)).toEqual(
+        source,
+      );
+      expect(reopened.view()).toEqual(viewBefore);
+      expect(rows(reopened.db)).toEqual(before);
+      const current = reopened.db.serialize();
+      expect(reopened.save(edit.boundary, edit.attempt)).toEqual({
+        operation: edited.operation,
+        replayed: true,
+      });
+      expect(reopened.db.serialize().equals(current)).toBe(true);
+      expect(reopened.db.pragma('foreign_key_check')).toEqual([]);
+      reopened.db.close();
+    } finally {
+      for (const db of databases) if (db.open) db.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it('passes detached plain technical values to the actual closed stage reader', () => {
     const name = { kind: 'ENTERED', value: 'Before caller mutation' };
     const values = { ...createEmptyNpcEditorDraft().identity, name };

@@ -1,4 +1,97 @@
-# Передача контекста — 2026-11-09
+# Передача контекста — 2026-11-10
+
+## Runtime #255 — авторский кандидат
+
+Текущее author browser evidence — внешние cleanup-affected-browser01 и его
+HTML audit: 12/12 case в четырёх affected spec, точный roster/ID parity,
+финальные source assertion locations каждого body выполнены; 91 промежуточная
+ошибка внутри успешных poll-групп, неклассифицированных ошибок ноль.
+Это scoped dirty прогон, не clean exact-SHA gate. Прежние ENM CLI-PASS без
+подтверждённого HTML tail не доказывают поздние assertions и отозваны ниже.
+
+Изолированный checkout issue-255, ветка codex/255-enemy-catalog от
+main 1c3c27a073fcbcaea57edf538e30664528715a9a. Source #244 принят:
+PR #281, main tree 0d38d4d5b3e5a3bf4a3dd89b4729aec358ccb900.
+Повторная source-поставка не нужна; artifacts/CHECKSUMS и generated/spec
+этим runtime не меняются. ADR 0090 фиксирует технические birth-v2/pin,
+legacy-v1 exact proof и общий GM cursor/source observer.
+
+Реальный CMP-007 → GM-001::CTA005 → ENM-001 показывает SENTIENT_ENEMIES
+(44 + пустые campaign-owned) и MONSTERS (16 видов/17 статблоков + пустые
+campaign-owned). Выбор принадлежит вкладке и сохраняется в прежнем QUEUE.
+Обе CTA002/004 открывают ENM-003 только для 44 SYSTEM_DEFAULT_SENTIENT;
+canonical CBT/SPC/ART-CB остаются отдельными настоящими строками MONSTERS.
+Back003→001→GM001, reconnect и process/SQLite restart сохраняют контекст,
+pin/selected identity и исходный системный PNG. Русская карточка содержит
+игровые факты, без raw clone/provenance/initial-runtime machinery.
+
+Новые CREATE имеют обязательный campaign.defaultSentientCatalogVersion
+в закрытой schemaVersion2 и bound result; source CMP-005 проверяется браузером.
+Legacy-v1 не дополняется: точный исходный baseline удостоверяет его каталог.
+Все consumers immutable birth используют исходную квитанцию. Миграция19→20
+сохраняет старые таблицы/JSON/hash/receipts. Общие GM readers и writer guards
+проверяют каждый исторический selection через immutable observer; NAV REPLAY
+не требует, чтобы нынешний выбор совпадал с историческим. PLAYER authority
+отказывает до публикации каталога. Placement поля отсутствуют в DTO/DOM/a11y.
+
+Внешний evidence-255 сохраняет started/result/log каждого авторского targeted
+прогона, включая отказы и dirty-state hashes. Они не являются проверкой HEAD.
+До передачи root выполняются target source/host/codec/migration/privacy checks,
+production build и scoped ENM E2E. Полный clean npm ci → import → verify →
+import:verify → test:e2e окончательного committed SHA и CI выполняет root
+после независимого ревью. Здесь полный gate/merge не объявляется пройденным.
+#255 не реализует ENM-002/004 instantiation, authoring/versions, archive/delete,
+генератор, группы, карту или бой. Следующая порученная задача — #256 после
+merge/acceptance #255; #188/#113 остаются открытыми до общей приёмки.
+Исторические снимки ниже относятся к прежним кандидатам.
+
+Первый clean verify fdc8378 остановлен root после двух NPC failures с reported
+62603/61631 мс при case budget 60000; detailed exceptions до остановки не
+напечатаны. Оба неизменённых isolated case прошли. Валидированный внешний
+профиль обнаружил 201 catalog read/3,49 ГБ/9,275 с read/hash и менее 0,1 с
+clone/freeze. Scope freshness сужен до current ENM/selection или исторического
+ENEMY_SELECTION; owner/baseline/pin, every-history resolution и immutable fence
+сохраняются. Бюджеты/worker/retry/config не менялись. Исходные failed/interrupted
+и profiling evidence сохранены в evidence-255 и clean-evidence255. Новая
+приёмка требует нового committed SHA, повторного root review и clean cycle.
+
+Clean verify следующего 5f3cb5 сообщил два web failures; root сохранил evidence
+и прервал известный red набор. Неизменённый atlas-form suite воспроизвёл оба:
+независимый точный TEST roster пропускал ENM-001/003 в equality и тексте boundary.
+Добавлены два настоящих screen literals и точное число screens 87 вместо 85;
+equality и NET-028 boundary assertions сохранены, production не менялся.
+Этот существующий renderer suite был пропущен ранним targeted выбором; новая
+проверка охватывает весь web project. Прежние failed/interrupted логи сохранены;
+новый committed SHA требует root re-review и полного clean exact-SHA цикла.
+
+Артефактный аудит следующего 639a359 отклонил E2E CLI «46 PASS»: HTML показал
+ошибку canonical.check и затем только Attach/AfterHooks, без tail assertions.
+disposeNetworkResources терял originalError при успешной очистке. Все прежние
+author ENM browser CLI-PASS считаются номинальными и не доказывают reconnect,
+privacy/restart или финальные source assertions без подтверждённого HTML tail.
+Helper теперь повторно выбрасывает исходную ошибку после всех cleanup либо aggregate
+с ней и cleanup failures; отдельные collected unit cases проверяют порядок и
+identity. Canonical radio использует click и прежнее host-confirmed toBeChecked.
+Остальные callers с явным rethrow не переписаны. Новый affected-target browser
+обнаружил следующий настоящий отказ resume ENM: creation projector пропускал
+ENM-001/003 в прежнем QUEUE delegation predicate. Добавлен закрытый guard этих
+форм; restart tests проходят через настоящий creation.project и owning источник,
+сохраняя selection/pin/revisions и bytes кампании. Этот unit использует fixture
+owner validator и serialize/reopen; полный networkApplication/file-host он не
+заменяет. Физический host restart проверяется отдельно настоящим browser.
+Новых shell/routes нет. Browser audit требует HTML roster/ID parity,
+tail assertions каждого case и ноль
+неклассифицированных error steps; старые raw logs/HTML сохранены как rejected.
+
+Полный clean e407ff5 принят локально, но его CI42774082585 завершился двумя
+таймаутами BODY30/HOOK30, а не job deadline. Точные reported case durations
+36,632/46,144 с не являются exclusive фазами. Unchanged local воспроизводители
+прошли; отдельный owner.submit измерен в 2,8053409 с, причина CI-выброса не
+доказана. [Измерения и scope](ci-budget-255.md) фиксируют только weapon case BODY60s
+и submit60s одного именованного owner case; все остальные actual submit hooks
+остаются30s, порядок/изоляция/проверки сохранены и защищены submit-count1.
+Defaults/workers/retries/CI/production не меняются; новый SHA требует fresh
+root clean r5 и полного CI, прежний failed CI сохраняется без rerun.
 
 ## Source #244 — кандидат Atlas 1.20/B15
 

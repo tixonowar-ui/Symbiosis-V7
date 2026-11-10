@@ -1,4 +1,5 @@
 import { NPC_CONTROL_FORM_IDS } from '@shared/npc-presentation.js';
+import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
 import type { CampaignGmScheduler } from './campaign-network-executor.js';
 import { readOwnedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
@@ -95,6 +96,8 @@ export interface CampaignConnection {
   readonly trusted: () => boolean;
 }
 interface Dependencies {
+  readonly defaultSentientCatalogVersion?: string;
+  readonly assertEnemyCatalogCurrent?: () => void;
   readonly gmScheduler?: CampaignGmScheduler;
   readonly database: Database.Database;
   readonly projectRoot: string;
@@ -368,6 +371,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       cursor.kind === 'ADMISSION' ||
       (cursor.kind === 'QUEUE' &&
         (cursor.formId === 'NET-017' ||
+          isEnemyLibraryForm(cursor.formId) ||
           (NPC_CONTROL_FORM_IDS as readonly string[]).includes(cursor.formId) ||
           isCampaignLobbyGmForm(cursor.formId) ||
           isCampaignLifecycleForm(cursor.formId)))
@@ -495,6 +499,14 @@ export function createCampaignCreationRuntime(d: Dependencies) {
             artAssetChecksumOrNull: artChecksum(draft),
           },
           baselineVersion: d.baseline.baselineVersion,
+          ...(d.defaultSentientCatalogVersion === undefined
+            ? {}
+            : {
+                enemyCatalogPin: {
+                  schemaVersion: 2,
+                  defaultSentientCatalogVersion: d.defaultSentientCatalogVersion,
+                },
+              }),
           catalogCompatibility: {
             status: compatible ? 'PASS' : 'FAIL',
             registryVersion: d.baseline.registryVersion,
@@ -906,6 +918,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
         !d.bind.validate(request.payload.preflightLeaseId, draft.campaignDraftId, draft.values.host)
       )
         unavailable();
+      d.assertEnemyCatalogCurrent?.();
       const campaignId = randomUUID(),
         receiptId = randomUUID();
       const result = commitCampaignCreation(
@@ -921,6 +934,9 @@ export function createCampaignCreationRuntime(d: Dependencies) {
             campaignId,
           ),
           baselineVersion: d.baseline.baselineVersion,
+          ...(d.defaultSentientCatalogVersion === undefined
+            ? {}
+            : { defaultSentientCatalogVersion: d.defaultSentientCatalogVersion }),
         },
         (current, owner, phase) => {
           guard(c)(current, owner, phase);

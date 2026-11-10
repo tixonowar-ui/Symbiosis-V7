@@ -992,7 +992,52 @@ describe('campaign creation receipt and UI', () => {
       revisions: ZERO,
       result,
     };
-    expect(decodeCampaignCreateReceipt(receipt, request, source).ok).toBe(true);
+    const legacyBytes = JSON.stringify(receipt),
+      decodedLegacy = decodeCampaignCreateReceipt(receipt, request, source);
+    expect(decodedLegacy.ok).toBe(true);
+    if (decodedLegacy.ok) expect(JSON.stringify(decodedLegacy.value)).toBe(legacyBytes);
+    const pin = 'SYMBIOSIS_SENTIENT_DEFAULTS_V1.2';
+    const pinnedSource = {
+      ...source,
+      enemyCatalogPin: { schemaVersion: 2, defaultSentientCatalogVersion: pin },
+    };
+    expect(decodeCampaignProjection(pinnedSource, '$.source', 'CMP-005').ok).toBe(true);
+    const pinnedResult = {
+      ...result,
+      campaignBirthSchemaVersion: 2,
+      defaultSentientCatalogVersion: pin,
+    };
+    expect(
+      decodeCampaignCreateReceipt({ ...receipt, result: pinnedResult }, request, pinnedSource).ok,
+    ).toBe(true);
+    const { defaultSentientCatalogVersion: _pin, ...missingPin } = pinnedResult;
+    const { campaignBirthSchemaVersion: _version, ...missingVersion } = pinnedResult;
+    for (const changed of [
+      result,
+      missingPin,
+      missingVersion,
+      { ...pinnedResult, campaignBirthSchemaVersion: 3 },
+      { ...pinnedResult, defaultSentientCatalogVersion: 'foreign' },
+    ])
+      expect(
+        decodeCampaignCreateReceipt({ ...receipt, result: changed }, request, pinnedSource).ok,
+      ).toBe(false);
+    expect(
+      decodeCampaignCreateReceipt({ ...receipt, result: pinnedResult }, request, source).ok,
+    ).toBe(false);
+    expect(
+      decodeCampaignCreateReceipt({ ...receipt, result: pinnedResult }, request, {
+        ...pinnedSource,
+        enemyCatalogPin: { schemaVersion: 2, defaultSentientCatalogVersion: 'foreign' },
+      }).ok,
+    ).toBe(false);
+    expect(
+      decodeCampaignCreateReceipt({ ...receipt, result: pinnedResult }, request, {
+        ...pinnedSource,
+        enemyCatalogPin: { schemaVersion: 3, defaultSentientCatalogVersion: pin },
+      }).ok,
+    ).toBe(false);
+    expect(JSON.stringify(receipt)).toBe(legacyBytes);
     expect(
       decodeCampaignCreateReceipt(
         { ...receipt, result: { ...result, hostPort: 1234 } },

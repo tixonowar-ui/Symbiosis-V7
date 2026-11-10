@@ -1,3 +1,4 @@
+import { migration0020 } from './migrations/0020-enemy-library.js';
 import type { DiseaseId } from '@generated/types/effects.js';
 import type Database from 'better-sqlite3';
 import { npcLifeStateRollFactValue, type NpcLifeStateRollFact } from './npc-life-facts.js';
@@ -141,7 +142,14 @@ function schema(db: Database.Database): boolean {
         return s.fail();
     return false;
   }
-  if (version !== 15 && version !== 16 && version !== 17 && version !== 18 && version !== 19)
+  if (
+    version !== 15 &&
+    version !== 16 &&
+    version !== 17 &&
+    version !== 18 &&
+    version !== 19 &&
+    version !== 20
+  )
     return s.fail();
   const expectedMigration =
     version === 15
@@ -152,7 +160,9 @@ function schema(db: Database.Database): boolean {
           ? migration0017
           : version === 18
             ? migration0018
-            : migration0019;
+            : version === 19
+              ? migration0019
+              : migration0020;
   const row = db
     .prepare(
       'SELECT version,name,checksum_sha256 FROM schema_migration ORDER BY version DESC LIMIT 1',

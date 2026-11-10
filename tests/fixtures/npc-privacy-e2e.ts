@@ -29,7 +29,8 @@ export async function createNpcPlayerPrivacyProbe(browser: Browser, baseURL: str
         const raw = String(message),
           value = JSON.parse(raw) as JsonObject;
         frames.push(raw);
-        const correlation = value['navigationRequestId'] ?? value['requestId'];
+        const correlation =
+          value['navigationRequestId'] ?? value['requestId'] ?? value['operationId'];
         const replies = typeof correlation === 'string' ? probeReplies.get(correlation) : undefined;
         if (replies !== undefined) {
           // These two hostile intents originate in the test, not the renderer's pending queue.
@@ -95,6 +96,54 @@ export async function createNpcPlayerPrivacyProbe(browser: Browser, baseURL: str
           expect(replies[0]!.raw).toBe(JSON.stringify(replies[0]!.value));
         }
         expect(errors).toEqual([]);
+      },
+      async refuseEnemyAccess(selection: JsonObject) {
+        const navigation: JsonObject = {
+          messageType: 'navigation.form-action',
+          protocolVersion: 2,
+          navigationRequestId: randomUUID(),
+          sourceFormId: 'GM-001',
+          actionKey: 'GM-001::CTA::005',
+          expectedProjectionRevision: (playerSnapshot()['revisions'] as JsonObject)[
+            'projectionRevision'
+          ]!,
+        };
+        const request: JsonObject = { ...selection, operationId: randomUUID() };
+        for (const [message, id, expected] of [
+          [
+            navigation,
+            navigation['navigationRequestId'] as string,
+            {
+              messageType: 'navigation.form-action.refusal',
+              protocolVersion: 2,
+              navigationRequestId: navigation['navigationRequestId']!,
+              revisions: { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 },
+              presentationUnchanged: true,
+              refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+            },
+          ],
+          [
+            request,
+            request['operationId'] as string,
+            {
+              messageType: 'network.enemy-selection.refusal',
+              protocolVersion: 3,
+              operationId: request['operationId']!,
+            },
+          ],
+        ] as const) {
+          const replies: { raw: string; value: JsonObject }[] = [];
+          probeReplies.set(id, replies);
+          expectedReplies.set(id, expected);
+          if (channel.send === undefined) throw Error('Player channel absent');
+          channel.send(message);
+          await expect.poll(() => replies.map((x) => x.value)).toEqual([expected]);
+        }
+        await expect(
+          page.locator(
+            '[data-enemy-library], [data-enemy-system-card], [data-atlas-form-id^="ENM-"]',
+          ),
+        ).toHaveCount(0);
       },
       async refuseNpcAccess(artRequest: JsonObject) {
         expect(artRequest).toMatchObject({

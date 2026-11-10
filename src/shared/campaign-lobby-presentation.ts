@@ -60,6 +60,7 @@ export interface CampaignPanelGroup {
 }
 export interface CampaignLobbyGmProjection
   extends RevisionVector, Partial<NpcLobbyProjectionFields> {
+  readonly enemyLibraryAvailable?: true;
   readonly contextId: string;
   readonly campaignId: string;
   readonly panelVariant: 'PRE_START' | 'STARTED_PEACE';
@@ -137,9 +138,15 @@ export function campaignLobbyGmProjectionValue(value: unknown): CampaignLobbyGmP
     r.invalid('$.campaignLobby', 'both NPC fields or exact historical absence', null);
   const row = r.exact(
     data,
-    gmKeys + (hasLock ? ' initialTimeLockOrNull npcInitialTimeReturnContextOrNull' : ''),
+    gmKeys +
+      (typeof data === 'object' && data !== null && Object.hasOwn(data, 'enemyLibraryAvailable')
+        ? ' enemyLibraryAvailable'
+        : '') +
+      (hasLock ? ' initialTimeLockOrNull npcInitialTimeReturnContextOrNull' : ''),
     '$.campaignLobby',
   );
+  if (Object.hasOwn(row, 'enemyLibraryAvailable'))
+    w.literal(row['enemyLibraryAvailable'], true, '$.enemyLibraryAvailable');
   common(row);
   const variant = r.oneOf(
     row['panelVariant'],
@@ -532,6 +539,7 @@ export function campaignLobbyGmActions(
       ...(supported.includes('UI-CMD-NPC-COMMIT-V1') && supported.includes('UI-CMD-NPC-NEW-VERSION')
         ? ['GM-001::CTA::004' as const]
         : []),
+      ...(p.enemyLibraryAvailable === true ? ['GM-001::CTA::005' as const] : []),
       'GM-001::CTA::006',
       'GM-001::CTA::013',
     ];

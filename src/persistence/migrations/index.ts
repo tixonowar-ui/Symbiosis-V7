@@ -20,6 +20,7 @@ import { migration0015 } from './0015-persistent-npc.js';
 import { migration0016 } from './0016-npc-wound-identities.js';
 import { migration0017 } from './0017-npc-linked-sets.js';
 import { migration0018 } from './0018-npc-custom-profile-identities.js';
+import { migration0020 } from './0020-enemy-library.js';
 import { migration0019 } from './0019-npc-poison-coating-identities.js';
 
 interface SchemaObjectRow {
@@ -55,6 +56,7 @@ const MIGRATIONS: readonly Migration[] = [
   migration0017,
   migration0018,
   migration0019,
+  migration0020,
 ];
 
 const CREATE_MIGRATION_REGISTRY_SQL = `CREATE TABLE schema_migration (

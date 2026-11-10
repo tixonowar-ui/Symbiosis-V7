@@ -16,7 +16,11 @@ export async function confirmNpcInput(page: Page) {
 }
 
 /** Creates the campaign through production controls, with no PC, admission or Start. */
-export async function enterNpcLibrary(page: Page, baseURL: string) {
+export async function enterNpcLibrary(
+  page: Page,
+  baseURL: string,
+  target: 'NPC' | 'ENEMY' = 'NPC',
+) {
   await page.goto(baseURL);
   await npcAction(page, 'APP-001::CTA::002', 'APP-011');
   await npcAction(page, 'APP-011::CTA::006', 'CMP-001');
@@ -47,6 +51,10 @@ export async function enterNpcLibrary(page: Page, baseURL: string) {
   await npcAction(page, 'CMP-005::CTA::001', 'CMP-006');
   await npcAction(page, 'CMP-006::CTA::001', 'CMP-007');
   await npcAction(page, 'CMP-007::CTA::004', 'GM-001');
+  if (target === 'ENEMY') {
+    await npcAction(page, 'GM-001::CTA::005', 'ENM-001');
+    return;
+  }
   await npcAction(page, 'GM-001::CTA::004', 'NPC-001');
   await expect(
     page.getByText('В кампании пока нет сохранённых НПС.', { exact: true }),

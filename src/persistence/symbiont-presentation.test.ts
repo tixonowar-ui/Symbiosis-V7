@@ -161,7 +161,7 @@ describe('local character symbiont presentation', () => {
     } as const;
     writeLocalCharacterSkillPresentation(database, skillStage);
 
-    expect(applyMigrations(database)).toBe(19);
+    expect(applyMigrations(database)).toBe(20);
     expect(
       database
         .prepare(

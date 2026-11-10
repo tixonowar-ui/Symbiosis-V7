@@ -229,6 +229,10 @@ export interface CampaignBindPreflight extends JsonObject {
     null | 'INVALID_INTERFACE' | 'PORT_UNAVAILABLE' | 'BIND_FAILED' | 'LEASE_EXPIRED';
 }
 export interface Cmp005Projection extends CampaignDraftReadCommon {
+  readonly enemyCatalogPin?: {
+    readonly schemaVersion: 2;
+    readonly defaultSentientCatalogVersion: string;
+  };
   readonly fullDraftSummary: CampaignPublicDraftValues & {
     readonly masterSecretConfigured: boolean;
     readonly artAssetChecksumOrNull: string | null;
@@ -285,6 +289,8 @@ export type CampaignCreateRequest = WorkflowCommandRequestMessage<
   CampaignCreatePayload
 >;
 export interface CampaignCreateResult extends JsonObject {
+  readonly campaignBirthSchemaVersion?: 2;
+  readonly defaultSentientCatalogVersion?: string;
   readonly stage: 'CAMPAIGN_CREATE';
   readonly gmLocalContextId: string;
   readonly campaignDraftId: string;

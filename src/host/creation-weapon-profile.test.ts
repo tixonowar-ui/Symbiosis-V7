@@ -552,6 +552,7 @@ describe('weapon profile durable stage', () => {
     expect(dependencies.allocateWitnessReceiptId).not.toHaveBeenCalled();
     expect(reload(setup).weaponProfileStage).toEqual(accepted.weaponProfileStage);
   });
+  // Only this SQLite recovery case: CI 42774082585 hit BODY30s; see ci-budget-255.md.
   it('recovers safe-return, resume and accepted profiles after closing and reopening SQLite', () => {
     const directory = mkdtempSync(join(tmpdir(), 'weapon-profile-'));
     directories.push(directory);
@@ -580,7 +581,7 @@ describe('weapon profile durable stage', () => {
     } finally {
       reopened.close();
     }
-  });
+  }, 60_000);
   it('rejects a checksum-valid replacement of the pending profile request identity', () => {
     const { setup, current } = setupProfile('corrupt-profile');
     const payload = JSON.parse(current.localCharacter.payloadJson) as {

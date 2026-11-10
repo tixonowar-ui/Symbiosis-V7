@@ -9,6 +9,23 @@
 
 ### Добавлено
 
+- **2026-11-10, runtime #255:** настоящая PAUSED кампания открывает ENM-001
+  из GM-001: две вкладки, 44 системных мыслящих и 16 видов/17 канонических
+  статблоков, отдельный пустой список пользовательских шаблонов кампании.
+  Реальный выбор, обе CTA к ENM-003 и Back сохраняют owning курсор, pin каталога
+  и исходный Runtime Pack арт после reconnect/restart. ENM-003 относится только
+  к 44 системным мыслящим; канонические строки имеют собственные identities.
+  ADR 0090 задаёт закрытую birth-v2 с pin при CREATE, точный legacy-v1 и миграцию
+  19→20 без изменения старых квитанций. GM source observer проверяет каждый
+  исторический выбор; PLAYER не получает каталог или приватные identities.
+  Карточка показывает русские игровые факты без технического payload dump.
+  Полный source file freshness проверяется при текущем ENM/выборе или enemy
+  history; ordinary GM/NPC сохраняет owner/baseline/pin без повторного чтения
+  pack. Every-history resolution, первый вход с rollback и immutable observer
+  сохранены; измеренный исходный read/hash cost — 9,275 с на NPC V1.
+  Artifacts/CHECKSUMS неизменны; placement, создание врагов, RNG, версии и бой
+  не добавлены. Полная приёмка точного SHA и #188/#113 остаются открытыми.
+
 - **2026-11-09, source #244:** Atlas 1.20/B15 и ADR 0089 разрешают read-only
   ENM-003 SYSTEM_LIBRARY в настоящей PAUSED кампании до Start без обязательных
   group/location/marker. Реальные selected template/catalog/art и GM/revision
