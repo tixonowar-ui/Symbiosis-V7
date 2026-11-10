@@ -275,12 +275,13 @@ for (const outcome of [
       await submitOwnFinal(playerPage, gm.baseURL, player.baseURL);
       await masterPage.getByRole('radio').check();
       await action(masterPage, 'NET-017::CTA::007');
+      // LIFECYCLE waits for host persistence and peer confirmation, within a finite local budget.
       await expect(
         playerPage.getByText(
           'Мастер принял заявку к рассмотрению. Персонажи ещё не допущены в кампанию.',
           { exact: true },
         ),
-      ).toBeVisible();
+      ).toBeVisible(outcome === 'LIFECYCLE' ? { timeout: 30_000 } : {});
       await action(masterPage, 'NET-017::CTA::010');
       await expect(form(masterPage, 'NET-018')).toBeVisible();
       if (outcome !== 'REJECT') {
@@ -327,7 +328,7 @@ for (const outcome of [
           .click();
         await expect(
           assignment.getByRole('combobox', { name: 'Персонаж набора', exact: true }),
-        ).toBeEnabled();
+        ).toBeEnabled(outcome === 'LIFECYCLE' ? { timeout: 30_000 } : {});
         await action(masterPage, 'NET-020::CTA::002');
       }
       await action(masterPage, 'NET-018::CTA::004');

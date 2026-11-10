@@ -2,6 +2,21 @@
 
 ## Runtime #256 — авторская реализация, приёмка ожидается
 
+CI 42859375721 прежнего c265e9f отказал на двух 5-секундных LIFECYCLE matchers
+после Vitest 7321/292 и остальных 46 E2E PASS. Оба отказа/traces сохранены;
+точная причина нагрузки CI неизвестна, завершение первой edit после catch
+не доказано. Конечная сравнительная пара base/candidate прошла со всеми tails
+и согласованными SQLite/receipt; устойчивое замедление не показано. Только
+два LIFECYCLE waits получили 30 с по ADR 0088, без runtime/default/config
+изменений. [Инцидент и границы измерения](ci-lifecycle-256.md) сохраняют timings
+и hashes. Новый SHA требует собственного review/clean gate/CI; прежние полные
+PASS на него не переносятся.
+
+Единственный actual uninstrumented fixed LIFECYCLE прошёл за 269572 мс,
+1 attempt/0 retry и все шесть конечных Expect-позиций. Archived HTML/traces и
+source fingerprint сохранены во внешнем ci-lifecycle-diagnosis; это targeted
+dirty proof, не полный gate будущего commit.
+
 Изолированная ветка codex/256-sentient-enemy-v1 основана на фактическом main
 efeb31a46b79f6c2842356abd4366159bcb29847 после squash PR #282. #255 закрыта;
 её проверенное дерево 3f9b76609ee89a3ee9ef411ffbed9a71cad3f0ae сохраняется.

@@ -31,6 +31,10 @@ PLAYER authority/privacy и закрытый decoder защищают новые
 группа/карта/бой/PC XP не включены. Авторские targeted evidence относятся к
 dirty source; clean exact-SHA, CI и merge пока не объявляются пройденными.
 
+После CI c265 два отдельных LIFECYCLE waits имеют конечный budget 30 с только
+для этого случая. Сравнительная диагностика не показала устойчивого замедления;
+runtime не изменён. [Отказ, измерения и ограничения](ci-lifecycle-256.md).
+
 ## Каталог врагов runtime #255
 
 Прежний GM ingress и cursor подключают ENM-001/003, без новой оболочки GM.
