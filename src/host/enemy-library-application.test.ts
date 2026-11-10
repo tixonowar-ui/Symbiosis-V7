@@ -13,6 +13,8 @@ import { loadLocalCharacterExportBaseline } from './local-character-export.js';
 import { validateEnemyLibrarySource } from './enemy-library-application.js';
 import { loadEnemySourceCatalog } from './enemy-catalog.js';
 import { createEnemyLibraryFixture } from '../../tests/fixtures/enemy-library.js';
+import { createCampaignCreationRuntime } from './campaign-creation.js';
+import { createCampaignBindManager } from './campaign-bind.js';
 
 let baseline: Awaited<ReturnType<typeof loadLocalCharacterExportBaseline>>;
 let catalog: ReturnType<typeof loadEnemySourceCatalog>;
@@ -407,6 +409,45 @@ it.each([false, true])(
       expect(calls).toBe(1);
       expect(f.db.serialize().equals(before)).toBe(true);
     } finally {
+      f.close();
+    }
+  },
+);
+
+it.each(['ENM-001', 'ENM-003'] as const)(
+  'delegates persisted %s campaign resume to the owning GM source projector after restart',
+  async (formId) => {
+    const f = createEnemyLibraryFixture(catalog, baseline);
+    const bind = createCampaignBindManager({ readShellListener: () => null });
+    try {
+      f.app().select(selection(f, 1, formId === 'ENM-001'));
+      if (formId === 'ENM-003') f.nav('ENM-001::CTA::002');
+      f.restart();
+      const expected = f.app().project();
+      const runtime = createCampaignCreationRuntime({
+        database: f.db,
+        projectRoot: process.cwd(),
+        baseline,
+        bind,
+        requestReview: {
+          project: () => Promise.resolve(f.app().project()),
+          withLifecycle: (_connection, view) => view,
+          receipt: () => null,
+          refreshConnectionPresentation: () => undefined,
+        },
+      });
+      const before = f.db.serialize();
+      await expect(
+        runtime.project({
+          gmLocalContextId: f.scope.gmLocalContextId,
+          executableCreate: false,
+          trusted: () => true,
+        }),
+      ).resolves.toEqual(expected);
+      expect(expected.base.formId).toBe(formId);
+      expect(f.db.serialize().equals(before)).toBe(true);
+    } finally {
+      await bind.close();
       f.close();
     }
   },

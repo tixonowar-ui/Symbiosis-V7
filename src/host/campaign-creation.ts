@@ -1,4 +1,5 @@
 import { NPC_CONTROL_FORM_IDS } from '@shared/npc-presentation.js';
+import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
 import type { CampaignGmScheduler } from './campaign-network-executor.js';
 import { readOwnedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
@@ -370,6 +371,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       cursor.kind === 'ADMISSION' ||
       (cursor.kind === 'QUEUE' &&
         (cursor.formId === 'NET-017' ||
+          isEnemyLibraryForm(cursor.formId) ||
           (NPC_CONTROL_FORM_IDS as readonly string[]).includes(cursor.formId) ||
           isCampaignLobbyGmForm(cursor.formId) ||
           isCampaignLifecycleForm(cursor.formId)))

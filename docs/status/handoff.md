@@ -2,6 +2,13 @@
 
 ## Runtime #255 — авторский кандидат
 
+Текущее author browser evidence — внешние cleanup-affected-browser01 и его
+HTML audit: 12/12 case в четырёх affected spec, точный roster/ID parity,
+финальные source assertion locations каждого body выполнены; 91 промежуточная
+ошибка внутри успешных poll-групп, неклассифицированных ошибок ноль.
+Это scoped dirty прогон, не clean exact-SHA gate. Прежние ENM CLI-PASS без
+подтверждённого HTML tail не доказывают поздние assertions и отозваны ниже.
+
 Изолированный checkout issue-255, ветка codex/255-enemy-catalog от
 main 1c3c27a073fcbcaea57edf538e30664528715a9a. Source #244 принят:
 PR #281, main tree 0d38d4d5b3e5a3bf4a3dd89b4729aec358ccb900.
@@ -56,6 +63,25 @@ equality и NET-028 boundary assertions сохранены, production не ме
 Этот существующий renderer suite был пропущен ранним targeted выбором; новая
 проверка охватывает весь web project. Прежние failed/interrupted логи сохранены;
 новый committed SHA требует root re-review и полного clean exact-SHA цикла.
+
+Артефактный аудит следующего 639a359 отклонил E2E CLI «46 PASS»: HTML показал
+ошибку canonical.check и затем только Attach/AfterHooks, без tail assertions.
+disposeNetworkResources терял originalError при успешной очистке. Все прежние
+author ENM browser CLI-PASS считаются номинальными и не доказывают reconnect,
+privacy/restart или финальные source assertions без подтверждённого HTML tail.
+Helper теперь повторно выбрасывает исходную ошибку после всех cleanup либо aggregate
+с ней и cleanup failures; отдельные collected unit cases проверяют порядок и
+identity. Canonical radio использует click и прежнее host-confirmed toBeChecked.
+Остальные callers с явным rethrow не переписаны. Новый affected-target browser
+обнаружил следующий настоящий отказ resume ENM: creation projector пропускал
+ENM-001/003 в прежнем QUEUE delegation predicate. Добавлен закрытый guard этих
+форм; restart tests проходят через настоящий creation.project и owning источник,
+сохраняя selection/pin/revisions и bytes кампании. Этот unit использует fixture
+owner validator и serialize/reopen; полный networkApplication/file-host он не
+заменяет. Физический host restart проверяется отдельно настоящим browser.
+Новых shell/routes нет. Browser audit требует HTML roster/ID parity,
+tail assertions каждого case и ноль
+неклассифицированных error steps; старые raw logs/HTML сохранены как rejected.
 
 ## Source #244 — кандидат Atlas 1.20/B15
 

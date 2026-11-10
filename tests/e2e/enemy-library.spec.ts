@@ -88,7 +88,7 @@ test('GM browses separate immutable enemy catalogs, retains selection/art across
     await expect(page.locator('[data-enemy-template]')).toHaveCount(17);
     await expect(page.getByText('16 видов · 17 статблоков', { exact: true })).toBeVisible();
     const canonical = page.locator('[data-enemy-template="CBT-BUBUY-FEMALE"] input');
-    await canonical.check();
+    await canonical.click();
     await expect(canonical).toBeChecked();
     await expect(page.locator('[data-atlas-action-key="ENM-001::CTA::002"]')).toHaveCount(0);
     await page.reload();
