@@ -83,6 +83,16 @@ owner validator и serialize/reopen; полный networkApplication/file-host �
 tail assertions каждого case и ноль
 неклассифицированных error steps; старые raw logs/HTML сохранены как rejected.
 
+Полный clean e407ff5 принят локально, но его CI42774082585 завершился двумя
+таймаутами BODY30/HOOK30, а не job deadline. Точные reported case durations
+36,632/46,144 с не являются exclusive фазами. Unchanged local воспроизводители
+прошли; отдельный owner.submit измерен в 2,8053409 с, причина CI-выброса не
+доказана. [Измерения и scope](ci-budget-255.md) фиксируют только weapon case BODY60s
+и submit60s одного именованного owner case; все остальные actual submit hooks
+остаются30s, порядок/изоляция/проверки сохранены и защищены submit-count1.
+Defaults/workers/retries/CI/production не меняются; новый SHA требует fresh
+root clean r5 и полного CI, прежний failed CI сохраняется без rerun.
+
 ## Source #244 — кандидат Atlas 1.20/B15
 
 Изолированный checkout issue-244, ветка codex/244-system-library-source от
