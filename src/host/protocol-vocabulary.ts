@@ -1,3 +1,4 @@
+import { isEnemyAuthoringForm } from '../shared/enemy-authoring.js';
 import { isEnemyLibraryForm } from '../shared/enemy-library.js';
 import { CAMPAIGN_PEER_FORMS, isCampaignLifecycleForm } from '../shared/campaign-lifecycle.js';
 import { NPC_CONTROL_FORM_IDS } from '../shared/npc-presentation.js';
@@ -30,6 +31,13 @@ const HOST_TRANSITION_KINDS = new Set([
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'ENM-001',
   'ENM-003',
+  'ENM-005',
+  'ENM-006',
+  'ENM-007',
+  'ENM-008',
+  'ENM-009',
+  'ENM-010',
+  'ENM-020',
   'NPC-001',
   'NPC-002',
   'NPC-003',
@@ -299,6 +307,7 @@ export async function loadProtocolVocabulary(
         return false;
       if (
         isEnemyLibraryForm(formId) ||
+        isEnemyAuthoringForm(formId) ||
         isCampaignLifecycleForm(formId) ||
         (NPC_CONTROL_FORM_IDS as readonly string[]).includes(formId) ||
         (CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)

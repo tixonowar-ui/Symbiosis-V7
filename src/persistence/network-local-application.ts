@@ -1,5 +1,5 @@
 import { NPC_TABLES } from './migrations/0015-persistent-npc.js';
-import { npcIdentityInUse } from './npc-identities.js';
+import { npcIdentityInUse, campaignEnemyIdentityInUse } from './npc-identities.js';
 import {
   CAMPAIGN_LIFECYCLE_TABLES,
   CAMPAIGN_LIFECYCLE_IDENTITIES,
@@ -921,7 +921,8 @@ function schema(db: Database.Database): void {
     row['version'] !== 17 &&
     row['version'] !== 18 &&
     row['version'] !== 19 &&
-    row['version'] !== 20
+    row['version'] !== 20 &&
+    row['version'] !== 21
   )
     return fail();
   if (
@@ -932,7 +933,8 @@ function schema(db: Database.Database): void {
     row['version'] === 17 ||
     row['version'] === 18 ||
     row['version'] === 19 ||
-    row['version'] === 20
+    row['version'] === 20 ||
+    row['version'] === 21
   )
     probeSchemaTables(db, CAMPAIGN_LOBBY_TABLES);
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -943,7 +945,8 @@ function schema(db: Database.Database): void {
     row['version'] === 17 ||
     row['version'] === 18 ||
     row['version'] === 19 ||
-    row['version'] === 20
+    row['version'] === 20 ||
+    row['version'] === 21
   )
     probeSchemaTables(db, NPC_TABLES);
   probeSchemaTables(db, NETWORK_APPLICATION_TABLES);
@@ -957,7 +960,8 @@ function schema(db: Database.Database): void {
     row['version'] === 17 ||
     row['version'] === 18 ||
     row['version'] === 19 ||
-    row['version'] === 20
+    row['version'] === 20 ||
+    row['version'] === 21
   )
     probeSchemaTables(db, DEVICE_REQUEST_REVIEW_TABLES);
   if (
@@ -969,7 +973,8 @@ function schema(db: Database.Database): void {
     row['version'] === 17 ||
     row['version'] === 18 ||
     row['version'] === 19 ||
-    row['version'] === 20
+    row['version'] === 20 ||
+    row['version'] === 21
   )
     probeSchemaTables(db, CAMPAIGN_ADMISSION_TABLES);
 }
@@ -988,7 +993,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version !== 17 &&
     version !== 18 &&
     version !== 19 &&
-    version !== 20
+    version !== 20 &&
+    version !== 21
   )
     return fail();
   return (
@@ -1001,7 +1007,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version === 17 ||
     version === 18 ||
     version === 19 ||
-    version === 20
+    version === 20 ||
+    version === 21
   );
 }
 function owner(db: Database.Database, id: string): void {
@@ -2431,7 +2438,8 @@ function readHistory(
     version === 17 ||
     version === 18 ||
     version === 19 ||
-    version === 20
+    version === 20 ||
+    version === 21
   ) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
@@ -2767,6 +2775,7 @@ export function readLocalNetworkShellExitByNavigationId(
   });
 }
 function assertUnused(db: Database.Database, id: string): void {
+  if (campaignEnemyIdentityInUse(db, id)) return fail('IDEMPOTENCY_CONFLICT');
   if (npcIdentityInUse(db, id)) return fail('IDEMPOTENCY_CONFLICT');
   assertUnusedOutsideNpc(db, id);
 }

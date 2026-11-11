@@ -31,6 +31,7 @@ export function enemyLibrarySelectionConfirmed(
       p.campaignId === request.campaignId &&
       p.activeTab === request.activeTab &&
       admissionJsonEqual(p.selectedOrNull, request.selectionOrNull) &&
+      admissionJsonEqual(p.userSelectionOrNull ?? null, request.userSelectionOrNull ?? null) &&
       (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
         (key) => p[key] === candidate.revisions[key] && p[key] >= request.expectedRevisions[key],
       )

@@ -1,3 +1,19 @@
+import {
+  ENEMY_AUTHORING_NAV_TARGETS,
+  ENEMY_AUTHORING_WORKFLOWS,
+  ENEMY_STAGE_FORMS,
+  isEnemyAuthoringForm,
+  enemyAuthoringProjectionValue,
+  enemyAuthoringActions,
+  type EnemyPatchStage,
+  type EnemyWorkflowRequest,
+  type EnemyVersionIdentity,
+} from '@shared/enemy-authoring.js';
+import {
+  enemyBrowserWorkflow,
+  enemyBrowserReceipt,
+  enemyBrowserDestination,
+} from './forms/enm/enemy-authoring-application.js';
 import { enemyLibrarySelectionConfirmed } from './forms/enm/enemy-library-confirmation.js';
 import {
   isEnemyLibraryForm,
@@ -598,6 +614,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     }
     if (
       isEnemyLibraryForm(formId) ||
+      isEnemyAuthoringForm(formId) ||
       isNpcControlForm(formId) ||
       isCampaignLobbyGmForm(formId) ||
       formId === 'PLY-001'
@@ -665,6 +682,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    ENEMY_AUTHORING_WORKFLOWS.some((id) => id === value) ||
     NPC_WORKFLOW_COMMAND_IDS.some((id) => id === value) ||
     isCampaignLifecycleWorkflow(value) ||
     (CAMPAIGN_LOBBY_WORKFLOW_IDS as readonly string[]).includes(value) ||
@@ -2047,9 +2065,11 @@ export interface ProjectionConnection {
   stageNpcInput(edit: NpcStageEdit): FormActionRequestResult;
   applyNpcInput(): FormActionRequestResult;
   discardNpcInput(): FormActionRequestResult;
+  submitEnemyStage(stage: EnemyPatchStage, data: JsonObject): FormActionRequestResult;
   selectEnemyLibrary(
     activeTab: EnemyLibraryTab,
     selectionOrNull: EnemyLibrarySelection | null,
+    userSelectionOrNull?: EnemyVersionIdentity | null,
   ): FormActionRequestResult;
   selectNpc(npcUuidOrNull: string | null): FormActionRequestResult;
   selectNpcHistory(version: number): FormActionRequestResult;
@@ -4420,6 +4440,7 @@ function decodeConfirmedSnapshot(
   const raw = inputMessage.presentation.base;
   const campaignContext =
     isEnemyLibraryForm(raw.formId) ||
+    isEnemyAuthoringForm(raw.formId) ||
     isNpcControlForm(raw.formId) ||
     raw.formId === 'CMP-006' ||
     raw.formId === 'NET-017' ||
@@ -4486,6 +4507,7 @@ function decodeConfirmedSnapshot(
     base.formId === 'APP-001'
       ? null
       : isEnemyLibraryForm(base.formId) ||
+          isEnemyAuthoringForm(base.formId) ||
           isNpcControlForm(base.formId) ||
           base.formId === 'NET-017' ||
           isCampaignCreationForm(base.formId) ||
@@ -4504,6 +4526,7 @@ function decodeConfirmedSnapshot(
     message.projectionRole !== 'gm' &&
     (executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
       [
+        ...ENEMY_AUTHORING_WORKFLOWS,
         ...NPC_WORKFLOW_COMMAND_IDS,
         ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
         ...ADMISSION_GM_WORKFLOW_IDS,
@@ -4514,7 +4537,30 @@ function decodeConfirmedSnapshot(
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (isEnemyLibraryForm(base.formId)) {
+  if (isEnemyAuthoringForm(base.formId)) {
+    try {
+      const p = enemyAuthoringProjectionValue(base.roleFilteredPayload);
+      if (
+        p.formId !== base.formId ||
+        message.presentation.layers.length !== 0 ||
+        !sameCampaignRevisions(p, message.revisions) ||
+        base.routeBindings.length !== 1 ||
+        base.routeBindings[0]?.source !== 'inherited' ||
+        base.routeBindings[0].parameterIndex !== 0 ||
+        base.routeBindings[0].value !== p.campaignId
+      )
+        return unrecognized('$.enemyAuthoring', null);
+      const actions = exactSymbiontActionKeys(
+        base.availableActionKeys,
+        enemyAuthoringActions(p),
+        '$.availableActionKeys',
+      );
+      if (!actions.ok) return actions;
+      projection = { ok: true, value: p as unknown as JsonObject };
+    } catch {
+      return unrecognized('$.enemyAuthoring', null);
+    }
+  } else if (isEnemyLibraryForm(base.formId)) {
     try {
       const p = enemyLibraryProjectionValue(base.roleFilteredPayload);
       if (
@@ -6077,6 +6123,21 @@ function decodeFormActionSnapshot(
       return unrecognized('$.presentation', null);
     return decoded;
   }
+  if (Object.hasOwn(ENEMY_AUTHORING_NAV_TARGETS, pending.actionKey)) {
+    const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
+    if (!decoded.ok) return decoded;
+    if (
+      previous.formId !== pending.sourceFormId ||
+      decoded.value.formId !==
+        ENEMY_AUTHORING_NAV_TARGETS[
+          pending.actionKey as keyof typeof ENEMY_AUTHORING_NAV_TARGETS
+        ] ||
+      !gmQueueMonotonic(decoded.value, previous) ||
+      decoded.value.revisions.projectionRevision < previous.revisions.projectionRevision + 1
+    )
+      return unrecognized('$.presentation', null);
+    return decoded;
+  }
   if (Object.hasOwn(NPC_NAV_TARGETS, pending.actionKey)) {
     const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
     if (!decoded.ok) return decoded;
@@ -6305,6 +6366,7 @@ function decodeFormActionSnapshot(
         ? previous.executableWorkflowCommandIds.filter(
             (id) =>
               id !== CAMPAIGN_CREATE_COMMAND_ID &&
+              !ENEMY_AUTHORING_WORKFLOWS.some((enemyId) => enemyId === id) &&
               !NPC_WORKFLOW_COMMAND_IDS.some((npcId) => npcId === id) &&
               !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id) &&
               !ADMISSION_GM_WORKFLOW_IDS.some((gmId) => gmId === id) &&
@@ -9032,6 +9094,7 @@ type NetworkGmDecisionRequest =
     >
   | WorkflowCommandRequestMessage<'UI-CMD-DEVICE-REQUEST-REJECT', NetworkGmRejectRequestPayload>;
 type GmBrowserRequest =
+  | EnemyWorkflowRequest
   | NpcWorkflowCommandRequest
   | NetworkGmDecisionRequest
   | AdmissionBrowserRequest
@@ -9108,6 +9171,7 @@ function gmQueueScope(
     isAdmissionGmForm(s.formId) ||
     isCampaignLobbyGmForm(s.formId) ||
     isEnemyLibraryForm(s.formId) ||
+    isEnemyAuthoringForm(s.formId) ||
     isNpcControlForm(s.formId) ||
     isCampaignLifecycleForm(s.formId)
       ? s.projection['contextId']
@@ -9152,10 +9216,12 @@ function gmQueueMonotonic(
       isAdmissionGmForm(previous.formId) ||
       isCampaignLobbyGmForm(next.formId) ||
       isEnemyLibraryForm(next.formId) ||
+      isEnemyAuthoringForm(next.formId) ||
       isNpcControlForm(next.formId) ||
       isCampaignLifecycleForm(next.formId) ||
       isCampaignLobbyGmForm(previous.formId) ||
       isEnemyLibraryForm(previous.formId) ||
+      isEnemyAuthoringForm(previous.formId) ||
       isNpcControlForm(previous.formId) ||
       isCampaignLifecycleForm(previous.formId)) &&
     sameCampaignRevisions(next.revisions, previous.revisions) &&
@@ -9225,6 +9291,20 @@ function gmDecisionReceipt(
   request: GmBrowserRequest,
   source: ConfirmedProjectionSnapshot,
 ): DecodeResult<CommandReceipt> {
+  if (ENEMY_AUTHORING_WORKFLOWS.some((id) => id === request.workflowCommandId)) {
+    try {
+      return {
+        ok: true,
+        value: enemyBrowserReceipt(
+          value,
+          request as EnemyWorkflowRequest,
+          enemyAuthoringProjectionValue(source.projection),
+        ),
+      };
+    } catch {
+      return unrecognized('$.receipt', null);
+    }
+  }
   if (NPC_WORKFLOW_COMMAND_IDS.some((id) => id === request.workflowCommandId)) {
     const p = checkedNpc(source.formId, source.projection, source.revisions);
     if (p === null) return unrecognized('$.receipt', null);
@@ -9319,6 +9399,16 @@ export function gmDecisionDestination(
   replay: boolean,
 ): boolean {
   const workflow = receipt.result['workflowCommandId'];
+  if (ENEMY_AUTHORING_WORKFLOWS.some((id) => id === workflow)) {
+    try {
+      return (
+        gmQueueMonotonic(next, source) &&
+        enemyBrowserDestination(next, enemyAuthoringProjectionValue(source.projection), receipt)
+      );
+    } catch {
+      return false;
+    }
+  }
   if (NPC_WORKFLOW_COMMAND_IDS.some((id) => id === workflow))
     return (
       gmQueueMonotonic(next, source) &&
@@ -9993,6 +10083,7 @@ export function connectProjection(
       isCampaignOwnerForm(snapshot.formId) ||
       isCampaignLobbyGmForm(snapshot.formId) ||
       isEnemyLibraryForm(snapshot.formId) ||
+      isEnemyAuthoringForm(snapshot.formId) ||
       isNpcControlForm(snapshot.formId) ||
       isCampaignLifecycleForm(snapshot.formId)
     )
@@ -10579,21 +10670,24 @@ export function connectProjection(
       isAdmissionGmForm(next.formId) ||
       isCampaignLobbyGmForm(next.formId) ||
       isEnemyLibraryForm(next.formId) ||
+      isEnemyAuthoringForm(next.formId) ||
       isNpcControlForm(next.formId) ||
       isCampaignLifecycleForm(next.formId)
     ) {
       const p =
         next.formId === 'NET-017'
           ? gmRequestProjection(next.projection)
-          : isEnemyLibraryForm(next.formId)
-            ? enemyLibraryProjectionValue(next.projection)
-            : isNpcControlForm(next.formId)
-              ? checkedNpc(next.formId, next.projection, next.revisions)
-              : isCampaignLifecycleForm(next.formId)
-                ? campaignLifecycleGmProjectionValue(next.projection)
-                : isCampaignLobbyGmForm(next.formId)
-                  ? campaignLobbyGmProjectionValue(next.projection)
-                  : admissionGmProjectionValue(next.formId, next.projection);
+          : isEnemyAuthoringForm(next.formId)
+            ? enemyAuthoringProjectionValue(next.projection)
+            : isEnemyLibraryForm(next.formId)
+              ? enemyLibraryProjectionValue(next.projection)
+              : isNpcControlForm(next.formId)
+                ? checkedNpc(next.formId, next.projection, next.revisions)
+                : isCampaignLifecycleForm(next.formId)
+                  ? campaignLifecycleGmProjectionValue(next.projection)
+                  : isCampaignLobbyGmForm(next.formId)
+                    ? campaignLobbyGmProjectionValue(next.projection)
+                    : admissionGmProjectionValue(next.formId, next.projection);
       if (p === null || p.contextId !== gmLocalContextId) {
         failUnexpected('$.contextId', null, 'GM queue changed the owned ticket.');
         return;
@@ -11820,12 +11914,14 @@ export function connectProjection(
               isAdmissionGmForm(lastSnapshot.formId) ||
               isCampaignLobbyGmForm(lastSnapshot.formId) ||
               isEnemyLibraryForm(lastSnapshot.formId) ||
+              isEnemyAuthoringForm(lastSnapshot.formId) ||
               isNpcControlForm(lastSnapshot.formId) ||
               isCampaignLifecycleForm(lastSnapshot.formId)) &&
             (candidate.value.formId === 'NET-017' ||
               isAdmissionGmForm(candidate.value.formId) ||
               isCampaignLobbyGmForm(candidate.value.formId) ||
               isEnemyLibraryForm(candidate.value.formId) ||
+              isEnemyAuthoringForm(candidate.value.formId) ||
               isNpcControlForm(candidate.value.formId) ||
               isCampaignLifecycleForm(candidate.value.formId)) &&
             /^network-gm-view:[0-9a-f]{64}$/u.test(message.presentation.assignment.correlationId) &&
@@ -11937,6 +12033,7 @@ export function connectProjection(
               isAdmissionGmForm(snapshot.value.formId) ||
               isCampaignLobbyGmForm(snapshot.value.formId) ||
               isEnemyLibraryForm(snapshot.value.formId) ||
+              isEnemyAuthoringForm(snapshot.value.formId) ||
               isNpcControlForm(snapshot.value.formId) ||
               isCampaignLifecycleForm(snapshot.value.formId)) &&
             !ownGmQueue(snapshot.value)
@@ -12597,6 +12694,7 @@ export function connectProjection(
             knownRevisions: reconnect.knownRevisions,
             supportedWorkflowCommandIds: [
               CAMPAIGN_CREATE_COMMAND_ID,
+              ...ENEMY_AUTHORING_WORKFLOWS,
               ...NPC_WORKFLOW_COMMAND_IDS,
               ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
               ...ADMISSION_GM_WORKFLOW_IDS,
@@ -12871,7 +12969,46 @@ export function connectProjection(
         return { ok: false, detail: 'Идентификатор запроса НПС недоступен.' };
       }
     },
-    selectEnemyLibrary: (activeTab, selectionOrNull) => {
+    submitEnemyStage: (stage, data) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot === null ||
+        !isEnemyAuthoringForm(lastSnapshot.formId) ||
+        socket?.readyState !== WebSocket.OPEN ||
+        stagedCapabilities !== null ||
+        commandPending() ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null ||
+        gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId
+      )
+        return { ok: false, detail: 'Дождитесь подтверждения или восстановите соединение.' };
+      const commandId = createNetworkCommandId();
+      if (commandId === null) return { ok: false, detail: 'Идентификатор команды недоступен.' };
+      try {
+        const p = enemyAuthoringProjectionValue(lastSnapshot.projection),
+          request = enemyBrowserWorkflow(p, ENEMY_STAGE_FORMS[stage][2], commandId, data);
+        if (
+          request === null ||
+          !lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) ||
+          !lastSnapshot.executableWorkflowCommandIds.includes(request.workflowCommandId)
+        )
+          return { ok: false, detail: 'Этап недоступен.' };
+        const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+        if (!encoded.ok) return { ok: false, detail: 'Поля этапа не прошли проверку.' };
+        pendingGmCommand = { request, receipt: null, source: lastSnapshot, replay: false };
+        try {
+          socket.send(encoded.text);
+        } catch {
+          socket.close(1000, 'enemy command interrupted');
+        }
+        notifyReady();
+        return { ok: true };
+      } catch {
+        return { ok: false, detail: 'Проверьте заполнение этапа.' };
+      }
+    },
+    selectEnemyLibrary: (activeTab, selectionOrNull, userSelectionOrNull) => {
       if (
         disposed ||
         terminal ||
@@ -12896,6 +13033,7 @@ export function connectProjection(
         expectedRevisions: lastSnapshot.revisions,
         activeTab,
         selectionOrNull,
+        ...(userSelectionOrNull === undefined ? {} : { userSelectionOrNull }),
       };
       const encoded = encodeClientMessageV3(request, WEB_PROTOCOL_VOCABULARY);
       if (!encoded.ok) return { ok: false, detail: 'Выбор каталога не прошёл проверку.' };
@@ -14589,6 +14727,31 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
+      if (isEnemyAuthoringForm(activeForm.formId)) {
+        try {
+          const p = enemyAuthoringProjectionValue(activeForm.projection),
+            commandId = createNetworkCommandId();
+          if (commandId === null || gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId)
+            return { ok: false, detail: 'Текущий GM-контекст недоступен.' };
+          const request = enemyBrowserWorkflow(p, actionKey, commandId, null);
+          if (request !== null) {
+            if (!lastSnapshot.executableWorkflowCommandIds.includes(request.workflowCommandId))
+              return { ok: false, detail: 'Команда недоступна.' };
+            const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
+            if (!encoded.ok) return { ok: false, detail: 'Команда не прошла проверку.' };
+            pendingGmCommand = { request, receipt: null, source: lastSnapshot, replay: false };
+            try {
+              socket.send(encoded.text);
+            } catch {
+              socket.close(1000, 'enemy commit interrupted');
+            }
+            notifyReady();
+            return { ok: true };
+          }
+        } catch {
+          return { ok: false, detail: 'Проверьте полную попытку врага.' };
+        }
+      }
       if (isNpcControlForm(activeForm.formId)) {
         const p = checkedNpc(activeForm.formId, activeForm.projection, lastSnapshot.revisions),
           commandId = createNetworkCommandId();
@@ -16131,9 +16294,11 @@ export function connectProjection(
         return { ok: true };
       }
       // CREATE binds its operation to the composition journal, whose domain reader requires UUID.
-      const navigationRequestId = Object.hasOwn(NPC_NAV_TARGETS, actionKey)
-        ? createNetworkCommandId()
-        : createRequestId('navigation');
+      const navigationRequestId =
+        Object.hasOwn(NPC_NAV_TARGETS, actionKey) ||
+        Object.hasOwn(ENEMY_AUTHORING_NAV_TARGETS, actionKey)
+          ? createNetworkCommandId()
+          : createRequestId('navigation');
       if (navigationRequestId === null)
         return { ok: false, detail: 'Не удалось создать идентификатор перехода НПС.' };
       const request = {

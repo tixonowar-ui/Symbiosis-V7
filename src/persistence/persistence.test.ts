@@ -1,4 +1,5 @@
 import { migration0019 } from './migrations/0019-npc-poison-coating-identities.js';
+import { migration0020 } from './migrations/0020-enemy-library.js';
 import { migration0015, NPC_TABLES } from './migrations/0015-persistent-npc.js';
 import { migration0016 } from './migrations/0016-npc-wound-identities.js';
 import { migration0017 } from './migrations/0017-npc-linked-sets.js';
@@ -163,6 +164,10 @@ describe('persistence schema', () => {
       'campaign_draft',
       'campaign_draft_cancel',
       'campaign_draft_update',
+      'campaign_enemy_current_version',
+      'campaign_enemy_history',
+      'campaign_enemy_template',
+      'campaign_enemy_version',
       'campaign_lifecycle_event',
       'campaign_lifecycle_head',
       'campaign_lobby_event',
@@ -232,12 +237,12 @@ describe('persistence schema', () => {
     expect(database.pragma('journal_mode', { simple: true })).toBe('memory');
 
     insertCampaign(database, 'preserved');
-    expect(applyMigrations(database)).toBe(20);
+    expect(applyMigrations(database)).toBe(21);
     expect(
       database.prepare('SELECT payload_json FROM campaign WHERE campaign_id = ?').get('preserved'),
     ).toEqual({ payload_json: '{}' });
     expect(database.prepare('SELECT count(*) AS count FROM schema_migration').get()).toEqual({
-      count: 20,
+      count: 21,
     });
 
     database
@@ -875,9 +880,9 @@ describe('forward NPC custom profile identity migration', () => {
   });
 });
 describe('forward NPC coating identity migration', () => {
-  it('preserves populated 18 rows and item references through 20, refusals and file reopen', () => {
+  it('preserves populated 18 rows and item references through 21, refusals and file reopen', () => {
     const tempRoot = resolve(tmpdir());
-    const directory = mkdtempSync(join(tempRoot, 'symbiosis-schema20-'));
+    const directory = mkdtempSync(join(tempRoot, 'symbiosis-schema21-'));
     if (dirname(resolve(directory)) !== tempRoot) throw Error('Temporary path escaped its root');
     const file = join(directory, 'migration.sqlite');
     let db = new Database(file);
@@ -934,8 +939,8 @@ describe('forward NPC coating identity migration', () => {
       const tables = allTableNames(db).filter((name) => name !== 'schema_migration'),
         oldRows = tableRows(db, tables),
         oldRegistry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
-      expect(applyMigrations(db)).toBe(20);
-      expect(readAppliedMigrationVersion(db)).toBe(20);
+      expect(applyMigrations(db)).toBe(21);
+      expect(readAppliedMigrationVersion(db)).toBe(21);
       expect(tableRows(db, tables)).toEqual(oldRows);
       expect(
         db.prepare('SELECT * FROM schema_migration WHERE version<=18 ORDER BY version').all(),
@@ -993,12 +998,12 @@ describe('forward NPC coating identity migration', () => {
       expect(db.serialize().equals(beforeRefusals)).toBe(true);
       const migrated = db.serialize(),
         rows = tableRows(db, tables);
-      expect(applyMigrations(db)).toBe(20);
+      expect(applyMigrations(db)).toBe(21);
       expect(db.serialize().equals(migrated)).toBe(true);
       db.close();
       db = new Database(file);
       db.pragma('foreign_keys=ON');
-      expect(applyMigrations(db)).toBe(20);
+      expect(applyMigrations(db)).toBe(21);
       expect(db.serialize().equals(migrated)).toBe(true);
       expect(tableRows(db, tables)).toEqual(rows);
       expect(
@@ -1086,20 +1091,30 @@ describe('migration 15 closed compatibility', () => {
     const tables = allTableNames(db).filter((t) => t !== 'schema_migration'),
       before = tableRows(db, tables),
       registry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
-    expect(applyMigrations(db)).toBe(20);
-    expect(readAppliedMigrationVersion(db)).toBe(20);
+    expect(applyMigrations(db)).toBe(21);
+    expect(readAppliedMigrationVersion(db)).toBe(21);
     expect(tableRows(db, tables)).toEqual(before);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<=14 ORDER BY version').all(),
     ).toEqual(registry);
-    expect(allTableNames(db)).toEqual([...tables, 'schema_migration', ...NPC_TABLES].sort());
+    expect(allTableNames(db)).toEqual(
+      [
+        ...tables,
+        'schema_migration',
+        ...NPC_TABLES,
+        'campaign_enemy_template',
+        'campaign_enemy_version',
+        'campaign_enemy_history',
+        'campaign_enemy_current_version',
+      ].sort(),
+    );
     expect(db.pragma('foreign_key_check')).toEqual([]);
     const migrated = db.serialize();
-    expect(applyMigrations(db)).toBe(20);
+    expect(applyMigrations(db)).toBe(21);
     expect(db.serialize().equals(migrated)).toBe(true);
     const reopened = new Database(migrated);
     databases.push(reopened);
-    expect(applyMigrations(reopened)).toBe(20);
+    expect(applyMigrations(reopened)).toBe(21);
     expect(tableRows(reopened, tables)).toEqual(before);
     expect(() => db.prepare('UPDATE campaign_creation_cursor SET kind=?').run('NPC')).toThrow(
       /CHECK/,
@@ -1175,20 +1190,20 @@ describe('migration 15 closed compatibility', () => {
     expect(readAppliedMigrationVersion(db)).toBe(14);
     expect(allTableNames(db).filter((t) => t.startsWith('npc_'))).toEqual([]);
   });
-  it('keeps the same empty legacy family reads at 14 and 20 without creating NPC state', () => {
+  it('keeps the same empty legacy family reads at 14 and 21 without creating NPC state', () => {
     const db = legacy14(),
       owner = bootstrapDeviceIdentity(db);
     readableLegacyFamilies(db, owner);
-    expect(applyMigrations(db)).toBe(20);
+    expect(applyMigrations(db)).toBe(21);
     const before = db.serialize();
     readableLegacyFamilies(db, owner);
     expect(db.serialize().equals(before)).toBe(true);
     for (const name of NPC_TABLES) expect(db.prepare(`SELECT * FROM ${name}`).all()).toEqual([]);
   });
-  it('rejects a registered future version 21 before migration or reader writes', () => {
+  it('rejects a registered future version 22 before migration or reader writes', () => {
     const db = memoryDatabase(),
       owner = bootstrapDeviceIdentity(db);
-    db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(21, 'future', 'f'.repeat(64));
+    db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(22, 'future', 'f'.repeat(64));
     const before = db.serialize();
     for (const read of [
       () => applyMigrations(db),
@@ -1210,7 +1225,7 @@ describe('migration 15 closed compatibility', () => {
     'campaign_lobby_head',
     'campaign_lifecycle_head',
     ...NPC_TABLES,
-  ])('refuses missing %s in schema 20 and preserves the damaged bytes', (table) => {
+  ])('refuses missing %s in schema 21 and preserves the damaged bytes', (table) => {
     const db = memoryDatabase(),
       owner = bootstrapDeviceIdentity(db);
     db.pragma('foreign_keys=OFF');
@@ -1235,13 +1250,25 @@ describe('network schema probes against live SQLite', () => {
     ...DEVICE_REQUEST_REVIEW_TABLES,
     ...CAMPAIGN_ADMISSION_TABLES,
   ];
-  it.each([10, 11, 12, 13, 14, 19, 20])(
+  it.each([10, 11, 12, 13, 14, 19, 20, 21])(
     'accepts the actual empty migration %s prefix without adding state',
     (version) => {
       const db = new Database(':memory:');
       databases.push(db);
       db.pragma('foreign_keys=ON');
-      if (version === 20) expect(applyMigrations(db)).toBe(version);
+      if (version === 21) expect(applyMigrations(db)).toBe(version);
+      else if (version === 20)
+        expect(
+          applyMigrationSequence(db, [
+            ...legacyMigrations14,
+            migration0015,
+            migration0016,
+            migration0017,
+            migration0018,
+            migration0019,
+            migration0020,
+          ]),
+        ).toBe(version);
       else if (version === 19)
         expect(
           applyMigrationSequence(db, [

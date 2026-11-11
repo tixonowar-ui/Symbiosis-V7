@@ -1,3 +1,6 @@
+import type { JsonObject } from '@shared/wire-protocol.js';
+import { EnemyAuthoringContent } from './forms/enm/enemy-authoring-content.js';
+import { ENEMY_STAGE_FORMS, isEnemyAuthoringForm } from '@shared/enemy-authoring.js';
 import { EnemyLibraryContent } from './forms/enm/enemy-library-content.js';
 import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import {
@@ -279,6 +282,8 @@ function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSn
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
     isNpcControlForm(snapshot.formId) ||
+    isEnemyLibraryForm(snapshot.formId) ||
+    isEnemyAuthoringForm(snapshot.formId) ||
     snapshot.formId === 'NET-017' ||
     isCampaignLobbyGmForm(snapshot.formId) ||
     isCampaignLifecycleForm(snapshot.formId) ||
@@ -2699,6 +2704,7 @@ export function App(): ReactElement {
   const [startingWeaponDraft, setStartingWeaponDraft] = useState<StartingWeaponDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
+  const enemyInputRef = useRef<JsonObject>({});
 
   useEffect(() => {
     const connection = connectProjection(
@@ -2864,11 +2870,24 @@ export function App(): ReactElement {
               connection={() => connectionRef.current}
               notice={setActionNotice}
             />
+            {isEnemyAuthoringForm(snapshot.formId) ? (
+              <EnemyAuthoringContent
+                key={snapshot.formId + String(snapshot.revisions.projectionRevision)}
+                projection={snapshot.projection}
+                onValue={(data) => {
+                  enemyInputRef.current = data;
+                }}
+              />
+            ) : null}
             {isEnemyLibraryForm(snapshot.formId) ? (
               <EnemyLibraryContent
                 projection={snapshot.projection}
-                onSelect={(tab, selection) => {
-                  const result = connectionRef.current?.selectEnemyLibrary(tab, selection);
+                onSelect={(tab, selection, userSelection) => {
+                  const result = connectionRef.current?.selectEnemyLibrary(
+                    tab,
+                    selection,
+                    userSelection,
+                  );
                   setActionNotice(result?.ok ? null : (result?.detail ?? 'Каталог недоступен.'));
                 }}
               />
@@ -3424,6 +3443,7 @@ export function App(): ReactElement {
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
                 isEnemyLibraryForm(snapshot.formId) ||
+                isEnemyAuthoringForm(snapshot.formId) ||
                 isNpcControlForm(snapshot.formId) ||
                 snapshot.formId === 'NET-017' ||
                 isCampaignLobbyGmForm(snapshot.formId) ||
@@ -3453,6 +3473,17 @@ export function App(): ReactElement {
               }
               formId={snapshot.formId}
               onAction={(selection) => {
+                const enemyStage = Object.entries(ENEMY_STAGE_FORMS).find(
+                  ([, forms]) => forms[0] === snapshot.formId && forms[2] === selection.actionKey,
+                )?.[0];
+                if (enemyStage !== undefined) {
+                  const result = connectionRef.current?.submitEnemyStage(
+                    enemyStage as keyof typeof ENEMY_STAGE_FORMS,
+                    enemyInputRef.current,
+                  );
+                  setActionNotice(result?.ok ? null : (result?.detail ?? 'Этап недоступен.'));
+                  return;
+                }
                 if (networkImageReadPending) {
                   setActionNotice('Дождитесь чтения изображения QR.');
                   return;

@@ -24,7 +24,7 @@ import {
 } from '../shared/npc-command.js';
 import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import { legacyLocalIdentityInUse } from './npc-identities.js';
+import { legacyLocalIdentityInUse, campaignEnemyIdentityInUse } from './npc-identities.js';
 import {
   STARTING_WEAPON_VARIANTS,
   type StartingWeaponVariant,
@@ -1180,6 +1180,7 @@ export function verifyNpcChildIndex(
 ): void {
   for (const child of children) {
     s.assertUnusedOutsideNpc(db, child.allocation.id);
+    if (campaignEnemyIdentityInUse(db, child.allocation.id)) return s.fail('IDEMPOTENCY_CONFLICT');
     if (legacyLocalIdentityInUse(db, child.allocation.id)) return s.fail('IDEMPOTENCY_CONFLICT');
   }
   const rows = db

@@ -1652,6 +1652,8 @@ describe('NET-017 actual GM client transport family', () => {
       gmLocalContextId: CONTEXT,
       supportedWorkflowCommandIds: [
         ...GM_CAPS.slice(0, 1),
+        'UI-CMD-ENEMY-DRAFT-PATCH',
+        'UI-CMD-ENEMY-COMMIT-V1',
         'UI-CMD-NPC-COMMIT-V1',
         'UI-CMD-NPC-NEW-VERSION',
         ...GM_CAPS.slice(1, 7),

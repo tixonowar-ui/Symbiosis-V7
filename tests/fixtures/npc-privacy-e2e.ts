@@ -30,7 +30,10 @@ export async function createNpcPlayerPrivacyProbe(browser: Browser, baseURL: str
           value = JSON.parse(raw) as JsonObject;
         frames.push(raw);
         const correlation =
-          value['navigationRequestId'] ?? value['requestId'] ?? value['operationId'];
+          value['navigationRequestId'] ??
+          value['requestId'] ??
+          value['operationId'] ??
+          value['commandId'];
         const replies = typeof correlation === 'string' ? probeReplies.get(correlation) : undefined;
         if (replies !== undefined) {
           // These two hostile intents originate in the test, not the renderer's pending queue.
@@ -96,6 +99,53 @@ export async function createNpcPlayerPrivacyProbe(browser: Browser, baseURL: str
           expect(replies[0]!.raw).toBe(JSON.stringify(replies[0]!.value));
         }
         expect(errors).toEqual([]);
+      },
+      async refuseEnemyAuthoringAccess(commands: readonly JsonObject[]) {
+        const navigation: JsonObject = {
+          messageType: 'navigation.form-action',
+          protocolVersion: 2,
+          navigationRequestId: randomUUID(),
+          sourceFormId: 'ENM-001',
+          actionKey: 'ENM-001::CTA::003',
+          expectedProjectionRevision: (playerSnapshot()['revisions'] as JsonObject)[
+            'projectionRevision'
+          ]!,
+        };
+        for (const original of [...commands, navigation]) {
+          const command = original['messageType'] === 'command.request',
+            id = randomUUID();
+          const request: JsonObject = {
+            ...original,
+            [command ? 'commandId' : 'navigationRequestId']: id,
+          };
+          const expected: JsonObject = command
+            ? {
+                messageType: 'command.refusal',
+                protocolVersion: 1,
+                commandId: id,
+                lastLifecycleState: null,
+                revisions: { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 },
+                refusal: { code: 'GUARD_REJECTED' },
+              }
+            : {
+                messageType: 'navigation.form-action.refusal',
+                protocolVersion: 2,
+                navigationRequestId: id,
+                revisions: { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 },
+                presentationUnchanged: true,
+                refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+              };
+          const replies: { raw: string; value: JsonObject }[] = [];
+          probeReplies.set(id, replies);
+          expectedReplies.set(id, expected);
+          if (channel.send === undefined) throw Error('Real player channel absent');
+          channel.send(request);
+          await expect.poll(() => replies.map((reply) => reply.value)).toEqual([expected]);
+          expect(replies[0]!.raw).toBe(JSON.stringify(replies[0]!.value));
+        }
+        await expect(
+          page.locator('[data-enemy-authoring], [data-enemy-sheet], [data-atlas-form-id^="ENM-"]'),
+        ).toHaveCount(0);
       },
       async refuseEnemyAccess(selection: JsonObject) {
         const navigation: JsonObject = {

@@ -25,6 +25,13 @@ reactTestGlobal.IS_REACT_ACT_ENVIRONMENT = true;
 const TEST_IMPLEMENTED_FORM_IDS = [
   'ENM-001',
   'ENM-003',
+  'ENM-005',
+  'ENM-006',
+  'ENM-007',
+  'ENM-008',
+  'ENM-009',
+  'ENM-010',
+  'ENM-020',
   'NPC-001',
   'NPC-002',
   'NPC-003',
@@ -269,7 +276,8 @@ describe('atlas implemented-form renderer', () => {
     // #174 adds CMP-008/016 and NET-008/009/010 screens, plus CMP-014/015/NET-023 dialogs.
     // #187 adds the eleven source-defined NPC screens; no dialog is added.
     // #255 adds the two read-only ENM catalog/card screens; no dialog is added.
-    expect(screens).toBe(87);
+    // #256 adds seven source-defined sentient V1 screens; no dialog is added.
+    expect(screens).toBe(94);
     expect(dialogs).toBe(10);
   });
 

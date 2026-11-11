@@ -1,0 +1,132 @@
+import type { JsonObject, CommandReceipt, RevisionVector } from '@shared/wire-protocol.js';
+import {
+  admissionCodecReaders as r,
+  admissionJsonEqual,
+} from '@shared/campaign-admission-codec.js';
+import {
+  ENEMY_STAGE_FORMS,
+  enemyAuthoringProjectionValue,
+  enemyVersionIdentityValue,
+  enemyWorkflowRequestValue,
+  type EnemyAuthoringProjection,
+  type EnemyPatchStage,
+  type EnemyWorkflowRequest,
+} from '@shared/enemy-authoring.js';
+
+export function enemyBrowserWorkflow(
+  p: EnemyAuthoringProjection,
+  actionKey: string,
+  commandId: string,
+  data: JsonObject | null,
+): EnemyWorkflowRequest | null {
+  const stage = (Object.entries(ENEMY_STAGE_FORMS) as [EnemyPatchStage, readonly string[]][]).find(
+    ([, forms]) => forms[0] === p.formId && forms[2] === actionKey,
+  )?.[0];
+  const commit = p.formId === 'ENM-010' && actionKey === 'ENM-010::CTA::004';
+  if (stage === undefined && !commit) return null;
+  const attempt = p.context.attemptOrNull;
+  if (attempt === null) throw new Error('Попытка отсутствует.');
+  return enemyWorkflowRequestValue({
+    messageType: 'command.request',
+    protocolVersion: 1,
+    commandKind: 'workflow-command',
+    role: 'gm',
+    commandId,
+    workflowCommandId: commit ? 'UI-CMD-ENEMY-COMMIT-V1' : 'UI-CMD-ENEMY-DRAFT-PATCH',
+    expectedRevisions: {
+      stateRevision: p.stateRevision,
+      projectionRevision: p.projectionRevision,
+      actorVisibilityRevision: p.actorVisibilityRevision,
+    },
+    payload: {
+      campaignId: p.campaignId,
+      creationAttemptId: attempt.attemptId,
+      expectedAttemptRevision: attempt.revision,
+      ...(commit ? {} : { stage, data: data ?? {} }),
+    },
+  });
+}
+export function enemyBrowserReceipt(
+  value: CommandReceipt,
+  request: EnemyWorkflowRequest,
+  source: EnemyAuthoringProjection,
+): CommandReceipt {
+  const receipt = r.exact(value, 'commandId receiptId result revisions', '$.receipt');
+  r.uuid(receipt['receiptId'], '$.receiptId');
+  if (receipt['commandId'] !== request.commandId) throw new Error('Чужая квитанция.');
+  const result = r.exact(
+    receipt['result'],
+    'campaignId creationAttemptId timestamp workflowCommandId sourceFormId stageOrNull attemptRevision committedVersionOrNull',
+    '$.result',
+  );
+  const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1';
+  if (
+    result['campaignId'] !== source.campaignId ||
+    result['campaignId'] !== request.payload.campaignId ||
+    result['creationAttemptId'] !== request.payload.creationAttemptId ||
+    result['workflowCommandId'] !== request.workflowCommandId ||
+    result['sourceFormId'] !== source.formId ||
+    result['stageOrNull'] !== (request.payload.stage ?? null) ||
+    result['attemptRevision'] !== request.payload.expectedAttemptRevision + (commit ? 0 : 1)
+  )
+    throw new Error('Квитанция не связана с попыткой.');
+  const timestamp = r.text(result['timestamp'], '$.timestamp');
+  if (new Date(timestamp).toISOString() !== timestamp)
+    throw new Error('Некорректная дата квитанции.');
+  const revisions = r.exact(
+    receipt['revisions'],
+    'stateRevision projectionRevision actorVisibilityRevision',
+    '$.revisions',
+  );
+  for (const key of ['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const)
+    if (
+      revisions[key] !==
+      request.expectedRevisions[key] + (key === 'actorVisibilityRevision' ? 0 : 1)
+    )
+      throw new Error('Некорректная ревизия квитанции.');
+  if (commit) {
+    const version = enemyVersionIdentityValue(result['committedVersionOrNull']);
+    if (version.campaignId !== source.campaignId || version.artSha256 !== source.art.sha256)
+      throw new Error('Чужая версия или арт.');
+  } else if (result['committedVersionOrNull'] !== null) throw new Error('PATCH не создаёт шаблон.');
+  return value;
+}
+export function enemyBrowserDestination(
+  candidate: {
+    readonly formId: string;
+    readonly projection: JsonObject;
+    readonly revisions: RevisionVector;
+  },
+  source: EnemyAuthoringProjection,
+  receipt: CommandReceipt,
+): boolean {
+  if (
+    candidate.projection['campaignId'] !== source.campaignId ||
+    candidate.projection['contextId'] !== source.contextId
+  )
+    return false;
+  if (
+    (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).some(
+      (key) => candidate.revisions[key] < receipt.revisions[key],
+    )
+  )
+    return false;
+  if (!admissionJsonEqual(candidate.revisions, receipt.revisions)) return true;
+  try {
+    const p = enemyAuthoringProjectionValue(candidate.projection),
+      result = receipt.result;
+    if (result['committedVersionOrNull'] !== null)
+      return (
+        p.formId === 'ENM-020' &&
+        admissionJsonEqual(p.context.selectedVersionOrNull, result['committedVersionOrNull'])
+      );
+    const stage = result['stageOrNull'] as EnemyPatchStage;
+    return (
+      p.formId === ENEMY_STAGE_FORMS[stage][1] &&
+      p.context.attemptOrNull?.attemptId === result['creationAttemptId'] &&
+      p.context.attemptOrNull?.revision === result['attemptRevision']
+    );
+  } catch {
+    return false;
+  }
+}

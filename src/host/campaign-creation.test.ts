@@ -834,25 +834,53 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
       expect(storageSnapshot(h.db)).toEqual(before);
     });
   });
-  it('keeps the persisted endpoint and receipt when restart recovery finds its port occupied', async () => {
-    const h = await setup();
-    const port = await freePort();
-    await ready(h, port);
-    const req = h.createRequest();
-    await h.send(req);
-    const ctx = h.ctx();
-    const before = storageSnapshot(h.db);
-    await h.bind.close();
-    h.db.close();
-    await listen(port);
-    const restarted = harness(open(h.path), projectRoot, ctx);
-    await restarted.resume();
-    expect(restarted.snapshotPayload()).toMatchObject({
-      hostPort: port,
-      hostBindRecovery: { status: 'UNAVAILABLE', reasonCode: 'PORT_UNAVAILABLE' },
-    });
-    expect(storageSnapshot(restarted.db)).toEqual(before);
-  });
+  it(
+    'keeps the persisted endpoint and receipt when restart recovery finds its port occupied',
+    {
+      timeout: 60_000,
+    },
+    async ({ onTestFailed }) => {
+      const startedAt = performance.now();
+      const phases: { phase: string; elapsedMs: number }[] = [];
+      const markPhase = (phase: string) => {
+        phases.push({ phase, elapsedMs: Math.round(performance.now() - startedAt) });
+      };
+      onTestFailed(() => {
+        console.error(
+          'Campaign occupied-port recovery elapsed phases (ms)',
+          JSON.stringify(phases),
+        );
+      });
+
+      markPhase('prepare SQLite and runtime');
+      const h = await setup();
+      markPhase('allocate free port');
+      const port = await freePort();
+      markPhase('prepare campaign draft and secret');
+      await ready(h, port);
+      markPhase('create campaign');
+      const req = h.createRequest();
+      await h.send(req);
+      const ctx = h.ctx();
+      const before = storageSnapshot(h.db);
+      markPhase('close campaign binding');
+      await h.bind.close();
+      markPhase('close SQLite');
+      h.db.close();
+      markPhase('occupy persisted port');
+      await listen(port);
+      markPhase('reopen SQLite and runtime');
+      const restarted = harness(open(h.path), projectRoot, ctx);
+      markPhase('resume and recover binding');
+      await restarted.resume();
+      expect(restarted.snapshotPayload()).toMatchObject({
+        hostPort: port,
+        hostBindRecovery: { status: 'UNAVAILABLE', reasonCode: 'PORT_UNAVAILABLE' },
+      });
+      expect(storageSnapshot(restarted.db)).toEqual(before);
+      markPhase('final assertions complete');
+    },
+  );
   it('rejects lost trusted connection and reset device without creating a campaign', async () => {
     const h = await setup();
     await ready(h, await freePort());

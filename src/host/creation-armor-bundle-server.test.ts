@@ -837,11 +837,23 @@ describe('CHR-021 host journey', () => {
 
   it(
     'commits the exact interaction diff and armor entry atomically with replay and restart',
-    { timeout: 20000 },
-    async () => {
+    // Both real host starts and the SQLite reopen are part of this case's body.
+    { timeout: 30_000 },
+    async ({ onTestFailed }) => {
+      const startedAt = performance.now();
+      const phases: { phase: string; elapsedMs: number }[] = [];
+      const markPhase = (phase: string) => {
+        phases.push({ phase, elapsedMs: Math.round(performance.now() - startedAt) });
+      };
+      onTestFailed(() => {
+        console.error('CHR-021 elapsed phases (ms)', JSON.stringify(phases));
+      });
+
+      markPhase('seed SQLite and start first host');
       const { host, previewHost, preview, databasePath } = await setupManualInteraction(
         'armor-confirmed-interaction',
       );
+      markPhase('check stale and changed confirmation refusals');
       const exactDiff = interactionDiff(preview);
       const changedDiff = { ...exactDiff, irreversibleOperationIds: [] };
       const beforeRefusal = current(host);
@@ -862,6 +874,7 @@ describe('CHR-021 host journey', () => {
       expect(current(host).checkpoint).toEqual(beforeRefusal.checkpoint);
       expect(host.rollRequestAllocations()).toBe(allocationsBeforeRefusal);
 
+      markPhase('confirm interaction and enter armor bundle');
       const request = interactionConfirmationRequest(
         host,
         'armor-confirmed-interaction-confirm',
@@ -896,6 +909,7 @@ describe('CHR-021 host journey', () => {
       expect(current(host).checkpoint).toEqual(committed.checkpoint);
       expect(host.rollRequestAllocations()).toBe(2);
 
+      markPhase('replay and check changed replay refusal');
       const [replay, replayed] = await sendCommand(previewHost.socket, request);
       expect(replay.messageType).toBe('command.replay');
       expect(replay.receipt).toEqual(result.receipt);
@@ -906,6 +920,7 @@ describe('CHR-021 host journey', () => {
       } as WorkflowRequest);
       expect(refusalCode(changedReplay)).toBe('IDEMPOTENCY_CONFLICT');
 
+      markPhase('restore first host connection');
       const restored = await reconnect(previewHost, 'armor-confirmed-interaction-reconnect');
       expect(restored.presentation.base.formId).toBe('CHR-021');
       expect(restored.presentation.base.roleFilteredPayload).toMatchObject({
@@ -913,21 +928,26 @@ describe('CHR-021 host journey', () => {
         qualityRollRequestId: 'armor-confirmed-interaction-roll-request-2',
       });
 
+      markPhase('close first host');
       await host.app.close();
+      markPhase('close and reopen SQLite');
       host.database.close();
       const reopened = openPersistenceDatabase(databasePath);
       databases.push(reopened);
+      markPhase('start replacement host');
       const restarted = await createArmorHost(
         { ...host, database: reopened },
         [],
         'armor-confirmed-interaction-restarted',
       );
+      markPhase('reconnect and replay after restart');
       await reconnect(restarted, 'armor-confirmed-interaction-restart');
       const [durableReplay, durableSnapshot] = await sendCommand(restarted.socket, request);
       expect(durableReplay.messageType).toBe('command.replay');
       expect(durableReplay.receipt).toEqual(result.receipt);
       expect(durableSnapshot.presentation.base.formId).toBe('CHR-021');
       expect(restarted.rollRequestAllocations()).toBe(0);
+      markPhase('final assertions complete');
     },
   );
 });

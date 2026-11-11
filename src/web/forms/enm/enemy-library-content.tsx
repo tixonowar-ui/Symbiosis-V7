@@ -1,3 +1,4 @@
+import type { EnemyVersionIdentity } from '@shared/enemy-authoring.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import {
   enemyLibraryProjectionValue,
@@ -124,7 +125,11 @@ export function EnemyLibraryContent({
   onSelect,
 }: {
   readonly projection: JsonObject;
-  readonly onSelect: (tab: EnemyLibraryTab, selection: EnemyLibrarySelection | null) => void;
+  readonly onSelect: (
+    tab: EnemyLibraryTab,
+    selection: EnemyLibrarySelection | null,
+    userSelection?: EnemyVersionIdentity | null,
+  ) => void;
 }) {
   const p = enemyLibraryProjectionValue(projection);
   if (p.formId === 'ENM-003') {
@@ -222,9 +227,29 @@ export function EnemyLibraryContent({
           <p>Выбрана каноническая запись. Карточка системного мыслящего к ней не относится.</p>
         ) : null}
         <h2>Пользовательские шаблоны этой кампании</h2>
-        <p>Сохранённых пользовательских шаблонов нет.</p>
+        {p.activeTab === 'MONSTERS' ? (
+          <p>Сохранённых пользовательских монстров нет.</p>
+        ) : p.currentUserTemplates.length === 0 ? (
+          <p>Сохранённых пользовательских шаблонов нет.</p>
+        ) : (
+          <ul>
+            {p.currentUserTemplates.map(({ displayName, ...identity }) => (
+              <li key={identity.templateId}>
+                <label>
+                  <input
+                    type="radio"
+                    name="enemy-template"
+                    checked={p.userSelectionOrNull?.versionId === identity.versionId}
+                    onChange={() => onSelect('SENTIENT_ENEMIES', null, identity)}
+                  />
+                  {displayName} · V{identity.version} · {identity.templateId.slice(0, 8)}
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
         <p>
-          Создание, версии, фильтры, инстанцирование и генерация противников в этом выпуске
+          Непустые симбионты, новые версии, фильтры, инстанцирование и генерация противников пока
           недоступны.
         </p>
       </section>

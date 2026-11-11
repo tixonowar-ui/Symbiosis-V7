@@ -1,5 +1,9 @@
 import { openLegacySchema19Database } from '../../tests/fixtures/legacy-schema-19.js';
-import { applyMigrations } from './migrations/index.js';
+import {
+  openLegacySchema20Database,
+  LEGACY_SCHEMA_20_MIGRATIONS,
+} from '../../tests/fixtures/legacy-schema-20.js';
+import { applyMigrations, applyMigrationSequence } from './migrations/index.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -497,7 +501,7 @@ describe('technical NPC attempt and actual GM queue transaction integration', ()
         registry = f.db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
       const source = readNpcRecoveryClosure(f.db, f.scope.campaignId, f.readers),
         viewBefore = f.view();
-      expect(applyMigrations(f.db)).toBe(20);
+      expect(applyMigrationSequence(f.db, LEGACY_SCHEMA_20_MIGRATIONS)).toBe(20);
       expect(rows(f.db)).toEqual(before);
       expect(
         f.db.prepare('SELECT * FROM schema_migration WHERE version<=19 ORDER BY version').all(),
@@ -507,7 +511,7 @@ describe('technical NPC attempt and actual GM queue transaction integration', ()
       f.db.close();
       const reopened = fixture(
         { bytes, scope: f.scope, profileId: f.profileId },
-        openPersistenceDatabase(path),
+        openLegacySchema20Database(path),
       );
       expect(readNpcRecoveryClosure(reopened.db, f.scope.campaignId, reopened.readers)).toEqual(
         source,
@@ -521,6 +525,82 @@ describe('technical NPC attempt and actual GM queue transaction integration', ()
       });
       expect(reopened.db.serialize().equals(current)).toBe(true);
       expect(reopened.db.pragma('foreign_key_check')).toEqual([]);
+      reopened.db.close();
+    } finally {
+      for (const db of databases) if (db.open) db.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it('upgrades populated legacy-v1 schema20 NPC/QUEUE histories and original receipts to21 without old-row writes, then reopens SQLite and exactly replays', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'sentient-enemy-migration-'));
+    try {
+      const path = join(directory, 'legacy20.sqlite'),
+        f = fixture(undefined, openLegacySchema20Database(path));
+      expect(f.db.prepare('SELECT MAX(version) version FROM schema_migration').get()).toEqual({
+        version: 20,
+      });
+      const birth = f.db.prepare('SELECT payload_json FROM campaign').get() as {
+        payload_json: string;
+      };
+      expect(JSON.parse(birth.payload_json)).toMatchObject({ schemaVersion: 1 });
+      expect(JSON.parse(birth.payload_json)).not.toHaveProperty('defaultSentientCatalogVersion');
+      const created = f.create(),
+        input = readNpcEditorDraft(catalog, created.attempt.values).identity;
+      const edit = f.replace(
+          created.attempt,
+          json({ ...input, name: { kind: 'ENTERED', value: 'Legacy20 NPC' } }),
+        ),
+        edited = f.save(edit.boundary, edit.attempt);
+      const tables = (
+        f.db
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name<>'schema_migration' ORDER BY name",
+          )
+          .all() as { name: string }[]
+      ).map((row) => row.name);
+      const rows = (db: Database.Database) =>
+        Object.fromEntries(
+          tables.map((table) => [
+            table,
+            db.prepare('SELECT * FROM ' + table + ' ORDER BY rowid').all(),
+          ]),
+        );
+      const before = rows(f.db),
+        registry = f.db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
+        source = readNpcRecoveryClosure(f.db, f.scope.campaignId, f.readers),
+        view = f.view();
+      expect(applyMigrations(f.db)).toBe(21);
+      expect(rows(f.db)).toEqual(before);
+      expect(
+        f.db.prepare('SELECT * FROM schema_migration WHERE version<=20 ORDER BY version').all(),
+      ).toEqual(registry);
+      expect(f.db.pragma('foreign_key_check')).toEqual([]);
+      for (const table of [
+        'campaign_enemy_template',
+        'campaign_enemy_version',
+        'campaign_enemy_history',
+        'campaign_enemy_current_version',
+      ])
+        expect(f.db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
+      const bytes = f.db.serialize();
+      f.db.close();
+      const reopened = fixture(
+        { bytes, scope: f.scope, profileId: f.profileId },
+        openPersistenceDatabase(path),
+      );
+      expect(readNpcRecoveryClosure(reopened.db, f.scope.campaignId, reopened.readers)).toEqual(
+        source,
+      );
+      expect(reopened.view()).toEqual(view);
+      expect(rows(reopened.db)).toEqual(before);
+      const stable = reopened.db.serialize();
+      expect(reopened.save(edit.boundary, edit.attempt)).toEqual({
+        operation: edited.operation,
+        replayed: true,
+      });
+      expect(reopened.db.serialize()).toEqual(stable);
+      expect(reopened.db.pragma('foreign_key_check')).toEqual([]);
+      expect(reopened.db.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
       reopened.db.close();
     } finally {
       for (const db of databases) if (db.open) db.close();

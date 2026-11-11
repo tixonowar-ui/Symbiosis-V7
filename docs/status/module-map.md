@@ -1,5 +1,40 @@
 # Состояние модулей
 
+## V1 мыслящего врага runtime #256
+
+ENM-001::CTA003 использует прежнюю owning GM оболочку и QUEUE. ENM-005–010
+подтверждают отдельную техническую попытку; ENM-010::CTA004 атомарно создаёт
+SENTIENT template/version/history/current pointer и открывает ENM-020.
+Identity не содержит sex, использует ORDINARY_SENTIENT и массу 30–500/0,1;
+база — семь целых 1–35, без суммы/RNG/clamp. Источниковые общие валидаторы
+связывают расу/класс/навыки/требования и точные слоты. Preview показывает
+полный лист, фактическое имущество, source profiles, свойства одежды/качество
+и penalties/поправки экипировки. Предметы по умолчанию не выдаются.
+
+ADR 0091 описывает immutable V1 и CORE-214 audit реального master/campaign,
+полный before/after/provenance/art и отсутствие RNG. Back сбрасывает зависимые
+стадии при смене базы/build, сохраняя старые события. Source observer проверяет
+все исторические попытки/версии/выборы после выхода из ENM; prepared callbacks
+остаются read-only в SQL/source fence. Миграция 0021 сохраняет старые bytes и
+birth-v1/v2/pin, не добавляет новый GM context или actor.
+Старые character/checkpoint/campaign/device, post-save и network-tab allocators
+видят занятые enemy IDs, включая отменённые попытки. Целые affected suites и
+точные collision/fresh-ID controls проверяют отказ без записи; смена настоящего
+active GM context отказывает новым PATCH/COMMIT и известному replay до receipt.
+
+Пользовательские V1 текущей кампании отделены от 44 SYSTEM_DEFAULT_SENTIENT и
+16/17 canonical, видны только на SENTIENT_ENEMIES и читаются через CTA007/020.
+ENM-003 по-прежнему относится только к 44 Runtime Pack записям. Placeholder
+закреплён в V1; системные payloads/арт и artifacts/CHECKSUMS не меняются.
+PLAYER authority/privacy и закрытый decoder защищают новые PATCH/COMMIT/NAV.
+Непустая композиция требует следующего среза #257; N+1, upload, instantiation,
+группа/карта/бой/PC XP не включены. Авторские targeted evidence относятся к
+dirty source; clean exact-SHA, CI и merge пока не объявляются пройденными.
+
+После CI c265 два отдельных LIFECYCLE waits имеют конечный budget 30 с только
+для этого случая. Сравнительная диагностика не показала устойчивого замедления;
+runtime не изменён. [Отказ, измерения и ограничения](ci-lifecycle-256.md).
+
 ## Каталог врагов runtime #255
 
 Прежний GM ingress и cursor подключают ENM-001/003, без новой оболочки GM.

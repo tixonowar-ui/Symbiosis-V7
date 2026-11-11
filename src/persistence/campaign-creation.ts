@@ -1,4 +1,14 @@
 import {
+  ENEMY_AUTHORING_FORMS,
+  ENEMY_AUTHORING_NAV_TARGETS,
+  enemyAuthoringContextValue,
+  enemyAuthoringMutationValue,
+  newEnemyAttempt,
+  reduceEnemyAuthoring,
+  type EnemyAuthoringContext,
+  type EnemyAuthoringMutation,
+} from '@shared/enemy-authoring.js';
+import {
   ENEMY_LIBRARY_FORMS,
   ENEMY_LIBRARY_NAV_TARGETS,
   enemyLibraryContextValue,
@@ -16,7 +26,7 @@ import type {
   NpcCompositionAuthoringApply,
   NpcWoundPreparationApply,
 } from './npc-gm-source.js';
-import { npcIdentityInUse } from './npc-identities.js';
+import { npcIdentityInUse, campaignEnemyIdentityInUse } from './npc-identities.js';
 import type {
   NpcAttemptPreparationContext,
   NpcCommitPreparationContext,
@@ -142,7 +152,8 @@ export type CampaignCreationCursor = {
         | CampaignLobbyGmForm
         | CampaignLifecycleForm
         | (typeof NPC_SOURCE_FORMS)[number]
-        | (typeof ENEMY_LIBRARY_FORMS)[number];
+        | (typeof ENEMY_LIBRARY_FORMS)[number]
+        | (typeof ENEMY_AUTHORING_FORMS)[number];
       readonly targetId: string;
     }
   | {
@@ -617,6 +628,7 @@ export function createLocalGmContext(
 }
 
 function assertUnusedId(db: Database.Database, id: string): void {
+  if (campaignEnemyIdentityInUse(db, id)) return fail('IDEMPOTENCY_CONFLICT');
   if (npcIdentityInUse(db, id)) return fail('IDEMPOTENCY_CONFLICT');
   text(id);
   if (id === loadDeviceId(db)) return fail('IDEMPOTENCY_CONFLICT');
@@ -648,7 +660,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 17 ||
     version === 18 ||
     version === 19 ||
-    version === 20
+    version === 20 ||
+    version === 21
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -669,7 +682,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 17 ||
     version === 18 ||
     version === 19 ||
-    version === 20
+    version === 20 ||
+    version === 21
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -686,7 +700,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 17 ||
     version === 18 ||
     version === 19 ||
-    version === 20
+    version === 20 ||
+    version === 21
       ? CAMPAIGN_ADMISSION_IDENTITIES
       : [];
   if (
@@ -697,7 +712,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 17 ||
     version === 18 ||
     version === 19 ||
-    version === 20
+    version === 20 ||
+    version === 21
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -1950,6 +1966,7 @@ export interface GmRequestReviewDraftRequest {
   readonly values: NetworkGmRequestDraftValues;
 }
 export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTriple {
+  readonly enemyAuthoring?: EnemyAuthoringContext;
   readonly npc?: NpcGmContext;
   readonly enemyLibrary?: EnemyLibraryContext;
   readonly schemaVersion: 1;
@@ -1959,7 +1976,8 @@ export interface GmRequestReviewView extends GmRequestReviewScope, RevisionTripl
     | CampaignLobbyGmForm
     | CampaignLifecycleForm
     | (typeof NPC_SOURCE_FORMS)[number]
-    | (typeof ENEMY_LIBRARY_FORMS)[number];
+    | (typeof ENEMY_LIBRARY_FORMS)[number]
+    | (typeof ENEMY_AUTHORING_FORMS)[number];
   readonly requestQueueRevision: number;
   readonly values: NetworkGmRequestDraftValues;
   readonly returnContext: Extract<NetworkGmRequestReturnContext, { originFormId: 'CMP-006' }>;
@@ -2134,6 +2152,12 @@ function queueNavigationTarget(request: FormActionIntentV2Message): GmRequestRev
   if (request.actionKey === 'NET-017::CTA::009' && request.sourceFormId === 'NET-017')
     return 'CMP-006';
   const enemyKey = request.actionKey as keyof typeof ENEMY_LIBRARY_NAV_TARGETS;
+  const authoringKey = request.actionKey as keyof typeof ENEMY_AUTHORING_NAV_TARGETS;
+  if (
+    Object.hasOwn(ENEMY_AUTHORING_NAV_TARGETS, authoringKey) &&
+    authoringKey.split('::')[0] === request.sourceFormId
+  )
+    return ENEMY_AUTHORING_NAV_TARGETS[authoringKey];
   if (
     Object.hasOwn(ENEMY_LIBRARY_NAV_TARGETS, enemyKey) &&
     enemyKey.split('::')[0] === request.sourceFormId
@@ -2187,6 +2211,7 @@ function verifyLifecycleCause(
   };
 }
 export type GmRequestReviewMutation =
+  | { readonly kind: 'ENEMY_AUTHORING'; readonly cause: EnemyAuthoringMutation }
   | { readonly kind: 'ENEMY_SELECTION'; readonly request: EnemyLibrarySelectionRequest }
   | { readonly kind: 'NPC_SOURCE'; readonly cause: NpcSourceCause }
   | { readonly kind: 'NPC_SELECTION'; readonly request: NpcSelectionReplaceRequest }
@@ -2384,6 +2409,10 @@ function queueDraft(value: unknown): GmRequestReviewDraftRequest {
 }
 function queueMutation(value: unknown): GmRequestReviewMutation {
   const record = queueObject(value, Object.keys(object(value)));
+  if (record['kind'] === 'ENEMY_AUTHORING') {
+    const row = queueObject(value, ['kind', 'cause']);
+    return { kind: 'ENEMY_AUTHORING', cause: enemyAuthoringMutationValue(row['cause']) };
+  }
   if (record['kind'] === 'ENEMY_SELECTION') {
     const row = queueObject(value, ['kind', 'request']);
     return { kind: 'ENEMY_SELECTION', request: enemyLibrarySelectionRequestValue(row['request']) };
@@ -2475,6 +2504,8 @@ function queueView(
     value.enemyLibrary?.selectedOrNull?.origin !== 'SYSTEM_DEFAULT_SENTIENT'
   )
     return fail();
+  if (Object.hasOwn(value, 'enemyAuthoring')) enemyAuthoringContextValue(value.enemyAuthoring);
+  else if (ENEMY_AUTHORING_FORMS.some((form) => form === value.formId)) return fail();
   if (Object.hasOwn(value, 'npc')) {
     if (!same(npcGmContextValue(value.npc), value.npc)) return fail();
     if (
@@ -2683,7 +2714,32 @@ function reduceQueue(
   let connectionFactsSha256OrNull = state.connectionFactsSha256OrNull;
   let document = queueViewDocument(old);
   let changed = true;
-  if (mutation.kind === 'ENEMY_SELECTION') {
+  if (mutation.kind === 'ENEMY_AUTHORING') {
+    if (mutation.cause.request.payload.campaignId !== scope.campaignId)
+      return fail('FOREIGN_OWNER');
+    const reduced = reduceEnemyAuthoring(
+      old.enemyAuthoring ?? fail('DRAFT_UNAVAILABLE'),
+      mutation.cause,
+      old.formId,
+      presentationRevisions(old),
+    );
+    document = {
+      ...document,
+      enemyAuthoring: reduced.context,
+      formId: reduced.formId,
+      stateRevision: next(old.stateRevision),
+      projectionRevision: next(old.projectionRevision),
+    };
+    if (mutation.cause.committedVersionOrNull !== null)
+      document = {
+        ...document,
+        enemyLibrary: {
+          activeTab: 'SENTIENT_ENEMIES',
+          selectedOrNull: null,
+          userSelectionOrNull: mutation.cause.committedVersionOrNull,
+        },
+      };
+  } else if (mutation.kind === 'ENEMY_SELECTION') {
     const request = mutation.request;
     if (
       old.formId !== 'ENM-001' ||
@@ -2695,6 +2751,9 @@ function reduceQueue(
     const enemyLibrary = enemyLibraryContextValue({
       activeTab: request.activeTab,
       selectedOrNull: request.selectionOrNull,
+      ...(Object.hasOwn(request, 'userSelectionOrNull')
+        ? { userSelectionOrNull: request.userSelectionOrNull }
+        : {}),
     });
     changed = !same(enemyLibrary, old.enemyLibrary);
     document = {
@@ -2815,6 +2874,23 @@ function reduceQueue(
       ...document,
       ...(npc === undefined ? {} : { npc }),
       ...(enemyLibrary === undefined ? {} : { enemyLibrary }),
+      ...(target === 'ENM-005' && old.formId === 'ENM-001'
+        ? {
+            enemyAuthoring: newEnemyAttempt(mutation.request.navigationRequestId, scope.campaignId),
+          }
+        : {}),
+      ...(target === 'ENM-020' && old.formId === 'ENM-001'
+        ? {
+            enemyAuthoring: {
+              attemptOrNull: null,
+              selectedVersionOrNull:
+                old.enemyLibrary?.userSelectionOrNull ?? fail('DRAFT_UNAVAILABLE'),
+            },
+          }
+        : {}),
+      ...(old.formId === 'ENM-005' && target === 'ENM-001'
+        ? { enemyAuthoring: { attemptOrNull: null, selectedVersionOrNull: null } }
+        : {}),
       formId: target,
       projectionRevision: next(old.projectionRevision),
     };
@@ -2885,7 +2961,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 17 &&
     row['version'] !== 18 &&
     row['version'] !== 19 &&
-    row['version'] !== 20
+    row['version'] !== 20 &&
+    row['version'] !== 21
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -2899,7 +2976,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 17 ||
     row['version'] === 18 ||
     row['version'] === 19 ||
-    row['version'] === 20
+    row['version'] === 20 ||
+    row['version'] === 21
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -2969,6 +3047,7 @@ function readQueueViewState(
     )
       return fail();
     if (
+      (mutation.kind === 'ENEMY_AUTHORING' && eventId !== mutation.cause.request.commandId) ||
       (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
       (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
       ((mutation.kind === 'NPC_SELECTION' || mutation.kind === 'ENEMY_SELECTION') &&
@@ -3218,6 +3297,7 @@ export function appendGmRequestReviewEventInTransaction(
   const eventId = text(input.eventId);
   const mutation = queueMutation(input.mutation);
   if (
+    (mutation.kind === 'ENEMY_AUTHORING' && eventId !== mutation.cause.request.commandId) ||
     (mutation.kind === 'NAV' && eventId !== mutation.request.navigationRequestId) ||
     (mutation.kind === 'DRAFT' && eventId !== mutation.request.draftUpdateId) ||
     ((mutation.kind === 'NPC_SELECTION' || mutation.kind === 'ENEMY_SELECTION') &&
@@ -3268,7 +3348,8 @@ export function appendGmRequestReviewEventInTransaction(
   if (state.viewOrNull === null) {
     if (!same(cursor, initial.cursor)) return fail('STALE_REVISION');
   } else if (
-    (mutation.kind === 'NAV' ||
+    (mutation.kind === 'ENEMY_AUTHORING' ||
+      mutation.kind === 'NAV' ||
       mutation.kind === 'DRAFT' ||
       mutation.kind === 'NPC_SELECTION' ||
       mutation.kind === 'ENEMY_SELECTION' ||

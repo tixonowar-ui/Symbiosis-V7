@@ -1,3 +1,4 @@
+import { isEnemyAuthoringForm } from '../shared/enemy-authoring.js';
 import { NPC_CONTROL_FORM_IDS } from '@shared/npc-presentation.js';
 import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
@@ -106,6 +107,7 @@ interface Dependencies {
   /** The application composition publishes the saved bind on the actual private listener. */
   readonly requestReview?: {
     readonly npcEnabled?: boolean;
+    readonly enemyAuthoringEnabled?: boolean;
     readonly project: (c: CampaignConnection) => Promise<{
       base: PresentedBaseForm;
       layers?: readonly PresentedLayerForm[];
@@ -372,6 +374,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       (cursor.kind === 'QUEUE' &&
         (cursor.formId === 'NET-017' ||
           isEnemyLibraryForm(cursor.formId) ||
+          isEnemyAuthoringForm(cursor.formId) ||
           (NPC_CONTROL_FORM_IDS as readonly string[]).includes(cursor.formId) ||
           isCampaignLobbyGmForm(cursor.formId) ||
           isCampaignLifecycleForm(cursor.formId)))
@@ -1069,6 +1072,8 @@ export function createCampaignCreationRuntime(d: Dependencies) {
               ? []
               : message.supportedWorkflowCommandIds.filter(
                   (id) =>
+                    (d.requestReview?.enemyAuthoringEnabled === true &&
+                      (id === 'UI-CMD-ENEMY-DRAFT-PATCH' || id === 'UI-CMD-ENEMY-COMMIT-V1')) ||
                     (d.requestReview?.npcEnabled === true &&
                       (id === 'UI-CMD-NPC-COMMIT-V1' || id === 'UI-CMD-NPC-NEW-VERSION')) ||
                     id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||

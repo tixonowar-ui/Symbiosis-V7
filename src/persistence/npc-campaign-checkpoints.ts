@@ -65,7 +65,8 @@ function schema(db: Database.Database): boolean {
     version !== 17 &&
     version !== 18 &&
     version !== 19 &&
-    version !== 20
+    version !== 20 &&
+    version !== 21
   )
     return s.fail();
   const row = db

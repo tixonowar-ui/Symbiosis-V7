@@ -3480,6 +3480,8 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
   describe('three real FINALs from one owning installation', () => {
     const OWNER_RETURN_ROLLBACK_CASE =
       'rolls back extra closures and both journals if the final owner guard fails';
+    const OWNER_MISSING_EXTRA_TAB_CASE =
+      'refuses a missing extra tab instead of retaining partial controller authority';
     const sources: Source[] = [];
     let filename: string,
       f: ReturnType<typeof playerDecisionFixture>,
@@ -3526,11 +3528,23 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
     beforeEach(({ task }) => {
       ownerSubmitCalls = 0;
       // Other cases retain their actual submit work in the original 30s hook.
-      if (task.name !== OWNER_RETURN_ROLLBACK_CASE) submitOwner();
+      if (task.name !== OWNER_RETURN_ROLLBACK_CASE && task.name !== OWNER_MISSING_EXTRA_TAB_CASE)
+        submitOwner();
     });
-    beforeEach(({ task }) => {
-      // ADR 0088: only this named case gets 60s after CI's 30s submit-hook timeout.
-      if (task.name === OWNER_RETURN_ROLLBACK_CASE) submitOwner();
+    beforeEach(({ task, onTestFailed }) => {
+      // ADR 0088: the two named cases retain the same submit with a finite 60s budget.
+      if (task.name === OWNER_MISSING_EXTRA_TAB_CASE) {
+        const startedAt = performance.now();
+        const phases = [{ phase: 'owner submit started', elapsedMs: 0 }];
+        onTestFailed(() => {
+          console.error('Admission owner submit elapsed phases (ms)', JSON.stringify(phases));
+        });
+        submitOwner();
+        phases.push({
+          phase: 'owner submit completed',
+          elapsedMs: Math.round(performance.now() - startedAt),
+        });
+      } else if (task.name === OWNER_RETURN_ROLLBACK_CASE) submitOwner();
     }, 60_000);
     beforeEach(() => {
       // Neither a stale prior owner nor duplicate submission may reach publication/preparation.
@@ -3771,7 +3785,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         ).toEqual(originals);
       });
     });
-    it('refuses a missing extra tab instead of retaining partial controller authority', () => {
+    it(OWNER_MISSING_EXTRA_TAB_CASE, () => {
       owner.db.pragma('foreign_keys = OFF');
       owner.db
         .prepare('DELETE FROM local_network_tab WHERE network_scope_id=?')
