@@ -331,8 +331,9 @@ const ROOT_SEALS = [
     sha256: '76d2cf3f7b0e93adaffd28e06efc23883ff19863c023c8530ef003a92abf5c6c',
   },
   {
+    // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
     key: 'registryCoverage',
-    sha256: '5872f77be4c93b0bf39c9f6be1e7b615c9117b6ccf93bb9fecc0710aa2c48969',
+    sha256: '542803be51f709175371667b25a8a3ba895d12985df6c5887a99d23e4b37bd3c',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

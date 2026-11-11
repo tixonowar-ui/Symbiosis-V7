@@ -26,6 +26,12 @@
 
 ### Добавлено
 
+- **2026-11-11, source #284:** ADR 0092 / Atlas 1.21 закрепляют утверждённый
+  явный полный pre-V1 rebuild навыков SENTIENT: полный Back/initial input,
+  реальные mixed charges/losses, отдельные acquisition facts и фактический
+  body/loadout. B16 сохраняет exact B15/старые receipts; runtime реализуется
+  отдельно в #257. Runtime Pack44, предметные XLSX и старые версии не меняются.
+
 - **2026-11-10, runtime #256:** из настоящего каталога кампании ENM-005–010
   создают sexless SENTIENT V1 с собственной ORDINARY_SENTIENT identity,
   ручными характеристиками, настоящими расой/классом/навыками, явно пустыми

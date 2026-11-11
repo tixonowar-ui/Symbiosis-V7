@@ -123,6 +123,7 @@
 | [0089](0089-system-library-without-placement.md)                     | Read-only SYSTEM_LIBRARY без placement; Atlas 1.20/B15                  | принято владельцем, source #244             |
 | [0090](0090-campaign-enemy-library-cursor-and-pin.md)                | Pin при CREATE и прежний GM cursor библиотеки врагов                    | техническая реализация CORE-191, #255       |
 | [0091](0091-sentient-enemy-v1.md)                                    | Попытка, полный лист и атомарная V1 мыслящего врага                     | техническая реализация #256                 |
+| [0092](0092-sentient-initial-skill-plan-rebuild.md)                  | Явный полный pre-V1 rebuild плана навыков SENTIENT; Atlas 1.21/B16      | принято владельцем, вариант A #284          |
 
 ## Перенос решений аудита
 

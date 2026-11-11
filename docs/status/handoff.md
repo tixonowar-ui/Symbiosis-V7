@@ -1,5 +1,53 @@
 # Передача контекста — 2026-11-11
 
+## Source #284 — утверждённый A, отдельный кандидат до runtime #257
+
+Фактический main `85f91cac1a8b257c907aa066765bc010922da819` доставил #256;
+issue #256 закрыта, #188/#113 открыты. Исторические инциденты/dirty доказательства
+ниже сохранены и не означают, что принятый #256 снова не завершён.
+В новом изолированном `codex/284-enemy-initial-plan-source` подготовлена
+разрешённая source-поставка ADR 0092 / Atlas 1.21/B16. Owner A получен явно;
+новые игровые решения не заменяются предложением runtime или NPC journal.
+
+Полный ENM-007 initial input/Back сохранён. Явный rebuild, actual skill charges,
+mandatory FREE/Advisor facts, single SYM-079 и verified ENM-009 body описаны
+в ADR 0092 и независимых JSON/Markdown mirrors. Системные 44 payloads/arts,
+XLSX, non-Atlas bytes и старые FINAL/snapshots/receipts неизменны. Frozen B15
+manifest: 3177 байт, SHA256 `1edfa7ba69d281082f8343b68e9f901cf3cd9cac19535eb73f5145ef94a838a2`.
+Зависимая runtime policy не включена в этот PR.
+
+Внешний evidence-284 сохраняет clean-base npm ci/import, byte-local source
+milestones и raw отказы: helper ENOBUFS/MD mirror lookup до записи артефактов,
+import02 exact intersecting registryCoverage seal refusal. Literal seals
+обновлены без изменения predicates; import03/04 прошли. Source/lineage target
+134/3 PASS (включая все real Git forward/reverse edges) и actual old #256
+physical reopen/original replay PASS являются dirty targeted evidence. Новые
+bytes после этих milestones требуют собственной актуальной проверки.
+Final SHA, независимый clean five-stage, полный CI и protected merge/tree proof
+не объявляются выполненными до фактического результата.
+
+Актуальные scoped evidence сохраняются вне репозитория в evidence-284:
+
+| Набор                     | Результат и граница                                                                                             |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| affected-source-suites-01 | 1311 PASS / 18 целых source/guard/validator/lineage suites, 90,82 с; стандартные workers/budgets                |
+| fresh-process-b15-b16-02  | Новый edge: 1 PASS / 25 filtered, 7,74 с; реальные FINAL/DRAFT/archive/export/candidate в разных Node-процессах |
+| old-enemy-physical-02     | 1 PASS, 5,51 с; raw rows до owning open, прежние B15 version/receipt, физический reopen, zero write/FK          |
+| validate-source-01        | Полный generated cross-registry validator PASS                                                                  |
+| typecheck-source-01       | Node и web tsconfigs PASS                                                                                       |
+| lint-source-01            | Scoped ESLint всех изменённых TS/TSX PASS                                                                       |
+
+Physical helper перечисляет все таблицы, как исходный producer; фактические
+80 таблиц старого fixture не содержат sqlite_% tables. Уточнение фильтра было
+проверкой fidelity, а не обнаруженной потерей данных. Password KDF обходится
+только unit verifier; сетевой authority/production UI этим тестом не доказаны.
+Новый runtime composition/rebuild остаётся #257. Ни эти dirty targeted результаты,
+ни прежние полные #256 gates не переносятся на будущий committed SHA/CI.
+
+Dirty #257 (25 файлов) и его WIP/evidence сохранены; old project/output не
+трогаются. После merge и acceptance #284 следующая порученная задача — #257;
+остальная исходная очередь идёт последовательно после её реальной поставки.
+
 ## Runtime #256 — авторская реализация, приёмка ожидается
 
 Полный локальный gate `2b5d9d1` прошёл, CI 42932255096 отказал на BODY30000

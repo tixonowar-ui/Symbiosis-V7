@@ -82143,7 +82143,8 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Ровно семь baseStats 1-35 без лимита суммы; постоянные модификаторы применяются после без clamp, итог может быть выше 35, но не ниже 1.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Изменение базы ENM-006 сохраняет полный доступный Back: dependent confirmations становятся неактуальны, а последующий полный ENM-007 требует явного rebuild. До него known-skill charges/losses и acquisition facts прежнего плана не сбрасываются и не применяются к неподтверждённому body; обычный NAV/Back/exact replay не меняет план."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -82547,7 +82548,8 @@
       "C",
       "perStatValidation",
       "derivedPreview",
-      "draftRevision"
+      "draftRevision",
+      "skillPlanImpact"
     ],
     "roles": [
       "gm"
@@ -82619,7 +82621,11 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Процесс персонажа без бросков создания.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "ADR 0092 / owner #284 A: initialSkillPlanOrNull — отдельный технический pre-V1 план SENTIENT, не actor/template.status. Новый plan имеет закрытый version discriminator и host-bound revision; legacy ABSENT не нормализуется и не дополняется в сохранённых bytes. Технические IDs/revisions не подменяют понятный GM preview последствий.",
+      "Полный initial input raceCode/pureClassOrNull/skillSelections[] и точный precomposition START budget сохраняются; incremental-only ограничение не вводится. До первого V1 GM отдельно подтверждает полную пересборку изменённого или того же input, включая changed ENM-006 → ENM-007; обычное сохранение идентичного input/NAV не является rebuild. Confirmation привязано к actual attempt, current plan revision, input и показанным последствиям; stale/foreign/role-loss/error отказывает без partial reset.",
+      "Явный rebuild атомарно делает старую deterministic derivation неактивной, инвалидирует cached composition/inventory/own-skill selections и создаёт новый полный initial plan с обычными source costs/requirements. Новые extra choices подтверждаются заново; unpaid bonus gap, перенос неоплаченной START-части и переписывание фактического charge запрещены. SYM-079 применяется к actual initial basis нового плана ровно один раз без stacking с прежним grant; старые расчёты/команды остаются immutable.",
+      "Обязательные acquisition facts отделены от текущих plan choices: FREE хранит исходный R6 и actual fixed signed S/M/Z loss без пересчёта по новой базе, refund или нового clamp; final floor проверяется на реальном листе. Advisor сохраняет cardId, I/W/suppression, первоначальное fill и все прежние receipts; rebuild инвалидирует только current own-skill choices, не требует заполнить abandoned prior plan/card ради полной смены race/build и сам не создаёт новую карту или reroll при same-card reselect."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -83042,7 +83048,8 @@
       "Skills",
       "Requirements",
       "Save draft stage",
-      "Back"
+      "Back",
+      "Explicit pre-V1 skill-plan rebuild confirmation with actual consequences; field/dialog control under existing SENTIENT_BUILD workflow, not a new global CTA"
     ],
     "contexts": [
       "enemy-catalog"
@@ -83129,7 +83136,11 @@
       "skillSelections[]",
       "requirements",
       "skillValidationSummary",
-      "draftRevision"
+      "draftRevision",
+      "initialSkillPlanOrNull",
+      "expectedSkillPlanRevisionOrNull",
+      "explicitRebuildConfirmationOrNull",
+      "rebuildConsequencesPreviewOrNull"
     ],
     "roles": [
       "gm"
@@ -83225,7 +83236,10 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Выбрать взаимоисключающий состав врага-мыслящего: до четырёх разных обычных симбионтов либо для допустимого Единого ровно один профиль симбиотического чудовища; задать уровни, деревья, current/maxOE и пустые специальные истории.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Внутри неизменённого плана composition edit/removal/reacquisition сохраняет известные навыки, actual START/SYM-166 charges и подтверждённые permanent losses. Потеря SYM-166 источника даёт capacity=0/overflow, а не free refund или вторую пятёрку при возврате. Lower W сам по себе не удаляет навыки; temporary impairment только отключает бонус. Автоматическое восстановление забытого START/GROSS/own Advisor skill запрещено; полный явный ENM-007 rebuild — отдельная граница.",
+      "ENM-008 показывает provisional consequences и не фиксирует permanent requirement loss по ещё не выбранному loadout. Initial Advisor fill относится к actual acquisition/current plan; поздняя permanent loss не требует повторного exact fill. AQA-005 confirmation остаётся явным; финальные требования разрешаются на ENM-009 с фактической экипировкой.",
+      "Обязательные acquisition facts отделены от текущих plan choices: FREE хранит исходный R6 и actual fixed signed S/M/Z loss без пересчёта по новой базе, refund или нового clamp; final floor проверяется на реальном листе. Advisor сохраняет cardId, I/W/suppression, первоначальное fill и все прежние receipts; rebuild инвалидирует только current own-skill choices, не требует заполнить abandoned prior plan/card ради полной смены race/build и сам не создаёт новую карту или reroll при same-card reselect."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -83649,7 +83663,10 @@
       "specialHistoriesInitiallyEmpty=true",
       "slotValidation",
       "draftRevision",
-      "commandId"
+      "commandId",
+      "skillPlanRevisionOrNull",
+      "retainedAcquisitionFacts[]",
+      "skillPoolAccounting"
     ],
     "roles": [
       "gm"
@@ -83721,7 +83738,9 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Оружие, броня, фармацевтика, инструменты и артефакты.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Успешное SENTIENT_INVENTORY/fullsheet атомарно разрешает actual permanent requirements и фактические skill charges текущего плана. Sealed/equipped source Nate применяется до решения о постоянной потере: provisional Skunk C0 на ENM-008 не забывает навык заранее. Armor M — temporary availability, не потеря знания/освобождение charges. Initial own Advisor requirements используют actual body/effective M; позднее temporary impairment не заставляет перераспределять/заполнять карту заново.",
+      "Permanent requirement loss навсегда в текущем плане удаляет навык и освобождает только его actual charges, включая mixed START/SYM-166 payment; возврат stats/source без явного rebuild не восстанавливает знание. Final permanent stats >=1 без ручного/автоматического clamp, >35 разрешены. Invalid final floor/stale/foreign/role-loss/error не фиксирует ни partial loss, ни частичный inventory/plan reset."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -84116,7 +84135,9 @@
       "profileVersion",
       "equipmentState",
       "inventoryValidationSummary",
-      "draftRevision"
+      "draftRevision",
+      "skillPlanRevisionOrNull",
+      "verifiedBodySkillResolution"
     ],
     "roles": [
       "gm"
@@ -84189,7 +84210,9 @@
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Проверка дерева, предметов, HP и сохранение шаблона.",
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
-      "Только пользовательский SENTIENT: massKg=30..500kg включительно, точный шаг 0.1kg, независимо от расы; поле sex отсутствует. Системные 44 шаблона из Runtime Pack остаются побайтово неизменными. SENTIENT art: собственный валидный арт имеет приоритет; при отсутствии выбора успешное сохранение v1 или N+1 закрепляет единственную заглушку sentient-enemy из согласованной поставки. Пол не вводится; существующий выбранный арт не заменяется при просмотре или reconnect."
+      "Только пользовательский SENTIENT: massKg=30..500kg включительно, точный шаг 0.1kg, независимо от расы; поле sex отсутствует. Системные 44 шаблона из Runtime Pack остаются побайтово неизменными. SENTIENT art: собственный валидный арт имеет приоритет; при отсутствии выбора успешное сохранение v1 или N+1 закрепляет единственную заглушку sentient-enemy из согласованной поставки. Пол не вводится; существующий выбранный арт не заменяется при просмотре или reconnect.",
+      "Полный pre-V1 preview показывает actual plan, permanent/temporary skill availability, actual START/SYM-166/own Advisor accounting, retained mandatory facts и реальные последствия rebuild; не raw technical dump. COMMIT связывает полностью подтверждённый plan/body/loadout и исходные acquisition receipts атомарно. Неподтверждённые после rebuild composition/inventory/own-skill choices не сохраняются. После V1 этого rebuild нет; N+1 не вводится этой source-поставкой.",
+      "Старые empty V1/attempts/FINAL/snapshots/receipts читаются и exact replay выполняется побайтно без новых полей/нормализации. Legacy editing сохраняет прежний смысл до явного перехода в новый plan. Новая policy не применяется задним числом; неизвестный discriminator/version, чужой plan или source identity отказываются."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -84723,7 +84746,9 @@
       "validationErrors[]",
       "historyEntry",
       "commandId",
-      "commitStatus"
+      "commitStatus",
+      "initialSkillPlanOrNull",
+      "skillPoolAccounting"
     ],
     "roles": [
       "gm"
@@ -89970,7 +89995,8 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Read-only цепочка версий; для новых экземпляров всегда используется только currentVersionId.",
-      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+      "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+      "Read-only V1 сохраняет исходные plan/acquisition/charge/loss facts и первоначальные receipts; просмотр/reconnect/restart не выполняет rebuild, RNG, refund или повторный SYM-079. Legacy initialSkillPlan ABSENT остаётся ABSENT в immutable saved bytes; ни новые поля, ни новый baseline ID не вписываются задним числом."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -90251,7 +90277,8 @@
     "requiredFields": [
       "contextId",
       "stateRevision",
-      "projectionRevision"
+      "projectionRevision",
+      "initialSkillPlanOrNull"
     ],
     "roles": [
       "gm"

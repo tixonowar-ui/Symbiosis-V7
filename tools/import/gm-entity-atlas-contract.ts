@@ -14,6 +14,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 // Intersecting witnesses include the accepted formal Weaver source clarification in ADR 0086.
 // Intersecting witnesses include the accepted initial poison source clarification in ADR 0087.
 // ENM-003 SYSTEM_LIBRARY/ABSENT is amended by ADR 0089 / #244.
+// SENTIENT pre-V1 initial-plan rebuild is amended by ADR 0092 / #284.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -55,31 +56,31 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'ENM-006',
-    sha256: 'b0ec2a80f14b119c1f4c9d45953467b355b31c2e2b21740c03d66d1140605f3c',
+    sha256: '38ccc35751e2bf03cab04dc2f2d2bc1941606137424bbd3bec19df0657de55fb',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'ENM-007',
-    sha256: '080998d7544ca5f8e0ca11f656e3436233a7ceb982af8baf9025682c31302911',
+    sha256: '0e98a6e47658221bbc767e772542c7cafacd2c2f60dfee01d55f3e07b0533d7a',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'ENM-008',
-    sha256: '50bec713d817021dcb6a459a14a8b310326d6c3c1c2b2110347f03667442736b',
+    sha256: '046345fb81e636ea01224397412aa94bc9b0a5bc4ab0fe42c2931c999c528f02',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'ENM-009',
-    sha256: '58466dd0f39eedefaa86a9d62ced1cdaf07ac9a61bfd193676aa747ffe741c8d',
+    sha256: 'efcb4d715757eb40b1b74f78ceedc4d020b40a35f5ff5e5123771d00cf087c65',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'ENM-010',
-    sha256: 'a46ec27eb288e749385cdc07788c9452d72b7f7c85876d9716aa105bd9aaf3b6',
+    sha256: '96d804ae6cabdb2593ae988503019b2867a4f5ff3b18a4e65f6dc8dc6839ac2c',
   },
   {
     target: 'forms',
@@ -259,7 +260,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-ENM-010',
-    sha256: 'a11bc5ebd1ffd6daee5034adb0755b63cc00dc5bb3217b27032a1bfcc641f90c',
+    sha256: 'a9ff7821b296aa99e0e22b796b27dd53c3b5551b5d832cd4602d7e4d5db7d576',
   },
   {
     target: 'qaScenarios',
@@ -379,7 +380,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH',
-    sha256: 'd3a8df5b5d90c99cdee0b2e8aaf82bb79d51b49a82c7433324f0319ac31dd293',
+    sha256: '9b1839baba743d29e868463448c23da00a94314e2c465d7619f1ac65ebef6e6e',
   },
   {
     target: 'qaScenarios',
@@ -415,7 +416,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-ENEMY-DRAFT-PATCH',
-    sha256: '0bfd7c410ebfb877d9d119afdf41c6927a8794f1bc8de027ddc39c34d9f39685',
+    sha256: '32e40bd085b172e67fbec098804b2f4630af0da314760e549e69bc8e86ffc8da',
   },
   {
     target: 'workflowCommands',
@@ -435,15 +436,87 @@ const OBJECT_SEALS = [
     id: 'UI-CMD-MONSTER-STATS-ROLL-ONCE',
     sha256: 'a34cadf4a9e47a78fc429fd7eec257f64944ad5b1eb2140e3c26d451c77782a4',
   },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-FORM-ENM-006',
+    sha256: 'b8b4821acc36833ba220dc89c6a344555565a5de28f50821d02f7cf52aa0234a',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-CHANGE-ENM-006',
+    sha256: '1eb8b92e164d6401f13f68cc8035bd3f9640f4f26ea7053aee797cd86623c4ef',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-FORM-ENM-007',
+    sha256: 'a988865a2d021e087303d512f6e4e2dce949596e53fd57dae8d6f173af237400',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-CHANGE-ENM-007',
+    sha256: '3f9720077a390d0718f724e7f8e76eae57bd08f487fe1b650f812d16c5be4991',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-FORM-ENM-008',
+    sha256: 'f0d2024434bbd3a8af5822a7ad767f8a70d271228a044e6b63a88f236352fd40',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-CHANGE-ENM-008',
+    sha256: '5d6e0178b89148b547664a9f6070196cdbbb69f57378933143fdeb8cc8e7e25c',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-FORM-ENM-009',
+    sha256: '405d0fffb95a65f1db80ca5e598eaf821ea21d41a7917ce074b01d3875c8cc73',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-CHANGE-ENM-009',
+    sha256: '0ae6b4bb97996c4336ff84d96bb0def0d05043648dc1620e9e0a5b71c4897d13',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-CHANGE-ENM-010',
+    sha256: '3f1aa6bc9ed6e9cd3dedc74ddc93bb47f5319ae0f8301c33528918a66f7fabf9',
+  },
+  {
+    target: 'forms',
+    key: 'id',
+    id: 'ENM-020',
+    sha256: '3ae64524681f9c289f919afda0064b8ffad90379a56b199c836244b15d4df002',
+  },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-FORM-ENM-020',
+    sha256: '907003c790e64d0d9f600c691508d90a18d702fda5975e84908af2cdfbc5e1a5',
+  },
+  {
+    target: 'journeys',
+    key: 'id',
+    id: 'J-ENEMY-SENTIENT',
+    sha256: '55bb8b00ecfddd3551a9fdea35fddafe0487eb1ed9f058255c52f39a10b00120',
+  },
 ] as const;
 const ROOT_SEALS = [
   {
     key: 'atlasVersion',
-    sha256: 'c6c8b62a661fbde356147a070da7207352241528753db3756aa2efef8e59aac8',
+    sha256: '4941e59530a45cfb89ebc95b9337774fa59f686b963942ea9074a4b9d2379918',
   },
   {
     key: 'releaseDate',
-    sha256: 'dd627efcb5b4f7a56b1dc2259533f08f93d260f95f32f227670084204b3069ef',
+    sha256: 'b3ff15f86190dbe330d60c00616bf86409191308461f59ce0361cf105690d75b',
   },
   {
     key: 'counts',
@@ -459,7 +532,7 @@ const ROOT_SEALS = [
   },
   {
     key: 'registryCoverage',
-    sha256: '5872f77be4c93b0bf39c9f6be1e7b615c9117b6ccf93bb9fecc0710aa2c48969',
+    sha256: '542803be51f709175371667b25a8a3ba895d12985df6c5887a99d23e4b37bd3c',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -489,23 +562,23 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### ENM-006 —',
-    sha256: 'cfbfbe2f8db06c372a5bef49d3b61357a6e89015572ee8ea936def5550c3b5a1',
+    sha256: '03934ca99b3d7b9983cc0591b42a20e9729e68b6a8cb5487eed400a2c19564c9',
   },
   {
     prefix: '### ENM-007 —',
-    sha256: '4a3635529f5a0a767881855fbc836c5b5cd236de771d2d70fff69768f27b4b75',
+    sha256: '432664095a43b6dd9d93e82a3a1b840b73d42a105a32680d9239cd41ed2d27f8',
   },
   {
     prefix: '### ENM-008 —',
-    sha256: 'ba76d81c84b7a757a4998877083c84e7e39225fad00f51bb8d11a1abf47bf25e',
+    sha256: '16759e65266063df16da1818e6f1c7cddabec08286f6acbd65f3f853a1060007',
   },
   {
     prefix: '### ENM-009 —',
-    sha256: 'bcdda3a4e5de0fd166045f8e4bb80cf55d9a51a7bfa8d0beb2c31d91a9b42458',
+    sha256: 'd91a74a097bd4dfad4a6801bc42765a9d626a6ec42af73b6f2452f3fae33beb4',
   },
   {
     prefix: '### ENM-010 —',
-    sha256: '9290db70fadbd497bc11e7b3fdb8e46a20d63fc6b87b1cb1538dd4d5e571a8c3',
+    sha256: '9a5b64b9381c16ff3c125bf36ecfdbc6fd3dd0f0f095648ac4700e739693fd9f',
   },
   {
     prefix: '### ENM-011 —',
@@ -575,6 +648,14 @@ const MARKDOWN_SECTIONS = [
     prefix: '### J-TEMPLATE-LIFECYCLE —',
     sha256: '66e29c98260c5a0ab9d584e8492e873028c23bf29dde59427db1b83f1d677ffe',
   },
+  {
+    prefix: '### ENM-020 —',
+    sha256: '9749c3d8b2871c2d9e6fd3416596a9f87bf33e9f5b61dfa67e3f70a991902fbb',
+  },
+  {
+    prefix: '### J-ENEMY-SENTIENT —',
+    sha256: 'e3dfca7a44ad45ba829ed8797c7e4c84647f65b3221df09b68ae135455cfe640',
+  },
 ] as const;
 const MARKDOWN_LINES = [
   {
@@ -628,7 +709,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-ENM-010 | ENM-010 |',
-    sha256: '69da3617fe991c682b013ebb118ce7829b9d8eef79f861f1ffabb26daa711ed8',
+    sha256: '827e1dd4eaafe0c43d6d953a3e7779469d21f7823ed06f4523160f5b3616ad90',
   },
   {
     prefix: '| QA-FORM-ENM-011 | ENM-011 |',
@@ -708,7 +789,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH | UI-CMD-ENEMY-DRAFT-PATCH |',
-    sha256: '9c41d291b98997a38ae4b9f4a9ed3447e127562d9bf9be3f92014f17d6da3709',
+    sha256: '855801a276dbf58ef420b932dbc26bc061e7b97b4975d29aefa3fd8c7277ce62',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-ENEMY-NEW-VERSION | UI-CMD-ENEMY-NEW-VERSION |',
@@ -732,7 +813,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-ENEMY-DRAFT-PATCH | Сохранить этап шаблона врага/монстра |',
-    sha256: '2b557da3ddd01e5c51b28c3e4dd1589bf7acba718cfef62423aab03da36e35a9',
+    sha256: 'ef738b2bdf0d1183bea9a8cfdebf2724a68001969b16b75af6e6175f94d39121',
   },
   {
     prefix: '| UI-CMD-ENEMY-COMMIT-V1 | Сохранить первую версию шаблона врага/монстра |',
@@ -753,6 +834,46 @@ const MARKDOWN_LINES = [
   {
     prefix: '| 306 | Q-CHAR-010 |',
     sha256: '4817f92e353b6baf779692eeb2f230c8af60ee4e5027baddab263a2fa3d5dee3',
+  },
+  {
+    prefix: '| QA-FORM-ENM-006 | ENM-006 |',
+    sha256: 'bf89b0cded453c7a57a4f19311ade4adf525763db3a5cc6e64d5957c82260f40',
+  },
+  {
+    prefix: '| QA-CHANGE-ENM-006 | ENM-006 |',
+    sha256: '8786e450ab2d4488f4bd364f18c20424214724cdd1f6a1999c38f6e3023b24e7',
+  },
+  {
+    prefix: '| QA-FORM-ENM-007 | ENM-007 |',
+    sha256: '3dc6b7734dc114e16dd2d009454a86ca03cb924db5cd55afc5c654ddfc40c48c',
+  },
+  {
+    prefix: '| QA-CHANGE-ENM-007 | ENM-007 |',
+    sha256: 'ad5c32a681bd931808d559df886dfdfd6cb3f287f32ce8402ab6f6c8a24385bf',
+  },
+  {
+    prefix: '| QA-FORM-ENM-008 | ENM-008 |',
+    sha256: '2b491ac0c4b462ae38f260c7ec5940c0d14e96680a6756ea0bb5adbd00d055f7',
+  },
+  {
+    prefix: '| QA-CHANGE-ENM-008 | ENM-008 |',
+    sha256: '6962df4379a90a5e11e372ee97b2336dc494e6eb7bbbcceceb923a07019b1167',
+  },
+  {
+    prefix: '| QA-FORM-ENM-009 | ENM-009 |',
+    sha256: '4a3a68388dafe690e16eaee393df3c815def73986a65e2815091a7ff6efd6ff3',
+  },
+  {
+    prefix: '| QA-CHANGE-ENM-009 | ENM-009 |',
+    sha256: 'c4ccdfdbd0f72f3606762665af221b0ca5191fdd2b9588c292a1ad65cc8b5446',
+  },
+  {
+    prefix: '| QA-CHANGE-ENM-010 | ENM-010 |',
+    sha256: 'c6f8ddeb214b263de8a5fb084ad23cc7b617d6587d6b03c7158bc7fed81c59d8',
+  },
+  {
+    prefix: '| QA-FORM-ENM-020 | ENM-020 |',
+    sha256: '930fcab05a04b2fc012fbe5c14bb96f83386c12d816110240ace8918057a0011',
   },
 ] as const;
 const WHERE = 'atlas ADR 0077';

@@ -135,6 +135,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '3a9a4b1b80574982934bf7a6b7ac12e5d45f058bc8716e276bfe8689c28c7226',
   },
+  // ADR 0092 / #284: exact pre-V1 initial skill-plan source successor.
+  initialSkillPlanBaselineVersion:
+    'sha256:73c143c90f588da5a1166b1456991aa8aafd4cde4101fac839a2967c27e68a11',
+  initialSkillPlanAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '630c156b9ca502f7ff88e77ce1520720db871b454c9a7d0815ce5fa6fa30b84e',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      'e45c7add8ff88e1dc37015b49c04bc4ee6e5d3a0d3559e54b6f15d5e218f4110',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
