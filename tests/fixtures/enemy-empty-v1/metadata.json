@@ -1,0 +1,63 @@
+{
+  "producerHead": "11fde3e35fe27de8ca718de57e5c6682c7e2cf86",
+  "equivalentDeliveredMain": "85f91cac1a8b257c907aa066765bc010922da819",
+  "producerTree": "0f01cd9a17a47a6643eae5a386df70de40086cad",
+  "producerSha256": "cbb0c6c8947e35d1bdf35a210c7b9b94333a3f7346dcabe073e704855e105e58",
+  "kind": "Actual populated schema21 database from unchanged #256 source; no #257 source or synthesized SQL rows",
+  "limitations": "Unit fixture verifier bypasses password KDF; no network/production UI claim. UUIDs are actual technical fixture allocations. Physical SQLite close/open and exact original replay independently checked.",
+  "databaseSha256": "58a390078a12b0ff8d52eae518dc479cda988887d307e736a027fe086b258f4b",
+  "compressedSha256": "3ae110cac4aa6e89ae7b2d7d9027ed42a3df3e6558decc85cebca9871e8e9d41",
+  "scope": {
+    "ownerDeviceId": "2d4cb08c-2607-4b45-9ee3-6bf6ae7261f4",
+    "gmLocalContextId": "e26e22dc-a8dd-4f78-a984-2ae129dd080a",
+    "campaignId": "0c42474c-bd17-4719-8eff-cf4e6438838d"
+  },
+  "originalCommitRequest": {
+    "messageType": "command.request",
+    "protocolVersion": 1,
+    "commandKind": "workflow-command",
+    "role": "gm",
+    "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+    "commandId": "4bf8e44c-68a8-4f51-828d-eda40433ff37",
+    "expectedRevisions": {
+      "stateRevision": 5,
+      "projectionRevision": 9,
+      "actorVisibilityRevision": 0
+    },
+    "payload": {
+      "campaignId": "0c42474c-bd17-4719-8eff-cf4e6438838d",
+      "creationAttemptId": "b0ee1db3-72ba-4ff8-b3e4-50a8452d8dcf",
+      "expectedAttemptRevision": 5
+    }
+  },
+  "originalCommitResult": {
+    "replayed": false,
+    "receipt": {
+      "commandId": "4bf8e44c-68a8-4f51-828d-eda40433ff37",
+      "receiptId": "ee7f2fb7-92dd-4326-9f49-33bd1154a80d",
+      "revisions": {
+        "stateRevision": 6,
+        "projectionRevision": 10,
+        "actorVisibilityRevision": 0
+      },
+      "result": {
+        "campaignId": "0c42474c-bd17-4719-8eff-cf4e6438838d",
+        "creationAttemptId": "b0ee1db3-72ba-4ff8-b3e4-50a8452d8dcf",
+        "timestamp": "2026-11-11T06:22:24.926Z",
+        "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+        "sourceFormId": "ENM-010",
+        "stageOrNull": null,
+        "attemptRevision": 5,
+        "committedVersionOrNull": {
+          "campaignId": "0c42474c-bd17-4719-8eff-cf4e6438838d",
+          "templateId": "4ac25bea-d94d-4dde-b280-86e2f0c4a33f",
+          "versionId": "a5bea159-2e67-42dd-b198-612cb566f7b8",
+          "version": 1,
+          "kind": "SENTIENT",
+          "artAssetKey": "symbiosis_placeholder_sentient_enemy",
+          "artSha256": "5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f"
+        }
+      }
+    }
+  }
+}

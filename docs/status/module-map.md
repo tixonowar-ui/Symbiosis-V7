@@ -1,5 +1,27 @@
 # Состояние модулей
 
+## Источниковая граница initial skill plan #284
+
+Владелец утвердил вариант A: полный initial input и отдельный явный rebuild
+до V1, включая same-build и changed ENM-006→007. ADR 0092 / Atlas 1.21/B16
+готовят source prerequisite #257; это ещё не runtime новой composition.
+В пределах одного плана known skills/actual START/SYM-166 charges и losses
+сохраняются. Rebuild делает прежнюю derivation неактивной и инвалидирует
+cached composition/inventory/current own choices, сохраняя mandatory FREE
+signed loss, Advisor card/RNG/history и исходные receipts. SYM-079 применяется
+к новому initial basis один раз без stacking. Actual ENM-009 body/Nate отделён
+от provisional состава и temporary armor M; безопасный Back после R6 доступен.
+
+Изменяются локальные Atlas формы/QA/PATCH/journey witnesses и точные guards.
+Frozen B15 manifest, Runtime Pack44, 23 non-Atlas строки, replay catalogs и
+runtime tuple сохраняются. B16 использует только exact forward пары и sealed
+real Git patch в обоих направлениях; настоящий старый #256 disk fixture
+проверяет исходные строки до owning open и original replay без новых полей.
+Авторские targeted результаты относятся к dirty bytes; independent review,
+окончательный clean five-stage и CI/merge учитываются отдельно. #257/#188/#113
+не выполнены этой source-поставкой. После merge/acceptance #284 следующая
+порученная работа — завершение runtime #257 в сохранённом отдельном checkout.
+
 ## V1 мыслящего врага runtime #256
 
 ENM-001::CTA003 использует прежнюю owning GM оболочку и QUEUE. ENM-005–010

@@ -658,7 +658,7 @@
     "title": "Установить или переместить метку группы"
   },
   {
-    "atomicity": "Patch one technical attempt stage only; no template row, runtime actor or currentVersion changes; CORE-194 creates the template only with a fully validated atomic save.",
+    "atomicity": "Patch one technical attempt stage only; no template row, runtime actor or currentVersion changes; CORE-194 creates the template only with a fully validated atomic save. Explicit SENTIENT_BUILD rebuild invalidates cached composition/inventory/own choices as one atomic technical-plan transition, preserving immutable acquisition/card/RNG history and actual fixed FREE loss; stale/foreign/error leaves zero partial reset. Other kinds/stages retain their existing contract.",
     "commandId": "UI-CMD-ENEMY-DRAFT-PATCH",
     "formIds": [
       "ENM-005",
@@ -672,9 +672,9 @@
       "ENM-014",
       "ENM-015"
     ],
-    "guards": "GM authority; only a technical creationAttempt/editAttempt exists before save; no enemyTemplate.status or persisted DRAFT template; stage-specific fields and attempt revision valid.",
+    "guards": "GM authority; only a technical creationAttempt/editAttempt exists before save; no enemyTemplate.status or persisted DRAFT template; stage-specific fields and attempt revision valid. SENTIENT pre-V1 skill-plan upgrade/rebuild follows ADR0092: full initial input and explicit bound confirmation, current plan/attempt revisions and sole GM; no implicit NAV reset or incremental-only replacement.",
     "qa": "QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH",
-    "reconnect": "Draft revision and any committed roll receipt restore exactly.",
+    "reconnect": "Draft revision and any committed roll receipt restore exactly. Exact old request returns its original receipt, never reruns rebuild/RNG/SYM079 or upgrades legacy bytes; same-card reselect keeps original card/IW/suppression.",
     "title": "Сохранить этап шаблона врага/монстра"
   },
   {

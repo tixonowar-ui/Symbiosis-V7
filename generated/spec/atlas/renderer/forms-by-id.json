@@ -10889,7 +10889,8 @@
       "C",
       "perStatValidation",
       "derivedPreview",
-      "draftRevision"
+      "draftRevision",
+      "skillPlanImpact"
     ],
     "roles": [
       "gm"
@@ -10943,7 +10944,8 @@
       "Skills",
       "Requirements",
       "Save draft stage",
-      "Back"
+      "Back",
+      "Explicit pre-V1 skill-plan rebuild confirmation with actual consequences; field/dialog control under existing SENTIENT_BUILD workflow, not a new global CTA"
     ],
     "contexts": [
       "enemy-catalog"
@@ -10961,7 +10963,11 @@
       "skillSelections[]",
       "requirements",
       "skillValidationSummary",
-      "draftRevision"
+      "draftRevision",
+      "initialSkillPlanOrNull",
+      "expectedSkillPlanRevisionOrNull",
+      "explicitRebuildConfirmationOrNull",
+      "rebuildConsequencesPreviewOrNull"
     ],
     "roles": [
       "gm"
@@ -11037,7 +11043,10 @@
       "specialHistoriesInitiallyEmpty=true",
       "slotValidation",
       "draftRevision",
-      "commandId"
+      "commandId",
+      "skillPlanRevisionOrNull",
+      "retainedAcquisitionFacts[]",
+      "skillPoolAccounting"
     ],
     "roles": [
       "gm"
@@ -11102,7 +11111,9 @@
       "profileVersion",
       "equipmentState",
       "inventoryValidationSummary",
-      "draftRevision"
+      "draftRevision",
+      "skillPlanRevisionOrNull",
+      "verifiedBodySkillResolution"
     ],
     "roles": [
       "gm"
@@ -11174,7 +11185,9 @@
       "validationErrors[]",
       "historyEntry",
       "commandId",
-      "commitStatus"
+      "commitStatus",
+      "initialSkillPlanOrNull",
+      "skillPoolAccounting"
     ],
     "roles": [
       "gm"
@@ -11885,7 +11898,8 @@
     "requiredFields": [
       "contextId",
       "stateRevision",
-      "projectionRevision"
+      "projectionRevision",
+      "initialSkillPlanOrNull"
     ],
     "roles": [
       "gm"

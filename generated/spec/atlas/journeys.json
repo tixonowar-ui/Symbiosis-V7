@@ -1273,7 +1273,7 @@
       "MON-041",
       "MON-088"
     ],
-    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
+    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine. ADR0092 local exception only for SENTIENT pre-V1: confirmed acquisition facts do not lock safe pre-V1 wizard Back ENM010 → ENM009 → ENM008 and ENM008 → ENM007 → ENM006 or explicit ENM007 skill-plan rebuild; mandatory RNG/card history and actual fixed FREE consequences remain immutable, and neither navigation nor replay resets them. Cancel and all other kinds retain their existing boundaries; no new cancel right is granted.",
     "steps": [
       {
         "formIds": [
