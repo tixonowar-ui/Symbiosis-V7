@@ -2229,6 +2229,7 @@ export type GmRequestReviewMutation =
       readonly kind: 'NAV';
       readonly request: FormActionIntentV2Message;
       readonly initialQueueOrNull: GmRequestQueueEvidence | null;
+      readonly enemyAuthoringSchemaVersion?: 2;
     }
   | { readonly kind: 'DRAFT'; readonly request: GmRequestReviewDraftRequest }
   | {
@@ -2454,10 +2455,25 @@ function queueMutation(value: unknown): GmRequestReviewMutation {
     };
   }
   if (record['kind'] === 'NAV') {
-    const row = queueObject(value, ['kind', 'request', 'initialQueueOrNull']);
+    const marked = Object.hasOwn(record, 'enemyAuthoringSchemaVersion');
+    const row = queueObject(value, [
+      'kind',
+      'request',
+      'initialQueueOrNull',
+      ...(marked ? ['enemyAuthoringSchemaVersion'] : []),
+    ]);
+    const request = queueNav(row['request']);
+    if (
+      marked &&
+      (row['enemyAuthoringSchemaVersion'] !== 2 ||
+        request.sourceFormId !== 'ENM-001' ||
+        request.actionKey !== 'ENM-001::CTA::003')
+    )
+      return fail();
     return {
       kind: 'NAV',
-      request: queueNav(row['request']),
+      request,
+      ...(marked ? { enemyAuthoringSchemaVersion: 2 as const } : {}),
       initialQueueOrNull:
         row['initialQueueOrNull'] === null ? null : queueEvidence(row['initialQueueOrNull']),
     };
@@ -2876,7 +2892,11 @@ function reduceQueue(
       ...(enemyLibrary === undefined ? {} : { enemyLibrary }),
       ...(target === 'ENM-005' && old.formId === 'ENM-001'
         ? {
-            enemyAuthoring: newEnemyAttempt(mutation.request.navigationRequestId, scope.campaignId),
+            enemyAuthoring: newEnemyAttempt(
+              mutation.request.navigationRequestId,
+              scope.campaignId,
+              mutation.enemyAuthoringSchemaVersion,
+            ),
           }
         : {}),
       ...(target === 'ENM-020' && old.formId === 'ENM-001'

@@ -141,10 +141,10 @@ hook/poll/wait budgets. Сохрани отказ/trace, фактическую 
 **Портативной сборки пока нет.** `tools/package` — пустой каталог. Не пытайся
 её запускать и не выдумывай команду.
 
-**E2E состоит из сорока семи реальных сценариев.** Они используют системный
+**E2E состоит из сорока девяти реальных сценариев.** Они используют системный
 Chrome (`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную
 SQLite, без mocked projection. `npm run test:e2e` сначала собирает веб-клиент,
-затем запускает все сорок семь сценариев. Среди них — recovery, локальные
+затем запускает все сорок девять сценариев. Среди них — recovery, локальные
 метаданные, варианты и экспорт; GM export использует отдельный доверенный
 архивный fixture. CMP-001–006 проверяют создание PAUSED при нуле PC,
 QR, секрет, отмену, новый вход, restart/replay и занятый порт. Финальный допуск
@@ -156,6 +156,9 @@ ENM-сценарий проверяет две вкладки, выбор/Back, 
 и PLAYER privacy. Отдельный SENTIENT V1-сценарий проходит ENM-005–010/020,
 явно пустую композицию, имущество/одежду, lost COMMIT reply, exact replay и restart. NPC-сценарий проверяет V1 и N+1 до Start, повтор после потери ответа,
 восстановление истории после restart и недоступность частных данных игроку.
+Два composition-сценария проходят реальные ENM-008 nodes, ordinary/monster
+composition, lost reply и физический restart. Явный rebuild навыков проверяет
+ORDINARY-сценарий.
 
 Четыре NET-сценария используют отдельные Node-процессы и SQLite игрока и мастера:
 ручной адрес, restart/recovery/CANCEL, новый и retained вход из FINAL, настоящий
@@ -208,11 +211,11 @@ tools/
 
 tests/
   integration/      кросс-слойные тесты. ПУСТО
-  e2e/              Playwright, сорок семь production-сценариев
+  e2e/              Playwright, сорок девять production-сценариев
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              92 ADR-записи + README. Статусы решений указаны в реестре
+  adr/              93 ADR-записи + README. Статусы решений указаны в реестре
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

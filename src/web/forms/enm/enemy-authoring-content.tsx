@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { admissionJsonEqual } from '@shared/campaign-admission-codec.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import {
   ENEMY_STATS,
@@ -6,6 +7,10 @@ import {
   type EnemyItemInput,
   type EnemySheet,
 } from '@shared/enemy-authoring.js';
+import {
+  EnemyCompositionFields,
+  EnemyCompositionFactsContent,
+} from './enemy-composition-fields.js';
 
 const labels: Readonly<Record<string, string>> = {
   PURE: 'Чистый',
@@ -129,8 +134,57 @@ export function EnemySheetContent({
           {sheet.skillSlots.used} из {sheet.skillSlots.capacity}
         </dd>
         <dt>Симбионты</dt>
-        <dd>Явно пустой состав</dd>
+        <dd>
+          {sheet.compositionFacts === undefined
+            ? 'Явно пустой состав'
+            : 'Подтверждённый состав и приобретения'}
+        </dd>
       </dl>
+      {sheet.compositionFacts === undefined ? null : (
+        <EnemyCompositionFactsContent facts={sheet.compositionFacts} catalog={catalog} />
+      )}
+      {sheet.skillPlanState?.planOrNull == null ? null : (
+        <section aria-label="Фактическая оплата навыков">
+          <h3>Начальный план {sheet.skillPlanState.planOrNull.revision}: фактическая оплата</h3>
+          <p>
+            Потеря источника или снижение вместимости не возвращает уже оплаченные слоты. Временное
+            отключение навыка не забывает его.
+          </p>
+          <ul>
+            {sheet.skillPlanState.planOrNull.accountingOrNull?.knownSkills.map((skill) => (
+              <li key={skill.skillKey}>
+                {text(
+                  list(catalog['skills']).find((row) => row['skillKey'] === skill.skillKey)?.[
+                    'name'
+                  ],
+                )}
+                : бонус {skill.bonus}, START {skill.startSlots}, Мирный воин {skill.dolphinSlots}.
+              </li>
+            ))}
+          </ul>
+          {sheet.skillPlanState.planOrNull.accountingOrNull?.permanentLosses.length === 0 ? null : (
+            <>
+              <h4>Подтверждённые постоянные утраты этого плана</h4>
+              <ul>
+                {sheet.skillPlanState.planOrNull.accountingOrNull?.permanentLosses.map(
+                  (loss, index) => (
+                    <li key={index}>
+                      {text(
+                        list(catalog['skills']).find((row) => row['skillKey'] === loss.skillKey)?.[
+                          'name'
+                        ],
+                      )}
+                      : прежний бонус {loss.bonusBefore}; освобождено START{' '}
+                      {loss.releasedStartSlots}, Мирный воин {loss.releasedDolphinSlots}. Возврат
+                      требований сам по себе не обучает навыку заново.
+                    </li>
+                  ),
+                )}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
       <h3>Навыки</h3>
       <ul>
         {sheet.skills.map((skill) => (
@@ -805,12 +859,19 @@ function InventoryFields({
 export function EnemyAuthoringContent({
   projection,
   onValue,
+  onPrepare,
 }: {
   readonly projection: JsonObject;
-  readonly onValue: (data: JsonObject) => void;
+  readonly onValue: (data: JsonObject | null) => void;
+  readonly onPrepare: (data: JsonObject) => { readonly ok: boolean; readonly detail?: string };
 }) {
-  const p = enemyAuthoringProjectionValue(projection),
-    attempt = p.context.attemptOrNull;
+  const p = useMemo(() => enemyAuthoringProjectionValue(projection), [projection]);
+  const attempt = p.context.attemptOrNull;
+  const pendingBuild =
+    p.formId === 'ENM-007'
+      ? (attempt?.skillPlanState?.rebuildPreviewOrNull ?? attempt?.legacySkillPlanPreview)
+      : null;
+  const buildForFields = pendingBuild?.initialInput.build ?? attempt?.buildOrNull;
   const [identity, setIdentity] = useState({
     name: attempt?.identityOrNull?.name ?? '',
     description: attempt?.identityOrNull?.description ?? '',
@@ -831,12 +892,52 @@ export function EnemyAuthoringContent({
       ]),
     ) as Record<(typeof ENEMY_STATS)[number], string>,
   );
-  const [race, setRace] = useState<string>(attempt?.buildOrNull?.raceCode ?? '');
-  const [pureClass, setPureClass] = useState(attempt?.buildOrNull?.pureClassOrNull ?? '');
-  const [skills, setSkills] = useState(attempt?.buildOrNull?.skillSelections ?? []);
-  const [emptyConfirmed, setEmptyConfirmed] = useState(
-    attempt?.compositionOrNull !== null && attempt?.compositionOrNull !== undefined,
+  const [race, setRace] = useState<string>(buildForFields?.raceCode ?? '');
+  const [pureClass, setPureClass] = useState(buildForFields?.pureClassOrNull ?? '');
+  const [skills, setSkills] = useState(buildForFields?.skillSelections ?? []);
+  const [rebuildConfirmed, setRebuildConfirmed] = useState(false);
+  const [planNotice, setPlanNotice] = useState<string | null>(null);
+  const initialInput = useMemo(
+    () => ({
+      baseStats: attempt?.baseStatsOrNull == null ? null : { ...attempt.baseStatsOrNull },
+      build: {
+        raceCode: race,
+        pureClassOrNull: pureClass === '' ? null : pureClass,
+        skillSelections: skills.map((skill) => ({ ...skill })),
+      },
+    }),
+    [attempt, race, pureClass, skills],
   );
+  const skillState = attempt?.skillPlanState;
+  const skillPlan = skillState?.planOrNull;
+  const rebuildPreview = skillState?.rebuildPreviewOrNull ?? attempt?.legacySkillPlanPreview;
+  const shownRebuild =
+    rebuildPreview != null && admissionJsonEqual(rebuildPreview.initialInput, initialInput)
+      ? rebuildPreview
+      : null;
+  const buildData = useMemo(
+    () =>
+      shownRebuild !== null
+        ? rebuildConfirmed
+          ? {
+              operation: 'CONFIRM_REBUILD',
+              initialInput,
+              expectedPlanRevision: shownRebuild.planRevision,
+              previewCommandId: shownRebuild.previewCommandId,
+              displayedConsequences: shownRebuild.consequences,
+            }
+          : null
+        : attempt?.schemaVersion !== 2
+          ? initialInput.build
+          : skillPlan == null
+            ? { operation: 'INITIALIZE', initialInput }
+            : attempt.buildOrNull !== null &&
+                admissionJsonEqual(skillPlan.initialInput, initialInput)
+              ? { operation: 'SAVE_IDENTICAL', initialInput }
+              : null,
+    [shownRebuild, rebuildConfirmed, initialInput, attempt, skillPlan],
+  );
+  const [compositionInput, setCompositionInput] = useState<JsonObject | null>(null);
   const [items, setItems] = useState(attempt?.inventoryOrNull?.inventoryItems ?? []);
   const [compatibility, setCompatibility] = useState(
     attempt?.inventoryOrNull?.armorCompatibilityReasonOrNull ?? '',
@@ -855,36 +956,17 @@ export function EnemyAuthoringContent({
               ENEMY_STATS.map((key) => [key, stats[key] === '' ? null : Number(stats[key])]),
             )
           : p.formId === 'ENM-007'
-            ? {
-                raceCode: race,
-                pureClassOrNull: pureClass === '' ? null : pureClass,
-                skillSelections: skills,
-              }
+            ? buildData
             : p.formId === 'ENM-008'
-              ? {
-                  symbiontCompositionMode: emptyConfirmed ? 'ORDINARY_SYMBIONTS' : 'UNCONFIRMED',
-                  ordinarySymbiontInstances: [],
-                  symbioticMonsterProfileIdOrNull: null,
-                }
+              ? compositionInput
               : p.formId === 'ENM-009'
                 ? {
                     inventoryItems: items,
                     armorCompatibilityReasonOrNull: compatibility === '' ? null : compatibility,
                   }
                 : {};
-    onValue(data as unknown as JsonObject);
-  }, [
-    p.formId,
-    identity,
-    stats,
-    race,
-    pureClass,
-    skills,
-    emptyConfirmed,
-    items,
-    compatibility,
-    onValue,
-  ]);
+    onValue(data as unknown as JsonObject | null);
+  }, [p.formId, identity, stats, buildData, compositionInput, items, compatibility, onValue]);
   const races = list(p.catalog['races']),
     classes = list(p.catalog['classes']),
     skillChoices = list(p.catalog['skills']);
@@ -964,6 +1046,7 @@ export function EnemyAuthoringContent({
             <select
               value={race}
               onChange={(e) => {
+                setRebuildConfirmed(false);
                 setRace(e.target.value);
                 setPureClass('');
                 setSkills([]);
@@ -980,7 +1063,13 @@ export function EnemyAuthoringContent({
           {race === 'PURE' ? (
             <label>
               Класс Чистого
-              <select value={pureClass} onChange={(e) => setPureClass(e.target.value)}>
+              <select
+                value={pureClass}
+                onChange={(e) => {
+                  setRebuildConfirmed(false);
+                  setPureClass(e.target.value);
+                }}
+              >
                 <option value="">Выберите класс</option>
                 {classes.map((row) => (
                   <option key={text(row['classCode'])} value={text(row['classCode'])}>
@@ -993,6 +1082,187 @@ export function EnemyAuthoringContent({
           <p>
             Изменение расы, класса или навыков потребует повторно подтвердить состав и имущество.
           </p>
+          {skillPlan == null ? null : (
+            <p>
+              Текущий начальный план: {skillPlan.revision}. Простое возвращение или сохранение
+              неизменённого выбора его не пересобирает.
+            </p>
+          )}
+          {skillPlan != null || attempt?.buildOrNull !== null ? (
+            <button
+              type="button"
+              onClick={() => {
+                setRebuildConfirmed(false);
+                const result = onPrepare({
+                  operation: 'PREVIEW_REBUILD',
+                  expectedPlanRevision: skillPlan?.revision ?? 0,
+                  initialInput,
+                });
+                setPlanNotice(
+                  result.ok
+                    ? 'Дождитесь расчёта последствий хостом.'
+                    : (result.detail ?? 'Расчёт пересборки недоступен.'),
+                );
+              }}
+            >
+              {attempt?.schemaVersion === 2
+                ? 'Рассчитать явную пересборку начального плана'
+                : 'Рассчитать переход к новому начальному плану'}
+            </button>
+          ) : null}
+          {shownRebuild === null ? null : (
+            <section aria-label="Последствия явной пересборки">
+              <h3>Подтверждённые хостом последствия</h3>
+              <p>
+                Прежний расчёт навыков станет неактивным. Новый начальный выбор оплачивается
+                целиком; прежняя смешанная оплата и бонусы не переносятся автоматически.
+              </p>
+              <ul>
+                {shownRebuild.consequences.abandonedSkills.map((skill) => (
+                  <li key={skill.skillKey}>
+                    {text(skillChoices.find((row) => row['skillKey'] === skill.skillKey)?.['name'])}
+                    : бонус {skill.bonus}; START {skill.startSlots}, Мирный воин{' '}
+                    {skill.dolphinSlots}.
+                  </li>
+                ))}
+              </ul>
+              <p>
+                Повторно подтвердить состав:{' '}
+                {shownRebuild.consequences.invalidateComposition ? 'да' : 'состав ещё не выбран'};
+                имущество:{' '}
+                {shownRebuild.consequences.invalidateInventory ? 'да' : 'имущество ещё не выбрано'};
+                собственные навыки Советника:{' '}
+                {shownRebuild.consequences.invalidateOwnAdvisorChoices
+                  ? 'да'
+                  : 'текущего выбора нет'}
+                .
+              </p>
+              {skillState?.advisorKnowledge.length === 0 || skillState === undefined ? null : (
+                <section aria-label="Прежние собственные навыки Советника">
+                  <h4>Собственные навыки Советника, которые станут неактивными</h4>
+                  <ul>
+                    {skillState.advisorKnowledge.flatMap((card) =>
+                      card.knownSkills.map((skill) => (
+                        <li key={card.cardId + skill.skillKey}>
+                          {text(
+                            skillChoices.find((row) => row['skillKey'] === skill.skillKey)?.[
+                              'name'
+                            ],
+                          )}
+                          : бонус {skill.bonus}; собственные слоты {skill.startSlots}.
+                        </li>
+                      )),
+                    )}
+                  </ul>
+                  <p>
+                    Первоначальные подтверждения карты сохраняются. При её использовании в новом
+                    плане текущие собственные навыки подтверждаются заново.
+                  </p>
+                </section>
+              )}
+              {skillState?.pendingChoicesOrNull?.advisorSkills.length ? (
+                <p>
+                  Ещё не проверенный по телу выбор Советника также отменяется:{' '}
+                  {skillState.pendingChoicesOrNull.advisorSkills
+                    .map(
+                      (skill) =>
+                        `${text(skillChoices.find((row) => row['skillKey'] === skill.skillKey)?.['name'])}, целевой бонус ${skill.targetBonus}`,
+                    )
+                    .join('; ')}
+                  . Эти заявки ещё не являются подтверждённой оплатой.
+                </p>
+              ) : null}
+              {attempt?.compositionOrNull == null ? null : 'schemaVersion' in
+                attempt.compositionOrNull ? (
+                <p>
+                  Прежний состав:{' '}
+                  {(attempt.compositionOrNull.monsterOrNull === null
+                    ? attempt.compositionOrNull.ordinarySymbiontInstances
+                    : [attempt.compositionOrNull.monsterOrNull]
+                  )
+                    .map(
+                      (choice) =>
+                        `${text(list(object(p.catalog['compositionCatalog'])['species']).find((row) => row['speciesKey'] === choice.speciesKey)?.['name'])}, уровень ${choice.targetLevel}`,
+                    )
+                    .join('; ') || 'без симбионтов'}
+                  .
+                </p>
+              ) : (
+                <p>Прежний состав явно пустой.</p>
+              )}
+              {attempt?.inventoryOrNull == null ? null : (
+                <p>
+                  Прежнее имущество:{' '}
+                  {attempt.inventoryOrNull.inventoryItems
+                    .map(
+                      (item) =>
+                        `${text(list(p.catalog['items']).find((row) => row['itemTypeId'] === item.itemTypeId)?.['name'])} × ${item.quantity}${item.equipped ? ' — экипировано' : ''}`,
+                    )
+                    .join('; ') || 'без имущества'}
+                  . Оно будет выбрано и проверено заново.
+                </p>
+              )}
+              {attempt?.compositionAcquisitions?.grossGrantOrNull == null ? null : (
+                <p>
+                  Бесплатный навык «
+                  {text(skillChoices.find((row) => row['skillKey'] === 'GROSS')?.['name'])}» будет
+                  рассчитан один раз по новому начальному выбору, без сложения с прежней выдачей.
+                </p>
+              )}
+              {attempt?.compositionAcquisitions?.freeSlotOrNull == null ? null : (
+                <p>
+                  Сохраняется исходный R6:{' '}
+                  {attempt.compositionAcquisitions.freeSlotOrNull.roll.mechanical.rawFace}.
+                  Необратимые изменения: S{' '}
+                  {attempt.compositionAcquisitions.freeSlotOrNull.permanentStatConsequence.S}, M{' '}
+                  {attempt.compositionAcquisitions.freeSlotOrNull.permanentStatConsequence.M}, Z{' '}
+                  {attempt.compositionAcquisitions.freeSlotOrNull.permanentStatConsequence.Z}; новая
+                  база не возвращает эти потери.
+                </p>
+              )}
+              {attempt?.compositionAcquisitions?.advisorCards.map((card) => (
+                <p key={card.cardId}>
+                  Исходная карта Советника сохраняется: исходный R20 для I —{' '}
+                  {card.iwRolls[0].mechanical.rawFace}, для W — {card.iwRolls[1].mechanical.rawFace}
+                  ;{' '}
+                  {card.suppressionRollOrNull === null
+                    ? 'подавление ещё не определялось'
+                    : `исходный R20 подавления ${card.suppressionRollOrNull.mechanical.rawFace}`}
+                  . Первоначальные подтверждения остаются в истории; текущие навыки выбираются
+                  заново только при использовании карты.
+                </p>
+              ))}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={rebuildConfirmed}
+                  onChange={(event) => setRebuildConfirmed(event.target.checked)}
+                />
+                Подтверждаю показанную пересборку и повторное подтверждение зависимых этапов
+              </label>
+              <p>
+                Для применения используйте «Сохранить расу, класс и навыки». Изменение полей требует
+                нового расчёта последствий.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  const result = onPrepare({
+                    operation: 'DISCARD_REBUILD',
+                    previewCommandId: shownRebuild.previewCommandId,
+                  });
+                  setPlanNotice(
+                    result.ok
+                      ? 'Дождитесь отмены расчёта хостом.'
+                      : (result.detail ?? 'Отмена расчёта недоступна.'),
+                  );
+                }}
+              >
+                Отказаться от расчёта пересборки
+              </button>
+            </section>
+          )}
+          {planNotice === null ? null : <p role="status">{planNotice}</p>}
           {buildOption === undefined ? null : (
             <section aria-label="Подтверждённые хостом правила выбора">
               <p>
@@ -1032,7 +1302,8 @@ export function EnemyAuthoringContent({
                     value={
                       skills.find((row) => row.skillKey === skill['skillKey'])?.targetBonus ?? ''
                     }
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setRebuildConfirmed(false);
                       setSkills([
                         ...skills.filter((row) => row.skillKey !== skill['skillKey']),
                         ...(e.target.value === ''
@@ -1043,8 +1314,8 @@ export function EnemyAuthoringContent({
                                 targetBonus: Number(e.target.value),
                               },
                             ]),
-                      ])
-                    }
+                      ]);
+                    }}
                   />
                 </label>
               </fieldset>
@@ -1053,21 +1324,12 @@ export function EnemyAuthoringContent({
         </fieldset>
       ) : null}
       {p.formId === 'ENM-008' ? (
-        <fieldset>
-          <legend>Состав симбионтов</legend>
-          <label>
-            <input
-              type="checkbox"
-              checked={emptyConfirmed}
-              onChange={(e) => setEmptyConfirmed(e.target.checked)}
-            />
-            Подтверждаю явно пустой состав симбионтов
-          </label>
-          <p>
-            Непустой состав и симбиотическое чудовище пока недоступны: их добавит следующий этап.
-            Скрытого назначения симбионта или опыта нет.
-          </p>
-        </fieldset>
+        <EnemyCompositionFields
+          projection={p}
+          onValue={setCompositionInput}
+          onPrepare={onPrepare}
+          requirementText={skillRequirementText}
+        />
       ) : null}
       {p.formId === 'ENM-009' ? (
         <>

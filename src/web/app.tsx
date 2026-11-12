@@ -2704,7 +2704,7 @@ export function App(): ReactElement {
   const [startingWeaponDraft, setStartingWeaponDraft] = useState<StartingWeaponDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
-  const enemyInputRef = useRef<JsonObject>({});
+  const enemyInputRef = useRef<JsonObject | null>({});
 
   useEffect(() => {
     const connection = connectProjection(
@@ -2876,6 +2876,14 @@ export function App(): ReactElement {
                 projection={snapshot.projection}
                 onValue={(data) => {
                   enemyInputRef.current = data;
+                }}
+                onPrepare={(data) => {
+                  const result = connectionRef.current?.submitEnemyStage(
+                    snapshot.formId === 'ENM-007' ? 'SENTIENT_BUILD' : 'SENTIENT_SYMBIONTS',
+                    data,
+                  ) ?? { ok: false, detail: 'Подготовка этапа недоступна.' };
+                  setActionNotice(result.ok ? null : result.detail);
+                  return result;
                 }}
               />
             ) : null}
@@ -3477,6 +3485,14 @@ export function App(): ReactElement {
                   ([, forms]) => forms[0] === snapshot.formId && forms[2] === selection.actionKey,
                 )?.[0];
                 if (enemyStage !== undefined) {
+                  if (enemyInputRef.current === null) {
+                    setActionNotice(
+                      snapshot.formId === 'ENM-007'
+                        ? 'Рассчитайте последствия пересборки и явно подтвердите полный начальный выбор.'
+                        : 'Сначала подтвердите пустой состав либо рассчитайте и подтвердите выбранные взаимодействия.',
+                    );
+                    return;
+                  }
                   const result = connectionRef.current?.submitEnemyStage(
                     enemyStage as keyof typeof ENEMY_STAGE_FORMS,
                     enemyInputRef.current,

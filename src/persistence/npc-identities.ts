@@ -39,10 +39,12 @@ export function campaignEnemyIdentityInUse(db: Database.Database, id: string): b
         `SELECT 1 FROM gm_request_queue_event e WHERE e.kind='ENEMY_AUTHORING' AND (
     json_extract(e.record_json,'$.mutation.cause.receiptId')=? OR
     EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.itemTemplateKeys') WHERE value=?) OR
-    EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.request.payload.data.inventoryItems') WHERE json_extract(value,'$.linkedSetInstanceId')=?)
+    EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.request.payload.data.inventoryItems') WHERE json_extract(value,'$.linkedSetInstanceId')=?) OR
+    EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.preparedComposition.instanceIds') WHERE value=?) OR
+    json_extract(e.record_json,'$.mutation.cause.preparedComposition.advisorCardIdOrNull')=?
   ) LIMIT 1`,
       )
-      .get(id, id, id) !== undefined
+      .get(id, id, id, id, id) !== undefined
   );
 }
 

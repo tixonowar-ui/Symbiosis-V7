@@ -1,5 +1,38 @@
 # Состояние модулей
 
+## Композиция мыслящего врага runtime #257
+
+Авторский кандидат использует поставленный #284 (main `54f1bfd`, Atlas 1.21/B16)
+и прежнюю GM оболочку ENM-005–010/020. ENM-008 даёт взаимоисключающий ordinary
+состав или разрешённый UNITED monster profile с реальными видами, уровнями,
+nodes и привязками. Host проверяет capacity, distinct species, mandatory L1,
+AND/OR/XOR, target level после взаимодействий и явное AQA-005 подтверждение.
+Обязательные FREE/Advisor acquisition rolls имеют собственные неизменяемые
+причины/receipts; это не PC XP или RNG исходных семи характеристик.
+
+`sentient-composition` переиспользует source arithmetic/topology и публикует
+постоянные характеристики, HP, surviving specimens с currentOE=maxOE, passives,
+skills и пустые специальные истории. `sentient-skill-plan` хранит actual
+START/SYM-166 mixed payments, overflow и permanent losses. Успешный ENM-009
+разрешает знания по настоящему body/Nate; временная armor M не забывает навык.
+Технический ADR 0093 связывает modern generation и каждый prepared prefix с
+owning cause; legacy ABSENT остаётся старым до явного upgrade.
+
+ENM-007 принимает полный initial input. Rebuild требует отдельного расчёта и
+подтверждения показанных последствий: прежние знания/платежи, composition,
+inventory и current own Advisor choices становятся неактивны. Исходный signed
+FREE loss, Advisor card/I/W/suppression/initial fills и receipts сохраняются;
+GROSS считается по новому initial basis один раз, без stacking. Back, одинаковое
+сохранение, preview/discard и exact replay сами план не меняют.
+
+Целевые owning/domain/client и три production browser paths проверяют source,
+authority, history, rollback, lost reply и restart; [границы доказательств](sentient-composition-257.md).
+Старый populated #256 fixture читается/повторяется физически без изменения
+исходных строк и V1. Артефакты, generated, source guards и Runtime Pack44 не
+меняются. Финальный clean five-stage cycle, CI и поставка учитываются отдельно;
+#257/#188/#113 пока не объявлены завершёнными. N+1, instantiation, placement,
+combat и следующие дочерние задачи не реализуются здесь.
+
 ## Источниковая граница initial skill plan #284
 
 Владелец утвердил вариант A: полный initial input и отдельный явный rebuild

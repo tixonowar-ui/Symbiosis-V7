@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomInt } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
@@ -23,6 +23,8 @@ import {
 import {
   commitEnemyAuthoring,
   readEnemyVersions,
+  readEnemyCompositionDiceSource,
+  validateEnemyCompositionReservations,
   type EnemyStoredVersion,
 } from '../persistence/enemy-authoring-store.js';
 import type {
@@ -37,6 +39,20 @@ import {
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import type { EnemyAuthoringSourceCatalog } from './enemy-authoring-catalog.js';
+import { enemyCompositionPatchValue } from '@shared/enemy-composition.js';
+import {
+  prepareEnemyComposition,
+  issueEnemyCompositionRolls,
+  enemyCompositionInitialBasis,
+} from './enemy-composition-preparation.js';
+import {
+  deriveSentientComposition,
+  deriveSentientCompositionStructure,
+  validateSentientCompositionRolls,
+  sentientCompositionRollRequirements,
+  sentientAcquisitionRolls,
+} from '../domain/entities/enemy-template/sentient-composition.js';
+import { prepareEnemySkillPlanState } from './enemy-skill-plan-preparation.js';
 
 function validateAttempt(catalog: EnemyAuthoringSourceCatalog, value: EnemyAttempt): void {
   const attempt = enemyAttemptValue(value);
@@ -49,7 +65,10 @@ function validateAttempt(catalog: EnemyAuthoringSourceCatalog, value: EnemyAttem
       classCode: build.pureClassOrNull,
       creationMode: 'MANUAL',
     });
-    if (Object.values(derived.skillStageStats).some((value) => value < 1))
+    if (
+      attempt.schemaVersion !== 2 &&
+      Object.values(derived.skillStageStats).some((value) => value < 1)
+    )
       return s.fail('INVALID_INPUT');
     validateSkillSelection(catalog.skills, {
       raceCode: build.raceCode,
@@ -59,6 +78,11 @@ function validateAttempt(catalog: EnemyAuthoringSourceCatalog, value: EnemyAttem
     });
   }
   if (attempt.inventoryOrNull !== null) deriveSentientEnemySheet(catalog, attempt);
+  if (attempt.compositionOrNull !== null && 'schemaVersion' in attempt.compositionOrNull) {
+    const race = attempt.buildOrNull?.raceCode ?? s.fail('SOURCE_CHANGED');
+    deriveSentientCompositionStructure(catalog.composition, race, attempt.compositionOrNull);
+    validateSentientCompositionRolls(catalog.composition, race, attempt.compositionOrNull);
+  }
 }
 /** Every historical attempt and COMMIT is checked even after cancellation, selection or leaving ENM. */
 export function validateEnemyAuthoringSource(
@@ -76,8 +100,57 @@ export function validateEnemyAuthoringSource(
     isEnemyAuthoringForm(source.viewOrNull?.formId ?? '') ||
     state.events.some((event) => event.mutation.kind === 'ENEMY_AUTHORING');
   if (relevant) catalog.assertCurrent();
+  validateEnemyCompositionReservations(db, source.scope, state.events);
   const versions = readEnemyVersions(db, source.scope, state.events);
   for (const [index, event] of state.events.entries()) {
+    if (event.mutation.kind === 'ENEMY_AUTHORING') {
+      const mutation = event.mutation.cause;
+      const original =
+        state.events[index - 1]?.view.enemyAuthoring?.attemptOrNull ?? s.fail('SOURCE_CHANGED');
+      const expected = prepareEnemySkillPlanState(
+        catalog,
+        original,
+        mutation.request,
+        mutation.itemTemplateKeys,
+        mutation.preparedComposition,
+      );
+      if (
+        expected === undefined
+          ? mutation.preparedSkillState !== undefined
+          : mutation.preparedSkillState === undefined ||
+            !s.same(expected, mutation.preparedSkillState)
+      )
+        return s.fail('SOURCE_CHANGED');
+      if (
+        original.schemaVersion === 2 &&
+        mutation.request.payload.stage === 'SENTIENT_SYMBIONTS' &&
+        mutation.preparedComposition === undefined
+      )
+        return s.fail('SOURCE_CHANGED');
+    }
+    if (
+      event.mutation.kind === 'ENEMY_AUTHORING' &&
+      event.mutation.cause.preparedComposition !== undefined
+    ) {
+      const mutation = event.mutation.cause,
+        prepared = mutation.preparedComposition ?? s.fail('SOURCE_CHANGED');
+      const original =
+        state.events[index - 1]?.view.enemyAuthoring?.attemptOrNull ?? s.fail('SOURCE_CHANGED');
+      const expected = prepareEnemyComposition(
+        catalog,
+        original,
+        mutation.request,
+        readEnemyCompositionDiceSource(db, source, state.events.slice(0, index)),
+        {
+          instanceIds: prepared.instanceIds,
+          advisorCardIdOrNull: prepared.advisorCardIdOrNull,
+          rolls: prepared.rolls.filter(
+            (row) => row.originatingCommandId === mutation.request.commandId,
+          ),
+        },
+      );
+      if (!s.same(expected, prepared)) return s.fail('SOURCE_CHANGED');
+    }
     if (
       event.mutation.kind === 'ENEMY_AUTHORING' &&
       event.mutation.cause.authorMasterProfileId !== source.context.masterProfileId
@@ -195,14 +268,96 @@ export function createEnemyAuthoringApplication(d: {
             Array.isArray(request.payload.data?.['inventoryItems'])
               ? request.payload.data['inventoryItems'].length
               : 0;
+          const compositionPreparation =
+            request.payload.stage === 'SENTIENT_SYMBIONTS' &&
+            (attempt.schemaVersion === 2 || Object.hasOwn(request.payload.data ?? {}, 'operation'))
+              ? (() => {
+                  const patch = Object.hasOwn(request.payload.data ?? {}, 'operation')
+                    ? enemyCompositionPatchValue(request.payload.data)
+                    : null;
+                  const observed: {
+                    diceSource?: ReturnType<typeof readEnemyCompositionDiceSource>;
+                  } = {};
+                  d.readCurrent((currentSource, state) => {
+                    if (!s.same(currentSource, source)) return s.fail('SOURCE_CHANGED');
+                    observed.diceSource = readEnemyCompositionDiceSource(
+                      d.database,
+                      source,
+                      state.events,
+                    );
+                  });
+                  const dice = observed.diceSource ?? s.fail('SOURCE_CHANGED');
+                  const previous =
+                    attempt.compositionOrNull !== null &&
+                    'schemaVersion' in attempt.compositionOrNull
+                      ? attempt.compositionOrNull
+                      : null;
+                  const card = attempt.compositionAcquisitions?.advisorCards[0];
+                  const instanceIds =
+                    patch === null
+                      ? []
+                      : patch.operation === 'PREVIEW'
+                        ? patch.selection.monsterOrNull === null
+                          ? patch.selection.ordinarySymbiontInstances.map((row) =>
+                              row.speciesKey === 'ADVISER' && card !== undefined
+                                ? card.symbiontInstanceId
+                                : randomUUID(),
+                            )
+                          : [randomUUID()]
+                        : (previous?.instanceIds ?? s.fail('UNAVAILABLE'));
+                  const advisorCardIdOrNull =
+                    patch === null
+                      ? null
+                      : patch.operation === 'PREVIEW'
+                        ? patch.selection.ordinarySymbiontInstances.some(
+                            (row) => row.speciesKey === 'ADVISER',
+                          )
+                          ? (card?.cardId ?? null)
+                          : null
+                        : patch.operation === 'CONFIRM'
+                          ? previous?.ordinarySymbiontInstances.some(
+                              (row) => row.speciesKey === 'ADVISER',
+                            )
+                            ? (previous.advisorCardIdOrNull ?? randomUUID())
+                            : null
+                          : (previous?.advisorCardIdOrNull ?? null);
+                  const rolls =
+                    patch?.operation === 'CONFIRM'
+                      ? issueEnemyCompositionRolls(
+                          d.catalog,
+                          attempt,
+                          request,
+                          dice.diceModeSnapshot,
+                          (sides) => randomInt(1, sides + 1),
+                        )
+                      : [];
+                  return prepareEnemyComposition(d.catalog, attempt, request, dice, {
+                    instanceIds,
+                    advisorCardIdOrNull,
+                    rolls,
+                  });
+                })()
+              : undefined;
+          const itemTemplateKeys = Array.from({ length: itemCount }, () => randomUUID());
+          const preparedSkillState = prepareEnemySkillPlanState(
+            d.catalog,
+            attempt,
+            request,
+            itemTemplateKeys,
+            compositionPreparation,
+          );
           const mutation: EnemyAuthoringMutation = {
             authorMasterProfileId: source.context.masterProfileId,
             sourceBaselineVersion: d.baseline.baselineVersion,
             request,
-            itemTemplateKeys: Array.from({ length: itemCount }, () => randomUUID()),
+            itemTemplateKeys,
             committedVersionOrNull: identity,
             receiptId: randomUUID(),
             timestamp,
+            ...(compositionPreparation === undefined
+              ? {}
+              : { preparedComposition: compositionPreparation }),
+            ...(preparedSkillState === undefined ? {} : { preparedSkillState }),
           };
           const versionOrNull: EnemyStoredVersion | null =
             identity === null
@@ -291,7 +446,8 @@ export function createEnemyAuthoringApplication(d: {
                       .filter(([, value]) => value < 1)
                       .map(([key]) => key);
                     const skills =
-                      invalidPermanentStats.length === 0
+                      invalidPermanentStats.length === 0 ||
+                      context.attemptOrNull?.schemaVersion === 2
                         ? validateSkillSelectionDraft(d.catalog.skills, {
                             raceCode: race.raceCode,
                             classCode,
@@ -327,6 +483,60 @@ export function createEnemyAuthoringApplication(d: {
               ...d.catalog.choices,
               buildOptions: buildOptions as unknown as JsonValue,
             },
+            ...(view.formId === 'ENM-008' &&
+            context.attemptOrNull?.compositionOrNull != null &&
+            'schemaVersion' in context.attemptOrNull.compositionOrNull
+              ? (() => {
+                  const attempt = context.attemptOrNull ?? s.fail('UNAVAILABLE'),
+                    composition = context.attemptOrNull.compositionOrNull;
+                  const basis = enemyCompositionInitialBasis(d.catalog, attempt),
+                    known = sentientAcquisitionRolls(composition);
+                  const requiredRolls = sentientCompositionRollRequirements(
+                    d.catalog.composition,
+                    basis.build.raceCode,
+                    composition,
+                  ).filter((row) => !known.has(row.kind));
+                  try {
+                    const preview = deriveSentientComposition(
+                      d.catalog.composition,
+                      d.catalog.skills,
+                      basis.build,
+                      basis.skillStageStats,
+                      composition,
+                      basis.selected.learnedSkills,
+                      false,
+                      false,
+                      0,
+                      false,
+                      context.attemptOrNull?.skillPlanState,
+                    );
+                    return {
+                      compositionPreparation: {
+                        permanentStatsOrNull: preview.permanentStats,
+                        factsOrNull: preview.facts as unknown as JsonObject,
+                        requiredRolls,
+                        errors: Object.entries(preview.permanentStats)
+                          .filter(([, value]) => value < 1)
+                          .map(
+                            ([stat]) =>
+                              `До выбора экипировки ${stat} ниже 1. Полный лист и сохранение потребуют итог не ниже 1; автоматического ограничения нет.`,
+                          ),
+                      },
+                    };
+                  } catch (error) {
+                    return {
+                      compositionPreparation: {
+                        permanentStatsOrNull: null,
+                        factsOrNull: null,
+                        requiredRolls,
+                        errors: [
+                          error instanceof Error ? error.message : 'Состав не прошёл проверку.',
+                        ],
+                      },
+                    };
+                  }
+                })()
+              : {}),
             art: d.catalog.art,
           };
           return {

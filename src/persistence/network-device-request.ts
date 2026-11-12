@@ -787,6 +787,9 @@ function viewMutation(
               kind: 'NAV' as const,
               request,
               initialQueueOrNull: state.viewOrNull === null ? queueEvidence(source.queue) : null,
+              ...(request.sourceFormId === 'ENM-001' && request.actionKey === 'ENM-001::CTA::003'
+                ? { enemyAuthoringSchemaVersion: 2 as const }
+                : {}),
             }
           : { kind: 'DRAFT' as const, request };
         if (old !== undefined) {

@@ -12990,7 +12990,12 @@ export function connectProjection(
           request = enemyBrowserWorkflow(p, ENEMY_STAGE_FORMS[stage][2], commandId, data);
         if (
           request === null ||
-          !lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) ||
+          (!lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) &&
+            !(
+              stage === 'SENTIENT_SYMBIONTS' &&
+              p.formId === 'ENM-008' &&
+              (data['operation'] === 'PREVIEW' || data['operation'] === 'CONFIRM')
+            )) ||
           !lastSnapshot.executableWorkflowCommandIds.includes(request.workflowCommandId)
         )
           return { ok: false, detail: 'Этап недоступен.' };

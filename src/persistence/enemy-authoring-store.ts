@@ -24,6 +24,34 @@ import {
 import { readGmRequestReviewSource, type GmRequestReviewSource } from './network-device-request.js';
 import { readAppliedMigrationVersion } from './migrations/index.js';
 import { npcIdentityInUse, legacyLocalIdentityInUse } from './npc-identities.js';
+import { readCampaignLifecycleLedger } from './campaign-lifecycle-ledger.js';
+
+/** The already-checked QUEUE prefix binds a roll to the settings which actually preceded it. */
+export function readEnemyCompositionDiceSource(
+  db: Database.Database,
+  source: GmRequestReviewSource,
+  events: readonly StoredGmRequestQueueEvent[],
+): { diceModeSnapshot: 'AUTO' | 'MANUAL'; lifecycleSourceCommandIdOrNull: string | null } {
+  if (!db.inTransaction) return s.fail('INVALID_INPUT');
+  let mode = source.creationOrigin.payload.defaultFutureRollMode;
+  let commandId: string | null = null;
+  const lifecycle = readCampaignLifecycleLedger(db, source.scope.campaignId);
+  for (const event of events)
+    if (event.mutation.kind === 'LIFECYCLE_SOURCE') {
+      const cause = event.mutation.cause;
+      const record =
+        lifecycle.find((row) => row.request.commandId === cause.commandId) ??
+        s.fail('SOURCE_CHANGED');
+      if (!s.same(record.scope, source.scope) || s.sha(s.canonical(record)) !== cause.recordSha256)
+        return s.fail('SOURCE_CHANGED');
+      if (record.request.workflowCommandId === 'UI-CMD-CAMPAIGN-SETTINGS-SET') {
+        mode = record.request.defaultFutureRollMode;
+        commandId = record.request.commandId;
+      }
+    }
+  if (mode !== 'AUTO' && mode !== 'MANUAL') return s.fail('SOURCE_CHANGED');
+  return { diceModeSnapshot: mode, lifecycleSourceCommandIdOrNull: commandId };
+}
 
 export interface EnemyStoredVersion {
   readonly actorId: string;
@@ -42,10 +70,75 @@ const tables = [
   'campaign_enemy_history',
   'campaign_enemy_current_version',
 ] as const;
+function allocatedCompositionIds(mutation: EnemyAuthoringMutation): readonly string[] {
+  const value = mutation.preparedComposition;
+  if (value === undefined) return [];
+  if (value.phase === 'PREVIEW') {
+    const kept = value.acquisitions.advisorCards.find(
+      (card) => card.cardId === value.advisorCardIdOrNull,
+    );
+    return value.instanceIds.filter((id) => id !== kept?.symbiontInstanceId);
+  }
+  if (value.phase === 'ACQUIRED')
+    return value.acquisitions.advisorCards
+      .filter((card) => card.iwRolls[0].originatingCommandId === mutation.request.commandId)
+      .map((card) => card.cardId);
+  return [];
+}
+/** Historical nested allocations keep the same global namespace as the original enemy identities. */
+export function validateEnemyCompositionReservations(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  events: readonly StoredGmRequestQueueEvent[],
+): void {
+  const allocated = new Set<string>();
+  for (const event of events)
+    if (event.mutation.kind === 'ENEMY_AUTHORING')
+      for (const id of allocatedCompositionIds(event.mutation.cause)) {
+        if (allocated.has(id) || npcIdentityInUse(db, id) || legacyLocalIdentityInUse(db, id))
+          return s.fail('IDEMPOTENCY_CONFLICT');
+        allocated.add(id);
+        s.assertUnusedOutsideNpc(db, id);
+        for (const [table, column] of [
+          ['campaign_enemy_template', 'template_id'],
+          ['campaign_enemy_version', 'version_id'],
+          ['campaign_enemy_history', 'history_id'],
+        ] as const)
+          if (db.prepare(`SELECT 1 FROM ${table} WHERE ${column}=?`).get(id) !== undefined)
+            return s.fail('IDEMPOTENCY_CONFLICT');
+        if (
+          db
+            .prepare(
+              `SELECT 1 FROM gm_request_queue_event e WHERE e.kind='ENEMY_AUTHORING' AND (
+      json_extract(e.record_json,'$.mutation.cause.receiptId')=? OR
+      EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.itemTemplateKeys') WHERE value=?) OR
+      EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.request.payload.data.inventoryItems') WHERE json_extract(value,'$.linkedSetInstanceId')=?) OR
+      (json_extract(e.record_json,'$.scope.campaignId')<>? AND (
+        EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.preparedComposition.instanceIds') WHERE value=?) OR
+        json_extract(e.record_json,'$.mutation.cause.preparedComposition.advisorCardIdOrNull')=?
+      ))
+    ) LIMIT 1`,
+            )
+            .get(id, id, id, scope.campaignId, id, id) !== undefined
+        )
+          return s.fail('IDEMPOTENCY_CONFLICT');
+      }
+}
 function versionAudit(
   version: EnemyStoredVersion,
   revisions: { stateRevision: number; projectionRevision: number; actorVisibilityRevision: number },
 ) {
+  const ledger = version.attempt.compositionAcquisitions;
+  const rolls =
+    ledger === undefined
+      ? []
+      : [
+          ...(ledger.freeSlotOrNull === null ? [] : [ledger.freeSlotOrNull.roll]),
+          ...ledger.advisorCards.flatMap((card) => [
+            ...card.iwRolls,
+            ...(card.suppressionRollOrNull === null ? [] : [card.suppressionRollOrNull]),
+          ]),
+        ];
   return {
     operationId: version.operationId,
     operation: version.operation,
@@ -60,7 +153,13 @@ function versionAudit(
       sourceBaselineVersion: version.sourceBaselineVersion,
     },
     art: { assetKey: version.identity.artAssetKey, sha256: version.identity.artSha256 },
-    rngReceiptOrNull: null,
+    rngReceiptOrNull:
+      rolls.length === 0
+        ? null
+        : {
+            kind: 'SENTIENT_COMPOSITION_ACQUISITIONS',
+            rolls,
+          },
   };
 }
 function schema(db: Database.Database): boolean {
@@ -376,6 +475,7 @@ export function commitEnemyAuthoring(
       const fresh = [
         prepared.mutation.receiptId,
         ...prepared.mutation.itemTemplateKeys,
+        ...allocatedCompositionIds(prepared.mutation),
         ...(version === null
           ? []
           : [version.identity.templateId, version.identity.versionId, version.historyId]),

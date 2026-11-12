@@ -1,6 +1,75 @@
-# Передача контекста — 2026-11-11
+# Передача контекста — 2026-11-12
 
-## Source #284 — утверждённый A, отдельный кандидат до runtime #257
+## Runtime #257 — авторский кандидат, полная приёмка ожидается
+
+Второй clean verify `1dcda8b` завершился 7395 PASS / 18 skipped из 7413,
+296 PASS / 1 failed suite: общий beforeAll группы композиции получил timeout
+10 с; individual assertions не упали. NPC cleanup correction прошла в этом
+наборе. Два отдельных профиля той же factory завершились за 5,581/5,582 с,
+не воспроизведя исходную нагрузку и не установив причину отказа. Владелец
+отдельно разрешил explicit 30 с только этому hook для 18 тестов; factory,
+assertions, общие defaults и runtime неизменны. [Доказательства и границы](web-setup-257.md).
+Один целевой whole web после правки прошёл: 927 PASS / 32 файла, Vitest 51,90 с,
+без skips/errors; source/control hashes до/после равны. Typecheck, scoped lint,
+формат, checksums и traceability verify — exit0. Это dirty scoped evidence;
+новому SHA ещё нужны независимый clean five-stage и CI. Старые неуспешные
+результаты не переносятся как PASS.
+
+Первый clean verify `fc7b4be` завершился 7412 PASS / 1 FAIL из 7413: существующий
+NPC disease removal case получил afterEach hook timeout 30 с; источник задаёт
+body budget 300 с, ошибка относится к hook. Reported case total 189484 мс
+не устанавливает исходную exclusive close duration. Сравнительная пара с прежними
+лимитами прошла по одному выбранному случаю на base/candidate; native close
+442,5461/409,5050 мс, без воспроизведения отказа или установленной причины.
+В узкой test-only правке success close перенесён после последнего assertion
+в существующий body budget, общий cleanup остаётся fallback. Это изменение
+учёта cleanup, не performance/root-cause fix. [Полный разбор](npc-close-257.md).
+Один обычный targeted case без overlay прошёл: 1 PASS / 37 filtered,
+reported case total 87246 мс; exclusive close duration отдельно не измерена.
+Новому committed SHA предстоят свежие independent clean five-stage и CI;
+результаты прежнего SHA не переносятся на него.
+
+Source #284 фактически поставлен PR285: main `54f1bfd7fd42577b032a72a1551ac15cc62ee2d7`,
+tree `07d57b67bb90c7dc93c5bc0b6450d53a52433839`, issue закрыта. Runtime #257
+подготовлен в отдельном checkout `issue-257-after284`; старые issue-257 WIP,
+project/output, source284 и все failed evidence сохранены. #257/#188/#113
+остаются открытыми до соответствующей приёмки; #258 не начата.
+
+Поставленный A/ADR0092 реализован полным initial input и явным host-bound
+rebuild. Modern attempt generation, thin START/SYM-166 accounting, actual
+body resolution и every-prefix proof описаны в ADR0093. Старые markerless
+attempts/V1/receipts сохраняют прежнюю grammar и bytes; pending legacy preview
+не включает новую generation. Реальные ordinary/monster controls не создают
+новой GM оболочки или global CTA, не заимствуют NPC journal/TRAINING/maxW.
+
+Текущие dirty targeted evidence находятся во внешнем `evidence-257-after284`:
+
+- `host-authoring-whole01`: 63 PASS / 1 FAIL из 64. Старый armor test менял
+  input мимо нового owning plan. Исправлен только тест: настоящие независимые
+  SEEKER/SOLDIER workflows сохранили все исходные assertions. Его отдельный
+  `host-equipment-plan02` и `host-case-headroom01` прошли. Это не общий all64 PASS.
+- Два новых длинных mixed/Advisor cases получают только body 60 с по ADR0088;
+  whole-file reported totals 23,325/23,153 с. Группа этих двух и исправленного
+  armor: 3 PASS; ни timeout cause, ни отдельная production latency не установлены.
+- `web-project-06`: 927 PASS / 32 файла, исходный hook 10 с. Предыдущие два hook
+  failures сохранены; убраны только лишний presentation read при сборке request
+  и повторный source validator тестового adapter. Actual commands/projections
+  продолжают все guards. Standalone synchronous-read профили — не CI benchmark.
+  Затем исправлена симуляция нового edit-away/back теста: реальное восстановление
+  exact input оставляет consent снятым, новый click обязателен.
+- `browser-plan-01`: 3 PASS / 2 файла, Chromium, local 0 retry. Сохранённый HTML
+  проверен авторским strict auditor: 3 attempts, 0 skip/flaky/global/attempt errors,
+  все 19 final assertions выполнены. 34 intermediate error steps относятся к 17
+  успешным polls, outside errors 0. Это dirty targeted scope, не полный E2E gate.
+
+Подробности и ограничения — [состояние #257](sentient-composition-257.md).
+Независимый reviewer отдельно связывает прочитанные snapshots/bytes и browser
+artifacts. Финальные static/traceability, committed SHA, отдельный clean five-stage
+cycle, CI и protected merge не заменяются этими результатами и фиксируются
+отдельно. Полный author verify/E2E повторно не запускается; push делает root
+только после независимой приёмки. Следующий child ждёт реального завершения #257.
+
+## Исторический снимок source #284 до merge — не текущий статус
 
 Фактический main `85f91cac1a8b257c907aa066765bc010922da819` доставил #256;
 issue #256 закрыта, #188/#113 открыты. Исторические инциденты/dirty доказательства

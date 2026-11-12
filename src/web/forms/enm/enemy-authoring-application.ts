@@ -12,6 +12,8 @@ import {
   type EnemyPatchStage,
   type EnemyWorkflowRequest,
 } from '@shared/enemy-authoring.js';
+import { enemyCompositionPatchValue } from '@shared/enemy-composition.js';
+import { enemyBuildPlanPatchValue } from '@shared/enemy-skill-plan.js';
 
 export function enemyBrowserWorkflow(
   p: EnemyAuthoringProjection,
@@ -56,10 +58,45 @@ export function enemyBrowserReceipt(
   if (receipt['commandId'] !== request.commandId) throw new Error('Чужая квитанция.');
   const result = r.exact(
     receipt['result'],
-    'campaignId creationAttemptId timestamp workflowCommandId sourceFormId stageOrNull attemptRevision committedVersionOrNull',
+    'campaignId creationAttemptId timestamp workflowCommandId sourceFormId stageOrNull attemptRevision committedVersionOrNull' +
+      (request.payload.stage === 'SENTIENT_SYMBIONTS' &&
+      (source.context.attemptOrNull?.schemaVersion === 2 ||
+        Object.hasOwn(request.payload.data ?? {}, 'operation'))
+        ? ' compositionPhase'
+        : '') +
+      (request.payload.stage === 'SENTIENT_BUILD' &&
+      Object.hasOwn(request.payload.data ?? {}, 'operation')
+        ? ' buildPhase'
+        : ''),
     '$.result',
   );
   const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1';
+  if (Object.hasOwn(result, 'compositionPhase')) {
+    const patch = Object.hasOwn(request.payload.data ?? {}, 'operation')
+      ? enemyCompositionPatchValue(request.payload.data)
+      : null;
+    if (
+      result['compositionPhase'] !==
+      (patch === null
+        ? 'CONFIRMED'
+        : ({ PREVIEW: 'PREVIEW', CONFIRM: 'ACQUIRED', FINISH: 'CONFIRMED' } as const)[
+            patch.operation
+          ])
+    )
+      throw new Error('Квитанция не связана с подготовкой состава.');
+  }
+  if (Object.hasOwn(result, 'buildPhase')) {
+    const patch = enemyBuildPlanPatchValue(request.payload.data);
+    if (
+      result['buildPhase'] !==
+      (patch.operation === 'PREVIEW_REBUILD'
+        ? 'PREVIEW_REBUILD'
+        : patch.operation === 'DISCARD_REBUILD'
+          ? 'REBUILD_DISCARDED'
+          : 'SAVED')
+    )
+      throw new Error('Квитанция не связана с планом навыков.');
+  }
   if (
     result['campaignId'] !== source.campaignId ||
     result['campaignId'] !== request.payload.campaignId ||
@@ -122,7 +159,15 @@ export function enemyBrowserDestination(
       );
     const stage = result['stageOrNull'] as EnemyPatchStage;
     return (
-      p.formId === ENEMY_STAGE_FORMS[stage][1] &&
+      p.formId ===
+        (stage === 'SENTIENT_BUILD' &&
+        (result['buildPhase'] === 'PREVIEW_REBUILD' || result['buildPhase'] === 'REBUILD_DISCARDED')
+          ? 'ENM-007'
+          : stage === 'SENTIENT_SYMBIONTS' &&
+              Object.hasOwn(result, 'compositionPhase') &&
+              result['compositionPhase'] !== 'CONFIRMED'
+            ? 'ENM-008'
+            : ENEMY_STAGE_FORMS[stage][1]) &&
       p.context.attemptOrNull?.attemptId === result['creationAttemptId'] &&
       p.context.attemptOrNull?.revision === result['attemptRevision']
     );
