@@ -307,6 +307,44 @@ it('uses actual source monster controls, explicit empty consent, and rejects mal
   }
 }, 30_000);
 
+it('renders actual saved V1 absence without accepting a configuration object or a summary on another form', async () => {
+  const source = await createCustomMonsterClientFixture(false, { captureSavedV1: true });
+  const saved = source.savedOrNull;
+  if (saved === null) throw Error('Actual saved V1 projection absent');
+  expect(saved.versionConfigurationSummaryOrNull).toBeNull();
+  expect(mount(saved).container.textContent).toContain(
+    'нет отдельного подтверждения конфигурации N+1',
+  );
+  for (const value of [{}, [], 'confirmation', 1]) {
+    const { socket, states } = await connect(saved, source.ownerDeviceId);
+    const before = states.at(-1),
+      malformed = structuredClone(saved);
+    Reflect.set(malformed, 'projectionRevision', malformed.projectionRevision + 1);
+    Reflect.set(malformed, 'versionConfigurationSummaryOrNull', value);
+    expect(() => enemyAuthoringProjectionValue(malformed)).toThrow();
+    socket.message(frame(malformed, 'HOST_SYSTEM_EVENT', 'network-gm-view:' + 'a'.repeat(64)));
+    expect(states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      snapshot: { formId: 'ENM-020' },
+    });
+    expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(before);
+  }
+  for (const projection of [
+    source.identity,
+    source.stats,
+    source.physics,
+    source.attack,
+    source.full,
+  ]) {
+    const malformed = { ...projection, versionConfigurationSummaryOrNull: null };
+    expect(() => enemyAuthoringProjectionValue(malformed)).toThrow();
+  }
+  const legacy = structuredClone(saved);
+  Reflect.deleteProperty(legacy, 'versionConfigurationSummaryOrNull');
+  expect(
+    Object.hasOwn(enemyAuthoringProjectionValue(legacy), 'versionConfigurationSummaryOrNull'),
+  ).toBe(false);
+});
 it('shows actual Adviser requirements, bonus limits and paid capacity, and requires fresh consent after edits', async () => {
   const source = await createCustomMonsterClientFixture(true);
   const controls = mount(source.acquired);

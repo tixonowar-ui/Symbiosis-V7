@@ -186,7 +186,7 @@ Actions `e2e-diagnostics-<номер попытки workflow>` на 14 дней.
 ```
 artifacts/          READ-ONLY. Поставленные артефакты. Менять запрещено
   registries/       10 xlsx — реестры, манифест, отчёт аудита
-  atlas/            Atlas UI: JSON и Markdown amendment v1.15 в legacy-файлах v1.2
+  atlas/            Atlas UI: JSON и Markdown amendment v1.22 в legacy-файлах v1.2
   packs/            Runtime Pack v1.2 (zip) — заморожен побайтово
   symbiont-media/   2 xlsx — 23 арта и 23 дерева; импорт по SpeciesKey работает
   CHECKSUMS.sha256  единственный файл, который туда пишет инструмент
@@ -218,7 +218,7 @@ tests/
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/
-  adr/              93 ADR-записи + README. Статусы решений указаны в реестре
+  adr/              94 ADR-записи + README. Статусы решений указаны в реестре
   ARCHITECTURE.md   архитектура и границы слоёв
   ROADMAP.md        вехи M0–M9, что сделано и что осталось
   TRACEABILITY.md   снимок покрытия

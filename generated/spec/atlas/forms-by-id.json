@@ -82625,7 +82625,8 @@
       "ADR 0092 / owner #284 A: initialSkillPlanOrNull — отдельный технический pre-V1 план SENTIENT, не actor/template.status. Новый plan имеет закрытый version discriminator и host-bound revision; legacy ABSENT не нормализуется и не дополняется в сохранённых bytes. Технические IDs/revisions не подменяют понятный GM preview последствий.",
       "Полный initial input raceCode/pureClassOrNull/skillSelections[] и точный precomposition START budget сохраняются; incremental-only ограничение не вводится. До первого V1 GM отдельно подтверждает полную пересборку изменённого или того же input, включая changed ENM-006 → ENM-007; обычное сохранение идентичного input/NAV не является rebuild. Confirmation привязано к actual attempt, current plan revision, input и показанным последствиям; stale/foreign/role-loss/error отказывает без partial reset.",
       "Явный rebuild атомарно делает старую deterministic derivation неактивной, инвалидирует cached composition/inventory/own-skill selections и создаёт новый полный initial plan с обычными source costs/requirements. Новые extra choices подтверждаются заново; unpaid bonus gap, перенос неоплаченной START-части и переписывание фактического charge запрещены. SYM-079 применяется к actual initial basis нового плана ровно один раз без stacking с прежним grant; старые расчёты/команды остаются immutable.",
-      "Обязательные acquisition facts отделены от текущих plan choices: FREE хранит исходный R6 и actual fixed signed S/M/Z loss без пересчёта по новой базе, refund или нового clamp; final floor проверяется на реальном листе. Advisor сохраняет cardId, I/W/suppression, первоначальное fill и все прежние receipts; rebuild инвалидирует только current own-skill choices, не требует заполнить abandoned prior plan/card ради полной смены race/build и сам не создаёт новую карту или reroll при same-card reselect."
+      "Обязательные acquisition facts отделены от текущих plan choices: FREE хранит исходный R6 и actual fixed signed S/M/Z loss без пересчёта по новой базе, refund или нового clamp; final floor проверяется на реальном листе. Advisor сохраняет cardId, I/W/suppression, первоначальное fill и все прежние receipts; rebuild инвалидирует только current own-skill choices, не требует заполнить abandoned prior plan/card ради полной смены race/build и сам не создаёт новую карту или reroll при same-card reselect.",
+      "ADR0092 pre-V1 boundary остаётся прежней: ENM007 не редактирует сохранённую V1. Отдельный полный N+1 version-configuration replacement обоих kinds действует только на ENM017 по ADR0094 / owner #288 A; старые V1 plan/acquisition/payment/receipts не переписываются."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -88223,7 +88224,22 @@
       "Owner decision #186 D: a host-bound CUSTOM_MONSTER technical attempt carries attemptId, attemptRevision, campaignId and originFormId=ENM-012|ENM-017. Existing monsterDraftId/creationAttemptId are exact aliases of that same attemptId, never separate identities. Creation binds origin ENM-012; version editing binds origin ENM-017 plus templateId and expectedCurrentVersion. The host, never a free client returnFormId, chooses every child return. SENTIENT, system templates and foreign/stale attempts cannot enter this channel. On ENM-017 monsterRollContextOrNull is null for SENTIENT and the closed bound context for CUSTOM_MONSTER; null never grants a roll or receipt CTA.",
       "CORE-201: each distinct creation or version attempt has its own single roll right. The host produces exactly seven independent natural R20 in S,D,M,Z,I,W,C order, without critical chains and regardless of MANUAL/AUTO input mode. One operationId-bound RandomStatsReceipt persists with its original faces; exact replay returns it, a second new roll in the same attempt refuses. Restart/refresh/view never restores a spent right or copies an old version receipt into a new attempt.",
       "Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
-      "Positive SENTIENT N+1 keeps monsterRollContextOrNull=null and saves through existing full-version guards. Negative SENTIENT→ENM-018/019 or forged non-null monster context refuses without writes. CUSTOM_MONSTER uses the non-null bound version context; the two kinds retain their existing full-sheet validation."
+      "Positive SENTIENT N+1 keeps monsterRollContextOrNull=null and saves through existing full-version guards. Negative SENTIENT→ENM-018/019 or forged non-null monster context refuses without writes. CUSTOM_MONSTER uses the non-null bound version context; the two kinds retain their existing full-sheet validation.",
+      "ADR0094 / owner #288 A: ENM017 хранит только technical version candidate, связанный с actual campaign/template/current baseVersion/attempt/revisions и owning NAV. Полная копия сохраняет все actual extra choices/payments/known skills/permanent losses; candidate не доказывает собственное происхождение. Ни template.status, ни NPC OPEN, новых global CTA/routes/workflow нет.",
+      "Полная смена SENTIENT base/race/class/initial skills либо current own Advisor choices любого kind требует явного version-configuration preview/confirmation внутри017 под UI-CMD-ENEMY-DRAFT-PATCH. Confirmation связывает actual attempt/baseVersion/revisions, полный kind-specific input и displayed consequences. Видны прежние bonuses и START/SYM166 charges только SENTIENT, actual own-card choices/цены/losses обоих kinds и invalidated composition/inventory confirmations; local input change снимает consent. Reason и содержательный diff обязательны на final NEW-VERSION.",
+      "Открытие017, NAV/Back, одинаковый SAVE и exact replay не reset и не выдают новые slots/grants. Независимая правка имени не заменяет план. Deliberate replacement того же полного input требует отдельного explicit consent; расчёт не использует прежний enhanced bonus как новый initial basis.",
+      "Явно подтверждённая новая SENTIENT конфигурация имеет полный новый initial basis и обычный exact START budget; extra choices подтверждаются заново. Пример UNITED raw20: V1 UNARMED3/LEARNING6 стоят START3+7, DOLPHIN6 доплатил UNARMED3→5 двумя SYM166 slots и ACROBATICS3 ещё тремя. Replacement V2 FENCING3/LEARNING6 задаёт новые START3+7 и явно распределяемую новую пятёрку при DOLPHIN6; прежние UNARMED/ACROBATICS/payments остаются immutable V1. Unpaid bonus gap, переписывание прежнего charge и refund старой версии запрещены.",
+      "SYM079 вычисляется ровно один раз от нового actual initial skill basis при explicit replacement, без stacking прежнего derived grant. Обычный PATCH/replay не выдаёт grant. Нельзя сделать прежний повышенный bonus новым initial input без его настоящей source cost/requirements.",
+      "Без explicit replacement same-plan composition/removal/reacquisition сохраняют known skills, actual payments и permanent losses; capacity0 не обнуляет spent SYM166 и не выдаёт вторую пятёрку при возврате. Lower W не удаляет известное; восстановление stats/source не воскрешает забытый START/GROSS/own Advisor skill. Temporary availability не забывает навык и не освобождает charge.",
+      "Actual inherited FREE fact сохраняет original R6 и fixed signed S/M/Z loss, в том числе при FREE→PURE и смене базы: без пересчёта по новой базе, refund или нового clamp. Final floor проверяется на настоящем полном листе. При PURE→FREE без prior R6 первое applicable acquisition использует existing #257 mandatory R6 control с actual acquisition/attempt/command receipt/provenance; ABSENT не заменяется нулями.",
+      "Существующая Advisor card обоих kinds сохраняет cardId, original I/W, acquisition/initial-fill facts и исходные receipts. Historical SENTIENT suppression fact неизменен и при Advisor absent либо неактивном текущем race/composition/body predicate: меняется применимость, не fact и не право броска. CUSTOM_MONSTER никогда не получает suppression field/control/roll. Replacement меняет только current own choices; abandoned card не требует fill при варианте без Advisor.",
+      "При actual card ABSENT первое acquisition использует already supplied applicable kind path #257/#258: два natural R20 с source +8, отдельный suppression только при применимом SENTIENT predicate. Все новые facts/receipts связаны с actual card/attempt/command; same-card reselect/Back/N+1 не reroll. Замена уже приобретённой карты ради новых I/W не разрешена: control явно недоступен с причиной.",
+      "Explicit version-configuration replacement current own Advisor choices разрешён обоим kinds. CUSTOM пример: own I20/W20 capacity10, initial UNARMED3/LEARNING6 (цены3+7), после actual permanent bodyD<11 UNARMED забыт. Ordinary same-plan restore не воскрешает его; deliberate replacement новой версии может явно задать FENCING3/LEARNING6 при actual body/own capacity/source requirements/costs и обычном initial fill. Прежние known/loss states остаются immutable V1; initial-fill/RNG witnesses карты не заменяются. CUSTOM не получает START/race/class/host skills/inventory/SENTIENT keys или suppression.",
+      "Неподтверждённый composition/loadout не фиксирует irreversible loss. SENTIENT actual source sealed/equipped Nate применяется до permanent requirements; armor M остаётся temporary availability. Новые own choices проходят actual body/I/W/capacity/source costs/requirements. Final permanent stats >=1 без repair/clamp, >35 законны. Invalid body/stale/foreign/role-loss/error оставляют zero partial loss/reset/inventory/allocation.",
+      "Legacy ABSENT обоих kind grammars остаётся ABSENT без fictional plan/UUID или SENTIENT keys в CUSTOM. Только explicit confirmation новой version configuration вводит её closed kind-specific discriminator; старые V1/open attempts/FINAL/snapshots/receipts/record hashes и exact replay не нормализуются. Stored old plan/card/payment/loss states остаются immutable; nullable current summaries объясняют отсутствие без implicit upgrade.",
+      "Только UI-CMD-ENEMY-NEW-VERSION атомарно append version/history/current pointer/receipt после повторной проверки sole current GM, current baseVersion, campaign/template/kind, source, revisions, подтверждённого complete candidate, diff/reason и inherited/resolved art. PATCH не пишет template/current/history. Cancel не публикует N+1 и не стирает mandatory receipts. Historical source/prefix и reused references доказываются actual earlier cause, не поздним global state; exact replay возвращает original receipt отдельно от current projection без reset/RNG/grant.",
+      "Mandatory composition R6/Advisor R20 — reuse существующих applicable kind controls, не новый monster seven-R20 channel. Исторические monsterRollContextOrNull/aliases/ENM018/019 return guards остаются точными; их runtime относится к #260. Art наследуется до #261 upload/clear. Archive/delete/in-place patch, NPC TRAINING/maxW/lifetime journal, XP, scene/combat/placement не добавляются.",
+      "Actual prior mandatory facts берутся из owning template-bound authoritative prefix, включая confirmed FREE/card acquisitions в subsequently cancelled version attempts того же шаблона. Только current baseVersion не доказывает ABSENT: следующий N+1 не перебрасывает уже существующие R6/IW/suppression и не стирает fixed loss/card/receipt. Actual original NAV/cause/receipt доказывают scope; unrelated template/campaign facts не переносятся. Это technical mandatory provenance, не NPC lifetime journal и не изменение отдельного CORE201 seven-R20 per-attempt right. Обычные edits и подготовка preview не требуют будущего consent и не выполняют replacement; только confirmation требует явного consent, связанного с exact preview/input/consequences/revisions."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -88235,7 +88251,7 @@
       "allowed": [
         "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-        "Разрешённые atlas workflow commands этой формы: UI-CMD-ENEMY-NEW-VERSION.",
+        "Разрешённые atlas workflow commands этой формы: UI-CMD-ENEMY-NEW-VERSION, UI-CMD-ENEMY-DRAFT-PATCH.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
         "Разрешённые видимые действия/CTA именно этой формы: Сохранить новую версию N+1; Отменить новую версию; Открыть однократный бросок новой версии; Открыть квитанцию броска этой версии."
       ],
@@ -88249,7 +88265,8 @@
           ],
           "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
           "workflowCommandIds": [
-            "UI-CMD-ENEMY-NEW-VERSION"
+            "UI-CMD-ENEMY-NEW-VERSION",
+            "UI-CMD-ENEMY-DRAFT-PATCH"
           ]
         },
         "availabilityInputs": [
@@ -88741,7 +88758,52 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-ENEMY-NEW-VERSION",
-          "guard": "Current user template exists; full candidate snapshot and diff/reason valid; owner #113 inclusive mass bounds pass by immutable templateKind (SENTIENT 30..500kg, CUSTOM_MONSTER 5..10000kg, exact 0.1kg step); resolved art fixed; active combats keep pinned old snapshot. The host-bound technical version attempt has current templateId/expectedCurrentVersion/attemptRevision; CUSTOM_MONSTER may use its own CORE-201 right through ENM-018, then edit the candidate manually.",
+          "guard": "Current user template exists; full candidate snapshot and diff/reason valid; owner #113 inclusive mass bounds pass by immutable templateKind (SENTIENT 30..500kg, CUSTOM_MONSTER 5..10000kg, exact 0.1kg step); resolved art fixed; active combats keep pinned old snapshot. The host-bound technical version attempt has current templateId/expectedCurrentVersion/attemptRevision; CUSTOM_MONSTER may use its own CORE-201 right through ENM-018, then edit the candidate manually. ADR0094 requires the complete current kind-specific candidate, bound versionConfigurationContext, required reason and actual diff. Any full SENTIENT initial-input or either-kind own-card replacement has actual confirmed preview/input/consequences; unchanged copy retains its real choices/payments/losses. Inherited FREE fixed signed loss/card/IW/initial-fill/receipts remain independently source-bound, including inactive SENTIENT suppression fact; CUSTOM has no suppression. On ENM017 only, prior mandatory FREE/card/acquisition facts are resolved from the owning template-bound authoritative prefix, including confirmed acquisitions of subsequently cancelled version attempts. The current baseVersion alone cannot prove ABSENT or restore a roll right; unrelated templates/campaigns do not supply facts. This does not change creation-stage guards or the distinct CORE201 seven-R20 per-attempt rule.",
+          "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
+          "recomputeTriggers": [
+            "action budget",
+            "HP/OE/effects/death or incapacity",
+            "position/range/visibility",
+            "inventory/equipment/ammo/cooldown",
+            "symbiont composition or learned nodes",
+            "turn/phase/reaction window",
+            "controller/seat/handoff",
+            "consent/masterPredicate response",
+            "game time/campaign state",
+            "stateRevision/projectionRevision"
+          ]
+        },
+        {
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [
+              "CORE-192",
+              "CORE-195"
+            ],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": [
+              "UI-CMD-ENEMY-DRAFT-PATCH"
+            ]
+          },
+          "availabilityInputs": [
+            "actorId",
+            "effectiveController",
+            "controllerSeat",
+            "projectionRole",
+            "scene",
+            "phase",
+            "turnOrReactionWindow",
+            "stateRevision",
+            "projectionRevision",
+            "actorVisibilityRevision",
+            "HP/OE/effects/position/range",
+            "inventory/equipment/ammo/cooldowns",
+            "consent/masterPredicate state",
+            "game time/local context"
+          ],
+          "commandId": "UI-CMD-ENEMY-DRAFT-PATCH",
+          "guard": "GM authority; only a technical creationAttempt/editAttempt exists before save; no enemyTemplate.status or persisted DRAFT template; stage-specific fields and attempt revision valid. SENTIENT pre-V1 skill-plan upgrade/rebuild follows ADR0092: full initial input and explicit bound confirmation, current plan/attempt revisions and sole GM; no implicit NAV reset or incremental-only replacement. ADR0094 / owner #288 A: on ENM017 only the actual host-bound version candidate may be edited; campaign/template/current baseVersion/kind/attempt revisions are checked for every technical edit. Ordinary edits preserve knowledge/payments/losses; preview may be prepared without consent and does not perform replacement. Only confirmation of an explicit version-configuration replacement requires consent bound to that actual preview, complete kind-specific input, displayed consequences and revisions. No NPC OPEN or saved V1 plan editing; both-kind own Advisor choices remain distinct. On ENM017 only, prior mandatory FREE/card/acquisition facts are resolved from the owning template-bound authoritative prefix, including confirmed acquisitions of subsequently cancelled version attempts. The current baseVersion alone cannot prove ABSENT or restore a roll right; unrelated templates/campaigns do not supply facts. This does not change creation-stage guards or the distinct CORE201 seven-R20 per-attempt rule.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -88769,7 +88831,10 @@
       "Change diff",
       "Active-combat pin notice",
       "Mandatory reason",
-      "Atomic version commit"
+      "Atomic version commit",
+      "Complete kind-specific version controls under existing PATCH workflow; no NPC OPEN",
+      "Explicit version-configuration preview and consent with actual payments/losses and retained mandatory facts",
+      "Own Advisor choices with actual requirements/costs/capacity for either kind; existing-card replacement unavailable"
     ],
     "contexts": [
       "enemy-catalog"
@@ -88851,7 +88916,8 @@
         146
       ],
       "workflowCommandIds": [
-        "UI-CMD-ENEMY-NEW-VERSION"
+        "UI-CMD-ENEMY-NEW-VERSION",
+        "UI-CMD-ENEMY-DRAFT-PATCH"
       ]
     },
     "requiredFields": [
@@ -88863,7 +88929,11 @@
       "reason(required)",
       "activeCombatPins[]",
       "commandId",
-      "monsterRollContextOrNull={attemptId,attemptRevision,originFormId=ENM-017,templateId,expectedCurrentVersion,randomStatsReceiptOrNull}"
+      "monsterRollContextOrNull={attemptId,attemptRevision,originFormId=ENM-017,templateId,expectedCurrentVersion,randomStatsReceiptOrNull}",
+      "versionConfigurationContext={attemptId,attemptRevision,campaignId,templateId,expectedCurrentVersion,templateKind}",
+      "versionConfigurationChangeOrNull={kind,kindSpecificInitialInput,advisorOwnChoicesChangeOrNull,displayedConsequences,explicitConfirmationOrNull}",
+      "retainedMandatoryFacts[]",
+      "kindSpecificSkillAccountingOrNull"
     ],
     "roles": [
       "gm"
@@ -88873,6 +88943,8 @@
       "COMMITTED": "Version N+1 appended once.",
       "EDITING_N_PLUS_1": "Prior versions immutable.",
       "READY_TO_COMMIT": "Diff/reason validate and active combats keep pinned version.",
+      "VERSION_CONFIGURATION_CONFIRMED": "Only the new kind-specific candidate configuration changed atomically; previous versions and mandatory witnesses immutable.",
+      "VERSION_CONFIGURATION_PREVIEW": "Host-bound complete input and displayed consequences; no active plan/receipt reset before explicit confirmation.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -89996,7 +90068,10 @@
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Read-only цепочка версий; для новых экземпляров всегда используется только currentVersionId.",
       "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
-      "Read-only V1 сохраняет исходные plan/acquisition/charge/loss facts и первоначальные receipts; просмотр/reconnect/restart не выполняет rebuild, RNG, refund или повторный SYM-079. Legacy initialSkillPlan ABSENT остаётся ABSENT в immutable saved bytes; ни новые поля, ни новый baseline ID не вписываются задним числом."
+      "Read-only V1 сохраняет исходные plan/acquisition/charge/loss facts и первоначальные receipts; просмотр/reconnect/restart не выполняет rebuild, RNG, refund или повторный SYM-079. Legacy initialSkillPlan ABSENT остаётся ABSENT в immutable saved bytes; ни новые поля, ни новый baseline ID не вписываются задним числом.",
+      "Legacy ABSENT обоих kind grammars остаётся ABSENT без fictional plan/UUID или SENTIENT keys в CUSTOM. Только explicit confirmation новой version configuration вводит её closed kind-specific discriminator; старые V1/open attempts/FINAL/snapshots/receipts/record hashes и exact replay не нормализуются. Stored old plan/card/payment/loss states остаются immutable; nullable current summaries объясняют отсутствие без implicit upgrade.",
+      "Read-only history показывает полный выбранный immutable snapshot и его kind-specific plan/payment/own-card/acquisition summary. Historical selection никогда не меняет currentVersion и не исполняет replacement/reset/acquisition/RNG. Old references/records/receipts остаются readable и exact; текущая проекция не подменяет original receipt.",
+      "Mandatory composition R6/Advisor R20 — reuse существующих applicable kind controls, не новый monster seven-R20 channel. Исторические monsterRollContextOrNull/aliases/ENM018/019 return guards остаются точными; их runtime относится к #260. Art наследуется до #261 upload/clear. Archive/delete/in-place patch, NPC TRAINING/maxW/lifetime journal, XP, scene/combat/placement не добавляются."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -90278,7 +90353,8 @@
       "contextId",
       "stateRevision",
       "projectionRevision",
-      "initialSkillPlanOrNull"
+      "initialSkillPlanOrNull",
+      "versionConfigurationSummaryOrNull"
     ],
     "roles": [
       "gm"

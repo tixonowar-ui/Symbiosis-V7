@@ -230,6 +230,8 @@ export interface SentientEnemyAuthoringProjection extends RevisionVector {
     readonly selectedVersionOrNull: SentientEnemyVersionIdentity | null;
   };
   readonly sheetOrNull: EnemySheet | null;
+  /** Projection-only absence of a separate N+1 configuration confirmation in existing V1. */
+  readonly versionConfigurationSummaryOrNull?: null;
   readonly validationErrors: readonly string[];
   readonly catalog: JsonObject;
   readonly compositionPreparation?: Readonly<{
@@ -731,11 +733,23 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
   const row = r.exact(
     value,
     'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog art' +
-      (Object.hasOwn(rawProjection, 'compositionPreparation') ? ' compositionPreparation' : ''),
+      (Object.hasOwn(rawProjection, 'compositionPreparation') ? ' compositionPreparation' : '') +
+      (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')
+        ? ' versionConfigurationSummaryOrNull'
+        : ''),
     '$.enemyAuthoringProjection',
   );
   w.literal(row['kind'], 'SENTIENT_ENEMY_AUTHORING', '$.kind');
   r.oneOf(row['formId'], SENTIENT_ENEMY_AUTHORING_FORMS, '$.formId');
+  if (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')) {
+    w.literal(
+      row['versionConfigurationSummaryOrNull'],
+      null,
+      '$.versionConfigurationSummaryOrNull',
+    );
+    if (row['formId'] !== 'ENM-020')
+      r.invalid('$.versionConfigurationSummaryOrNull', 'saved ENM-020 projection only', null);
+  }
   r.oneOf(row['campaignStatus'], ['PAUSED', 'HOSTING'], '$.campaignStatus');
   for (const key of ['contextId', 'campaignId']) r.uuid(row[key], '$.' + key);
   revisionValue(

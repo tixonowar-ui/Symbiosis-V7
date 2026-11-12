@@ -43,6 +43,12 @@
 
 ### Добавлено
 
+- **2026-11-13, источник #288:** Atlas1.22/B17 и ADR0094 задают явную N+1
+  конфигурацию обоих enemy kinds с обязательным reason/diff и сохранением
+  mandatory RNG/card provenance. Точные guards, sealed forward compatibility
+  и genuine old256/257/258 replay дополняют nullable read-only ENM020 binding;
+  runtime259 не реализуется. [Scoped состояние](docs/status/enemy-version-configuration-source-288.md).
+
 - **2026-11-12, runtime #258:** настоящий manual CUSTOM_MONSTER проходит
   ENM-011–016/020: собственные характеристики/HP/физика, закрытые определения
   брони/атаки и NONE либо один source-backed ordinary symbiont. V1 и receipt

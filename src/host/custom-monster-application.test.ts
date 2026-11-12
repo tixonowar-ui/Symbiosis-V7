@@ -245,6 +245,7 @@ it('commits a closed manual NONE V1, retains literal definitions and full HP thr
     f.finish(preview.request.commandId);
     const before = f.projection();
     expect(before.formId).toBe('ENM-016');
+    expect(Object.hasOwn(before, 'versionConfigurationSummaryOrNull')).toBe(false);
     expect(before.sheetOrNull).toMatchObject({
       kind: 'CUSTOM_MONSTER',
       identity: { name: 'Каменный зверь' },
@@ -264,6 +265,7 @@ it('commits a closed manual NONE V1, retains literal definitions and full HP thr
       saved = f.app().command(request);
     const original = f.projection();
     expect(original.formId).toBe('ENM-020');
+    expect(original.versionConfigurationSummaryOrNull).toBeNull();
     expect(original.sheetOrNull).toEqual(before.sheetOrNull);
     expect(f.db.prepare('SELECT kind FROM campaign_enemy_template').all()).toEqual([
       { kind: 'CUSTOM_MONSTER' },

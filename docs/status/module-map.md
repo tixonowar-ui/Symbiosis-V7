@@ -1,5 +1,15 @@
 # Состояние модулей
 
+## Источник N+1 конфигурации enemy — #288
+
+Atlas1.22/B17 и ADR0094 задают явную замену текущих choices для SENTIENT и
+CUSTOM own-card при обязательном reason/diff/confirmation, сохраняя mandatory
+RNG/card provenance и immutable старые версии. Текущая ENM020 получает только
+nullable read-only summary, без stored upgrade или runtime259 policy.
+B0–B16→B17 разрешены точными seals; настоящие старые256/257/258 fixtures
+проверяют physical reopen/receipt replay. [Текущее scoped состояние](enemy-version-configuration-source-288.md);
+финальные clean5/CI ожидаются, #259 остаётся заблокированным до source delivery.
+
 ## Произвольный монстр runtime #258 — авторский кандидат
 
 Поставленный #257/PR286 — main `44c5dd8`, tree `ab05f2fc`; #257 закрыта.

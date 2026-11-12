@@ -207,8 +207,9 @@ const ROOT_SEALS = [
   },
   {
     // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
+    // ADR0094 / #288 changes only intersecting ENM017 PATCH/NEW-VERSION witnesses.
     key: 'registryCoverage',
-    sha256: '542803be51f709175371667b25a8a3ba895d12985df6c5887a99d23e4b37bd3c',
+    sha256: 'd7ec2e4d9d8f4bbb1d969bb829486f536d2e4420bb28648a13d540e0168cfcb7',
   },
   {
     key: 'globalContracts',

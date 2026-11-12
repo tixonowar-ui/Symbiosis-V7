@@ -11680,7 +11680,10 @@
       "Change diff",
       "Active-combat pin notice",
       "Mandatory reason",
-      "Atomic version commit"
+      "Atomic version commit",
+      "Complete kind-specific version controls under existing PATCH workflow; no NPC OPEN",
+      "Explicit version-configuration preview and consent with actual payments/losses and retained mandatory facts",
+      "Own Advisor choices with actual requirements/costs/capacity for either kind; existing-card replacement unavailable"
     ],
     "contexts": [
       "enemy-catalog"
@@ -11700,7 +11703,11 @@
       "reason(required)",
       "activeCombatPins[]",
       "commandId",
-      "monsterRollContextOrNull={attemptId,attemptRevision,originFormId=ENM-017,templateId,expectedCurrentVersion,randomStatsReceiptOrNull}"
+      "monsterRollContextOrNull={attemptId,attemptRevision,originFormId=ENM-017,templateId,expectedCurrentVersion,randomStatsReceiptOrNull}",
+      "versionConfigurationContext={attemptId,attemptRevision,campaignId,templateId,expectedCurrentVersion,templateKind}",
+      "versionConfigurationChangeOrNull={kind,kindSpecificInitialInput,advisorOwnChoicesChangeOrNull,displayedConsequences,explicitConfirmationOrNull}",
+      "retainedMandatoryFacts[]",
+      "kindSpecificSkillAccountingOrNull"
     ],
     "roles": [
       "gm"
@@ -11710,6 +11717,8 @@
       "COMMITTED": "Version N+1 appended once.",
       "EDITING_N_PLUS_1": "Prior versions immutable.",
       "READY_TO_COMMIT": "Diff/reason validate and active combats keep pinned version.",
+      "VERSION_CONFIGURATION_CONFIRMED": "Only the new kind-specific candidate configuration changed atomically; previous versions and mandatory witnesses immutable.",
+      "VERSION_CONFIGURATION_PREVIEW": "Host-bound complete input and displayed consequences; no active plan/receipt reset before explicit confirmation.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -11899,7 +11908,8 @@
       "contextId",
       "stateRevision",
       "projectionRevision",
-      "initialSkillPlanOrNull"
+      "initialSkillPlanOrNull",
+      "versionConfigurationSummaryOrNull"
     ],
     "roles": [
       "gm"

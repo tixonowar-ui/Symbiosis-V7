@@ -1,4 +1,17 @@
-# Передача контекста — 2026-11-12
+# Передача контекста — 2026-11-13
+
+## Source #288 — кандидат, финальные gates ожидаются
+
+Владелец утвердил вариант A для полной N+1 конфигурации обоих enemy kinds.
+Atlas1.22/B17, ADR0094, точные source/mirror guards и явная baseline lineage
+подготовлены от поставленного main `4bfe9ed`; старые B16 и mandatory facts
+сохранены. Nullable read-only ENM020 compatibility не добавляет runtime259 policy.
+[Контракт, scoped доказательства и сохранённые отказы](enemy-version-configuration-source-288.md).
+#259 удерживается до actual288 merge/closure/tree proof; #188/#113 открыты.
+Никаких #260+, push/PR или полного авторского verify нет; root выполняет
+независимое ревью и финальный clean5/CI после окончательного committed SHA.
+
+## Исторический handoff до поставки #258
 
 ## Runtime #258 — авторский кандидат, финальные gates ожидаются
 

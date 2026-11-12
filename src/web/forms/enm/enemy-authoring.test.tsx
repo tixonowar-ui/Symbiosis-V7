@@ -293,6 +293,48 @@ async function connect(p = fixture(), ownerDeviceId = id(4)) {
   expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
   return { states, socket, connection };
 }
+it('ENM-020 renders an explicitly absent N+1 confirmation without adding a plan or accepting a summary object', () => {
+  // Structural renderer fixture; actual host/SQL/replay absence is tested at the owning boundary.
+  const preview = clothingPreview();
+  const saved: EnemyAuthoringProjection = {
+    ...preview,
+    formId: 'ENM-020',
+    context: {
+      attemptOrNull: null,
+      selectedVersionOrNull: {
+        campaignId: preview.campaignId,
+        templateId: id(90),
+        versionId: id(91),
+        version: 1,
+        kind: 'SENTIENT',
+        artAssetKey: 'symbiosis_placeholder_sentient_enemy',
+        artSha256: ENEMY_PLACEHOLDER_SHA256,
+      },
+    },
+    versionConfigurationSummaryOrNull: null,
+  };
+  const decoded = enemyAuthoringProjectionValue(saved);
+  const html = renderToStaticMarkup(
+    createElement(EnemyAuthoringContent, {
+      projection: decoded as unknown as JsonObject,
+      onValue() {},
+      onPrepare: () => ({ ok: true }),
+    }),
+  );
+  expect(html).toContain('нет отдельного подтверждения конфигурации N+1');
+  for (const value of [{}, [], 'confirmation', 1]) {
+    const malformed = structuredClone(saved);
+    Reflect.set(malformed, 'versionConfigurationSummaryOrNull', value);
+    expect(() => enemyAuthoringProjectionValue(malformed)).toThrow();
+  }
+  const otherForm = { ...fixture(), versionConfigurationSummaryOrNull: null };
+  expect(() => enemyAuthoringProjectionValue(otherForm)).toThrow();
+  const legacy = structuredClone(saved);
+  Reflect.deleteProperty(legacy, 'versionConfigurationSummaryOrNull');
+  expect(
+    Object.hasOwn(enemyAuthoringProjectionValue(legacy), 'versionConfigurationSummaryOrNull'),
+  ).toBe(false);
+});
 it('registers the exact seven source-defined ENM-005/006/007/008/009/010/020 screens and renders explicit identity/build facts', () => {
   for (const form of [
     'ENM-005',

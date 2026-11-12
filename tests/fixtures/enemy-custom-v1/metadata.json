@@ -1,0 +1,126 @@
+{
+  "producerHead": "4bfe9ed4c7ad9a021b3b39cc7daa3ba0180c8ebd",
+  "producerTree": "b1920a574092fa6d18852d36b6d0a4fbd8541da6",
+  "schemaVersion": 22,
+  "baselineVersion": "sha256:73c143c90f588da5a1166b1456991aa8aafd4cde4101fac839a2967c27e68a11",
+  "file": "schema22-custom-v1.sqlite.gz",
+  "gzipSha256": "50678d9abf89b1a3c04199d53b9066ae0dfc937b52a3c53f0dc158933d9f17d2",
+  "inflatedPreOpenSha256": "61f6e340d3236059f8dd3488e91e1f97c0aaf6eab2fb8874d85a25dea8d9fe19",
+  "inflatedBytes": 1179648,
+  "producerSha256": "9a94028d4fed1411021f86243398e468cda0abc5787c019c4a735948049dad25",
+  "sourceSha256": {
+    "package.json": "70f665c8a5c9cd2405f3ff7deb9b227d0a890792e96cb16ea51e4891d9b6b78e",
+    "package-lock.json": "35eb4cab21c51a9f6be3aedad90f78ce943ceaf5f2f06f44f673b6feb2d08d2c",
+    ".nvmrc": "474505894c819df312c25285f3f15f9200f04b072dcb70cbea3ad42e9f5b6f35",
+    "artifacts/CHECKSUMS.sha256": "73c143c90f588da5a1166b1456991aa8aafd4cde4101fac839a2967c27e68a11",
+    "artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json": "630c156b9ca502f7ff88e77ce1520720db871b454c9a7d0815ce5fa6fa30b84e",
+    "artifacts/atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md": "e45c7add8ff88e1dc37015b49c04bc4ee6e5d3a0d3559e54b6f15d5e218f4110",
+    "tests/fixtures/enemy-library.ts": "218dfbdbcd8bbfb9fa97c05161f5046c4b3fdf21b731b62046392b4f87a3a671",
+    "src/host/enemy-authoring-application.ts": "fbd1ad29624b83189275bc772c9331889c6c59b345a66b4356bdca3aaecb4c10",
+    "src/host/enemy-authoring-catalog.ts": "fd71e5e782a95beda1771b440a59878bd95189cdb12e28f070cb7ad13a278634",
+    "src/host/enemy-catalog.ts": "8eaa19196536d7baccf412eebf8d0e21ffa520bf24bee06b9d2fc06c89f77b96",
+    "src/host/custom-monster-application.ts": "ebe2733655fe2929dc2c14bf7279bfb1bf24762fb46682753fd1538a40c76899",
+    "src/host/custom-monster-preparation.ts": "9aee9373d8f443a457f249c0a37855f4cbd30fc24e6b09a36133f255f0d3fea9",
+    "src/shared/enemy-authoring.ts": "fb64eb322a17ccbc34076b0e13e1eb8ab439e59103129c82e8ed45aef0e40670",
+    "src/shared/custom-monster-state.ts": "7cfc279a79f5e87bb3a853056e78166232db12661551d2d01b22f66f81925d2e",
+    "src/shared/custom-monster.ts": "a7046c430a15e87ee547339b327f903626191e52482bf718909caed9055dea87",
+    "src/shared/custom-monster-presentation.ts": "3d7e74f16b6df8c4dea965fc6e5fb6798034d8150805d08d2a5aa081a1c53bd1",
+    "src/persistence/enemy-authoring-store.ts": "0e6f3e1807898fa4f9f7aa40c136de797a04d1ce9b21a562e0d4762496cf510f",
+    "src/persistence/campaign-creation.ts": "9ab3803e0f51755dea6b8427b38dd5b9b364dc30c96fa11f412732efb90e71a2",
+    "src/persistence/network-device-request.ts": "57ae3bcd44283974fc17e389c50324f8ab79ca6c19e2ee37b68bec3d46cc10fb",
+    "src/persistence/database.ts": "1084896bbc6ed0c185b367f4e6d048b93241b487fcdd99535ab90eec4ec6c462",
+    "src/domain/entities/enemy-template/custom-monster-authoring.ts": "eda549c022b498f4d487bff684641c4306bddc3799776b7dfa383c4ad25ab40c"
+  },
+  "scope": {
+    "ownerDeviceId": "75c31416-3309-42d3-ba7e-e6aa5d5aa97d",
+    "gmLocalContextId": "b1d623b2-9e7c-44cf-a4de-af0ce4646429",
+    "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91"
+  },
+  "commitRequest": {
+    "messageType": "command.request",
+    "protocolVersion": 1,
+    "commandKind": "workflow-command",
+    "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+    "role": "gm",
+    "commandId": "63caca13-0738-46be-8b91-1d0efee4d77e",
+    "expectedRevisions": {
+      "stateRevision": 8,
+      "projectionRevision": 12,
+      "actorVisibilityRevision": 0
+    },
+    "payload": {
+      "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+      "creationAttemptId": "0dcc6a85-4c6b-4fee-ae38-bd235ff55dee",
+      "expectedAttemptRevision": 7
+    }
+  },
+  "commitResult": {
+    "replayed": false,
+    "receipt": {
+      "commandId": "63caca13-0738-46be-8b91-1d0efee4d77e",
+      "receiptId": "76dc42a4-9a42-47c0-a965-282e64fbef4a",
+      "revisions": {
+        "stateRevision": 9,
+        "projectionRevision": 13,
+        "actorVisibilityRevision": 0
+      },
+      "result": {
+        "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+        "creationAttemptId": "0dcc6a85-4c6b-4fee-ae38-bd235ff55dee",
+        "timestamp": "2026-11-12T21:42:02.704Z",
+        "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+        "sourceFormId": "ENM-016",
+        "stageOrNull": null,
+        "attemptRevision": 7,
+        "committedVersionOrNull": {
+          "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+          "templateId": "f47a45e3-717a-477f-bb84-e014c2ad19c4",
+          "versionId": "495ecc7e-d55e-458e-b892-1a7946171f36",
+          "version": 1,
+          "kind": "CUSTOM_MONSTER",
+          "artAssetKey": "symbiosis_placeholder_monster",
+          "artSha256": "563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86"
+        }
+      }
+    }
+  },
+  "savedVersionRecordSha256": "777a6d5f78e51f95dd7785263a200d5e8466059212618a155a6a8c7827211eae",
+  "openAttempt": {
+    "schemaVersion": 1,
+    "kind": "CUSTOM_MONSTER",
+    "attemptId": "b8c50ffb-f885-494c-8c03-eca6a2568ee9",
+    "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+    "revision": 2,
+    "identityOrNull": {
+      "creatureType": "CUSTOM_MONSTER",
+      "description": "Actual delivered B16 runtime before source288",
+      "name": "Открытая старая CUSTOM attempt #258"
+    },
+    "statsOrNull": {
+      "ageYears": 1,
+      "baseMaxHP": 7,
+      "baseStats": {
+        "C": 20,
+        "D": 20,
+        "I": 20,
+        "M": 20,
+        "S": 20,
+        "W": 20,
+        "Z": 20
+      },
+      "massKg": 5.1,
+      "rollReceiptOrNull": null,
+      "statMode": "MANUAL"
+    },
+    "physicsOrNull": null,
+    "attackOrNull": null,
+    "compositionOrNull": null,
+    "advisorCards": [],
+    "activeAdvisorCardIdOrNull": null
+  },
+  "limits": [
+    "Actual delivered old258 host/store/source only; no B17 source or future compatibility claim",
+    "Fixture owner verifier bypasses password KDF; not a WS/network authority proof",
+    "Manual NONE; no monster stat roll or Adviser acquisition is exercised"
+  ]
+}

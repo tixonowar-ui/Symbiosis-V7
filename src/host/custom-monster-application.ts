@@ -191,6 +191,7 @@ export function projectCustomMonster(
     campaignStatus: source.currentCampaign.status,
     context: { attemptOrNull: attempt, selectedVersionOrNull },
     sheetOrNull,
+    ...(view.formId === 'ENM-020' ? { versionConfigurationSummaryOrNull: null } : {}),
     validationErrors,
     catalog: catalog.monsterChoices,
     diceMode,
