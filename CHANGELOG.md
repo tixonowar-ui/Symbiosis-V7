@@ -9,6 +9,13 @@
 
 ### Исправлено
 
+- **2026-11-12, проверки #258:** старые integration fixtures используют actual22
+  batch v2, полный source input loader и точный список доступных CTA. Для
+  затронутых fault snapshots восстановлен локальный freelist=0 precondition;
+  после отдельного NPC page proof тот же precondition применён только к позднему
+  native async mirror refusal. Исходные byte-exact assertions, guards и budgets
+  сохранены. [Отказы и page-level доказательства](docs/status/fixture-rollback-258.md).
+
 - **2026-11-12, проверки #257:** владелец отдельно разрешил локальный beforeAll
   30 с только для группы из 18 source-backed web-тестов композиции. Factory,
   assertions, runtime и общие настройки сохранены; [отказ и измерения](docs/status/web-setup-257.md)
@@ -35,6 +42,14 @@
   причина вариативности CI зафиксированы в `docs/status/ci-lifecycle-256.md`.
 
 ### Добавлено
+
+- **2026-11-12, runtime #258:** настоящий manual CUSTOM_MONSTER проходит
+  ENM-011–016/020: собственные характеристики/HP/физика, закрытые определения
+  брони/атаки и NONE либо один source-backed ordinary symbiont. V1 и receipt
+  сохраняются атомарно; полный лист, поставленный арт, exact replay и restart
+  используют прежний GM ingress. Отдельная Advisor card сохраняет acquisition
+  facts и реальные permanent losses; SENTIENT/FINAL/старые receipts не меняются.
+  ROLL_ONCE, N+1, upload, placement и combat исключены. [Проверки и границы](docs/status/custom-monster-258.md).
 
 - **2026-11-12, runtime #257:** ENM-008 подтверждает настоящий обычный состав
   или разрешённый профиль симбиотического чудовища, реальные nodes, взаимодействия

@@ -9,6 +9,7 @@ import type { EnemyWorkflowRequest } from '@shared/enemy-authoring.js';
 import type { CommandReceipt } from '@shared/wire-protocol.js';
 import { enemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
 import { openPersistenceDatabase } from '../persistence/database.js';
+import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
 import type { GmRequestReviewScope } from '../persistence/campaign-creation.js';
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
 import { loadLocalCharacterExportBaseline } from './local-character-export.js';
@@ -69,6 +70,22 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B16 an
     } finally {
       raw.close();
     }
+    expect(before.find((table) => table.name === 'schema_migration')?.rows).toHaveLength(21);
+    const expectedRows = before.map((table) =>
+      table.name !== 'schema_migration'
+        ? table
+        : {
+            ...table,
+            rows: [
+              ...table.rows,
+              {
+                version: migration0022.version,
+                name: migration0022.name,
+                checksum_sha256: createHash('sha256').update(migration0022.sql).digest('hex'),
+              },
+            ],
+          },
+    );
     db = openPersistenceDatabase(filename);
     const database = () => {
       if (db === undefined) throw Error('Historical database is closed');
@@ -109,11 +126,11 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B16 an
         validateOwner: () => undefined,
         readCurrent,
       });
-    expect(rows(database())).toEqual(before); // Raw snapshot precedes the first owning open, not merely project/replay.
+    expect(rows(database())).toEqual(expectedRows); // Only the explicit0022 registry append differs from the raw pre-open snapshot.
     expect(database().memory).toBe(false);
     expect(
       database().prepare('SELECT MAX(version) version,COUNT(*) count FROM schema_migration').get(),
-    ).toEqual({ version: 21, count: 21 });
+    ).toEqual({ version: 22, count: 22 });
     expect(database().pragma('user_version', { simple: true })).toBe(0);
     const view = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
     expect(storedBaselines).toEqual([BASELINE_FIXTURE_IDS.B15]);
@@ -129,7 +146,7 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B16 an
       ...metadata.originalCommitResult,
       replayed: true,
     });
-    expect(rows(database())).toEqual(before);
+    expect(rows(database())).toEqual(expectedRows);
     database().close();
     db = openPersistenceDatabase(filename);
     const bytes = database().serialize();
@@ -138,7 +155,7 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B16 an
       ...metadata.originalCommitResult,
       replayed: true,
     });
-    expect(rows(database())).toEqual(before);
+    expect(rows(database())).toEqual(expectedRows);
     expect(database().serialize().equals(bytes)).toBe(true);
     expect(database().pragma('foreign_key_check')).toEqual([]);
   } finally {

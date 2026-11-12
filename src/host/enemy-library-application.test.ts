@@ -97,7 +97,10 @@ it('MONSTERS lists/selects actual canonical records but cannot use Runtime-Pack-
     expect(p.activeTab).toBe('MONSTERS');
     expect(p.selectedOrNull).toEqual(request.selectionOrNull);
     expect(p.canonicalTemplates[1]!.speciesIdOrNull).not.toBeNull();
-    expect(f.app().project().base.availableActionKeys).toEqual(['ENM-001::CTA::013']);
+    expect(f.app().project().base.availableActionKeys).toEqual([
+      'ENM-001::CTA::013',
+      'ENM-001::CTA::011',
+    ]);
     const before = f.db.serialize();
     expect(() => f.nav('ENM-001::CTA::004')).toThrow();
     expect(f.db.serialize().equals(before)).toBe(true);
@@ -363,6 +366,9 @@ it('avoids catalog file reads outside ENM with no selection history but checks t
     fault = true;
     expect(observe).not.toThrow();
     expect(calls).toBe(0);
+    // Compact only the fault fixture: SQLite does not journal unused freelist leaves (§7.3).
+    f.db.exec('VACUUM');
+    expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
     const before = f.db.serialize();
     expect(() => f.nav('GM-001::CTA::005')).toThrow();
     expect(calls).toBe(1);

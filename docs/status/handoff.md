@@ -1,6 +1,46 @@
 # Передача контекста — 2026-11-12
 
-## Runtime #257 — авторский кандидат, полная приёмка ожидается
+## Runtime #258 — авторский кандидат, финальные gates ожидаются
+
+Продолжается только #258 от фактически поставленного #257/PR286: main
+`44c5dd88a1796f2e85b1c3bec155f2996bfc409d`, tree `ab05f2fc`. #257 закрыта;
+#258/#188/#113 открыты. Старые checkout/output, failed evidence и исходные
+V1/FINAL/receipts сохранены. Новые artifacts/CHECKSUMS/generated/CI не меняются.
+
+Первый root clean verify `9fe631e` контролируемо остановлен FAILED за 896,397 с.
+Исправлены только старые test fixtures: actual22 batch v2, полный набор файлов
+loader, exact CTA list и локальный byte-exact rollback precondition после
+измерения SQLite freelist pages. Сохранены исходные assertions и все failed logs.
+Whole six-file target дал 306 PASS / 2 Buffer FAIL; после двух последних локальных
+preconditions whole network78 прошёл, остальные пять файлов неизменны после своих
+230 PASS. Это не один новый all308 PASS и не clean gate. [Полный разбор](fixture-rollback-258.md).
+Второй clean verify `c058113` также остановлен FAILED: существующий native async
+NPC mirror case правильно отказал до callback, но byte snapshot отличался только
+содержимым заранее свободных leaves260/261/264. Данные/schema/PRAGMAs равны.
+Только эта ветка получает локальный VACUUM+freelist0 перед snapshot; исходные
+assertions и бюджеты сохранены. Выбранный owning fault group — 18 PASS в шести
+wrappers, 78 отфильтрованы; это не полный verify. Все failed evidence сохранены
+в [том же разборе](fixture-rollback-258.md). Новый final SHA ещё не принят и не
+опубликован; старый clean gate не переносится.
+
+Manual CUSTOM_MONSTER проходит ENM-011–016/020 с реальными controls, отдельной
+kind schema, grammar11, NONE/одним ordinary и host-derived full sheet. Migration22
+сохраняет прежние record bytes и явно поддерживает historical21. Реальный
+request kind/tab guard исправлен после browser01; causal browser02 достиг
+lost ACK/reconnect, selected user row, physical restart, private PLAYER и всех
+восьми final assertions. Никакого optimistic selection или ослабления waits нет.
+
+`node-monster-final01` — 96 PASS / 5 whole files, 90,09 с; `web-project01` —
+929 PASS / 33 файла до локальной Unicode input поправки; свежий affected custom
+web target — 2 PASS. `browser02` — 1 PASS / 1 attempt / 0 retry, 52,1 с; все
+12 intermediate comparison errors находятся в шести успешных poll groups.
+Его UI bytes предшествуют Unicode-only изменению; это не новый final-gate PASS.
+Старые отказы и limits, genuine old fixtures, единственный Advisor body60 и
+границы KDF/mock Socket доказательств описаны в [status](custom-monster-258.md).
+Финальный committed SHA, независимый clean five-stage, CI, protected squash и
+сверка main tree ещё ожидаются. #259+ не начаты.
+
+## Исторический авторский снимок #257 до protected merge PR286
 
 Второй clean verify `1dcda8b` завершился 7395 PASS / 18 skipped из 7413,
 296 PASS / 1 failed suite: общий beforeAll группы композиции получил timeout

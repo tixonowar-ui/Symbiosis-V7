@@ -7,6 +7,7 @@ import {
   enemyAuthoringActions,
   enemyWorkflowRequestValue,
   isEnemyAuthoringForm,
+  isSentientEnemyAuthoringForm,
   type EnemyAttempt,
   type EnemyAuthoringMutation,
   type EnemyAuthoringProjection,
@@ -34,6 +35,7 @@ import type {
 } from '../persistence/campaign-creation.js';
 import type { GmRequestReviewSource } from '../persistence/network-device-request.js';
 import { networkApplicationStorage as s } from '../persistence/network-local-application.js';
+import { readAppliedMigrationVersion } from '../persistence/migrations/index.js';
 import {
   resolveStoredLocalCharacterExportBaseline,
   type LocalCharacterExportBaseline,
@@ -53,6 +55,19 @@ import {
   sentientAcquisitionRolls,
 } from '../domain/entities/enemy-template/sentient-composition.js';
 import { prepareEnemySkillPlanState } from './enemy-skill-plan-preparation.js';
+import { customMonsterAttemptValue } from '@shared/custom-monster-state.js';
+import {
+  customMonsterCompleteInput,
+  deriveCustomMonsterBody,
+  deriveCustomMonsterSheet,
+  customMonsterIdentityDomainValue,
+} from '../domain/entities/enemy-template/custom-monster-authoring.js';
+import {
+  prepareCustomMonsterComposition,
+  prepareCustomMonsterKnowledge,
+} from './custom-monster-preparation.js';
+import { customMonsterStatsValue } from '@shared/custom-monster.js';
+import { prepareCustomMonsterCommand, projectCustomMonster } from './custom-monster-application.js';
 
 function validateAttempt(catalog: EnemyAuthoringSourceCatalog, value: EnemyAttempt): void {
   const attempt = enemyAttemptValue(value);
@@ -100,6 +115,23 @@ export function validateEnemyAuthoringSource(
     isEnemyAuthoringForm(source.viewOrNull?.formId ?? '') ||
     state.events.some((event) => event.mutation.kind === 'ENEMY_AUTHORING');
   if (relevant) catalog.assertCurrent();
+  const monsterRelevant =
+    source.viewOrNull?.enemyAuthoring?.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
+    source.viewOrNull?.enemyAuthoring?.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER' ||
+    state.events.some(
+      (event) =>
+        event.view.enemyAuthoring?.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
+        event.view.enemyAuthoring?.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER' ||
+        (event.mutation.kind === 'NAV' &&
+          event.mutation.request.actionKey === 'ENM-001::CTA::011') ||
+        (event.mutation.kind === 'ENEMY_AUTHORING' &&
+          (event.mutation.cause.request.payload.stage?.startsWith('MONSTER_') ||
+            event.mutation.cause.committedVersionOrNull?.kind === 'CUSTOM_MONSTER')),
+    );
+  if (monsterRelevant) {
+    if (readAppliedMigrationVersion(db) !== 22) return s.fail('SOURCE_CHANGED');
+    catalog.assertMonsterCurrent();
+  }
   validateEnemyCompositionReservations(db, source.scope, state.events);
   const versions = readEnemyVersions(db, source.scope, state.events);
   for (const [index, event] of state.events.entries()) {
@@ -107,20 +139,61 @@ export function validateEnemyAuthoringSource(
       const mutation = event.mutation.cause;
       const original =
         state.events[index - 1]?.view.enemyAuthoring?.attemptOrNull ?? s.fail('SOURCE_CHANGED');
-      const expected = prepareEnemySkillPlanState(
-        catalog,
-        original,
-        mutation.request,
-        mutation.itemTemplateKeys,
-        mutation.preparedComposition,
-      );
-      if (
-        expected === undefined
-          ? mutation.preparedSkillState !== undefined
-          : mutation.preparedSkillState === undefined ||
-            !s.same(expected, mutation.preparedSkillState)
-      )
-        return s.fail('SOURCE_CHANGED');
+      if (original.kind === 'CUSTOM_MONSTER') {
+        if (mutation.preparedComposition !== undefined || mutation.preparedSkillState !== undefined)
+          return s.fail('SOURCE_CHANGED');
+        if (mutation.request.payload.stage === 'MONSTER_STATS') {
+          const expectedKnowledge = prepareCustomMonsterKnowledge(
+            catalog.monster,
+            original,
+            customMonsterStatsValue(mutation.request.payload.data),
+            mutation.request.commandId,
+          );
+          if (!s.same(expectedKnowledge, mutation.preparedMonsterKnowledge))
+            return s.fail('SOURCE_CHANGED');
+        } else if (mutation.preparedMonsterKnowledge !== undefined) return s.fail('SOURCE_CHANGED');
+        if (mutation.request.payload.stage === 'MONSTER_SYMBIONT') {
+          const prepared = mutation.preparedMonsterComposition ?? s.fail('SOURCE_CHANGED');
+          const expected = prepareCustomMonsterComposition(
+            catalog.monster,
+            original,
+            mutation.request,
+            readEnemyCompositionDiceSource(db, source, state.events.slice(0, index))
+              .diceModeSnapshot,
+            {
+              symbiontInstanceIdOrNull: prepared.composition.symbiontInstanceIdOrNull,
+              advisorCardIdOrNull: prepared.composition.advisorCardIdOrNull,
+              rolls: prepared.advisorCards.flatMap((card) =>
+                card.iwRolls.filter(
+                  (roll) => roll.originatingCommandId === mutation.request.commandId,
+                ),
+              ),
+            },
+          );
+          if (!s.same(expected, prepared)) return s.fail('SOURCE_CHANGED');
+        } else if (mutation.preparedMonsterComposition !== undefined)
+          return s.fail('SOURCE_CHANGED');
+      } else {
+        if (
+          mutation.preparedMonsterComposition !== undefined ||
+          mutation.preparedMonsterKnowledge !== undefined
+        )
+          return s.fail('SOURCE_CHANGED');
+        const expected = prepareEnemySkillPlanState(
+          catalog,
+          original,
+          mutation.request,
+          mutation.itemTemplateKeys,
+          mutation.preparedComposition,
+        );
+        if (
+          expected === undefined
+            ? mutation.preparedSkillState !== undefined
+            : mutation.preparedSkillState === undefined ||
+              !s.same(expected, mutation.preparedSkillState)
+        )
+          return s.fail('SOURCE_CHANGED');
+      }
       if (
         original.schemaVersion === 2 &&
         mutation.request.payload.stage === 'SENTIENT_SYMBIONTS' &&
@@ -136,6 +209,7 @@ export function validateEnemyAuthoringSource(
         prepared = mutation.preparedComposition ?? s.fail('SOURCE_CHANGED');
       const original =
         state.events[index - 1]?.view.enemyAuthoring?.attemptOrNull ?? s.fail('SOURCE_CHANGED');
+      if (original.kind !== 'SENTIENT') return s.fail('SOURCE_CHANGED');
       const expected = prepareEnemyComposition(
         catalog,
         original,
@@ -177,7 +251,21 @@ export function validateEnemyAuthoringSource(
     const attempt = event.view.enemyAuthoring?.attemptOrNull;
     if (attempt != null) {
       if (attempt.campaignId !== source.scope.campaignId) return s.fail('FOREIGN_OWNER');
-      validateAttempt(catalog, attempt);
+      if (attempt.kind === 'SENTIENT') validateAttempt(catalog, attempt);
+      else {
+        customMonsterAttemptValue(attempt);
+        if (attempt.identityOrNull !== null)
+          customMonsterIdentityDomainValue(attempt.identityOrNull);
+        if (attempt.compositionOrNull !== null) {
+          deriveCustomMonsterBody(
+            catalog.monster,
+            customMonsterCompleteInput(attempt),
+            attempt.compositionOrNull.symbiontInstanceIdOrNull,
+          );
+          if (attempt.compositionOrNull.phase === 'CONFIRMED')
+            deriveCustomMonsterSheet(catalog.monster, attempt);
+        }
+      }
     }
     if (
       event.mutation.kind === 'ENEMY_AUTHORING' &&
@@ -193,9 +281,18 @@ export function validateEnemyAuthoringSource(
         state.events[index - 1]?.view.enemyAuthoring?.attemptOrNull ?? s.fail('SOURCE_CHANGED');
       if (
         !s.same(saved.attempt, original) ||
-        !s.same(saved.sheet, deriveSentientEnemySheet(catalog, original)) ||
-        saved.identity.artSha256 !== catalog.art.sha256 ||
-        saved.identity.artAssetKey !== ENEMY_PLACEHOLDER ||
+        !s.same(
+          saved.sheet,
+          original.kind === 'CUSTOM_MONSTER'
+            ? deriveCustomMonsterSheet(catalog.monster, original)
+            : deriveSentientEnemySheet(catalog, original),
+        ) ||
+        saved.identity.artSha256 !==
+          (original.kind === 'CUSTOM_MONSTER' ? catalog.monsterArt : catalog.art).sha256 ||
+        saved.identity.artAssetKey !==
+          (original.kind === 'CUSTOM_MONSTER'
+            ? 'symbiosis_placeholder_monster'
+            : ENEMY_PLACEHOLDER) ||
         !s.same(saved.identity, mutation.committedVersionOrNull)
       )
         return s.fail('SOURCE_CHANGED');
@@ -250,6 +347,22 @@ export function createEnemyAuthoringApplication(d: {
             })
           )
             return s.fail('STALE_REVISION');
+          if (attempt.kind === 'CUSTOM_MONSTER') {
+            let result: ReturnType<typeof prepareCustomMonsterCommand> | undefined;
+            d.readCurrent((currentSource, state) => {
+              if (!s.same(currentSource, source)) return s.fail('SOURCE_CHANGED');
+              result = prepareCustomMonsterCommand(
+                d.database,
+                d.catalog,
+                source,
+                attempt,
+                request,
+                d.baseline.baselineVersion,
+                state.events,
+              );
+            });
+            return result ?? s.fail('SOURCE_CHANGED');
+          }
           const timestamp = new Date().toISOString();
           const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1';
           const identity = commit
@@ -388,6 +501,7 @@ export function createEnemyAuthoringApplication(d: {
       return d.database
         .transaction(() => {
           let versions: readonly EnemyStoredVersion[] = [];
+          let monsterDiceMode: 'AUTO' | 'MANUAL' | undefined;
           const source = d.readCurrent((source, state) => {
             if (!s.same(source.scope, d.scope)) return s.fail('FOREIGN_OWNER');
             versions = validateEnemyAuthoringSource(
@@ -397,6 +511,15 @@ export function createEnemyAuthoringApplication(d: {
               d.catalog,
               d.baseline,
             );
+            if (
+              source.viewOrNull?.enemyAuthoring?.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
+              source.viewOrNull?.enemyAuthoring?.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER'
+            )
+              monsterDiceMode = readEnemyCompositionDiceSource(
+                d.database,
+                source,
+                state.events,
+              ).diceModeSnapshot;
           });
           const view = source.viewOrNull ?? s.fail('UNAVAILABLE');
           if (!isEnemyAuthoringForm(view.formId)) return s.fail('UNAVAILABLE');
@@ -407,6 +530,20 @@ export function createEnemyAuthoringApplication(d: {
               : (versions.find((version) =>
                   s.same(version.identity, context.selectedVersionOrNull),
                 ) ?? s.fail('SOURCE_CHANGED'));
+          if (
+            context.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
+            context.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER'
+          )
+            return projectCustomMonster(
+              d.catalog,
+              source,
+              context,
+              version,
+              monsterDiceMode ?? s.fail('SOURCE_CHANGED'),
+            );
+          if (version !== null && version.operation !== 'CREATE_SENTIENT_ENEMY_TEMPLATE')
+            return s.fail('SOURCE_CHANGED');
+          if (!isSentientEnemyAuthoringForm(view.formId)) return s.fail('SOURCE_CHANGED');
           let sheetOrNull = version?.sheet ?? null;
           const validationErrors: string[] = [];
           if (view.formId === 'ENM-010') {
@@ -476,7 +613,10 @@ export function createEnemyAuthoringApplication(d: {
             contextId: d.scope.gmLocalContextId,
             campaignId: d.scope.campaignId,
             campaignStatus: source.currentCampaign.status,
-            context,
+            context: {
+              attemptOrNull: context.attemptOrNull,
+              selectedVersionOrNull: context.selectedVersionOrNull,
+            },
             sheetOrNull,
             validationErrors,
             catalog: {

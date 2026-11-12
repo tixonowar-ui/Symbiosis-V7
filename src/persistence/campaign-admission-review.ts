@@ -124,7 +124,7 @@ function callSynchronous<Args extends readonly unknown[], Result>(
 function schema(db: Database.Database): void {
   s.schema(db);
   if (
-    !([12, 13, 14, 15, 16, 17, 18, 19, 20, 21] as readonly unknown[]).includes(
+    !([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )

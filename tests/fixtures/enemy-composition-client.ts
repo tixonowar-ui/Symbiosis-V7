@@ -6,7 +6,7 @@ import { loadEnemySourceCatalog } from '../../src/host/enemy-catalog.js';
 import { loadLocalCharacterExportBaseline } from '../../src/host/local-character-export.js';
 import { createEnemyAuthoringApplication } from '../../src/host/enemy-authoring-application.js';
 import {
-  enemyAuthoringProjectionValue,
+  sentientEnemyAuthoringProjectionValue as enemyAuthoringProjectionValue,
   type EnemyPatchStage,
 } from '../../src/shared/enemy-authoring.js';
 import type { JsonObject } from '../../src/shared/wire-protocol.js';

@@ -501,6 +501,12 @@ describe('durable local network tab entry', () => {
     'refuses read-only guard violation %s before creating a tab',
     (fault) => {
       const { db, device, input } = setup();
+      if (fault === 'DDL') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // Compact only this fixture before its byte-exact rollback snapshot.
+        db.exec('VACUUM');
+        expect(db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = db.serialize();
       expectCode(
         () =>
@@ -561,7 +567,7 @@ describe('durable local network tab entry', () => {
     ).run();
     const registry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
       campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<=8 ORDER BY version').all(),
     ).toEqual(registry);
@@ -570,7 +576,7 @@ describe('durable local network tab entry', () => {
     for (const table of LOCAL_NETWORK_TAB_TABLES)
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
   });
-  it('upgrades a real schema9 entry/close history to10 without modifying those receipts or allocating application state', () => {
+  it('upgrades a real schema9 entry/close history to the current schema without modifying those receipts or allocating application state', () => {
     const db = legacyDatabase(9),
       device = bootstrapDeviceIdentity(db);
     const first = commitLocalNetworkTabEntry(db, request(device), allow);
@@ -580,7 +586,7 @@ describe('durable local network tab entry', () => {
       .prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id')
       .all();
     const closes = db.prepare('SELECT * FROM local_network_tab_close').all();
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(
       db.prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id').all(),
     ).toEqual(entries);
@@ -609,7 +615,7 @@ describe('durable local network tab entry', () => {
     else if (fault === 'missing-review-table') db.exec('DROP TABLE gm_request_queue_event');
     else if (fault === 'old-version')
       db.prepare('DELETE FROM schema_migration WHERE version>=9').run();
-    else db.prepare('UPDATE schema_migration SET version=22 WHERE version=21').run();
+    else db.prepare('UPDATE schema_migration SET version=23 WHERE version=22').run();
     const before = db.serialize();
     expectCode(() => readActiveLocalNetworkTab(db, device), 'CORRUPT_STORAGE');
     expectCode(() => commitLocalNetworkTabEntry(db, input, allow), 'CORRUPT_STORAGE');
@@ -1003,7 +1009,7 @@ describe('forward request-review migration', () => {
       entry: db.prepare('SELECT * FROM local_network_tab_entry').all(),
       registry: db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
     };
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(db.prepare('SELECT * FROM campaign_creation_cursor').all()).toEqual(before.cursor);
     expect(db.prepare('SELECT * FROM local_network_tab_entry').all()).toEqual(before.entry);
     expect(
@@ -1014,7 +1020,7 @@ describe('forward request-review migration', () => {
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const stable = db.serialize();
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(db.serialize().equals(stable)).toBe(true);
   });
 });

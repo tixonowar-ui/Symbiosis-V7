@@ -1126,7 +1126,8 @@ export function readCampaignAdmissionAvailability(
       version !== 18 &&
       version !== 19 &&
       version !== 20 &&
-      version !== 21
+      version !== 21 &&
+      version !== 22
     )
       return s.fail();
     const source = readGmRequestReviewSource(db, scope, validate),

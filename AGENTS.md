@@ -141,10 +141,10 @@ hook/poll/wait budgets. Сохрани отказ/trace, фактическую 
 **Портативной сборки пока нет.** `tools/package` — пустой каталог. Не пытайся
 её запускать и не выдумывай команду.
 
-**E2E состоит из сорока девяти реальных сценариев.** Они используют системный
+**E2E состоит из пятидесяти реальных сценариев.** Они используют системный
 Chrome (`channel: 'chrome'`), production `dist/web`, Fastify+WS и изолированную
 SQLite, без mocked projection. `npm run test:e2e` сначала собирает веб-клиент,
-затем запускает все сорок девять сценариев. Среди них — recovery, локальные
+затем запускает все пятьдесят сценариев. Среди них — recovery, локальные
 метаданные, варианты и экспорт; GM export использует отдельный доверенный
 архивный fixture. CMP-001–006 проверяют создание PAUSED при нуле PC,
 QR, секрет, отмену, новый вход, restart/replay и занятый порт. Финальный допуск
@@ -159,6 +159,9 @@ ENM-сценарий проверяет две вкладки, выбор/Back, 
 Два composition-сценария проходят реальные ENM-008 nodes, ordinary/monster
 composition, lost reply и физический restart. Явный rebuild навыков проверяет
 ORDINARY-сценарий.
+Manual CUSTOM_MONSTER-сценарий проходит ENM-011–016/020 с явным NONE,
+закрытыми definitions, lost COMMIT ACK, user selection, physical restart и
+PLAYER privacy; optional ordinary branch отдельно проверяется owning/controls тестами.
 
 Четыре NET-сценария используют отдельные Node-процессы и SQLite игрока и мастера:
 ручной адрес, restart/recovery/CANCEL, новый и retained вход из FINAL, настоящий
@@ -211,7 +214,7 @@ tools/
 
 tests/
   integration/      кросс-слойные тесты. ПУСТО
-  e2e/              Playwright, сорок девять production-сценариев
+  e2e/              Playwright, пятьдесят production-сценариев
   fixtures/         source-backed fixtures и изолированный temp-SQLite host harness
 
 docs/

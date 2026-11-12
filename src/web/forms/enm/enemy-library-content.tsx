@@ -227,9 +227,7 @@ export function EnemyLibraryContent({
           <p>Выбрана каноническая запись. Карточка системного мыслящего к ней не относится.</p>
         ) : null}
         <h2>Пользовательские шаблоны этой кампании</h2>
-        {p.activeTab === 'MONSTERS' ? (
-          <p>Сохранённых пользовательских монстров нет.</p>
-        ) : p.currentUserTemplates.length === 0 ? (
+        {p.currentUserTemplates.length === 0 ? (
           <p>Сохранённых пользовательских шаблонов нет.</p>
         ) : (
           <ul>
@@ -240,7 +238,7 @@ export function EnemyLibraryContent({
                     type="radio"
                     name="enemy-template"
                     checked={p.userSelectionOrNull?.versionId === identity.versionId}
-                    onChange={() => onSelect('SENTIENT_ENEMIES', null, identity)}
+                    onChange={() => onSelect(p.activeTab, null, identity)}
                   />
                   {displayName} · V{identity.version} · {identity.templateId.slice(0, 8)}
                 </label>
@@ -248,10 +246,7 @@ export function EnemyLibraryContent({
             ))}
           </ul>
         )}
-        <p>
-          Непустые симбионты, новые версии, фильтры, инстанцирование и генерация противников пока
-          недоступны.
-        </p>
+        <p>Новые версии, фильтры, инстанцирование и генерация противников пока недоступны.</p>
       </section>
     </section>
   );

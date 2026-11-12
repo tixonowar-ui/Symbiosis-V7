@@ -118,10 +118,10 @@ export function enemyLibrarySelectionRequestValue(value: unknown): EnemyLibraryS
     const user = enemyVersionIdentityValue(row['userSelectionOrNull']);
     if (
       user.campaignId !== row['campaignId'] ||
-      row['activeTab'] !== 'SENTIENT_ENEMIES' ||
+      (row['activeTab'] === 'SENTIENT_ENEMIES') !== (user.kind === 'SENTIENT') ||
       row['selectionOrNull'] !== null
     )
-      r.invalid('$.userSelectionOrNull', 'own campaign SENTIENT selection', null);
+      r.invalid('$.userSelectionOrNull', 'own campaign and kind/tab selection', null);
   }
   return w.validated(row);
 }
@@ -200,8 +200,10 @@ export function enemyLibraryProjectionValue(value: unknown): EnemyLibraryProject
   });
   if (new Set(users.map((user) => user.templateId)).size !== users.length)
     r.invalid('$.currentUserTemplates', 'distinct templates', null);
-  if (row['activeTab'] === 'MONSTERS' && users.length !== 0)
-    r.invalid('$.currentUserTemplates', 'no SENTIENT entries in MONSTERS', null);
+  if (
+    users.some((user) => (user.kind === 'SENTIENT') !== (row['activeTab'] === 'SENTIENT_ENEMIES'))
+  )
+    r.invalid('$.currentUserTemplates', 'actual kind belongs to active tab', null);
   const context = enemyLibraryContextValue({
     activeTab: row['activeTab'],
     selectedOrNull: row['selectedOrNull'],
@@ -403,9 +405,12 @@ export function enemyLibraryContextValue(value: unknown): EnemyLibraryContext {
   );
   r.oneOf(row['activeTab'], ENEMY_LIBRARY_TABS, '$.activeTab');
   if (row['userSelectionOrNull'] != null) {
-    enemyVersionIdentityValue(row['userSelectionOrNull']);
-    if (row['activeTab'] !== 'SENTIENT_ENEMIES' || row['selectedOrNull'] !== null)
-      r.invalid('$.userSelectionOrNull', 'exclusive SENTIENT user selection', null);
+    const identity = enemyVersionIdentityValue(row['userSelectionOrNull']);
+    if (
+      (row['activeTab'] === 'SENTIENT_ENEMIES') !== (identity.kind === 'SENTIENT') ||
+      row['selectedOrNull'] !== null
+    )
+      r.invalid('$.userSelectionOrNull', 'exclusive own-kind user selection', null);
   }
   if (row['selectedOrNull'] !== null) {
     const selected = enemyLibrarySelectionValue(row['selectedOrNull']);
@@ -426,6 +431,7 @@ export function enemyLibraryActions(p: EnemyLibraryProjection): readonly ActionK
       : []),
     'ENM-001::CTA::013',
     ...(p.activeTab === 'SENTIENT_ENEMIES' ? ['ENM-001::CTA::003' as const] : []),
+    ...(p.activeTab === 'MONSTERS' ? ['ENM-001::CTA::011' as const] : []),
     ...(p.userSelectionOrNull != null ? ['ENM-001::CTA::007' as const] : []),
   ];
 }

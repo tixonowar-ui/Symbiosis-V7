@@ -126,7 +126,7 @@ describe('durable private installation identity', () => {
     ensureDeviceInstallationIdentity(db, input, validateRealKeyPair);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
     const before = raw(db);
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(raw(db)).toEqual(before);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
   });
@@ -348,6 +348,12 @@ describe('durable private installation identity', () => {
     'rejects callback %s changes and rolls them back',
     (kind) => {
       const { db, input } = setup();
+      if (kind === 'schema') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // Preserve the original byte-exact assertion on a compacted fixture.
+        db.exec('VACUUM');
+        expect(db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = db.serialize();
       expectCode(
         () =>
@@ -530,7 +536,7 @@ describe('durable private installation identity', () => {
     else if (kind === 'missing-review-table') db.exec('DROP TABLE gm_request_queue_event');
     else if (kind === 'older-schema')
       db.prepare('DELETE FROM schema_migration WHERE version>=8').run();
-    else db.prepare('UPDATE schema_migration SET version=22 WHERE version=21').run();
+    else db.prepare('UPDATE schema_migration SET version=23 WHERE version=22').run();
     const before = db.serialize();
     const validate = vi.fn(allow);
     expectCode(() => readDeviceInstallationIdentity(db, device), 'CORRUPT_STORAGE');
@@ -551,7 +557,7 @@ describe('durable private installation identity', () => {
     const oldRegistry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
     const local = db.prepare('SELECT * FROM local_character').all();
     const campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<8 ORDER BY version').all(),
     ).toEqual(oldRegistry);
@@ -561,7 +567,7 @@ describe('durable private installation identity', () => {
     for (const table of ['campaign_character_copy', 'campaign_checkpoint', 'local_gm_context'])
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const before = db.serialize();
-    expect(applyMigrations(db)).toBe(21);
+    expect(applyMigrations(db)).toBe(22);
     expect(db.serialize().equals(before)).toBe(true);
   });
 });

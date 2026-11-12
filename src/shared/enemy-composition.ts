@@ -107,6 +107,8 @@ function choice(value: unknown): EnemySymbiontChoice {
   if (sided) r.oneOf(binding['side'], ['LEFT', 'RIGHT'], '$.side');
   return w.validated(row);
 }
+/** Shape only: callers still prove source species, kind, graph, interfaces and native resources. */
+export const enemySymbiontChoiceValue = choice;
 export function enemyCompositionSelectionValue(value: unknown): EnemyCompositionSelection {
   const row = r.exact(
     value,

@@ -531,7 +531,7 @@ describe('technical NPC attempt and actual GM queue transaction integration', ()
       rmSync(directory, { recursive: true, force: true });
     }
   });
-  it('upgrades populated legacy-v1 schema20 NPC/QUEUE histories and original receipts to21 without old-row writes, then reopens SQLite and exactly replays', () => {
+  it('upgrades populated legacy-v1 schema20 NPC/QUEUE histories and original receipts to22 without old-row writes, then reopens SQLite and exactly replays', () => {
     const directory = mkdtempSync(join(tmpdir(), 'sentient-enemy-migration-'));
     try {
       const path = join(directory, 'legacy20.sqlite'),
@@ -569,7 +569,7 @@ describe('technical NPC attempt and actual GM queue transaction integration', ()
         registry = f.db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
         source = readNpcRecoveryClosure(f.db, f.scope.campaignId, f.readers),
         view = f.view();
-      expect(applyMigrations(f.db)).toBe(21);
+      expect(applyMigrations(f.db)).toBe(22);
       expect(rows(f.db)).toEqual(before);
       expect(
         f.db.prepare('SELECT * FROM schema_migration WHERE version<=20 ORDER BY version').all(),

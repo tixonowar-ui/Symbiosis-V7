@@ -14,6 +14,7 @@ import {
 } from '@shared/enemy-authoring.js';
 import { enemyCompositionPatchValue } from '@shared/enemy-composition.js';
 import { enemyBuildPlanPatchValue } from '@shared/enemy-skill-plan.js';
+import { customMonsterCompositionPatchValue } from '@shared/custom-monster-state.js';
 
 export function enemyBrowserWorkflow(
   p: EnemyAuthoringProjection,
@@ -24,7 +25,9 @@ export function enemyBrowserWorkflow(
   const stage = (Object.entries(ENEMY_STAGE_FORMS) as [EnemyPatchStage, readonly string[]][]).find(
     ([, forms]) => forms[0] === p.formId && forms[2] === actionKey,
   )?.[0];
-  const commit = p.formId === 'ENM-010' && actionKey === 'ENM-010::CTA::004';
+  const commit =
+    (p.formId === 'ENM-010' && actionKey === 'ENM-010::CTA::004') ||
+    (p.formId === 'ENM-016' && actionKey === 'ENM-016::CTA::002');
   if (stage === undefined && !commit) return null;
   const attempt = p.context.attemptOrNull;
   if (attempt === null) throw new Error('Попытка отсутствует.');
@@ -63,7 +66,9 @@ export function enemyBrowserReceipt(
       (source.context.attemptOrNull?.schemaVersion === 2 ||
         Object.hasOwn(request.payload.data ?? {}, 'operation'))
         ? ' compositionPhase'
-        : '') +
+        : request.payload.stage === 'MONSTER_SYMBIONT'
+          ? ' compositionPhase'
+          : '') +
       (request.payload.stage === 'SENTIENT_BUILD' &&
       Object.hasOwn(request.payload.data ?? {}, 'operation')
         ? ' buildPhase'
@@ -72,9 +77,12 @@ export function enemyBrowserReceipt(
   );
   const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1';
   if (Object.hasOwn(result, 'compositionPhase')) {
-    const patch = Object.hasOwn(request.payload.data ?? {}, 'operation')
-      ? enemyCompositionPatchValue(request.payload.data)
-      : null;
+    const patch =
+      request.payload.stage === 'MONSTER_SYMBIONT'
+        ? customMonsterCompositionPatchValue(request.payload.data)
+        : Object.hasOwn(request.payload.data ?? {}, 'operation')
+          ? enemyCompositionPatchValue(request.payload.data)
+          : null;
     if (
       result['compositionPhase'] !==
       (patch === null
@@ -123,7 +131,11 @@ export function enemyBrowserReceipt(
       throw new Error('Некорректная ревизия квитанции.');
   if (commit) {
     const version = enemyVersionIdentityValue(result['committedVersionOrNull']);
-    if (version.campaignId !== source.campaignId || version.artSha256 !== source.art.sha256)
+    if (
+      version.campaignId !== source.campaignId ||
+      version.artSha256 !== source.art.sha256 ||
+      version.kind !== source.context.attemptOrNull?.kind
+    )
       throw new Error('Чужая версия или арт.');
   } else if (result['committedVersionOrNull'] !== null) throw new Error('PATCH не создаёт шаблон.');
   return value;
@@ -163,11 +175,13 @@ export function enemyBrowserDestination(
         (stage === 'SENTIENT_BUILD' &&
         (result['buildPhase'] === 'PREVIEW_REBUILD' || result['buildPhase'] === 'REBUILD_DISCARDED')
           ? 'ENM-007'
-          : stage === 'SENTIENT_SYMBIONTS' &&
-              Object.hasOwn(result, 'compositionPhase') &&
-              result['compositionPhase'] !== 'CONFIRMED'
-            ? 'ENM-008'
-            : ENEMY_STAGE_FORMS[stage][1]) &&
+          : stage === 'MONSTER_SYMBIONT' && result['compositionPhase'] !== 'CONFIRMED'
+            ? 'ENM-015'
+            : stage === 'SENTIENT_SYMBIONTS' &&
+                Object.hasOwn(result, 'compositionPhase') &&
+                result['compositionPhase'] !== 'CONFIRMED'
+              ? 'ENM-008'
+              : ENEMY_STAGE_FORMS[stage][1]) &&
       p.context.attemptOrNull?.attemptId === result['creationAttemptId'] &&
       p.context.attemptOrNull?.revision === result['attemptRevision']
     );

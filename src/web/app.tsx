@@ -2879,7 +2879,11 @@ export function App(): ReactElement {
                 }}
                 onPrepare={(data) => {
                   const result = connectionRef.current?.submitEnemyStage(
-                    snapshot.formId === 'ENM-007' ? 'SENTIENT_BUILD' : 'SENTIENT_SYMBIONTS',
+                    snapshot.formId === 'ENM-015'
+                      ? 'MONSTER_SYMBIONT'
+                      : snapshot.formId === 'ENM-007'
+                        ? 'SENTIENT_BUILD'
+                        : 'SENTIENT_SYMBIONTS',
                     data,
                   ) ?? { ok: false, detail: 'Подготовка этапа недоступна.' };
                   setActionNotice(result.ok ? null : result.detail);

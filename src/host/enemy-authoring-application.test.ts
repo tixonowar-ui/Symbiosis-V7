@@ -2,6 +2,7 @@ import { randomUUID, randomInt, createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import Database from 'better-sqlite3';
 import { openPersistenceDatabase } from '../persistence/database.js';
+import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
 import type * as NodeCrypto from 'node:crypto';
 import { createCampaignCreationRuntime } from './campaign-creation.js';
 import { createCampaignBindManager } from './campaign-bind.js';
@@ -34,7 +35,7 @@ import type {
   EnemyUserEntry,
 } from '@shared/enemy-authoring.js';
 import { commitEnemyAuthoring, readEnemyVersions } from '../persistence/enemy-authoring-store.js';
-import { enemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
+import { sentientEnemyAuthoringProjectionValue as enemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
 import { emptyEnemySkillPlanState } from '@shared/enemy-skill-plan.js';
 import { enemyLibraryProjectionValue } from '@shared/enemy-library.js';
 import { BASELINE_LINEAGE_SEALS } from './baseline-lineage-seals.js';
@@ -314,7 +315,9 @@ function projectedComposition(f: ReturnType<typeof fixture>) {
     throw Error('Actual composed state missing');
   return value;
 }
-function compositionStorageRows(f: Pick<ReturnType<typeof fixture>, 'db'>) {
+function compositionStorageRows(
+  f: Pick<ReturnType<typeof fixture>, 'db'>,
+): Record<string, unknown[]> {
   const tables = f.db
     .prepare("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
     .all() as { name: string }[];
@@ -332,7 +335,7 @@ function compositionStorageRows(f: Pick<ReturnType<typeof fixture>, 'db'>) {
               columns.map(({ name }) => '"' + name.replaceAll('"', '""') + '"').join(','),
           )
           .all(),
-      ];
+      ] as const;
     }),
   );
 }
@@ -1350,6 +1353,20 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
     } finally {
       raw.close();
     }
+    const originalRegistry = rows['schema_migration'];
+    if (!Array.isArray(originalRegistry)) throw Error('Historical migration registry absent');
+    expect(originalRegistry).toHaveLength(21);
+    const migratedRows = {
+      ...rows,
+      schema_migration: [
+        ...originalRegistry,
+        {
+          version: migration0022.version,
+          name: migration0022.name,
+          checksum_sha256: createHash('sha256').update(migration0022.sql).digest('hex'),
+        },
+      ],
+    };
     db = openPersistenceDatabase(filename);
     const database = () =>
       db ??
@@ -1378,10 +1395,10 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
         validateOwner: () => undefined,
         readCurrent,
       });
-    expect(compositionStorageRows({ db: database() })).toEqual(rows);
+    expect(compositionStorageRows({ db: database() })).toEqual(migratedRows);
     expect(
       database().prepare('SELECT MAX(version) version,COUNT(*) count FROM schema_migration').get(),
-    ).toEqual({ version: 21, count: 21 });
+    ).toEqual({ version: 22, count: 22 });
     expect(database().pragma('user_version', { simple: true })).toBe(0);
     const current = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
     expect(current.formId).toBe('ENM-009');
@@ -1395,7 +1412,7 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
       ...metadata.originalCommitResult,
       replayed: true,
     });
-    expect(compositionStorageRows({ db: database() })).toEqual(rows);
+    expect(compositionStorageRows({ db: database() })).toEqual(migratedRows);
     database().close();
     db = openPersistenceDatabase(filename);
     const bytes = database().serialize();
@@ -1404,7 +1421,7 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
       replayed: true,
     });
     expect(database().serialize().equals(bytes)).toBe(true);
-    expect(compositionStorageRows({ db: database() })).toEqual(rows);
+    expect(compositionStorageRows({ db: database() })).toEqual(migratedRows);
     expect(database().pragma('foreign_key_check')).toEqual([]);
     const nav = (actionKey: ActionKey) => {
       const projection = app().project();
@@ -2316,7 +2333,10 @@ it('checks actual file freshness at first tentative authoring entry/current view
   const root = mkdtempSync(join(tmpdir(), 'enemy-authoring-source-'));
   let f: ReturnType<typeof fixture> | undefined;
   try {
-    for (const path of Object.keys(ENEMY_AUTHORING_SOURCE_SEALS)) {
+    for (const path of [
+      ...Object.keys(ENEMY_AUTHORING_SOURCE_SEALS),
+      'generated/media/gm-entity-portraits/symbiosis_placeholder_monster.png',
+    ]) {
       const to = join(root, path);
       mkdirSync(dirname(to), { recursive: true });
       writeFileSync(to, readFileSync(join(process.cwd(), path)));
@@ -2335,6 +2355,9 @@ it('checks actual file freshness at first tentative authoring entry/current view
     );
     f.checkedRead();
     expect(checks).toBe(0);
+    // Compact only the fault fixture: SQLite does not journal unused freelist leaves (§7.3).
+    f.db.exec('VACUUM');
+    expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
     const path = join(root, 'generated/spec/character/skills.json'),
       original = readFileSync(path),
       before = f.db.serialize();
@@ -2910,6 +2933,7 @@ it('validates actual historical prepared payments against their own input after 
     const lastAttempt = structural.events.findLast(
       (event) => event.view.enemyAuthoring?.attemptOrNull != null,
     )?.view.enemyAuthoring?.attemptOrNull;
+    if (lastAttempt?.kind !== 'SENTIENT') throw Error('Expected historical SENTIENT attempt');
     expect(
       lastAttempt?.skillPlanState?.planOrNull?.initialSkills.find(
         (skill) => skill.source === 'SELECTED',
@@ -3128,6 +3152,12 @@ for (const table of [
       f.db.exec(
         `CREATE TRIGGER fail_enemy BEFORE INSERT ON ${table} BEGIN SELECT RAISE(ABORT,'injected storage fault'); END;`,
       );
+      if (table === 'campaign_enemy_history' || table === 'campaign_enemy_current_version') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // Compact this affected fault fixture before preserving every byte assertion.
+        f.db.exec('VACUUM');
+        expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = f.db.serialize();
       expect(() => f.app().command(f.commitRequest())).toThrow();
       expect(f.db.serialize().equals(before)).toBe(true);
@@ -3223,6 +3253,11 @@ for (const mode of [
     const f = fixture();
     try {
       f.db.exec('CREATE TABLE preparation_probe (value INTEGER) STRICT');
+      if (mode === 'SCHEMA') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        f.db.exec('VACUUM');
+        expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const request = f.request('SENTIENT_IDENTITY', identity),
         before = f.db.serialize();
       let calls = 0;
