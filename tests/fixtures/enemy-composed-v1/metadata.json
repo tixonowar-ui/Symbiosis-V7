@@ -1,0 +1,96 @@
+{
+  "sourceCommit": "c6820e9b258f7a743403ddba0ed55dcd23691036",
+  "deliveredMain": "44c5dd88a1796f2e85b1c3bec155f2996bfc409d",
+  "sourceTree": "ab05f2fc5e408ac7cf47dc36acc665a7e423d852",
+  "schemaVersion": 21,
+  "baselineVersion": "sha256:73c143c90f588da5a1166b1456991aa8aafd4cde4101fac839a2967c27e68a11",
+  "file": "schema21-composed-v1.sqlite.gz",
+  "gzipSha256": "b4c726ec2fdae7a6be4c5d25013acf2206fdb5def0d2092ea235eddabaed4e52",
+  "inflatedPreOpenSha256": "3184d3810b723ecea8ac5b152bedfb8fb8cd2ac6904d03c8816a9325ba607b30",
+  "inflatedBytes": 1212416,
+  "producerSha256": "5cfac14588d7ba9baec3db070530126165b97d3c158b7b2a415c08ae965efafb",
+  "sourceSha256": {
+    "tests/fixtures/enemy-library.ts": "218dfbdbcd8bbfb9fa97c05161f5046c4b3fdf21b731b62046392b4f87a3a671",
+    "src/host/enemy-authoring-application.ts": "c7acf0c7d2bab09cb1fbb3cd894b478ece7fa1bdabd481de07b81e9722c3464a",
+    "src/host/enemy-authoring-catalog.ts": "a7e369a806478311f7722ff3b31e0fdf0cc5c71726ddc169d41da2fc80c44403",
+    "src/host/enemy-catalog.ts": "8eaa19196536d7baccf412eebf8d0e21ffa520bf24bee06b9d2fc06c89f77b96",
+    "src/shared/enemy-authoring.ts": "769a10cf4ca268da55c90c8ffa9794d865765d66f656aef01939b30ecf807a10",
+    "src/shared/enemy-composition.ts": "46228da53a5da4392fe29bdce5e187c2c8fa81d0be8ae641ae1a700f141344ff",
+    "src/shared/enemy-skill-plan.ts": "6cb05185b92dd796e484c0b24f94029ead10261536a1fe3cae11fa6e3a0b87b1",
+    "src/persistence/enemy-authoring-store.ts": "8f54b1b016caee13ecac9e693b0452b3d73be21c25ab7d71cd5de4c4343e4e9b",
+    "src/persistence/campaign-creation.ts": "f2355f75aeefbf637b5d5dc7b181dccba5e4a08baf4315b02c53b1260525def2",
+    "src/persistence/network-device-request.ts": "e8c5c59ec8a3b1117e3e5c12724c2973732f93836efb3704caec68b8629959c0",
+    "src/persistence/database.ts": "1084896bbc6ed0c185b367f4e6d048b93241b487fcdd99535ab90eec4ec6c462",
+    "src/domain/entities/enemy-template/sentient-authoring.ts": "9bedeb4046b67aee8bdb8d82e87c57bfb26603dafd193fbe0aa58a3b50205d2c",
+    "src/domain/entities/enemy-template/sentient-composition.ts": "8df115e673c1585af7345ad45bb425b29c5ad21be3731e5684d826395632749c",
+    "src/domain/entities/enemy-template/sentient-skill-plan.ts": "22308052f7eaed515d03ababeabcc454ff221f5901130fe26ecf5370cea8595f"
+  },
+  "scope": {
+    "ownerDeviceId": "504ae802-814a-46a3-aa71-e029921c163c",
+    "gmLocalContextId": "1591800f-74f8-42dd-888c-1a82250c1099",
+    "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84"
+  },
+  "commitRequest": {
+    "messageType": "command.request",
+    "protocolVersion": 1,
+    "commandKind": "workflow-command",
+    "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+    "role": "gm",
+    "commandId": "e52a6437-ccd1-4ef2-b059-7f8ba7a0398e",
+    "expectedRevisions": {
+      "stateRevision": 7,
+      "projectionRevision": 11,
+      "actorVisibilityRevision": 0
+    },
+    "payload": {
+      "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+      "creationAttemptId": "8943b49d-05d1-4cdf-8a98-9d485f817736",
+      "expectedAttemptRevision": 7
+    }
+  },
+  "commitResult": {
+    "replayed": false,
+    "receipt": {
+      "commandId": "e52a6437-ccd1-4ef2-b059-7f8ba7a0398e",
+      "receiptId": "f04ec263-31d9-40a1-af25-08a609f72de8",
+      "revisions": {
+        "stateRevision": 8,
+        "projectionRevision": 12,
+        "actorVisibilityRevision": 0
+      },
+      "result": {
+        "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+        "creationAttemptId": "8943b49d-05d1-4cdf-8a98-9d485f817736",
+        "timestamp": "2026-11-12T11:00:49.826Z",
+        "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+        "sourceFormId": "ENM-010",
+        "stageOrNull": null,
+        "attemptRevision": 7,
+        "committedVersionOrNull": {
+          "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+          "templateId": "e9507481-775b-48dd-849c-74f918cdb795",
+          "versionId": "762777a4-9d31-4a1d-8434-9303e22c112b",
+          "version": 1,
+          "kind": "SENTIENT",
+          "artAssetKey": "symbiosis_placeholder_sentient_enemy",
+          "artSha256": "5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f"
+        }
+      }
+    }
+  },
+  "savedVersionRecordSha256": "00fdee42d42060ac5c301cd0bbdecc334b842814c6fcdd25f8a44ef05d0bbe96",
+  "openAttemptId": "dc4114bd-9ed1-4fd5-81f7-0d131be78d0b",
+  "openPlanId": "339cae52-1673-47b9-a433-56a81f14942f",
+  "producerPhysicalProof": {
+    "performed": true,
+    "repeats": 2,
+    "allRowsMatchOriginal": true,
+    "exactOriginalReceipt": true,
+    "serializedBytesUnchangedAcrossReplay": true,
+    "foreignKeyCheck": []
+  },
+  "limitations": [
+    "Old actual host/store commands and source; fixture owner verifier bypasses password KDF, so this is not a full network authority test.",
+    "No new #258 code imported or migration22 run. Fixture production does not establish future consumer/migration acceptance."
+  ]
+}

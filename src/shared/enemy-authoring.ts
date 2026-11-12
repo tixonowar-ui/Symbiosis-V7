@@ -31,8 +31,24 @@ import {
   type EnemySkillPlanState,
   type EnemySkillRebuildPreview,
 } from './enemy-skill-plan.js';
+import { CUSTOM_MONSTER_PLACEHOLDER, CUSTOM_MONSTER_PLACEHOLDER_SHA256 } from './custom-monster.js';
+import {
+  CUSTOM_MONSTER_STAGE_FORMS,
+  customMonsterAttemptValue,
+  preparedCustomMonsterCompositionValue,
+  preparedMonsterKnowledgeValue,
+  reduceCustomMonsterAttempt,
+  type CustomMonsterAttempt,
+  type CustomMonsterVersionIdentity,
+  type PreparedCustomMonsterComposition,
+  type PreparedMonsterKnowledge,
+} from './custom-monster-state.js';
+import {
+  customMonsterProjectionValue,
+  type CustomMonsterProjection,
+} from './custom-monster-presentation.js';
 
-export const ENEMY_AUTHORING_FORMS = [
+export const SENTIENT_ENEMY_AUTHORING_FORMS = [
   'ENM-005',
   'ENM-006',
   'ENM-007',
@@ -41,7 +57,26 @@ export const ENEMY_AUTHORING_FORMS = [
   'ENM-010',
   'ENM-020',
 ] as const;
+export const ENEMY_AUTHORING_FORMS = [
+  'ENM-005',
+  'ENM-006',
+  'ENM-007',
+  'ENM-008',
+  'ENM-009',
+  'ENM-010',
+  'ENM-011',
+  'ENM-012',
+  'ENM-013',
+  'ENM-014',
+  'ENM-015',
+  'ENM-016',
+  'ENM-020',
+] as const;
 export type EnemyAuthoringForm = (typeof ENEMY_AUTHORING_FORMS)[number];
+export const isSentientEnemyAuthoringForm = (
+  value: string,
+): value is SentientEnemyAuthoringProjection['formId'] =>
+  (SENTIENT_ENEMY_AUTHORING_FORMS as readonly string[]).includes(value);
 export const isEnemyAuthoringForm = (value: string): value is EnemyAuthoringForm =>
   (ENEMY_AUTHORING_FORMS as readonly string[]).includes(value);
 export const ENEMY_AUTHORING_WORKFLOWS = [
@@ -98,7 +133,7 @@ export interface EnemyAttempt {
   readonly itemTemplateKeys: readonly string[];
   readonly compositionAcquisitions?: EnemyCompositionAcquisitions;
 }
-export interface EnemyVersionIdentity {
+export interface SentientEnemyVersionIdentity {
   readonly campaignId: string;
   readonly templateId: string;
   readonly versionId: string;
@@ -107,19 +142,20 @@ export interface EnemyVersionIdentity {
   readonly artAssetKey: typeof ENEMY_PLACEHOLDER;
   readonly artSha256: string;
 }
+export type EnemyVersionIdentity = SentientEnemyVersionIdentity | CustomMonsterVersionIdentity;
+export type EnemyAuthoringAttempt = EnemyAttempt | CustomMonsterAttempt;
 export interface EnemyAuthoringContext {
-  readonly attemptOrNull: EnemyAttempt | null;
+  readonly attemptOrNull: EnemyAuthoringAttempt | null;
   readonly selectedVersionOrNull: EnemyVersionIdentity | null;
 }
-export interface EnemyUserEntry extends EnemyVersionIdentity {
-  readonly displayName: string;
-}
+export type EnemyUserEntry = EnemyVersionIdentity & { readonly displayName: string };
 export type EnemyPatchStage =
   | 'SENTIENT_IDENTITY'
   | 'SENTIENT_STATS'
   | 'SENTIENT_BUILD'
   | 'SENTIENT_SYMBIONTS'
-  | 'SENTIENT_INVENTORY';
+  | 'SENTIENT_INVENTORY'
+  | keyof typeof CUSTOM_MONSTER_STAGE_FORMS;
 export type EnemyWorkflowPayload = {
   readonly campaignId: string;
   readonly creationAttemptId: string;
@@ -141,6 +177,8 @@ export interface EnemyAuthoringMutation {
   readonly timestamp: string;
   readonly preparedComposition?: EnemyComposedComposition;
   readonly preparedSkillState?: EnemySkillPlanState;
+  readonly preparedMonsterComposition?: PreparedCustomMonsterComposition;
+  readonly preparedMonsterKnowledge?: PreparedMonsterKnowledge;
 }
 export interface EnemySheet {
   readonly skillPlanState?: EnemySkillPlanState;
@@ -181,13 +219,16 @@ export interface EnemySheet {
   readonly progressionPolicy: 'NO_XP_PROGRESSION';
   readonly artAssetKey: typeof ENEMY_PLACEHOLDER;
 }
-export interface EnemyAuthoringProjection extends RevisionVector {
+export interface SentientEnemyAuthoringProjection extends RevisionVector {
   readonly kind: 'SENTIENT_ENEMY_AUTHORING';
-  readonly formId: EnemyAuthoringForm;
+  readonly formId: (typeof SENTIENT_ENEMY_AUTHORING_FORMS)[number];
   readonly contextId: string;
   readonly campaignId: string;
   readonly campaignStatus: 'PAUSED' | 'HOSTING';
-  readonly context: EnemyAuthoringContext;
+  readonly context: {
+    readonly attemptOrNull: EnemyAttempt | null;
+    readonly selectedVersionOrNull: SentientEnemyVersionIdentity | null;
+  };
   readonly sheetOrNull: EnemySheet | null;
   readonly validationErrors: readonly string[];
   readonly catalog: JsonObject;
@@ -206,8 +247,19 @@ export interface EnemyAuthoringProjection extends RevisionVector {
     readonly bytesBase64: string;
   };
 }
+export type EnemyAuthoringProjection = SentientEnemyAuthoringProjection | CustomMonsterProjection;
+/** Existing SENTIENT widgets/fixtures fail closed when accidentally handed the other kind. */
+export function sentientEnemyAuthoringProjectionValue(
+  value: unknown,
+): SentientEnemyAuthoringProjection {
+  const projection = enemyAuthoringProjectionValue(value);
+  if (projection.kind !== 'SENTIENT_ENEMY_AUTHORING')
+    return r.invalid('$.kind', 'SENTIENT authoring projection', null);
+  return projection;
+}
 export const ENEMY_AUTHORING_NAV_TARGETS = {
   'ENM-001::CTA::003': 'ENM-005',
+  'ENM-001::CTA::011': 'ENM-011',
   'ENM-005::CTA::004': 'ENM-001',
   'ENM-006::CTA::001': 'ENM-005',
   'ENM-006::CTA::003': 'ENM-005',
@@ -218,8 +270,17 @@ export const ENEMY_AUTHORING_NAV_TARGETS = {
   'ENM-009::CTA::003': 'ENM-008',
   'ENM-010::CTA::005': 'ENM-009',
   'ENM-020::CTA::002': 'ENM-001',
+  'ENM-011::CTA::003': 'ENM-001',
+  'ENM-012::CTA::006': 'ENM-011',
+  'ENM-013::CTA::004': 'ENM-012',
+  'ENM-014::CTA::001': 'ENM-013',
+  'ENM-014::CTA::003': 'ENM-013',
+  'ENM-015::CTA::004': 'ENM-014',
+  'ENM-016::CTA::001': 'ENM-015',
+  'ENM-016::CTA::003': 'ENM-015',
 } as const;
 export const ENEMY_STAGE_FORMS = {
+  ...CUSTOM_MONSTER_STAGE_FORMS,
   SENTIENT_IDENTITY: ['ENM-005', 'ENM-006', 'ENM-005::CTA::003'],
   SENTIENT_STATS: ['ENM-006', 'ENM-007', 'ENM-006::CTA::002'],
   SENTIENT_BUILD: ['ENM-007', 'ENM-008', 'ENM-007::CTA::004'],
@@ -524,11 +585,20 @@ export function enemyVersionIdentityValue(value: unknown): EnemyVersionIdentity 
   );
   for (const key of ['campaignId', 'templateId', 'versionId']) r.uuid(row[key], '$.' + key);
   w.literal(row['version'], 1, '$.version');
-  w.literal(row['kind'], 'SENTIENT', '$.kind');
-  w.literal(row['artAssetKey'], ENEMY_PLACEHOLDER, '$.artAssetKey');
+  r.oneOf(row['kind'], ['SENTIENT', 'CUSTOM_MONSTER'], '$.kind');
+  const monster = row['kind'] === 'CUSTOM_MONSTER';
+  w.literal(
+    row['artAssetKey'],
+    monster ? CUSTOM_MONSTER_PLACEHOLDER : ENEMY_PLACEHOLDER,
+    '$.artAssetKey',
+  );
   if (typeof row['artSha256'] !== 'string' || !/^[a-f0-9]{64}$/u.test(row['artSha256']))
     r.invalid('$.artSha256', 'SHA-256', null);
-  w.literal(row['artSha256'], ENEMY_PLACEHOLDER_SHA256, '$.artSha256');
+  w.literal(
+    row['artSha256'],
+    monster ? CUSTOM_MONSTER_PLACEHOLDER_SHA256 : ENEMY_PLACEHOLDER_SHA256,
+    '$.artSha256',
+  );
   return w.validated(row);
 }
 export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutation {
@@ -537,12 +607,26 @@ export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutat
     value,
     'request itemTemplateKeys committedVersionOrNull receiptId timestamp sourceBaselineVersion authorMasterProfileId' +
       (Object.hasOwn(raw, 'preparedComposition') ? ' preparedComposition' : '') +
-      (Object.hasOwn(raw, 'preparedSkillState') ? ' preparedSkillState' : ''),
+      (Object.hasOwn(raw, 'preparedSkillState') ? ' preparedSkillState' : '') +
+      (Object.hasOwn(raw, 'preparedMonsterComposition') ? ' preparedMonsterComposition' : '') +
+      (Object.hasOwn(raw, 'preparedMonsterKnowledge') ? ' preparedMonsterKnowledge' : ''),
     '$.enemyMutation',
   );
   r.text(row['sourceBaselineVersion'], '$.sourceBaselineVersion');
   r.uuid(row['authorMasterProfileId'], '$.authorMasterProfileId');
   const request = enemyWorkflowRequestValue(row['request']);
+  if (Object.hasOwn(row, 'preparedMonsterKnowledge')) {
+    if (request.payload.stage !== 'MONSTER_STATS')
+      r.invalid('$.preparedMonsterKnowledge', 'own accepted body stage only', null);
+    preparedMonsterKnowledgeValue(row['preparedMonsterKnowledge']);
+  } else if (request.payload.stage === 'MONSTER_STATS')
+    r.invalid('$.preparedMonsterKnowledge', 'verified accepted body accounting', null);
+  if (Object.hasOwn(row, 'preparedMonsterComposition')) {
+    if (request.payload.stage !== 'MONSTER_SYMBIONT')
+      r.invalid('$.preparedMonsterComposition', 'own CUSTOM_MONSTER composition stage', null);
+    preparedCustomMonsterCompositionValue(row['preparedMonsterComposition']);
+  } else if (request.payload.stage === 'MONSTER_SYMBIONT')
+    r.invalid('$.preparedMonsterComposition', 'host prepared composition', null);
   if (Object.hasOwn(row, 'preparedSkillState')) enemySkillPlanStateValue(row['preparedSkillState']);
   if (
     request.payload.stage === 'SENTIENT_BUILD' &&
@@ -600,7 +684,9 @@ export function enemyAuthoringReceipt(
       workflowCommandId: mutation.request.workflowCommandId,
       sourceFormId:
         mutation.request.payload.stage === undefined
-          ? 'ENM-010'
+          ? mutation.committedVersionOrNull?.kind === 'CUSTOM_MONSTER'
+            ? 'ENM-016'
+            : 'ENM-010'
           : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
       stageOrNull: mutation.request.payload.stage ?? null,
       attemptRevision:
@@ -610,6 +696,9 @@ export function enemyAuthoringReceipt(
       ...(mutation.preparedComposition === undefined
         ? {}
         : { compositionPhase: mutation.preparedComposition.phase }),
+      ...(mutation.preparedMonsterComposition === undefined
+        ? {}
+        : { compositionPhase: mutation.preparedMonsterComposition.composition.phase }),
       ...(mutation.request.payload.stage === 'SENTIENT_BUILD' &&
       Object.hasOwn(mutation.request.payload.data ?? {}, 'operation')
         ? {
@@ -637,6 +726,8 @@ function statBlock(value: unknown, base: boolean, provisional = false): void {
 }
 export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringProjection {
   const rawProjection = w.record(value, '$.enemyAuthoringProjection');
+  if (rawProjection['kind'] === 'CUSTOM_MONSTER_AUTHORING')
+    return customMonsterProjectionValue(value);
   const row = r.exact(
     value,
     'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog art' +
@@ -644,7 +735,7 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     '$.enemyAuthoringProjection',
   );
   w.literal(row['kind'], 'SENTIENT_ENEMY_AUTHORING', '$.kind');
-  r.oneOf(row['formId'], ENEMY_AUTHORING_FORMS, '$.formId');
+  r.oneOf(row['formId'], SENTIENT_ENEMY_AUTHORING_FORMS, '$.formId');
   r.oneOf(row['campaignStatus'], ['PAUSED', 'HOSTING'], '$.campaignStatus');
   for (const key of ['contextId', 'campaignId']) r.uuid(row[key], '$.' + key);
   revisionValue(
@@ -656,10 +747,17 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     ),
   );
   const context = enemyAuthoringContextValue(row['context']);
+  if (
+    context.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
+    context.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER'
+  )
+    return r.invalid('$.context', 'SENTIENT projection owns only SENTIENT data', null);
   if (row['formId'] !== 'ENM-020' && context.attemptOrNull === null)
     r.invalid('$.context.attemptOrNull', 'own open attempt', null);
   if (context.attemptOrNull !== null) {
-    const formIndex = ENEMY_AUTHORING_FORMS.indexOf(row['formId'] as EnemyAuthoringForm);
+    const formIndex = SENTIENT_ENEMY_AUTHORING_FORMS.indexOf(
+      row['formId'] as SentientEnemyAuthoringProjection['formId'],
+    );
     const fields = [
       'identityOrNull',
       'baseStatsOrNull',
@@ -1198,6 +1296,10 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
     enemyVersionIdentityValue(row['selectedVersionOrNull']);
   if (row['attemptOrNull'] !== null) {
     const rawAttempt = w.record(row['attemptOrNull'], '$.attempt');
+    if (rawAttempt['kind'] === 'CUSTOM_MONSTER') {
+      customMonsterAttemptValue(rawAttempt);
+      return w.validated(row);
+    }
     const attempt = r.exact(
       row['attemptOrNull'],
       'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys' +
@@ -1380,7 +1482,11 @@ export function reduceEnemyAuthoring(
   )
     r.invalid('$.expectedRevisions', 'current revisions', null);
   if (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1') {
-    if (formId !== 'ENM-010' || mutation.committedVersionOrNull?.campaignId !== attempt.campaignId)
+    if (
+      formId !== (attempt.kind === 'CUSTOM_MONSTER' ? 'ENM-016' : 'ENM-010') ||
+      mutation.committedVersionOrNull?.campaignId !== attempt.campaignId ||
+      mutation.committedVersionOrNull.kind !== attempt.kind
+    )
       r.invalid('$.commit', 'own ENM-010 attempt', null);
     return {
       context: { attemptOrNull: null, selectedVersionOrNull: mutation.committedVersionOrNull },
@@ -1388,6 +1494,46 @@ export function reduceEnemyAuthoring(
     };
   }
   const stage = payload.stage ?? r.invalid('$.stage', 'PATCH stage', null);
+  if (attempt.kind === 'CUSTOM_MONSTER') {
+    if (
+      !Object.hasOwn(CUSTOM_MONSTER_STAGE_FORMS, stage) ||
+      mutation.preparedComposition !== undefined ||
+      mutation.preparedSkillState !== undefined
+    )
+      return r.invalid('$.stage', 'closed CUSTOM_MONSTER kind', null);
+    const forms = ENEMY_STAGE_FORMS[stage];
+    if (formId !== forms[0]) r.invalid('$.stage', 'own current form', null);
+    const next = reduceCustomMonsterAttempt(
+      attempt,
+      request,
+      mutation.preparedMonsterComposition,
+      mutation.preparedMonsterKnowledge,
+    );
+    return {
+      context: { attemptOrNull: next, selectedVersionOrNull: null },
+      formId:
+        stage === 'MONSTER_SYMBIONT' && next.compositionOrNull?.phase !== 'CONFIRMED'
+          ? 'ENM-015'
+          : forms[1],
+    };
+  }
+  if (
+    stage.startsWith('MONSTER_') ||
+    mutation.preparedMonsterComposition !== undefined ||
+    mutation.preparedMonsterKnowledge !== undefined
+  )
+    return r.invalid('$.stage', 'closed SENTIENT kind', null);
+  const sentientStage = r.oneOf(
+    stage,
+    [
+      'SENTIENT_IDENTITY',
+      'SENTIENT_STATS',
+      'SENTIENT_BUILD',
+      'SENTIENT_SYMBIONTS',
+      'SENTIENT_INVENTORY',
+    ],
+    '$.stage',
+  );
   if (attempt.schemaVersion === 2 && mutation.preparedSkillState === undefined)
     r.invalid('$.preparedSkillState', 'modern cause cannot downgrade to legacy', null);
   const buildPatch =
@@ -1402,7 +1548,7 @@ export function reduceEnemyAuthoring(
     SENTIENT_BUILD: 'buildOrNull',
     SENTIENT_SYMBIONTS: 'compositionOrNull',
     SENTIENT_INVENTORY: 'inventoryOrNull',
-  }[stage];
+  }[sentientStage];
   // Back is a real edit: dependent confirmations cannot trap mutually incompatible slot budgets.
   const invalidate =
     buildPatch?.operation === 'CONFIRM_REBUILD'
@@ -1517,12 +1663,19 @@ export function enemyAuthoringActions(p: EnemyAuthoringProjection): readonly Act
     .filter(([key]) => key.startsWith(p.formId + '::'))
     .map(([key]) => key as ActionKey);
   if (p.formId === 'ENM-020') return back;
+  if (p.kind === 'CUSTOM_MONSTER_AUTHORING') {
+    if (p.formId === 'ENM-016')
+      return p.validationErrors.length === 0 ? [...back, 'ENM-016::CTA::002'] : back;
+    const stage = Object.values(CUSTOM_MONSTER_STAGE_FORMS).find(([form]) => form === p.formId);
+    return stage === undefined ? back : [...back, stage[2]];
+  }
   if (p.formId === 'ENM-010')
     return p.validationErrors.length === 0 ? [...back, 'ENM-010::CTA::004'] : back;
   const stage = Object.values(ENEMY_STAGE_FORMS).find(([form]) => form === p.formId);
   if (
     p.formId === 'ENM-008' &&
-    p.context.attemptOrNull?.compositionOrNull != null &&
+    p.context.attemptOrNull?.kind === 'SENTIENT' &&
+    p.context.attemptOrNull.compositionOrNull != null &&
     'schemaVersion' in p.context.attemptOrNull.compositionOrNull &&
     p.context.attemptOrNull.compositionOrNull.phase === 'PREVIEW'
   )

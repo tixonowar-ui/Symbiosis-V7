@@ -8,10 +8,19 @@ import { ENEMY_PLACEHOLDER } from '@shared/enemy-authoring.js';
 import { ENEMY_AUTHORING_SOURCE_SEALS } from './enemy-authoring-source-seals.js';
 import { array, record, string } from './json-source.js';
 import { npcInventoryMetadataChoices } from '../domain/rules/npc-authoring/inventory.js';
+import {
+  CUSTOM_MONSTER_PLACEHOLDER,
+  CUSTOM_MONSTER_PLACEHOLDER_SHA256,
+} from '@shared/custom-monster.js';
+import type { CustomMonsterFullCatalog } from '../domain/entities/enemy-template/custom-monster-authoring.js';
 
 export interface EnemyAuthoringSourceCatalog extends SentientAuthoringCatalog {
   readonly assertCurrent: () => void;
   readonly choices: JsonObject;
+  readonly monster: CustomMonsterFullCatalog;
+  readonly monsterChoices: JsonObject;
+  readonly assertMonsterCurrent: () => void;
+  readonly monsterArt: EnemyAuthoringSourceCatalog['art'];
   readonly art: {
     readonly mediaType: 'image/png';
     readonly sha256: string;
@@ -69,6 +78,30 @@ export function loadEnemyAuthoringSourceCatalog(
     bytes = readFileSync(join(root, 'generated/media', string(asset['mediaPath'], 'art path')));
   const digest = sha(bytes);
   if (digest !== asset['sha256']) return fail('placeholder bytes differ');
+  const monsterAssets = artRows.filter(
+    (row) =>
+      row['assetKey'] === CUSTOM_MONSTER_PLACEHOLDER &&
+      row['entityKind'] === 'CUSTOM_MONSTER' &&
+      row['raceCodeOrNull'] === null &&
+      row['sexOrNull'] === null,
+  );
+  if (monsterAssets.length !== 1) return fail('CUSTOM_MONSTER placeholder absent/ambiguous');
+  const monsterAsset = monsterAssets[0]!,
+    monsterPath = join(
+      root,
+      'generated/media',
+      string(monsterAsset['mediaPath'], 'monster art path'),
+    );
+  const monsterBytes = readFileSync(monsterPath);
+  if (
+    monsterAsset['sha256'] !== CUSTOM_MONSTER_PLACEHOLDER_SHA256 ||
+    sha(monsterBytes) !== CUSTOM_MONSTER_PLACEHOLDER_SHA256
+  )
+    return fail('monster placeholder bytes differ');
+  const assertMonsterCurrent = () => {
+    if (sha(readFileSync(monsterPath)) !== CUSTOM_MONSTER_PLACEHOLDER_SHA256)
+      fail('changed monster placeholder');
+  };
   const inventoryMetadata = npcInventoryMetadataChoices(common.inventory);
   if (inventoryMetadata === null) return fail('source-bound inventory metadata unavailable');
   const choices = {
@@ -138,16 +171,63 @@ export function loadEnemyAuthoringSourceCatalog(
     }
   };
   freeze(choices);
+  const ordinarySpecies = common.symbionts.species.filter((row) => row.kind === 'ORDINARY');
+  const ordinaryKeys = new Set(ordinarySpecies.map((row) => row.speciesKey));
+  const monsterChoices = {
+    compositionCatalog: {
+      species: ordinarySpecies.map(
+        ({ speciesKey, speciesLabel, kind, allowedRaceCodes, slotCost, bindingPolicy }) => ({
+          speciesKey,
+          name: speciesLabel,
+          kind,
+          allowedRaceCodes,
+          slotCost,
+          bindingPolicy,
+        }),
+      ),
+      races: [],
+      levels: common.development.levels
+        .filter((row) => ordinaryKeys.has(row.speciesKey))
+        .map(({ speciesKey, levelProfileId, level, baseMaxOE }) => ({
+          speciesKey,
+          levelProfileId,
+          level,
+          baseMaxOE,
+        })),
+      nodes: common.development.nodes.filter((row) => ordinaryKeys.has(row.speciesKey)),
+    },
+    advisorSkills: common.skills.skills
+      .filter((row) => row.category === 'SELECTABLE_GENERAL')
+      .map((row) => ({
+        skillKey: row.skillKey,
+        name: skillLabels[row.skillKey],
+        maxBonus: row.maxBonus,
+        requirements: common.skills.requirements
+          .filter((req) => req.skillKey === row.skillKey)
+          .map(({ statCode, minValue }) => ({ statCode, minValue })),
+      })),
+  } as unknown as JsonObject;
+  freeze(monsterChoices);
+  const ruleRows = array(
+    JSON.parse(readFileSync(join(root, 'generated/spec/rules/rules.json'), 'utf8')) as unknown,
+    'rules',
+  ).map((value) => record(value, 'rule'));
+  const monster: CustomMonsterFullCatalog = Object.freeze({
+    symbionts: common.symbionts,
+    development: common.development,
+    native: common.nativeSymbionts,
+    passiveHealth: common.passiveHealth,
+    rules: ruleRows,
+    skills: common.skills,
+    skillLabels: Object.freeze(skillLabels),
+  });
   return Object.freeze({
     composition: Object.freeze({
       symbionts: common.symbionts,
       development: common.development,
       native: common.nativeSymbionts,
       structural: common.ordinaryComposition,
-      rules: array(
-        JSON.parse(readFileSync(join(root, 'generated/spec/rules/rules.json'), 'utf8')) as unknown,
-        'rules',
-      ).map((value) => record(value, 'rule')),
+      rules: ruleRows,
     }),
     equipment: common.equipment,
     skills: common.skills,
@@ -156,6 +236,14 @@ export function loadEnemyAuthoringSourceCatalog(
     passiveHealth: common.passiveHealth,
     skillLabels: Object.freeze(skillLabels),
     choices,
+    monster,
+    monsterChoices,
+    assertMonsterCurrent,
+    monsterArt: Object.freeze({
+      mediaType: 'image/png' as const,
+      sha256: CUSTOM_MONSTER_PLACEHOLDER_SHA256,
+      bytesBase64: monsterBytes.toString('base64'),
+    }),
     art: Object.freeze({
       mediaType: 'image/png' as const,
       sha256: digest,

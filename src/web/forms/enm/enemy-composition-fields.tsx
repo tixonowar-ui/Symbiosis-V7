@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
-import type { EnemyAuthoringProjection } from '@shared/enemy-authoring.js';
+import type { SentientEnemyAuthoringProjection as EnemyAuthoringProjection } from '@shared/enemy-authoring.js';
 import type {
   EnemyCompositionSelection,
   EnemyCompositionSkills,

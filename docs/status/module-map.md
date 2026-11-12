@@ -1,6 +1,28 @@
 # Состояние модулей
 
-## Композиция мыслящего врага runtime #257
+## Произвольный монстр runtime #258 — авторский кандидат
+
+Поставленный #257/PR286 — main `44c5dd8`, tree `ab05f2fc`; #257 закрыта.
+Новый CUSTOM_MONSTER использует существующие CMP-007 → GM-001 → ENM-001 и
+technical workflow/storage/receipt. ENM-011–016/020 имеют реальные controls для
+manual body, 11 CORE-205 definitions, TORSO-only physics, fixed melee attack,
+NONE/одного ordinary symbiont и полного host-derived листа. ROLL_ONCE отключён.
+
+Новые `custom-monster` shared/domain/host/widget модули сохраняют закрытую kind,
+а migration0022 расширяет прежние таблицы с точным копированием старых records.
+Graph/native/passive contributions переиспользованы без NPC race/baseHP=100,
+inventory/host skills или lifetime journal. Advisor имеет отдельную карточку,
+обязательные acquisition receipts и irreversible permanent losses на принятом
+body/graph boundary. Every-prefix source/identity proof охватывает также
+cancelled NAV-only monster history; 44 system и canonical catalog неизменны.
+
+Целевые 96 node tests и UI/production NONE proof прошли в указанном в
+[status](custom-monster-258.md) scope. Genuine #256/#257 physical compatibility,
+authority loss, stale/foreign/changed source, atomic rollback и private PLAYER
+проверены отдельно; новые bytes ещё требуют финального clean five-stage и CI.
+#258/#188/#113 остаются открытыми; следующие children не начаты.
+
+## Исторический снимок runtime #257 до protected merge PR286
 
 Авторский кандидат использует поставленный #284 (main `54f1bfd`, Atlas 1.21/B16)
 и прежнюю GM оболочку ENM-005–010/020. ENM-008 даёт взаимоисключающий ordinary

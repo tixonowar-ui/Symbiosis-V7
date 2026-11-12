@@ -64,7 +64,7 @@ afterEach(() => {
 });
 
 describe('device identity migration', () => {
-  it('upgrades version 2 to 21 without changing existing persistence rows', () => {
+  it('upgrades version 2 to the current schema without changing existing persistence rows', () => {
     const database = rawMemoryDatabase();
     expect(applyMigrationSequence(database, [migration0001, migration0002])).toBe(2);
     database
@@ -74,7 +74,7 @@ describe('device identity migration', () => {
       )
       .run('preserved', 'DRAFT', '{ "source": "v2" }');
 
-    expect(applyMigrations(database)).toBe(21);
+    expect(applyMigrations(database)).toBe(22);
     expect(
       database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
     ).toEqual([
@@ -99,6 +99,7 @@ describe('device identity migration', () => {
       { version: 19, name: 'npc-poison-coating-identities' },
       { version: 20, name: 'enemy-library' },
       { version: 21, name: 'sentient-enemy-v1' },
+      { version: 22, name: 'custom-monster-v1' },
     ]);
     expect(
       database
@@ -171,7 +172,7 @@ describe('device identity store', () => {
     databases.splice(databases.indexOf(firstDatabase), 1);
     const restartedDatabase = new Database(carrier);
     configurePersistenceDatabase(restartedDatabase);
-    expect(applyMigrations(restartedDatabase)).toBe(21);
+    expect(applyMigrations(restartedDatabase)).toBe(22);
     databases.push(restartedDatabase);
 
     expect(bootstrapDeviceIdentity(restartedDatabase)).toBe(firstBootstrap);

@@ -62,8 +62,9 @@ export function createEnemyLibraryApplication(d: {
           catalogBaselineVersion: source.creationOrigin.payload.baselineVersion,
           systemTemplates: d.catalog.systemTemplates,
           canonicalTemplates: d.catalog.canonicalTemplates,
-          currentUserTemplates:
-            context.activeTab === 'SENTIENT_ENEMIES' ? (d.readUsers?.() ?? []) : [],
+          currentUserTemplates: (d.readUsers?.() ?? []).filter(
+            (row) => (row.kind === 'SENTIENT') === (context.activeTab === 'SENTIENT_ENEMIES'),
+          ),
           ...(view.formId === 'ENM-003'
             ? { systemTemplateArtAssetKey: context.selectedOrNull?.artAssetKey }
             : {}),

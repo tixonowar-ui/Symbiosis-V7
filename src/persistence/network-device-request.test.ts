@@ -2235,12 +2235,12 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it('rejects a v1 batch on schema 21 without writes', () => {
+  it('rejects a v1 batch on schema 22 without writes', () => {
     const p = setup(),
       opening = connect(p),
       request = submission(p, opening);
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 21,
+      version: 22,
     });
     const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
     const before = p.db.serialize();

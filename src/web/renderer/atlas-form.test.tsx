@@ -31,6 +31,12 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'ENM-008',
   'ENM-009',
   'ENM-010',
+  'ENM-011',
+  'ENM-012',
+  'ENM-013',
+  'ENM-014',
+  'ENM-015',
+  'ENM-016',
   'ENM-020',
   'NPC-001',
   'NPC-002',
@@ -277,7 +283,8 @@ describe('atlas implemented-form renderer', () => {
     // #187 adds the eleven source-defined NPC screens; no dialog is added.
     // #255 adds the two read-only ENM catalog/card screens; no dialog is added.
     // #256 adds seven source-defined sentient V1 screens; no dialog is added.
-    expect(screens).toBe(94);
+    // #258 adds ENM-011..016; ENM-020 was already counted by #256.
+    expect(screens).toBe(100);
     expect(dialogs).toBe(10);
   });
 

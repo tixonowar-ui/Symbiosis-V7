@@ -3,7 +3,7 @@ import { admissionJsonEqual } from '@shared/campaign-admission-codec.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import {
   ENEMY_STATS,
-  enemyAuthoringProjectionValue,
+  sentientEnemyAuthoringProjectionValue as enemyAuthoringProjectionValue,
   type EnemyItemInput,
   type EnemySheet,
 } from '@shared/enemy-authoring.js';
@@ -11,6 +11,8 @@ import {
   EnemyCompositionFields,
   EnemyCompositionFactsContent,
 } from './enemy-composition-fields.js';
+import { CustomMonsterContent } from './custom-monster-content.js';
+import { customMonsterProjectionValue } from '@shared/custom-monster-presentation.js';
 
 const labels: Readonly<Record<string, string>> = {
   PURE: 'Чистый',
@@ -856,7 +858,18 @@ function InventoryFields({
     </section>
   );
 }
-export function EnemyAuthoringContent({
+export function EnemyAuthoringContent(props: {
+  readonly projection: JsonObject;
+  readonly onValue: (data: JsonObject | null) => void;
+  readonly onPrepare: (data: JsonObject) => { readonly ok: boolean; readonly detail?: string };
+}) {
+  return props.projection['kind'] === 'CUSTOM_MONSTER_AUTHORING' ? (
+    <CustomMonsterContent {...props} projection={customMonsterProjectionValue(props.projection)} />
+  ) : (
+    <SentientEnemyAuthoringContent {...props} />
+  );
+}
+function SentientEnemyAuthoringContent({
   projection,
   onValue,
   onPrepare,

@@ -8,7 +8,7 @@ import {
   ENEMY_PLACEHOLDER_SHA256,
   enemyAuthoringActions,
   enemyAuthoringProjectionValue,
-  type EnemyAuthoringProjection,
+  type SentientEnemyAuthoringProjection as EnemyAuthoringProjection,
   type EnemyItemInput,
 } from '@shared/enemy-authoring.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
@@ -670,7 +670,7 @@ describe('source-backed composition controls and confirmed wire boundary', () =>
       expect(() => mount(source.acquired)).not.toThrow();
     },
   );
-  it('renders confirmed own-card resources and the complete sheet without technical JSON', () => {
+  it('renders confirmed own-card resources and refuses a foreign-kind form before replacing the complete sheet', async () => {
     expect(() => enemyAuthoringProjectionValue(source.full)).not.toThrow();
     const { container } = mount(source.full);
     expect(container.textContent).toContain('Собственная карта Советника');
@@ -678,6 +678,18 @@ describe('source-backed composition controls and confirmed wire boundary', () =>
     expect(container.textContent).not.toMatch(
       /rollReceiptId|symbiontInstanceId|"schemaVersion"|initialRuntimeState/,
     );
+    const { socket, states } = await connect(source.full, source.ownerDeviceId);
+    const before = states.at(-1),
+      foreign = structuredClone(source.full);
+    Reflect.set(foreign, 'formId', 'ENM-011');
+    Reflect.set(foreign, 'projectionRevision', foreign.projectionRevision + 1);
+    expect(() => enemyAuthoringProjectionValue(foreign)).toThrow();
+    socket.message(frame(foreign, 'HOST_SYSTEM_EVENT', 'network-gm-view:' + 'a'.repeat(64)));
+    expect(states.at(-1)).toMatchObject({
+      kind: 'protocol-error',
+      snapshot: { formId: 'ENM-010' },
+    });
+    expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(before);
   });
   const planFaults: Readonly<Record<string, (p: EnemyAuthoringProjection) => void>> = {
     unknownPlanVersion: (p) =>

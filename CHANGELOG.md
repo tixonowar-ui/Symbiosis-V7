@@ -36,6 +36,14 @@
 
 ### Добавлено
 
+- **2026-11-12, runtime #258:** настоящий manual CUSTOM_MONSTER проходит
+  ENM-011–016/020: собственные характеристики/HP/физика, закрытые определения
+  брони/атаки и NONE либо один source-backed ordinary symbiont. V1 и receipt
+  сохраняются атомарно; полный лист, поставленный арт, exact replay и restart
+  используют прежний GM ingress. Отдельная Advisor card сохраняет acquisition
+  facts и реальные permanent losses; SENTIENT/FINAL/старые receipts не меняются.
+  ROLL_ONCE, N+1, upload, placement и combat исключены. [Проверки и границы](docs/status/custom-monster-258.md).
+
 - **2026-11-12, runtime #257:** ENM-008 подтверждает настоящий обычный состав
   или разрешённый профиль симбиотического чудовища, реальные nodes, взаимодействия
   и обязательные acquisition facts. Полный лист использует actual body/loadout,

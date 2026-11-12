@@ -8,6 +8,7 @@ import {
   type EnemyAuthoringContext,
   type EnemyAuthoringMutation,
 } from '@shared/enemy-authoring.js';
+import { newCustomMonsterAttempt } from '@shared/custom-monster-state.js';
 import {
   ENEMY_LIBRARY_FORMS,
   ENEMY_LIBRARY_NAV_TARGETS,
@@ -661,7 +662,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -683,7 +685,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -701,7 +704,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
       ? CAMPAIGN_ADMISSION_IDENTITIES
       : [];
   if (
@@ -713,7 +717,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -2750,7 +2755,10 @@ function reduceQueue(
       document = {
         ...document,
         enemyLibrary: {
-          activeTab: 'SENTIENT_ENEMIES',
+          activeTab:
+            mutation.cause.committedVersionOrNull.kind === 'CUSTOM_MONSTER'
+              ? 'MONSTERS'
+              : 'SENTIENT_ENEMIES',
           selectedOrNull: null,
           userSelectionOrNull: mutation.cause.committedVersionOrNull,
         },
@@ -2877,6 +2885,8 @@ function reduceQueue(
         enemyLibrary.selectedOrNull?.origin !== 'SYSTEM_DEFAULT_SENTIENT')
     )
       return fail('DRAFT_UNAVAILABLE');
+    if (target === 'ENM-011' && old.formId === 'ENM-001' && enemyLibrary?.activeTab !== 'MONSTERS')
+      return fail('DRAFT_UNAVAILABLE');
     const npc = npcContextAfterNavigation(
       db,
       scope,
@@ -2899,6 +2909,17 @@ function reduceQueue(
             ),
           }
         : {}),
+      ...(target === 'ENM-011' && old.formId === 'ENM-001'
+        ? {
+            enemyAuthoring: {
+              attemptOrNull: newCustomMonsterAttempt(
+                mutation.request.navigationRequestId,
+                scope.campaignId,
+              ),
+              selectedVersionOrNull: null,
+            },
+          }
+        : {}),
       ...(target === 'ENM-020' && old.formId === 'ENM-001'
         ? {
             enemyAuthoring: {
@@ -2908,7 +2929,7 @@ function reduceQueue(
             },
           }
         : {}),
-      ...(old.formId === 'ENM-005' && target === 'ENM-001'
+      ...((old.formId === 'ENM-005' || old.formId === 'ENM-011') && target === 'ENM-001'
         ? { enemyAuthoring: { attemptOrNull: null, selectedVersionOrNull: null } }
         : {}),
       formId: target,
@@ -2982,7 +3003,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 18 &&
     row['version'] !== 19 &&
     row['version'] !== 20 &&
-    row['version'] !== 21
+    row['version'] !== 21 &&
+    row['version'] !== 22
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -2997,7 +3019,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 18 ||
     row['version'] === 19 ||
     row['version'] === 20 ||
-    row['version'] === 21
+    row['version'] === 21 ||
+    row['version'] === 22
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();

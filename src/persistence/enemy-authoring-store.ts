@@ -4,9 +4,14 @@ import type {
   EnemyAttempt,
   EnemyAuthoringMutation,
   EnemySheet,
-  EnemyVersionIdentity,
+  SentientEnemyVersionIdentity,
   EnemyWorkflowRequest,
 } from '@shared/enemy-authoring.js';
+import type {
+  CustomMonsterAttempt,
+  CustomMonsterSheet,
+  CustomMonsterVersionIdentity,
+} from '@shared/custom-monster-state.js';
 import {
   enemyAuthoringReceipt,
   enemyVersionIdentityValue,
@@ -53,17 +58,28 @@ export function readEnemyCompositionDiceSource(
   return { diceModeSnapshot: mode, lifecycleSourceCommandIdOrNull: commandId };
 }
 
-export interface EnemyStoredVersion {
+interface EnemyStoredVersionBase {
   readonly actorId: string;
-  readonly operation: 'CREATE_SENTIENT_ENEMY_TEMPLATE';
-  readonly identity: EnemyVersionIdentity;
-  readonly attempt: EnemyAttempt;
-  readonly sheet: EnemySheet;
   readonly sourceBaselineVersion: string;
   readonly operationId: string;
   readonly timestamp: string;
   readonly historyId: string;
 }
+export type EnemyStoredVersion = EnemyStoredVersionBase &
+  (
+    | {
+        readonly operation: 'CREATE_SENTIENT_ENEMY_TEMPLATE';
+        readonly identity: SentientEnemyVersionIdentity;
+        readonly attempt: EnemyAttempt;
+        readonly sheet: EnemySheet;
+      }
+    | {
+        readonly operation: 'CREATE_CUSTOM_MONSTER_TEMPLATE';
+        readonly identity: CustomMonsterVersionIdentity;
+        readonly attempt: CustomMonsterAttempt;
+        readonly sheet: CustomMonsterSheet;
+      }
+  );
 const tables = [
   'campaign_enemy_template',
   'campaign_enemy_version',
@@ -71,6 +87,22 @@ const tables = [
   'campaign_enemy_current_version',
 ] as const;
 function allocatedCompositionIds(mutation: EnemyAuthoringMutation): readonly string[] {
+  const monster = mutation.preparedMonsterComposition;
+  if (monster !== undefined) {
+    const value = monster.composition;
+    if (value.phase === 'PREVIEW')
+      return value.symbiontInstanceIdOrNull === null ||
+        monster.advisorCards.some(
+          (card) => card.symbiontInstanceId === value.symbiontInstanceIdOrNull,
+        )
+        ? []
+        : [value.symbiontInstanceIdOrNull];
+    if (value.phase === 'ACQUIRED')
+      return monster.advisorCards
+        .filter((card) => card.iwRolls[0].originatingCommandId === mutation.request.commandId)
+        .map((card) => card.cardId);
+    return [];
+  }
   const value = mutation.preparedComposition;
   if (value === undefined) return [];
   if (value.phase === 'PREVIEW') {
@@ -115,11 +147,13 @@ export function validateEnemyCompositionReservations(
       EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.request.payload.data.inventoryItems') WHERE json_extract(value,'$.linkedSetInstanceId')=?) OR
       (json_extract(e.record_json,'$.scope.campaignId')<>? AND (
         EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.preparedComposition.instanceIds') WHERE value=?) OR
-        json_extract(e.record_json,'$.mutation.cause.preparedComposition.advisorCardIdOrNull')=?
+        json_extract(e.record_json,'$.mutation.cause.preparedComposition.advisorCardIdOrNull')=? OR
+        json_extract(e.record_json,'$.mutation.cause.preparedMonsterComposition.composition.symbiontInstanceIdOrNull')=? OR
+        json_extract(e.record_json,'$.mutation.cause.preparedMonsterComposition.composition.advisorCardIdOrNull')=?
       ))
     ) LIMIT 1`,
             )
-            .get(id, id, id, scope.campaignId, id, id) !== undefined
+            .get(id, id, id, scope.campaignId, id, id, id, id) !== undefined
         )
           return s.fail('IDEMPOTENCY_CONFLICT');
       }
@@ -128,17 +162,20 @@ function versionAudit(
   version: EnemyStoredVersion,
   revisions: { stateRevision: number; projectionRevision: number; actorVisibilityRevision: number },
 ) {
-  const ledger = version.attempt.compositionAcquisitions;
+  const ledger =
+    version.attempt.kind === 'SENTIENT' ? version.attempt.compositionAcquisitions : undefined;
   const rolls =
-    ledger === undefined
-      ? []
-      : [
-          ...(ledger.freeSlotOrNull === null ? [] : [ledger.freeSlotOrNull.roll]),
-          ...ledger.advisorCards.flatMap((card) => [
-            ...card.iwRolls,
-            ...(card.suppressionRollOrNull === null ? [] : [card.suppressionRollOrNull]),
-          ]),
-        ];
+    version.attempt.kind === 'CUSTOM_MONSTER'
+      ? version.attempt.advisorCards.flatMap((card) => [...card.iwRolls])
+      : ledger === undefined
+        ? []
+        : [
+            ...(ledger.freeSlotOrNull === null ? [] : [ledger.freeSlotOrNull.roll]),
+            ...ledger.advisorCards.flatMap((card) => [
+              ...card.iwRolls,
+              ...(card.suppressionRollOrNull === null ? [] : [card.suppressionRollOrNull]),
+            ]),
+          ];
   return {
     operationId: version.operationId,
     operation: version.operation,
@@ -157,7 +194,10 @@ function versionAudit(
       rolls.length === 0
         ? null
         : {
-            kind: 'SENTIENT_COMPOSITION_ACQUISITIONS',
+            kind:
+              version.attempt.kind === 'CUSTOM_MONSTER'
+                ? 'CUSTOM_MONSTER_ADVISER_ACQUISITIONS'
+                : 'SENTIENT_COMPOSITION_ACQUISITIONS',
             rolls,
           },
   };
@@ -173,7 +213,7 @@ function schema(db: Database.Database): boolean {
       return s.fail('SOURCE_CHANGED');
     return false;
   }
-  if (version !== 21) return s.fail('SOURCE_CHANGED');
+  if (version !== 21 && version !== 22) return s.fail('SOURCE_CHANGED');
   for (const table of tables) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   return true;
 }
@@ -254,11 +294,11 @@ export function readEnemyVersions(
       row['version_id'] !== identity.versionId ||
       row['version'] !== 1 ||
       template['template_id'] !== identity.templateId ||
-      template['kind'] !== 'SENTIENT' ||
+      template['kind'] !== identity.kind ||
       !s.same(checked(template), {
         campaignId: scope.campaignId,
         templateId: identity.templateId,
-        kind: 'SENTIENT',
+        kind: identity.kind,
       }) ||
       h['history_id'] !== stored.historyId ||
       h['template_id'] !== identity.templateId ||
@@ -276,7 +316,11 @@ export function readEnemyVersions(
       stored.operationId !== commit.eventId ||
       stored.timestamp !== commit.mutation.cause.timestamp ||
       stored.actorId !== commit.mutation.cause.authorMasterProfileId ||
-      stored.operation !== 'CREATE_SENTIENT_ENEMY_TEMPLATE'
+      stored.operation !==
+        (identity.kind === 'CUSTOM_MONSTER'
+          ? 'CREATE_CUSTOM_MONSTER_TEMPLATE'
+          : 'CREATE_SENTIENT_ENEMY_TEMPLATE') ||
+      stored.attempt.kind !== identity.kind
     )
       return s.fail('SOURCE_CHANGED');
     return stored;
@@ -444,7 +488,11 @@ export function commitEnemyAuthoring(
               version.operationId !== request.commandId ||
               version.timestamp !== mutation.timestamp ||
               version.actorId !== mutation.authorMasterProfileId ||
-              version.operation !== 'CREATE_SENTIENT_ENEMY_TEMPLATE')
+              version.operation !==
+                (version.identity.kind === 'CUSTOM_MONSTER'
+                  ? 'CREATE_CUSTOM_MONSTER_TEMPLATE'
+                  : 'CREATE_SENTIENT_ENEMY_TEMPLATE') ||
+              version.attempt.kind !== version.identity.kind)
           )
             return s.fail('SOURCE_CHANGED');
           if (version !== null) {
@@ -502,11 +550,11 @@ export function commitEnemyAuthoring(
           db,
           'campaign_enemy_template',
           ['template_id', 'campaign_id', 'kind'],
-          [version.identity.templateId, scope.campaignId, 'SENTIENT'],
+          [version.identity.templateId, scope.campaignId, version.identity.kind],
           {
             campaignId: scope.campaignId,
             templateId: version.identity.templateId,
-            kind: 'SENTIENT',
+            kind: version.identity.kind,
           },
         );
         insert(

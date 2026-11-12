@@ -515,7 +515,7 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     return fail('restore cursor retirement requires the checkpoint transaction');
   const schema = db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row;
   const version = schema['version'];
-  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 21)
+  if (typeof version !== 'number' || !Number.isSafeInteger(version) || version < 1 || version > 22)
     return fail('unknown schema version for restore cursor retirement');
   // Versions 1..5 predate this aggregate. A version-6 database must have its actual tables.
   if (version < 6) return;
@@ -545,7 +545,8 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
   )
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -559,7 +560,8 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -572,7 +574,8 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
   )
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -585,7 +588,8 @@ export function retirePostSaveRestoreCursor(db: Database.Database, localCharacte
     version === 18 ||
     version === 19 ||
     version === 20 ||
-    version === 21
+    version === 21 ||
+    version === 22
   )
     for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (

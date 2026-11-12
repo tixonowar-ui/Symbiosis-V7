@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { migration0015, NPC_TABLES } from './migrations/0015-persistent-npc.js';
 import { migration0021 } from './migrations/0021-sentient-enemy-v1.js';
+import { migration0022 } from './migrations/0022-custom-monster-v1.js';
 
 /** The original allocators also see enemy template and cancelled-attempt reservations. */
 export function campaignEnemyIdentityInUse(db: Database.Database, id: string): boolean {
@@ -27,6 +28,16 @@ export function campaignEnemyIdentityInUse(db: Database.Database, id: string): b
     migration.checksum_sha256 !== createHash('sha256').update(migration0021.sql).digest('hex')
   )
     throw Error('Enemy identity migration differs');
+  const monsterMigration = db
+    .prepare('SELECT name,checksum_sha256 FROM schema_migration WHERE version=22')
+    .get() as { name: string; checksum_sha256: string } | undefined;
+  if (
+    monsterMigration !== undefined &&
+    (monsterMigration.name !== migration0022.name ||
+      monsterMigration.checksum_sha256 !==
+        createHash('sha256').update(migration0022.sql).digest('hex'))
+  )
+    throw Error('Monster identity migration differs');
   for (const [table, column] of [
     ['campaign_enemy_template', 'template_id'],
     ['campaign_enemy_version', 'version_id'],
@@ -41,10 +52,12 @@ export function campaignEnemyIdentityInUse(db: Database.Database, id: string): b
     EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.itemTemplateKeys') WHERE value=?) OR
     EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.request.payload.data.inventoryItems') WHERE json_extract(value,'$.linkedSetInstanceId')=?) OR
     EXISTS(SELECT 1 FROM json_each(e.record_json,'$.mutation.cause.preparedComposition.instanceIds') WHERE value=?) OR
-    json_extract(e.record_json,'$.mutation.cause.preparedComposition.advisorCardIdOrNull')=?
+    json_extract(e.record_json,'$.mutation.cause.preparedComposition.advisorCardIdOrNull')=? OR
+    json_extract(e.record_json,'$.mutation.cause.preparedMonsterComposition.composition.symbiontInstanceIdOrNull')=? OR
+    json_extract(e.record_json,'$.mutation.cause.preparedMonsterComposition.composition.advisorCardIdOrNull')=?
   ) LIMIT 1`,
       )
-      .get(id, id, id, id, id) !== undefined
+      .get(id, id, id, id, id, id, id) !== undefined
   );
 }
 
