@@ -72,6 +72,13 @@ raw tables до owning open, проверяет physical reopen, original COMMIT
 
 ## Авторские проверки и пределы
 
+Первый независимый clean verify `fc7b4be` завершился 7412/7413 PASS,
+296/297 файлов PASS; единственный отказ — существующий NPC afterEach 30 с,
+не body 300 с. [Разбор success cleanup](npc-close-257.md) сохраняет исходный
+отказ и ограниченные сравнительные измерения. Уточняется только владение
+success close одного теста; runtime, общие hooks/лимиты и старые данные не меняются.
+Свежие полные gates/CI нового SHA учитываются отдельно.
+
 Внешний evidence root: `evidence-257-after284`. Logs/started/result сохраняют
 HEAD/tree, dirty roster и SHA каждого changed/untracked файла до/после; результат
 не приписывается одному HEAD без этих bytes. Ошибочные/прерванные попытки сохранены.

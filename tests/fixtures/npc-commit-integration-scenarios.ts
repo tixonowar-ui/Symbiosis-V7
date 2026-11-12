@@ -4637,6 +4637,9 @@ export function registerNpcDiseaseReservation() {
           readNpcRecoveryClosure(h.db, h.scope.campaignId, h.readers).blocks.at(-1)!
             .initialTimeLockOrNull,
         ).toEqual(closure.blocks[0]!.initialTimeLockOrNull);
+        // Account for this owned handle's success cleanup in the journey's existing body budget.
+        // The unchanged afterEach still closes it if an earlier assertion fails.
+        h.db.close();
       }, 300_000);
       it('rejects hash-valid omitted time-lock metadata after all reciprocal operation, checkpoint and GM seals are reconstructed', () => {
         const { h, closure, version } = restoredTimed(),

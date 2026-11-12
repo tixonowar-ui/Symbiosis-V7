@@ -2,6 +2,20 @@
 
 ## Runtime #257 — авторский кандидат, полная приёмка ожидается
 
+Первый clean verify `fc7b4be` завершился 7412 PASS / 1 FAIL из 7413: существующий
+NPC disease removal case получил afterEach hook timeout 30 с; источник задаёт
+body budget 300 с, ошибка относится к hook. Reported case total 189484 мс
+не устанавливает исходную exclusive close duration. Сравнительная пара с прежними
+лимитами прошла по одному выбранному случаю на base/candidate; native close
+442,5461/409,5050 мс, без воспроизведения отказа или установленной причины.
+В узкой test-only правке success close перенесён после последнего assertion
+в существующий body budget, общий cleanup остаётся fallback. Это изменение
+учёта cleanup, не performance/root-cause fix. [Полный разбор](npc-close-257.md).
+Один обычный targeted case без overlay прошёл: 1 PASS / 37 filtered,
+reported case total 87246 мс; exclusive close duration отдельно не измерена.
+Новому committed SHA предстоят свежие independent clean five-stage и CI;
+результаты прежнего SHA не переносятся на него.
+
 Source #284 фактически поставлен PR285: main `54f1bfd7fd42577b032a72a1551ac15cc62ee2d7`,
 tree `07d57b67bb90c7dc93c5bc0b6450d53a52433839`, issue закрыта. Runtime #257
 подготовлен в отдельном checkout `issue-257-after284`; старые issue-257 WIP,
