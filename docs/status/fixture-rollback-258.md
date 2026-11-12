@@ -70,7 +70,44 @@ precondition, не performance fix и не утверждение универс
 Остальные пять файлов не менялись и сохраняют привязанные 230 PASS первого
 набора. Это два разных source-bound запуска, а не один новый all308 PASS.
 
-Относительно failed9fe нет budget/hook/default/worker/retry/CI изменений. Новый committed SHA
-ещё требует независимые clean five-stage, полный CI, protected merge и actual
-closure/tree proof. Старый failed9fe и прежние dirty browser результаты не
-переносятся как full PASS нового кандидата; #258/#188/#113 пока открыты.
+## Второй clean verify и NPC mirror rollback
+
+Независимый clean verify `c05811326441c887ca323b40b6f892ebf88a22b1` / tree
+`d5e976fb` контролируемо остановлен FAILED/exit -1 через 3885,866 с после отказа
+существующего NPC source-capture case. Полного успешного summary нет; clean
+исходники до/после неизменны. Raw log SHA-256:
+`00ca41dedc6a6c13066524e2e9a07070f23e8e6f52a219bcd570d194b38934f5`.
+Это assertion failure, не timeout: native async `writeGmMirror` с поддельным
+display tag правильно отклонён с INVALID_INPUT, bodyCalls/delayedWrites равны
+нулю, транзакция закрыта. Падает только прежнее точное сравнение Buffer.
+
+Unchanged case отдельно воспроизведён в `diagnostic-source-capture06`. Один
+последующий measurement-only запуск `diagnostic-source-pages07` сохранил все
+исходные assertions и снова завершился FAIL на Buffer. В before было десять
+freelist pages: trunk272 и девять leaves. Отличаются 7697 байт только на заранее
+свободных leaves260/261/264 (3580/3617/500 байт). Все строки, schema, PRAGMAs и
+значимые pages совпадают; bodyCalls/delayedWrites остаются нулевыми.
+Raw buffers SHA-256 до/после:
+`3ba552d5c0911e5798244181b0cae59d1221a9449aa6c536a1f6b901c8e16fe3` /
+`31b5e0dd50f9ebb752dc9c6ad65df0478fc3a98319f4c15dedc7dcf99c30ba4b`;
+measurement log SHA
+`874bab2e7108800f3fd1bd608623ff9fc148595810894f75493aa9a024ea92b6`.
+Временная instrumentation удалена; fixture восстановлен побайтно к исходному
+SHA `d7ef53df88caa376bcd2f2a28526864b5f842aea04f3620ee280f2a36283da2f`
+до исправления. Frozen clean checkout не изменялся.
+
+Тот же локальный precondition добавлен только ветке `method=writeGmMirror`
+этого именованного теста, перед исходным byte snapshot. Ранний source-reader
+случай, общий fixture, callbacks, все assertions и бюджеты неизменны.
+Один bounded набор `npc-fault-group08` выбрал 18 существующих cases в шести
+registry wrappers: source-capture4, lazy preparation8, поздний item rollback1,
+поздний disease rollback1, неподтверждённый editor input1 и checked closure3.
+Все 18 PASS; ещё 78 cases отфильтрованы. Vitest38,90 с, wrapper39,850 с,
+log SHA `4a42cf0cc43c30533b5c26787fd5dddead298a59e5cf2a6176c3d439e4a71373`.
+Это выбранный fault group, не шесть полных suites и не full verify.
+
+Относительно failed9fe/c058 нет budget/hook/default/worker/retry/CI изменений.
+Новый committed SHA ещё требует независимые clean five-stage, полный CI,
+protected merge и actual closure/tree proof. Старые failed gates и прежние dirty
+browser результаты не переносятся как full PASS нового кандидата;
+#258/#188/#113 пока открыты.

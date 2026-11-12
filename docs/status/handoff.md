@@ -14,7 +14,14 @@ loader, exact CTA list и локальный byte-exact rollback precondition п
 Whole six-file target дал 306 PASS / 2 Buffer FAIL; после двух последних локальных
 preconditions whole network78 прошёл, остальные пять файлов неизменны после своих
 230 PASS. Это не один новый all308 PASS и не clean gate. [Полный разбор](fixture-rollback-258.md).
-Новый final SHA ещё не принят и не опубликован.
+Второй clean verify `c058113` также остановлен FAILED: существующий native async
+NPC mirror case правильно отказал до callback, но byte snapshot отличался только
+содержимым заранее свободных leaves260/261/264. Данные/schema/PRAGMAs равны.
+Только эта ветка получает локальный VACUUM+freelist0 перед snapshot; исходные
+assertions и бюджеты сохранены. Выбранный owning fault group — 18 PASS в шести
+wrappers, 78 отфильтрованы; это не полный verify. Все failed evidence сохранены
+в [том же разборе](fixture-rollback-258.md). Новый final SHA ещё не принят и не
+опубликован; старый clean gate не переносится.
 
 Manual CUSTOM_MONSTER проходит ENM-011–016/020 с реальными controls, отдельной
 kind schema, grammar11, NONE/одним ordinary и host-derived full sheet. Migration22

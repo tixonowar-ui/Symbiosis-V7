@@ -4811,8 +4811,13 @@ export function registerNpcSourceCapture() {
     it.each(['readCheckedGmSource', 'writeGmMirror'] as const)(
       'refuses native async %s with a forged display tag before body or delayed SQL',
       async (method) => {
-        const { h, edit } = editable(),
-          before = h.db.serialize();
+        const { h, edit } = editable();
+        if (method === 'writeGmMirror') {
+          // The late mirror refusal rolls back writes; unused freelist leaves are not journalled.
+          h.db.exec('VACUUM');
+          expect(h.db.pragma('freelist_count', { simple: true })).toBe(0);
+        }
+        const before = h.db.serialize();
         let bodyCalls = 0,
           delayedWrites = 0;
         const hostile = async () => {
