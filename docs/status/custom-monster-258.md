@@ -4,6 +4,12 @@
 tree `ab05f2fc`. Issue #258 ещё открыта; #188/#113 остаются открытыми.
 Независимый clean five-stage, CI, protected merge и сверка main tree ожидаются.
 
+Первый clean verify `9fe631e` остановлен FAILED после выявленных fixture
+несоответствий schema22 и rollback byte preconditions. Точные reproductions,
+page-level доказательство, узкие test-only исправления и новые scoped результаты
+сохранены в [разборе](fixture-rollback-258.md). Production source и budgets не менялись;
+новому SHA предстоит полный gate заново.
+
 ## Продукт и источник
 
 Настоящий GM входит из PAUSED CMP-007 через GM-001 в раздел «Монстры» ENM-001.

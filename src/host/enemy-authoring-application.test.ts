@@ -2333,7 +2333,10 @@ it('checks actual file freshness at first tentative authoring entry/current view
   const root = mkdtempSync(join(tmpdir(), 'enemy-authoring-source-'));
   let f: ReturnType<typeof fixture> | undefined;
   try {
-    for (const path of Object.keys(ENEMY_AUTHORING_SOURCE_SEALS)) {
+    for (const path of [
+      ...Object.keys(ENEMY_AUTHORING_SOURCE_SEALS),
+      'generated/media/gm-entity-portraits/symbiosis_placeholder_monster.png',
+    ]) {
       const to = join(root, path);
       mkdirSync(dirname(to), { recursive: true });
       writeFileSync(to, readFileSync(join(process.cwd(), path)));
@@ -2352,6 +2355,9 @@ it('checks actual file freshness at first tentative authoring entry/current view
     );
     f.checkedRead();
     expect(checks).toBe(0);
+    // Compact only the fault fixture: SQLite does not journal unused freelist leaves (§7.3).
+    f.db.exec('VACUUM');
+    expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
     const path = join(root, 'generated/spec/character/skills.json'),
       original = readFileSync(path),
       before = f.db.serialize();
@@ -3146,6 +3152,12 @@ for (const table of [
       f.db.exec(
         `CREATE TRIGGER fail_enemy BEFORE INSERT ON ${table} BEGIN SELECT RAISE(ABORT,'injected storage fault'); END;`,
       );
+      if (table === 'campaign_enemy_history' || table === 'campaign_enemy_current_version') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // Compact this affected fault fixture before preserving every byte assertion.
+        f.db.exec('VACUUM');
+        expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = f.db.serialize();
       expect(() => f.app().command(f.commitRequest())).toThrow();
       expect(f.db.serialize().equals(before)).toBe(true);
@@ -3241,6 +3253,11 @@ for (const mode of [
     const f = fixture();
     try {
       f.db.exec('CREATE TABLE preparation_probe (value INTEGER) STRICT');
+      if (mode === 'SCHEMA') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        f.db.exec('VACUUM');
+        expect(f.db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const request = f.request('SENTIENT_IDENTITY', identity),
         before = f.db.serialize();
       let calls = 0;

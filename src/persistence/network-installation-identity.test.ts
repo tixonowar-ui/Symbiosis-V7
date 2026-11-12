@@ -348,6 +348,12 @@ describe('durable private installation identity', () => {
     'rejects callback %s changes and rolls them back',
     (kind) => {
       const { db, input } = setup();
+      if (kind === 'schema') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // Preserve the original byte-exact assertion on a compacted fixture.
+        db.exec('VACUUM');
+        expect(db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = db.serialize();
       expectCode(
         () =>

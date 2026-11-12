@@ -342,7 +342,8 @@ function submission(
     schemaVersion === 18 ||
     schemaVersion === 19 ||
     schemaVersion === 20 ||
-    schemaVersion === 21
+    schemaVersion === 21 ||
+    schemaVersion === 22
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -847,8 +848,13 @@ describe('synchronous GM source composition', () => {
   it.each(['DML', 'DDL', 'PRAGMA', 'PROMISE'] as const)(
     'refuses and rolls back a %s observer',
     (kind) => {
-      const p = setup(),
-        before = p.db.serialize();
+      const p = setup();
+      if (kind === 'DDL') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        p.db.exec('VACUUM');
+        expect(p.db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
+      const before = p.db.serialize();
       expect(() =>
         readGmRequestReviewSourceWith(p.db, gmScope(p), allow, () => {
           if (kind === 'DML') p.db.exec('UPDATE campaign SET lifecycle_state=lifecycle_state');
@@ -2073,6 +2079,9 @@ describe('GM request review persistence', () => {
     p.db.exec(
       "CREATE TRIGGER review_sabotage AFTER INSERT ON hosted_device_request_decision BEGIN UPDATE campaign SET payload_json='{}'; END",
     );
+    // Compact only this fault fixture before its unchanged byte-exact rollback assertion.
+    p.db.exec('VACUUM');
+    expect(p.db.pragma('freelist_count', { simple: true })).toBe(0);
     const before = p.db.serialize();
     expect(() =>
       commitGmDeviceRequestDecision(

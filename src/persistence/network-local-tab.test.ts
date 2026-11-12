@@ -501,6 +501,12 @@ describe('durable local network tab entry', () => {
     'refuses read-only guard violation %s before creating a tab',
     (fault) => {
       const { db, device, input } = setup();
+      if (fault === 'DDL') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // Compact only this fixture before its byte-exact rollback snapshot.
+        db.exec('VACUUM');
+        expect(db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = db.serialize();
       expectCode(
         () =>

@@ -7,6 +7,15 @@
 #258/#188/#113 открыты. Старые checkout/output, failed evidence и исходные
 V1/FINAL/receipts сохранены. Новые artifacts/CHECKSUMS/generated/CI не меняются.
 
+Первый root clean verify `9fe631e` контролируемо остановлен FAILED за 896,397 с.
+Исправлены только старые test fixtures: actual22 batch v2, полный набор файлов
+loader, exact CTA list и локальный byte-exact rollback precondition после
+измерения SQLite freelist pages. Сохранены исходные assertions и все failed logs.
+Whole six-file target дал 306 PASS / 2 Buffer FAIL; после двух последних локальных
+preconditions whole network78 прошёл, остальные пять файлов неизменны после своих
+230 PASS. Это не один новый all308 PASS и не clean gate. [Полный разбор](fixture-rollback-258.md).
+Новый final SHA ещё не принят и не опубликован.
+
 Manual CUSTOM_MONSTER проходит ENM-011–016/020 с реальными controls, отдельной
 kind schema, grammar11, NONE/одним ordinary и host-derived full sheet. Migration22
 сохраняет прежние record bytes и явно поддерживает historical21. Реальный

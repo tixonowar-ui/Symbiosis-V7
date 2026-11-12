@@ -9,6 +9,11 @@
 
 ### Исправлено
 
+- **2026-11-12, проверки #258:** старые integration fixtures используют actual22
+  batch v2, полный source input loader и точный список доступных CTA. Для
+  затронутых fault snapshots восстановлен локальный freelist=0 precondition;
+  исходные byte-exact assertions, guards и budgets сохранены. [Отказы и page-level доказательства](docs/status/fixture-rollback-258.md).
+
 - **2026-11-12, проверки #257:** владелец отдельно разрешил локальный beforeAll
   30 с только для группы из 18 source-backed web-тестов композиции. Factory,
   assertions, runtime и общие настройки сохранены; [отказ и измерения](docs/status/web-setup-257.md)

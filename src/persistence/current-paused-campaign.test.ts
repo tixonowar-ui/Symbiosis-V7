@@ -472,6 +472,12 @@ describe('owned current PAUSED campaign source', () => {
     'refuses a trusted validator contract violation (%s)',
     (kind) => {
       const { db } = setup();
+      if (kind === 'schema') {
+        // SQLite does not journal unused freelist leaves (atomiccommit.html §7.3).
+        // This fixture precondition keeps the byte-exact rollback assertion meaningful.
+        db.exec('VACUUM');
+        expect(db.pragma('freelist_count', { simple: true })).toBe(0);
+      }
       const before = db.serialize();
       expectCode(
         () =>
