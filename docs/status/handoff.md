@@ -2,6 +2,19 @@
 
 ## Runtime #257 — авторский кандидат, полная приёмка ожидается
 
+Второй clean verify `1dcda8b` завершился 7395 PASS / 18 skipped из 7413,
+296 PASS / 1 failed suite: общий beforeAll группы композиции получил timeout
+10 с; individual assertions не упали. NPC cleanup correction прошла в этом
+наборе. Два отдельных профиля той же factory завершились за 5,581/5,582 с,
+не воспроизведя исходную нагрузку и не установив причину отказа. Владелец
+отдельно разрешил explicit 30 с только этому hook для 18 тестов; factory,
+assertions, общие defaults и runtime неизменны. [Доказательства и границы](web-setup-257.md).
+Один целевой whole web после правки прошёл: 927 PASS / 32 файла, Vitest 51,90 с,
+без skips/errors; source/control hashes до/после равны. Typecheck, scoped lint,
+формат, checksums и traceability verify — exit0. Это dirty scoped evidence;
+новому SHA ещё нужны независимый clean five-stage и CI. Старые неуспешные
+результаты не переносятся как PASS.
+
 Первый clean verify `fc7b4be` завершился 7412 PASS / 1 FAIL из 7413: существующий
 NPC disease removal case получил afterEach hook timeout 30 с; источник задаёт
 body budget 300 с, ошибка относится к hook. Reported case total 189484 мс

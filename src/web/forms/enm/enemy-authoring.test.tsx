@@ -416,7 +416,7 @@ describe('source-backed composition controls and confirmed wire boundary', () =>
   const mounted: { root: Root; container: HTMLDivElement }[] = [];
   beforeAll(async () => {
     source = await createEnemyCompositionClientFixture();
-  });
+  }, 30_000);
   afterEach(() => {
     for (const value of mounted.splice(0)) {
       act(() => value.root.unmount());
