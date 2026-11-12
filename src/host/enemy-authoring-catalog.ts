@@ -72,6 +72,26 @@ export function loadEnemyAuthoringSourceCatalog(
   const inventoryMetadata = npcInventoryMetadataChoices(common.inventory);
   if (inventoryMetadata === null) return fail('source-bound inventory metadata unavailable');
   const choices = {
+    compositionCatalog: {
+      species: common.symbionts.species.map(
+        ({ speciesKey, speciesLabel, kind, allowedRaceCodes, slotCost, bindingPolicy }) => ({
+          speciesKey,
+          name: speciesLabel,
+          kind,
+          allowedRaceCodes,
+          slotCost,
+          bindingPolicy,
+        }),
+      ),
+      races: common.symbionts.races,
+      levels: common.development.levels.map(({ speciesKey, levelProfileId, level, baseMaxOE }) => ({
+        speciesKey,
+        levelProfileId,
+        level,
+        baseMaxOE,
+      })),
+      nodes: common.development.nodes,
+    },
     inventoryMetadata,
     buildOptions: [],
     races: common.skills.races.map((race) => ({
@@ -119,6 +139,16 @@ export function loadEnemyAuthoringSourceCatalog(
   };
   freeze(choices);
   return Object.freeze({
+    composition: Object.freeze({
+      symbionts: common.symbionts,
+      development: common.development,
+      native: common.nativeSymbionts,
+      structural: common.ordinaryComposition,
+      rules: array(
+        JSON.parse(readFileSync(join(root, 'generated/spec/rules/rules.json'), 'utf8')) as unknown,
+        'rules',
+      ).map((value) => record(value, 'rule')),
+    }),
     equipment: common.equipment,
     skills: common.skills,
     inventory: common.inventory,

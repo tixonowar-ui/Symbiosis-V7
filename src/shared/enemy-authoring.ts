@@ -9,6 +9,28 @@ import type {
 import type { NpcCatalogueInventoryRequestEntry } from './npc-editor-presentation.js';
 import { admissionCodecReaders as r, admissionJsonEqual } from './campaign-admission-codec.js';
 import { wireCodecPrimitives as w } from './wire-codec.js';
+import {
+  enemyComposedCompositionValue,
+  enemyCompositionAcquisitionsValue,
+  enemyCompositionPatchValue,
+  type EnemyComposedComposition,
+  type EnemyCompositionAcquisitions,
+} from './enemy-composition.js';
+import {
+  enemyCompositionCatalogShape,
+  enemyCompositionFactsShape,
+  enemyCompositionSkillBindings,
+  enemyCompositionBindings,
+} from './enemy-composition-presentation.js';
+import {
+  emptyEnemySkillPlanState,
+  enemySkillPlanStateValue,
+  enemySkillRebuildPreviewValue,
+  enemyBuildPlanPatchValue,
+  enemySkillPlanCatalogBindings,
+  type EnemySkillPlanState,
+  type EnemySkillRebuildPreview,
+} from './enemy-skill-plan.js';
 
 export const ENEMY_AUTHORING_FORMS = [
   'ENM-005',
@@ -59,7 +81,11 @@ export interface EnemyEmptyComposition {
   readonly ordinarySymbiontInstances: readonly never[];
   readonly symbioticMonsterProfileIdOrNull: null;
 }
+export type EnemyComposition = EnemyEmptyComposition | EnemyComposedComposition;
 export interface EnemyAttempt {
+  readonly schemaVersion?: 2;
+  readonly skillPlanState?: EnemySkillPlanState;
+  readonly legacySkillPlanPreview?: EnemySkillRebuildPreview;
   readonly attemptId: string;
   readonly campaignId: string;
   readonly kind: 'SENTIENT';
@@ -67,9 +93,10 @@ export interface EnemyAttempt {
   readonly identityOrNull: EnemyIdentity | null;
   readonly baseStatsOrNull: EnemyStats | null;
   readonly buildOrNull: EnemyBuild | null;
-  readonly compositionOrNull: EnemyEmptyComposition | null;
+  readonly compositionOrNull: EnemyComposition | null;
   readonly inventoryOrNull: EnemyInventory | null;
   readonly itemTemplateKeys: readonly string[];
+  readonly compositionAcquisitions?: EnemyCompositionAcquisitions;
 }
 export interface EnemyVersionIdentity {
   readonly campaignId: string;
@@ -112,8 +139,11 @@ export interface EnemyAuthoringMutation {
   readonly committedVersionOrNull: EnemyVersionIdentity | null;
   readonly receiptId: string;
   readonly timestamp: string;
+  readonly preparedComposition?: EnemyComposedComposition;
+  readonly preparedSkillState?: EnemySkillPlanState;
 }
 export interface EnemySheet {
+  readonly skillPlanState?: EnemySkillPlanState;
   readonly identity: EnemyIdentity;
   readonly baseStats: EnemyStats;
   readonly skillStageStats: EnemyStats;
@@ -131,8 +161,10 @@ export interface EnemySheet {
     readonly capacity: number;
     readonly used: number;
     readonly remaining: number;
+    readonly overflow?: number;
   };
-  readonly composition: EnemyEmptyComposition;
+  readonly composition: EnemyComposition;
+  readonly compositionFacts?: JsonObject;
   readonly inventory: EnemyInventory;
   readonly items: readonly {
     readonly itemTemplateKey: string;
@@ -159,6 +191,15 @@ export interface EnemyAuthoringProjection extends RevisionVector {
   readonly sheetOrNull: EnemySheet | null;
   readonly validationErrors: readonly string[];
   readonly catalog: JsonObject;
+  readonly compositionPreparation?: Readonly<{
+    permanentStatsOrNull: EnemyStats | null;
+    factsOrNull: JsonObject | null;
+    requiredRolls: readonly Readonly<{
+      kind: 'FREE_SLOT' | 'ADVISER_I' | 'ADVISER_W' | 'ADVISER_SUPPRESSION';
+      dieSides: 6 | 20;
+    }>[];
+    errors: readonly string[];
+  }>;
   readonly art: {
     readonly mediaType: 'image/png';
     readonly sha256: string;
@@ -252,6 +293,10 @@ function buildShape(value: unknown): void {
   }
 }
 function emptyShape(value: unknown): void {
+  if (Object.hasOwn(w.record(value, '$.composition'), 'schemaVersion')) {
+    enemyComposedCompositionValue(value);
+    return;
+  }
   const row = r.exact(
     value,
     'symbiontCompositionMode ordinarySymbiontInstances symbioticMonsterProfileIdOrNull',
@@ -487,14 +532,38 @@ export function enemyVersionIdentityValue(value: unknown): EnemyVersionIdentity 
   return w.validated(row);
 }
 export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutation {
+  const raw = w.record(value, '$.enemyMutation');
   const row = r.exact(
     value,
-    'request itemTemplateKeys committedVersionOrNull receiptId timestamp sourceBaselineVersion authorMasterProfileId',
+    'request itemTemplateKeys committedVersionOrNull receiptId timestamp sourceBaselineVersion authorMasterProfileId' +
+      (Object.hasOwn(raw, 'preparedComposition') ? ' preparedComposition' : '') +
+      (Object.hasOwn(raw, 'preparedSkillState') ? ' preparedSkillState' : ''),
     '$.enemyMutation',
   );
   r.text(row['sourceBaselineVersion'], '$.sourceBaselineVersion');
   r.uuid(row['authorMasterProfileId'], '$.authorMasterProfileId');
   const request = enemyWorkflowRequestValue(row['request']);
+  if (Object.hasOwn(row, 'preparedSkillState')) enemySkillPlanStateValue(row['preparedSkillState']);
+  if (
+    request.payload.stage === 'SENTIENT_BUILD' &&
+    Object.hasOwn(request.payload.data ?? {}, 'operation')
+  ) {
+    enemyBuildPlanPatchValue(request.payload.data);
+    if (!Object.hasOwn(row, 'preparedSkillState'))
+      r.invalid('$.preparedSkillState', 'host-bound plan preparation', null);
+  }
+  const compositionOperation =
+    request.payload.stage === 'SENTIENT_SYMBIONTS' &&
+    Object.hasOwn(request.payload.data ?? {}, 'operation');
+  if (compositionOperation && !Object.hasOwn(row, 'preparedComposition'))
+    r.invalid('$.preparedComposition', 'host preparation for a composition operation', null);
+  if (Object.hasOwn(row, 'preparedComposition')) {
+    if (request.payload.stage !== 'SENTIENT_SYMBIONTS')
+      r.invalid('$.preparedComposition', 'composition stage only', null);
+    if (compositionOperation) enemyCompositionPatchValue(request.payload.data);
+    else emptyShape(request.payload.data);
+    enemyComposedCompositionValue(row['preparedComposition']);
+  }
   r.uuid(row['receiptId'], '$.receiptId');
   const timestamp = r.text(row['timestamp'], '$.timestamp');
   const time = Date.parse(timestamp);
@@ -538,6 +607,20 @@ export function enemyAuthoringReceipt(
         mutation.request.payload.expectedAttemptRevision +
         (mutation.committedVersionOrNull === null ? 1 : 0),
       committedVersionOrNull: mutation.committedVersionOrNull as unknown as JsonValue,
+      ...(mutation.preparedComposition === undefined
+        ? {}
+        : { compositionPhase: mutation.preparedComposition.phase }),
+      ...(mutation.request.payload.stage === 'SENTIENT_BUILD' &&
+      Object.hasOwn(mutation.request.payload.data ?? {}, 'operation')
+        ? {
+            buildPhase:
+              mutation.request.payload.data?.['operation'] === 'PREVIEW_REBUILD'
+                ? 'PREVIEW_REBUILD'
+                : mutation.request.payload.data?.['operation'] === 'DISCARD_REBUILD'
+                  ? 'REBUILD_DISCARDED'
+                  : 'SAVED',
+          }
+        : {}),
     },
   };
 }
@@ -546,16 +629,18 @@ function numeric(value: unknown, path: string): number {
     ? value
     : r.invalid(path, 'finite number', null);
 }
-function statBlock(value: unknown, base: boolean): void {
+function statBlock(value: unknown, base: boolean, provisional = false): void {
   const row = r.exact(value, ENEMY_STATS.join(' '), '$.stats');
   for (const key of ENEMY_STATS)
-    if (r.integer(row[key], '$.' + key, 1) > 35 && base)
+    if (r.integer(row[key], '$.' + key, provisional ? Number.MIN_SAFE_INTEGER : 1) > 35 && base)
       r.invalid('$.stats', 'base stat 1..35', null);
 }
 export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringProjection {
+  const rawProjection = w.record(value, '$.enemyAuthoringProjection');
   const row = r.exact(
     value,
-    'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog art',
+    'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog art' +
+      (Object.hasOwn(rawProjection, 'compositionPreparation') ? ' compositionPreparation' : ''),
     '$.enemyAuthoringProjection',
   );
   w.literal(row['kind'], 'SENTIENT_ENEMY_AUTHORING', '$.kind');
@@ -611,11 +696,92 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     r.invalid('$.art', 'version-bound placeholder', null);
   for (const error of r.list(row['validationErrors'], '$.validationErrors'))
     r.text(error, '$.error');
+  const rawCatalog = w.record(row['catalog'], '$.catalog');
   const catalog = r.exact(
     row['catalog'],
-    'inventoryMetadata buildOptions races classes skills items',
+    'inventoryMetadata buildOptions races classes skills items' +
+      (Object.hasOwn(rawCatalog, 'compositionCatalog') ? ' compositionCatalog' : ''),
     '$.catalog',
   );
+  if (Object.hasOwn(catalog, 'compositionCatalog'))
+    enemyCompositionCatalogShape(catalog['compositionCatalog']);
+  else if (row['formId'] === 'ENM-008')
+    r.invalid('$.compositionCatalog', 'source catalogue required by the ENM-008 controls', null);
+  if (context.attemptOrNull?.skillPlanState !== undefined)
+    enemySkillPlanCatalogBindings(context.attemptOrNull.skillPlanState, catalog['skills']);
+  if (context.attemptOrNull?.legacySkillPlanPreview !== undefined)
+    enemySkillPlanCatalogBindings(
+      {
+        ...emptyEnemySkillPlanState(),
+        rebuildPreviewOrNull: context.attemptOrNull.legacySkillPlanPreview,
+      },
+      catalog['skills'],
+    );
+  if (
+    context.attemptOrNull?.compositionAcquisitions?.grossGrantOrNull != null &&
+    !r
+      .list(catalog['skills'], '$.skills')
+      .some((raw) => w.record(raw, '$.skill')['skillKey'] === 'GROSS')
+  )
+    r.invalid('$.catalog.skills', 'acquired GROSS fact has an actual skill label', null);
+  const composing = context.attemptOrNull?.compositionOrNull;
+  if (composing != null && 'schemaVersion' in composing) {
+    enemyCompositionBindings(composing, catalog['compositionCatalog']);
+    for (const skill of [...composing.skills.advisorSkills, ...composing.skills.dolphinSkills])
+      if (
+        !r
+          .list(catalog['skills'], '$.skills')
+          .some((raw) => w.record(raw, '$.skill')['skillKey'] === skill.skillKey)
+      )
+        r.invalid('$.composition.skills', 'actual catalogue choice', null);
+  }
+  const expectedPreparation =
+    row['formId'] === 'ENM-008' && composing != null && 'schemaVersion' in composing;
+  if (expectedPreparation !== Object.hasOwn(row, 'compositionPreparation'))
+    r.invalid('$.compositionPreparation', 'current discriminated ENM-008 preparation only', null);
+  if (expectedPreparation && composing != null && 'schemaVersion' in composing) {
+    const preparation = r.exact(
+      row['compositionPreparation'],
+      'permanentStatsOrNull factsOrNull requiredRolls errors',
+      '$.compositionPreparation',
+    );
+    const errors = r.list(preparation['errors'], '$.errors');
+    errors.forEach((error) => r.text(error, '$.error'));
+    if (preparation['permanentStatsOrNull'] !== null) {
+      const provisional = r.exact(
+        preparation['permanentStatsOrNull'],
+        ENEMY_STATS.join(' '),
+        '$.provisionalStats',
+      );
+      for (const key of ENEMY_STATS)
+        r.integer(provisional[key], '$.provisionalStats.' + key, Number.MIN_SAFE_INTEGER);
+    }
+    if (preparation['factsOrNull'] !== null)
+      enemyCompositionSkillBindings(
+        enemyCompositionFactsShape(
+          preparation['factsOrNull'],
+          composing,
+          catalog['compositionCatalog'],
+          context.attemptOrNull?.skillPlanState,
+        ),
+        catalog['skills'],
+      );
+    if (
+      (preparation['permanentStatsOrNull'] === null) !== (preparation['factsOrNull'] === null) ||
+      (preparation['factsOrNull'] === null && errors.length === 0)
+    )
+      r.invalid('$.compositionPreparation', 'actual facts or explicit source refusal', null);
+    for (const raw of r.list(preparation['requiredRolls'], '$.requiredRolls')) {
+      const roll = r.exact(raw, 'kind dieSides', '$.requiredRoll');
+      r.oneOf(
+        roll['kind'],
+        ['FREE_SLOT', 'ADVISER_I', 'ADVISER_W', 'ADVISER_SUPPRESSION'],
+        '$.kind',
+      );
+      if (roll['dieSides'] !== (roll['kind'] === 'FREE_SLOT' ? 6 : 20))
+        r.invalid('$.dieSides', 'source acquisition die', null);
+    }
+  }
   const metadata = r.exact(
     catalog['inventoryMetadata'],
     'qualityTiers clothingRegions clothingHermetic clothingFlammability',
@@ -786,9 +952,12 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     }
   }
   if (row['sheetOrNull'] !== null) {
+    const rawSheet = w.record(row['sheetOrNull'], '$.sheet');
     const sheet = r.exact(
       row['sheetOrNull'],
-      'identity baseStats skillStageStats permanentStats effectiveStats build skills skillSlots composition inventory items armor requirementPenalties classMovementModifier maxHP progressionPolicy artAssetKey',
+      'identity baseStats skillStageStats permanentStats effectiveStats build skills skillSlots composition inventory items armor requirementPenalties classMovementModifier maxHP progressionPolicy artAssetKey' +
+        (Object.hasOwn(rawSheet, 'compositionFacts') ? ' compositionFacts' : '') +
+        (Object.hasOwn(rawSheet, 'skillPlanState') ? ' skillPlanState' : ''),
       '$.sheet',
     );
     const identity = r.exact(
@@ -802,8 +971,50 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     const mass = numeric(identity['massKg'], '$.massKg');
     if (mass < 30 || mass > 500 || Math.round(mass * 10) / 10 !== mass)
       r.invalid('$.massKg', 'SENTIENT mass', null);
+    const sheetSkillState = Object.hasOwn(sheet, 'skillPlanState')
+      ? enemySkillPlanStateValue(sheet['skillPlanState'])
+      : undefined;
+    if (sheetSkillState !== undefined) {
+      enemySkillPlanCatalogBindings(sheetSkillState, catalog['skills']);
+      const plan =
+        sheetSkillState.planOrNull ??
+        r.invalid('$.sheet.skillPlan', 'confirmed initial plan', null);
+      const accounting =
+        plan.accountingOrNull ??
+        r.invalid('$.sheet.skillPlan', 'resolved current full input', null);
+      if (
+        sheetSkillState.pendingChoicesOrNull !== null ||
+        sheetSkillState.rebuildPreviewOrNull !== null ||
+        !admissionJsonEqual(plan.initialInput, {
+          baseStats: sheet['baseStats'],
+          build: sheet['build'],
+        })
+      )
+        r.invalid('$.sheet.skillPlan', 'resolved current full input', null);
+      const actual = r.list(sheet['skills'], '$.skills').map((raw) => {
+        const skill = w.record(raw, '$.skill');
+        return {
+          skillKey: skill['skillKey'],
+          bonus: skill['bonus'],
+          slotCost: skill['slotCost'],
+          source: skill['source'],
+        };
+      });
+      const expected = accounting.knownSkills.map((skill) => ({
+        skillKey: skill.skillKey,
+        bonus: skill.bonus,
+        slotCost: skill.startSlots + skill.dolphinSlots,
+        source: skill.source,
+      }));
+      if (!admissionJsonEqual(actual, expected))
+        r.invalid('$.sheet.skills', 'actual paid current-plan knowledge', null);
+    }
     for (const key of ['baseStats', 'skillStageStats', 'permanentStats', 'effectiveStats'])
-      statBlock(sheet[key], key === 'baseStats');
+      statBlock(
+        sheet[key],
+        key === 'baseStats',
+        key === 'skillStageStats' && Object.hasOwn(sheet, 'skillPlanState'),
+      );
     const build = r.exact(sheet['build'], 'raceCode pureClassOrNull skillSelections', '$.build');
     r.oneOf(build['raceCode'], ['PURE', 'FREE', 'UNITED'], '$.race');
     if (build['pureClassOrNull'] !== null)
@@ -823,26 +1034,47 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
         })
       )
         r.invalid('$.sheet.skills', 'actual catalogue skill/name', null);
-      r.oneOf(skill['source'], ['RACE_GRANTED', 'CLASS_MANDATORY', 'SELECTED'], '$.source');
+      r.oneOf(
+        skill['source'],
+        Object.hasOwn(rawSheet, 'compositionFacts')
+          ? ['RACE_GRANTED', 'CLASS_MANDATORY', 'SELECTED', 'SYMBIONT_GRANTED', 'SYMBIONT_SELECTED']
+          : ['RACE_GRANTED', 'CLASS_MANDATORY', 'SELECTED'],
+        '$.source',
+      );
       r.integer(skill['bonus'], '$.bonus', 0);
       r.integer(skill['slotCost'], '$.slotCost', 0);
     }
-    const slots = r.exact(sheet['skillSlots'], 'capacity used remaining', '$.skillSlots');
-    for (const key of ['capacity', 'used', 'remaining']) r.integer(slots[key], '$.' + key, 0);
-    if (slots['remaining'] !== 0 || slots['capacity'] !== slots['used'])
-      r.invalid('$.skillSlots', 'complete allocation', null);
-    const composition = r.exact(
-      sheet['composition'],
-      'symbiontCompositionMode ordinarySymbiontInstances symbioticMonsterProfileIdOrNull',
-      '$.composition',
+    const composed = Object.hasOwn(rawSheet, 'compositionFacts');
+    const slots = r.exact(
+      sheet['skillSlots'],
+      'capacity used remaining' + (composed ? ' overflow' : ''),
+      '$.skillSlots',
     );
+    for (const key of Object.keys(slots)) r.integer(slots[key], '$.' + key, 0);
     if (
-      composition['symbiontCompositionMode'] !== 'ORDINARY_SYMBIONTS' ||
-      r.list(composition['ordinarySymbiontInstances'], '$.ordinarySymbiontInstances').length !==
-        0 ||
-      composition['symbioticMonsterProfileIdOrNull'] !== null
+      composed
+        ? slots['remaining'] !== Math.max(0, Number(slots['capacity']) - Number(slots['used'])) ||
+          slots['overflow'] !== Math.max(0, Number(slots['used']) - Number(slots['capacity']))
+        : slots['remaining'] !== 0 || slots['capacity'] !== slots['used']
     )
-      r.invalid('$.composition', 'explicit empty composition', null);
+      r.invalid('$.skillSlots', 'actual current allocation/overflow', null);
+    emptyShape(sheet['composition']);
+    const composition = w.record(sheet['composition'], '$.composition');
+    if (Object.hasOwn(composition, 'schemaVersion') !== Object.hasOwn(rawSheet, 'compositionFacts'))
+      r.invalid('$.compositionFacts', 'source facts for the discriminated composition only', null);
+    if (Object.hasOwn(rawSheet, 'compositionFacts')) {
+      const decodedComposition = enemyComposedCompositionValue(composition);
+      enemyCompositionBindings(decodedComposition, catalog['compositionCatalog']);
+      const facts = enemyCompositionFactsShape(
+        sheet['compositionFacts'],
+        decodedComposition,
+        catalog['compositionCatalog'],
+        Object.hasOwn(sheet, 'skillPlanState')
+          ? enemySkillPlanStateValue(sheet['skillPlanState'])
+          : undefined,
+      );
+      enemyCompositionSkillBindings(facts, catalog['skills']);
+    }
     const inventory = r.exact(
       sheet['inventory'],
       'inventoryItems armorCompatibilityReasonOrNull',
@@ -942,7 +1174,11 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
         !admissionJsonEqual(sheet['baseStats'], a.baseStatsOrNull) ||
         !admissionJsonEqual(sheet['build'], a.buildOrNull) ||
         !admissionJsonEqual(sheet['composition'], a.compositionOrNull) ||
-        !admissionJsonEqual(sheet['inventory'], a.inventoryOrNull)
+        !admissionJsonEqual(sheet['inventory'], a.inventoryOrNull) ||
+        (a.skillPlanState === undefined
+          ? Object.hasOwn(sheet, 'skillPlanState')
+          : !Object.hasOwn(sheet, 'skillPlanState') ||
+            !admissionJsonEqual(sheet['skillPlanState'], a.skillPlanState))
       )
         r.invalid('$.sheet', 'current complete attempt', null);
     }
@@ -961,19 +1197,134 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
   if (row['selectedVersionOrNull'] !== null)
     enemyVersionIdentityValue(row['selectedVersionOrNull']);
   if (row['attemptOrNull'] !== null) {
+    const rawAttempt = w.record(row['attemptOrNull'], '$.attempt');
     const attempt = r.exact(
       row['attemptOrNull'],
-      'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys',
+      'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys' +
+        (Object.hasOwn(rawAttempt, 'compositionAcquisitions') ? ' compositionAcquisitions' : '') +
+        (Object.hasOwn(rawAttempt, 'schemaVersion')
+          ? ' schemaVersion skillPlanState'
+          : Object.hasOwn(rawAttempt, 'legacySkillPlanPreview')
+            ? ' legacySkillPlanPreview'
+            : ''),
       '$.attempt',
     );
     r.uuid(attempt['attemptId'], '$.attemptId');
     r.uuid(attempt['campaignId'], '$.campaignId');
     w.literal(attempt['kind'], 'SENTIENT', '$.kind');
     r.integer(attempt['revision'], '$.revision', 0);
+    if (Object.hasOwn(attempt, 'legacySkillPlanPreview')) {
+      const preview = enemySkillRebuildPreviewValue(attempt['legacySkillPlanPreview']);
+      if (
+        preview.planIdOrNull !== null ||
+        preview.planRevision !== 0 ||
+        preview.attemptId !== attempt['attemptId'] ||
+        preview.sourceAttemptRevision + 1 !== attempt['revision'] ||
+        !admissionJsonEqual(preview.initialInput.baseStats, attempt['baseStatsOrNull'])
+      )
+        r.invalid('$.legacySkillPlanPreview', 'own pending upgrade without an active plan', null);
+    }
+    if (Object.hasOwn(attempt, 'schemaVersion')) {
+      w.literal(attempt['schemaVersion'], 2, '$.attempt.schemaVersion');
+      const state = enemySkillPlanStateValue(attempt['skillPlanState']);
+      const preview = state.rebuildPreviewOrNull;
+      if (
+        preview !== null &&
+        (preview.attemptId !== attempt['attemptId'] ||
+          preview.sourceAttemptRevision + 1 !== attempt['revision'] ||
+          !admissionJsonEqual(preview.initialInput.baseStats, attempt['baseStatsOrNull']))
+      )
+        r.invalid('$.rebuildPreview', 'own current attempt and full input', null);
+      if (
+        attempt['compositionOrNull'] !== null &&
+        (state.planOrNull === null ||
+          !admissionJsonEqual(state.planOrNull.initialInput, {
+            baseStats: attempt['baseStatsOrNull'],
+            build: attempt['buildOrNull'],
+          }))
+      )
+        r.invalid('$.skillPlan', 'current composed input', null);
+      if (state.pendingChoicesOrNull !== null) {
+        const composition = enemyComposedCompositionValue(attempt['compositionOrNull']);
+        if (
+          state.pendingChoicesOrNull.compositionPreviewCommandId !== composition.previewCommandId ||
+          !admissionJsonEqual(
+            {
+              advisorSkills: state.pendingChoicesOrNull.advisorSkills,
+              dolphinSkills: state.pendingChoicesOrNull.dolphinSkills,
+            },
+            composition.skills,
+          )
+        )
+          r.invalid('$.pendingChoices', 'current confirmed composition choices', null);
+      }
+      const acquiredCards = Object.hasOwn(attempt, 'compositionAcquisitions')
+        ? enemyCompositionAcquisitionsValue(attempt['compositionAcquisitions']).advisorCards
+        : [];
+      if (
+        [...state.advisorKnowledge, ...state.advisorInitialFillHistory].some(
+          (card) => !acquiredCards.some((source) => source.cardId === card.cardId),
+        )
+      )
+        r.invalid('$.advisorKnowledge', 'actual acquired card identity', null);
+    }
     if (attempt['identityOrNull'] !== null) identityShape(attempt['identityOrNull']);
     if (attempt['baseStatsOrNull'] !== null) statBlock(attempt['baseStatsOrNull'], true);
     if (attempt['buildOrNull'] !== null) buildShape(attempt['buildOrNull']);
-    if (attempt['compositionOrNull'] !== null) emptyShape(attempt['compositionOrNull']);
+    if (attempt['compositionOrNull'] !== null) {
+      emptyShape(attempt['compositionOrNull']);
+      if (
+        Object.hasOwn(w.record(attempt['compositionOrNull'], '$.composition'), 'schemaVersion') !==
+        Object.hasOwn(attempt, 'compositionAcquisitions')
+      )
+        r.invalid('$.compositionAcquisitions', 'new composition owns its acquisition ledger', null);
+    }
+    if (Object.hasOwn(attempt, 'compositionAcquisitions')) {
+      enemyCompositionAcquisitionsValue(attempt['compositionAcquisitions']);
+      if (
+        attempt['compositionOrNull'] !== null &&
+        (!Object.hasOwn(w.record(attempt['compositionOrNull'], '$.composition'), 'schemaVersion') ||
+          !admissionJsonEqual(
+            w.record(attempt['compositionOrNull'], '$.composition')['acquisitions'],
+            attempt['compositionAcquisitions'],
+          ))
+      )
+        r.invalid('$.composition', 'the persistent acquisition ledger must not be dropped', null);
+    }
+    const pendingPreview =
+      attempt['schemaVersion'] === 2
+        ? enemySkillPlanStateValue(attempt['skillPlanState']).rebuildPreviewOrNull
+        : Object.hasOwn(attempt, 'legacySkillPlanPreview')
+          ? enemySkillRebuildPreviewValue(attempt['legacySkillPlanPreview'])
+          : null;
+    if (pendingPreview !== null) {
+      const ledger = Object.hasOwn(attempt, 'compositionAcquisitions')
+        ? enemyCompositionAcquisitionsValue(attempt['compositionAcquisitions'])
+        : null;
+      const receipts =
+        ledger === null
+          ? []
+          : [
+              ...(ledger.freeSlotOrNull === null ? [] : [ledger.freeSlotOrNull.roll.rollReceiptId]),
+              ...ledger.advisorCards.flatMap((card) => [
+                ...card.iwRolls.map((roll) => roll.rollReceiptId),
+                ...(card.suppressionRollOrNull === null
+                  ? []
+                  : [card.suppressionRollOrNull.rollReceiptId]),
+              ]),
+            ];
+      if (
+        pendingPreview.consequences.invalidateComposition !==
+          (attempt['compositionOrNull'] !== null) ||
+        pendingPreview.consequences.invalidateInventory !== (attempt['inventoryOrNull'] !== null) ||
+        !admissionJsonEqual(pendingPreview.consequences.retainedRollReceiptIds, receipts)
+      )
+        r.invalid(
+          '$.rebuildPreview.consequences',
+          'actual cached stages and retained acquisition receipts',
+          null,
+        );
+    }
     if (attempt['inventoryOrNull'] !== null) inventoryShape(attempt['inventoryOrNull']);
     r.list(attempt['itemTemplateKeys'], '$.itemTemplateKeys').forEach((key) =>
       r.uuid(key, '$.itemTemplateKey'),
@@ -981,7 +1332,11 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
   }
   return w.validated(row);
 }
-export function newEnemyAttempt(attemptId: string, campaignId: string): EnemyAuthoringContext {
+export function newEnemyAttempt(
+  attemptId: string,
+  campaignId: string,
+  schemaVersion?: 2,
+): EnemyAuthoringContext {
   return enemyAuthoringContextValue({
     attemptOrNull: {
       attemptId,
@@ -994,6 +1349,9 @@ export function newEnemyAttempt(attemptId: string, campaignId: string): EnemyAut
       compositionOrNull: null,
       inventoryOrNull: null,
       itemTemplateKeys: [],
+      ...(schemaVersion === undefined
+        ? {}
+        : { schemaVersion, skillPlanState: emptyEnemySkillPlanState() }),
     },
     selectedVersionOrNull: null,
   });
@@ -1030,6 +1388,12 @@ export function reduceEnemyAuthoring(
     };
   }
   const stage = payload.stage ?? r.invalid('$.stage', 'PATCH stage', null);
+  if (attempt.schemaVersion === 2 && mutation.preparedSkillState === undefined)
+    r.invalid('$.preparedSkillState', 'modern cause cannot downgrade to legacy', null);
+  const buildPatch =
+    stage === 'SENTIENT_BUILD' && Object.hasOwn(payload.data ?? {}, 'operation')
+      ? enemyBuildPlanPatchValue(payload.data)
+      : null;
   const forms = ENEMY_STAGE_FORMS[stage];
   if (formId !== forms[0]) r.invalid('$.stage', 'own current form', null);
   const key = {
@@ -1041,25 +1405,111 @@ export function reduceEnemyAuthoring(
   }[stage];
   // Back is a real edit: dependent confirmations cannot trap mutually incompatible slot budgets.
   const invalidate =
-    stage === 'SENTIENT_STATS' && !admissionJsonEqual(attempt.baseStatsOrNull, payload.data)
-      ? { buildOrNull: null, compositionOrNull: null, inventoryOrNull: null, itemTemplateKeys: [] }
-      : stage === 'SENTIENT_BUILD' && !admissionJsonEqual(attempt.buildOrNull, payload.data)
-        ? { compositionOrNull: null, inventoryOrNull: null, itemTemplateKeys: [] }
-        : {};
+    buildPatch?.operation === 'CONFIRM_REBUILD'
+      ? { compositionOrNull: null, inventoryOrNull: null, itemTemplateKeys: [] }
+      : stage === 'SENTIENT_STATS' && !admissionJsonEqual(attempt.baseStatsOrNull, payload.data)
+        ? {
+            buildOrNull: null,
+            compositionOrNull: null,
+            inventoryOrNull: null,
+            itemTemplateKeys: [],
+          }
+        : stage === 'SENTIENT_BUILD' &&
+            buildPatch === null &&
+            !admissionJsonEqual(attempt.buildOrNull, payload.data)
+          ? { compositionOrNull: null, inventoryOrNull: null, itemTemplateKeys: [] }
+          : {};
   const data =
-    stage === 'SENTIENT_IDENTITY' && typeof payload.data?.['name'] === 'string'
-      ? { ...payload.data, name: payload.data['name'].trim() }
-      : payload.data;
+    buildPatch !== null
+      ? buildPatch.operation === 'PREVIEW_REBUILD' || buildPatch.operation === 'DISCARD_REBUILD'
+        ? attempt.buildOrNull
+        : buildPatch.initialInput.build
+      : stage === 'SENTIENT_IDENTITY' && typeof payload.data?.['name'] === 'string'
+        ? { ...payload.data, name: payload.data['name'].trim() }
+        : stage === 'SENTIENT_SYMBIONTS' && mutation.preparedComposition !== undefined
+          ? mutation.preparedComposition
+          : payload.data;
+  const skillPreparation = mutation.preparedSkillState,
+    priorComposition = attempt.compositionOrNull;
+  const resolvedComposition =
+    stage === 'SENTIENT_INVENTORY' &&
+    skillPreparation !== undefined &&
+    priorComposition !== null &&
+    'schemaVersion' in priorComposition
+      ? (() => {
+          const composition = priorComposition;
+          const gross = composition.acquisitions.grossGrantOrNull;
+          const loss = skillPreparation.planOrNull?.accountingOrNull?.permanentLosses.find(
+            (loss) => loss.skillKey === 'GROSS' && loss.commandId === request.commandId,
+          );
+          return gross !== null && gross.lostAtCommandIdOrNull === null && loss !== undefined
+            ? {
+                ...composition,
+                acquisitions: {
+                  ...composition.acquisitions,
+                  grossGrantOrNull: { ...gross, lostAtCommandIdOrNull: loss.commandId },
+                },
+              }
+            : composition;
+        })()
+      : null;
   const next = {
     ...attempt,
     ...invalidate,
     revision: attempt.revision + 1,
     [key]: data,
+    ...(mutation.preparedSkillState === undefined
+      ? {}
+      : attempt.schemaVersion !== 2 && buildPatch?.operation === 'PREVIEW_REBUILD'
+        ? {
+            legacySkillPlanPreview:
+              mutation.preparedSkillState.rebuildPreviewOrNull ??
+              r.invalid('$.preview', 'pending legacy upgrade', null),
+          }
+        : attempt.schemaVersion !== 2 && buildPatch?.operation === 'DISCARD_REBUILD'
+          ? {}
+          : { schemaVersion: 2, skillPlanState: mutation.preparedSkillState }),
+    ...(buildPatch?.operation === 'CONFIRM_REBUILD' && attempt.compositionAcquisitions !== undefined
+      ? {
+          compositionAcquisitions: {
+            ...attempt.compositionAcquisitions,
+            activeAdvisorCardIdOrNull: null,
+            grossGrantOrNull: null,
+            advisorCards: attempt.compositionAcquisitions.advisorCards.map((card) => ({
+              ...card,
+              skillsOrNull: null,
+            })),
+          },
+        }
+      : {}),
+    ...(stage === 'SENTIENT_SYMBIONTS' && mutation.preparedComposition !== undefined
+      ? {
+          ...(admissionJsonEqual(attempt.compositionOrNull, mutation.preparedComposition)
+            ? {}
+            : { inventoryOrNull: null, itemTemplateKeys: [] }),
+          compositionAcquisitions: mutation.preparedComposition.acquisitions,
+        }
+      : {}),
     ...(stage === 'SENTIENT_INVENTORY' ? { itemTemplateKeys: mutation.itemTemplateKeys } : {}),
+    ...(resolvedComposition === null
+      ? {}
+      : {
+          compositionOrNull: resolvedComposition,
+          compositionAcquisitions: resolvedComposition.acquisitions,
+        }),
   };
+  if (!(attempt.schemaVersion !== 2 && buildPatch?.operation === 'PREVIEW_REBUILD'))
+    delete next.legacySkillPlanPreview;
   return {
     context: enemyAuthoringContextValue({ attemptOrNull: next, selectedVersionOrNull: null }),
-    formId: forms[1],
+    formId:
+      buildPatch?.operation === 'PREVIEW_REBUILD' || buildPatch?.operation === 'DISCARD_REBUILD'
+        ? 'ENM-007'
+        : stage === 'SENTIENT_SYMBIONTS' &&
+            mutation.preparedComposition !== undefined &&
+            mutation.preparedComposition.phase !== 'CONFIRMED'
+          ? 'ENM-008'
+          : forms[1],
   };
 }
 export function enemyAuthoringActions(p: EnemyAuthoringProjection): readonly ActionKey[] {
@@ -1070,5 +1520,12 @@ export function enemyAuthoringActions(p: EnemyAuthoringProjection): readonly Act
   if (p.formId === 'ENM-010')
     return p.validationErrors.length === 0 ? [...back, 'ENM-010::CTA::004'] : back;
   const stage = Object.values(ENEMY_STAGE_FORMS).find(([form]) => form === p.formId);
+  if (
+    p.formId === 'ENM-008' &&
+    p.context.attemptOrNull?.compositionOrNull != null &&
+    'schemaVersion' in p.context.attemptOrNull.compositionOrNull &&
+    p.context.attemptOrNull.compositionOrNull.phase === 'PREVIEW'
+  )
+    return back;
   return stage === undefined ? back : [...back, stage[2]];
 }

@@ -1,6 +1,8 @@
-import { createElement } from 'react';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createEnemyCompositionClientFixture } from '../../../../tests/fixtures/enemy-composition-client.js';
 import {
   ENEMY_AUTHORING_WORKFLOWS,
   ENEMY_PLACEHOLDER_SHA256,
@@ -249,7 +251,7 @@ function frame(p: EnemyAuthoringProjection, reason: string, correlationId: strin
     },
   };
 }
-async function connect() {
+async function connect(p = fixture(), ownerDeviceId = id(4)) {
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
       values.set([1, 2, 3, 4]);
@@ -260,7 +262,7 @@ async function connect() {
     'fetch',
     vi.fn(() =>
       Promise.resolve(
-        new Response(JSON.stringify({ deviceId: id(4) }), {
+        new Response(JSON.stringify({ deviceId: ownerDeviceId }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -268,7 +270,7 @@ async function connect() {
     ),
   );
   vi.stubGlobal('WebSocket', Socket);
-  window.sessionStorage.setItem(GM_CONTEXT_STORAGE_KEY, id(1));
+  window.sessionStorage.setItem(GM_CONTEXT_STORAGE_KEY, p.contextId);
   const states: WebClientState[] = [],
     connection = connectProjection((state) => states.push(state));
   connections.push(connection);
@@ -276,7 +278,6 @@ async function connect() {
   const socket = Socket.instances.at(-1)!;
   socket.open();
   const request = JSON.parse(socket.sent[0]!) as { reconnectRequestId: string };
-  const p = fixture();
   socket.message({
     messageType: 'session.reconnect.capabilities',
     protocolVersion: 2,
@@ -289,7 +290,7 @@ async function connect() {
     },
   });
   socket.message(frame(p, 'RECONNECT', request.reconnectRequestId));
-  expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'ENM-007' } });
+  expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
   return { states, socket, connection };
 }
 it('registers the exact seven source-defined ENM-005/006/007/008/009/010/020 screens and renders explicit identity/build facts', () => {
@@ -309,6 +310,7 @@ it('registers the exact seven source-defined ENM-005/006/007/008/009/010/020 scr
     createElement(EnemyAuthoringContent, {
       projection: fixture() as unknown as JsonObject,
       onValue() {},
+      onPrepare: () => ({ ok: true }),
     }),
   );
   expect(html).toContain('Раса, класс и навыки');
@@ -321,6 +323,7 @@ it('registers the exact seven source-defined ENM-005/006/007/008/009/010/020 scr
       createElement(EnemyAuthoringContent, {
         projection: preview as unknown as JsonObject,
         onValue() {},
+        onPrepare: () => ({ ok: true }),
       }),
     ),
   ).toContain('Качество: Хорошее');
@@ -407,3 +410,317 @@ it.each(Object.entries(faults))(
     expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(before);
   },
 );
+
+describe('source-backed composition controls and confirmed wire boundary', () => {
+  let source: Awaited<ReturnType<typeof createEnemyCompositionClientFixture>>;
+  const mounted: { root: Root; container: HTMLDivElement }[] = [];
+  beforeAll(async () => {
+    source = await createEnemyCompositionClientFixture();
+  });
+  afterEach(() => {
+    for (const value of mounted.splice(0)) {
+      act(() => value.root.unmount());
+      value.container.remove();
+    }
+  });
+  function mount(
+    p: EnemyAuthoringProjection,
+    onValue = vi.fn(),
+    onPrepare = vi.fn((_value: JsonObject) => ({ ok: true })),
+  ) {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const container = document.createElement('div'),
+      root = createRoot(container);
+    document.body.append(container);
+    mounted.push({ container, root });
+    act(() =>
+      root.render(
+        createElement(EnemyAuthoringContent, {
+          projection: p as unknown as JsonObject,
+          onValue,
+          onPrepare,
+        }),
+      ),
+    );
+    return { container, onValue, onPrepare };
+  }
+  it('renders real source nodes and keeps locally edited selection separate from the confirmed PREVIEW', () => {
+    const { container, onValue, onPrepare } = mount(source.preview);
+    const confirm = () =>
+      [...container.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Подтвердить взаимодействия и приобретения',
+      );
+    expect(confirm()).toBeDefined();
+    expect(confirm()!.disabled).toBe(true);
+    const node = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find(
+      (input) =>
+        input.getAttribute('aria-label')?.startsWith('Изучить:') &&
+        !input.disabled &&
+        input.checked,
+    );
+    expect(node).toBeDefined();
+    const composition = source.preview.context.attemptOrNull!.compositionOrNull!;
+    if (!('schemaVersion' in composition)) throw Error('Composed fixture required');
+    const catalog = source.preview.catalog['compositionCatalog'] as JsonObject;
+    const selectedNode = (catalog['nodes'] as JsonObject[]).find(
+      (entry) =>
+        typeof entry['label'] === 'string' &&
+        'Изучить: ' + entry['label'] === node!.getAttribute('aria-label'),
+    )!;
+    const member = composition.ordinarySymbiontInstances.find(
+      (entry) => entry.speciesKey === selectedNode['speciesKey'],
+    )!;
+    expect(member.learnedNodeRefs).toContain(selectedNode['nodeRef']);
+    act(() => node!.click());
+    expect(confirm()).toBeUndefined();
+    expect(onValue).toHaveBeenLastCalledWith(null);
+    const button = [...container.querySelectorAll('button')].find(
+      (value) => value.textContent === 'Рассчитать взаимодействия',
+    )!;
+    act(() => button.click());
+    expect(onPrepare).toHaveBeenCalledOnce();
+    const request = onPrepare.mock.calls[0]![0];
+    expect(request['operation']).toBe('PREVIEW');
+    // This tests exact local intent; the production case separately proves a valid graph on the host.
+    expect(request['selection']).toEqual({
+      symbiontCompositionMode: composition.symbiontCompositionMode,
+      ordinarySymbiontInstances: composition.ordinarySymbiontInstances.map((entry) =>
+        entry === member
+          ? {
+              ...entry,
+              learnedNodeRefs: entry.learnedNodeRefs.filter(
+                (ref) => ref !== selectedNode['nodeRef'],
+              ),
+            }
+          : entry,
+      ),
+      symbioticMonsterProfileIdOrNull: composition.symbioticMonsterProfileIdOrNull,
+      monsterOrNull: composition.monsterOrNull,
+    });
+    expect(source.preview.context.attemptOrNull!.compositionOrNull).toMatchObject({
+      phase: 'PREVIEW',
+    });
+    expect(container.textContent).not.toMatch(
+      /"schemaVersion"|rollReceiptId|sourceBaselineVersion|bytesBase64/,
+    );
+  });
+  it('does not publish FINISH for an unchecked empty composition after acquisitions', () => {
+    const { container, onValue } = mount(source.emptyAcquired);
+    const mode = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Режим состава симбионтов"]',
+    )!;
+    act(() => {
+      mode.value = 'EMPTY';
+      mode.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onValue).toHaveBeenLastCalledWith(null);
+    const checkbox = [
+      ...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    ].find((input) => input.parentElement?.textContent?.includes('Подтверждаю явно пустой'))!;
+    act(() => checkbox.click());
+    expect(onValue).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'FINISH' }));
+    act(() => checkbox.click());
+    expect(onValue).toHaveBeenLastCalledWith(null);
+  });
+  it('binds explicit rebuild confirmation to the actual host candidate and displayed payments, and clears it after a local edit', () => {
+    const { container, onValue, onPrepare } = mount(source.buildPreview);
+    const preview =
+      source.buildPreview.context.attemptOrNull!.skillPlanState!.rebuildPreviewOrNull!;
+    const fencing = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+      (input) => input.getAttribute('aria-label') === 'Бонус: Фехтование',
+    )!;
+    expect(fencing.value).toBe('3');
+    expect(container.textContent).toContain('Прежний расчёт навыков станет неактивным');
+    expect(container.textContent).toContain('START 9, Мирный воин 0');
+    expect(container.textContent).toContain(
+      'Собственные навыки Советника, которые станут неактивными',
+    );
+    expect(container.textContent).toContain('собственные слоты 9');
+    expect(container.textContent).toContain('исходный R20 для I — 12, для W — 12');
+    expect(onValue).toHaveBeenLastCalledWith(null);
+    const checkbox = [
+      ...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    ].find((input) =>
+      input.parentElement?.textContent?.includes('Подтверждаю показанную пересборку'),
+    )!;
+    act(() => checkbox.click());
+    expect(onValue).toHaveBeenLastCalledWith({
+      operation: 'CONFIRM_REBUILD',
+      initialInput: preview.initialInput,
+      expectedPlanRevision: 1,
+      previewCommandId: preview.previewCommandId,
+      displayedConsequences: preview.consequences,
+    });
+    act(() => {
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      const setter = descriptor?.set?.bind(fencing);
+      if (setter === undefined) throw Error('Native controlled-input setter unavailable');
+      setter('4');
+      fencing.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(onValue).toHaveBeenLastCalledWith(null);
+    expect(container.textContent).not.toContain('Подтверждаю показанную пересборку');
+    const calculate = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Рассчитать явную пересборку начального плана',
+    )!;
+    act(() => calculate.click());
+    expect(onPrepare).toHaveBeenLastCalledWith({
+      operation: 'PREVIEW_REBUILD',
+      expectedPlanRevision: 1,
+      initialInput: {
+        ...preview.initialInput,
+        build: {
+          ...preview.initialInput.build,
+          skillSelections: [
+            ...preview.initialInput.build.skillSelections.filter(
+              (row) => row.skillKey !== 'FENCING',
+            ),
+            { skillKey: 'FENCING', targetBonus: 4 },
+          ],
+        },
+      },
+    });
+    // Re-enter every original row in its displayed order, restoring the exact full input.
+    for (const skill of preview.initialInput.build.skillSelections) {
+      const name = (source.buildPreview.catalog['skills'] as JsonObject[]).find(
+        (row) => row['skillKey'] === skill.skillKey,
+      )?.['name'];
+      if (typeof name !== 'string') throw Error('Source skill name unavailable');
+      // A same-value native assignment does not dispatch a React change. Make both edits real.
+      for (const bonus of [skill.targetBonus + 1, skill.targetBonus]) {
+        act(() => {
+          const input = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+            (element) => element.getAttribute('aria-label') === `Бонус: ${name}`,
+          )!;
+          const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          const setter = descriptor?.set?.bind(input);
+          if (setter === undefined) throw Error('Native controlled-input setter unavailable');
+          setter(String(bonus));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      }
+    }
+    const returnedConsent = [...container.querySelectorAll<HTMLInputElement>('input')].find(
+      (input) => input.parentElement?.textContent?.includes('Подтверждаю показанную пересборку'),
+    )!;
+    expect(returnedConsent.checked).toBe(false);
+    expect(onValue).toHaveBeenLastCalledWith(null);
+    act(() => returnedConsent.click());
+    expect(onValue).toHaveBeenLastCalledWith({
+      operation: 'CONFIRM_REBUILD',
+      initialInput: preview.initialInput,
+      expectedPlanRevision: 1,
+      previewCommandId: preview.previewCommandId,
+      displayedConsequences: preview.consequences,
+    });
+  });
+  it('discards a displayed rebuild through the existing PATCH without changing local current-plan knowledge', () => {
+    const original = structuredClone(source.buildPreview.context.attemptOrNull!.skillPlanState);
+    const { container, onPrepare } = mount(source.buildPreview);
+    const discard = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Отказаться от расчёта пересборки',
+    )!;
+    act(() => discard.click());
+    expect(onPrepare).toHaveBeenLastCalledWith({
+      operation: 'DISCARD_REBUILD',
+      previewCommandId:
+        source.buildPreview.context.attemptOrNull!.skillPlanState!.rebuildPreviewOrNull!
+          .previewCommandId,
+    });
+    expect(source.buildPreview.context.attemptOrNull!.skillPlanState).toEqual(original);
+  });
+  const nestedFaults: Readonly<Record<string, (p: EnemyAuthoringProjection) => void>> = {
+    missingCompositionCatalog: (p) => Reflect.deleteProperty(p.catalog, 'compositionCatalog'),
+    nodeSourceQuestions: (p) => {
+      const catalog = p.catalog['compositionCatalog'] as JsonObject;
+      Object.assign((catalog['nodes'] as JsonObject[])[0]!, { sourceQuestionIds: 42 });
+    },
+    ownAdvisorR6: (p) => {
+      const a = p.context.attemptOrNull!.compositionOrNull!;
+      if (!('schemaVersion' in a)) throw Error('Fixture must contain composed input');
+      Object.assign(a.acquisitions.advisorCards[0]!.iwRolls[0].mechanical, { dieSides: 6 });
+    },
+    foreignActiveCard: (p) => {
+      const a = p.context.attemptOrNull!.compositionOrNull!;
+      if (!('schemaVersion' in a)) throw Error('Fixture must contain composed input');
+      Object.assign(a.acquisitions, { activeAdvisorCardIdOrNull: id(998) });
+    },
+    invalidPreparedSpecimens: (p) => {
+      const facts = p.compositionPreparation!.factsOrNull!;
+      Object.assign(facts, { specimens: [42] });
+    },
+    unknownPreparedField: (p) => Object.assign(p.compositionPreparation!, { rawHistory: [] }),
+  };
+  it.each(Object.entries(nestedFaults))(
+    'rejects malformed nested %s before publishing and retains the real confirmed composition',
+    async (_name, damage) => {
+      const { socket, states } = await connect(source.acquired, source.ownerDeviceId);
+      const old = states.at(-1),
+        p = structuredClone(source.acquired);
+      Object.assign(p, { projectionRevision: p.projectionRevision + 1 });
+      const packet = frame(p, 'HOST_SYSTEM_EVENT', 'network-gm-view:' + 'a'.repeat(64));
+      damage(p);
+      expect(() => enemyAuthoringProjectionValue(p)).toThrow();
+      socket.message(packet);
+      expect(states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        snapshot: { formId: 'ENM-008' },
+      });
+      expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(old);
+      expect(() => mount(source.acquired)).not.toThrow();
+    },
+  );
+  it('renders confirmed own-card resources and the complete sheet without technical JSON', () => {
+    expect(() => enemyAuthoringProjectionValue(source.full)).not.toThrow();
+    const { container } = mount(source.full);
+    expect(container.textContent).toContain('Собственная карта Советника');
+    expect(container.textContent).toContain('Начальные истории пожирания, спутников и стаи пусты');
+    expect(container.textContent).not.toMatch(
+      /rollReceiptId|symbiontInstanceId|"schemaVersion"|initialRuntimeState/,
+    );
+  });
+  const planFaults: Readonly<Record<string, (p: EnemyAuthoringProjection) => void>> = {
+    unknownPlanVersion: (p) =>
+      Object.assign(p.context.attemptOrNull!.skillPlanState!, { schemaVersion: 99 }),
+    missingModernPlan: (p) => Reflect.deleteProperty(p.context.attemptOrNull!, 'skillPlanState'),
+    foreignPreviewAttempt: (p) =>
+      Object.assign(p.context.attemptOrNull!.skillPlanState!.rebuildPreviewOrNull!, {
+        attemptId: id(999),
+      }),
+    stalePreviewAttemptRevision: (p) =>
+      Object.assign(p.context.attemptOrNull!.skillPlanState!.rebuildPreviewOrNull!, {
+        sourceAttemptRevision: 0,
+      }),
+    foreignRenderedPaidSkill: (p) =>
+      Object.assign(
+        p.context.attemptOrNull!.skillPlanState!.rebuildPreviewOrNull!.consequences
+          .abandonedSkills[0]!,
+        { skillKey: 'FOREIGN_SKILL' },
+      ),
+    malformedConsequence: (p) =>
+      Object.assign(p.context.attemptOrNull!.skillPlanState!.rebuildPreviewOrNull!.consequences, {
+        abandonedSkills: [42],
+      }),
+    extraRawHistory: (p) =>
+      Object.assign(p.context.attemptOrNull!.skillPlanState!, { journal: [] }),
+  };
+  it.each(Object.entries(planFaults))(
+    'rejects malformed plan %s before publish and retains the previous confirmed build',
+    async (_name, damage) => {
+      const { socket, states } = await connect(source.buildPreview, source.ownerDeviceId),
+        old = states.at(-1);
+      const bad = structuredClone(source.buildPreview);
+      Object.assign(bad, { projectionRevision: bad.projectionRevision + 1 });
+      const packet = frame(bad, 'HOST_SYSTEM_EVENT', 'network-gm-view:' + 'a'.repeat(64));
+      damage(bad);
+      expect(() => enemyAuthoringProjectionValue(bad)).toThrow();
+      socket.message(packet);
+      expect(states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        snapshot: { formId: 'ENM-007' },
+      });
+      expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(old);
+      expect(() => mount(source.buildPreview)).not.toThrow();
+    },
+  );
+});

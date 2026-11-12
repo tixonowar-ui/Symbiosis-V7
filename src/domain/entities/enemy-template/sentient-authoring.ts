@@ -3,6 +3,7 @@ import { calculateSkillStageStats } from '../../rules/skill-stage/stats.js';
 import { validateSkillSelection } from '../../rules/skill-stage/skills.js';
 import {
   buildNpcInventoryPreview,
+  deriveNpcInventoryStatContributions,
   type NpcInventoryPublicationCatalog,
 } from '../../rules/npc-authoring/inventory-publication.js';
 import {
@@ -17,8 +18,15 @@ import {
   deriveNpcEquipmentRequirementPenalties,
   type NpcEquipmentCatalog,
 } from '../../rules/npc-authoring/equipment-profile.js';
-import { admissionCodecReaders as r } from '@shared/campaign-admission-codec.js';
+import {
+  admissionCodecReaders as r,
+  admissionJsonEqual,
+} from '@shared/campaign-admission-codec.js';
 import { wireCodecPrimitives as w } from '@shared/wire-codec.js';
+import {
+  enemySkillPlanStateValue,
+  enemySkillRebuildPreviewValue,
+} from '@shared/enemy-skill-plan.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import {
   ENEMY_PLACEHOLDER,
@@ -31,6 +39,14 @@ import {
   type EnemyInventory,
   type EnemySheet,
 } from '@shared/enemy-authoring.js';
+import {
+  enemyComposedCompositionValue,
+  enemyCompositionAcquisitionsValue,
+} from '@shared/enemy-composition.js';
+import {
+  deriveSentientComposition,
+  type SentientCompositionCatalog,
+} from './sentient-composition.js';
 
 export interface SentientAuthoringCatalog {
   readonly equipment: NpcEquipmentCatalog;
@@ -39,6 +55,7 @@ export interface SentientAuthoringCatalog {
   readonly inventory: NpcInventoryCatalog;
   readonly inventoryPublication: NpcInventoryPublicationCatalog;
   readonly passiveHealth: NpcPassiveHealthCatalog;
+  readonly composition: SentientCompositionCatalog;
 }
 const fail = (message: string): never => {
   throw new Error('SENTIENT: ' + message);
@@ -112,20 +129,47 @@ export function enemyInventoryValue(value: unknown): EnemyInventory {
   return w.validated(row);
 }
 export function enemyAttemptValue(value: unknown): EnemyAttempt {
+  const raw = w.record(value, '$.attempt');
   const row = r.exact(
     value,
-    'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys',
+    'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys' +
+      (Object.hasOwn(raw, 'compositionAcquisitions') ? ' compositionAcquisitions' : '') +
+      (Object.hasOwn(raw, 'schemaVersion')
+        ? ' schemaVersion skillPlanState'
+        : Object.hasOwn(raw, 'legacySkillPlanPreview')
+          ? ' legacySkillPlanPreview'
+          : ''),
     '$.attempt',
   );
   r.uuid(row['attemptId'], '$.attemptId');
   r.uuid(row['campaignId'], '$.campaignId');
   w.literal(row['kind'], 'SENTIENT', '$.kind');
   r.integer(row['revision'], '$.revision', 0);
+  if (Object.hasOwn(row, 'legacySkillPlanPreview'))
+    enemySkillRebuildPreviewValue(row['legacySkillPlanPreview']);
+  if (Object.hasOwn(row, 'schemaVersion')) {
+    w.literal(row['schemaVersion'], 2, '$.attempt.schemaVersion');
+    enemySkillPlanStateValue(row['skillPlanState']);
+  }
   if (row['identityOrNull'] !== null) enemyIdentityValue(row['identityOrNull']);
   if (row['baseStatsOrNull'] !== null) enemyBaseStatsValue(row['baseStatsOrNull']);
   if (row['buildOrNull'] !== null) enemyBuildValue(row['buildOrNull']);
-  if (row['compositionOrNull'] !== null) enemyEmptyCompositionValue(row['compositionOrNull']);
+  if (row['compositionOrNull'] !== null) {
+    if (Object.hasOwn(w.record(row['compositionOrNull'], '$.composition'), 'schemaVersion')) {
+      const composition = enemyComposedCompositionValue(row['compositionOrNull']);
+      if (!admissionJsonEqual(composition.acquisitions, row['compositionAcquisitions']))
+        fail('Composition acquisition ledger mismatch.');
+    } else enemyEmptyCompositionValue(row['compositionOrNull']);
+  }
   if (row['inventoryOrNull'] !== null) enemyInventoryValue(row['inventoryOrNull']);
+  if (Object.hasOwn(row, 'compositionAcquisitions'))
+    enemyCompositionAcquisitionsValue(row['compositionAcquisitions']);
+  if (
+    Object.hasOwn(row, 'compositionAcquisitions') &&
+    row['compositionOrNull'] !== null &&
+    !Object.hasOwn(w.record(row['compositionOrNull'], '$.composition'), 'schemaVersion')
+  )
+    fail('Acquisition facts cannot be dropped by a legacy empty composition.');
   const keys = r.list(row['itemTemplateKeys'], '$.itemTemplateKeys');
   keys.forEach((key) => r.uuid(key, '$.itemTemplateKey'));
   if (new Set(keys).size !== keys.length) fail('Повтор ключа предмета.');
@@ -138,6 +182,7 @@ function complete<T>(value: T | null, label: string): T {
 export function deriveSentientEnemySheet(
   catalog: SentientAuthoringCatalog,
   value: EnemyAttempt,
+  preparingVerifiedBody = false,
 ): EnemySheet {
   const attempt = enemyAttemptValue(value);
   const identity = enemyIdentityValue(complete(attempt.identityOrNull, 'идентичность'));
@@ -145,13 +190,34 @@ export function deriveSentientEnemySheet(
   const build = complete(attempt.buildOrNull, 'раса и навыки');
   const composition = complete(attempt.compositionOrNull, 'симбионты');
   const inventory = complete(attempt.inventoryOrNull, 'имущество');
+  if (attempt.schemaVersion === 2) {
+    const plan =
+      attempt.skillPlanState?.planOrNull ?? fail('Требуется явный начальный план навыков.');
+    if (!admissionJsonEqual(plan.initialInput, { baseStats, build }))
+      fail('Изменённая база требует явной пересборки ENM-007.');
+    if (!('schemaVersion' in composition))
+      return fail('Современный план требует подтверждённого состава, включая пустой.');
+    if (!preparingVerifiedBody && plan.accountingOrNull === null)
+      fail('Требуется разрешение навыков по настоящему имуществу ENM-009.');
+    if (
+      !preparingVerifiedBody &&
+      composition.advisorCardIdOrNull !== null &&
+      !attempt.skillPlanState?.advisorKnowledge.some(
+        (row) => row.cardId === composition.advisorCardIdOrNull,
+      )
+    )
+      fail('Собственные навыки Советника не подтверждены по настоящему телу.');
+  }
   const derived = calculateSkillStageStats(catalog.skills, {
     baseStats,
     raceCode: build.raceCode,
     classCode: build.pureClassOrNull,
     creationMode: 'MANUAL',
   });
-  if (Object.values(derived.skillStageStats).some((stat) => stat < 1))
+  if (
+    attempt.schemaVersion !== 2 &&
+    Object.values(derived.skillStageStats).some((stat) => stat < 1)
+  )
     fail('Итоговая постоянная характеристика ниже 1. Автоматическое ограничение не применяется.');
   const skills = validateSkillSelection(catalog.skills, {
     raceCode: build.raceCode,
@@ -195,10 +261,55 @@ export function deriveSentientEnemySheet(
     inventory.armorCompatibilityReasonOrNull === null
   )
     fail('Для слоёв костюмов подтвердите физическую совместимость и основание.');
+  const compositionResult =
+    'schemaVersion' in composition
+      ? deriveSentientComposition(
+          catalog.composition,
+          catalog.skills,
+          build,
+          derived.skillStageStats,
+          composition,
+          skills.learnedSkills,
+          deriveNpcInventoryStatContributions(catalog.inventoryPublication, requests)
+            .equippedHermeticNate,
+          true,
+          armor.mobilityModifier,
+          !preparingVerifiedBody,
+          attempt.skillPlanState,
+        )
+      : null;
+  const permanentStats = compositionResult?.permanentStats ?? derived.skillStageStats;
   const effectiveStats = {
-    ...derived.skillStageStats,
-    M: Math.max(1, derived.skillStageStats.M + armor.mobilityModifier),
+    ...permanentStats,
+    M: Math.max(1, permanentStats.M + armor.mobilityModifier),
   };
+  const compositionFacts =
+    compositionResult === null
+      ? null
+      : (() => {
+          const unavailable = (key: string, current: EnemyStats) => {
+            if (!catalog.skills.skills.some((row) => row.skillKey === key))
+              return fail('Неизвестный навык в листе.');
+            return catalog.skills.requirements.some(
+              (row) => row.skillKey === key && current[row.statCode] < row.minValue,
+            );
+          };
+          const advisor = compositionResult.facts.advisorOrNull;
+          return {
+            ...compositionResult.facts,
+            temporarilyUnavailableSkills: compositionResult.learnedSkills
+              .filter((row) => unavailable(row.skillKey, effectiveStats))
+              .map((row) => row.skillKey),
+            temporarilyUnavailableAdvisorSkills:
+              advisor === null
+                ? []
+                : advisor.skills
+                    .filter((row) =>
+                      unavailable(row.skillKey, { ...effectiveStats, I: advisor.I, W: advisor.W }),
+                    )
+                    .map((row) => row.skillKey),
+          };
+        })();
   const requirementPenalties = deriveNpcEquipmentRequirementPenalties(catalog.equipment, {
     inventoryPreview: preview,
     effectiveStats,
@@ -214,18 +325,31 @@ export function deriveSentientEnemySheet(
       classMovementModifier -= Number(penalty);
   }
   return {
+    ...(attempt.skillPlanState === undefined ? {} : { skillPlanState: attempt.skillPlanState }),
     identity,
     baseStats,
     build,
     skillStageStats: derived.skillStageStats,
-    permanentStats: derived.skillStageStats,
+    permanentStats,
     effectiveStats,
-    skills: skills.learnedSkills.map((skill) => ({
+    skills: (compositionResult?.learnedSkills ?? skills.learnedSkills).map((skill) => ({
       ...skill,
       name: catalog.skillLabels[skill.skillKey] ?? fail('Неизвестный навык.'),
     })),
-    skillSlots: { capacity: skills.capacity, used: skills.used, remaining: skills.remaining },
+    skillSlots:
+      compositionResult === null
+        ? { capacity: skills.capacity, used: skills.used, remaining: skills.remaining }
+        : (() => {
+            const start = compositionResult.facts.startSkillSlots;
+            return {
+              capacity: start.capacity,
+              used: start.used,
+              remaining: start.available,
+              overflow: start.overflow,
+            };
+          })(),
     composition,
+    ...(compositionFacts === null ? {} : { compositionFacts }),
     inventory,
     items: preview.items.map((item) => ({
       itemTemplateKey: item.request.itemInstanceId,
@@ -248,7 +372,16 @@ export function deriveSentientEnemySheet(
     armor: armor as unknown as JsonObject,
     requirementPenalties: requirementPenalties as unknown as JsonObject,
     classMovementModifier,
-    maxHP: deriveNpcPassiveHealthComponent(catalog.passiveHealth, []).subtotalHP,
+    maxHP: deriveNpcPassiveHealthComponent(
+      catalog.passiveHealth,
+      compositionResult?.facts.specimens.map((row) => ({
+        symbiontInstanceId: row.symbiontInstanceId,
+        speciesKey: row.speciesKey,
+        effectiveLevel: row.targetLevel,
+        learnedNodeRefs: row.learnedNodeRefs,
+        effectsEnabled: row.effectsEnabled,
+      })) ?? [],
+    ).subtotalHP,
     progressionPolicy: 'NO_XP_PROGRESSION',
     artAssetKey: ENEMY_PLACEHOLDER,
   };

@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { ActionKey } from '@generated/types/atlas.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import {
@@ -35,8 +38,10 @@ export function createEnemyLibraryFixture(
   catalog: EnemySourceCatalog,
   baseline: LocalCharacterExportBaseline,
   legacy = false,
+  mode: 'AUTO' | 'MANUAL' = 'MANUAL',
 ) {
   let db = openPersistenceDatabase(':memory:');
+  const ownedDirectories: string[] = [];
   const ownerDeviceId = bootstrapDeviceIdentity(db),
     masterProfileId = randomUUID(),
     gmLocalContextId = randomUUID();
@@ -105,7 +110,7 @@ export function createEnemyLibraryFixture(
   navDraft('CMP-003');
   update('SECRET', { secretProvided: true });
   navDraft('CMP-004');
-  update('MODE', { defaultFutureRollMode: 'MANUAL' });
+  update('MODE', { defaultFutureRollMode: mode });
   navDraft('CMP-005');
   const before = draft();
   const creation = commitCampaignCreation(
@@ -196,8 +201,23 @@ export function createEnemyLibraryFixture(
       db = new Database(bytes);
       configurePersistenceDatabase(db);
     },
+    restartFromDisk() {
+      let filename = db.name;
+      if (db.memory) {
+        const directory = mkdtempSync(join(tmpdir(), 'symbiosis-enemy-disk-'));
+        ownedDirectories.push(directory);
+        filename = join(directory, 'store.sqlite');
+        writeFileSync(filename, db.serialize());
+        db.close();
+        const first = openPersistenceDatabase(filename);
+        first.close();
+      } else db.close();
+      db = openPersistenceDatabase(filename);
+      return filename;
+    },
     close() {
       if (db.open) db.close();
+      for (const directory of ownedDirectories) rmSync(directory, { recursive: true, force: true });
     },
   };
 }
