@@ -16,6 +16,7 @@ export const ENEMY_LIBRARY_NAV_TARGETS = {
   'ENM-001::CTA::002': 'ENM-003',
   'ENM-001::CTA::004': 'ENM-003',
   'ENM-001::CTA::007': 'ENM-020',
+  'ENM-001::CTA::008': 'ENM-017',
   'ENM-001::CTA::013': 'GM-001',
   'ENM-003::CTA::001': 'ENM-001',
 } as const;
@@ -73,7 +74,7 @@ export interface EnemyLibrarySelectionRequest {
   readonly operationId: string;
   readonly contextId: string;
   readonly campaignId: string;
-  readonly sourceFormId: 'ENM-001';
+  readonly sourceFormId: 'ENM-001' | 'ENM-020';
   readonly activeTab: EnemyLibraryTab;
   readonly expectedRevisions: RevisionVector;
   readonly selectionOrNull: EnemyLibrarySelection | null;
@@ -103,7 +104,7 @@ export function enemyLibrarySelectionRequestValue(value: unknown): EnemyLibraryS
   );
   w.literal(row['messageType'], 'network.enemy-selection.replace', '$.messageType');
   w.literal(row['protocolVersion'], 3, '$.protocolVersion');
-  w.literal(row['sourceFormId'], 'ENM-001', '$.sourceFormId');
+  r.oneOf(row['sourceFormId'], ['ENM-001', 'ENM-020'], '$.sourceFormId');
   r.oneOf(row['activeTab'], ENEMY_LIBRARY_TABS, '$.activeTab');
   for (const key of ['operationId', 'contextId', 'campaignId']) r.uuid(row[key], '$.' + key);
   const revisions = r.exact(
@@ -123,6 +124,11 @@ export function enemyLibrarySelectionRequestValue(value: unknown): EnemyLibraryS
     )
       r.invalid('$.userSelectionOrNull', 'own campaign and kind/tab selection', null);
   }
+  if (
+    row['sourceFormId'] === 'ENM-020' &&
+    (row['selectionOrNull'] !== null || row['userSelectionOrNull'] == null)
+  )
+    r.invalid('$.historySelection', 'one actual saved own-template version', null);
   return w.validated(row);
 }
 export function enemyLibrarySelectionResponseValue(value: unknown): EnemyLibrarySelectionResponse {
@@ -432,6 +438,8 @@ export function enemyLibraryActions(p: EnemyLibraryProjection): readonly ActionK
     'ENM-001::CTA::013',
     ...(p.activeTab === 'SENTIENT_ENEMIES' ? ['ENM-001::CTA::003' as const] : []),
     ...(p.activeTab === 'MONSTERS' ? ['ENM-001::CTA::011' as const] : []),
-    ...(p.userSelectionOrNull != null ? ['ENM-001::CTA::007' as const] : []),
+    ...(p.userSelectionOrNull != null
+      ? ['ENM-001::CTA::007' as const, 'ENM-001::CTA::008' as const]
+      : []),
   ];
 }

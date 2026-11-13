@@ -61,7 +61,7 @@ export interface CustomMonsterVersionIdentity {
   readonly campaignId: string;
   readonly templateId: string;
   readonly versionId: string;
-  readonly version: 1;
+  readonly version: number;
   readonly kind: 'CUSTOM_MONSTER';
   readonly artAssetKey: typeof CUSTOM_MONSTER_PLACEHOLDER;
   readonly artSha256: string;

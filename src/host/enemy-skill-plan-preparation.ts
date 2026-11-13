@@ -159,7 +159,10 @@ export function prepareEnemySkillPlanState(
     ...emptyEnemySkillPlanState(),
     rebuildPreviewOrNull: attempt.legacySkillPlanPreview ?? null,
   };
-  if (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1') {
+  if (
+    request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' ||
+    request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION'
+  ) {
     deriveSentientEnemySheet(catalog, attempt);
     if (state.rebuildPreviewOrNull !== null || state.pendingChoicesOrNull !== null)
       return s.fail('UNAVAILABLE');

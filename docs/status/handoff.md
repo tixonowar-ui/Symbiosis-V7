@@ -1,6 +1,42 @@
-# Передача контекста — 2026-11-13
+# Передача контекста — 2026-11-14
 
-## Source #288 — кандидат, финальные gates ожидаются
+## Runtime #259 — WIP, сквозная публикация ещё не принята
+
+Source #288 фактически поставлен PR289: source commit
+`a04c632f91a54d386055c63e1a7ab30d93896424`, tree `04df155d`;
+ADR0094/Atlas1.22B17 доступны. #259 продолжает исходную очередь, #188/#113
+открыты. Подготовлены обе полные N+1 ветви, источник из owning prefix,
+retained mandatory facts, платежи/потери, atomic append и read-only история.
+Это не NPC OPEN и не поставка260/261.
+
+Целевые schema fixtures:343PASS/8Node files,24PASS/renderer,
+101screens/10dialogs; TSC/lint/format0 на точных59pins. Это не full verify.
+Браузерные failed HTML/trace сохранены. Одиночная диагностика доказала codec отказ
+ENM017 после durable NAV commit, до публикации редактора, а не после NEW commit.
+Регистрация, final dispatch/host reason и actual resume NEW capability исправлены
+с отдельными scoped regression/static checks. Production07: оба полных Chrome
+cases прошли с первой попытки, включая lost ACK, историю, restart и PLAYER wire/DOM;
+root независимо проверил scoped отчёт/polls/tails/raw witnesses/изображения.
+Это не полный финальный E2E/clean5/CI runtime #259.
+Глобальный42 явно утверждён и отдельно поставлен process #290 / PR291:
+текущая база main `3a35f5229a6a581333454cc666e1db5a33cfc330`, tree `cfd598d6`.
+Сохранены backup68/index/diff и именованный stash; FF-only/stash apply без
+конфликтов сохранили все63 code/test bytes и обе CHANGELOG записи. Runtime diff
+не включает CI/AGENTS; общие limits/hooks/defaults/workers/retries не менялись. Результаты
+полного процессного цикла не подменяют ещё ожидаемые runtime gates.
+[Подробный статус](enemy-template-versions-259.md).
+Первый runtime SHA `de06e696` получил FAILED в независимом clean01:
+7592PASS/15FAIL,303PASS/9FAIL files, Vitest5756,31с/verify5980,7305с.
+Сохранены весь лог и отдельные причины: устаревшие registry/capability/legacy
+oracles, строгая CORRUPT_STORAGE категория при дырке22 перед23, NET terminal
+assertion и пять body timeouts. Production не менялся; новые только именные
+body budgets900/120/300/600/360с, остальные budgets и assertions сохранены.
+Один целевой WIP run прошёл ровно15 cases/9 files,252 filtered,
+включая полный BIND/lostACK/restart chain; TSC, scoped9-path lint/format и
+diffcheck прошли. Это не полный новый clean5/CI. Новый окончательный SHA,
+независимые full gates/protected merge/delivery ещё требуются;260/261 не начаты.
+
+## Исторический авторский снимок source #288 до protected merge PR289
 
 Владелец утвердил вариант A для полной N+1 конфигурации обоих enemy kinds.
 Atlas1.22/B17, ADR0094, точные source/mirror guards и явная baseline lineage

@@ -334,8 +334,18 @@ export function deriveSentientComposition(
     const coefficient = number(catalog, 'SYM-076', /добавить \+(\d+) к S/u);
     for (const stat of ENEMY_STATS)
       add(stat, (['S', 'D', 'M', 'Z'].includes(stat) ? 1 : -1) * coefficient * trogr.targetLevel);
-    const absorbedTeacher = trogr.absorbedSpeciesKeys.includes('TEACHER'),
-      suppression = rolls.get('ADVISER_SUPPRESSION');
+    const absorbedTeacher = trogr.absorbedSpeciesKeys.includes('TEACHER');
+    const card = composition.acquisitions.advisorCards.find(
+      (row) => row.cardId === composition.advisorCardIdOrNull,
+    );
+    // A retained historical roll grants no current effect when its actual source predicate is absent.
+    const suppression = structural.requiredSourceContinuations.some(
+      (row) =>
+        row.kind === 'ADVISER_SUPPRESSION_ROLL' &&
+        row.symbiontInstanceId === card?.symbiontInstanceId,
+    )
+      ? rolls.get('ADVISER_SUPPRESSION')
+      : undefined;
     for (const stat of ENEMY_STATS) {
       if (['S', 'D', 'M', 'Z'].includes(stat))
         maximums[stat] =

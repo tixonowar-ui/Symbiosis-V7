@@ -4,6 +4,7 @@ import {
   enemyLibraryProjectionValue,
   type EnemyLibrarySelectionRequest,
 } from '@shared/enemy-library.js';
+import { enemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
 
 /** A technical ACK alone never confirms a choice: only its current, correlated owning projection does. */
 export function enemyLibrarySelectionConfirmed(
@@ -18,12 +19,26 @@ export function enemyLibrarySelectionConfirmed(
 ): boolean {
   if (
     !acknowledged ||
-    candidate.formId !== 'ENM-001' ||
+    candidate.formId !== request.sourceFormId ||
     assignment.reason !== 'FORM_ACTION' ||
     assignment.correlationId !== request.operationId
   )
     return false;
   try {
+    if (request.sourceFormId === 'ENM-020') {
+      const p = enemyAuthoringProjectionValue(candidate.projection);
+      return (
+        p.formId === 'ENM-020' &&
+        p.contextId === request.contextId &&
+        p.campaignId === request.campaignId &&
+        request.selectionOrNull === null &&
+        admissionJsonEqual(p.context.selectedVersionOrNull, request.userSelectionOrNull) &&
+        admissionJsonEqual(p.versionHistory?.selected, request.userSelectionOrNull) &&
+        (['stateRevision', 'projectionRevision', 'actorVisibilityRevision'] as const).every(
+          (key) => p[key] === candidate.revisions[key] && p[key] >= request.expectedRevisions[key],
+        )
+      );
+    }
     const p = enemyLibraryProjectionValue(candidate.projection);
     return (
       p.formId === 'ENM-001' &&

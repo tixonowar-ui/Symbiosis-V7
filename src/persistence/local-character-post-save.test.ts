@@ -283,10 +283,11 @@ describe('receipt-backed restore cursor', () => {
     'missing-review-table',
     'unknown-version',
   ] as const)(
-    'does not downgrade a version-12 store when %s invalidates cursor retirement',
+    'does not downgrade the schema23 store when %s invalidates cursor retirement',
     (damage) => {
       const p = setup('DRAFT');
       const original = readLocalCharacter(p.db, p.scope.entityId);
+      let futureBytes: Buffer | undefined;
       if (damage === 'missing-table') p.db.exec('DROP TABLE local_character_post_save_cursor');
       else if (damage === 'missing-campaign-table') p.db.exec('DROP TABLE campaign_draft_update');
       else if (damage === 'missing-installation-table')
@@ -298,7 +299,24 @@ describe('receipt-backed restore cursor', () => {
       else if (damage === 'missing-network-application-table')
         p.db.exec('DROP TABLE local_network_host_pin');
       else if (damage === 'missing-review-table') p.db.exec('DROP TABLE gm_request_queue_event');
-      else p.db.prepare('UPDATE schema_migration SET version = 23 WHERE version = 22').run();
+      else {
+        const registry = p.db
+          .prepare<[], { version: number }>('SELECT * FROM schema_migration ORDER BY version')
+          .all();
+        expect(registry.map((row) => row.version)).toEqual(
+          Array.from({ length: 23 }, (_, index) => index + 1),
+        );
+        p.db
+          .prepare('INSERT INTO schema_migration VALUES(?,?,?)')
+          .run(24, 'future', 'f'.repeat(64));
+        expect(
+          p.db.prepare('SELECT * FROM schema_migration WHERE version<=23 ORDER BY version').all(),
+        ).toEqual(registry);
+        expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+          version: 24,
+        });
+        futureBytes = p.db.serialize();
+      }
       expect(() =>
         commitLocalCharacterCheckpoint(p.db, p.scope.entityId, p.complete.checkpointId, (write) =>
           write(
@@ -308,6 +326,7 @@ describe('receipt-backed restore cursor', () => {
         ),
       ).toThrow();
       expect(readLocalCharacter(p.db, p.scope.entityId)).toEqual(original);
+      if (futureBytes !== undefined) expect(p.db.serialize()).toEqual(futureBytes);
     },
   );
   it('atomically closes APP-009 and recovers its exact receipt after a crash with a newer second draft present', () => {

@@ -937,7 +937,7 @@ async function submitConnectedPlayer(
         h.db.prepare('SELECT * FROM hosted_network_command WHERE command_id=?').get(commandId),
       ).toEqual(originalHostedSubmit);
       expect(h.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-        version: 22,
+        version: 23,
       });
     });
   if (loseFirstBindingAck)

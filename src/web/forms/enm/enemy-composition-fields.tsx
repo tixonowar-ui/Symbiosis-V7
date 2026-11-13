@@ -222,7 +222,15 @@ export function EnemyCompositionFields({
   const [advisorRemovalConfirmed, setAdvisorRemovalConfirmed] = useState(false);
   const [faces, setFaces] = useState<Readonly<Record<string, string>>>({});
   const [skills, setSkills] = useState<EnemyCompositionSkills>(
-    confirmed?.skills ?? { advisorSkills: [], dolphinSkills: [] },
+    p.formId === 'ENM-017' &&
+      p.context.versionAttempt?.ownChoicesPending === true &&
+      p.context.versionAttempt.configurationConfirmation?.input.kind === 'SENTIENT' &&
+      confirmed?.advisorCardIdOrNull != null
+      ? {
+          ...confirmed.skills,
+          advisorSkills: p.context.versionAttempt.configurationConfirmation.input.advisorSkills,
+        }
+      : (confirmed?.skills ?? { advisorSkills: [], dolphinSkills: [] }),
   );
   const [notice, setNotice] = useState<string | null>(null);
   const unchanged = confirmed !== null && admissionJsonEqual(selection, selectionOf(confirmed));

@@ -16,6 +16,7 @@ import {
   deriveSentientCompositionStructure,
   sentientCompositionRollRequirements,
   validateSentientCompositionRolls,
+  sentientAcquisitionRolls,
   type SentientCompositionCatalog,
 } from './sentient-composition.js';
 let common: NpcAuthoringSourceCatalog, catalog: SentientCompositionCatalog;
@@ -262,6 +263,66 @@ it('requires an explicit confirmation and real independent Adviser I/W plus supp
       rolls: acquired.rolls.map((row) => ({ ...row, originatingCommandId: id(99) })),
     }),
   ).toThrow('provenance');
+});
+it('keeps original suppression facts while source presence controls the current minimum and reselect needs no new roll', () => {
+  const active = confirmed(
+    composition([choice('TROGR', 5), choice('ADVISER')]),
+    'UNITED',
+    [1, 20, 20],
+  );
+  const trogr = active.ordinarySymbiontInstances.find((row) => row.speciesKey === 'TROGR');
+  const adviser = active.ordinarySymbiontInstances.find((row) => row.speciesKey === 'ADVISER');
+  const card = active.acquisitions.advisorCards[0],
+    trogrId = active.instanceIds[0];
+  if (trogr === undefined || adviser === undefined || card === undefined || trogrId === undefined)
+    throw new Error('Missing actual source-backed Trogr/Advisor test composition');
+  const preview = (value: EnemyComposedComposition) =>
+    deriveSentientComposition(
+      catalog,
+      common.skills,
+      { raceCode: 'UNITED', pureClassOrNull: null, skillSelections: [] },
+      stats,
+      value,
+      [],
+      false,
+      false,
+    );
+  expect(preview(active).permanentStats.I).toBe(6); // SYM075/076: I20−30, source minimum1+R20/4(rounded)=6.
+  const onlyTrogr = enemyComposedCompositionValue({
+    ...active,
+    ordinarySymbiontInstances: [trogr],
+    instanceIds: [trogrId],
+    advisorCardIdOrNull: null,
+    acquisitions: { ...active.acquisitions, activeAdvisorCardIdOrNull: null },
+    rolls: [],
+    skills: { advisorSkills: [], dolphinSkills: [] },
+  });
+  expect(preview(onlyTrogr).permanentStats.I).toBe(1);
+  expect(onlyTrogr.acquisitions.advisorCards[0]?.suppressionRollOrNull).toEqual(
+    card.suppressionRollOrNull,
+  );
+  const onlyAdviser = enemyComposedCompositionValue({
+    ...active,
+    ordinarySymbiontInstances: [adviser],
+    instanceIds: [card.symbiontInstanceId],
+  });
+  expect(preview(onlyAdviser).permanentStats.I).toBe(20);
+  expect(sentientAcquisitionRolls(onlyAdviser).get('ADVISER_SUPPRESSION')).toEqual(
+    card.suppressionRollOrNull,
+  );
+  const reselected = enemyComposedCompositionValue({
+    ...active,
+    previewCommandId: id(81),
+    confirmationCommandIdOrNull: id(82),
+  });
+  const known = validateSentientCompositionRolls(catalog, 'UNITED', reselected);
+  expect(
+    sentientCompositionRollRequirements(catalog, 'UNITED', reselected).filter(
+      (row) => !known.has(row.kind),
+    ),
+  ).toEqual([]);
+  expect(preview(reselected).permanentStats.I).toBe(6);
+  expect(reselected.acquisitions).toEqual(active.acquisitions);
 });
 it('does not silently unlock FREE and retains the required single R6 consequence', () => {
   const value = composition([choice('OWL'), choice('TICK')]);

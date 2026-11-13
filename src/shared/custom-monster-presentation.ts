@@ -21,6 +21,14 @@ import type {
 } from './custom-monster-state.js';
 import { enemySymbiontChoiceValue } from './enemy-composition.js';
 import type { EnemySymbiontChoice } from './enemy-composition.js';
+import {
+  enemyVersionHistoryValue,
+  enemyVersionConfigurationSummaryValue,
+  type EnemyVersionHistory,
+  type EnemyVersionConfigurationSummary,
+} from './enemy-version-history.js';
+import { enemyVersionEditorValue, type EnemyVersionEditor } from './enemy-version-editor.js';
+import type { EnemyVersionAttemptContext } from './enemy-version-configuration.js';
 
 export const CUSTOM_MONSTER_FORMS = [
   'ENM-011',
@@ -29,6 +37,7 @@ export const CUSTOM_MONSTER_FORMS = [
   'ENM-014',
   'ENM-015',
   'ENM-016',
+  'ENM-017',
   'ENM-020',
 ] as const;
 export interface CustomMonsterProjection extends RevisionVector {
@@ -40,10 +49,13 @@ export interface CustomMonsterProjection extends RevisionVector {
   readonly context: {
     readonly attemptOrNull: CustomMonsterAttempt | null;
     readonly selectedVersionOrNull: CustomMonsterVersionIdentity | null;
+    readonly versionAttempt?: EnemyVersionAttemptContext;
   };
   readonly sheetOrNull: CustomMonsterSheet | null;
   /** Existing V1 has no separate N+1 configuration confirmation; no stored field is added. */
-  readonly versionConfigurationSummaryOrNull?: null;
+  readonly versionConfigurationSummaryOrNull?: EnemyVersionConfigurationSummary | null;
+  readonly versionHistory?: EnemyVersionHistory;
+  readonly versionEditor?: EnemyVersionEditor;
   readonly validationErrors: readonly string[];
   readonly catalog: JsonObject;
   readonly requiredRolls: readonly ('ADVISER_I' | 'ADVISER_W')[];
@@ -178,18 +190,17 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
     'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog requiredRolls diceMode advisorPreparationOrNull art' +
       (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')
         ? ' versionConfigurationSummaryOrNull'
-        : ''),
+        : '') +
+      (Object.hasOwn(rawProjection, 'versionHistory') ? ' versionHistory' : '') +
+      (Object.hasOwn(rawProjection, 'versionEditor') ? ' versionEditor' : ''),
     '$.monsterProjection',
   );
   w.literal(row['kind'], 'CUSTOM_MONSTER_AUTHORING', '$.kind');
   r.oneOf(row['diceMode'], ['AUTO', 'MANUAL'], '$.diceMode');
   const form = r.oneOf(row['formId'], CUSTOM_MONSTER_FORMS, '$.formId');
   if (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')) {
-    w.literal(
-      row['versionConfigurationSummaryOrNull'],
-      null,
-      '$.versionConfigurationSummaryOrNull',
-    );
+    if (row['versionConfigurationSummaryOrNull'] !== null)
+      enemyVersionConfigurationSummaryValue(row['versionConfigurationSummaryOrNull']);
     if (form !== 'ENM-020')
       r.invalid('$.versionConfigurationSummaryOrNull', 'saved ENM-020 projection only', null);
   }
@@ -198,6 +209,34 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
   for (const key of ['stateRevision', 'projectionRevision', 'actorVisibilityRevision'])
     r.integer(row[key], '$.' + key, 0);
   const context = enemyAuthoringContextValue(row['context']);
+  if (form === 'ENM-017') enemyVersionEditorValue(row['versionEditor'], context);
+  else if (Object.hasOwn(rawProjection, 'versionEditor') || context.versionAttempt !== undefined)
+    r.invalid('$.versionEditor', 'own ENM-017 only', null);
+  if (
+    row['versionConfigurationSummaryOrNull'] != null &&
+    (context.selectedVersionOrNull?.kind !== 'CUSTOM_MONSTER' ||
+      context.selectedVersionOrNull.version <= 1 ||
+      enemyVersionConfigurationSummaryValue(row['versionConfigurationSummaryOrNull']).input.kind !==
+        'CUSTOM_MONSTER')
+  )
+    r.invalid(
+      '$.versionConfigurationSummaryOrNull',
+      'explicit CUSTOM_MONSTER N+1 confirmation only',
+      null,
+    );
+  if (Object.hasOwn(rawProjection, 'versionHistory')) {
+    const history = enemyVersionHistoryValue(row['versionHistory']);
+    if (
+      form !== 'ENM-020' ||
+      !admissionJsonEqual(history.selected, context.selectedVersionOrNull) ||
+      !admissionJsonEqual(
+        history.entries.find((entry) => admissionJsonEqual(entry.identity, history.selected))
+          ?.configurationSummaryOrNull,
+        row['versionConfigurationSummaryOrNull'],
+      )
+    )
+      r.invalid('$.versionHistory', 'own saved selected version and configuration summary', null);
+  }
   const attempt = context.attemptOrNull;
   if (row['advisorPreparationOrNull'] !== null) {
     const preparation = r.exact(
@@ -210,7 +249,7 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
     r.integer(preparation['capacity'], '$.capacity', 1);
     if (
       typeof preparation['initialFilled'] !== 'boolean' ||
-      form !== 'ENM-015' ||
+      (form !== 'ENM-015' && form !== 'ENM-017') ||
       attempt?.kind !== 'CUSTOM_MONSTER' ||
       attempt.compositionOrNull?.advisorCardIdOrNull !== preparation['cardId'] ||
       !attempt.advisorCards.some(
@@ -242,7 +281,10 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
       'attackOrNull',
       'compositionOrNull',
     ] as const;
-    for (const field of fields.slice(0, CUSTOM_MONSTER_FORMS.indexOf(form)))
+    for (const field of fields.slice(
+      0,
+      form === 'ENM-017' ? 0 : CUSTOM_MONSTER_FORMS.indexOf(form),
+    ))
       if (attempt[field] === null) r.invalid('$.attempt.' + field, 'preceding saved stage', null);
   }
   const catalog = r.exact(row['catalog'], 'compositionCatalog advisorSkills', '$.monsterCatalog');
@@ -290,7 +332,8 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
         if (!choices.some((row) => row['skillKey'] === loss.skillKey))
           r.invalid('$.advisorLoss', 'actual source skill', null);
     }
-    const preparationExpected = form === 'ENM-015' && composition?.advisorCardIdOrNull != null;
+    const preparationExpected =
+      (form === 'ENM-015' || form === 'ENM-017') && composition?.advisorCardIdOrNull != null;
     if (preparationExpected !== (row['advisorPreparationOrNull'] !== null))
       r.invalid('$.advisorPreparation', 'exact current acquired personality', null);
   }
@@ -298,7 +341,10 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
     r.text(error, '$.error');
   const required = r.list(row['requiredRolls'], '$.requiredRolls');
   required.forEach((value) => r.oneOf(value, ['ADVISER_I', 'ADVISER_W'], '$.requiredRoll'));
-  if (new Set(required).size !== required.length || (form !== 'ENM-015' && required.length !== 0))
+  if (
+    new Set(required).size !== required.length ||
+    (form !== 'ENM-015' && form !== 'ENM-017' && required.length !== 0)
+  )
     r.invalid('$.requiredRolls', 'own distinct preparation only', null);
   const art = r.exact(row['art'], 'mediaType sha256 bytesBase64', '$.art');
   w.literal(art['mediaType'], 'image/png', '$.mediaType');
@@ -371,7 +417,8 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
   }
   if (
     (form === 'ENM-020' ||
-      (form === 'ENM-016' && r.list(row['validationErrors'], '$.errors').length === 0)) &&
+      ((form === 'ENM-016' || form === 'ENM-017') &&
+        r.list(row['validationErrors'], '$.errors').length === 0)) &&
     row['sheetOrNull'] === null
   )
     r.invalid('$.sheet', 'complete saved/valid preview sheet', null);

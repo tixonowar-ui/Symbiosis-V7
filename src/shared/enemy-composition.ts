@@ -231,6 +231,10 @@ function rollShape(raw: unknown): void {
   if (r.integer(mechanical['rawFace'], '$.rawFace', 1) > sides)
     r.invalid('$.rawFace', 'die range', null);
 }
+export function enemyCompositionRollValue(value: unknown): EnemyCompositionRoll {
+  rollShape(value);
+  return w.validated(structuredClone(value));
+}
 export function enemyCompositionAcquisitionsValue(value: unknown): EnemyCompositionAcquisitions {
   const row = r.exact(
     value,

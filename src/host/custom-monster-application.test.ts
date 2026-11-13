@@ -33,6 +33,7 @@ import { readGmRequestReviewSourceWith } from '../persistence/network-device-req
 import type { GmRequestReviewScope } from '../persistence/campaign-creation.js';
 import type { CommandReceipt } from '@shared/wire-protocol.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
+import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import { sentientEnemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
 import {
   createLocalGmContext,
@@ -332,7 +333,7 @@ it('commits a closed manual NONE V1, retains literal definitions and full HP thr
   }
 });
 
-it('retains schema22 proof for an unpatched monster NAV and cancelled attempt after leaving ENM', () => {
+it('refuses a corrupted schema23 prefix missing mandatory22 after an unpatched monster NAV and cancelled attempt', () => {
   const f = fixture();
   try {
     f.selectTab('MONSTERS');
@@ -345,10 +346,11 @@ it('retains schema22 proof for an unpatched monster NAV and cancelled attempt af
         .prepare("SELECT COUNT(*) n FROM gm_request_queue_event WHERE kind='ENEMY_AUTHORING'")
         .get(),
     ).toEqual({ n: 0 });
+    // With23 still present, deleting22 corrupts the contiguous prefix before the ENM-specific source guard.
     f.db.prepare('DELETE FROM schema_migration WHERE version=22').run();
     const bytes = f.db.serialize();
-    expect(() => f.checked()).toThrow('SOURCE_CHANGED');
-    expect(() => f.app().project()).toThrow('SOURCE_CHANGED');
+    expect(() => f.checked()).toThrow('network application storage: CORRUPT_STORAGE');
+    expect(() => f.app().project()).toThrow('network application storage: CORRUPT_STORAGE');
     expect(f.db.serialize().equals(bytes)).toBe(true);
   } finally {
     f.close();
@@ -768,7 +770,7 @@ it('binds Adviser losses to accepted graph/body changes, ignores speculative pre
   // The complete source/SQLite Back/replay journey measured 27.985s under a 30s body deadline.
 }, 60_000);
 
-it('physically migrates genuine old257 composed SENTIENT V1 and open plan through22 and preserves all old bytes and original receipt', () => {
+it('physically migrates genuine old257 composed SENTIENT V1 and open plan through23 and preserves all old bytes and original receipt', () => {
   const root = join(process.cwd(), 'tests/fixtures/enemy-composed-v1');
   const metadata = JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8')) as {
     sourceCommit: string;
@@ -794,7 +796,7 @@ it('physically migrates genuine old257 composed SENTIENT V1 and open plan throug
   expect(createHash('sha256').update(compressed).digest('hex')).toBe(metadata.gzipSha256);
   const bytes = gunzipSync(compressed);
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(metadata.inflatedPreOpenSha256);
-  const directory = mkdtempSync(join(tmpdir(), 'symbiosis-old257-through22-')),
+  const directory = mkdtempSync(join(tmpdir(), 'symbiosis-old257-through23-')),
     filename = join(directory, 'history.sqlite');
   writeFileSync(filename, bytes);
   const rows = (db: Database.Database): Record<string, unknown[]> =>
@@ -826,6 +828,11 @@ it('physically migrates genuine old257 composed SENTIENT V1 and open plan throug
           version: migration0022.version,
           name: migration0022.name,
           checksum_sha256: createHash('sha256').update(migration0022.sql).digest('hex'),
+        },
+        {
+          version: migration0023.version,
+          name: migration0023.name,
+          checksum_sha256: createHash('sha256').update(migration0023.sql).digest('hex'),
         },
       ],
     };

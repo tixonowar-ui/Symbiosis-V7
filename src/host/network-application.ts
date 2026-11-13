@@ -4183,13 +4183,19 @@ export function createGmNetworkRuntime(d: {
         readGmRequestReviewSourceWith(db, scope(c), validateOwner, (source, state) => {
           validateEnemySources(source, state);
           if (d.enemyAuthoring !== undefined)
-            users = validateEnemyAuthoringSource(
-              db,
-              source,
-              state,
-              d.enemyAuthoring,
-              d.baseline,
-            ).map((version) => ({ ...version.identity, displayName: version.sheet.identity.name }));
+            users = validateEnemyAuthoringSource(db, source, state, d.enemyAuthoring, d.baseline)
+              .filter(
+                (version, _index, versions) =>
+                  !versions.some(
+                    (other) =>
+                      other.identity.templateId === version.identity.templateId &&
+                      other.identity.version > version.identity.version,
+                  ),
+              )
+              .map((version) => ({
+                ...version.identity,
+                displayName: version.sheet.identity.name,
+              }));
         });
         return users;
       },

@@ -9,6 +9,14 @@
 
 ### Исправлено
 
+- **2026-11-14, проверки #259:** после сохранённого FAILED clean01 уточнены
+  registry23/capability/legacy test oracles и строгий отказ повреждённого prefix.
+  Ровно пять именных body budgets получили измеренный конечный запас; production
+  и общие настройки сохранены, как и проверки данных, replay/приватности и
+  неизменности БД. Целевые15 cases/9 files прошли,
+  252 отфильтрованы; новый полный clean5/CI окончательного SHA ещё ожидается.
+  [Отказы, измерения и пределы proof](docs/status/enemy-template-versions-259.md).
+
 - **2026-11-12, проверки #258:** старые integration fixtures используют actual22
   batch v2, полный source input loader и точный список доступных CTA. Для
   затронутых fault snapshots восстановлен локальный freelist=0 precondition;
@@ -42,6 +50,18 @@
   причина вариативности CI зафиксированы в `docs/status/ci-lifecycle-256.md`.
 
 ### Добавлено
+
+- **2026-11-13, кандидат runtime #259:** подготовлены полные N+1 копии SENTIENT и
+  CUSTOM_MONSTER через ENM017: причина, читаемый diff, отдельный preview/consent
+  замены конфигурации, immutable old versions и отдельный выбор истории ENM020.
+  Owning механика/отказы/atomic faults и текущие23/future24 fixtures имеют отдельные
+  scoped доказательства. Два целевых полных Chrome cases прошли с первой попытки:
+  replacement controls, lost ACK, история, restart и PLAYER wire/DOM. Это не полный
+  финальный clean5/CI. Необходимые host registration/resume и NEW dispatch/reason
+  исправления довели WIP до42 файлов кода. Общий42 отдельно поставлен process
+  [#290 / PR291](https://github.com/tixonowar-ui/Symbiosis-V7/pull/291);
+  runtime-кандидат интегрирован с новым main, его финальные gates ещё ожидаются.
+  [Состояние и сохранённые отказы](docs/status/enemy-template-versions-259.md).
 
 - **2026-11-13, источник #288:** Atlas1.22/B17 и ADR0094 задают явную N+1
   конфигурацию обоих enemy kinds с обязательным reason/diff и сохранением

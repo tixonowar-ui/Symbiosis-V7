@@ -24,6 +24,7 @@ import {
 } from './local-character-export.js';
 import type { EnemySourceCatalog } from './enemy-catalog.js';
 import type { EnemyUserEntry } from '@shared/enemy-authoring.js';
+import { readEnemyVersions } from '../persistence/enemy-authoring-store.js';
 
 /** Own current GM scope is supplied by the existing campaign runtime on every call. */
 export function createEnemyLibraryApplication(d: {
@@ -137,7 +138,25 @@ export function createEnemyLibraryApplication(d: {
               : {}),
           });
           if (request.selectionOrNull !== null) d.catalog.resolve(request.selectionOrNull);
-          if (
+          if (request.sourceFormId === 'ENM-020') {
+            const selected = request.userSelectionOrNull ?? s.fail('INVALID_INPUT');
+            const current =
+              source.viewOrNull?.enemyLibrary?.userSelectionOrNull ?? s.fail('UNAVAILABLE');
+            if (
+              selected.templateId !== current.templateId ||
+              selected.kind !== current.kind ||
+              selected.campaignId !== d.scope.campaignId
+            )
+              return s.fail('FOREIGN_OWNER');
+            let found = false;
+            d.readCurrent((checked, state) => {
+              if (!s.same(checked, source)) return s.fail('SOURCE_CHANGED');
+              found = readEnemyVersions(d.database, checked.scope, state.events).some((version) =>
+                s.same(version.identity, selected),
+              );
+            });
+            if (!found) return s.fail('FOREIGN_OWNER');
+          } else if (
             request.userSelectionOrNull != null &&
             !(d.readUsers?.() ?? []).some(({ displayName: _label, ...identity }) =>
               s.same(identity, request.userSelectionOrNull),

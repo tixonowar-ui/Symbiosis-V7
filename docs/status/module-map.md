@@ -1,6 +1,33 @@
 # Состояние модулей
 
-## Источник N+1 конфигурации enemy — #288
+## Enemy template N+1 runtime #259 — кандидат
+
+Существующие GM каталог/host/store/widgets расширены до полных обеих kind копий
+ENM017, reason/diff и source-bound explicit replacement, затем атомарного N+1 и
+отдельного immutable history view ENM020. `enemy-version-configuration`,
+`enemy-version-source` и registered0023 сохраняют исходные records/receipts и
+owning-prefix provenance. Current accounting/mandatory card facts разделены по
+ADR0094; это не новая NPC lifetime модель.
+[Scope, проверки и текущий blocker](enemy-template-versions-259.md).
+
+Host protocol registration017, final NEW dispatch/reason и actual resume capability
+подключены. Два целевых полных Chrome cases прошли с первой попытки на dirty source;
+Root независимо проверил этот scoped отчёт и изображения; это не полный
+E2E/clean5/CI окончательного SHA.
+Общий42codefiles отдельно поставлен process #290 / PR291; текущая runtime база —
+main `3a35f5229a6a581333454cc666e1db5a33cfc330`, tree `cfd598d6`.
+После backup/retained stash/FF-only/apply все63 code/test bytes прежние;
+CI/AGENTS исключены из runtime diff. Первый независимый runtime clean01 на
+`de06e696` завершился FAILED:7592PASS/15FAIL,303PASS/9FAIL files.
+Исправлены только test/fixture oracles и пять именных body budgets;
+production, общие hooks/defaults/workers/retries сохранены. Целевой WIP run
+прошёл ровно15 cases/9 files,252 filtered, включая полный NET BIND restart/replay;
+node/web typecheck, scoped lint/format и diffcheck прошли. Новые независимые
+full clean5/CI/E2E окончательного SHA ещё ожидаются.
+Поставки259 нет. Source288 уже поставлен,
+#188/#113 остаются открыты;260/261 не начаты.
+
+## Исторический снимок source #288 до protected merge PR289
 
 Atlas1.22/B17 и ADR0094 задают явную замену текущих choices для SENTIENT и
 CUSTOM own-card при обязательном reason/diff/confirmation, сохраняя mandatory
@@ -10,7 +37,7 @@ B0–B16→B17 разрешены точными seals; настоящие ст�
 проверяют physical reopen/receipt replay. [Текущее scoped состояние](enemy-version-configuration-source-288.md);
 финальные clean5/CI ожидаются, #259 остаётся заблокированным до source delivery.
 
-## Произвольный монстр runtime #258 — авторский кандидат
+## Исторический снимок runtime #258 до protected merge PR287
 
 Поставленный #257/PR286 — main `44c5dd8`, tree `ab05f2fc`; #257 закрыта.
 Новый CUSTOM_MONSTER использует существующие CMP-007 → GM-001 → ENM-001 и
