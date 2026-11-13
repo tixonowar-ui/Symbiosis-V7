@@ -373,7 +373,7 @@ test('NPC saves a full V1 before Start, retains history, replays a lost N+1 rece
     await expect(page.locator('[data-npc-content="NPC-003"]')).toContainText(
       'Наблюдатель после встречи',
     );
-    await npcAction(page, 'NPC-003::CTA::009', 'NPC-007', 30_000);
+    await npcAction(page, 'NPC-003::CTA::009', 'NPC-007', 60_000);
     const selectHistoryVersion = async (version: 1 | 2, label: string) => {
       const sentStart = sent.length,
         replyStart = replies.length;

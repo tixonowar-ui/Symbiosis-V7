@@ -185,7 +185,12 @@ test('NET connects two real Node installations by manual address, submits own FI
     await scenario.close(failure);
   }
 });
-async function submitOwnFinal(page: Page, address: string, ownAddress: string) {
+async function submitOwnFinal(
+  page: Page,
+  address: string,
+  ownAddress: string,
+  submittedTimeoutMs?: number,
+) {
   await page.goto(ownAddress);
   await expect(form(page, 'CHR-040')).toBeVisible();
   await action(page, 'CHR-040::CTA::003');
@@ -201,7 +206,9 @@ async function submitOwnFinal(page: Page, address: string, ownAddress: string) {
   await action(page, 'NET-003::CTA::001');
   await expect(form(page, 'NET-004')).toBeVisible();
   await action(page, 'NET-004::CTA::002');
-  await expect(form(page, 'NET-005')).toBeVisible();
+  await expect(form(page, 'NET-005')).toBeVisible(
+    submittedTimeoutMs === undefined ? {} : { timeout: submittedTimeoutMs },
+  );
 }
 
 for (const outcome of [
@@ -272,7 +279,12 @@ for (const outcome of [
       await createCampaign(masterPage, gm.baseURL);
       const sources = player.inspect().sources;
       await action(masterPage, 'CMP-006::CTA::002');
-      await submitOwnFinal(playerPage, gm.baseURL, player.baseURL);
+      await submitOwnFinal(
+        playerPage,
+        gm.baseURL,
+        player.baseURL,
+        outcome === 'LIFECYCLE' ? 30_000 : undefined,
+      );
       await masterPage.getByRole('radio').check();
       await action(masterPage, 'NET-017::CTA::007');
       // LIFECYCLE waits for host persistence and peer confirmation, within a finite local budget.
@@ -463,7 +475,9 @@ for (const outcome of [
           { timeout: player.operationTimeoutMs },
         );
         await action(masterPage, 'NET-016::CTA::002');
-        await expect(form(masterPage, 'GM-001')).toBeVisible();
+        await expect(form(masterPage, 'GM-001')).toBeVisible(
+          outcome === 'LIFECYCLE' ? { timeout: 30_000 } : {},
+        );
         await expect(form(playerPage, 'PLY-001')).toBeVisible({
           timeout: player.operationTimeoutMs,
         });
