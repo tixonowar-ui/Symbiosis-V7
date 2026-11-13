@@ -15,6 +15,7 @@ import { asArray, asObject, type JsonObject } from './lib/json.js';
 // Intersecting witnesses include the accepted initial poison source clarification in ADR 0087.
 // ENM-003 SYSTEM_LIBRARY/ABSENT is amended by ADR 0089 / #244.
 // SENTIENT pre-V1 initial-plan rebuild is amended by ADR 0092 / #284.
+// N+1 configuration/own-card source is amended by ADR0094 / #288.
 const OBJECT_SEALS = [
   {
     target: 'forms',
@@ -62,7 +63,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'ENM-007',
-    sha256: '0e98a6e47658221bbc767e772542c7cafacd2c2f60dfee01d55f3e07b0533d7a',
+    sha256: '5ff3b54572f3ff81be0bdc4e5bea3c50b35b2a3cfd0333a30f8a8edb0e8f224a',
   },
   {
     target: 'forms',
@@ -122,7 +123,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'ENM-017',
-    sha256: '95de68aa1f44ba5d3cd217bf3998da2a64795cb676304c957ae973b5cdd8489b',
+    sha256: 'ee01f7b0b7bfde195d559d14941c1f660f0108fa3837699f7aad065ea8a7a112',
   },
   {
     target: 'forms',
@@ -182,7 +183,7 @@ const OBJECT_SEALS = [
     target: 'journeys',
     key: 'id',
     id: 'J-TEMPLATE-LIFECYCLE',
-    sha256: '6bef5147ef9da6569c78f19f13a469f4b30cacb344e362acf3eb1c6b4a4603c5',
+    sha256: 'f2d19780c0fa8e462ef4039b7145dc57c10ead5861780052437bb872f4d0e58b',
   },
   {
     target: 'coverageRequirements',
@@ -290,7 +291,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-ENM-017',
-    sha256: '12905b2a34688dd50756971b771f3f8d22a81c90a75abda49e7d2170e707d314',
+    sha256: '75460f4fcf161a388d9e38f421edbfa9d92eba90e99bb6a76f759763b4d260d2',
   },
   {
     target: 'qaScenarios',
@@ -380,13 +381,13 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH',
-    sha256: '9b1839baba743d29e868463448c23da00a94314e2c465d7619f1ac65ebef6e6e',
+    sha256: 'cd526634020a568b9bcf34e97bbe207c5c3d1860dffb82c3d65320b6f09c3d12',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-ENEMY-NEW-VERSION',
-    sha256: '5fb69b7dacd49bb76dddd878df83d5e2295079361999adfe175b1548d7fbcb59',
+    sha256: 'd4792b53df7bd4c0ba1f773639490388889031252bb611dd76a7e890422b40d4',
   },
   {
     target: 'qaScenarios',
@@ -416,7 +417,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-ENEMY-DRAFT-PATCH',
-    sha256: '32e40bd085b172e67fbec098804b2f4630af0da314760e549e69bc8e86ffc8da',
+    sha256: '337565fbb465da6f5cc52cb84d298b4de193212e23f8fe93bd4b520125619bc8',
   },
   {
     target: 'workflowCommands',
@@ -428,7 +429,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-ENEMY-NEW-VERSION',
-    sha256: 'c3166ed1086c4608042a95019e2564c6a91cb020003233fda05a7e52769f375b',
+    sha256: '3e2da93b4ac31ce139637eb7211b33ee8d6520224e5256edbe403ac2aff7ac51',
   },
   {
     target: 'workflowCommands',
@@ -452,13 +453,13 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-ENM-007',
-    sha256: 'a988865a2d021e087303d512f6e4e2dce949596e53fd57dae8d6f173af237400',
+    sha256: '761f1b742ce8ae0d1a6532dc73507a175597e458e72ea1f9a18ae2de19fb19ec',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-CHANGE-ENM-007',
-    sha256: '3f9720077a390d0718f724e7f8e76eae57bd08f487fe1b650f812d16c5be4991',
+    sha256: '0ac47e750064c80e9fa22caeb33fc271eca3de0b67e497b57388aa655799fe5c',
   },
   {
     target: 'qaScenarios',
@@ -494,13 +495,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'ENM-020',
-    sha256: '3ae64524681f9c289f919afda0064b8ffad90379a56b199c836244b15d4df002',
+    sha256: '410397ddc05daf6a15c1641850f420c8623590024db6b3c4ca390d49fa39f4b9',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-ENM-020',
-    sha256: '907003c790e64d0d9f600c691508d90a18d702fda5975e84908af2cdfbc5e1a5',
+    sha256: 'd7d13391299df3178b711481294ea781814568e1d99f8a4190e7c5dd02590304',
   },
   {
     target: 'journeys',
@@ -508,15 +509,21 @@ const OBJECT_SEALS = [
     id: 'J-ENEMY-SENTIENT',
     sha256: '55bb8b00ecfddd3551a9fdea35fddafe0487eb1ed9f058255c52f39a10b00120',
   },
+  {
+    target: 'qaScenarios',
+    key: 'qaId',
+    id: 'QA-CHANGE-ENM-017',
+    sha256: '9edd93ad753b0b74428c625922f816b8c204e4e1dac3b64153af95a9c190ae0a',
+  },
 ] as const;
 const ROOT_SEALS = [
   {
     key: 'atlasVersion',
-    sha256: '4941e59530a45cfb89ebc95b9337774fa59f686b963942ea9074a4b9d2379918',
+    sha256: 'e79787460da4f730b24443d363b3d422e7fa7f04ddba7ab5c2f6d1b48e66839b',
   },
   {
     key: 'releaseDate',
-    sha256: 'b3ff15f86190dbe330d60c00616bf86409191308461f59ce0361cf105690d75b',
+    sha256: 'c632fb16191a345891994e0829686cf2ba7aa7801f849afd27546548acf3347d',
   },
   {
     key: 'counts',
@@ -532,7 +539,7 @@ const ROOT_SEALS = [
   },
   {
     key: 'registryCoverage',
-    sha256: '542803be51f709175371667b25a8a3ba895d12985df6c5887a99d23e4b37bd3c',
+    sha256: 'd7ec2e4d9d8f4bbb1d969bb829486f536d2e4420bb28648a13d540e0168cfcb7',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -566,7 +573,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### ENM-007 —',
-    sha256: '432664095a43b6dd9d93e82a3a1b840b73d42a105a32680d9239cd41ed2d27f8',
+    sha256: 'c656f152931b1e4e08e7c6d138169d1e519094b7dbd93f8514ad779721a55dd8',
   },
   {
     prefix: '### ENM-008 —',
@@ -606,7 +613,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### ENM-017 —',
-    sha256: '6b2ae0361936dbe2998a3c6bc2c75bfbaca9f919b346feb365acda0baf46e786',
+    sha256: '761df9fb47a19a03ee03f66d43e12af8c722f873b303f4f562b4db3bdfef9a38',
   },
   {
     prefix: '### ENM-018 —',
@@ -646,11 +653,11 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### J-TEMPLATE-LIFECYCLE —',
-    sha256: '66e29c98260c5a0ab9d584e8492e873028c23bf29dde59427db1b83f1d677ffe',
+    sha256: '722fe6272c0ee7673cc282e7ff6965f26abec68e7ad5479f5cd880f48761d912',
   },
   {
     prefix: '### ENM-020 —',
-    sha256: '9749c3d8b2871c2d9e6fd3416596a9f87bf33e9f5b61dfa67e3f70a991902fbb',
+    sha256: 'de4a39f5cd3a17bfac877489f2b4683b8fb5cde92db6d599b9ce5fc37f923da7',
   },
   {
     prefix: '### J-ENEMY-SENTIENT —',
@@ -729,7 +736,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-ENM-017 | ENM-017 |',
-    sha256: '55cae64ba0d3fea57a6da18763f54de581c041ab87816f8562aa1fe2f4f2cd40',
+    sha256: 'b2341d7bb25e6eed01bd7813612ae1815a45d69c34aae277fce123fe35726aff',
   },
   {
     prefix: '| QA-FORM-ENM-018 | ENM-018 |',
@@ -789,11 +796,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH | UI-CMD-ENEMY-DRAFT-PATCH |',
-    sha256: '855801a276dbf58ef420b932dbc26bc061e7b97b4975d29aefa3fd8c7277ce62',
+    sha256: '9af6b72c68ca154a280a40c9054e62508247bf1515577de61bce2a0fdd15863b',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-ENEMY-NEW-VERSION | UI-CMD-ENEMY-NEW-VERSION |',
-    sha256: '8fb7f99a05f7802f45c71f1212da3a0c916ddf877d885df9a88800278fa4f59c',
+    sha256: 'bdfda1a57a294809d13c4f72f5204dcc3cb72ba45314cad2dc0ed54918eae6b6',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-MONSTER-STATS-ROLL-ONCE | UI-CMD-MONSTER-STATS-ROLL-ONCE |',
@@ -813,7 +820,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-ENEMY-DRAFT-PATCH | Сохранить этап шаблона врага/монстра |',
-    sha256: 'ef738b2bdf0d1183bea9a8cfdebf2724a68001969b16b75af6e6175f94d39121',
+    sha256: '82cbad04a218184a0f89a4b6052b075c8107cf20b11b100e81d0382bde1e4598',
   },
   {
     prefix: '| UI-CMD-ENEMY-COMMIT-V1 | Сохранить первую версию шаблона врага/монстра |',
@@ -821,7 +828,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| UI-CMD-ENEMY-NEW-VERSION | Выпустить новую версию пользовательского шаблона |',
-    sha256: '42b374eaf95eaae2db225aa0e0aeb240383b17f00eaa66f063d5894dd0752eea',
+    sha256: 'edaa26f87684fd646ead6be74e854383f307c86df2555588c3376e32ea1ddd80',
   },
   {
     prefix: '| UI-CMD-MONSTER-STATS-ROLL-ONCE | Однократно сгенерировать характеристики монстра |',
@@ -845,11 +852,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-ENM-007 | ENM-007 |',
-    sha256: '3dc6b7734dc114e16dd2d009454a86ca03cb924db5cd55afc5c654ddfc40c48c',
+    sha256: '33bdf1e3f67b5c7ac64d57cfedc023af60014331ad1dbe77e6729adfe5cfdbfc',
   },
   {
     prefix: '| QA-CHANGE-ENM-007 | ENM-007 |',
-    sha256: 'ad5c32a681bd931808d559df886dfdfd6cb3f287f32ce8402ab6f6c8a24385bf',
+    sha256: 'cd2d948d764c7837125eb082b9355718312db28508ebee09cc8be042c3866a87',
   },
   {
     prefix: '| QA-FORM-ENM-008 | ENM-008 |',
@@ -873,7 +880,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-ENM-020 | ENM-020 |',
-    sha256: '930fcab05a04b2fc012fbe5c14bb96f83386c12d816110240ace8918057a0011',
+    sha256: 'a4a723f8dd47f3b01806d533bbecad366278b94b4fcf8924dd0208b8b0ab4271',
+  },
+  {
+    prefix: '| QA-CHANGE-ENM-017 | ENM-017 |',
+    sha256: '8d8de854b95f584d5d0404206daddaa18a395ae1dc5911fa38a4179d0356a262',
   },
 ] as const;
 const WHERE = 'atlas ADR 0077';

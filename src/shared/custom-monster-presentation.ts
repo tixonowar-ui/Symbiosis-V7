@@ -42,6 +42,8 @@ export interface CustomMonsterProjection extends RevisionVector {
     readonly selectedVersionOrNull: CustomMonsterVersionIdentity | null;
   };
   readonly sheetOrNull: CustomMonsterSheet | null;
+  /** Existing V1 has no separate N+1 configuration confirmation; no stored field is added. */
+  readonly versionConfigurationSummaryOrNull?: null;
   readonly validationErrors: readonly string[];
   readonly catalog: JsonObject;
   readonly requiredRolls: readonly ('ADVISER_I' | 'ADVISER_W')[];
@@ -170,14 +172,27 @@ export function customMonsterSheetValue(value: unknown): CustomMonsterSheet {
   return w.validated(structuredClone(row));
 }
 export function customMonsterProjectionValue(value: unknown): CustomMonsterProjection {
+  const rawProjection = w.record(value, '$.monsterProjection');
   const row = r.exact(
     value,
-    'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog requiredRolls diceMode advisorPreparationOrNull art',
+    'kind formId contextId campaignId campaignStatus stateRevision projectionRevision actorVisibilityRevision context sheetOrNull validationErrors catalog requiredRolls diceMode advisorPreparationOrNull art' +
+      (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')
+        ? ' versionConfigurationSummaryOrNull'
+        : ''),
     '$.monsterProjection',
   );
   w.literal(row['kind'], 'CUSTOM_MONSTER_AUTHORING', '$.kind');
   r.oneOf(row['diceMode'], ['AUTO', 'MANUAL'], '$.diceMode');
   const form = r.oneOf(row['formId'], CUSTOM_MONSTER_FORMS, '$.formId');
+  if (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')) {
+    w.literal(
+      row['versionConfigurationSummaryOrNull'],
+      null,
+      '$.versionConfigurationSummaryOrNull',
+    );
+    if (form !== 'ENM-020')
+      r.invalid('$.versionConfigurationSummaryOrNull', 'saved ENM-020 projection only', null);
+  }
   for (const key of ['contextId', 'campaignId']) r.uuid(row[key], '$.' + key);
   r.oneOf(row['campaignStatus'], ['PAUSED', 'HOSTING'], '$.campaignStatus');
   for (const key of ['stateRevision', 'projectionRevision', 'actorVisibilityRevision'])

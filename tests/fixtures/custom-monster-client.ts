@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import assert from 'node:assert/strict';
 import { createEnemyLibraryFixture } from './enemy-library.js';
 import { loadLocalCharacterExportBaseline } from '../../src/host/local-character-export.js';
 import { loadNpcAuthoringSourceCatalog } from '../../src/host/npc-catalog.js';
@@ -10,7 +11,10 @@ import type { EnemyPatchStage } from '../../src/shared/enemy-authoring.js';
 import type { JsonObject } from '../../src/shared/wire-protocol.js';
 
 /** Actual host/SQLite/source DTOs, detached before closing. This does not claim a network boundary. */
-export async function createCustomMonsterClientFixture(adviser = false) {
+export async function createCustomMonsterClientFixture(
+  adviser = false,
+  options: { captureSavedV1?: boolean } = {},
+) {
   const baseline = await loadLocalCharacterExportBaseline(process.cwd());
   const common = await loadNpcAuthoringSourceCatalog(process.cwd());
   const catalog = loadEnemyAuthoringSourceCatalog(process.cwd(), common);
@@ -140,6 +144,38 @@ export async function createCustomMonsterClientFixture(adviser = false) {
         : [],
     });
     const full = project();
+    let savedOrNull: ReturnType<typeof customMonsterProjectionValue> | null = null;
+    if (options.captureSavedV1 === true) {
+      const current = f.readCurrent().viewOrNull,
+        attempt = current?.enemyAuthoring?.attemptOrNull;
+      assert(current && attempt?.kind === 'CUSTOM_MONSTER');
+      const request = {
+        messageType: 'command.request',
+        protocolVersion: 1,
+        commandKind: 'workflow-command',
+        workflowCommandId: 'UI-CMD-ENEMY-COMMIT-V1',
+        role: 'gm',
+        commandId: randomUUID(),
+        expectedRevisions: {
+          stateRevision: current.stateRevision,
+          projectionRevision: current.projectionRevision,
+          actorVisibilityRevision: current.actorVisibilityRevision,
+        },
+        payload: {
+          campaignId: f.scope.campaignId,
+          creationAttemptId: attempt.attemptId,
+          expectedAttemptRevision: attempt.revision,
+        },
+      };
+      const original = app().command(request);
+      const bytes = f.db.serialize();
+      savedOrNull = project();
+      assert.equal(savedOrNull.formId, 'ENM-020');
+      assert.equal(savedOrNull.versionConfigurationSummaryOrNull, null);
+      assert.deepEqual(project(), savedOrNull);
+      assert.deepEqual(app().command(request), { ...original, replayed: true });
+      assert(f.db.serialize().equals(bytes));
+    }
     return {
       identity,
       stats,
@@ -148,6 +184,7 @@ export async function createCustomMonsterClientFixture(adviser = false) {
       symbiont,
       acquired,
       full,
+      savedOrNull,
       ownerDeviceId: f.scope.ownerDeviceId,
     };
   } finally {

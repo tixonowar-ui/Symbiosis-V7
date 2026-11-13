@@ -144,6 +144,7 @@ export function resolveStoredLocalCharacterExportBaseline(
     BASELINE_LINEAGE_SEALS.initialLifeBaselineVersion,
     BASELINE_LINEAGE_SEALS.initialPoisonBaselineVersion,
     BASELINE_LINEAGE_SEALS.systemLibraryBaselineVersion,
+    BASELINE_LINEAGE_SEALS.initialSkillPlanBaselineVersion,
   ];
   if (!knownStored.includes(storedBaselineVersion)) return fail('unknown stored baseline');
   verifyHistoricalBaselineLineage(

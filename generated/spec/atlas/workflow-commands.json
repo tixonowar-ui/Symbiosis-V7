@@ -658,7 +658,7 @@
     "title": "Установить или переместить метку группы"
   },
   {
-    "atomicity": "Patch one technical attempt stage only; no template row, runtime actor or currentVersion changes; CORE-194 creates the template only with a fully validated atomic save. Explicit SENTIENT_BUILD rebuild invalidates cached composition/inventory/own choices as one atomic technical-plan transition, preserving immutable acquisition/card/RNG history and actual fixed FREE loss; stale/foreign/error leaves zero partial reset. Other kinds/stages retain their existing contract.",
+    "atomicity": "Patch one technical attempt stage only; no template row, runtime actor or currentVersion changes; CORE-194 creates the template only with a fully validated atomic save. Explicit SENTIENT_BUILD rebuild invalidates cached composition/inventory/own choices as one atomic technical-plan transition, preserving immutable acquisition/card/RNG history and actual fixed FREE loss; stale/foreign/error leaves zero partial reset. Other kinds/stages retain their existing contract. ENM017 ordinary copies/identical SAVE/same-plan edits retain knowledge/payments/losses. Only explicit version-configuration confirmation resets new current choices as approved, never template/current/history or mandatory facts; stale/foreign/authority-loss/fault has zero partial reset. CUSTOM receives no START/race/class/host-skills/suppression.",
     "commandId": "UI-CMD-ENEMY-DRAFT-PATCH",
     "formIds": [
       "ENM-005",
@@ -670,11 +670,12 @@
       "ENM-012",
       "ENM-013",
       "ENM-014",
-      "ENM-015"
+      "ENM-015",
+      "ENM-017"
     ],
-    "guards": "GM authority; only a technical creationAttempt/editAttempt exists before save; no enemyTemplate.status or persisted DRAFT template; stage-specific fields and attempt revision valid. SENTIENT pre-V1 skill-plan upgrade/rebuild follows ADR0092: full initial input and explicit bound confirmation, current plan/attempt revisions and sole GM; no implicit NAV reset or incremental-only replacement.",
+    "guards": "GM authority; only a technical creationAttempt/editAttempt exists before save; no enemyTemplate.status or persisted DRAFT template; stage-specific fields and attempt revision valid. SENTIENT pre-V1 skill-plan upgrade/rebuild follows ADR0092: full initial input and explicit bound confirmation, current plan/attempt revisions and sole GM; no implicit NAV reset or incremental-only replacement. ADR0094 / owner #288 A: on ENM017 only the actual host-bound version candidate may be edited; campaign/template/current baseVersion/kind/attempt revisions are checked for every technical edit. Ordinary edits preserve knowledge/payments/losses; preview may be prepared without consent and does not perform replacement. Only confirmation of an explicit version-configuration replacement requires consent bound to that actual preview, complete kind-specific input, displayed consequences and revisions. No NPC OPEN or saved V1 plan editing; both-kind own Advisor choices remain distinct. On ENM017 only, prior mandatory FREE/card/acquisition facts are resolved from the owning template-bound authoritative prefix, including confirmed acquisitions of subsequently cancelled version attempts. The current baseVersion alone cannot prove ABSENT or restore a roll right; unrelated templates/campaigns do not supply facts. This does not change creation-stage guards or the distinct CORE201 seven-R20 per-attempt rule.",
     "qa": "QA-WORKFLOW-UI-CMD-ENEMY-DRAFT-PATCH",
-    "reconnect": "Draft revision and any committed roll receipt restore exactly. Exact old request returns its original receipt, never reruns rebuild/RNG/SYM079 or upgrades legacy bytes; same-card reselect keeps original card/IW/suppression.",
+    "reconnect": "Draft revision and any committed roll receipt restore exactly. Exact old request returns its original receipt, never reruns rebuild/RNG/SYM079 or upgrades legacy bytes; same-card reselect keeps original card/IW/suppression. ENM017 exact replay restores its original technical receipt separately from current projection; no second reset/SYM166/SYM079 grant or reroll, and no implicit legacy discriminator.",
     "title": "Сохранить этап шаблона врага/монстра"
   },
   {
@@ -690,14 +691,14 @@
     "title": "Сохранить первую версию шаблона врага/монстра"
   },
   {
-    "atomicity": "Append immutable version N+1 while preserving template UUID and all previous versions.",
+    "atomicity": "Append immutable version N+1 while preserving template UUID and all previous versions. Only this command appends the confirmed complete N+1 plus history/current pointer/receipt, without rewriting any prior version, identity, art, snapshot, original receipt or payment/acquisition witness. No partial append on source/revision/ownership/fault refusal.",
     "commandId": "UI-CMD-ENEMY-NEW-VERSION",
     "formIds": [
       "ENM-017"
     ],
-    "guards": "Current user template exists; full candidate snapshot and diff/reason valid; owner #113 inclusive mass bounds pass by immutable templateKind (SENTIENT 30..500kg, CUSTOM_MONSTER 5..10000kg, exact 0.1kg step); resolved art fixed; active combats keep pinned old snapshot. The host-bound technical version attempt has current templateId/expectedCurrentVersion/attemptRevision; CUSTOM_MONSTER may use its own CORE-201 right through ENM-018, then edit the candidate manually.",
+    "guards": "Current user template exists; full candidate snapshot and diff/reason valid; owner #113 inclusive mass bounds pass by immutable templateKind (SENTIENT 30..500kg, CUSTOM_MONSTER 5..10000kg, exact 0.1kg step); resolved art fixed; active combats keep pinned old snapshot. The host-bound technical version attempt has current templateId/expectedCurrentVersion/attemptRevision; CUSTOM_MONSTER may use its own CORE-201 right through ENM-018, then edit the candidate manually. ADR0094 requires the complete current kind-specific candidate, bound versionConfigurationContext, required reason and actual diff. Any full SENTIENT initial-input or either-kind own-card replacement has actual confirmed preview/input/consequences; unchanged copy retains its real choices/payments/losses. Inherited FREE fixed signed loss/card/IW/initial-fill/receipts remain independently source-bound, including inactive SENTIENT suppression fact; CUSTOM has no suppression. On ENM017 only, prior mandatory FREE/card/acquisition facts are resolved from the owning template-bound authoritative prefix, including confirmed acquisitions of subsequently cancelled version attempts. The current baseVersion alone cannot prove ABSENT or restore a roll right; unrelated templates/campaigns do not supply facts. This does not change creation-stage guards or the distinct CORE201 seven-R20 per-attempt rule.",
     "qa": "QA-WORKFLOW-UI-CMD-ENEMY-NEW-VERSION",
-    "reconnect": "Same version command returns prior N+1 receipt. Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt.",
+    "reconnect": "Same version command returns prior N+1 receipt. Returning from ENM-018/019 restores the same confirmed attempt and receipt, including after a roll; it never rerolls, rolls back randomness or overwrites later manual candidate edits. Only the receipt/original roll is immutable; candidate base stats remain manually editable within CORE-200 1..35. Canceling version editing preserves the prior currentVersion and does not erase its attempt receipt. Copy/read/replay never starts version-configuration replacement, replenishes a slot pool or stacks a grant. Historical selection is read-only/current pointer unchanged; original command receipt is separate from current projection. Existing-card replacement is unavailable; first ABSENT acquisition follows only its already supplied applicable kind rule, not CORE201 seven-R20.",
     "title": "Выпустить новую версию пользовательского шаблона"
   },
   {

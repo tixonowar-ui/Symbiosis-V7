@@ -6340,7 +6340,7 @@
       "CORE-220",
       "MON-088"
     ],
-    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine. Exception scoped to the CUSTOM_MONSTER child ENM-018/019: return to its host-bound attempt remains available after a committed roll, preserving that receipt and spent right; this is not rollback or reroll.",
+    "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine. Exception scoped to the CUSTOM_MONSTER child ENM-018/019: return to its host-bound attempt remains available after a committed roll, preserving that receipt and spent right; this is not rollback or reroll. ADR0094 exception only for the bound pre-commit ENM017 version candidate: required-reason full configuration editing/explicit replacement and delivered cancel preserve mandatory acquisition receipts even after their confirmation. Back/copy/replay never reset the candidate or erase used rights; currentVersion changes only on successful NEW-VERSION. Existing CUSTOM_MONSTER ENM018/019 child origins/return rules and all other lifecycle boundaries stay unchanged.",
     "steps": [
       {
         "formIds": [

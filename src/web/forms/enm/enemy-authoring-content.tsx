@@ -995,6 +995,9 @@ function SentientEnemyAuthoringContent({
           ? 'Сохранённая версия 1. Лист и арт неизменяемы.'
           : 'Техническая попытка. Шаблон появится в каталоге только после полного сохранения.'}
       </p>
+      {p.formId === 'ENM-020' && p.versionConfigurationSummaryOrNull === null ? (
+        <p>У этой сохранённой версии нет отдельного подтверждения конфигурации N+1.</p>
+      ) : null}
       <img
         alt="Заглушка мыслящего врага"
         src={`data:image/png;base64,${p.art.bytesBase64}`}

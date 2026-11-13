@@ -618,6 +618,7 @@ export function createEnemyAuthoringApplication(d: {
               selectedVersionOrNull: context.selectedVersionOrNull,
             },
             sheetOrNull,
+            ...(view.formId === 'ENM-020' ? { versionConfigurationSummaryOrNull: null } : {}),
             validationErrors,
             catalog: {
               ...d.catalog.choices,

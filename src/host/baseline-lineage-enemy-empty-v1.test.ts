@@ -38,8 +38,8 @@ function rows(db: Database.Database) {
     };
   });
 }
-it('physically opens genuine B15 schema21 empty V1 and open attempt under B16 and replays the original receipt without rewriting any old row', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'symbiosis-b15-b16-empty-v1-'));
+it('physically opens genuine B15 schema21 empty V1 and open attempt under B17 and replays the original receipt without rewriting any old row', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'symbiosis-b15-b17-empty-v1-'));
   let db: ReturnType<typeof openPersistenceDatabase> | undefined;
   try {
     const fixture = join(process.cwd(), 'tests/fixtures/enemy-empty-v1');
@@ -92,7 +92,7 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B16 an
       return db;
     };
     const baseline = await loadLocalCharacterExportBaseline(process.cwd());
-    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B16);
+    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B17);
     const common = await loadNpcAuthoringSourceCatalog(process.cwd());
     const catalog = loadEnemyAuthoringSourceCatalog(process.cwd(), common),
       library = loadEnemySourceCatalog(process.cwd(), baseline);

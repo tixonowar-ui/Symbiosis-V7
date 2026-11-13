@@ -906,6 +906,9 @@ export function CustomMonsterContent({
   const attempt = p.context.attemptOrNull;
   return (
     <section aria-label="Создание произвольного монстра">
+      {p.formId === 'ENM-020' && p.versionConfigurationSummaryOrNull === null ? (
+        <p>У этой сохранённой версии нет отдельного подтверждения конфигурации N+1.</p>
+      ) : null}
       <img
         alt="Заглушка произвольного монстра"
         src={`data:image/png;base64,${p.art.bytesBase64}`}

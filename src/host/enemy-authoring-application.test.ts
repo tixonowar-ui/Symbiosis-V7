@@ -469,6 +469,12 @@ it('ADR0092 verifies permanent START loss on Plague, keeps it forgotten on Chime
       receipt = f.app().command(commit);
     f.restartFromDisk();
     const finalBytes = f.db.serialize();
+    expect(enemyAuthoringProjectionValue(f.app().project().base.roleFilteredPayload)).toMatchObject(
+      {
+        formId: 'ENM-020',
+        versionConfigurationSummaryOrNull: null,
+      },
+    );
     for (const [request, original] of [
       [initial, initialReceipt],
       [inventory, inventoryReceipt],
@@ -476,6 +482,12 @@ it('ADR0092 verifies permanent START loss on Plague, keeps it forgotten on Chime
       [commit, receipt],
     ] as const)
       expect(f.app().command(request)).toEqual({ ...original, replayed: true });
+    expect(enemyAuthoringProjectionValue(f.app().project().base.roleFilteredPayload)).toMatchObject(
+      {
+        formId: 'ENM-020',
+        versionConfigurationSummaryOrNull: null,
+      },
+    );
     expect(f.db.serialize().equals(finalBytes)).toBe(true);
   } finally {
     f.close();
